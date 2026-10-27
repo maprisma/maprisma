@@ -886,41 +886,41 @@ class ModelsPage:
 
         base = state.get("base") or web_sources.chosen("models")
 
-        def work():
-            found, missing = [], []
-            try:
-                gpu = install_ctl.detect_gpu()
-                result = model_advice.ask(agent, question, rt.name, gpu.name or gpu.vendor, state["vram"],
-                                          state["ram"], installed, most=most)
-                state["phase"] = "finding"       # the progress row says so
-                for item in result.models:      # each as the repo a search for it finds first
-                    try:
-                        hits = models_ctl.search(item.search, limit=3, base=base)
-                    except (OSError, ValueError, RuntimeError, subprocess.SubprocessError):
-                        hits = []
-                    repo = next((h for h in hits if h.id not in {r.id for r, _item in found}), None)
-                    if repo is not None:
-                        found.append((repo, item))
-                    else:
-                        missing.append(item.name)
-            except Exception as error:          # the agent, its sign-in, the web, an answer that did not hold up
-                result = error
-            GLib.idle_add(done, result, found, missing)
+        found, missing = [], []
+        name = ai_helper.name_of(agent)
 
-        def done(result, found, missing):
+        def work(step):
+            gpu = install_ctl.detect_gpu()
+            result = model_advice.ask(agent, question, rt.name, gpu.name or gpu.vendor, state["vram"],
+                                      state["ram"], installed, most=most)
+            state["phase"] = "finding"           # the progress row says so
+            step("find")
+            for item in result.models:          # each as the repo a search for it finds first
+                try:
+                    hits = models_ctl.search(item.search, limit=3, base=base)
+                except (OSError, ValueError, RuntimeError, subprocess.SubprocessError):
+                    hits = []
+                repo = next((h for h in hits if h.id not in {r.id for r, _item in found}), None)
+                if repo is not None:
+                    found.append((repo, item))
+                else:
+                    missing.append(item.name)
+            step.done("find", _("{0} found").format(len(found)))
+            return result
+
+        def done(result):
             state["asking"], state["phase"] = False, ""
-            if isinstance(result, Exception):
-                self.show_error(_("{0} could not answer: {1}").format(ai_helper.name_of(agent), str(result)[:2000]))
-            else:
+            if not isinstance(result, Exception):
                 # kept with its own page, shown when that page is the one open
                 state["advice"], state["advice_found"], state["advice_missing"] = result, found, missing
             if self.models_state is state:
                 self.fill_model_ask()
                 if not isinstance(result, Exception):
                     self.show_model_suggestions(state)
-            return False
 
-        threading.Thread(target=work, daemon=True).start()
+        self.run_ai_help(_("Model advice"), agent,
+                         [("ask", _("{0} looks on the web for models that fit").format(name)),
+                          ("find", _("Finding them on Hugging Face"))], work, done)
 
     def search_models(self):
         """Search (or, with nothing typed, the trending GGUF models) on the chosen site."""

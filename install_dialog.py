@@ -208,15 +208,34 @@ class InstallDialog:
         if argv is None:
             self.toast(_("No agent here can take a task (Claude Code, Codex)."), 6)
             return False
+        import agent_details
+        import ai_protocol
         name = ai_helper.name_of(agent)
         ai_helper.record_task(tab.split(":", 1)[0], agent, title)       # Smart Check lists it
+        try:
+            model = agent_details.details_for(agent).model
+        except Exception:
+            model = ""
+        entry = ai_protocol.Entry(title, "task", agent, model, argv)      # Smart Check › Protocol
+        entry.look_up(tab.split(":", 1)[0], prompt, argv=argv)
+        started = time.monotonic()
         if terminal_pane.vte() is None:
             import desktop
             if not desktop.open_terminal(argv, str(Path.home())):
+                entry.end("failed", "no terminal", 0)
                 self.toast(_("No terminal found (xdg-terminal-exec)"), 6)
                 return False
+            entry.end("started", _("in a terminal window of its own: its text is not kept here"), 0)
             return True
-        self.open_command_tab(f"task:{tab}", f"{name} · {title}", "", self.back_to_here(), on_end=on_end, argv=argv)
+
+        def ended():
+            pane = self.sessions.get(f"task:{tab}")
+            code = getattr(pane, "exit_code", None)
+            entry.end("ok" if not code else "failed", f"exit code {code}" if code else "",
+                      time.monotonic() - started, transcript=pane.transcript() if pane is not None else "")
+            if on_end is not None:
+                on_end()
+        self.open_command_tab(f"task:{tab}", f"{name} · {title}", "", self.back_to_here(), on_end=ended, argv=argv)
         return True
 
     def open_command_tab(self, tab: str, title: str, script: str, back, on_end=None, argv=None, on_fail=None):

@@ -221,7 +221,9 @@ SCHEMA = {"type": "object", "additionalProperties": True,
 def _bounded(argv, **kwargs):
     import ai_core
     # Our own look-up run: the provider watcher does not start the agent's local LLMs for it.
+    import ai_helper
     kwargs.setdefault("env", {**os.environ, "AI_AGENTS_MAP_NO_PROVIDERS": "1"})
+    kwargs.setdefault("cancel", getattr(ai_helper._watch, "cancel", None))    # the progress box's Cancel
     return ai_core.read_bounded_output(argv, **kwargs)
 
 

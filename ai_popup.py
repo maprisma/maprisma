@@ -1722,6 +1722,8 @@ class AgentsMap(TextGuard, PageParts, SettingsPages, ThemeCss, InstallDialog, Se
             GLib.idle_add(done, found)
 
         def done(found):
+            if isinstance(found, Exception):
+                found = []
             self.ai_checking_mcp = False
             if (ai_core.setting("ai_checks") or force) and [vars(f) for f in found] != [vars(f) for f in self.ai_mcp_updates]:
                 self.ai_mcp_updates = found
@@ -1730,7 +1732,14 @@ class AgentsMap(TextGuard, PageParts, SettingsPages, ThemeCss, InstallDialog, Se
                 self.fill_smart_check()
             return False
 
-        threading.Thread(target=work, daemon=True).start()
+        agent = ai_helper.chosen(installed) if force else None
+        if agent is None:                       # the daily check: quietly in the background
+            threading.Thread(target=work, daemon=True).start()
+            return
+        self.run_ai_help(_("MCP server updates"), agent,
+                         [("ask", _("{0} looks for newer versions of your MCP servers").format(
+                             ai_helper.name_of(agent)))],
+                         lambda _step: mcp_updates.check(installed, force=True), done)
 
     def research_new_agents(self):
         """Once per new installed agent (setting "look_up_new_agents", on by default)."""

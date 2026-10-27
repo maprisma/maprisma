@@ -2761,5 +2761,32 @@
  "An MCP server": "Un serveur MCP",
  "Set up or repair": "Configurer ou réparer",
  "Setup help from an agent": "Aide à la configuration par un agent",
- "{0} cannot take a task now.": "{0} ne peut pas prendre de tâche pour le moment."
+ "{0} cannot take a task now.": "{0} ne peut pas prendre de tâche pour le moment.",
+ "MCP server advice": "Conseils de serveurs MCP",
+ "Open the protocol folder": "Ouvrir le dossier du protocole",
+ "{0}: done": "{0} : terminé",
+ "{0} found": "{0} trouvés",
+ "Protocol": "Protocole",
+ "{0} min {1} s": "{0} min {1} s",
+ "{0} s": "{0} s",
+ "in a terminal window of its own: its text is not kept here": "dans sa propre fenêtre de terminal : son texte n'est pas conservé ici",
+ "{0} problems, {1} tips": "{0} problèmes, {1} conseils",
+ "Stopping…": "Arrêt…",
+ "In the background": "En arrière-plan",
+ "Finding them on Hugging Face": "Les trouver sur Hugging Face",
+ "{0} looks for newer versions of your MCP servers": "{0} cherche des versions plus récentes de tes serveurs MCP",
+ "Cancelled": "Annulé",
+ "{0} picks the servers that fit from the registry": "{0} choisit dans le registre les serveurs qui conviennent",
+ "started": "démarré",
+ "{0} did not work: {1}": "{0} n'a pas fonctionné : {1}",
+ "{0} looks at it": "{0} l'examine",
+ "{0} turns your question into search words": "{0} transforme ta question en mots de recherche",
+ "Summing up this PC's setup": "Résumé de la configuration de ce PC",
+ "{0} looks on the web for models that fit": "{0} cherche sur le web des modèles qui conviennent",
+ "done in {0}": "terminé en {0}",
+ "What each AI help run was asked, what the agent answered, which options closed it in and, for a task in a tab, what its terminal showed: to look over what was done.": "Ce qui a été demandé à chaque exécution de l'aide IA, ce que l'agent a répondu, quelles options l'ont restreint et, pour une tâche dans un onglet, ce que son terminal a affiché : pour revoir ce qui a été fait.",
+ "\u00041 AI help run": [
+  "1 exécution de l'aide IA",
+  "{0} exécutions de l'aide IA"
+ ]
 }

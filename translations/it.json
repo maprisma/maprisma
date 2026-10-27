@@ -2761,5 +2761,32 @@
  "An MCP server": "Un server MCP",
  "Set up or repair": "Configura o ripara",
  "Setup help from an agent": "Aiuto alla configurazione da un agente",
- "{0} cannot take a task now.": "{0} non può occuparsi di un compito ora."
+ "{0} cannot take a task now.": "{0} non può occuparsi di un compito ora.",
+ "MCP server advice": "Consigli sui server MCP",
+ "Open the protocol folder": "Apri la cartella del protocollo",
+ "{0}: done": "{0}: fatto",
+ "{0} found": "{0} trovati",
+ "Protocol": "Protocollo",
+ "{0} min {1} s": "{0} min {1} s",
+ "{0} s": "{0} s",
+ "in a terminal window of its own: its text is not kept here": "in una finestra di terminale propria: il suo testo non viene conservato qui",
+ "{0} problems, {1} tips": "{0} problemi, {1} consigli",
+ "Stopping…": "Interruzione…",
+ "In the background": "In background",
+ "Finding them on Hugging Face": "Ricerca su Hugging Face",
+ "{0} looks for newer versions of your MCP servers": "{0} cerca versioni più recenti dei tuoi server MCP",
+ "Cancelled": "Annullato",
+ "{0} picks the servers that fit from the registry": "{0} sceglie dal registro i server adatti",
+ "started": "avviato",
+ "{0} did not work: {1}": "{0} non ha funzionato: {1}",
+ "{0} looks at it": "{0} lo esamina",
+ "{0} turns your question into search words": "{0} trasforma la tua domanda in parole di ricerca",
+ "Summing up this PC's setup": "Riepilogo della configurazione di questo PC",
+ "{0} looks on the web for models that fit": "{0} cerca sul web modelli adatti",
+ "done in {0}": "fatto in {0}",
+ "What each AI help run was asked, what the agent answered, which options closed it in and, for a task in a tab, what its terminal showed: to look over what was done.": "Cosa è stato chiesto a ogni esecuzione dell'aiuto IA, cosa ha risposto l'agente, quali opzioni lo hanno limitato e, per un compito in una scheda, cosa ha mostrato il suo terminale: per rivedere ciò che è stato fatto.",
+ "\u00041 AI help run": [
+  "1 esecuzione dell'aiuto IA",
+  "{0} esecuzioni dell'aiuto IA"
+ ]
 }

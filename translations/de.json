@@ -2761,5 +2761,32 @@
  "An MCP server": "Ein MCP-Server",
  "Set up or repair": "Einrichten oder reparieren",
  "Setup help from an agent": "Einrichtungshilfe von einem Agenten",
- "{0} cannot take a task now.": "{0} kann gerade keine Aufgabe übernehmen."
+ "{0} cannot take a task now.": "{0} kann gerade keine Aufgabe übernehmen.",
+ "MCP server advice": "MCP-Server-Beratung",
+ "Open the protocol folder": "Protokollordner öffnen",
+ "{0}: done": "{0}: fertig",
+ "{0} found": "{0} gefunden",
+ "Protocol": "Protokoll",
+ "{0} min {1} s": "{0} min {1} s",
+ "{0} s": "{0} s",
+ "in a terminal window of its own: its text is not kept here": "in einem eigenen Terminalfenster: sein Text wird hier nicht festgehalten",
+ "{0} problems, {1} tips": "{0} Probleme, {1} Tipps",
+ "Stopping…": "Wird beendet…",
+ "In the background": "Im Hintergrund",
+ "Finding them on Hugging Face": "Sie auf Hugging Face finden",
+ "{0} looks for newer versions of your MCP servers": "{0} sucht nach neueren Versionen deiner MCP-Server",
+ "Cancelled": "Abgebrochen",
+ "{0} picks the servers that fit from the registry": "{0} wählt die passenden Server aus der Registry",
+ "started": "gestartet",
+ "{0} did not work: {1}": "{0} hat nicht geklappt: {1}",
+ "{0} looks at it": "{0} sieht es sich an",
+ "{0} turns your question into search words": "{0} macht aus deiner Frage Suchbegriffe",
+ "Summing up this PC's setup": "Die Einrichtung dieses PCs zusammenfassen",
+ "{0} looks on the web for models that fit": "{0} sucht im Web nach passenden Modellen",
+ "done in {0}": "fertig in {0}",
+ "What each AI help run was asked, what the agent answered, which options closed it in and, for a task in a tab, what its terminal showed: to look over what was done.": "Was jeder KI-Hilfe-Lauf gefragt wurde, was der Agent geantwortet hat, mit welchen Optionen er eingeschränkt war und, bei einer Aufgabe im Tab, was sein Terminal zeigte: zum Nachprüfen, was getan wurde.",
+ "\u00041 AI help run": [
+  "1 KI-Hilfe-Lauf",
+  "{0} KI-Hilfe-Läufe"
+ ]
 }

@@ -11,10 +11,12 @@ checks. Nothing an agent answers is ever run by the app.
 
 from __future__ import annotations
 
+import contextlib
 import functools
 import json
 import os
 import shutil
+import threading
 
 import plugin_ai
 from plugin_ai import Usage, parse_output  # noqa: F401  (the app's modules use them from here)
@@ -56,10 +58,31 @@ def name_of(command: str) -> str:
 
 # --- one look-up -----------------------------------------------------------------------------------
 
+_watch = threading.local()          # this thread's AI help run (watched): its Cancel
+
+
+@contextlib.contextmanager
+def watched(cancel, entry=None):
+    """Look-ups this thread makes inside the block end as soon as `cancel` (an Event) is set: the
+    progress box's Cancel (ai_progress); each one's prompt and answer go into `entry` (ai_protocol)."""
+    before = getattr(_watch, "cancel", None), getattr(_watch, "entry", None)
+    _watch.cancel, _watch.entry = cancel, entry
+    try:
+        yield
+    finally:
+        _watch.cancel, _watch.entry = before
+
+
+def cancelled() -> bool:
+    cancel = getattr(_watch, "cancel", None)
+    return cancel is not None and cancel.is_set()
+
+
 def _bounded(argv, **kwargs):
     import ai_core
     # Our own look-up run: the provider watcher does not start the agent's local LLMs for it.
     kwargs.setdefault("env", {**os.environ, "AI_AGENTS_MAP_NO_PROVIDERS": "1"})
+    kwargs.setdefault("cancel", getattr(_watch, "cancel", None))
     return ai_core.read_bounded_output(argv, **kwargs)
 
 
@@ -77,9 +100,18 @@ def look_up(command: str, task: str, prompt: str, schema: dict, run=_bounded, re
     stdin = agent_profiles.research_input(command, prompt)        # the question on stdin, not in argv
     if stdin is not None:
         run = functools.partial(run, stdin=stdin)
-    return plugin_ai.look_up_argv(agent_profiles.research_command(command, prompt, schema_file),
-                                  harness.research_output if harness else "text", plugin=plugin_id(), task=task,
-                                  agent=command, run=run, cwd=str(work), result_of=result_of)
+    argv = agent_profiles.research_command(command, prompt, schema_file)
+    entry = getattr(_watch, "entry", None)
+    try:
+        answer = plugin_ai.look_up_argv(argv, harness.research_output if harness else "text", plugin=plugin_id(),
+                                        task=task, agent=command, run=run, cwd=str(work), result_of=result_of)
+    except Exception as error:
+        if entry is not None:
+            entry.look_up(task, prompt, error=str(error), argv=argv)
+        raise
+    if entry is not None:
+        entry.look_up(task, prompt, answer, argv=argv)
+    return answer
 
 
 def billing(command: str, environ=None) -> tuple[str, str]:

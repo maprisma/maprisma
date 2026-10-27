@@ -359,6 +359,80 @@ class PageParts:
         box.append(bar)
         return box
 
+    # --- an AI help run, with its progress box (ai_progress) ------------------------------------------
+
+    def run_ai_help(self, title: str, agent: str, steps, work, done):
+        """work(step) on a thread: what an agent is asked, step by step; step(key, text="") says which
+        step is under way, step.done(key, detail) what one came to. done(result) then runs here, with
+        what work returned or the exception it raised. The box shows the agent, its model, the steps
+        and the time; In the background lets it go on unseen (a toast says when it is done), Cancel
+        ends the agent's program (ai_helper.watched)."""
+        import threading
+        import agent_details
+        import ai_helper
+        import ai_progress
+        import ai_protocol
+        import plugin_ai
+        from ui_helpers import short_number
+        old = getattr(self, "ai_box", None)
+        if old is not None and not old.gone:
+            old.fade()
+        cancel = threading.Event()
+        state = {"background": False}
+        try:
+            model = agent_details.details_for(agent).model
+        except Exception:
+            model = ""
+        name = ai_helper.name_of(agent)
+        box = ai_progress.AiProgress(title, " · ".join(filter(None, [name, model])), "am-smartcheck-symbolic",
+                                     steps, on_cancel=cancel.set,
+                                     on_background=lambda: state.update(background=True))
+        self.ai_box = box
+        self.card_frame.add_overlay(box.widget)
+        started = dt.datetime.now().replace(microsecond=0)
+        entry = ai_protocol.Entry(title, "look-up", agent, model)
+
+        def step(key, text=""):
+            GLib.idle_add(lambda: box.start(key, text) and False)
+        step.done = lambda key, detail="": GLib.idle_add(lambda: box.done(key, detail) and False)
+
+        def run():
+            with ai_helper.watched(cancel, entry):
+                try:
+                    result = work(step)
+                except Exception as error:      # the agent, its sign-in, the web, an answer that did not hold up
+                    result = error
+            GLib.idle_add(finish, result)
+
+        def tokens() -> int:
+            try:
+                runs = [r for r in plugin_ai.runs() if r.get("agent") == agent
+                        and str(r.get("when", "")) >= started.isoformat()]
+            except Exception:
+                return 0
+            return sum(plugin_ai.tokens_of(r) or 0 for r in runs)
+
+        def finish(result):
+            failed = isinstance(result, Exception)
+            used = tokens()
+            if failed:
+                box.fail(_("{0} could not answer: {1}").format(name, str(result)[:400]), cancelled=cancel.is_set())
+            else:
+                box.succeed(_("{0} tokens").format(short_number(used)) if used else "")
+            entry.steps([(r["label"].get_label(), r["state"], r["detail"].get_label()) for r in
+                         (box.rows[k] for k in box.order)])
+            entry.end("cancelled" if cancel.is_set() else "failed" if failed else "ok",
+                      str(result) if failed else "", box.seconds(), used)
+            if state["background"] and not cancel.is_set():
+                self.toast(_("{0}: done").format(title) if not failed else
+                           _("{0} did not work: {1}").format(title, str(result)[:120]), 8)
+            self.ai_entry = entry          # a change the page makes from this answer is noted in it
+            done(result)
+            return False
+
+        threading.Thread(target=run, daemon=True).start()
+        return box
+
     # --- notices -----------------------------------------------------------------------------------------
 
     def toast(self, message: str, seconds: int, button: str = "", on_button=None, on_dismissed=None) -> Adw.Toast:

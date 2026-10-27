@@ -2761,5 +2761,32 @@
  "An MCP server": "Een MCP-server",
  "Set up or repair": "Instellen of herstellen",
  "Setup help from an agent": "Hulp bij instellen door een agent",
- "{0} cannot take a task now.": "{0} kan nu geen taak aannemen."
+ "{0} cannot take a task now.": "{0} kan nu geen taak aannemen.",
+ "MCP server advice": "Advies over MCP-servers",
+ "Open the protocol folder": "Protocolmap openen",
+ "{0}: done": "{0}: klaar",
+ "{0} found": "{0} gevonden",
+ "Protocol": "Protocol",
+ "{0} min {1} s": "{0} min {1} s",
+ "{0} s": "{0} s",
+ "in a terminal window of its own: its text is not kept here": "in een eigen terminalvenster: de tekst wordt hier niet bewaard",
+ "{0} problems, {1} tips": "{0} problemen, {1} tips",
+ "Stopping…": "Bezig met stoppen…",
+ "In the background": "Op de achtergrond",
+ "Finding them on Hugging Face": "Ze op Hugging Face zoeken",
+ "{0} looks for newer versions of your MCP servers": "{0} zoekt naar nieuwere versies van je MCP-servers",
+ "Cancelled": "Geannuleerd",
+ "{0} picks the servers that fit from the registry": "{0} kiest de passende servers uit het register",
+ "started": "gestart",
+ "{0} did not work: {1}": "{0} is niet gelukt: {1}",
+ "{0} looks at it": "{0} bekijkt het",
+ "{0} turns your question into search words": "{0} maakt van je vraag zoekwoorden",
+ "Summing up this PC's setup": "De opzet van deze pc samenvatten",
+ "{0} looks on the web for models that fit": "{0} zoekt op het web naar passende modellen",
+ "done in {0}": "klaar in {0}",
+ "What each AI help run was asked, what the agent answered, which options closed it in and, for a task in a tab, what its terminal showed: to look over what was done.": "Wat elke AI-hulpronde gevraagd werd, wat de agent antwoordde, welke opties hem beperkten en, bij een taak in een tabblad, wat de terminal liet zien: om na te kijken wat er gedaan is.",
+ "\u00041 AI help run": [
+  "1 AI-hulpronde",
+  "{0} AI-hulprondes"
+ ]
 }

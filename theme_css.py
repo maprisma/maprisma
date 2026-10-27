@@ -232,6 +232,8 @@ class ThemeCss:
         .am-splash-row {{ font-size: 13px; }}
         .am-splash-count {{ font-size: 13px; color: {muted_hex}; }}
         .am-splash-tick {{ color: {green_hex}; font-weight: 700; min-width: 16px; }}
+        .am-ai-failed {{ color: {red_hex}; font-weight: 700; min-width: 16px; }}
+        .am-ai-progress {{ border: 1px solid alpha({fg_hex}, 0.12); border-radius: 14px; padding: 22px 28px; }}
         progressbar.am-splash-bar {{ min-width: 260px; }}
         progressbar.am-splash-bar trough, progressbar.am-splash-bar progress {{ min-height: 4px;
             border-radius: 2px; }}

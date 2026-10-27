@@ -182,6 +182,19 @@ class TerminalPane(Gtk.Box):
         self.exit_code = code
         self.set_state(False, _("ended") + (f" ({code})" if code else ""))
 
+    def transcript(self, most: int = 256 * 1024) -> str:
+        """What the terminal shows and keeps (its scrollback), as plain text, the end of it at most."""
+        Vte = vte()
+        try:
+            row, _col = self.terminal.get_cursor_position()
+            start = max(0, row - self.terminal.get_scrollback_lines())
+            text = self.terminal.get_text_range_format(Vte.Format.TEXT, start, 0, row, self.terminal.get_column_count())
+            text = text[0] if isinstance(text, tuple) else text
+        except (AttributeError, TypeError, ValueError):
+            return ""
+        text = (text or "").rstrip()
+        return text[-most:]
+
     def stop(self):
         """End the agent and what it started (its MCP servers, tools): SIGHUP to its process
         group, as a terminal closing would; SIGTERM after 3 s and SIGKILL after 6 s if it is

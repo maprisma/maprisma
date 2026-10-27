@@ -1451,25 +1451,26 @@ class McpPages:
         self.fill_mcp_ask()
         most = ai_core.setting("mcp_advice_count")
 
-        def work():
-            try:
-                result = mcp_advice.ask(agent, question, most, phase=lambda p: state.__setitem__("phase", p))
-            except Exception as error:          # the agent, its sign-in, an answer that did not hold up
-                result = error
-            GLib.idle_add(done, result)
+        name = ai_helper.name_of(agent)
+
+        def work(step):
+            def phase(p):
+                state["phase"] = p
+                step(p)
+            return mcp_advice.ask(agent, question, most, phase=phase)
 
         def done(result):
             state.update(asking=False, phase="")
-            if isinstance(result, Exception):
-                self.show_error(_("{0} could not answer: {1}").format(ai_helper.name_of(agent), str(result)[:2000]))
-            else:
+            if not isinstance(result, Exception):
                 state["advice"] = result
             self.fill_mcp_ask()
             if not isinstance(result, Exception):
                 self.show_mcp_suggestions()
-            return False
 
-        threading.Thread(target=work, daemon=True).start()
+        self.run_ai_help(_("MCP server advice"), agent,
+                         [("terms", _("{0} turns your question into search words").format(name)),
+                          ("picking", _("{0} picks the servers that fit from the registry").format(name))],
+                         work, done)
 
     def show_mcp_suggestions(self):
         """The agent's picks in the registry list, why each fits below its name, as many as
