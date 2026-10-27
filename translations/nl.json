@@ -2747,5 +2747,19 @@
  "Newer versions of your add-ons are ready: {0}. Update all of them here, or one at a time with Update on its card.": "Er zijn nieuwere versies van je add-ons: {0}. Werk ze hier allemaal bij, of één voor één met Bijwerken op de kaart.",
  "Add-ons are being updated. Try again in a moment.": "Add-ons worden bijgewerkt. Probeer het zo opnieuw.",
  "Update add-on to {0}": "Add-on bijwerken naar {0}",
- "The newer signed version from the catalog; it is checked before it replaces this one.": "De nieuwere ondertekende versie uit de catalogus; die wordt gecontroleerd voordat ze deze vervangt."
+ "The newer signed version from the catalog; it is checked before it replaces this one.": "De nieuwere ondertekende versie uit de catalogus; die wordt gecontroleerd voordat ze deze vervangt.",
+ "Get help from {0}": "Hulp van {0}",
+ "Ask {0}…": "{0} vragen…",
+ "Install, set up or remove an agent, a provider or an MCP server: {0} does it in a tab here and asks you before each step.": "Een agent, een provider of een MCP-server installeren, instellen of verwijderen: {0} doet het hier in een tabblad en vraagt je vóór elke stap.",
+ "{0} starts in a tab with your request. It tells you its plan and asks before each step that changes the system; it never needs your API keys in the chat.": "{0} start in een tabblad met je verzoek. Het vertelt je eerst zijn plan en vraagt vóór elke stap die het systeem verandert; je API-sleutels heeft het in de chat nooit nodig.",
+ "What": "Wat",
+ "To do": "Actie",
+ "Which one (empty: {0} suggests some)": "Welke (leeg: {0} stelt er een paar voor)",
+ "Notes (optional)": "Notities (optioneel)",
+ "An AI agent": "Een AI-agent",
+ "A provider (local LLM or online)": "Een provider (lokale LLM of online)",
+ "An MCP server": "Een MCP-server",
+ "Set up or repair": "Instellen of herstellen",
+ "Setup help from an agent": "Hulp bij instellen door een agent",
+ "{0} cannot take a task now.": "{0} kan nu geen taak aannemen."
 }

@@ -89,6 +89,7 @@
  "research_output": "text",
  "task": [],
  "rewrite": [],
+ "closed": [],
  "tools_setting": [
   "~/.pi/agent/settings.json",
   "defaultTools"

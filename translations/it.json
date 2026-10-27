@@ -2747,5 +2747,19 @@
  "Newer versions of your add-ons are ready: {0}. Update all of them here, or one at a time with Update on its card.": "Sono pronte nuove versioni dei tuoi componenti aggiuntivi: {0}. Aggiornali tutti qui, oppure uno alla volta con Aggiorna sulla sua scheda.",
  "Add-ons are being updated. Try again in a moment.": "I componenti aggiuntivi sono in aggiornamento. Riprova tra un momento.",
  "Update add-on to {0}": "Aggiorna il componente a {0}",
- "The newer signed version from the catalog; it is checked before it replaces this one.": "La versione firmata più recente del catalogo; viene controllata prima di sostituire questa."
+ "The newer signed version from the catalog; it is checked before it replaces this one.": "La versione firmata più recente del catalogo; viene controllata prima di sostituire questa.",
+ "Get help from {0}": "Aiuto da {0}",
+ "Ask {0}…": "Chiedi a {0}…",
+ "Install, set up or remove an agent, a provider or an MCP server: {0} does it in a tab here and asks you before each step.": "Installare, configurare o rimuovere un agente, un provider o un server MCP: {0} lo fa qui in una scheda e ti chiede prima di ogni passo.",
+ "{0} starts in a tab with your request. It tells you its plan and asks before each step that changes the system; it never needs your API keys in the chat.": "{0} si avvia in una scheda con la tua richiesta. Ti dice il suo piano e chiede prima di ogni passo che modifica il sistema; non ha mai bisogno delle tue chiavi API nella chat.",
+ "What": "Cosa",
+ "To do": "Azione",
+ "Which one (empty: {0} suggests some)": "Quale (vuoto: {0} ne suggerisce alcuni)",
+ "Notes (optional)": "Note (facoltative)",
+ "An AI agent": "Un agente IA",
+ "A provider (local LLM or online)": "Un provider (LLM locale o online)",
+ "An MCP server": "Un server MCP",
+ "Set up or repair": "Configura o ripara",
+ "Setup help from an agent": "Aiuto alla configurazione da un agente",
+ "{0} cannot take a task now.": "{0} non può occuparsi di un compito ora."
 }

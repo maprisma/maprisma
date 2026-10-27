@@ -60,6 +60,7 @@
  "research_output": "text",
  "task": [],
  "rewrite": [],
+ "closed": [],
  "tools_setting": [],
  "sandbox_setting": "sandbox.mode",
  "replies": [],

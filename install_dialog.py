@@ -172,7 +172,7 @@ class InstallDialog:
                       f"code {code}:\n{' && '.join(shlex.join(c) for c in step.run)}\nFind out why and fix it, "
                       f"then {verb} {name}. Ask me before each step that changes the system.")
             self.toast(_("{0} did not work.").format(title), 12, _("Fix it with {0}…").format(
-                ai_helper.name_of(agent)), lambda: self.do_with_agent(f"fix:{kind}:{key}", title, prompt))
+                ai_helper.name_of(agent)), lambda: self.do_with_agent(f"fix:{kind}:{key}", title, prompt, agent=agent))
         self.open_command_tab(f"install:{kind}:{key}", title, script, self.back_to_here(key),
                               on_end=updated if update else None, on_fail=fix)
         return True
@@ -189,12 +189,22 @@ class InstallDialog:
         except GLib.Error:
             pass
 
-    def do_with_agent(self, tab: str, title: str, prompt: str, on_end=None) -> bool:
+    def do_with_agent(self, tab: str, title: str, prompt: str, on_end=None, agent: str | None = None) -> bool:
         """The agent in a terminal tab of the window with `prompt` as its first message: it asks before
-        each step itself, the user watches (without VTE: in a terminal window of its own)."""
+        each step itself, the user watches (without VTE: in a terminal window of its own). `agent`: the
+        one a dialog named (it must still be able to take a task), else the one for AI checks."""
+        import agent_guard
         import terminal_pane
-        agent = self.task_agent()
-        argv = ai_helper.task_argv(agent, prompt) if agent else None
+        if agent is not None and agent not in ai_helper.task_agents({a.command for a in self.agent_list
+                                                                     if a.installed}):
+            self.toast(_("{0} cannot take a task now.").format(ai_helper.name_of(agent)), 6)
+            return False
+        agent = agent or self.task_agent()
+        try:
+            argv = ai_helper.task_argv(agent, prompt) if agent else None
+        except agent_guard.Refused as error:
+            self.toast(str(error), 10)
+            return False
         if argv is None:
             self.toast(_("No agent here can take a task (Claude Code, Codex)."), 6)
             return False
@@ -299,10 +309,7 @@ class InstallDialog:
             return
 
         def signed():
-            self.collect()
-            self.refresh_overview()
-            self.refresh_map()
-            self.refresh_setup()
+            self.after_sign_in(agent)
         if terminal_pane.vte() is None:
             import desktop
             if desktop.run_steps_in_terminal([list(login.argv)]):
@@ -316,6 +323,29 @@ class InstallDialog:
         script = note + shlex.join(login.argv) + f"; echo; echo {shlex.quote(done)}"
         self.open_command_tab(f"signin:{agent.command}", _("Sign in to {0}").format(agent.name), script,
                               self.back_to_here(agent.command), on_end=signed)
+
+    def after_sign_in(self, agent):
+        """A sign-in ended: show it everywhere, and ask the desktop for the agent's usage again, since
+        its record still tells the old sign-in (or none) and its plan."""
+        import agent_details
+        self.collect()
+        self.refresh_overview()
+        self.refresh_map()
+        self.refresh_setup()
+
+        def again():
+            self.collect()
+            self.refresh_overview()
+            self.refresh_map()
+            self.refresh_setup()
+            if self.status_showing == ("agent", agent.command):
+                self.open_agent_status(agent, refreshed=True)
+            return False
+
+        def work():
+            if agent_details.refresh_usage(agent.command):
+                GLib.idle_add(again)
+        threading.Thread(target=work, daemon=True).start()
 
     def ask_key(self, agent, step):
         """The API key, in a password field; where it goes is said before it is saved."""
@@ -357,10 +387,7 @@ class InstallDialog:
                 ok, message = result
                 if ok:
                     self.toast(_("{0}: the API key is set up.").format(agent.name), 5)
-                    self.collect()
-                    self.refresh_overview()
-                    self.refresh_map()
-                    self.refresh_setup()
+                    self.after_sign_in(agent)
                 else:
                     self.toast(_("{0} did not take the key: {1}").format(agent.name, message or "?"), 8)
                 return False

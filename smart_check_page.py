@@ -152,7 +152,7 @@ class SmartCheckPage:
                                  valign=Gtk.Align.CENTER)
                 fix.add_css_class("am-small-btn")
                 fix.connect("clicked", lambda *_a, f=finding: self.do_with_agent(
-                    "smart-fix:" + f.title[:40], f.title, smart_check.fix_prompt(f)))
+                    "smart-fix:" + f.title[:40], f.title, smart_check.fix_prompt(f), agent=task_agent))
                 item.add_suffix(fix)
             listbox.append(item)
         group.append(listbox)

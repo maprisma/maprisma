@@ -25,6 +25,7 @@ from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 
 import agent_updates
 import ai_core
+import ai_helper
 import desktop
 from glyphs import MCP_GLYPHS, MCP_GROUP_GLYPHS, glyph
 from i18n import _, ngettext
@@ -135,6 +136,7 @@ class SetupPage:
         if not welcome:
             box.append(self.setup_explainer())
             self.setup_uses(box)
+            self.ai_help_row(box)
         self.setup_problem_keys = set(self.setup_problems())
         if self.with_addons():
             self.fill_addon_sections(box, welcome)
@@ -871,6 +873,76 @@ class SetupPage:
         badge.add_css_class("am-setup-problem")
         badge.set_tooltip_text(title)
         return badge
+
+    # --- get help from an agent: install, set up or remove with it (ai_setup_help) -------------------
+
+    def ai_help_row(self, box):
+        """Get help from {agent}…: shown while an online agent here can take a task and is signed in."""
+        import ai_setup_help
+        agent = ai_setup_help.ready_agent(self.ai_help_agents(), ai_setup_help.signed_in)
+        if agent is None:
+            return
+        name = ai_helper.name_of(agent)
+        listbox = self.boxed_list()
+        listbox.set_margin_top(6)
+        row = self.plain_row(_("Get help from {0}").format(name),
+                             _("Install, set up or remove an agent, a provider or an MCP server: {0} does it in a "
+                               "tab here and asks you before each step.").format(name))
+        button = Gtk.Button(label=_("Ask {0}…").format(name), valign=Gtk.Align.CENTER)
+        button.connect("clicked", lambda *_a: self.ask_ai_help(agent))
+        row.add_suffix(button)
+        row.set_activatable_widget(button)
+        listbox.append(row)
+        box.append(listbox)
+
+    def ai_help_agents(self) -> list:
+        return ai_helper.task_agents({a.command for a in self.agent_list if a.installed})
+
+    def ask_ai_help(self, agent: str):
+        """What (agent, provider, MCP server), what to do, its name and notes; Start opens the tab."""
+        import ai_setup_help
+        name = ai_helper.name_of(agent)
+        dialog = Adw.AlertDialog(heading=_("Get help from {0}").format(name),
+                                 body=_("{0} starts in a tab with your request. It tells you its plan and asks "
+                                        "before each step that changes the system; it never needs your API keys "
+                                        "in the chat.").format(name))
+        rows = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
+        rows.add_css_class("boxed-list")
+        kind = Adw.ComboRow(title=_("What"), model=Gtk.StringList.new([_(t) for _k, t in ai_setup_help.KINDS]),
+                            use_markup=False)
+        action = Adw.ComboRow(title=_("To do"),
+                              model=Gtk.StringList.new([_(t) for _k, t in ai_setup_help.ACTIONS]), use_markup=False)
+        which = Adw.EntryRow(title=_("Which one (empty: {0} suggests some)").format(name), use_markup=False)
+        notes = Adw.EntryRow(title=_("Notes (optional)"), use_markup=False)
+        for row in (kind, action, which, notes):
+            rows.append(row)
+        dialog.set_extra_child(rows)
+        dialog.add_response("cancel", _("Cancel"))
+        dialog.add_response("start", _("Start"))
+        dialog.set_response_appearance("start", Adw.ResponseAppearance.SUGGESTED)
+        dialog.set_default_response("start")
+
+        def answered(_d, response):
+            if response != "start":
+                return
+            k = ai_setup_help.KINDS[kind.get_selected()][0]
+            act = ai_setup_help.ACTIONS[action.get_selected()][0]
+            inv = self.inventory
+            text = ai_setup_help.prompt(
+                k, act, which.get_text(), notes.get_text(), desktop.app_name(),
+                [a.name for a in self.agent_list if a.installed], [r.name for r in inv.runtimes if r.installed],
+                sorted(m.name for m in inv.mcp))
+            title = _(ai_setup_help.ACTIONS[action.get_selected()][1]) + " · " + \
+                (which.get_text().strip()[:40] or _(ai_setup_help.KINDS[kind.get_selected()][1]))
+
+            def ended():
+                self.collect()
+                self.refresh_map()
+                self.refresh_setup()
+                self.run_health()
+            self.do_with_agent(f"setup-help:{k}", title, text, on_end=ended, agent=agent)
+        dialog.connect("response", answered)
+        dialog.present(self.window)
 
     def refill_setup_health(self):
         """A new health check on Setup: its cards again when their problems changed."""

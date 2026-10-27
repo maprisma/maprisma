@@ -1570,7 +1570,8 @@ class AgentsMap(TextGuard, PageParts, SettingsPages, ThemeCss, InstallDialog, Se
         if agent:
             buttons.append((_("Do it with {0}…").format(ai_helper.name_of(agent)),
                             lambda: self.do_with_agent(f"mcp-update:{update.name}", _("Update {0}").format(update.name),
-                                                       mcp_updates.task_prompt(update), on_end=self.after_mcp_task)))
+                                                       mcp_updates.task_prompt(update), on_end=self.after_mcp_task,
+                                                       agent=agent)))
         return buttons
 
     def after_mcp_task(self):
@@ -2871,6 +2872,7 @@ class AgentsMap(TextGuard, PageParts, SettingsPages, ThemeCss, InstallDialog, Se
         problems = [f for area in report.areas for f in area.findings if f.level == "warn"]
         if not problems:
             body.append(self.status_hero("ok", _("Nothing to fix."), _("Everything set up and working")))
+            self.ai_help_row(body)
             return
         body.append(self.status_hero("missing", ngettext("1 open problem", "{0} open problems",
                                                          len(problems)).format(len(problems)),
@@ -2879,6 +2881,7 @@ class AgentsMap(TextGuard, PageParts, SettingsPages, ThemeCss, InstallDialog, Se
         for finding in problems:
             listbox.append(self.finding_list_row(finding))
         body.append(listbox)
+        self.ai_help_row(body)
 
     def section_in(self, body, title: str):
         self.settings_heading(body, title)

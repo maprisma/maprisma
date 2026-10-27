@@ -25,6 +25,10 @@ key = "mcpServers"
 [research]                             # one web look-up with no other tools (Add skills, MCP)
 argv = ["exampleagent", "ask", "--web-only", "{prompt}"]
 
+[closed]                               # what closes it in when the map starts it (look-ups, rewrites, task tabs);
+background = []                        # without this table the map does not start it for them. Its look-up's
+                                       # --web-only says it already; an agent with MCP servers turns them off here
+
 [security]                             # its settings on the Security page, and its risks
 file = "~/.exampleagent/config.json"
 format = "json"

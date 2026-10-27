@@ -110,20 +110,24 @@ def totals(command: str, days: int = 30) -> plugin_ai.Totals:
 # --- a task in a terminal tab ----------------------------------------------------------------------
 
 def task_argv(command: str, prompt: str) -> list[str] | None:
-    """The agent started with `prompt` as its first message (its task fact); None when it has none."""
+    """The agent started with `prompt` as its first message (its task fact), closed in so it asks
+    before each change (agent_guard.task; raises agent_guard.Refused); None when it has none."""
+    import agent_guard
     import harnesses
     harness = harnesses.get(command)
     if harness is None or not harness.task:
         return None
     facts = {command: plugin_ai.AgentFacts(name_of(command), harness.research, harness.research_output,
                                            harness.task)}
-    return plugin_ai.task_argv(command, prompt, facts=facts)
+    argv = plugin_ai.task_argv(command, prompt, facts=facts)
+    return agent_guard.task(command, argv) if argv else argv
 
 
 def task_agents(installed) -> list[str]:
     """Installed agents that can take a task in a tab, the chosen AI-check agent first."""
     import harnesses
-    able: list[str] = [h.command for h in harnesses.all_harnesses() if h.task and h.command in installed
+    able: list[str] = [h.command for h in harnesses.all_harnesses() if h.task and h.closed and h.closed[1]
+                       and h.command in installed
             and shutil.which(h.command)]
     first = chosen(installed)
     return ([first] if first in able else []) + [c for c in able if c != first]
