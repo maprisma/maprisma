@@ -224,7 +224,7 @@ class DetailsPages:
                                       (_("Last 30 days"), money(spent.month), "")]))
         kinds = (_("Input"), _("Output"), _("Cache read"), _("Cache write"))
         for model, (provider, counts, parts) in sorted(spent.by_model.items(), key=lambda m: -sum(m[1][2]))[:6]:
-            self.settings_heading(group, _("{0}, last 30 days").format(model))
+            self.settings_heading(group, _("{0}, last 30 days").format(model), upper=False)
             rows = [(kind, _("{0} tokens · {1}").format(short_number(n), money(usd)), "")
                     for kind, n, usd in zip(kinds, counts, parts) if n]
             rows.append((_("In all"), money(sum(parts)), ""))

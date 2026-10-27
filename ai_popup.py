@@ -3175,7 +3175,7 @@ class AgentsMap(TextGuard, PageParts, SettingsPages, ThemeCss, InstallDialog, Se
         self.install_status.add_css_class("am-agent-detail")
         page.append(self.install_status)
         # The choices right under the progress, on the right: Cancel (Stop while it runs), then the action.
-        buttons = Gtk.Box(spacing=10, halign=Gtk.Align.END, margin_top=4)
+        buttons = Gtk.Box(spacing=ai_core.GAP_INLINE, halign=Gtk.Align.END)
         self.install_cancel = Gtk.Button(label=_("Cancel"))
         self.install_cancel.add_css_class("am-action-btn")
         self.install_cancel.connect("clicked", lambda *_: self.cancel_install())

@@ -89,7 +89,7 @@ class LlmHelpPage:
                 mark.set_tooltip_text(_("More than the card holds: it would not load, or spill into RAM") if over
                                       else _("The card holds more"))
                 row.add_prefix(mark)
-                button = self.small_button(_("Set to {0}").format(short_number(model.best)))
+                button = self.action_button(_("Set to {0}").format(short_number(model.best)))
                 button.connect("clicked", lambda _b, m=model.name, n=model.best:
                                self.apply_tuning(rt, m, "ctx-size", str(n)))
                 row.add_suffix(button)
@@ -106,7 +106,7 @@ class LlmHelpPage:
         name = local_helper.label(local) if local is not None else ai_helper.name_of(online)
         self.settings_heading(slot, _("Tips from an agent"))
         line = Gtk.Box(spacing=8)
-        ask = self.small_button(_("Ask {0}").format(name), primary=True)
+        ask = self.action_button(_("Ask {0}").format(name), role="primary")
         ask.connect("clicked", lambda _b: self.ask_tuning(rt, engine, facts, slot))
         line.append(ask)
         hint = Gtk.Label(label=_("It sees the facts above (names and numbers only); you choose what to apply."),
@@ -132,7 +132,7 @@ class LlmHelpPage:
                     "build": _("the {0} build").format(builds.get(item.value, item.value)), "note": ""}[item.kind]
             row = self.plain_row(item.title, "\n".join(filter(None, [what, item.why])))
             if item.kind in ("setting", "context"):
-                button = self.small_button(_("Apply"))
+                button = self.action_button(_("Apply"))
                 button.connect("clicked", lambda _b, s=item: self.apply_tuning(rt, s.model, s.key, s.value))
                 row.add_suffix(button)
             elif item.kind == "build":

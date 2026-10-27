@@ -35,7 +35,7 @@ class AiProgress:
                               valign=Gtk.Align.CENTER)
         self.widget.add_css_class("am-splash")
         self.widget.add_css_class("am-ai-progress")
-        inner = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10, halign=Gtk.Align.CENTER,
+        inner = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12, halign=Gtk.Align.CENTER,
                         width_request=340)
         icon = Gtk.Image.new_from_icon_name(icon_name)
         icon.set_pixel_size(56)
@@ -77,15 +77,16 @@ class AiProgress:
         self.status.add_css_class("am-agent-detail")
         inner.append(self.status)
         self.buttons = Gtk.Box(spacing=8, halign=Gtk.Align.CENTER, margin_top=4)
+        # The pages' button look (PageParts.action_button: page size, am-danger for stopping).
         self.background = Gtk.Button(label=_("In the background"))
         self.background.connect("clicked", lambda _b: self._to_background())
         self.cancel = Gtk.Button(label=_("Cancel"))
-        self.cancel.add_css_class("destructive-action")
+        self.cancel.add_css_class("am-danger")
         self.cancel.connect("clicked", lambda _b: self._cancel())
         self.close = Gtk.Button(label=_("Close"), visible=False)
         self.close.connect("clicked", lambda _b: self.fade())
         for button in (self.background, self.cancel, self.close):
-            button.add_css_class("am-small-btn")
+            button.add_css_class("am-page-btn")
             self.buttons.append(button)
         inner.append(self.buttons)
         self.widget.append(inner)

@@ -96,7 +96,7 @@ class ModelsPage:
         page.append(self.models_stack)
 
         # Installed: the list, and the chosen model's page.
-        installed = Gtk.Box(spacing=18)
+        installed = Gtk.Box(spacing=ai_core.GAP)
         left = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=ai_core.GAP)
         left.set_size_request(MODEL_LIST_WIDTH, -1)
         self.models_have_heading = Gtk.Label(xalign=0)
@@ -389,9 +389,7 @@ class ModelsPage:
         return False
 
     def detail_heading(self, box, text: str):
-        label = Gtk.Label(label=text, xalign=0)
-        label.add_css_class("am-group-heading")
-        box.append(label)
+        return self.section_heading(box, text)
 
     def name_meaning(self, box, *names: str):
         """What the name means: each recognised part with one line about it."""

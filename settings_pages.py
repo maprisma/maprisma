@@ -260,11 +260,11 @@ class SettingsPages:
         return column
 
     @staticmethod
-    def settings_heading(box, text: str):
-        """A section heading on a page (libadwaita's heading style)."""
-        label = Gtk.Label(label=text, xalign=0)
-        label.add_css_class("heading")
-        box.append(label)
+    def settings_heading(box, text: str, upper: bool = True):
+        """A section heading on a page: the pages' one heading style (PageParts.section_heading);
+        upper=False keeps a name's own case (a model's)."""
+        from page_parts import PageParts
+        return PageParts.section_heading(box, text, muted=False, upper=upper)
 
     def dropdown(self, labels: list[str], selected: int, on_change) -> Gtk.DropDown:
         drop = Gtk.DropDown.new_from_strings(labels)

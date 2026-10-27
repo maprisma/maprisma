@@ -441,7 +441,7 @@ class McpPages:
         self.add_details = {}
 
         def two_panes(key, left):
-            pane = Gtk.Box(spacing=18)
+            pane = Gtk.Box(spacing=ai_core.GAP)
             left.set_size_request(MODEL_LIST_WIDTH, -1)
             pane.append(Adw.Clamp(maximum_size=MODEL_LIST_WIDTH, child=left, unit=Adw.LengthUnit.PX,
                                   halign=Gtk.Align.START, hexpand=False))

@@ -42,9 +42,28 @@ yet"), not a generic one.
 
 ## Buttons
 
-`action_row` gives every page's actions one size (`am-page-btn`). Colour says the kind: `am-primary`
-for the main action, `am-danger` for one that removes. Small buttons (`am-small-btn`) stay for
-inline actions in rows and menus.
+Make every button with `action_button(label, role=, size=, on_click=, tip=)`:
+
+| | `size="page"` (`am-page-btn`, 13 px) | `size="inline"` (`am-small-btn`, 11 px) |
+|---|---|---|
+| Use | a page's own actions (`action_row` makes its buttons this size too) | rows, cards, popovers, the progress box |
+| `role="primary"` (`am-primary`) | the one action the page is for | the one action a card is for |
+| `role="danger"` (`am-danger`) | removing, stopping, cancelling a run | the same, inline |
+
+`am-action-btn` and `am-download-btn` are older names that look like `am-page-btn`. Dialog
+responses (Adw.AlertDialog) keep libadwaita's own look. The rules also work in the boxes over the
+card (`.am-splash`: the first open's splash, the AI progress box).
+
+## Shared pieces
+
+| Piece | Helper |
+|---|---|
+| A section heading in a page or card | `section_heading(box, text, muted=True)` (11 px, bold, upper case; `muted=False`: text colour). `settings_heading` and `detail_heading` use it. |
+| Explanations | `am-card-text` (13 px); `am-agent-detail` (11 px, dim) only for metadata and short hints |
+| Copy | `ui_helpers.copy_button(get_text, tip, label)`: the copy symbol, a tick after copying |
+| Text to read, not edit | `ui_helpers.readonly_text(text)`: monospace, the preview look (`am-diff`) |
+| Spacing | `ai_core.GAP` (16) between blocks and panes, `GAP_TIGHT` (6) between lines that belong together, `GAP_INLINE` (8) between controls side by side |
+| An AI help run | `run_ai_help(title, agent, steps, work, done)`: the progress box (ai_progress) and the protocol entry |
 
 ## Pages that follow it
 

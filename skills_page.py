@@ -97,7 +97,7 @@ class SkillsPage:
         self.setting_line(body, _("Also for"), _("Agents that do not read this folder yet get it too."),
                           self.skills_agents)
         self.skills_agents.set_halign(Gtk.Align.FILL)
-        buttons = Gtk.Box(spacing=10)
+        buttons = Gtk.Box(spacing=ai_core.GAP_INLINE)
         self.skills_status = Gtk.Label(xalign=0, wrap=True, max_width_chars=1, hexpand=True)
         self.skills_status.add_css_class("am-agent-detail")
         buttons.append(self.skills_status)

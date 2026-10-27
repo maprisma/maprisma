@@ -111,9 +111,8 @@ class SmartCheckPage:
             self.save_setting(ai_local_helper=suggested.key)
             self.toast(_("Local helper: {0}").format(local_helper.label(suggested)), 5)
             self.fill_smart_check()
-        button = Gtk.Button(label=_("Use it"), halign=Gtk.Align.START)
-        button.add_css_class("am-small-btn")
-        button.connect("clicked", use)
+        button = self.action_button(_("Use it"), role="primary", on_click=lambda: use(None))
+        button.set_halign(Gtk.Align.START)
         card.body.append(button)
 
     PROTOCOL_SHOWN = 30
@@ -122,7 +121,8 @@ class SmartCheckPage:
         """Protocol: every AI help run (ai_protocol), the newest first: what was asked, what came back,
         what it led to; each opens to the whole text (Copy, for a report or a second opinion)."""
         import ai_protocol
-        from gi.repository import Adw, Gdk, Gio
+        from gi.repository import Adw, Gio
+        from ui_helpers import copy_button, readonly_text
         found = ai_protocol.entries(most=self.PROTOCOL_SHOWN)
         if not found:
             return
@@ -142,28 +142,21 @@ class SmartCheckPage:
                 _("{0} s").format(entry.get("seconds")) if entry.get("seconds") else "",
                 _("{0} tokens").format(short_number(int(entry.get("tokens") or 0))) if entry.get("tokens") else ""])))
             text = ai_protocol.as_text(entry)
-            view = Gtk.TextView(editable=False, cursor_visible=False, monospace=True,
-                                wrap_mode=Gtk.WrapMode.WORD_CHAR, top_margin=8, bottom_margin=8,
-                                left_margin=10, right_margin=10)
-            view.get_buffer().set_text(text)
+            view = readonly_text(text)
             scroller = Gtk.ScrolledWindow(child=view, min_content_height=120, max_content_height=360,
                                           propagate_natural_height=True)
             holder = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6, margin_top=6, margin_bottom=6,
                              margin_start=6, margin_end=6)
             holder.append(scroller)
             buttons = Gtk.Box(spacing=6, halign=Gtk.Align.END)
-            copy = Gtk.Button(label=_("Copy"))
-            copy.add_css_class("am-small-btn")
-            copy.connect("clicked", lambda _b, t=text: Gdk.Display.get_default().get_clipboard().set(t))
-            buttons.append(copy)
+            buttons.append(copy_button(lambda t=text: t, label=_("Copy")))
             holder.append(buttons)
             row.add_row(holder)
             listbox.append(row)
         group.append(listbox)
-        folder = Gtk.Button(label=_("Open the protocol folder"), halign=Gtk.Align.START)
-        folder.add_css_class("am-small-btn")
-        folder.connect("clicked", lambda _b: Gio.AppInfo.launch_default_for_uri(
+        folder = self.action_button(_("Open the protocol folder"), on_click=lambda: Gio.AppInfo.launch_default_for_uri(
             ai_protocol.FOLDER.as_uri(), None) if ai_protocol.FOLDER.is_dir() else None)
+        folder.set_halign(Gtk.Align.START)
         group.append(folder)
 
     def fill_smart_hero(self, body, agent, analysis):

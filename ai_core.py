@@ -18,10 +18,12 @@ import i18n
 
 SETTINGS_MAX_BYTES = 256 * 1024
 MIN_WINDOW_SIZE = (420, 320)   # the card's width and its page height, logical px
-# One rhythm for every page: GAP between blocks (sections, cards, forms, card rows), GAP_TIGHT
-# between lines that belong together (hint lines, terminal tabs, a card's text).
+# One rhythm for every page: GAP between blocks (sections, cards, forms, card rows, list and detail
+# panes), GAP_TIGHT between lines that belong together (hint lines, terminal tabs, a card's text),
+# GAP_INLINE between controls side by side (buttons in a row, a label and its dropdown).
 GAP = 16
 GAP_TIGHT = 6
+GAP_INLINE = 8
 VIEWS = ("main", "setup")    # the cards with the map beside them, and Setup; the rest are sub-pages
 
 

@@ -38,7 +38,7 @@ class ConnectPage:
         self.connect_title = Gtk.Label()
         page.append(self.page_header(self.connect_title, self.close_connect,
                                      _("Back without changing anything (Backspace, Esc)")))
-        column = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=ai_core.GAP_TIGHT * 2)
+        column = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=ai_core.GAP)
         column.add_css_class("am-settings")
 
         self.connect_about = self.info_card(_("What happens"), "info")
