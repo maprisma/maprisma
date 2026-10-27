@@ -1376,6 +1376,37 @@ class Agy(Installer):
         return Release(f"v{version}", [(name, url, 0)], {name: sha512})
 
 
+class Mise(Installer):
+    """mise, the tool most agents are installed with (`mise use -g <agent>`), for a PC that has none
+    (the first-agent guide): its static (musl) Linux build from its GitHub release, the SHA-256 GitHub
+    lists for the asset checked before anything is unpacked; `mise` into ~/.local/bin. Its install
+    script (curl | sh) is not run. Agents it installs land in mise's own folders, where the app looks."""
+    key, name, command, service = "mise", "mise", "mise", ""
+    bin_rel = "bin/mise"
+    has_service = False
+    uses_models = False
+    site = "https://mise.jdx.dev"
+    ARCHES = {"x86_64": "x64", "aarch64": "arm64"}
+
+    def latest(self, gpu: Gpu, build: str = "") -> Release:
+        arch = self.ARCHES.get(os.uname().machine)
+        if arch is None:
+            raise RuntimeError(f"no mise build for {os.uname().machine}")
+        data = _curl_json("https://api.github.com/repos/jdx/mise/releases/latest")
+        version = str(data.get("tag_name", ""))
+        if not re.fullmatch(r"v\d{4}\.\d{1,2}\.\d{1,3}", version):
+            raise RuntimeError("no mise release found")
+        wanted = f"mise-{version}-linux-{arch}-musl.tar.gz"
+        assets = [a for a in data.get("assets", []) if isinstance(a, dict) and a.get("name") == wanted]
+        if not assets:
+            raise RuntimeError(f"mise {version} has no {wanted}")
+        return github_release(version, assets)
+
+
+# Tools the first-agent guide installs before an agent (not a local LLM, not an agent).
+TOOL_INSTALLERS = {"mise": Mise()}
+
+
 # --- installs described as data (harnesses.Download), for agents and local LLMs from add-ons ----------
 
 _REPO = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,99}/[A-Za-z0-9][A-Za-z0-9._-]{0,99}")
@@ -1544,7 +1575,7 @@ harnesses.on_change(_rebuild)
 
 
 def installer(key: str):
-    return INSTALLERS.get(key) or AGENT_INSTALLERS.get(key)
+    return INSTALLERS.get(key) or AGENT_INSTALLERS.get(key) or TOOL_INSTALLERS.get(key)
 
 
 def _models_root(path: Path) -> Path:
