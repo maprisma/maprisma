@@ -35,7 +35,12 @@ WATCH_FOR = 20 * 60        # give up after this
 
 class InstallDialog:
     def install_subject(self, kind: str, key: str):
-        """(name, installed, source, ways, data) of an agent or a local LLM, or None."""
+        """(name, installed, source, ways, data) of an agent, a local LLM or a GPU package, or None."""
+        if kind == "tool":
+            import gpu_stack
+            if key not in gpu_stack.PACKAGES:
+                return None
+            return gpu_stack.PACKAGES[key][0], False, "", gpu_stack.ways(key), ()
         if kind == "agent":
             h = harnesses.get(key)
             agent = next((a for a in self.agent_list if a.command == key), None)
@@ -281,6 +286,8 @@ class InstallDialog:
                 self.open_my_setup()
             elif origin == "smartcheck":
                 self.show_smart_check_again()
+            elif origin == "firstagent":
+                self.open_first_agent()
             else:
                 self.show_view("main", save=False)
         return back
@@ -442,6 +449,9 @@ class InstallDialog:
     def is_installed_now(self, kind: str, key: str) -> bool:
         if kind == "agent":
             return agents.detect(key)[0]
+        if kind == "tool":
+            import gpu_stack
+            return key in gpu_stack.PACKAGES and bool(gpu_stack.package_version(gpu_stack.PACKAGES[key][1]))
         p = providers.get(key)
         try:
             return bool(p and p.detect and p.detect(inventory.own_processes()).installed)
@@ -454,6 +464,8 @@ class InstallDialog:
 
         def tick():
             if self.is_installed_now(kind, key) == want:
+                if kind == "tool":
+                    self.gpu_software_done = False      # the GPU card's software line again
                 self.collect()
                 self.refresh_overview()
                 self.refresh_map()

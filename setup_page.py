@@ -159,12 +159,26 @@ class SetupPage:
         hero.append(title)
         text = _("Pick the AI agents and local LLMs you use. The ones found on this PC are already ticked: "
                  "one click on Switch on puts them on your map.") if found else \
-            _("No agent or local LLM was found on this PC yet. Pick what you want to use: after Switch on, "
-              "Asterism shows you how to install it.")
+            _("No AI agent was found on this PC yet. The guide gets one working step by step, online or on this "
+              "PC; or pick add-ons below if you know what you want.")
         line = Gtk.Label(label=text, wrap=True, justify=Gtk.Justification.CENTER, max_width_chars=60)
         line.add_css_class("am-hint")
         hero.append(line)
+        if not found:
+            # No agent here: the first-agent guide is the way in (first_agent_page).
+            start = self.action_button(_("Set up your first agent"), role="primary", size="page",
+                                       on_click=self.welcome_to_first_agent)
+            start.set_halign(Gtk.Align.CENTER)
+            start.set_margin_top(ai_core.GAP_TIGHT)
+            hero.append(start)
         return hero
+
+    def welcome_to_first_agent(self):
+        """The welcome page's main button on a PC without agents: welcome done, the guide opens."""
+        self.save_setting(setup_done=True)
+        self.setup_welcome = False
+        self.show_view("main", save=False)
+        self.open_first_agent()
 
     def fill_addon_sections(self, box, welcome: bool):
         """What Asterism found on this PC comes first; on the welcome page it comes ticked."""

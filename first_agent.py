@@ -46,6 +46,7 @@ class Route:
     pricing: str = ""             # https: what it costs, on the provider's own page
     runtime: str = ""             # local: the local LLM's key
     needs: tuple = ()             # tools before the agent ("mise", "node")
+    name: str = ""                # the agent's own name (shown while its add-on is still off)
 
 
 @dataclass(frozen=True)
@@ -95,7 +96,7 @@ def parse(data) -> Catalog:
         title = _text(item.get("title"), 60)
         if title:
             catalog.routes.append(Route(rid, kind, agent, title, _text(item.get("access"), 400), pricing,
-                                        runtime, tuple(dict.fromkeys(needs))))
+                                        runtime, tuple(dict.fromkeys(needs)), _text(item.get("name"), 40) or title))
     for item in data.get("models") or []:
         if not isinstance(item, dict):
             continue

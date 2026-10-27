@@ -69,6 +69,7 @@ class LlmHelpPage:
             (_("Build"), builds.get(facts.build, facts.build or _("not known")), facts.devices),
             (_("GPU stacks"), ", ".join(facts.stacks) or _("none found"), ""),
             (_("Video memory"), llm_tuning.gb(facts.vram), facts.gpu)]))
+        self.fill_gpu_software(slot, facts)
         self.settings_heading(slot, _("Context per model"))
         rows = self.boxed_list()
         for model in facts.models:
@@ -96,6 +97,29 @@ class LlmHelpPage:
             rows.append(row)
         slot.append(rows)
         self.fill_tuning_ask(slot, rt, engine, facts)
+
+    def fill_gpu_software(self, slot, facts):
+        """ROCm, Vulkan, CUDA and the PyTorch builds here (gpu_stack), with Install… for what an AMD
+        card would want (the system's package, sudo in a terminal; else the vendor's page)."""
+        import gpu_stack
+        import install_ctl
+        stack = gpu_stack.look(install_ctl.detect_gpu().vendor, rocm_in_use=facts.build == "rocm")
+        rows = [(_("Graphics card software"), ", ".join(stack.summary()) or _("none found"), "")]
+        for torch in stack.torches[:6]:
+            rows.append((_("PyTorch {0}").format(torch.version), f"{torch.backend} · {torch.where}", ""))
+        self.detail_grid(slot, rows)
+        for key in gpu_stack.wanted(stack):
+            name = gpu_stack.PACKAGES[key][0]
+            hint = {"rocm": _("ROCm makes llama.cpp's ROCm build possible, often faster than Vulkan on AMD cards."),
+                    "pytorch-rocm": _("PyTorch is here for the CPU only: its ROCm build uses the graphics card."),
+                    "vulkan-radeon": _("Without Vulkan or ROCm, a local LLM runs on the CPU only.")}[key]
+            line = Gtk.Box(spacing=ai_core.GAP_INLINE)
+            label = Gtk.Label(label=hint, xalign=0, wrap=True, hexpand=True, max_width_chars=1)
+            label.add_css_class("am-agent-detail")
+            line.append(label)
+            line.append(self.action_button(_("Install {0}…").format(name),
+                                           on_click=lambda k=key: self.offer_install("tool", k)))
+            slot.append(line)
 
     def fill_tuning_ask(self, slot, rt, engine, facts):
         import local_helper

@@ -86,3 +86,25 @@ class VerifyTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class GpuStackTest(unittest.TestCase):
+    def test_pytorch_backend_from_its_version_file(self):
+        import gpu_stack
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp) / "lib/python3.14/site-packages/torch"
+            folder.mkdir(parents=True)
+            (folder / "version.py").write_text("__version__ = '2.14.1+rocm7.2'\nhip: Optional[str] = '7.2.4'\ncuda = None\n")
+            found = gpu_stack.torch_at(str(folder))
+            self.assertEqual((found.version, found.backend), ("2.14.1", "ROCm 7.2"))
+            (folder / "version.py").write_text("__version__ = '2.14.1'\ncuda = '12.8'\nhip = None\n")
+            self.assertEqual(gpu_stack.torch_at(str(folder)).backend, "CUDA 12.8")
+
+    def test_what_an_amd_card_wants(self):
+        import gpu_stack
+        s = gpu_stack.Stack("amd", vulkan=True, rocm="", torches=[gpu_stack.Torch("x", "2.1", "CPU")])
+        self.assertEqual(gpu_stack.wanted(s), ["rocm", "pytorch-rocm"])
+        self.assertEqual(gpu_stack.wanted(gpu_stack.Stack("amd", vulkan=False)), ["vulkan-radeon", "rocm"])
+        self.assertEqual(gpu_stack.wanted(gpu_stack.Stack("amd", vulkan=True, rocm="7.2")), [])
+        self.assertEqual(gpu_stack.wanted(gpu_stack.Stack("nvidia")), [])
+        self.assertEqual(gpu_stack.look("amd", rocm_in_use=True).rocm or "", gpu_stack.rocm() or "yes")
