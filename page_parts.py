@@ -361,7 +361,27 @@ class PageParts:
 
     # --- an AI help run, with its progress box (ai_progress) ------------------------------------------
 
-    def run_ai_help(self, title: str, agent: str, steps, work, done):
+    def local_ai_helper(self):
+        """The local helper confirmed in Settings (local_helper.Candidate), while it is still set up."""
+        import local_helper
+        installed = {a.command for a in self.agent_list if a.installed}
+        try:
+            found = local_helper.candidates(installed, self.inventory.runtimes)
+        except Exception:
+            return None
+        return local_helper.chosen(found, ai_core.setting("ai_local_helper"))
+
+    def ready_helper_model(self, candidate):
+        """On the worker thread: the helper's local LLM started and its model loaded (raises)."""
+        import runtime_ctl
+        rt = next((r for r in self.inventory.runtimes if r.key == candidate.runtime), None)
+        if rt is None:
+            raise RuntimeError(_("{0} is not installed").format(candidate.runtime))
+        ok, why = runtime_ctl.load(rt, candidate.model, wait=60)
+        if not ok:
+            raise RuntimeError(_("{0} could not load {1}: {2}").format(rt.name, candidate.model, why))
+
+    def run_ai_help(self, title: str, agent: str, steps, work, done, model: str | None = None):
         """work(step) on a thread: what an agent is asked, step by step; step(key, text="") says which
         step is under way, step.done(key, detail) what one came to. done(result) then runs here, with
         what work returned or the exception it raised. The box shows the agent, its model, the steps
@@ -379,10 +399,11 @@ class PageParts:
             old.fade()
         cancel = threading.Event()
         state = {"background": False}
-        try:
-            model = agent_details.details_for(agent).model
-        except Exception:
-            model = ""
+        if model is None:
+            try:
+                model = agent_details.details_for(agent).model
+            except Exception:
+                model = ""
         name = ai_helper.name_of(agent)
         box = ai_progress.AiProgress(title, " · ".join(filter(None, [name, model])), "am-smartcheck-symbolic",
                                      steps, on_cancel=cancel.set,

@@ -2788,5 +2788,16 @@
  "\u00041 AI help run": [
   "1 AI-hulpronde",
   "{0} AI-hulprondes"
- ]
+ ],
+ "(suggested)": "(aanbevolen)",
+ "{0} could answer Smart Check and the AI help that needs no web on this PC, without tokens.": "{0} kan Smart Check en de AI-hulp die geen web nodig heeft op deze pc beantwoorden, zonder tokens.",
+ "Loading {0}": "{0} laden",
+ "Use it": "Gebruiken",
+ "Local helper: {0}": "Lokale helper: {0}",
+ "The local helper answers (Settings › Local helper)": "De lokale helper antwoordt (Instellingen › Lokale helper)",
+ "Local helper": "Lokale helper",
+ "A local helper": "Een lokale helper",
+ "{0} could not load {1}: {2}": "{0} kon {1} niet laden: {2}",
+ "None set up": "Geen ingesteld",
+ "An agent with a model of your local LLM answers the AI help that needs no web (Smart Check, which MCP server fits, help with local LLMs) on this PC, without tokens. Suggested: the largest chat model your graphics card holds.": "Een agent met een model van je lokale LLM beantwoordt de AI-hulp die geen web nodig heeft (Smart Check, welke MCP-server past, hulp bij lokale LLM's) op deze pc, zonder tokens. Aanbevolen: het grootste chatmodel dat je grafische kaart kan bevatten."
 }

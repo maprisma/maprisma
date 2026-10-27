@@ -488,6 +488,38 @@ class SettingsPages:
         group.add(row)
         return row
 
+    def local_helper_choices(self):
+        """(every possible local helper, the suggested one), the suggestion first."""
+        import install_ctl
+        import local_helper
+        installed = {a.command for a in self.agent_list if a.installed}
+        found = local_helper.candidates(installed, self.inventory.runtimes)
+        suggested = local_helper.suggest(found, install_ctl.detect_gpu().vram)
+        if suggested is not None:
+            found = [suggested] + [c for c in found if c != suggested]
+        return found, suggested
+
+    def local_helper_row(self, group):
+        """Settings › Local helper: Off, or an agent with a local LLM's model (the app suggests one, the
+        user confirms it by choosing it)."""
+        import local_helper
+        try:
+            found, suggested = self.local_helper_choices()
+        except Exception:
+            found, suggested = [], None
+        names = {r.key: r.name for r in self.inventory.runtimes}
+        labels = [_("Off")] + [local_helper.label(c, names.get(c.runtime, "")) +
+                               (" " + _("(suggested)") if c == suggested else "") for c in found]
+        current = local_helper.chosen(found, ai_core.setting("ai_local_helper"))
+        row = self.combo_row(group, _("Local helper"),
+                             _("An agent with a model of your local LLM answers the AI help that needs no web "
+                               "(Smart Check, which MCP server fits, help with local LLMs) on this PC, without "
+                               "tokens. Suggested: the largest chat model your graphics card holds."),
+                             labels if found else [_("None set up")], found.index(current) + 1 if current else 0,
+                             lambda i: self.save_setting(ai_local_helper=found[i - 1].key if i > 0 and found else {}))
+        row.set_sensitive(bool(found))
+        return row
+
     def combo_row(self, group, title: str, hint: str, labels: list[str], selected: int, on_change) -> Adw.ComboRow:
         """A long explanation would squeeze the chosen value: its first sentence shows, all of it on hover."""
         short = self.short_hint(hint)
@@ -590,6 +622,7 @@ class SettingsPages:
                              helpers.index(chosen) if chosen in helpers else 0,
                              lambda i: helpers and self.save_setting(ai_checks_agent=helpers[i]))
         row.set_sensitive(bool(helpers))
+        self.local_helper_row(ai)
         self.switch_row(group, _("Keep the MCP server list"),
                         _("When the app starts, the MCP registry's list of servers is saved in the background "
                           "(at most every 12 hours, then only what changed), so searching it takes no time."),

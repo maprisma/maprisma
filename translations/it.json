@@ -2788,5 +2788,16 @@
  "\u00041 AI help run": [
   "1 esecuzione dell'aiuto IA",
   "{0} esecuzioni dell'aiuto IA"
- ]
+ ],
+ "(suggested)": "(consigliato)",
+ "{0} could answer Smart Check and the AI help that needs no web on this PC, without tokens.": "{0} potrebbe rispondere a Smart Check e all'aiuto IA che non richiede il web su questo PC, senza token.",
+ "Loading {0}": "Caricamento di {0}",
+ "Use it": "Usalo",
+ "Local helper: {0}": "Assistente locale: {0}",
+ "The local helper answers (Settings › Local helper)": "Risponde l'assistente locale (Impostazioni › Assistente locale)",
+ "Local helper": "Assistente locale",
+ "A local helper": "Un assistente locale",
+ "{0} could not load {1}: {2}": "{0} non è riuscito a caricare {1}: {2}",
+ "None set up": "Nessuno configurato",
+ "An agent with a model of your local LLM answers the AI help that needs no web (Smart Check, which MCP server fits, help with local LLMs) on this PC, without tokens. Suggested: the largest chat model your graphics card holds.": "Un agente con un modello del tuo LLM locale risponde all'aiuto IA che non richiede il web (Smart Check, quale server MCP è adatto, aiuto con gli LLM locali) su questo PC, senza token. Consigliato: il modello di chat più grande che la tua scheda grafica può contenere."
 }

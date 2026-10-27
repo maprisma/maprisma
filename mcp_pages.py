@@ -1365,17 +1365,24 @@ class McpPages:
         import ai_helper
         box = self.mcp_ask_box
         self.clear_box(box)
+        import local_helper
         installed = set(self.installed_commands())
         helpers = ai_helper.helpers(installed)
-        box.set_visible(bool(helpers))
-        if not helpers:
+        local = self.local_ai_helper()          # works without the web: the local helper first
+        box.set_visible(bool(helpers) or local is not None)
+        if not helpers and local is None:
             return
-        agent = ai_helper.chosen(installed)
-        name = ai_helper.name_of(agent)
+        agent = local.agent if local is not None else ai_helper.chosen(installed)
+        name = local_helper.label(local) if local is not None else ai_helper.name_of(agent)
         state = self.mcp_ask_state
         group = self.group_card(box, "mcp-ask", _("Ask an agent"), "am-smartcheck-symbolic",
                                 _("Not sure which server? Ask {0}").format(name))
-        line = self.ai_agent_picker(helpers, agent, self.fill_mcp_ask) if len(helpers) > 1 else Gtk.Box(spacing=8)
+        line = self.ai_agent_picker(helpers, agent, self.fill_mcp_ask) if len(helpers) > 1 and local is None \
+            else Gtk.Box(spacing=8)
+        if local is not None:
+            note = Gtk.Label(label=_("The local helper answers (Settings › Local helper)"), xalign=0)
+            note.add_css_class("am-agent-detail")
+            line.append(note)
         line.add_css_class("am-line")
         line.append(Gtk.Box(hexpand=True))
         line.append(self.count_picker("mcp_advice_count", mcp_advice.SERVER_COUNTS, mcp_advice.MAX_SERVERS,
@@ -1451,13 +1458,20 @@ class McpPages:
         self.fill_mcp_ask()
         most = ai_core.setting("mcp_advice_count")
 
+        local = self.local_ai_helper()
+        if local is not None and local.agent != agent:
+            local = None                       # the card was filled for an online agent
         name = ai_helper.name_of(agent)
 
         def work(step):
             def phase(p):
                 state["phase"] = p
                 step(p)
-            return mcp_advice.ask(agent, question, most, phase=phase)
+            if local is None:
+                return mcp_advice.ask(agent, question, most, phase=phase)
+            step("load")
+            self.ready_helper_model(local)
+            return mcp_advice.ask(agent, question, most, phase=phase, look_up=ai_helper.advise_as_look_up(local))
 
         def done(result):
             state.update(asking=False, phase="")
@@ -1467,10 +1481,12 @@ class McpPages:
             if not isinstance(result, Exception):
                 self.show_mcp_suggestions()
 
-        self.run_ai_help(_("MCP server advice"), agent,
-                         [("terms", _("{0} turns your question into search words").format(name)),
-                          ("picking", _("{0} picks the servers that fit from the registry").format(name))],
-                         work, done)
+        steps = [("terms", _("{0} turns your question into search words").format(name)),
+                 ("picking", _("{0} picks the servers that fit from the registry").format(name))]
+        if local is not None:
+            steps.insert(0, ("load", _("Loading {0}").format(local.model)))
+        self.run_ai_help(_("MCP server advice"), agent, steps, work, done,
+                         model=local.model if local is not None else None)
 
     def show_mcp_suggestions(self):
         """The agent's picks in the registry list, why each fits below its name, as many as

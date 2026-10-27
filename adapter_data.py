@@ -44,7 +44,7 @@ TOP = {"command": STR, "name": STR, "label": STR, "full_name": STR, "icon": STR,
        "data": STRS, "install": TABLES, "update": TABLE, "sessions": TABLE, "skills": TABLE, "mcp": TABLE,
        "access": TABLE, "security": TABLE, "login_status": TABLE, "installer": STR, "usage": STR,
        "local_llm": TABLE, "ask": TABLE, "configure": TABLES, "home": STR, "activity": STRS, "details": TABLE,
-       "program_dir": STR, "start": STRS, "web_search": BOOL, "chat_app": BOOL, "herdr": STR, "research": TABLE, "rewrite": TABLE, "task": TABLE, "closed": TABLE,
+       "program_dir": STR, "start": STRS, "web_search": BOOL, "chat_app": BOOL, "herdr": STR, "research": TABLE, "rewrite": TABLE, "task": TABLE, "closed": TABLE, "advise": TABLE,
        "models": TABLE, "tools": TABLE, "replies": TABLE, "subagents": TABLE}
 WAY = {"kind": STR, "spec": STR, "tool": STR, "argv": STRS, "sudo": BOOL, "url": STR, "note": STR,
        "update": STRS, "packages": "a list of [manager, name]"}
@@ -68,6 +68,9 @@ RESEARCH, REWRITE, TASK = {"argv": STRS, "output": STR}, {"argv": STRS}, {"argv"
 # What closes it in when the map starts it (agent_guard): options right after the program for its
 # look-ups and rewrites, for its task tabs, and per MCP server in its [mcp] file ("{name}").
 CLOSED = {"background": STRS, "task": STRS, "mcp_off": STRS, "home_env": STR}
+# One question answered by a model it is given (a local LLM's), offline and without tools: the prompt
+# on stdin; "model": the options that pick it ("{model}" once, "{provider}" at most once).
+ADVISE = {"argv": STRS, "model": STRS, "output": STR}
 OUTPUTS = ("text", "claude-json", "codex-jsonl")
 # Its session files, for how fast its latest reply came (the map's "t/s"): the folder, how many
 # folders deep the files are in it, and their format (one usage_box.FORMATS has).
@@ -196,6 +199,20 @@ def check(data: dict, name: str) -> None:
                 or (table == "task" and "{prompt}" not in argv):         # research without it: on stdin
             raise AdapterError(f"{name}: {table}.argv must start with “{data['command']}”; "
                                f"{', '.join(placeholders)} each once at most, as an argument of its own")
+    if "advise" in data:
+        _check(data["advise"], ADVISE, f"{name}: advise", ("argv", "model"))
+        argv, model = data["advise"]["argv"], data["advise"]["model"]
+        if not argv or argv[0] != data["command"] or any("{" in a for a in argv):
+            raise AdapterError(f"{name}: advise.argv must start with “{data['command']}” and hold no "
+                               "placeholder (the prompt goes on stdin)")
+        if not model or not model[0].startswith("-") or model.count("{model}") != 1 \
+                or model.count("{provider}") > 1 or any("{" in a and a not in ("{model}", "{provider}") for a in model):
+            raise AdapterError(f"{name}: advise.model must be options holding “{{model}}” once "
+                               "(and “{provider}” at most once), each as an argument of its own")
+        if data["advise"].get("output", "text") not in OUTPUTS:
+            raise AdapterError(f"{name}: advise.output is not one the app has ({', '.join(OUTPUTS)})")
+        if "closed" not in data:
+            raise AdapterError(f"{name}: advise needs a closed table (what closes it in)")
     if "closed" in data:
         _check(data["closed"], CLOSED, f"{name}: closed")
         for key in ("background", "task", "mcp_off"):
@@ -483,6 +500,8 @@ def harness(data: dict, name: str = "adapter", hooks=None) -> Harness:
         research_output=data["research"].get("output", "text") if "research" in data else "text",
         task=tuple(data["task"]["argv"]) if "task" in data else (),
         rewrite=tuple(data["rewrite"]["argv"]) if "rewrite" in data else (), models=models,
+        advise=(tuple(data["advise"]["argv"]), tuple(data["advise"]["model"]), data["advise"].get("output", "text"))
+        if "advise" in data else (),
         closed=(tuple(data["closed"].get("background", ())), tuple(data["closed"].get("task", ())),
                 tuple(data["closed"].get("mcp_off", ())), data["closed"].get("home_env", "")) if "closed" in data else (),
         tools_setting=(data["tools"]["file"], data["tools"]["key"]) if "tools" in data else (),

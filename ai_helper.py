@@ -114,6 +114,37 @@ def look_up(command: str, task: str, prompt: str, schema: dict, run=_bounded, re
     return answer
 
 
+def advise(candidate, task: str, prompt: str, schema: dict | None = None, result_of=None, run=_bounded) -> str:
+    """One question to the local helper (local_helper.Candidate): its model answers offline, the
+    prompt on stdin; the run goes into the shared log and the protocol like a look-up. `schema` is not
+    given to it (no agent takes one offline): the prompts say which JSON to answer with."""
+    import agent_profiles
+    import local_helper
+    argv, output = local_helper.advise_argv(candidate)
+    work = agent_profiles.WORK_DIR                 # an empty folder of ours: no project files around it
+    work.mkdir(parents=True, exist_ok=True, mode=0o700)
+    entry = getattr(_watch, "entry", None)
+    try:
+        answer = plugin_ai.look_up_argv(argv, output, plugin=plugin_id(), task=task, agent=candidate.agent,
+                                        run=functools.partial(run, stdin=prompt.encode("utf-8")), cwd=str(work),
+                                        result_of=result_of)
+    except Exception as error:
+        if entry is not None:
+            entry.look_up(task, prompt, error=str(error), argv=argv)
+        raise
+    if entry is not None:
+        entry.look_up(task, prompt, answer, argv=argv)
+    return answer
+
+
+def advise_as_look_up(candidate):
+    """advise() with look_up()'s arguments (agent, task, prompt, schema, result_of=…), for the modules
+    that take a look_up function (smart_check.analyze, mcp_advice.ask)."""
+    def look_up(_agent, task, prompt, schema=None, result_of=None, **_kwargs):
+        return advise(candidate, task, prompt, schema, result_of=result_of)
+    return look_up
+
+
 def billing(command: str, environ=None) -> tuple[str, str]:
     """How this agent's runs are paid: ("key", "") when its API key variable is set (the agent then
     uses the key, at API prices), ("plan", <plan>) when it is signed in to a subscription (the runs

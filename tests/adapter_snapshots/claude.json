@@ -137,6 +137,7 @@
   "--output-format",
   "text"
  ],
+ "advise": [],
  "closed": [
   [
    "--strict-mcp-config",

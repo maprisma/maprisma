@@ -89,7 +89,32 @@
  "research_output": "text",
  "task": [],
  "rewrite": [],
- "closed": [],
+ "advise": [
+  [
+   "pi",
+   "-p",
+   "--no-session",
+   "--no-tools",
+   "--no-mcp",
+   "--no-extensions",
+   "--no-context-files",
+   "--no-approve",
+   "--offline"
+  ],
+  [
+   "--provider",
+   "{provider}",
+   "--model",
+   "{model}"
+  ],
+  "text"
+ ],
+ "closed": [
+  [],
+  [],
+  [],
+  ""
+ ],
  "tools_setting": [
   "~/.pi/agent/settings.json",
   "defaultTools"

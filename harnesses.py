@@ -195,6 +195,8 @@ class Harness:
     task: tuple = ()                  # argv: started in a terminal tab with "{prompt}" as its first prompt
     rewrite: tuple = ()               # argv: the prompt on stdin, no tools at all; "{answer}": the file
                                       # it writes its answer to (else its output is the answer)
+    advise: tuple = ()                # (argv, model options with "{model}"/"{provider}", output): one question
+                                      # answered offline by a model it is given (the local helper)
     closed: tuple = ()                # (background options, task options, per-MCP-server options with
                                       # "{name}", the variable that moves its home): what closes it in
                                       # (agent_guard); () = not known
@@ -362,7 +364,7 @@ def _extended(harness: Harness) -> Harness:
 # Facts newer than add-on API 1: an agent add-on signed before them does not bring them, so the
 # app's own adapter for the same agent gives them until the add-on is signed again.
 NEWER_FACTS = ("home", "activity", "details", "program_dir", "web_search", "chat_app", "herdr", "logout",
-               "start", "research", "rewrite", "task", "closed", "models", "tools_setting", "sandbox_setting",
+               "start", "research", "rewrite", "task", "closed", "advise", "models", "tools_setting", "sandbox_setting",
                "asks_setting", "replies", "subagents", "sessions")
 
 

@@ -82,6 +82,7 @@ class SmartCheckPage:
         analysis = smart_check.last()
         runs = ai_helper.runs()
         self.fill_smart_hero(body, agent, analysis)
+        self.fill_local_helper_hint(body)
         self.note_card(body, "warning", self.own_risk_text(), _("At your own risk"))
         self.fill_smart_analysis(body, agent, analysis, runs)
         self.fill_smart_updates(body, agent)
@@ -89,6 +90,31 @@ class SmartCheckPage:
         self.fill_smart_protocol(body)
         for category in smart_check.categories(runs):
             self.fill_smart_category(body, category)
+
+    def fill_local_helper_hint(self, body):
+        """No local helper yet, but one could be: the suggestion, with Use it (the user confirms)."""
+        import local_helper
+        if ai_core.setting("ai_local_helper"):
+            return
+        try:
+            _found, suggested = self.local_helper_choices()
+        except Exception:
+            return
+        if suggested is None:
+            return
+        names = {r.key: r.name for r in self.inventory.runtimes}
+        text = _("{0} could answer Smart Check and the AI help that needs no web on this PC, without tokens.").format(
+            local_helper.label(suggested, names.get(suggested.runtime, "")))
+        card = self.note_card(body, "info", text, _("A local helper"))
+
+        def use(_button):
+            self.save_setting(ai_local_helper=suggested.key)
+            self.toast(_("Local helper: {0}").format(local_helper.label(suggested)), 5)
+            self.fill_smart_check()
+        button = Gtk.Button(label=_("Use it"), halign=Gtk.Align.START)
+        button.add_css_class("am-small-btn")
+        button.connect("clicked", use)
+        card.body.append(button)
 
     PROTOCOL_SHOWN = 30
 
@@ -363,7 +389,8 @@ class SmartCheckPage:
 
     def run_smart_analysis(self):
         """Check now: the chosen agent looks at a summary of the setup (in the background, minutes)."""
-        agent = ai_helper.chosen(set(self.installed_commands()))
+        local = self.local_ai_helper()          # the setup is shown to it: no web needed, the local helper first
+        agent = local.agent if local is not None else ai_helper.chosen(set(self.installed_commands()))
         if agent is None or self.smart_analyzing:
             return
         self.smart_analyzing = True
@@ -378,8 +405,11 @@ class SmartCheckPage:
             details = {a.command: agent_details.details_for(a.command) for a in agent_list if a.installed}
             pc = health.pc_info([rt.models_dir for rt in inv.runtimes if rt.installed and rt.models_dir])
             setup = smart_check.snapshot(agent_list, details, inv, report, pc, updates, waiting)
+            if local is not None:
+                step("load")
+                self.ready_helper_model(local)
             step("ask")
-            result = smart_check.analyze(agent, setup)
+            result = smart_check.analyze(agent, setup, look_up=ai_helper.advise_as_look_up(local) if local else None)
             step.done("ask", _("{0} problems, {1} tips").format(result.count("problem"), result.count("tip")))
             return result
 
@@ -388,6 +418,7 @@ class SmartCheckPage:
             if self.page_name() == "smartcheck":
                 self.fill_smart_check()
 
-        self.run_ai_help(_("Smart Check"), agent,
-                         [("collect", _("Summing up this PC's setup")),
-                          ("ask", _("{0} looks at it").format(name))], work, done)
+        steps = [("collect", _("Summing up this PC's setup")), ("ask", _("{0} looks at it").format(name))]
+        if local is not None:
+            steps.insert(1, ("load", _("Loading {0}").format(local.model)))
+        self.run_ai_help(_("Smart Check"), agent, steps, work, done, model=local.model if local is not None else None)
