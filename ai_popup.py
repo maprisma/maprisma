@@ -482,7 +482,9 @@ class AgentsMap(TextGuard, PageParts, SettingsPages, ThemeCss, InstallDialog, Se
             icon.set_pixel_size(22)
             icon.set_valign(Gtk.Align.CENTER)
             header.append(icon)
-        title = Gtk.Label(label=_("My AI Agents Map"), xalign=0)
+        # Asterism: its own name alone; the Omarchy plugin: "My AI Agents Map".
+        title = Gtk.Label(label=_("My AI Agents Map") if desktop.app_name() == "AI Agents Map" else desktop.app_name(),
+                          xalign=0)
         title.add_css_class("am-title")
         title.set_ellipsize(Pango.EllipsizeMode.END)
         title.set_max_width_chars(30)
