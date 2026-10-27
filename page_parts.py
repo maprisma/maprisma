@@ -359,6 +359,17 @@ class PageParts:
         box.append(bar)
         return box
 
+    @staticmethod
+    def small_button(label: str, primary: bool = False, destructive: bool = False) -> Gtk.Button:
+        """The pages' compact button (am-small-btn); primary: the one action a card is for."""
+        button = Gtk.Button(label=label, valign=Gtk.Align.CENTER)
+        button.add_css_class("am-small-btn")
+        if primary:
+            button.add_css_class("suggested-action")
+        if destructive:
+            button.add_css_class("destructive-action")
+        return button
+
     # --- an AI help run, with its progress box (ai_progress) ------------------------------------------
 
     def local_ai_helper(self):

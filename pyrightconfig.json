@@ -27,7 +27,7 @@
     "page_parts.py",
     "previews.py",
     "settings_pages.py",
-    "setup_page.py", "splash.py", "ai_progress.py",
+    "setup_page.py", "splash.py", "ai_progress.py", "llm_help_page.py",
     "skills_page.py",
     "smart_check_page.py",
     "subagents_page.py",

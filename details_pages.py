@@ -580,6 +580,7 @@ class DetailsPages:
         config.add_css_class("am-boxed")
         self.fill_runtime(config, rt, names, summary=True)
         group.append(config)
+        self.fill_runtime_performance(body, rt)
         for card in dict.fromkeys(h[3] for h in hooks if h[3] not in ("statistics", "health")):
             found = [h for h in hooks if h[3] == card]
             level = max(h[2] for h in found)

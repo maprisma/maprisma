@@ -274,6 +274,23 @@ class Engine:
     # --- the Models page: adding, removing and tuning its models ----------------------------------
     download = ""               # "file": GGUF files into its folder; "pull": its own download; "": not here
     removable = ""              # "file": its files to the trash; "api": its own delete; "": in its own app
+    # Performance settings the local LLM help may suggest (llm_tuning): {key: (allowed values as a
+    # regex, what it does)}; {} = none (no Performance card). Builds: (key, label) of the programs it
+    # can be installed as (ROCm, Vulkan, …), the one installed now from build_now().
+    tuning: dict = {}
+    builds: tuple = ()
+
+    def tuning_now(self, rt) -> dict:
+        """{"*": {key: value}, model: {key: value}}: what is set now (only `tuning`'s keys)."""
+        return {}
+
+    def tuning_changes(self, rt, section: str, key: str, value: str) -> list:
+        """The changes (connect.Change) that set it, written with a backup (Undo)."""
+        raise ValueError("nothing to change here")
+
+    def build_now(self, rt) -> str:
+        return ""
+
     context_settable = False    # the page sets a model's context for it
     context_effect = ""         # when a new context counts: "restart", "next-load", "" (at once)
 

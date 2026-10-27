@@ -117,6 +117,7 @@ from configure_menu import ConfigureMenu
 from subagents_page import SubagentsPage
 from traffic_page import TrafficPage
 from smart_check_page import SmartCheckPage
+from llm_help_page import LlmHelpPage
 from skills_page import SkillsPage
 from mcp_pages import McpPages
 from details_pages import DetailsPages
@@ -177,7 +178,7 @@ class AppWindow(Adw.ApplicationWindow):
 
 
 class AgentsMap(TextGuard, PageParts, SettingsPages, ThemeCss, InstallDialog, SetupPage, AddonsPage, DetailsPages, InfoPage, McpPages, SkillsPage, ConnectPage, ConfigureMenu, TrafficPage, SubagentsPage, ModelsPage, SmartCheckPage,
-                Adw.Application):
+                LlmHelpPage, Adw.Application):
     def __init__(self):
         super().__init__(application_id=desktop.app_id())
         self.window = None
@@ -1281,7 +1282,9 @@ class AgentsMap(TextGuard, PageParts, SettingsPages, ThemeCss, InstallDialog, Se
                 self.refresh_map()
                 self.run_health()
             if running != self.running and self.window.is_visible():
-                # An agent was opened or closed: its dot, its model and its card change.
+                # An agent was opened or closed: its dot, its model and its card change; a local LLM
+                # none of whose agents runs now may give its GPU memory back (asked in a toast).
+                self.offer_gpu_cleanup(self.running, running, usage)
                 self.running = running
                 self.refresh_overview()
                 self.refresh_map()
