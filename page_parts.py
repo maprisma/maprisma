@@ -78,25 +78,34 @@ class PageParts:
                    "ok": ("✓", "am-hint-ok"), "info": ("i", "am-hint-info")}
 
     @staticmethod
-    def page_header(title: Gtk.Label, on_back, tip: str) -> Gtk.Box:
-        """Back · ⌫ and the page title (a label the page sets), over a rule."""
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=ai_core.GAP)
-        header = Gtk.Box(spacing=8)
+    def back_button(on_back, tip: str, shortcut: str = "· ⌫") -> Gtk.Button:
+        """The pages' Back button (and the terminal's, without the shortcut)."""
         back = Gtk.Button()
         for css in ("flat", "am-header-btn", "am-back-bordered"):
             back.add_css_class(css)
         back_box = Gtk.Box(spacing=6)
         back_box.append(Gtk.Image.new_from_icon_name("go-previous-symbolic"))
         back_box.append(Gtk.Label(label=_("Back")))
-        back_box.append(Gtk.Label(label="· ⌫"))
+        if shortcut:
+            back_box.append(Gtk.Label(label=shortcut))
         back.set_child(back_box)
         back.set_tooltip_text(tip)
         back.connect("clicked", lambda *_: on_back())
-        header.append(back)
+        return back
+
+    @staticmethod
+    def page_header(title: Gtk.Label, on_back, tip: str, end=()) -> Gtk.Box:
+        """Back · ⌫ and the page title (a label the page sets), over a rule; end: widgets after the
+        title (a folder, a one-line explanation), the one that should take the room hexpands."""
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=ai_core.GAP)
+        header = Gtk.Box(spacing=ai_core.GAP_INLINE)
+        header.append(PageParts.back_button(on_back, tip))
         title.set_xalign(0)
-        title.set_hexpand(True)
+        title.set_hexpand(not end)
         title.add_css_class("am-section-title")
         header.append(title)
+        for widget in end:
+            header.append(widget)
         box.append(header)
         rule = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
         rule.add_css_class("am-settings-rule")

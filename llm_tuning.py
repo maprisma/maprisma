@@ -45,6 +45,7 @@ class Facts:
     devices: str = ""             # what it says its devices are
     settings: dict = field(default_factory=dict)   # {"*": {k: v}, model: {k: v}}
     tuning: dict = field(default_factory=dict)     # {key: (regex, what it does)}
+    per_model: bool = True                         # settings per model (else for every model only)
     models: list = field(default_factory=list)     # ModelFacts
     loaded: list = field(default_factory=list)     # models loaded now
     vram_used: int = 0            # by this local LLM now
@@ -79,7 +80,8 @@ def collect(rt, engine, gpu, usage=None) -> Facts:
     import os
     import context_ctl
     facts = Facts(rt.name, rt.key, gpu=gpu.name or gpu.vendor, vram=gpu.vram, stacks=stacks_here(),
-                  builds=[key for key, _label in engine.builds], tuning=dict(engine.tuning))
+                  builds=[key for key, _label in engine.builds], tuning=dict(engine.tuning),
+                  per_model=bool(getattr(engine, "tuning_per_model", True)))
     try:
         facts.build = engine.build_now(rt)
     except Exception:
@@ -142,7 +144,8 @@ def facts_text(facts: Facts) -> str:
         lines.append("Its devices: " + facts.devices.replace("\n", "; "))
     if facts.loaded:
         lines.append(f"Loaded now: {', '.join(facts.loaded)} ({gb(facts.vram_used)} on the card)")
-    lines.append("Settings it can have (key: allowed values, what it does):")
+    lines.append("Settings it can have (key: allowed values, what it does)"
+                 + ("" if facts.per_model else ", for every model only (model \"*\")") + ":")
     lines += [f"  {key}: {regex} — {what}" for key, (regex, what) in facts.tuning.items()]
     lines.append("Settings now ([*] for every model, then per model):")
     for section, values in facts.settings.items():
@@ -196,6 +199,8 @@ def validate(answer: dict, facts: Facts) -> tuple[str, list[Suggestion]]:
         if model != "*" and model not in names:
             continue
         if kind == "setting":
+            if not facts.per_model and model != "*":
+                continue                         # its settings are for every model only
             rule = facts.tuning.get(key)
             if rule is None or not re.fullmatch(rule[0], value) or facts.settings.get(model, {}).get(key) == value:
                 continue

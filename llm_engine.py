@@ -278,6 +278,8 @@ class Engine:
     # regex, what it does)}; {} = none (no Performance card). Builds: (key, label) of the programs it
     # can be installed as (ROCm, Vulkan, …), the one installed now from build_now().
     tuning: dict = {}
+    tuning_per_model = True     # False: its settings count for every model ("*" only: an env file)
+    tuning_effect = "restart"   # when a changed setting counts (as context_effect)
     builds: tuple = ()
 
     def tuning_now(self, rt) -> dict:

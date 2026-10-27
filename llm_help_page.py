@@ -202,7 +202,8 @@ class LlmHelpPage:
             entry = getattr(self, "ai_entry", None)
             if entry is not None and backup is not None:
                 entry.note_change(f"{rt.name}: {what}", str(backup))
-            if engine.context_effect == "restart" and rt.running:
+            effect = engine.context_effect if key == "ctx-size" else engine.tuning_effect
+            if effect == "restart" and rt.running:
                 self.toast(_("{0}: {1}. It counts after a restart.").format(rt.name, what), 20, _("Restart now"),
                            lambda: self.restart_runtime(rt))
             elif backup is not None:

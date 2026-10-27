@@ -53,30 +53,12 @@ class ModelsPage:
         Get from Hugging Face (search, model page, download options), On this PC (GGUF files
         other local LLMs or Downloads have)."""
         page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=ai_core.GAP)
-        header = Gtk.Box(spacing=8)
-        back = Gtk.Button()
-        back.add_css_class("flat")
-        back.add_css_class("am-header-btn")
-        back.add_css_class("am-back-bordered")
-        back_box = Gtk.Box(spacing=6)
-        back_box.append(Gtk.Image.new_from_icon_name("go-previous-symbolic"))
-        back_box.append(Gtk.Label(label=_("Back")))
-        back_box.append(Gtk.Label(label="· ⌫"))
-        back.set_child(back_box)
-        back.set_tooltip_text(_("Back (Backspace, Esc)"))
-        back.connect("clicked", lambda *_: self.close_models())
-        header.append(back)
-        self.models_title = Gtk.Label(xalign=0)
-        self.models_title.add_css_class("am-section-title")
-        header.append(self.models_title)
+        self.models_title = Gtk.Label()
         self.models_folder_label = Gtk.Label(xalign=0, hexpand=True)
         self.models_folder_label.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
         self.models_folder_label.add_css_class("am-agent-detail")
-        header.append(self.models_folder_label)
-        page.append(header)
-        rule = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
-        rule.add_css_class("am-settings-rule")
-        page.append(rule)
+        page.append(self.page_header(self.models_title, self.close_models, _("Back (Backspace, Esc)"),
+                                     end=(self.models_folder_label,)))
 
         # The tabs (the choice is kept, as on the other Add pages).
         switch = Gtk.Box(spacing=0, halign=Gtk.Align.START)

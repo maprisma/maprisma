@@ -55,6 +55,26 @@ class TuningTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             engine.tuning_changes(None, "*", "gpu-layers", "lots")
 
+    def test_ollama_settings_are_for_every_model_only(self):
+        from unittest import mock
+        import install_ctl
+        engine = llm_engine.of("ollama")
+        f = llm_tuning.Facts("Ollama", "ollama", tuning=dict(engine.tuning), per_model=False,
+                             models=[llm_tuning.ModelFacts("qwen")])
+        _s, found = llm_tuning.validate({"suggestions": [
+            {"kind": "setting", "title": "one model", "model": "qwen", "key": "OLLAMA_FLASH_ATTENTION", "value": "1"},
+            {"kind": "setting", "title": "all", "model": "*", "key": "OLLAMA_FLASH_ATTENTION", "value": "1"}]}, f)
+        self.assertEqual([s.title for s in found], ["all"])
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            env = Path(tmp) / "server.env"
+            env.write_text("OLLAMA_HOST=127.0.0.1:11434\n")
+            with mock.patch.object(install_ctl.Ollama, "env_file", env):
+                [change] = engine.tuning_changes(None, "*", "OLLAMA_KV_CACHE_TYPE", "q8_0")
+                self.assertIn("OLLAMA_KV_CACHE_TYPE=q8_0", change.new)
+                with self.assertRaises(ValueError):
+                    engine.tuning_changes(None, "qwen", "OLLAMA_KV_CACHE_TYPE", "q8_0")
+
 
 if __name__ == "__main__":
     unittest.main()

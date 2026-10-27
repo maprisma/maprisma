@@ -107,16 +107,8 @@ class TerminalPane(Gtk.Box):
         self.exit_code = None
 
         header = Gtk.Box(spacing=8)
-        back = Gtk.Button()
-        back.add_css_class("flat")
-        back.add_css_class("am-header-btn")
-        back.add_css_class("am-back-bordered")
-        back_box = Gtk.Box(spacing=6)
-        back_box.append(Gtk.Image.new_from_icon_name("go-previous-symbolic"))
-        back_box.append(Gtk.Label(label=_("Back")))
-        back.set_child(back_box)
-        back.set_tooltip_text(_("Back to the map; the agent keeps running here"))
-        back.connect("clicked", lambda *_: on_back())
+        from page_parts import PageParts       # here: gi's versions are set by then
+        back = PageParts.back_button(lambda: on_back(), _("Back to the map; the agent keeps running here"), shortcut="")
         header.append(back)
         title = Gtk.Label(label=agent.name.upper(), xalign=0)
         title.add_css_class("am-section-title")
