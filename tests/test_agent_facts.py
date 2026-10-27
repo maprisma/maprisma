@@ -45,7 +45,7 @@ class FactsTest(unittest.TestCase):
         self.assertEqual(self.facts("logout"), {"claude": ("claude", "auth", "logout"), "codex": ("codex", "logout")})
         self.assertEqual(set(self.facts("research")), {"claude", "codex"})
         self.assertEqual(set(self.facts("rewrite")), {"claude", "codex"})
-        self.assertEqual(set(self.facts("models")), {"claude", "codex"})
+        self.assertEqual(set(self.facts("models")), {"claude", "codex", "dsh", "hermes", "opencode", "pi"})
         self.assertEqual(self.facts("sandbox_setting"), {"claude": "sandbox.enabled", "codex": "sandbox_mode",
                                                          "cursor-agent": "sandbox.mode"})
         self.assertEqual(self.facts("asks_setting"), {

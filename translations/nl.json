@@ -2832,5 +2832,10 @@
  "Performance": "Prestaties",
  "Performance of {0}": "Prestaties van {0}",
  "Build, context per model, and tips from an agent": "Build, context per model en tips van een agent",
- "{0} looks at {1}'s settings": "{0} bekijkt de instellingen van {1}"
+ "{0} looks at {1}'s settings": "{0} bekijkt de instellingen van {1}",
+ "Tick the agents that should use {0} from {1} (backup, Undo).": "Vink de agents aan die {0} van {1} moeten gebruiken (back-up, Ongedaan maken).",
+ "its default (last session)": "standaard (laatste sessie)",
+ "Use {0}?": "{0} gebruiken?",
+ "No agent here can be switched to {0}'s models.": "Geen agent hier kan naar de modellen van {0} worden omgezet.",
+ "Not changed: {0}. Some agents were switched already and could not be put back.": "Niet gewijzigd: {0}. Sommige agents waren al omgezet en konden niet worden teruggezet."
 }

@@ -93,3 +93,6 @@ model = ["--provider", "{provider}", "--model", "{model}"]
 
 [closed]                               # what closes it in when the map starts it (agent_guard)
 background = []                        # its advise argv says it already
+
+[models]                               # its online models on the map: "provider/model" (its hooks)
+hook = true

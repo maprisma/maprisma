@@ -88,7 +88,10 @@
  "detect": false,
  "limits": false,
  "details": true,
- "models": null,
+ "models": [
+  "adapter_hooks_dsh.models_choices",
+  "adapter_hooks_dsh.models_plan"
+ ],
  "local_llm": {
   "files": [
    "~/.dsh/profiles/web/cordis.patch.yml"

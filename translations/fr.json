@@ -2832,5 +2832,10 @@
  "Performance": "Performances",
  "Performance of {0}": "Performances de {0}",
  "Build, context per model, and tips from an agent": "Version, contexte par modèle et conseils d'un agent",
- "{0} looks at {1}'s settings": "{0} examine les réglages de {1}"
+ "{0} looks at {1}'s settings": "{0} examine les réglages de {1}",
+ "Tick the agents that should use {0} from {1} (backup, Undo).": "Coche les agents qui doivent utiliser {0} de {1} (sauvegarde, Annuler).",
+ "its default (last session)": "son modèle par défaut (dernière session)",
+ "Use {0}?": "Utiliser {0} ?",
+ "No agent here can be switched to {0}'s models.": "Aucun agent ici ne peut passer aux modèles de {0}.",
+ "Not changed: {0}. Some agents were switched already and could not be put back.": "Non modifié : {0}. Certains agents étaient déjà changés et n'ont pas pu être rétablis."
 }

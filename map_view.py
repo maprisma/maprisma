@@ -18,8 +18,9 @@ on_relink(agent, old, new), onto empty space on_relink(agent, old, None).
 A local LLM's line to a model that agents use (drawn in the accent colour) can be
 selected the same way: dragging its end onto another model of that local LLM calls
 on_remodel(runtime, old model, new model), onto empty space on_remodel(runtime, old, None).
-Drawing from a local LLM to one of its models calls on_attach(runtime, model): agents are
-given that model (the window asks which).
+Drawing from a local LLM or an online provider to one of its models calls on_attach(provider,
+model): agents are given that model (the window asks which). Drawing from an agent to a model of a
+provider it is connected to (or from the model to the agent) calls on_pick_model, as a click does.
 Selecting a box shows a hook (orange: the theme's signal colour, apart from the lines' own) on
 every line of it that can be moved or removed, so what can be done is in view; a hook is grabbed
 at once, without clicking its line first, and hovering it says what dragging it does.
@@ -977,9 +978,13 @@ class MapView(Gtk.DrawingArea):
         kinds = {self.kind_of(source), self.kind_of(target)}
         if kinds in ({"agent", "mcp"}, {"agent", "skills"}):
             return True
-        if self.kind_of(source) == "runtime" and self.kind_of(target) == "model":
-            # From a local LLM to one of its models: agents get that model.
+        if self.kind_of(source) in ("runtime", "cloud") and self.kind_of(target) == "model":
+            # From a local LLM or an online provider to one of its models: agents get that model.
             return any(e.kind == "serves" and e.source == source and e.target == target for e in self.graph.edges)
+        if kinds == {"agent", "model"}:
+            # An agent and a model of a provider it is connected to: it uses that model.
+            agent, model = (source, target) if self.kind_of(source) == "agent" else (target, source)
+            return self.pick_for(agent, model) is not None
         if kinds == {"agent", "cloud"}:
             return True                 # an agent to an online provider: its sign-in
         if kinds != {"agent", "runtime"}:
@@ -1002,7 +1007,7 @@ class MapView(Gtk.DrawingArea):
             return
         if hook is not None or self.near_selected_edge(x, y):
             source, target = self.selected_edge
-            if self.kind_of(source) == "runtime":       # a model line: its model end moves
+            if self.kind_of(source) in ("runtime", "cloud"):   # a model line (local or online): its model end moves
                 self.link = {"from": source, "remodel": target, "start": (x, y), "x": x, "y": y, "target": None,
                              "drawing": False}
                 return
@@ -1020,7 +1025,7 @@ class MapView(Gtk.DrawingArea):
             self.link = None
             return
         # Every box can be moved inside its card (a new place in its order); some also draw lines.
-        only = self.kind_of(node_id) not in ("agent", "runtime", "mcp", "skills")
+        only = self.kind_of(node_id) not in ("agent", "runtime", "cloud", "mcp", "skills", "model")
         self.link = {"from": node_id, "start": (x, y), "x": x, "y": y, "target": None, "drawing": False,
                      "order_only": only}
 
@@ -1098,10 +1103,18 @@ class MapView(Gtk.DrawingArea):
             elif self.node_at(link["x"], link["y"]) is None:
                 self.on_relink(link["from"], link["relink"], None)
             return
-        if link and link["drawing"] and link["target"] and self.kind_of(link["from"]) == "runtime" \
+        if link and link["drawing"] and link["target"] and self.kind_of(link["from"]) in ("runtime", "cloud") \
                 and self.kind_of(link["target"]) == "model":
             if self.on_attach is not None:
                 self.on_attach(link["from"], link["target"])
+            return
+        if link and link["drawing"] and link["target"] and {self.kind_of(link["from"]), self.kind_of(link["target"])} \
+                == {"agent", "model"}:
+            a, b = link["from"], link["target"]
+            agent, model = (a, b) if self.kind_of(a) == "agent" else (b, a)
+            pick = self.pick_for(agent, model)
+            if pick is not None and self.on_pick_model is not None:
+                self.on_pick_model(*pick)
             return
         if link and link["drawing"] and link["target"] and self.on_link is not None:
             a, b = link["from"], link["target"]
@@ -1514,7 +1527,13 @@ class MapView(Gtk.DrawingArea):
         agents = [i for i in self.selected if i.startswith("agent:")]
         if self.graph is None or len(agents) != 1 or self.kind_of(node_id) != "model":
             return None
-        agent = agents[0]
+        return self.pick_for(agents[0], node_id)
+
+    def pick_for(self, agent, node_id):
+        """(agent id, provider id, model name) when node_id is a model of a provider (a local LLM or
+        an online one) the agent is connected to; else None."""
+        if self.graph is None or self.kind_of(node_id) != "model":
+            return None
         node = next(n for n in self.graph.nodes if n.id == node_id)
         for edge in self.graph.edges:
             if edge.target == node_id and edge.kind == "serves" and edge.source.startswith(("runtime:", "cloud:")) \

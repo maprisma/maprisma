@@ -54,3 +54,6 @@ hook = true
 
 [details]                              # its model and providers (the agent's card)
 reader = "opencode"
+
+[models]                               # its online models on the map: "provider/model" (its hooks)
+hook = true

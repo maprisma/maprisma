@@ -249,7 +249,10 @@
  "detect": false,
  "limits": false,
  "details": true,
- "models": null,
+ "models": [
+  "adapter_hooks_opencode.models_choices",
+  "adapter_hooks_opencode.models_plan"
+ ],
  "local_llm": {
   "files": [
    "~/.config/opencode/opencode.json"
