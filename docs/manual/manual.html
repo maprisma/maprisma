@@ -554,12 +554,35 @@
   session numbers and matched by model name — then Health, Risk management, What the words mean and
   Configuration.</p>
 
+  <h2 id="performance">Performance</h2>
+  <p>A local LLM whose settings the app knows (llama.cpp, Ollama installed by the app) has a
+  <b>Performance</b> card on its details page:</p>
+  <ul>
+    <li><b>Build</b>, <b>GPU stacks</b> and <b>Video memory</b>: what runs it — ROCm, Vulkan, CUDA or the
+      CPU (for llama.cpp read from its own device list, also for a build you made yourself), which of
+      these stacks this PC has, and the card's memory.</li>
+    <li><b>Context per model</b>: each model's file size, the context set now, the context the card holds
+      for it — its file plus the context's cache, read from the model's header — and what it was trained
+      for. <b>!</b> marks a context larger than the card holds (the model would not load, or spill into
+      RAM), <b>↑</b> one the card could make larger; <b>Set to …</b> changes it.</li>
+    <li><b>Ask …</b>: the local helper (or the online agent) looks at these facts — names and numbers
+      only — and suggests changes: settings such as flash attention, the context's cache type, the GPU
+      layers, parallel requests and batch sizes; contexts; another build when it would clearly help.
+      The app keeps only suggestions it can stand behind (a known setting with an allowed value, a
+      context the card holds) and shows each with why. <b>Apply</b> writes it with a backup; the message
+      offers <b>Undo</b>, or <b>Restart now</b> when it counts only after a restart. Another build is
+      only suggested: install it from the local LLM's menu.</li>
+  </ul>
+  <p>For Ollama, its settings are for every model at once (its server's environment file).</p>
+
   <h2 id="gpu">GPU memory and Free GPU memory</h2>
   <p>In the <b>GPU</b> card above the map, <b>GPU memory</b> shows how much is in use, split into local LLMs, desktop and
   apps, and free; <b>GPU activity</b> shows load, temperature and power. Each local LLM's box shows
   how much memory it holds, and loaded models get a green dot.</p>
   <p>Right-click a local LLM for <b>Start</b>, <b>Stop</b>, start at login, and <b>Free GPU memory</b>:
   its models are unloaded, it keeps running and loads one again when asked.</p>
+  <p>When the last agent that used a local LLM closes and the LLM still holds its models, a message asks
+  whether to give the memory back: <b>Free it</b> unloads them, <b>Keep</b> leaves them loaded.</p>
 
   <p>A local LLM that holds GPU memory gets a red stop button on its box. It asks first: <b>Free GPU memory</b> unloads its models; <b>Stop</b> ends it. For LM Studio the button is <b>Stop server</b>: only its server ends, and the app stays open with its models loaded. A model that a local LLM has loaded, but no agent uses, is joined to it by a solid light line.</p>
   <p>LM Studio can be open without its server. Its box then says <i>server off</i> with a yellow dot, agents cannot reach it, and its menu offers <b>Start server</b> (<code>lms server start</code>).</p>
@@ -743,7 +766,7 @@
     <tbody>
       <tr><td><b>Recommended</b></td><td>The MCP project's reference servers (Filesystem, Fetch, Git, Memory, Sequential Thinking, Time, Everything) and official servers of well-known makers (GitHub, Playwright, Chrome DevTools, Brave Search, Context7), grouped by purpose and pinned to their newest version.</td></tr>
       <tr><td><b>MCP registry</b></td><td>A search of the official MCP registry. Each result names its publisher as the registry checked it. The search can take ten seconds or more. The results come 20 at a time; the line under the list pages through them and shows where you are, for example <b>‹ Previous 20</b> · 21 – 40 / 200 · <b>Next 20 ›</b> (with <i>/ 40+</i> when the registry does not say how many there are).</td></tr>
-      <tr><td><b>On this PC</b></td><td>Programs on this computer that offer an MCP server, found by reading their files — nothing is started. AppImages are only looked into when you click <b>Look inside…</b>.</td></tr>
+      <tr><td><b>On this PC</b></td><td>Programs on this computer that offer an MCP server, found by reading their files — nothing is started. AppImages are only looked into when you click <b>Look inside…</b>; they are unpacked closed in by bubblewrap (no network, no home folder), so <code>bwrap</code> must be installed.</td></tr>
       <tr><td><b>By hand</b></td><td>A command line, or a web address with headers.</td></tr>
     </tbody>
   </table>
@@ -829,6 +852,7 @@
       <tr><td><b>AI features</b>: <b>Look up new agents</b></td><td>Ask an installed agent where an unknown agent keeps its settings (on by default).</td></tr>
       <tr><td><b>AI features</b>: <b>Daily AI checks</b></td><td>Once a day, an agent looks on the web for new versions of your MCP servers (off by default; it uses the agent's tokens). See <a href="#smart-check">Smart Check</a>.</td></tr>
       <tr><td><b>AI features</b>: <b>Agent for AI checks</b></td><td>Claude Code or Codex: does the AI checks and look-ups and takes the <b>Do it with …</b> and <b>Fix it with …</b> tasks.</td></tr>
+      <tr><td><b>AI features</b>: <b>Local helper</b></td><td>An agent with a model of your local LLM for the AI help that needs no web (off until you choose one). See <a href="#local-helper">The local helper</a>.</td></tr>
       <tr><td><b>Models folder</b></td><td>One folder for all models, with <b>Reorganize models…</b>.</td></tr>
       <tr><td><b>Add-ons</b> <span class="badge">Asterism</span></td><td><b>Look for add-ons online</b>, the Add-ons page, and <b>Setup</b>.</td></tr>
       <tr><td><b>About</b></td><td>The version, the author and the license; <b>Website</b> opens the project on GitHub and <b>Report an Issue</b> its issue list.</td></tr>
@@ -885,6 +909,9 @@
   <h1>Smart Check</h1>
   <p class="lead">Smart Check lets an installed online agent — Claude Code or Codex — look at this PC's
   AI setup, find updates for your MCP servers and do fixes for you, and shows what that cost in tokens.
+  A <a href="#local-helper">local helper</a> — an agent with a model of your own local LLM — can take
+  the questions that need no web, on this PC and without tokens. Every run shows its progress in a box
+  over the window and is kept in the <a href="#smart-protocol">Protocol</a>.
   The two sparkles in the header open it; they show only while one of these agents is installed.
   Settings › <b>Agent for AI checks</b> picks which one.</p>
 
@@ -907,7 +934,9 @@
   <b>!</b> problems, <b>·</b> tips and <b>✓</b> what is good. Answers that do not hold up are left out.</p>
   <p><b>Fix it with …</b> next to a problem or tip opens the agent in a terminal tab in the window with
   that finding as its task: it looks whether it is so, explains, and asks you before each step that
-  changes anything. Moving MCP servers to a new version is left to the app's <b>Update</b> (below),
+  changes anything. The app starts it so that it must ask — Codex in a read-only sandbox that asks
+  for more, Claude Code with every command and edit set to ask, whatever its own allow-list says —
+  and without its MCP servers. The finding is handed over as data to check, not as instructions. Moving MCP servers to a new version is left to the app's <b>Update</b> (below),
   which changes every agent's settings at once, with a backup and Undo.</p>
 
   <h2 id="smart-updates">Updates found</h2>
@@ -928,6 +957,45 @@
   the list.</p>
   <div class="tip"><p><b>Tip</b> After an action started here — an update, or a task in a terminal tab —
   <b>Back</b> brings you to Smart Check again, up to date.</p></div>
+
+  <h2 id="ai-progress">While an agent works</h2>
+  <p>Every AI help run you start — Check now, Ask an agent on the Models and Add MCP server pages, Check
+  now for updates, Ask on a local LLM's <a href="#performance">Performance</a> card — shows a box in the
+  middle of the window: who is asked (the agent and its model), its steps (a spinner that turns into
+  <b>✓</b>, or <b>✗</b> when one failed), the time so far and, at the end, the tokens it used.</p>
+  <ul>
+    <li><b>In the background</b> hides the box; the run goes on, and a message says when it is done.</li>
+    <li><b>Cancel</b> ends the agent at once (its program and everything it started).</li>
+    <li>When it fails, the box stays with what went wrong until you close it; the text can be selected
+      and copied.</li>
+  </ul>
+  <p>Look-ups on the web (model advice, MCP updates) run with the web and nothing else: without the
+  agent's MCP servers, connectors, plugins and hooks.</p>
+
+  <h2 id="local-helper">The local helper</h2>
+  <p>An agent connected to a local LLM can answer AI help with one of that LLM's models: on this PC, with
+  no web, no tokens of a plan and nothing leaving the computer. It answers what needs no web: Smart
+  Check's summary, which MCP server fits, and the tips on a local LLM's Performance card. Model advice
+  and MCP server updates still go to the online agent, since they need the web.</p>
+  <p>The app suggests one — the largest chat model your graphics card holds (speech, embedding and
+  tokenizer models are left out) — on Smart Check, with <b>Use it</b>. Settings › <b>AI features</b> ›
+  <b>Local helper</b> lists every agent and model that can be it, the suggested one first, and
+  <b>Off</b>. Nothing is used until you choose it. Before it answers, the app starts the local LLM and
+  loads the model (a step in the progress box). The helper runs with no tools, no MCP servers, no
+  extensions and no project files. Any agent whose add-on says how to ask it one question offline can
+  be the helper; Pi is the first.</p>
+
+  <h2 id="smart-protocol">Protocol</h2>
+  <p>Every AI help run is kept, so that you — or someone who knows the setup well — can look over what
+  was done. Each entry shows when it ran, the agent and model, the result (worked, failed, cancelled),
+  the time and the tokens. Opened, it shows the whole text: the options that closed the agent in, the
+  steps, each question exactly as it was sent with the agent's answer, what the app changed from the
+  answer (with the backup, for Undo by hand) and, for a task in a terminal tab, what the terminal showed
+  when it ended. <b>Copy</b> puts an entry on the clipboard for a report or a second opinion;
+  <b>Open the protocol folder</b> shows the files.</p>
+  <p>The protocol keeps the last 200 runs in <code>~/.local/state/ai-agents-map/ai-help/</code>, readable
+  only by you. Questions hold names, numbers and settings, never keys; a terminal's text holds what was
+  on the screen.</p>
 
   <h2 id="smart-tokens">Token statistics</h2>
   <p>Tokens used today and in the last 30 days, a chart per day, and the totals by agent and by plugin
@@ -1238,6 +1306,7 @@
       <tr><td><code>~/.local/state/ai-agents-map/jobs.json</code></td><td>Interrupted downloads and installs.</td></tr>
       <tr><td><code>~/.local/state/ai-agents-map/reorganize.json</code></td><td>The journal of the last reorganize, for Undo.</td></tr>
       <tr><td><code>~/.cache/ai-agents-map/</code></td><td>Scan results, tool lists, update checks, the last Smart Check (<code>smart-check.json</code>) and the AI checks' MCP updates (<code>mcp-updates.json</code>).</td></tr>
+      <tr><td><code>~/.local/state/ai-agents-map/ai-help/</code></td><td>The <a href="#smart-protocol">Protocol</a>: one file per AI help run (the last 200).</td></tr>
       <tr><td><code>~/.local/state/omarchy-plugin-ai/runs.json</code></td><td>The AI look-ups and tasks of this app and other plugins, with their tokens: Smart Check's statistics.</td></tr>
       <tr><td><code>~/.config/systemd/user/ai-agents-map-providers.service</code></td><td>The watcher that starts local LLMs with their agents.</td></tr>
     </tbody>

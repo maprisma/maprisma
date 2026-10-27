@@ -319,7 +319,8 @@ def main():
     parser.add_argument("--out", type=Path, help="also copy the (single) PDF here")
     args = parser.parse_args()
     chromium = tool("chromium", "CHROMIUM", ("/usr/bin/google-chrome-stable",))
-    pdfcraft = tool("pdfcraft-cli", "PDFCRAFT", ("~/Applications/pdfcraft-*/usr/bin/pdfcraft-cli",))
+    pdfcraft = tool("pdfcraft-cli", "PDFCRAFT", ("/mnt/Data/Ai/McpServers/pdfcraft-*/usr/bin/pdfcraft-cli",
+                                                 "~/Applications/pdfcraft-*/usr/bin/pdfcraft-cli"))
     BUILD.mkdir(exist_ok=True)
     for lang in (LANGUAGES if args.all else (args.lang,)):
         build(lang, args.plugin_version, None if args.all else args.out, chromium, pdfcraft)

@@ -48,7 +48,8 @@ theme, Hyprland window actions). Install that one there.
   - Arch: `sudo pacman -S python-gobject gtk4 libadwaita`
 
   Agent icons need a Nerd Font (Symbols Nerd Font). Optional: `vte4` for agents in a terminal
-  inside the window.
+  inside the window, `bubblewrap` (`bwrap`) for unpacking AppImages (MCP server apps, Jan): they
+  are unpacked closed in, and without it not at all.
 - **From source:** `bin/asterism` in a checkout.
 
 Settings live in `~/.config/asterism/`. Light or dark and the accent colour follow your system.

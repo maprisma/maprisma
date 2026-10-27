@@ -9,7 +9,8 @@ license=('MIT')
 depends=('python' 'python-gobject' 'gtk4' 'libadwaita' 'curl' 'openssh' 'ttf-nerd-fonts-symbols')
 optdepends=('vte4: agents in a terminal inside the window'
             'xdg-terminal-exec: start agents in your own terminal'
-            'mise: updates for agents installed with mise')
+            'mise: updates for agents installed with mise'
+            'bubblewrap: unpacking AppImages (MCP server apps, Jan) closed in')
 # The signed agent and provider add-ons (switched off until the first start's Set up).
 _addons=https://github.com/uBruckhaus/asterism-addons/releases/download
 _adapters=0.11.1              # the adapter add-ons' own release (signed separately)

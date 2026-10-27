@@ -18,7 +18,7 @@ python3 docs/manual/build.py --out ~/Documents/Asterism-User-Manual.pdf
 ```
 
 Needs `chromium` (or `google-chrome-stable`), `pdftotext` (poppler) and `pdfcraft-cli`
-(on PATH, in `~/Applications/pdfcraft-*/`, or `PDFCRAFT=/path/to/pdfcraft-cli`).
+(on PATH, in `/mnt/Data/Ai/McpServers/pdfcraft-*/` or `~/Applications/pdfcraft-*/`, or `PDFCRAFT=/path/to/pdfcraft-cli`).
 
 What the build does:
 
