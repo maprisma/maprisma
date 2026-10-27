@@ -75,6 +75,21 @@ class TuningTest(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     engine.tuning_changes(None, "qwen", "OLLAMA_KV_CACHE_TYPE", "q8_0")
 
+    def test_an_older_addon_engine_gets_the_tuning_of_the_apps_own(self):
+        from unittest import mock
+        import providers
+
+        class Old(llm_engine.LlamaRouter):      # a provider add-on signed before tuning existed
+            pass
+        old = Old()
+        fake = mock.Mock(engine=old)
+        with mock.patch.object(providers, "get", return_value=fake):
+            engine = llm_engine.of("llamacpp")
+        self.assertIs(engine, old)
+        self.assertIn("flash-attn", engine.tuning)
+        with self.assertRaises(ValueError):
+            engine.tuning_changes(None, "*", "flash-attn", "maybe")
+
 
 if __name__ == "__main__":
     unittest.main()
