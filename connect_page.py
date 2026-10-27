@@ -222,7 +222,7 @@ class ConnectPage:
         import online_models
         graph = self.side_map.graph
         model = next((n.label for n in graph.nodes if n.id == model_id), "")
-        users = {e.source for e in graph.edges if e.target == cloud_id and e.kind in ("uses", "available")}
+        users = {e.source for e in graph.edges if e.target == cloud_id and e.kind in ("uses", "available", "offer")}
         provider = next((n.label for n in graph.nodes if n.id == cloud_id), cloud_id)
         agents = [a for a in self.agent_list if f"agent:{a.command}" in users and online_models.supported(a.command)
                   and online_models.target(a.command, provider, model) is not None]
@@ -665,7 +665,10 @@ class ConnectPage:
             self.connect_models = models
             context = llm_engine.of(runtime).agent_context(runtime)
             self.connect_context = context
-            self.connect_model = self.dropdown(models or [_("(no models found)")], 0,
+            # A model chosen before (the first-agent guide's starter model), once, when it is there.
+            chosen, self.connect_preselect = getattr(self, "connect_preselect", None), None
+            self.connect_model = self.dropdown(models or [_("(no models found)")],
+                                               models.index(chosen) if chosen in models else 0,
                                                lambda _i: (self.update_connect_preview(), self.connect_run_check()))
             if not remove_only:
                 self.setting_line(form, _("Model"), _("The model the agent uses when it works with this provider."),

@@ -104,7 +104,7 @@ class TargetTest(unittest.TestCase):
 
 
 class MapTest(unittest.TestCase):
-    def test_online_providers_of_a_local_harness_are_offered_dashed(self):
+    def test_online_providers_of_a_local_harness_are_offered_quietly(self):
         g = graph.Graph()
         agent = mock.Mock(command="dsh")
         found = ["llama-local/qwen", "deepseek-official/deepseek-flash"]
@@ -114,7 +114,7 @@ class MapTest(unittest.TestCase):
         self.assertIn("cloud:deepseek", ids)
         self.assertIn("model:cloud:deepseek:deepseek-flash", ids)
         self.assertNotIn("model:cloud:llama-local:qwen", ids)            # the local LLM's box shows it
-        self.assertIn(("agent:dsh", "cloud:deepseek", "available"), {(e.source, e.target, e.kind) for e in g.edges})
+        self.assertIn(("agent:dsh", "cloud:deepseek", "offer"), {(e.source, e.target, e.kind) for e in g.edges})
 
 
 if __name__ == "__main__":

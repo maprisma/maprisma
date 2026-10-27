@@ -33,10 +33,35 @@ class FirstAgentPage:
         page.append(self.page_scroller(self.first_body))
         return page
 
+    first_hw = None                          # (gpu, gpu_stack.Stack), looked at on a thread (first_look)
+
+    def first_look(self):
+        """The graphics card and its software, once per open (lspci, pacman: seconds at worst), on a
+        thread; the page is filled again when they are known."""
+        import gpu_stack
+        import install_ctl
+
+        def work():
+            try:
+                gpu = install_ctl.detect_gpu()
+                hw = (gpu, gpu_stack.look(gpu.vendor))
+            except Exception:
+                hw = (install_ctl.Gpu("", count=0, vram=0), gpu_stack.Stack())
+            GLib.idle_add(done, hw)
+
+        def done(hw):
+            self.first_hw = hw
+            if self.page_name() == "firstagent":
+                self.fill_first_agent()
+            return False
+        threading.Thread(target=work, daemon=True).start()
+
     def open_first_agent(self):
         if self.page_name() != "firstagent":
             self.first_return = self.view if self.page_name() in ai_core.VIEWS else "main"
         self.first_catalog = first_agent.load(loaded_addons=getattr(self, "addons", ()))
+        self.first_hw = None
+        self.first_look()
         self.fill_first_agent()
         self.empty_area.set_visible(False)       # its "set up your first agent" is this page
         self.show_page("firstagent")
@@ -77,6 +102,14 @@ class FirstAgentPage:
     def fill_first_agent(self):
         body = self.first_body
         self.clear_box(body)
+        if self.first_hw is None:
+            waiting = Gtk.Box(spacing=ai_core.GAP_INLINE)
+            waiting.append(Gtk.Spinner(spinning=True))
+            label = Gtk.Label(label=_("Looking at this PC's graphics card…"), xalign=0)
+            label.add_css_class("am-agent-detail")
+            waiting.append(label)
+            body.append(waiting)
+            return
         route = self.first_route()
         if route is None:
             self.fill_first_choice(body)
@@ -84,14 +117,13 @@ class FirstAgentPage:
             self.fill_first_steps(body, route)
 
     def fill_first_choice(self, body):
-        import install_ctl
         catalog = self.first_catalog or first_agent.load()
         card = self.info_card(_("Get one agent working"), "info")
         self.card_text(card.body, _("An agent is the program you talk to: it reads, writes and runs things for you. "
                                     "It needs either an online account (a plan or an API key) or a model running "
                                     "on this PC. Pick one way; Asterism shows every step and asks before each one."))
         body.append(card)
-        vram = install_ctl.detect_gpu().vram
+        vram = self.first_hw[0].vram
         for kind, title, hint in (("online", _("With an online account"),
                                    _("The strongest models; needs a plan or an API key, which costs money.")),
                                   ("local", _("On this PC"),
@@ -103,7 +135,13 @@ class FirstAgentPage:
             self.note(body, hint)
             rows = self.boxed_list()
             for route in routes:
-                lines = [route.access]
+                lines = [_(route.access)]
+                missing = self.first_unavailable(route)
+                if missing:
+                    row = self.plain_row(route.title, missing)
+                    row.set_sensitive(False)
+                    rows.append(row)
+                    continue
                 if kind == "local":
                     model = first_agent.suggested(catalog.models, vram)
                     if model is not None:
@@ -117,6 +155,18 @@ class FirstAgentPage:
                 rows.append(row)
             body.append(rows)
         body.append(self.action_row(self.action_button(_("Later"), size="page", on_click=self.first_later)))
+
+    def first_unavailable(self, route) -> str:
+        """Why this edition cannot offer the route ("" when it can): its agent or its local LLM is
+        neither here nor in an add-on that could be switched on."""
+        import harnesses
+        import providers
+        addons = [a for a in getattr(self, "addons", ()) if a.state in ("verified", "loaded")]
+        for key, kind, here in ((route.agent, "agent", harnesses.get(route.agent) is not None),
+                                (route.runtime, "provider", not route.runtime or providers.get(route.runtime) is not None)):
+            if not here and not any(a.kind == kind and key in a.provides for a in addons):
+                return _("Not available in this edition (its add-on is not here).")
+        return ""
 
     def first_choose(self, route):
         self.first_save(route=route.id, later=False)
@@ -133,6 +183,9 @@ class FirstAgentPage:
         the one to do now."""
         import harnesses
         import providers
+        # mise (~/.local/bin) or its shims may have come since the app started: on PATH now, so the
+        # install recipes and the agents' starts find them.
+        ai_core.add_user_program_dirs()
         steps = []
         agent = next((a for a in self.agent_list if a.command == route.agent), None)
         name = agent.name if agent else route.name
@@ -164,7 +217,7 @@ class FirstAgentPage:
                       lambda: self.offer_install("agent", route.agent), ""))
         if route.kind == "online":
             steps.append((_("Sign in or set an API key"), installed and self.first_signed_in(route.agent),
-                          route.access, _("Sign in…"), lambda: self.offer_sign_in(route.agent), ""))
+                          _(route.access), _("Sign in…"), lambda: self.offer_sign_in(route.agent), ""))
         else:
             steps += self.first_local_steps(route, name, installed)
         verified = route.agent in first_agent.working(self.first_installed())
@@ -181,8 +234,7 @@ class FirstAgentPage:
         rt = next((r for r in self.inventory.runtimes if r.key == route.runtime), None)
         rt_name = rt.name if rt else route.runtime
         steps = []
-        gpu = install_ctl.detect_gpu()
-        stack = gpu_stack.look(gpu.vendor)
+        gpu, stack = self.first_hw
         if gpu.vendor == "amd":
             # Vulkan is enough to start (the graphics driver alone); ROCm is offered below, for speed.
             steps.append((_("Graphics card support"), stack.vulkan or bool(stack.rocm),
@@ -191,8 +243,9 @@ class FirstAgentPage:
         steps += [(_("{0}, which runs the model").format(rt_name), bool(rt and rt.installed),
                   _("Installed for you only, as a background service; the install page shows what it does."),
                   _("Install {0}").format(rt_name), lambda: self.offer_install("runtime", route.runtime), "")]
-        have = self.first_model_here(rt, catalog.models)
-        vram = install_ctl.detect_gpu().vram
+        here = self.first_model_here(rt, catalog.models)
+        have = here[0].title if here else None
+        vram = gpu.vram
         model = first_agent.suggested(catalog.models, vram)
         detail = _("{0}: {1}, {2} (fits your graphics card: {3})").format(
             _("Suggested"), model.title, size_text(model.bytes), {"fits": _("yes"), "partly": _("partly"),
@@ -200,30 +253,107 @@ class FirstAgentPage:
                 first_agent.fit(model, vram)]) if model else ""
         steps.append((_("A model"), have is not None, have or detail, _("Download it"),
                       (lambda m=model: self.first_download(rt, m)) if model and rt and rt.installed else None, ""))
-        connected = installed and bool(rt) and connect.is_connected(route.agent, route.runtime) \
-            and connect.is_active(route.agent, route.runtime)
+        if here is not None:
+            steps.append(self.first_context_step(rt, here, vram))
+        connected = installed and bool(rt) and here is not None and connect.is_connected(route.agent, route.runtime) \
+            and connect.is_active(route.agent, route.runtime) and self.first_uses(route.agent, here[1])
         steps.append((_("{0} connected to {1}").format(name, rt_name), connected,
                       _("A preview shows what changes in its settings; Undo puts it back."), _("Connect…"),
-                      lambda: self.on_map_link(f"agent:{route.agent}", f"runtime:{route.runtime}"), ""))
+                      (lambda: self.first_connect(route, here[1])) if here else None, ""))
         return steps
 
+    def first_context_step(self, rt, here, vram: int) -> tuple:
+        """The model's context: at least what an agent needs (first_agent.MIN_CONTEXT), at most what the
+        card holds for it (context_ctl.fit) and the catalog's size for it; set with a backup (Undo)."""
+        import os
+        import context_ctl
+        import llm_engine
+        from pathlib import Path
+        model, name = here
+        engine = llm_engine.of(rt)
+        title = _("Enough context for an agent")
+        try:
+            folder = Path(os.path.expanduser(rt.models_dir)) if rt.models_dir else Path()
+            found = engine.context_now(rt, folder, name)
+        except Exception:
+            found = None
+        if not found:
+            return (title, True, _("Set by the local LLM itself."), "", None, "")
+        now, cache, model_file = found
+        best = model.context
+        if model_file is not None and vram:
+            try:
+                fit = context_ctl.fit(model_file, vram, cache or "f16")
+                if fit.known:
+                    best = min(best, fit.best)      # 0: the model leaves no room at all (blocked below)
+            except Exception:
+                pass
+        if best < first_agent.MIN_CONTEXT:
+            return (title, False, "", "", None,
+                    _("This model leaves too little room for an agent on this card; choose a smaller one."))
+        done = bool(now) and now >= first_agent.MIN_CONTEXT
+        return (title, done, _("now {0} tokens; an agent needs at least {1}").format(now or "?", first_agent.MIN_CONTEXT),
+                _("Set to {0}").format(best), lambda: self.first_set_context(rt, name, best), "")
+
+    def first_set_context(self, rt, name: str, ctx: int):
+        """As the Performance card does: the settings change with its backup (Undo), or the local
+        LLM's own way (Ollama: its API), on a thread."""
+        import llm_engine
+        engine = llm_engine.of(rt)
+        if engine.context_changes(rt, name, ctx) is not None:
+            self.apply_tuning(rt, name, "ctx-size", str(ctx))
+            GLib.timeout_add(1500, lambda: self.page_name() == "firstagent" and self.first_refresh() and False)
+            return
+
+        def work():
+            try:
+                engine.set_context(rt, name, ctx)
+                return None
+            except (OSError, ValueError, RuntimeError) as error:
+                return str(error)
+
+        def done(error):
+            if error:
+                self.show_error(_("Not changed: {0}").format(error))
+            else:
+                self.toast(_("{0}: context set to {1}").format(name, ctx), 5)
+            self.first_refresh()
+            return False
+        threading.Thread(target=lambda: GLib.idle_add(done, work()), daemon=True).start()
+
     @staticmethod
-    def first_model_here(rt, models) -> str | None:
-        """The starter model's name when the local LLM has one of them (by file name or repo)."""
+    def first_uses(command: str, model: str) -> bool:
+        """The agent's settings name this model (its model, without the provider)."""
+        import agent_details
+        import graph
+        try:
+            name, _provider = graph.split_model(agent_details.details_for(command).model)
+        except Exception:
+            return False
+        return name.lower() == model.lower()
+
+    def first_connect(self, route, model: str):
+        """The connect page for the agent and the local LLM, with the starter model chosen."""
+        self.connect_preselect = model
+        self.on_map_link(f"agent:{route.agent}", f"runtime:{route.runtime}")
+
+    @staticmethod
+    def first_model_here(rt, models) -> tuple | None:
+        """(starter model, the local LLM's own name for it) when it has one of them (by file or repo)."""
         if rt is None or not rt.installed:
             return None
-        names = [str(m).lower() for m in rt.models or ()]
         for model in models:
             stem, repo = model.file[:-5].lower(), model.repo.lower()
-            if any(stem in n or repo in n for n in names):
-                return model.title
+            for name in rt.models or ():
+                if stem in str(name).lower() or repo in str(name).lower():
+                    return model, str(name)
         return None
 
     def fill_first_steps(self, body, route):
         steps = self.first_steps(route)
         now = next((i for i, step in enumerate(steps) if not step[1]), None)
         card = self.info_card(route.title.upper(), "ok" if now is None else "info")
-        self.card_text(card.body, route.access)
+        self.card_text(card.body, _(route.access))
         body.append(card)
         rows = self.boxed_list()
         for index, (title, done, detail, label, action, blocked) in enumerate(steps):
@@ -248,8 +378,7 @@ class FirstAgentPage:
     def fill_first_optional(self, body):
         """On an AMD card: ROCm (and PyTorch for ROCm) for more speed, not needed to start."""
         import gpu_stack
-        import install_ctl
-        stack = gpu_stack.look(install_ctl.detect_gpu().vendor)
+        stack = self.first_hw[1]
         extra = [k for k in gpu_stack.wanted(stack) if k in ("rocm", "pytorch-rocm")]
         if not extra:
             return
@@ -280,6 +409,8 @@ class FirstAgentPage:
         body.append(card)
 
     def first_refresh(self):
+        self.first_hw = None                 # an install may have brought ROCm or Vulkan
+        self.first_look()
         self.collect()
         self.refresh_overview()
         self.refresh_map()
@@ -298,7 +429,18 @@ class FirstAgentPage:
         self.open_install(types.SimpleNamespace(key="mise", name="mise", installed=False), "install")
 
     def first_install_node(self):
+        import terminal_pane
+        ai_core.add_user_program_dirs()
         argv = first_agent.node_step()
+        if terminal_pane.vte() is None:
+            # No terminal inside the window: a terminal window of its own; Check again afterwards.
+            import desktop
+            from pathlib import Path
+            if desktop.open_terminal(argv, str(Path.home())):
+                self.toast(_("Node.js is installing in a terminal window. Check again when it is done."), 8)
+            else:
+                self.show_note(_("No terminal found (xdg-terminal-exec)"))
+            return
         self.open_command_tab("install:node", _("Install Node.js"), "", self.back_to_here(),
                               on_end=self.first_refresh, argv=argv)
 
@@ -335,16 +477,18 @@ class FirstAgentPage:
         name = agent.name if agent else route.title
 
         rt = next((r for r in self.inventory.runtimes if r.key == route.runtime), None) if route.runtime else None
+        here = self.first_model_here(rt, (self.first_catalog or first_agent.load()).models) if rt else None
 
         def work(step):
             import ai_helper
-            if rt is not None and not rt.running:
-                # Our own runs do not wake the local LLM (the watcher leaves them alone): started here.
+            if rt is not None and here is not None:
+                # Our own runs do not wake the local LLM (the watcher leaves them alone): started here
+                # and its model loaded (waited for), so the question finds it ready.
                 import runtime_ctl
                 step("start")
-                ok, why = runtime_ctl.start(rt)
+                ok, why = runtime_ctl.load(rt, here[1], wait=90)
                 if not ok:
-                    raise RuntimeError(_("{0} did not start: {1}").format(rt.name, why))
+                    raise RuntimeError(_("{0} could not load {1}: {2}").format(rt.name, here[1], why))
                 step("ask")
             work_dir = agent_profiles.WORK_DIR
             work_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -367,7 +511,7 @@ class FirstAgentPage:
                 self.fill_first_agent()
 
         steps = [("ask", _("{0} answers a test question").format(name))]
-        if rt is not None and not rt.running:
+        if rt is not None and here is not None:
             steps.insert(0, ("start", _("Starting {0}").format(rt.name)))
         self.run_ai_help(_("Test of {0}").format(name), route.agent, steps, work, done)
 

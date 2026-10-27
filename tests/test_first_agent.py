@@ -108,3 +108,13 @@ class GpuStackTest(unittest.TestCase):
         self.assertEqual(gpu_stack.wanted(gpu_stack.Stack("amd", vulkan=True, rocm="7.2")), [])
         self.assertEqual(gpu_stack.wanted(gpu_stack.Stack("nvidia")), [])
         self.assertEqual(gpu_stack.look("amd", rocm_in_use=True).rocm or "", gpu_stack.rocm() or "yes")
+
+
+class CatalogTextsTest(unittest.TestCase):
+    def test_every_routes_access_text_is_translated(self):
+        import i18n
+        for code, _name in i18n.LANGUAGES:
+            if code == "en":
+                continue
+            for route in fa.load().routes:
+                self.assertIn(route.access, i18n.STRINGS[code], (code, route.id))

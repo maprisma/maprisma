@@ -2897,5 +2897,22 @@
  "Starting {0}": "Iniciando {0}",
  "PyTorch {0} ({1})": "PyTorch {0} ({1})",
  "Software: {0}": "Software: {0}",
- "Optional:": "Opcional:"
+ "Optional:": "Opcional:",
+ "A ChatGPT plan (Plus, Pro, Business) or an API key from platform.openai.com.": "Un plan de ChatGPT (Plus, Pro, Business) o una clave de API de platform.openai.com.",
+ "A Claude plan (Pro, Max, Team) or an API key from console.anthropic.com. The free plan does not include Claude Code.": "Un plan de Claude (Pro, Max, Team) o una clave de API de console.anthropic.com. El plan gratuito no incluye Claude Code.",
+ "An agent is the program you talk to: it reads, writes and runs things for you. It needs either an online account (a plan or an API key) or a model running on this PC. Pick one way; Asterism shows every step and asks before each one.": "Un agente es el programa con el que hablas: lee, escribe y ejecuta cosas por ti. Necesita una cuenta en línea (un plan o una clave de API) o un modelo que funcione en este PC. Elige un camino; Asterism muestra cada paso y pregunta antes de cada uno.",
+ "No AI agent was found on this PC yet. The guide gets one working step by step, online or on this PC; or pick add-ons below if you know what you want.": "Todavía no se ha encontrado ningún agente de IA en este PC. La guía pone uno en marcha paso a paso, en línea o en este PC; o elige complementos abajo si sabes lo que quieres.",
+ "No agent works on this PC yet. Asterism guides you to one, online (a plan or an API key) or on this PC (a local LLM), and asks before each step.": "Todavía no funciona ningún agente en este PC. Asterism te guía hasta uno, en línea (un plan o una clave de API) o en este PC (un LLM local), y pregunta antes de cada paso.",
+ "Node.js is installing in a terminal window. Check again when it is done.": "Node.js se está instalando en una ventana de terminal. Vuelve a comprobar cuando termine.",
+ "Not available in this edition (its add-on is not here).": "No disponible en esta edición (falta su complemento).",
+ "ROCm lets a local LLM run its ROCm build, often faster than Vulkan on AMD cards.": "ROCm permite que un LLM local use su compilación ROCm, a menudo más rápida que Vulkan en tarjetas AMD.",
+ "Runs on this PC: Ollama serves a model, OpenCode talks to it. Downloads need the internet once; then nothing leaves the PC.": "Funciona en este PC: Ollama sirve un modelo y OpenCode habla con él. Las descargas necesitan internet una vez; después nada sale del PC.",
+ "Runs on this PC: llama.cpp serves a model, Pi talks to it. Downloads need the internet once; then nothing leaves the PC.": "Funciona en este PC: llama.cpp sirve un modelo y Pi habla con él. Las descargas necesitan internet una vez; después nada sale del PC.",
+ "Vulkan is enough to start. ROCm, AMD's compute software, is often faster; PyTorch for ROCm lets speech and image tools use the graphics card.": "Vulkan basta para empezar. ROCm, el software de cálculo de AMD, suele ser más rápido; PyTorch para ROCm permite que las herramientas de voz e imagen usen la tarjeta gráfica.",
+ "Set by the local LLM itself.": "Lo fija el propio LLM local.",
+ "now {0} tokens; an agent needs at least {1}": "ahora {0} tokens; un agente necesita al menos {1}",
+ "{0} can also use {1}'s models: not a connection, nothing to remove. Click one of the models, or draw a line to it, to switch {0} to it.": "{0} también puede usar los modelos de {1}: no es una conexión, no hay nada que quitar. Haz clic en uno de los modelos o traza una línea hasta él para cambiar {0} a ese modelo.",
+ "Looking at this PC's graphics card…": "Revisando la tarjeta gráfica de este PC…",
+ "Enough context for an agent": "Contexto suficiente para un agente",
+ "This model leaves too little room for an agent on this card; choose a smaller one.": "Este modelo deja muy poco espacio para un agente en esta tarjeta; elige uno más pequeño."
 }

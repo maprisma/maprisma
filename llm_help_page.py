@@ -110,7 +110,7 @@ class LlmHelpPage:
         self.detail_grid(slot, rows)
         for key in gpu_stack.wanted(stack):
             name = gpu_stack.PACKAGES[key][0]
-            hint = {"rocm": _("ROCm makes llama.cpp's ROCm build possible, often faster than Vulkan on AMD cards."),
+            hint = {"rocm": _("ROCm lets a local LLM run its ROCm build, often faster than Vulkan on AMD cards."),
                     "pytorch-rocm": _("PyTorch is here for the CPU only: its ROCm build uses the graphics card."),
                     "vulkan-radeon": _("Without Vulkan or ROCm, a local LLM runs on the CPU only.")}[key]
             line = Gtk.Box(spacing=ai_core.GAP_INLINE)

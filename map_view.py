@@ -101,7 +101,7 @@ TILE_GLYPHS = {"cloud": "cloud", "runtime": "chip", "model": "model", "more": "f
 TILE_TONES = {"mcp": "yellow", "skills": "green", "model": "muted", "more": "muted"}
 # "available": set up but not in use (dotted), in the alert colour of the header's ! (the legend too).
 # "loaded": a provider → model line while that model is loaded but no agent uses it (solid, light).
-EDGE_COLORS = {"uses": "accent", "available": "red", "serves": "muted", "mcp": "yellow", "skills": "green",
+EDGE_COLORS = {"uses": "accent", "available": "red", "offer": "muted", "serves": "muted", "mcp": "yellow", "skills": "green",
                "loaded": "fg", "models": "magenta",   # models: agents on different models of one local LLM
                "subagent": "accent"}                  # subagent: an agent → a subagent it works with
 
@@ -137,6 +137,7 @@ class MapView(Gtk.DrawingArea):
         self.selected = []       # node ids picked by clicking, in click order
         self.on_selection = None # callback(list of selected nodes)
         self.on_link = None      # callback(agent node id, runtime node id) after a drawn line
+        self.offer_tip = ""      # tooltip of an "offer" line ("{0}" agent, "{1}" provider)
         self.link = None         # while drawing: {"from": id, "x": .., "y": .., "target": id or None}
         self.on_relink = None    # callback(agent id, old runtime id, new runtime id)
         self.on_remodel = None   # callback(runtime id, old model id, new model id or None): a model line moved
@@ -912,6 +913,18 @@ class MapView(Gtk.DrawingArea):
             best = min(best, math.hypot(px - x, py - y))
         return best
 
+    def offer_at(self, x, y, reach: float = 6):
+        """(agent name, provider name) of a shown "offer" line under the pointer, or None."""
+        lit = self.highlighted()[1]
+        for index, edge in enumerate(self.graph.edges if self.graph else []):
+            if edge.kind != "offer" or lit is None or index not in lit or edge.source not in self.boxes \
+                    or edge.target not in self.boxes:
+                continue
+            if self.edge_distance(edge, x, y) < reach:
+                names = {n.id: n.label for n in self.graph.nodes}
+                return names.get(edge.source, edge.source), names.get(edge.target, edge.target)
+        return None
+
     def edge_at(self, x, y, reach: float = 6):
         best, best_dist = None, reach
         for edge in self.graph.edges if self.graph else []:
@@ -1298,6 +1311,8 @@ class MapView(Gtk.DrawingArea):
             # A subagent's box: its whole task (the box cuts it short) and what it is.
             node = next(n for n in self.graph.nodes if n.id == found)
             self.set_tooltip_text("\n".join(p for p in (node.label, node.detail) if p))
+        elif pin is None and found is None and self.offer_tip and (offer := self.offer_at(x, y)) is not None:
+            self.set_tooltip_text(self.offer_tip.format(*offer))
         elif pin is None and ((edge := self.hook_at(x, y)) is not None
                               or (found is None and (edge := self.edge_at(x, y)) is not None)):
             # A hook, or a line that can be moved: what to do with it (the cursor says it can be grabbed).
@@ -1537,7 +1552,7 @@ class MapView(Gtk.DrawingArea):
         node = next(n for n in self.graph.nodes if n.id == node_id)
         for edge in self.graph.edges:
             if edge.target == node_id and edge.kind == "serves" and edge.source.startswith(("runtime:", "cloud:")) \
-                    and any(e.source == agent and e.target == edge.source and e.kind in ("uses", "available")
+                    and any(e.source == agent and e.target == edge.source and e.kind in ("uses", "available", "offer")
                             for e in self.graph.edges):
                 return agent, edge.source, node.label
         return None
@@ -1898,6 +1913,8 @@ class MapView(Gtk.DrawingArea):
             edge = self.graph.edges[index]
             if edge.kind == "default" or edge.source not in self.boxes or edge.target not in self.boxes:
                 continue
+            if edge.kind == "offer" and (lit_edges is None or index not in lit_edges):
+                continue                     # what an agent could switch to: only while it is in view
             x1, y1, x2, y2 = self.edge_points(edge)
             bend = (x2 - x1) * 0.5
             picked = (edge.source, edge.target) == self.selected_edge
@@ -1934,7 +1951,7 @@ class MapView(Gtk.DrawingArea):
                 cr.set_line_width(3.2 if picked else 2.8 if active or outside else 2.2 if loaded else
                                   2.0 if lit_edges is not None and index in lit_edges else 1.4)
                 # Dashed: set up but not in use (an agent's second provider).
-                cr.set_dash([5, 4] if edge.kind == "available" else [])
+                cr.set_dash([5, 4] if edge.kind == "available" else [1.5, 4] if edge.kind == "offer" else [])
             cr.move_to(x1, y1)
             cr.curve_to(x1 + bend, y1, x2 - bend, y2, x2, y2)
             cr.stroke()

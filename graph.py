@@ -161,8 +161,10 @@ def provider_name(raw: str) -> str:
 
 def online_choices(graph, agent, aid: str, model: str, model_provider: str, local_names: dict, runtimes: dict):
     """A harness with several providers (Hermes, DeepSeek Harness, Pi, …): each online provider its
-    own settings (or its own built-in routes) offer, with those models, joined to it by a dashed
-    "available" line while it uses another provider; a click or a line to one of them switches it."""
+    own settings (or its own built-in routes) offer, with those models, joined to it by an "offer" line
+    while it uses another provider: not a connection (nothing to disconnect), only what it can switch
+    to; the map draws it quietly while the agent is selected or hovered; a click or a line to one of
+    the models switches it."""
     import online_models
     local_keys = {key.lower() for key in providers.connect_keys().values()} | {n.lower() for n in local_names}
     current = f"{model_provider}/{model}" if model and model_provider else ""
@@ -174,7 +176,7 @@ def online_choices(graph, agent, aid: str, model: str, model_provider: str, loca
         cid = f"cloud:{service.lower()}"
         graph.add(Node(cid, 2, service, "", "cloud"))
         if not any(e.source == aid and e.target == cid for e in graph.edges):
-            graph.link(aid, cid, "available")
+            graph.link(aid, cid, "offer")
         mid = f"model:{cid}:{name.lower()}"
         graph.add(Node(mid, 3, name, "", "model"))
         if not any(e.source == cid and e.target == mid for e in graph.edges):

@@ -955,6 +955,8 @@ class AgentsMap(TextGuard, PageParts, SettingsPages, ThemeCss, InstallDialog, Se
         self.side_map.on_pick_model = self.on_map_pick_model
         self.side_map.on_remodel = self.on_map_remodel
         self.side_map.on_attach = self.on_map_attach
+        self.side_map.offer_tip = _("{0} can also use {1}'s models: not a connection, nothing to remove. "
+                                    "Click one of the models, or draw a line to it, to switch {0} to it.")
         self.side_map.edge_tips = (
             _("Drag its orange hook to another local LLM, or onto empty space to remove it (click the line or "
               "its box to show the hook)"),
