@@ -1366,6 +1366,276 @@
      "params": {}
     }
    ]
+  },
+  {
+   "name": "subagents of Claude projects, Codex rollouts and Copilot events",
+   "environment": {
+    "ASTERISM_DIFF_COMPONENT": "scans",
+    "ASTERISM_SCAN_NOW": "1793188800",
+    "ASTERISM_SCAN_PROC": "$HOME/proc",
+    "ASTERISM_SCAN_SYSTEM_ROOT": "$HOME/system",
+    "PATH": "$HOME/.local/bin"
+   },
+   "files": [
+    {
+     "path": "proc",
+     "type": "directory"
+    },
+    {
+     "path": "system/var/lib/pacman/local",
+     "type": "directory"
+    },
+    {
+     "path": ".local/bin",
+     "type": "directory"
+    },
+    {
+     "path": ".local/bin/opencode",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/codex",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/dsh",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/muse",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/grok",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/goose",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/gemini",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/crush",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/claude",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/cursor-agent",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/hermes",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/copilot",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/pi",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/omp",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/openclaw",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/bionic",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/agy",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": "proc/4101/comm",
+     "content": "claude\n"
+    },
+    {
+     "path": "proc/4101/cmdline",
+     "content": "claude\u0000"
+    },
+    {
+     "path": "proc/4101/environ",
+     "content": ""
+    },
+    {
+     "path": "proc/4101/cwd",
+     "type": "symlink",
+     "target": "/tmp"
+    },
+    {
+     "path": "proc/4102/comm",
+     "content": "codex\n"
+    },
+    {
+     "path": "proc/4102/cmdline",
+     "content": "codex\u0000"
+    },
+    {
+     "path": "proc/4102/environ",
+     "content": ""
+    },
+    {
+     "path": "proc/4102/cwd",
+     "type": "symlink",
+     "target": "/tmp"
+    },
+    {
+     "path": "proc/4103/comm",
+     "content": "copilot\n"
+    },
+    {
+     "path": "proc/4103/cmdline",
+     "content": "copilot\u0000"
+    },
+    {
+     "path": "proc/4103/environ",
+     "content": ""
+    },
+    {
+     "path": "proc/4103/cwd",
+     "type": "symlink",
+     "target": "/tmp"
+    },
+    {
+     "path": ".claude/projects/-tmp/0f3c9a2e-1111-2222-3333-444455556666/subagents/agent-a1.meta.json",
+     "content": "{\"agentType\": \"Explore\", \"description\": \"Look\\tat  the\\nmap\"}",
+     "age": 10
+    },
+    {
+     "path": ".claude/projects/-tmp/0f3c9a2e-1111-2222-3333-444455556666/subagents/agent-a1.jsonl",
+     "content": "{\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"working\"}]}}\n",
+     "age": 10
+    },
+    {
+     "path": ".claude/projects/-tmp/0f3c9a2e-1111-2222-3333-444455556666/subagents/agent-b2.meta.json",
+     "content": "{\"agentType\": \"\", \"description\": \"done\"}",
+     "age": 5
+    },
+    {
+     "path": ".claude/projects/-tmp/0f3c9a2e-1111-2222-3333-444455556666/subagents/agent-b2.jsonl",
+     "content": "{\"message\": {\"content\": [{\"type\": \"tool_use\", \"name\": \"SubagentHandback\", \"input\": {}}]}}\n",
+     "age": 5
+    },
+    {
+     "path": ".claude/projects/-tmp/0f3c9a2e-1111-2222-3333-444455556666/subagents/agent-c3.meta.json",
+     "content": "not json",
+     "age": 300
+    },
+    {
+     "path": ".claude/projects/-tmp/0f3c9a2e-1111-2222-3333-444455556666/subagents/agent-c3.jsonl",
+     "content": "{}\n",
+     "age": 300
+    },
+    {
+     "path": ".claude/projects/-tmp/0f3c9a2e-1111-2222-3333-444455556666/subagents/agent-d4.meta.json",
+     "content": "{}",
+     "age": 4000
+    },
+    {
+     "path": ".claude/projects/-tmp/0f3c9a2e-1111-2222-3333-444455556666/subagents/agent-d4.jsonl",
+     "content": "{}\n",
+     "age": 4000
+    },
+    {
+     "path": ".claude/projects/-tmp/0f3c9a2e-1111-2222-3333-444455556666/subagents/notes.txt",
+     "content": "x"
+    },
+    {
+     "path": ".claude/projects/-tmp/bad name/subagents/agent-z9.meta.json",
+     "content": "{}"
+    },
+    {
+     "path": ".codex/sessions/2026/10/28/rollout-1.jsonl",
+     "content": "{\"type\": \"session_meta\", \"payload\": {\"id\": \"t-child\", \"cwd\": \"/tmp\", \"source\": {\"subagent\": {\"thread_spawn\": {\"parent_thread_id\": \"t-parent\", \"agent_role\": \"reviewer\", \"agent_nickname\": \"Rex\"}}}}}\n{\"type\": \"event_msg\", \"payload\": {\"type\": \"task_started\"}}\n{\"type\": \"event_msg\", \"payload\": {\"type\": \"task_complete\"}}\n",
+     "age": 30
+    },
+    {
+     "path": ".codex/sessions/2026/10/28/rollout-2.jsonl",
+     "content": "{\"type\": \"session_meta\", \"payload\": {\"id\": \"t-plain\", \"cwd\": \"/tmp\", \"parent_thread_id\": \"t-parent\"}}\n",
+     "age": 30
+    },
+    {
+     "path": ".codex/sessions/2026/10/28/rollout-3.jsonl",
+     "content": "{\"type\": \"session_meta\", \"payload\": {\"id\": \"t-run\", \"cwd\": \"/tmp/w\", \"parent_thread_id\": \"t-parent\", \"source\": {\"subagent\": \"review\"}, \"agent_path\": \"r/x\"}}\n{\"type\": \"event_msg\", \"payload\": {\"type\": \"task_complete\"}}\n{\"type\": \"event_msg\", \"payload\": {\"type\": \"turn_started\"}}\n",
+     "age": 20
+    },
+    {
+     "path": ".codex/sessions/2026/10/28/rollout-4.jsonl",
+     "content": "{\"type\": \"session_meta\", \"payload\": {\"id\": \"t-old\", \"parent_thread_id\": \"t-parent\", \"source\": {\"subagent\": \"x\"}}}\n",
+     "age": 5000
+    },
+    {
+     "path": ".codex/sessions/2026/10/28/rollout-5.jsonl",
+     "content": "{\"type\": \"session_meta\", \"payload\": {\"id\": \"t-badparent\", \"parent_thread_id\": \"bad parent\", \"source\": {\"subagent\": \"x\"}}}\n",
+     "age": 10
+    },
+    {
+     "path": ".copilot/session-state/s1/events.jsonl",
+     "content": "{\"type\": \"subagent.started\", \"timestamp\": \"2026-10-28T11:59:20.000Z\", \"data\": {\"toolCallId\": \"c0\", \"agentName\": \"early\", \"agentDisplayName\": \"Early\"}}\n{\"type\": \"session.start\", \"data\": {\"context\": {\"cwd\": \"/tmp/copilot\"}}}\n{\"type\": \"subagent.started\", \"timestamp\": \"2026-10-28T11:59:45.000Z\", \"data\": {\"toolCallId\": \"c1\", \"agentName\": \"explore\"}}\n{\"type\": \"subagent.completed\", \"timestamp\": \"2026-10-28T11:59:52.000Z\", \"data\": {\"toolCallId\": \"c0\"}}\n{\"type\": \"subagent.failed\", \"data\": {\"toolCallId\": \"c2\", \"agentName\": \"lost\"}}\n{\"type\": \"subagent.started\", \"timestamp\": \"bad\", \"data\": {\"toolCallId\": \"c3\", \"agentName\": \"x\"}}\n{\"type\":\"subagent.started\",\"data\":{\"toolCallId\":\"c4\"}",
+     "age": 2
+    }
+   ],
+   "requests": [
+    {
+     "method": "agents.activity",
+     "params": {
+      "command": "claude"
+     }
+    },
+    {
+     "method": "agents.activity",
+     "params": {
+      "command": "codex"
+     }
+    },
+    {
+     "method": "agents.activity",
+     "params": {
+      "command": "copilot"
+     }
+    },
+    {
+     "method": "map.snapshot",
+     "params": {
+      "force": true
+     }
+    },
+    {
+     "method": "map.snapshot",
+     "params": {
+      "poll": true
+     }
+    }
+   ]
   }
  ]
 }

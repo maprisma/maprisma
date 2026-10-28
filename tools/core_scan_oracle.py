@@ -39,6 +39,10 @@ def service():
     original_scan=provider_watch._scan_agents
     # Callers pass /proc positionally: always scan the fixture's own process tree.
     provider_watch._scan_agents=lambda names,_proc=None,pids_out=None:original_scan(names,proc,pids_out)
+    import subagents
+    real_projects=subagents.claude_projects
+    subagents.claude_projects=lambda agent,pids,now=None,root=subagents.CLAUDE_PROJECTS,proc_=None,recent=subagents.RECENT:real_projects(
+        agent,pids,now,root,proc,recent)
     original_working=agent_activity.Activity.working
     agent_activity.Activity.working=lambda self,pids,**kw: original_working(self,pids,proc=proc,**kw)
     if os.environ.get('ASTERISM_SCAN_NOW'):

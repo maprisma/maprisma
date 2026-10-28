@@ -406,3 +406,26 @@ They move with the task runner (phases 3–4).
 
 Checks: 60 differential cases, 25 Dart tests, 94 Flutter tests, AOT release probe, Python suite and
 typecheck clean.
+
+### Phase 2, part 3 — subagents ported exactly, and caches (Claude, 2026-10-28)
+
+The Dart subagent readers were a simplification and differed from Python: "running" up to 90 s instead of
+`RUNNING` 60 s, the session-reader `epoch` (dividing large numbers by 1000) instead of the subagent one,
+no `kept` limit for finished ones, no age sort, a whole-tree glob, no read budget, Copilot's
+`agentDisplayName` and folder pre-pass missing. New `subagent_readers.dart` ports `subagents.of`,
+`claude_projects` (with `handed_back`), `opencode_db`, `from_files` (Codex rollouts, Copilot events:
+bounded newest-first traversal, 32 MB read budget, opened file checked against the listed device/inode,
+per-file cache by device/inode/size/mtime/ctime) and `from_db` (Goose). `posix_ffi` gained `lstatFull`,
+`readChecked` and `readAt`.
+
+Fixture: Claude subagents (running, handed back, finished, too old, broken meta, invalid names), Codex
+rollouts (finished, running, ordinary fork, too old, bad parent) and Copilot events (pre-pass folder,
+completed, failed without start, bad timestamp, unfinished last line), with a new per-file `age` in the
+harness; the oracle now gives `claude_projects` the fixture `/proc`.
+
+Caches: SQLite images reused while database and WAL are unchanged (up to 64 MB, four databases); JSON
+reads with a limit above 1 MiB (LM Studio's model index, `~/.claude.json`, Codex's model cache) parsed
+again only when the file changed.
+
+**Map scan on the real HOME: Dart 50–53 ms steady (107 ms cold), Python 60 ms.** Checks: 61 differential
+cases, 25 Dart tests, 94 Flutter tests, Python suite and typecheck clean; real HOME matches.

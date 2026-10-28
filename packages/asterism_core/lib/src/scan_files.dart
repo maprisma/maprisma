@@ -95,11 +95,35 @@ final class ScanFiles {
     return data == null ? null : utf8.decode(data, allowMalformed: true);
   }
 
+  final _bigJson = <String, (List<int>, Map<String, dynamic>)>{};
+
   Map<String, dynamic> json(
     String path, {
     int limit = 512 * 1024,
     bool comments = true,
   }) {
+    // Large indexes (e.g. LM Studio's model cache) are parsed again only when
+    // the file changed (device, inode, size, mtime, ctime). Read-only callers.
+    if (limit > 1024 * 1024) {
+      final signature = posix.lstatFull(expand(path))?.signature;
+      final cached = _bigJson[path];
+      if (signature != null &&
+          cached != null &&
+          cached.$1.length == signature.length &&
+          [
+            for (var i = 0; i < signature.length; i++)
+              cached.$1[i] == signature[i],
+          ].every((same) => same)) {
+        return cached.$2;
+      }
+      final value = _json(path, limit, comments);
+      if (signature != null) _bigJson[path] = (signature, value);
+      return value;
+    }
+    return _json(path, limit, comments);
+  }
+
+  Map<String, dynamic> _json(String path, int limit, bool comments) {
     try {
       final source = text(path, limit: limit);
       final data = source == null

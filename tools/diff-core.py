@@ -184,6 +184,11 @@ def run_side(command, case, home):
             for name in dirs+files:
                 os.utime(Path(folder)/name,(timestamp,timestamp),follow_symlinks=False)
             os.utime(folder,(timestamp,timestamp),follow_symlinks=False)
+        # A file may be older than the pinned clock ("age" in seconds), e.g. a finished subagent.
+        for item in case.get('files', []):
+            if 'age' in item:
+                older = timestamp - float(item['age'])
+                os.utime(home / item['path'], (older, older), follow_symlinks=False)
     env = {**os.environ, 'HOME': str(home), 'XDG_CONFIG_HOME': str(home / '.config'),
            'XDG_CACHE_HOME': str(home / '.cache'), 'XDG_STATE_HOME': str(home / '.local/state'),
            'XDG_DATA_HOME': str(home / '.local/share'), 'ASTERISM_DESKTOP': 'generic',

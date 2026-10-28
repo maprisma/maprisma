@@ -1,13 +1,13 @@
 import 'dart:ffi';
 import 'dart:io';
 import 'package:path/path.dart' as p;
-import 'adapters.dart';
 import 'agent_catalog.dart';
 import 'agent_details.dart';
 import 'provider_scans.dart';
 import 'scan_files.dart';
 import 'session_readers.dart';
 import 'sqlite_numbers.dart';
+import 'subagent_readers.dart';
 
 String metaText(dynamic value, [int most = 200]) => value is String
     ? String.fromCharCodes(
@@ -26,7 +26,9 @@ final class ActivityReaders {
   ActivityReaders(this.files, this.details)
     : provider = ProviderScans(files),
       sessions = SessionReaders(files),
-      sqlite = SqliteNumbers(files);
+      sqlite = SqliteNumbers(files),
+      subagentReaders = SubagentReaders(files, ProviderScans(files).proc);
+  final SubagentReaders subagentReaders;
   final ScanFiles files;
   final DetailReaders details;
   final ProviderScans provider;
@@ -37,36 +39,6 @@ final class ActivityReaders {
   static final ticks = DynamicLibrary.open(
     'libc.so.6',
   ).lookupFunction<IntPtr Function(Int), int Function(int)>('sysconf')(2);
-  bool ownDirectory(String path) {
-    if (FileSystemEntity.typeSync(path, followLinks: false) !=
-        FileSystemEntityType.directory) {
-      return false;
-    }
-    int? fd;
-    try {
-      fd = files.posix.openAt(-100, path, 0x10000 | 0x20000);
-      return files.posix.stat(fd).uid == files.posix.uid;
-    } on FileSystemException {
-      return false;
-    } finally {
-      if (fd != null) files.posix.close(fd);
-    }
-  }
-
-  bool noLinks(String path) {
-    var current = files.expand(path);
-    while (true) {
-      if (FileSystemEntity.typeSync(current, followLinks: false) ==
-          FileSystemEntityType.link) {
-        return false;
-      }
-      final parent = p.dirname(current);
-      if (parent == current) break;
-      current = parent;
-    }
-    return true;
-  }
-
   double? written(String path) {
     final data = files.bytes(path, limit: 1, portion: 'head');
     if (data == null) return null;
@@ -196,15 +168,26 @@ final class ActivityReaders {
             'goose-db',
           ].contains(spec['format']) &&
           spec['path'] is String &&
-          noLinks(spec['path']);
+          subagentReaders.linkFree(spec['path'] as String);
       final children = supported
-          ? subagents(
-              agent.adapter,
-              owned,
-              now: now,
-              recent: recent,
-              kept: kept,
-            )
+          ? [
+              for (final s in subagentReaders.of(
+                agent.command,
+                spec['format'] as String,
+                spec['path'] as String,
+                owned,
+                now: now,
+                recent: recent,
+                kept: kept,
+              ))
+                {
+                  'key': s.key,
+                  'kind': s.kind,
+                  'folder': s.folder,
+                  'age': s.age,
+                  'running': s.running,
+                },
+            ]
           : <Map<String, dynamic>>[];
       for (final child in children) {
         child['running'] = owned.isNotEmpty && child['running'] == true;
@@ -223,208 +206,5 @@ final class ActivityReaders {
       ..clear()
       ..addAll(seen);
     return (running, activity);
-  }
-
-  List<Map<String, dynamic>> subagents(
-    Adapter adapter,
-    List<int> pids, {
-    required double now,
-    double recent = 1800,
-    int kept = 10,
-  }) {
-    final spec = adapter.table('subagents'),
-        form = spec['format'],
-        root = files.expand(spec['path'] as String? ?? '');
-    if (root.isEmpty || !noLinks(root)) return [];
-    final found = <Map<String, dynamic>>[];
-    void add(
-      dynamic sid,
-      dynamic kind,
-      dynamic folder,
-      dynamic stamp,
-      bool finished,
-    ) {
-      final when = epoch(stamp), id = metaText(sid, 160);
-      if (when == null || when == 0 || now - when > recent || id.isEmpty) {
-        return;
-      }
-      final age = (now - when).clamp(0.0, double.infinity);
-      found.add({
-        'key': '${adapter.command}:$id',
-        'kind': metaText(kind, 60).isEmpty ? 'subagent' : metaText(kind, 60),
-        'folder': tilde(files, metaText(folder, 4096)),
-        'age': age,
-        'running': !finished && age <= 90,
-      });
-    }
-
-    if (form == 'opencode-db') {
-      final since = ((now - recent) * 1000).toInt();
-      for (final row in sqlite.select(
-        root,
-        'SELECT id, agent, directory, time_updated, time_idle FROM session_v2 WHERE parent_id IS NOT NULL AND time_updated >= $since ORDER BY time_updated DESC LIMIT 40',
-        maxRows: 40,
-      )) {
-        if (row[3] is! num) continue;
-        add(
-          boundedText(row[0], 80),
-          metaText(row[1], 60).isEmpty ? 'subagent' : row[1],
-          row[2],
-          (row[3] as num) / 1000,
-          row[4] is num && row[4] >= row[3],
-        );
-      }
-    } else if (form == 'goose-db') {
-      for (final row in sqlite.select(
-        root,
-        "SELECT substr(id,1,80), substr(session_type,1,60), substr(working_dir,1,4096), CASE WHEN typeof(updated_at) IN ('integer','real') THEN updated_at ELSE substr(updated_at,1,40) END FROM sessions WHERE session_type = 'sub_agent' AND parent_session_id IS NOT NULL ORDER BY updated_at DESC LIMIT 2000",
-        maxRows: 2000,
-      )) {
-        add(row[0], row[1], row[2], row[3], false);
-      }
-    } else if (form == 'claude-projects') {
-      final projects = <String, String>{};
-      for (final pid in pids.take(64)) {
-        try {
-          final cwd = Link('${provider.proc}/$pid/cwd').targetSync();
-          projects[cwd.replaceAll(RegExp(r'[^A-Za-z0-9]'), '-')] = cwd;
-        } on FileSystemException {
-          /* process ended */
-        }
-      }
-      for (final project in projects.entries) {
-        final dir = p.join(root, project.key);
-        if (!ownDirectory(dir)) continue;
-        for (final session in files.list(dir, limit: 2000)) {
-          if (!RegExp(r'^[A-Za-z0-9\-]{1,80}$').hasMatch(p.basename(session)) ||
-              !ownDirectory(session)) {
-            continue;
-          }
-          final directory = '$session/subagents';
-          if (!ownDirectory(directory)) continue;
-          final meta = files.list(directory, limit: 2000)..sort();
-          for (final file in meta) {
-            final match = RegExp(
-              r'^(agent-[A-Za-z0-9_\-]{1,80})\.meta\.json$',
-            ).firstMatch(p.basename(file));
-            if (match == null) continue;
-            final path = '$directory/${match[1]}.jsonl',
-                stamp = written(path) ?? written(file);
-            if (stamp == null) continue;
-            final info = files.json(file, limit: 16 * 1024, comments: false),
-                text =
-                    files.text(path, limit: 64 * 1024, portion: 'tail') ?? '';
-            final handback = text
-                .split('\n')
-                .reversed
-                .take(5)
-                .any((line) => line.contains('SubagentHandback'));
-            add(
-              '${p.basename(session)}:${match[1]}',
-              metaText(info['agentType'], 60).isEmpty
-                  ? 'general-purpose'
-                  : info['agentType'],
-              project.value,
-              stamp,
-              handback,
-            );
-          }
-        }
-      }
-    } else if (form == 'codex-rollouts' || form == 'copilot-events') {
-      final pattern = form == 'codex-rollouts'
-          ? '*/*/*/*.jsonl'
-          : '*/events.jsonl';
-      final paths = sessions.matching(root, pattern);
-      for (final path in paths) {
-        final stamp = written(path);
-        if (stamp == null || now - stamp > recent) continue;
-        final head =
-                files.bytes(path, limit: 512 * 1024, portion: 'head') ?? [],
-            tail = files.bytes(path, limit: 128 * 1024, portion: 'tail') ?? [];
-        if (form == 'codex-rollouts') {
-          final meta = sessions.entries(head).firstOrNull;
-          if (meta?['type'] != 'session_meta' || meta?['payload'] is! Map) {
-            continue;
-          }
-          final payload = meta!['payload'] as Map,
-              sub = dig(meta, 'payload.source.subagent'),
-              spawn = mapOf(dig(meta, 'payload.source.subagent.thread_spawn'));
-          final parent =
-              payload['parent_thread_id'] ?? spawn['parent_thread_id'];
-          if (!(sub is String && sub.isNotEmpty ||
-                  sub is Map && sub.isNotEmpty) ||
-              parent is! String ||
-              !RegExp(r'^[A-Za-z0-9\-]{1,80}$').hasMatch(parent)) {
-            continue;
-          }
-          final name =
-              payload['agent_path'] ??
-              spawn['agent_path'] ??
-              payload['agent_nickname'] ??
-              spawn['agent_nickname'];
-          var role = payload['agent_role'] ?? spawn['agent_role'] ?? name;
-          if (name is String && role is String && name != role) {
-            role = '$role · $name';
-          }
-          var finished = false;
-          for (final event in sessions.entries(tail)) {
-            if (event['type'] != 'event_msg') continue;
-            final kind = dig(event, 'payload.type');
-            if (['task_complete', 'turn_aborted'].contains(kind)) {
-              finished = true;
-            }
-            if (['task_started', 'turn_started'].contains(kind)) {
-              finished = false;
-            }
-          }
-          add(payload['id'], role, payload['cwd'], stamp, finished);
-        } else {
-          final bytes = files.bytes(path, limit: 4 * 1024 * 1024);
-          if (bytes == null) continue;
-          final rows = <String, List<dynamic>>{};
-          var cwd = '';
-          for (final event in sessions.entries(bytes, completeLines: true)) {
-            final data = mapOf(event['data']);
-            if (event['type'] == 'session.start') {
-              cwd = metaText(dig(data, 'context.cwd'), 4096);
-            }
-            final key = metaText(data['toolCallId'], 100);
-            if (key.isEmpty) continue;
-            if (event['type'] == 'subagent.started') {
-              rows[key] = [
-                data['agentName'],
-                epoch(event['timestamp']) ?? stamp,
-                false,
-              ];
-            } else if ([
-              'subagent.completed',
-              'subagent.failed',
-            ].contains(event['type'])) {
-              rows.putIfAbsent(key, () => [data['agentName'], stamp, true]);
-              rows[key]![1] = epoch(event['timestamp']) ?? stamp;
-              rows[key]![2] = true;
-            }
-          }
-          for (final e in rows.entries) {
-            add(
-              '${p.basename(p.dirname(path))}:${e.key}',
-              e.value[0],
-              cwd,
-              e.value[1],
-              e.value[2] as bool,
-            );
-          }
-        }
-      }
-    }
-    found.sort((a, b) => (a['age'] as num).compareTo(b['age'] as num));
-    final limited = found.take(40).toList(),
-        result = [
-          ...limited.where((s) => s['running'] == true),
-          ...limited.where((s) => s['running'] != true).take(kept.clamp(0, 40)),
-        ];
-    result.sort((a, b) => (a['age'] as num).compareTo(b['age'] as num));
-    return result;
   }
 }

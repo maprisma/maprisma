@@ -221,6 +221,9 @@ final class SqliteNumbers {
         )
       >('sqlite3_progress_handler');
 
+  static const _cacheBytes = 64 * 1024 * 1024;
+  final _images = <String, (String, Uint8List)>{};
+
   Uint8List? snapshot(String path) {
     path = files.expand(path);
     if (files.credential(path)) return null;
@@ -260,6 +263,14 @@ final class SqliteNumbers {
       }
       final baseStamp = io.stamp(fd),
           walStamp = walFd == null ? null : io.stamp(walFd);
+      // Unchanged database and WAL (device, inode, size, times): reuse the
+      // committed image instead of reading the whole file again every scan.
+      final key = '$path\x00$baseStamp\x00$walStamp';
+      final cached = _images.remove(path);
+      if (cached != null && cached.$1 == key) {
+        _images[path] = cached;
+        return cached.$2;
+      }
       final base = io.readDescriptor(fd, maxDatabaseBytes);
       final wal = walFd == null
           ? null
@@ -268,7 +279,14 @@ final class SqliteNumbers {
           walFd != null && io.stamp(walFd) != walStamp) {
         return null;
       }
-      return committedImage(base, wal);
+      final image = committedImage(base, wal);
+      if (image.length <= _cacheBytes) {
+        _images[path] = (key, image);
+        while (_images.length > 4) {
+          _images.remove(_images.keys.first);
+        }
+      }
+      return image;
     } on FileSystemException {
       return null;
     } on FormatException {

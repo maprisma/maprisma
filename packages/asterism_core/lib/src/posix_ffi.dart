@@ -138,6 +138,98 @@ class Posix {
     }
   }
 
+  static final _lseek = _lib
+      .lookupFunction<
+        Int64 Function(Int, Int64, Int),
+        int Function(int, int, int)
+      >('lseek');
+
+  /// lstat (or stat with [follow]): times, type, owner and the identity Python
+  /// compares as (st_dev, st_ino, st_size, st_mtime_ns, st_ctime_ns).
+  ({int sec, int nsec, int mode, int uid, List<int> signature})? lstatFull(
+    String path, {
+    bool follow = false,
+  }) {
+    final buffer = calloc<Uint8>(256);
+    try {
+      var ok = false;
+      _path(
+        path,
+        (name) =>
+            ok = _statx(-100, name, follow ? 0 : 0x100, 0x7ff, buffer) == 0,
+      );
+      if (!ok) return null;
+      final b = ByteData.sublistView(buffer.asTypedList(256));
+      return (
+        sec: b.getInt64(112, Endian.host),
+        nsec: b.getUint32(120, Endian.host),
+        mode: b.getUint16(28, Endian.host),
+        uid: b.getUint32(20, Endian.host),
+        signature: [
+          b.getUint32(136, Endian.host),
+          b.getUint32(140, Endian.host),
+          b.getUint64(32, Endian.host),
+          b.getUint64(40, Endian.host),
+          b.getInt64(112, Endian.host),
+          b.getUint32(120, Endian.host),
+          b.getInt64(96, Endian.host),
+          b.getUint32(104, Endian.host),
+        ],
+      );
+    } finally {
+      calloc.free(buffer);
+    }
+  }
+
+  List<int>? signature(String path) => lstatFull(path)?.signature;
+
+  /// Open [path] without following it, check it is this account's own regular
+  /// file with the same device and inode as [expected] (when given), then read.
+  T? readChecked<T>(
+    String path,
+    T Function(int fd, int size) read, {
+    List<int>? expected,
+  }) {
+    int? fd;
+    try {
+      fd = openAt(-100, path, noFollow | nonBlock);
+      final opened = lstatFull('/proc/self/fd/$fd', follow: true);
+      if (opened == null ||
+          opened.mode & 0xf000 != 0x8000 ||
+          opened.uid != uid ||
+          expected != null &&
+              (expected.length < 3 ||
+                  opened.signature[0] != expected[0] ||
+                  opened.signature[1] != expected[1] ||
+                  opened.signature[2] != expected[2])) {
+        return null;
+      }
+      return read(fd, opened.signature[3]);
+    } on FileSystemException {
+      return null;
+    } finally {
+      if (fd != null) close(fd);
+    }
+  }
+
+  /// Up to [length] bytes from [offset] (pread-like, short reads continued).
+  Uint8List readAt(int fd, int offset, int length) {
+    if (_lseek(fd, offset, 0) < 0) _fail();
+    final buffer = calloc<Uint8>(max(1, min(length, 1 << 20)));
+    final out = BytesBuilder(copy: false);
+    try {
+      while (out.length < length) {
+        final count = _read(fd, buffer, min(length - out.length, 1 << 20));
+        if (count < 0) _fail();
+        if (count == 0) break;
+        out.add(Uint8List.fromList(buffer.asTypedList(count)));
+      }
+      return out.takeBytes();
+    } finally {
+      calloc.free(buffer);
+    }
+  }
+
   String stamp(int fd) {
     final buffer = calloc<Uint8>(256);
     try {
