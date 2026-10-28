@@ -586,3 +586,19 @@ In the core: apply/Undo, the worker, the task runner, routing by handle, and eve
 except those that choose a model. Waiting for the provider engines (phase 4): connections with a chosen
 model (`connect_extra`/`context_ctl`, Ollama's API), `models.switch_preview`/`models.attach_preview`
 (model load/unload, online model plans), and the model actions in plans.
+
+## Phase 4 — processes and providers (Claude, 2026-10-28)
+
+Steps: 4a provider overview; 4b provider operations (start/stop, load/unload) through the worker; 4c
+context sizes for the card (`context_ctl`, `gpu_usage`), connections with a model and the model previews;
+4d model search, downloads, pulls and imports; 4e `asterism-core provider-watch`; 4f terminals, agent start
+and the stop guard.
+
+### 4a — provider overview
+
+`providers.snapshot` is served by the core (it needs only the map for its focus, not Python's tasks; the
+phase 2 note was wrong). Engine facts (`can_load`, `download`, `removable`, installer `can_install`, LM
+Studio's `lms` control) and the online providers are generated into the provider facts by
+`tools/adapter-assets.py`. Fixture: after a map, the overview with focus, model folders from the settings
+(non-text entries skipped) and a refusal; the real HOME matches except focus (the comparison script runs
+each Dart request in its own process).

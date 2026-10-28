@@ -2927,6 +2927,10 @@
     {
      "path": ".dsh/profiles/web/cordis.patch.yml",
      "content": "# my profile\n- id: llm-pi-ai\n  name: '@deepseek-ai/dsh-llm-pi-ai'\n  config:\n    providers:\n      llama-local:\n        displayName: llama.cpp (local)\n        api: openai-completions\n        baseURL: http://127.0.0.1:8080/v1\n        headers:\n          Authorization: Bearer local\n        models:\n        - id: old-model\n          contextWindow: 4096\n      cloud:\n        api: x\n        enabled: yes\n        port: 0x1F\n- id: agent-default-model\n  name: '@deepseek-ai/dsh-agent-default-model'\n  config:\n    provider: llama-local\n    model: old-model\n"
+    },
+    {
+     "path": ".config/asterism/settings.json",
+     "content": "{\"model_folders\": [\"~/nope\", \"/tmp\", 5]}"
     }
    ],
    "requests": [
@@ -3394,6 +3398,28 @@
       "command": "pi",
       "item": "ollama",
       "remove": false
+     }
+    },
+    {
+     "method": "map.snapshot",
+     "params": {
+      "force": true
+     }
+    },
+    {
+     "method": "map.snapshot",
+     "params": {
+      "poll": true
+     }
+    },
+    {
+     "method": "providers.snapshot",
+     "params": {}
+    },
+    {
+     "method": "providers.snapshot",
+     "params": {
+      "x": 1
      }
     }
    ]

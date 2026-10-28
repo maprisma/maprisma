@@ -12,6 +12,8 @@ import 'map_graph.dart';
 import 'scan_files.dart';
 import 'service_i18n.dart';
 import 'settings.dart';
+import 'adapter_assets.g.dart';
+import 'core_tasks.dart' show taskFocus;
 import 'system_reads.dart';
 
 // Each route here has passed its differential fixtures (normal and hostile) and
@@ -25,6 +27,7 @@ const readOnlyRoutes = <String>{
   'usage.snapshot',
   'existing.mounts',
   'system.mount_signature',
+  'providers.snapshot',
 };
 
 final class ReadService {
@@ -108,6 +111,7 @@ final class ReadService {
       return {...result, 'focus': focus};
     }
     if (params.isNotEmpty) throw const FormatException('Unexpected parameters');
+    if (method == 'providers.snapshot') return providersSnapshot();
     if (method == 'usage.snapshot') {
       // Fixtures pin the clock (ASTERISM_SCAN_NOW), as the session readers do.
       final pinned = double.tryParse(
@@ -192,6 +196,52 @@ final class ReadService {
       };
     }
     throw const FormatException('Unknown read route');
+  }
+
+  /// flutter_providers.snapshot with the focus the backend adds per runtime.
+  Map<String, dynamic> providersSnapshot() {
+    final engines = providerFacts['engines'] as Map;
+    bool lms() =>
+        inventory.providers.which('lms') ||
+        FileSystemEntity.isFileSync(files.expand('~/.lmstudio/bin/lms'));
+    final local = <Map<String, dynamic>>[];
+    for (final rt in inventory.providers.scan()) {
+      final engine = engines[rt.key] as Map? ?? const {};
+      final removable = engine['removable'] as String? ?? '';
+      final download = engine['download'] as String? ?? '';
+      local.add({
+        'key': rt.key,
+        'name': rt.name,
+        'installed': rt.installed,
+        'installable': !rt.installed && engine['can_install'] == true,
+        'running': rt.running,
+        'server_off': rt.serverOff,
+        'address': rt.address,
+        'models_dir': rt.modelsDir,
+        'models': rt.models,
+        'can_control': engine['lms_control'] == true
+            ? rt.installed && (rt.service.isNotEmpty || lms())
+            : rt.installed && rt.service.isNotEmpty,
+        'can_load': engine['can_load'] == true,
+        'removable': rt.installed && (removable == 'file' || removable == 'api')
+            ? removable
+            : '',
+        'download': rt.installed ? download : '',
+        'can_import':
+            rt.installed && (download == 'file' || download == 'pull'),
+        'focus': taskFocus(map, {'key': rt.key}),
+      });
+    }
+    final folders = settings.load()['model_folders'];
+    return {
+      'folders': [
+        for (final f in folders is List ? folders : const [])
+          if (f is String)
+            {'path': f, 'available': FileSystemEntity.isDirectorySync(f)},
+      ],
+      'local': local,
+      'online': providerFacts['online'],
+    };
   }
 
   Map<String, dynamic> mapSnapshot(Map<String, dynamic> params) {
