@@ -460,6 +460,51 @@ class Posix {
     }
   }
 
+  static final _chmodPath = _lib
+      .lookupFunction<
+        Int Function(Pointer<Utf8>, Uint32),
+        int Function(Pointer<Utf8>, int)
+      >('chmod');
+
+  /// chmod for a path this process just created (folders and copies in its
+  /// own backup folder).
+  void chmodPath(String path, int mode) => _path(path, (name) {
+    if (_chmodPath(name, mode) != 0) _fail();
+  });
+
+  /// Python connect._write for an agent's settings: a fresh exclusive
+  /// temporary file in the same folder (opened like the reference, through the
+  /// kernel's lookup), its mode set before writing, fsync, then renamed over.
+  void replaceFile(String path, List<int> bytes, int mode) {
+    final dir = openAt(-100, p.dirname(path), directory);
+    final temporary =
+        '.${p.basename(path)}-${Random.secure().nextInt(1 << 32)}-${Random.secure().nextInt(1 << 32)}';
+    int? fd;
+    var created = false, renamed = false;
+    try {
+      fd = openAt(dir, temporary, 1 | 0x40 | 0x80 | noFollow, mode);
+      created = true;
+      chmod(fd, mode);
+      write(fd, bytes);
+      sync(fd);
+      close(fd);
+      fd = null;
+      _path(
+        temporary,
+        (from) => _path(p.basename(path), (to) {
+          if (_rename(dir, from, dir, to) != 0) _fail();
+        }),
+      );
+      renamed = true;
+    } finally {
+      if (fd != null) close(fd);
+      if (created && !renamed) {
+        _path(temporary, (name) => _unlink(dir, name, 0));
+      }
+      close(dir);
+    }
+  }
+
   void atomicWrite(String path, List<int> bytes) {
     final dir = privateDirectory(p.dirname(path));
     final temporary =

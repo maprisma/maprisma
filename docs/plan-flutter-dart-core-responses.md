@@ -429,3 +429,34 @@ again only when the file changed.
 
 **Map scan on the real HOME: Dart 50–53 ms steady (107 ms cold), Python 60 ms.** Checks: 61 differential
 cases, 25 Dart tests, 94 Flutter tests, Python suite and typecheck clean; real HOME matches.
+
+## Phase 3 — write path (Claude, 2026-10-28)
+
+Steps: 3a apply/Undo, worker, task runner and routing by handle; 3b skill links; 3c MCP servers; 3d local
+LLM connections (YAML/JSON transforms; DeepSeek Harness needs PyYAML-identical output); 3e map editor
+previews, repair and authoring.
+
+**Before 3a, a Devel regression from phase 2 fixed (479ea4f):** with `map.snapshot` in Dart, the Python
+reference never got a map, so the map editor's move/switch/attach/repair previews resolved against an
+empty graph. `current_map()` builds one when needed (reused 5 s); task focus still never scans.
+
+### 3a, part 1 — apply, Undo and the worker
+
+- `connect_apply.dart`: `Change`, `Plan`, `ConfigFiles.read` (connect._read: missing is "", own regular
+  file, no final link, 2 MiB / 8 MiB for `.claude.json`, strict UTF-8), `write` (connect._write: owner
+  bits kept, group/other dropped, exclusive temporary, fsync, rename), `apply` (stale checks twice, link
+  checks, backup folder `%Y%m%d-%H%M%S-%f`, copies 0600, `manifest.json` in `json.dumps` form, created
+  folders recorded) and `undo` (only what was not changed again; links, created files, retired folders,
+  created folders deepest first).
+- `plan_worker.dart`: `decodePlan` with the checks of `flutter_plan_wire.decode` (v1–3), and
+  `asterism-core worker`: `--plan-fd N` as the Python backend passes it (private regular own file, mode
+  without group/other bits) or `--plan-stdin` (length-prefixed; Dart's `Process.start` cannot pass an
+  extra descriptor). Plans with context sizes or model load/unload are refused before writing: they need
+  the provider engines (phase 4).
+- `tests/test_dart_worker_parity.py`: one plan (a changed file with 0644 mode, a new file in new nested
+  folders with non-ASCII text, a link added, a link removed) applied by the Python and the Dart worker to
+  identical homes: **identical trees, manifests byte for byte**; then Python undoes the Dart backup and Dart
+  the Python one: identical restored lists and trees. A file changed after the plan is refused with no
+  backup and no link.
+
+Not yet: connections routes and the task runner in Dart (3a part 2), plan builders (3b–3e).

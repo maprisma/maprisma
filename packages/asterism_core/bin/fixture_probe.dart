@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:asterism_core/asterism_core.dart';
 import 'package:asterism_core/src/adapters.dart';
+import 'package:asterism_core/src/connect_apply.dart';
 import 'package:asterism_core/src/read_service.dart';
 import 'package:asterism_core/src/security_reports.dart';
 import 'package:asterism_core/src/session_readers.dart';
@@ -39,6 +40,14 @@ Future<void> main() async {
           adapter = Adapter(Map<String, dynamic>.from(params['facts'] as Map));
         }
         result = {'command': adapter.command, 'name': adapter.name};
+      } else if (request.method == 'dev.undo') {
+        // Undo of a backup folder either side made (development probe only).
+        result = {
+          'restored': ConfigFiles(
+            Posix(),
+            identity.home,
+          ).undo(params['folder'] as String),
+        };
       } else if (request.method == 'scan.catalog') {
         if (params.isNotEmpty) throw const FormatException('Unexpected params');
         result = {

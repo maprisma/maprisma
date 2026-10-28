@@ -3,11 +3,16 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:asterism_core/asterism_core.dart';
+import 'package:asterism_core/src/plan_worker.dart';
 
-// Worker and provider-watch subcommands belong to subsequent reviewed phases.
+// `worker`: one private plan (phase 3). provider-watch comes with phase 4.
 Future<void> main(List<String> args) async {
+  if (args.isNotEmpty && args.first == 'worker') {
+    exitCode = await runWorker(args.sublist(1));
+    return;
+  }
   if (args.isNotEmpty) {
-    stderr.writeln('No subcommands implemented in phase 1');
+    stderr.writeln('Unknown subcommand');
     exitCode = 64;
     return;
   }
