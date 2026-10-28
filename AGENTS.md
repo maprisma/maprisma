@@ -17,7 +17,8 @@
   `docs/history/` (links among them stay relative). Active: `plan-flutter.md`, `plan-one-app.md`, `plan-flutter-dart-core.md`, `plan-macos.md` (later).
 - **Flutter checks:** `tools/flutter-dev check` (format, analyzer, tests), `tools/flutter-dev build` (isolated
   Devel build in `.flutter-previews/`, not launched). The remote `gtk` is the GTK repo
-  `/mnt/Data/Projects/asterism`: never push this tree's `main` there.
+  `/mnt/Data/Projects/ai-agents-map` (the folder was `asterism` until 2026-10-28; this one was
+  `asterism-flutter`): never push this tree's `main` there. Naming: `docs/plan-naming.md`.
 - **One source:** shared code is edited only here; `tools/sync-plugin.py ~/.config/omarchy/plugins/ubruckhaus.ai-agents-map`
   copies it into the plugin (whose pre-commit hook refuses drift).
 - **Before a commit:** `python3 -m unittest discover -s tests -q` and `tools/typecheck.sh` (0 errors).

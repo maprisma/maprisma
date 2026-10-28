@@ -48,8 +48,8 @@ feature parity, migration and packaging have been validated.
 
 ## Working copy
 
-Work on `main` in `/mnt/Data/Projects/asterism-flutter`. The original GTK repository
-at `/mnt/Data/Projects/asterism` is separate and must not be overwritten or synced
+Work on `main` in `/mnt/Data/Projects/asterism` (was `asterism-flutter` until 2026-10-28). The original GTK repository
+at `/mnt/Data/Projects/ai-agents-map` (was `asterism`) is separate and must not be overwritten or synced
 from this migration. Its local remote is named `gtk`; never push Flutter main
 there. The baseline migration, documentation archive and reviewed connection-authoring
 slice (`69464c8`) are committed. Further work remains local unless Uwe requests
