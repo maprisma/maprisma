@@ -20,6 +20,10 @@ format = "codex-jsonl"
 kind = "mise"
 spec = "codex"
 
+[subagents]
+format = "codex-rollouts"
+path = "~/.codex/sessions"
+
 [sessions]
 reader = "codex-files"            # a reader the app has (~/.codex/sessions)
 note = "Numbers from {0}'s session files (no text is read). The API value is what the tokens would cost at API prices, not what a plan costs."

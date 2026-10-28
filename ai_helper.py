@@ -24,8 +24,8 @@ from plugin_ai import Usage, parse_output  # noqa: F401  (the app's modules use 
 
 def plugin_id() -> str:
     """This app's name in the shared log."""
-    import desktop
-    return "ai-agents-map" if desktop.NAME == "omarchy" else "asterism"
+    import identity
+    return identity.short_name()
 
 
 # --- which agent ---------------------------------------------------------------------------------

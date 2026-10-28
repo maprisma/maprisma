@@ -35,8 +35,11 @@ another models folder to move it.
 The user manual (a PDF in eight languages, also under **?** in the app, in its language) explains
 everything step by step: [docs/manual](docs/manual).
 
-On [Omarchy](https://omarchy.org) the same app is the **AI Agents Map** plugin (bar icon, Omarchy
-theme, Hyprland window actions). Install that one there.
+Asterism also runs on [Omarchy](https://omarchy.org), automatically using its theme and Hyprland
+window integration while keeping the Asterism name and `~/.config/asterism` settings. On its first
+start, if it has no settings yet, it copies the legacy **AI Agents Map** plugin's configuration
+with a private backup, leaving the originals untouched. Verified add-ons for installed agents and
+local LLMs are enabled automatically. The legacy plugin remains supported during the transition.
 
 ## Install
 

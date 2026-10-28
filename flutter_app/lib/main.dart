@@ -1,0 +1,2454 @@
+import 'dart:convert';
+import 'dart:io';
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show mapEquals;
+import 'package:flutter/services.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:window_manager/window_manager.dart';
+
+import 'backend.dart';
+import 'task_card.dart';
+import 'agent_terminal.dart';
+import 'agent_map.dart';
+import 'agent_list_view.dart';
+import 'agent_details_view.dart';
+import 'settings_view.dart';
+import 'project_start_menu.dart';
+import 'addon_details.dart';
+import 'map_groups.dart';
+import 'map_welcome.dart';
+import 'map_addons_focus.dart';
+import 'first_agent_view.dart';
+import 'agent_action_dialog.dart';
+import 'providers_view.dart';
+import 'system_map_view.dart';
+import 'provider_task_dialog.dart';
+import 'connections_view.dart';
+import 'model_removal_dialog.dart';
+import 'subagents_dialog.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await windowManager.ensureInitialized();
+  await windowManager.setPreventClose(true);
+  runApp(const AsterismApp());
+}
+
+class AsterismApp extends StatefulWidget {
+  const AsterismApp({super.key, this.connectBackend});
+
+  /// Allows isolated service fixtures; production always starts its bundled service.
+  final Future<Backend> Function()? connectBackend;
+
+  @override
+  State<AsterismApp> createState() => _AsterismAppState();
+}
+
+class _AsterismAppState extends State<AsterismApp> with WindowListener {
+  final _navigator = GlobalKey<NavigatorState>();
+  final _terminals = <AgentTerminal>[];
+  final _startMenu = ProjectStartMenuController();
+  AgentTerminal? _visibleTerminal;
+  bool _closing = false;
+  int _reviewDepth = 0;
+  Backend? _backend;
+  Map<String, dynamic>? _snapshot;
+  Map<String, String> _strings = {};
+  String? _selected;
+  bool _busy = true;
+  bool _failed = false;
+  Locale? _locale;
+  String _search = '';
+  bool _showMap = true;
+  bool _showSystemMap = false;
+  bool _systemRefreshing = false;
+  Map<String, dynamic> _system = {
+    'nodes': [],
+    'edges': [],
+    'notes': [],
+    'helpers': [],
+    'limited': false,
+  };
+  final _aiTransform = TransformationController();
+  final _systemTransform = TransformationController();
+  Map<String, dynamic>? _graph;
+  Map<String, dynamic>? _agentInfo;
+  bool _showSettings = false;
+  int? _focusCategory;
+  bool _welcome = false;
+  bool _skipWelcomeSearch = false;
+  bool _detectionComplete = false;
+  Map<String, dynamic> _guide = {};
+  bool _setupDetecting = false;
+  bool _setupDetectionFailed = false;
+  int _setupRevision = 0;
+  Set<String> _setupDetected = {};
+  bool _startupChecked = false;
+  List<Map<String, dynamic>> _addons = [];
+  List<Map<String, dynamic>>? _addonEntries;
+  bool _taskActive = false;
+  Map<String, dynamic> _providers = {'local': [], 'online': []};
+  Map<String, dynamic> _connections = {'agents': [], 'mcp': [], 'skills': []};
+  String? _connectionUndo;
+  String? _moveUndo;
+  String? _systemSelection;
+  String? _aiFocus;
+  Timer? _liveTimer;
+  bool _livePending = false;
+  bool _windowFocused = true;
+  DateTime? _nextMapScan;
+  DateTime? _nextSystemMountCheck;
+
+  TaskCardSpec? _card;
+  final _viewBodyKeys = <String, GlobalKey>{};
+  VoidCallback? _cancelReview;
+  String? _view;
+  String? _connectionCommand;
+  Map<String, dynamic>? _browser;
+  bool get _showGuide => _view == 'guide';
+  set _showGuide(bool value) {
+    if (value) {
+      if (_taskActive) return;
+      _card = null;
+      _browser = null;
+      _view = 'guide';
+    } else if (_showGuide) {
+      _view = null;
+    }
+  }
+
+  bool get _showProviders => _view == 'providers';
+  set _showProviders(bool value) {
+    if (value) {
+      if (_taskActive) return;
+      _card = null;
+      _browser = null;
+      _view = 'providers';
+    } else if (_showProviders) {
+      _view = null;
+    }
+  }
+
+  bool get _showConnections => _view == 'connections';
+  set _showConnections(bool value) {
+    if (value) {
+      if (_taskActive) return;
+      _card = null;
+      _browser = null;
+      _view = 'connections';
+    } else if (_showConnections) {
+      _view = null;
+    }
+  }
+
+  Set<String> _focusOf(Map<String, dynamic> reply) =>
+      (reply['focus'] as List? ?? []).cast<String>().toSet();
+
+  void _closeCard() {
+    if (_card?.closable != true) return;
+    final cancel = _cancelReview;
+    _cancelReview = null;
+    setState(() => _card = null);
+    cancel?.call();
+  }
+
+  Future<bool> _cardReview(
+    String title,
+    Map<String, dynamic> plan,
+    Widget Function(VoidCallback, VoidCallback) build,
+  ) async {
+    final answer = Completer<bool>();
+    final wasBusy = _busy;
+    void finish(bool value) {
+      if (answer.isCompleted) return;
+      _cancelReview = null;
+      if (mounted) setState(() => _busy = wasBusy);
+      if (value && mounted) {
+        setState(
+          () => _card = TaskCardSpec(
+            title: title,
+            focus: _focusOf(plan),
+            closable: false,
+            child: const Center(child: CircularProgressIndicator()),
+          ),
+        );
+      }
+      // Keep the review's map visible until the next phase replaces the card.
+      if (!value && mounted) setState(() => _card = null);
+      answer.complete(value);
+    }
+
+    setState(() {
+      _busy = true;
+      _cancelReview = () => finish(false);
+      _card = TaskCardSpec(
+        title: title,
+        focus: _focusOf(plan),
+        child: build(() => finish(true), () => finish(false)),
+      );
+    });
+    return _review(() => answer.future);
+  }
+
+  bool get _navigationBlocked =>
+      _busy || _taskActive || _reviewDepth > 0 || _card?.closable == false;
+
+  bool get _hasTaskView =>
+      _showGuide ||
+      _showConnections ||
+      _showProviders ||
+      (_showMap &&
+          !_showSettings &&
+          _visibleTerminal == null &&
+          _focusCategory != null);
+
+  bool _halfTaskMapVisible(TaskCardWidth width, Set<String> focus) =>
+      width == TaskCardWidth.half &&
+      MediaQuery.sizeOf(_navigator.currentContext!).width >= 900 &&
+      (_graph?['nodes'] as List? ?? []).any((n) => focus.contains(n['id']));
+
+  static const _dataTasks = {
+    'models.search',
+    'models.files',
+    'addons.catalog',
+    'guide.snapshot',
+    'system.refresh',
+    'existing.scan',
+    'existing.check',
+    'system.move_preview',
+    'system.tool_check',
+  };
+
+  Future<Map<String, dynamic>?> _runTask({
+    required String title,
+    required String operation,
+    Map<String, dynamic> params = const {},
+    String? existingTask,
+    Set<String> focus = const {},
+    TaskCardWidth width = TaskCardWidth.half,
+  }) async {
+    final result = Completer<Map<String, dynamic>?>();
+    if (operation.startsWith('system.') ||
+        operation.startsWith('existing.') ||
+        operation.startsWith('models.') && operation != 'models.remove' ||
+        operation == 'guide.snapshot' ||
+        operation == 'addons.catalog') {
+      width = TaskCardWidth.full;
+    }
+    final prior = _card;
+    final effectiveFocus = focus.isEmpty ? prior?.focus ?? focus : focus;
+    setState(() {
+      _taskActive = true;
+      _card = TaskCardSpec(
+        title: title,
+        width: width,
+        focus: effectiveFocus,
+        closable: false,
+        child: TaskProgress(
+          key: GlobalKey(),
+          backend: _backend!,
+          operation: operation,
+          params: params,
+          existingTask: existingTask,
+          title: title,
+          tr: tr,
+          onFocus: (ids) {
+            if (!mounted || _card == null) return;
+            setState(
+              () => _card = TaskCardSpec(
+                title: title,
+                width: width,
+                focus: ids,
+                closable: false,
+                child: _card!.child,
+              ),
+            );
+          },
+          onComplete: (value) {
+            if (!result.isCompleted) result.complete(value);
+          },
+        ),
+      );
+    });
+    final value = await result.future;
+    final resultFocus = _card?.focus ?? effectiveFocus;
+    if (!mounted) return value;
+    if (!_dataTasks.contains(operation)) {
+      await _refresh(refreshMap: _halfTaskMapVisible(width, resultFocus));
+    }
+    if (!mounted) return value;
+    if (value?['undo'] is String) _connectionUndo = value!['undo'] as String;
+    if (value?['move_undo'] is String) {
+      _moveUndo = value!['move_undo'] as String;
+    }
+    setState(() => _taskActive = false);
+    // Data-selection tasks return straight to the retained browser/overview.
+    if (const [
+          'models.search',
+          'models.files',
+          'addons.catalog',
+          'guide.snapshot',
+          'system.refresh',
+          'existing.scan',
+        ].contains(operation) &&
+        value != null &&
+        value['ok'] != false) {
+      setState(() => _card = null);
+    } else {
+      _taskResult(title, value, resultFocus, width: width);
+    }
+    return value?['ok'] == false ? null : value;
+  }
+
+  void _taskResult(
+    String title,
+    Map<String, dynamic>? value,
+    Set<String> focus, {
+    Future<void> Function()? undo,
+    TaskCardWidth width = TaskCardWidth.half,
+  }) {
+    if (!mounted) return;
+    setState(
+      () => _card = TaskCardSpec(
+        title: title,
+        width: width,
+        focus: focus,
+        child: TaskReview(
+          content: Text(
+            tr(
+              value == null
+                  ? 'Cancelled'
+                  : value['ok'] == false
+                  ? 'The action could not be completed.'
+                  : value['external'] == true
+                  ? 'This runs in a separate terminal; passwords are entered there. Refresh when it finishes.'
+                  : 'Succeeded',
+            ),
+          ),
+          actions: [
+            if (undo != null ||
+                value?['undo'] != null && value?['undo'] == _connectionUndo ||
+                value?['move_undo'] != null)
+              TextButton.icon(
+                onPressed: () => _undoTask(
+                  title,
+                  focus,
+                  width,
+                  undo ??
+                      () async {
+                        if (value?['move_undo'] != null) {
+                          final started = await _backend!.call(
+                            'system.move_undo',
+                            {'undo': value!['move_undo']},
+                          );
+                          final restored = await _runTask(
+                            title: tr('Undo'),
+                            operation: 'system.move_undo',
+                            existingTask: started['task'] as String,
+                            width: TaskCardWidth.full,
+                          );
+                          if (restored?['ok'] != true) {
+                            throw StateError('Undo failed');
+                          }
+                          _moveUndo = null;
+                          await _reloadSystem();
+                        } else if (!await _undoConnection(refresh: false)) {
+                          throw StateError('Undo failed');
+                        }
+                      },
+                ),
+                icon: const Icon(Icons.undo),
+                label: Text(tr('Undo')),
+              ),
+            TextButton(onPressed: _closeCard, child: Text(tr('Close'))),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _undoTask(
+    String title,
+    Set<String> focus,
+    TaskCardWidth width,
+    Future<void> Function() undo,
+  ) async {
+    if (_busy || _taskActive) return;
+    setState(() {
+      _busy = true;
+      _taskActive = true;
+      _card = TaskCardSpec(
+        title: title,
+        focus: focus,
+        width: width,
+        closable: false,
+        child: const Center(child: CircularProgressIndicator()),
+      );
+    });
+    var ok = false;
+    try {
+      await undo();
+      await _refresh(refreshMap: _halfTaskMapVisible(width, focus));
+      ok = true;
+    } catch (_) {
+      // Keep failures in the same result card, without consuming another action.
+    } finally {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _taskActive = false;
+        });
+        _taskResult(
+          title,
+          {'ok': ok},
+          focus,
+          width: width,
+          undo: ok ? null : undo,
+        );
+      }
+    }
+  }
+
+  Widget _viewHost(
+    String title,
+    Widget child,
+    VoidCallback close, {
+    Set<String> focus = const {},
+    TaskCardWidth width = TaskCardWidth.full,
+  }) => _host(
+    TaskCardSpec(
+      title: tr(title),
+      child: KeyedSubtree(
+        key: _viewBodyKeys.putIfAbsent(title, () => GlobalKey()),
+        child: child,
+      ),
+      width: width,
+      focus: focus,
+    ),
+    close,
+  );
+
+  Widget _host(TaskCardSpec spec, VoidCallback close) => TaskHost(
+    spec: spec,
+    graph: _graph ?? const {'nodes': [], 'edges': []},
+    tr: tr,
+    onClose: close,
+  );
+
+  String tr(String key) => _strings[key] ?? key;
+
+  void _actionFailed() {
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      if (_card?.child is! TaskProgress) _card = null;
+    });
+    ScaffoldMessenger.of(_navigator.currentContext!).showSnackBar(
+      SnackBar(content: Text(tr('The action could not be completed.'))),
+    );
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    windowManager.addListener(this);
+    _liveTimer = Timer.periodic(
+      const Duration(seconds: 2),
+      (_) => _refreshLive(),
+    );
+    _connect();
+  }
+
+  Future<void> _connect() async {
+    if (_terminals.any((terminal) => !terminal.ended)) {
+      return;
+    }
+    for (final terminal in _terminals) {
+      terminal.dispose();
+    }
+    _terminals.clear();
+    _visibleTerminal = null;
+    setState(() {
+      _busy = true;
+      _failed = false;
+    });
+    try {
+      // Development location is explicit; release packaging will bundle the service.
+      const definedRoot = String.fromEnvironment('ASTERISM_SOURCE');
+      final root = definedRoot.isNotEmpty
+          ? definedRoot
+          : File(Platform.resolvedExecutable).parent.path;
+      final backend =
+          await (widget.connectBackend?.call() ?? Backend.start(root));
+      if (!mounted) {
+        backend.dispose();
+        return;
+      }
+      _backend?.dispose();
+      _backend = backend;
+      await _refresh();
+      if (mounted) unawaited(_loadSystem());
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _failed = true;
+          _busy = false;
+        });
+      }
+    }
+  }
+
+  @override
+  void onWindowClose() async {
+    if (_closing) return;
+    _closing = true;
+    if (_terminals.any((terminal) => !terminal.ended) ||
+        _taskActive ||
+        _reviewDepth > 0 ||
+        _card?.closable == false) {
+      final close = await showDialog<bool>(
+        context: _navigator.currentContext!,
+        builder: (context) => AlertDialog(
+          content: Text(
+            tr(
+              _taskActive
+                  ? 'Close Asterism? Running agents will stop; committed changes will finish.'
+                  : 'Close Asterism and stop its running agents?',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(tr('Cancel')),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(tr('Close')),
+            ),
+          ],
+        ),
+      );
+      if (close != true) {
+        _closing = false;
+        return;
+      }
+    }
+    for (final terminal in _terminals) {
+      try {
+        await terminal.stop();
+      } catch (_) {
+        /* Service shutdown also closes owned PTYs. */
+      }
+    }
+    if (mounted) setState(() => _busy = true);
+    await _backend?.shutdown();
+    await windowManager.destroy();
+  }
+
+  Future<void> _start(Map<String, dynamic> choice) async {
+    if (_busy || !mounted) return;
+    final command = choice['command'] as String;
+    setState(() => _busy = true);
+    try {
+      final result = await _backend!.call('sessions.start', choice);
+      if (!mounted) return;
+      if (result['session'] != null) {
+        final terminal = AgentTerminal(
+          _backend!,
+          result['session'] as String,
+          command,
+          result['path'] as String,
+          tr: tr,
+        );
+        setState(() {
+          _terminals.add(terminal);
+          _visibleTerminal = terminal;
+        });
+      }
+      await _refresh();
+    } catch (_) {
+      _actionFailed();
+    }
+  }
+
+  Future<void> _stopTerminal(AgentTerminal terminal) async {
+    if (!terminal.ended) {
+      final stop = await showDialog<bool>(
+        context: _navigator.currentContext!,
+        builder: (context) => AlertDialog(
+          content: Text('${tr('Stop')} ${terminal.command}?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(tr('Cancel')),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(tr('Stop')),
+            ),
+          ],
+        ),
+      );
+      if (stop != true) return;
+    }
+    try {
+      if (_backend?.isConnected ?? false) await terminal.stop();
+      if (!mounted) return;
+      setState(() {
+        _terminals.remove(terminal);
+        if (_visibleTerminal == terminal) _visibleTerminal = null;
+      });
+      terminal.dispose();
+    } catch (_) {
+      _actionFailed();
+    }
+  }
+
+  Future<void> _retry() {
+    if (!(_backend?.isConnected ?? false)) return _connect();
+    if (_showSystemMap) return _refreshSystem(true);
+    if (_card != null) {
+      return _refresh(
+        refreshMap: _halfTaskMapVisible(_card!.width, _card!.focus),
+      );
+    }
+    return _refresh();
+  }
+
+  @override
+  void onWindowFocus() {
+    _windowFocused = true;
+  }
+
+  @override
+  void onWindowBlur() {
+    _windowFocused = false;
+  }
+
+  Future<Map<String, dynamic>> _freshMap() async {
+    var result = await _backend!.call('map.snapshot', {'force': true});
+    final deadline = DateTime.now().add(const Duration(seconds: 10));
+    while (mounted &&
+        result['pending'] == true &&
+        DateTime.now().isBefore(deadline)) {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      result = await _backend!.call('map.snapshot', {'poll': true});
+    }
+    return result;
+  }
+
+  Future<void> _refreshLive() async {
+    if (_busy || _livePending || !(_backend?.isConnected ?? false)) return;
+    _livePending = true;
+    try {
+      final appearance = await _backend!.call('app.theme');
+      if (!mounted) return;
+      if (_snapshot != null &&
+          !mapEquals(
+            _snapshot!['theme'] as Map?,
+            appearance['theme'] as Map?,
+          )) {
+        setState(() => _snapshot!['theme'] = appearance['theme']);
+      }
+      if (_taskActive || _reviewDepth > 0 || _card?.closable == false) return;
+      final idleTaskSurface = _card != null || _browser != null;
+      if (_showSystemMap) {
+        final settings = _snapshot?['settings'] as Map? ?? const {};
+        final interval = settings['map_scan_interval'] as int? ?? 6;
+        if (!_systemRefreshing &&
+            interval > 0 &&
+            (settings['map_scan_pause_unfocused'] == false || _windowFocused) &&
+            !(_nextSystemMountCheck?.isAfter(DateTime.now()) ?? false)) {
+          _nextSystemMountCheck = DateTime.now().add(
+            Duration(seconds: interval < 15 ? 15 : interval),
+          );
+          final changed = await _backend!.call('system.mount_signature');
+          if (mounted &&
+              _showSystemMap &&
+              changed['signature'] != _system['mount_signature']) {
+            unawaited(_refreshSystem(false, quiet: true));
+          }
+        }
+        return;
+      }
+      if (!idleTaskSurface &&
+          (!_showMap ||
+              _showSystemMap ||
+              _showProviders ||
+              _showConnections ||
+              _showSettings ||
+              _showGuide ||
+              _visibleTerminal != null)) {
+        return;
+      }
+      final settings = _snapshot?['settings'] as Map? ?? const {};
+      final interval = settings['map_scan_interval'] as int? ?? 6;
+      final pending = _graph?['pending'] == true;
+      if (!pending &&
+          (interval == 0 ||
+              (settings['map_scan_pause_unfocused'] != false &&
+                  !_windowFocused) ||
+              (_nextMapScan?.isAfter(DateTime.now()) ?? false))) {
+        return;
+      }
+      final graph = await _backend!.call(
+        'map.snapshot',
+        pending ? {'poll': true} : const {},
+      );
+      if (!pending) {
+        _nextMapScan = DateTime.now().add(Duration(seconds: interval));
+      }
+      if (mounted) {
+        setState(() {
+          _graph = graph;
+          _failed = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _failed = true);
+    } finally {
+      _livePending = false;
+    }
+  }
+
+  Future<void> _openSubagents(String command) async {
+    setState(() => _busy = true);
+    try {
+      final initial = await _backend!.call('agents.activity', {
+        'command': command,
+      });
+      if (!mounted) return;
+      await showDialog<void>(
+        context: _navigator.currentContext!,
+        builder: (context) => SubagentsDialog(
+          backend: _backend!,
+          command: command,
+          initial: initial,
+          tr: tr,
+        ),
+      );
+    } catch (_) {
+      _actionFailed();
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  void _selectAgent(String command) {
+    setState(() {
+      _selected = command;
+      _agentInfo = null;
+      _showMap = false;
+      _showSystemMap = false;
+      _showSettings = false;
+      _showProviders = false;
+      _showConnections = false;
+    });
+    _refresh();
+  }
+
+  Future<void> _updateSettings(Map<String, dynamic> values) async {
+    setState(() => _busy = true);
+    try {
+      await _backend!.call('settings.update', {'values': values});
+      await _refresh();
+    } catch (_) {
+      _actionFailed();
+    }
+  }
+
+  Future<T> _review<T>(Future<T> Function() open) async {
+    if (mounted) setState(() => _reviewDepth++);
+    try {
+      return await open();
+    } finally {
+      if (mounted) setState(() => _reviewDepth--);
+    }
+  }
+
+  // Only sessions owned by this app depend on its currently loaded adapters.
+  bool get _agentsRunning => _terminals.any((t) => !t.ended);
+
+  Map<String, dynamic> get _mapGraph =>
+      _welcome && !_addons.any((i) => i['enabled'] == true)
+      ? {'nodes': <dynamic>[], 'edges': <dynamic>[]}
+      : _graph ?? {'nodes': <dynamic>[], 'edges': <dynamic>[]};
+
+  Map<int, int> get _groupAvailable => {
+    for (final col in [1, 2])
+      col: {
+        ..._addons
+            .where(
+              (i) =>
+                  (col == 1 ? i['kind'] == 'agent' : i['kind'] != 'agent') &&
+                  i['enabled'] != true,
+            )
+            .map((i) => i['id']),
+        ...(_addonEntries ?? [])
+            .where(
+              (i) =>
+                  (col == 1 ? i['kind'] == 'agent' : i['kind'] == 'provider') &&
+                  i['action'] == 'install',
+            )
+            .map((i) => i['id']),
+      }.length,
+  };
+
+  Map<int, int> get _groupFound => {
+    for (final col in [1, 2])
+      col: _addons
+          .where(
+            (i) =>
+                (col == 1 ? i['kind'] == 'agent' : i['kind'] != 'agent') &&
+                i['enabled'] != true &&
+                _setupDetected.contains(i['id']),
+          )
+          .length,
+  };
+
+  void _offerAddonUndo(Future<void> Function() undo) {
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(_navigator.currentContext!);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(tr('Add-ons')),
+        action: SnackBarAction(
+          label: tr('Undo'),
+          onPressed: () async {
+            if (_busy || _agentsRunning) {
+              _actionFailed();
+              return;
+            }
+            setState(() => _busy = true);
+            try {
+              await undo();
+            } catch (_) {
+              _actionFailed();
+            } finally {
+              if (mounted) setState(() => _busy = false);
+            }
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _groupFocus() {
+    final category = _focusCategory!;
+    return MapAddonsFocus(
+      hosted: true,
+      key: ValueKey('focus-$category'),
+      category: category,
+      items: _addons,
+      detected: _setupDetected,
+      nodes: (_mapGraph['nodes'] as List? ?? [])
+          .cast<Map<String, dynamic>>()
+          .where((n) => n['column'] == category)
+          .toList(),
+      entries: _addonEntries,
+      busy: _busy,
+      running: _agentsRunning,
+      online: (_snapshot?['settings'] as Map?)?['addons_online'] != false,
+      tr: tr,
+      welcome: _welcome && category == 1,
+      detecting: _setupDetecting && _reviewDepth == 0,
+      detectionFailed: _setupDetectionFailed,
+      onDetect: _detectSetup,
+      onApply: _finishSetup,
+      onLater: () => _finishSetup(null),
+      onBack: () => setState(() => _focusCategory = null),
+      onToggle: _toggleAddon,
+      onCatalog: _loadAddonCatalog,
+      onOnline: (on) => _updateSettings({'addons_online': on}),
+      onInstall: _installAddon,
+      onMenu: _addonMenu,
+      onNodeMenu: _nodeMenu,
+      onLogin: (command) => _agentAction(command, 'login'),
+      onNode: _aiNode,
+      onModels: () => _guideAction('', 'providers'),
+      onConnections: () => _guideAction('', 'connections'),
+      onFolders: _openExisting,
+    );
+  }
+
+  void _nodeMenu(BuildContext context, Map<String, dynamic> node) {
+    final id = (node['id'] as String).split(':').skip(1).join(':');
+    final item = _addons
+        .where((a) => (a['provides'] as List? ?? []).contains(id))
+        .firstOrNull;
+    if (item != null) {
+      _addonMenu(context, item);
+    } else {
+      _aiNode(node);
+    }
+  }
+
+  Future<void> _addonMenu(
+    BuildContext context,
+    Map<String, dynamic> item,
+  ) async {
+    final update = (_addonEntries ?? [])
+        .where(
+          (e) =>
+              e['id'] == item['id'] &&
+              e['action'] == 'update' &&
+              e['preview'] != null,
+        )
+        .firstOrNull;
+    final blocked = _busy || _agentsRunning;
+    await _review(
+      () => showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        builder: (sheet) => ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(sheet).height * .85,
+          ),
+          child: ListView(
+            shrinkWrap: true,
+            padding: const EdgeInsets.all(24),
+            children: [
+              Text(
+                '${item['name']} · ${item['version']}',
+                style: Theme.of(sheet).textTheme.titleLarge,
+              ),
+              AddonDetails(item: item, tr: tr),
+              if (_agentsRunning)
+                Text(tr('Finish running agents before changing add-ons.')),
+              TextButton(
+                onPressed:
+                    blocked ||
+                        item['supported'] != true ||
+                        (item['verified'] != true && item['enabled'] != true)
+                    ? null
+                    : () {
+                        Navigator.pop(sheet);
+                        _toggleAddon(
+                          item['id'] as String,
+                          item['enabled'] != true,
+                        );
+                      },
+                child: Text(
+                  tr(item['enabled'] == true ? 'Switch off' : 'Switch on'),
+                ),
+              ),
+              if (update != null)
+                TextButton(
+                  onPressed: blocked
+                      ? null
+                      : () {
+                          Navigator.pop(sheet);
+                          _installAddon(update);
+                        },
+                  child: Text(
+                    tr(
+                      'Update add-on to {0}',
+                    ).replaceAll('{0}', update['version'] as String),
+                  ),
+                ),
+              for (final agent in item['sign_ins'] as List? ?? [])
+                TextButton(
+                  onPressed: _busy
+                      ? null
+                      : () {
+                          Navigator.pop(sheet);
+                          _agentAction(agent['command'] as String, 'login');
+                        },
+                  child: Text(
+                    tr(
+                      'Sign in to {0}…',
+                    ).replaceAll('{0}', agent['name'] as String),
+                  ),
+                ),
+              if (item['kind'] == 'agent')
+                for (final command in item['provides'] as List? ?? [])
+                  if (_catalog.any((a) => a['command'] == command))
+                    TextButton(
+                      onPressed: _busy
+                          ? null
+                          : () {
+                              Navigator.pop(sheet);
+                              _selectAgent(command as String);
+                            },
+                      child: Text(tr('Details')),
+                    ),
+              if (item['removable'] == true)
+                TextButton(
+                  onPressed: blocked
+                      ? null
+                      : () {
+                          Navigator.pop(sheet);
+                          _removeAddon(item);
+                        },
+                  child: Text(tr('Remove')),
+                ),
+              TextButton(
+                onPressed: () => Navigator.pop(sheet),
+                child: Text(tr('Close')),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _removeAddon(Map<String, dynamic> item) async {
+    if (_busy || _agentsRunning) return;
+    try {
+      final plan = await _backend!.call('addons.remove_preview', {
+        'id': item['id'],
+      });
+      if (!mounted) return;
+      final yes = await _cardReview(
+        tr('Remove'),
+        plan,
+        (yes, no) => AddonRemovalReview(
+          plan: plan,
+          tr: tr,
+          onConfirm: yes,
+          onCancel: no,
+        ),
+      );
+      if (yes != true || !mounted) return;
+      setState(() => _busy = true);
+      final result = await _backend!.call('addons.remove_apply', {
+        'preview': plan['preview'],
+      });
+      _addonEntries = null;
+      _taskResult(
+        tr('Remove'),
+        result,
+        _focusOf(plan),
+        undo: () async {
+          await _backend!.call('addons.remove_undo', {'undo': result['undo']});
+        },
+      );
+      await _refresh();
+    } catch (_) {
+      if (mounted) _actionFailed();
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _toggleAddon(String id, bool on) async {
+    if (_busy || _agentsRunning) return;
+    final before =
+        _addons.where((i) => i['id'] == id).firstOrNull?['enabled'] == true;
+    setState(() => _busy = true);
+    try {
+      await _backend!.call('addons.set_enabled', {'id': id, 'enabled': on});
+      if (!mounted) return;
+      setState(() {
+        _selected = null;
+        _agentInfo = null;
+      });
+      await _refresh();
+      _offerAddonUndo(() async {
+        await _backend!.call('addons.set_enabled', {
+          'id': id,
+          'enabled': before,
+        });
+        await _refresh();
+      });
+    } catch (_) {
+      _actionFailed();
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<Map<String, dynamic>?> _addonOperation(
+    String method,
+    Map<String, dynamic> params,
+  ) async {
+    if (_busy) return null;
+    setState(() {
+      _busy = true;
+      _taskActive = true;
+    });
+    try {
+      final started = await _backend!.call(method, params);
+      if (!mounted) return null;
+      return await _runTask(
+        operation: method,
+        params: const {},
+        existingTask: started['task'] as String,
+        title: tr(
+          (method.startsWith('existing.') || method == 'system.refresh')
+              ? (method == 'system.refresh' ? 'System Map' : 'Find existing AI')
+              : method == 'guide.snapshot'
+              ? 'Your first agent'
+              : 'Add-ons',
+        ),
+      );
+    } catch (_) {
+      _actionFailed();
+      return null;
+    } finally {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _taskActive = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _loadSystem() async {
+    Map<String, dynamic> data;
+    try {
+      data = await _backend!.call('system.cached');
+    } catch (_) {
+      return;
+    }
+    if (mounted) {
+      setState(() {
+        _system = data;
+        _moveUndo = data['move_undo'] as String?;
+      });
+    }
+    if (mounted) await _refreshSystem(false, quiet: true);
+  }
+
+  Future<void> _reloadSystem() async {
+    final data = await _backend!.call('system.cached');
+    if (mounted) {
+      setState(() {
+        _system = data;
+        _moveUndo = data['move_undo'] as String?;
+      });
+    }
+  }
+
+  Future<void> _refreshSystem(bool search, {bool quiet = false}) async {
+    if (_systemRefreshing) return;
+    setState(() => _systemRefreshing = true);
+    try {
+      Map<String, dynamic>? result;
+      if (quiet) {
+        final started = await _backend!.call('system.refresh', {
+          'search': search,
+        });
+        while (mounted) {
+          final status = await _backend!.call('tasks.status', {
+            'task': started['task'],
+          });
+          if (status['state'] == 'done') {
+            result = status['result'] as Map<String, dynamic>;
+            break;
+          }
+          if (status['state'] != 'running') {
+            throw StateError('System refresh failed');
+          }
+          await Future<void>.delayed(const Duration(milliseconds: 200));
+        }
+      } else {
+        result = await _addonOperation('system.refresh', {'search': search});
+      }
+      if (result != null && mounted) setState(() => _system = result!);
+    } catch (_) {
+      if (mounted && !quiet) _actionFailed();
+    } finally {
+      if (mounted) setState(() => _systemRefreshing = false);
+    }
+  }
+
+  Future<void> _openSystem({bool search = false}) async {
+    if (!mounted) return;
+    setState(() {
+      _card = null;
+      _browser = null;
+      _showSystemMap = true;
+      _showGuide = false;
+      _showConnections = false;
+      _showProviders = false;
+      _showSettings = false;
+      _visibleTerminal = null;
+    });
+    await _refreshSystem(search, quiet: !search);
+  }
+
+  Future<void> _openExisting() => _openSystem(search: true);
+
+  Future<void> _systemSaved(Map<String, dynamic> result) async {
+    if (result['ok'] == false) _actionFailed();
+    if (result.containsKey('move_undo')) {
+      _moveUndo = result['move_undo'] as String?;
+    }
+    if (result['undo'] != null) {
+      _connectionUndo = result['undo'] as String;
+      _moveUndo = null;
+    }
+    if (_card != null &&
+        (result['undo'] != null || result['move_undo'] != null)) {
+      _taskResult(_card!.title, result, _card!.focus, width: _card!.width);
+    }
+    await _reloadSystem();
+    await _refreshSystem(false, quiet: true);
+  }
+
+  void _systemSession(Map<String, dynamic> result) {
+    final terminal = AgentTerminal(
+      _backend!,
+      result['session'] as String,
+      result['command'] as String,
+      result['path'] as String,
+      tr: tr,
+    );
+    setState(() {
+      _terminals.add(terminal);
+      _visibleTerminal = terminal;
+      _showSystemMap = false;
+    });
+  }
+
+  Future<void> _systemFolderOnAI(
+    Map<String, dynamic> source,
+    Map<String, dynamic> target,
+  ) async {
+    if (_busy || source['found'] == null || target['kind'] != 'runtime') return;
+    setState(() => _busy = true);
+    try {
+      final plan = await _backend!.call('system.folder_preview', {
+        'found': source['found'],
+        'runtime': (target['id'] as String).substring(8),
+      });
+      if (!mounted ||
+          !await _cardReview(
+            tr('Preview'),
+            plan,
+            (yes, no) => ConnectionReview(
+              plan: plan,
+              tr: tr,
+              onConfirm: yes,
+              onCancel: no,
+            ),
+          )) {
+        return;
+      }
+      final started = await _backend!.call('connections.apply', {
+        'plan': plan['plan'],
+      });
+      if (!mounted) return;
+      await _runTask(
+        operation: 'connections.apply',
+        params: const {},
+        existingTask: started['task'] as String,
+        title: tr('Apply'),
+      );
+    } catch (_) {
+      _actionFailed();
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _openUsage() async {
+    try {
+      final result = await _backend!.call('usage.snapshot');
+      if (!mounted) return;
+      await showDialog<void>(
+        context: _navigator.currentContext!,
+        builder: (context) => AlertDialog(
+          title: Text(tr('Usage')),
+          content: SizedBox(
+            width: 720,
+            child: ListView(
+              shrinkWrap: true,
+              children: [
+                Text(tr('Last 30 days')),
+                if ((result['categories'] as List).isEmpty)
+                  Text(tr('No AI runs recorded in the last 30 days.')),
+                for (final c in result['categories'] as List)
+                  ExpansionTile(
+                    title: Text('${c['plugin']} · ${tr(c['task'] as String)}'),
+                    subtitle: Text(
+                      '${c['runs']} ${tr('Sessions')} · ${c['totals']['tokens']} ${tr('Tokens')} · ${c['totals']['unknown']} ${tr('Unknown')}',
+                    ),
+                    children: [
+                      for (final run in c['entries'] as List)
+                        ListTile(
+                          title: Text('${run['when']} · ${run['agent']}'),
+                          subtitle: Text(
+                            '${tr(run['ok'] == true ? 'Succeeded' : 'Failed')} · ${run['tokens'] ?? '—'} ${tr('Tokens')}',
+                          ),
+                        ),
+                    ],
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(tr('Close')),
+            ),
+          ],
+        ),
+      );
+    } catch (_) {
+      if (mounted) _actionFailed();
+    }
+  }
+
+  Future<void> _showAI(Map<String, dynamic> node) async {
+    if ((node['id'] as String).startsWith('agent:')) {
+      final command = (node['id'] as String).substring(6);
+      if (!_catalog.any((a) => a['command'] == command)) {
+        await _openGroups();
+        return;
+      }
+      _selectAgent(command);
+      return;
+    }
+    final graph = await _freshMap();
+    if (!mounted) return;
+    final target = (graph['nodes'] as List)
+        .where(
+          (n) =>
+              n['id'] == node['id'] ||
+              (n['group'] != null && n['group'] == node['path']),
+        )
+        .firstOrNull;
+    setState(() {
+      _showSystemMap = false;
+      _showMap = true;
+      _graph = graph;
+      _aiFocus = target?['id'] as String?;
+    });
+    if (target == null) {
+      ScaffoldMessenger.of(_navigator.currentContext!).showSnackBar(
+        SnackBar(
+          content: Text(
+            tr(
+              'This component has no AI Map node yet. Enable its add-on or connect a runtime first.',
+            ),
+          ),
+        ),
+      );
+    }
+  }
+
+  void _aiNode(Map<String, dynamic> node) {
+    if (node['kind'] == 'agent') {
+      _selectAgent((node['id'] as String).substring(6));
+      return;
+    }
+    String? target;
+    if (node['kind'] == 'runtime') {
+      target = node['id'] as String;
+    } else {
+      final group = node['group'] as String?;
+      target =
+          (_system['nodes'] as List)
+                  .where((n) => group != null && n['path'] == group)
+                  .firstOrNull?['id']
+              as String?;
+      if (target == null && node['kind'] == 'model') {
+        final id = node['id'] as String;
+        if (id.startsWith('model:runtime:')) {
+          target = 'runtime:${id.split(':')[2]}';
+        }
+      }
+    }
+    setState(() => _systemSelection = target);
+    _openSystem();
+  }
+
+  Future<void> _loadAddonCatalog() async {
+    final result = await _addonOperation('addons.catalog', const {});
+    if (!mounted || result == null) return;
+    setState(
+      () => _addonEntries = (result['entries'] as List)
+          .cast<Map<String, dynamic>>(),
+    );
+  }
+
+  Future<void> _reloadAddonCatalog() async {
+    // Refresh the already-consented catalog without replacing the install result.
+    final prior = _card;
+    setState(() {
+      _busy = true;
+      _taskActive = true;
+      if (prior != null) {
+        _card = TaskCardSpec(
+          title: prior.title,
+          child: prior.child,
+          focus: prior.focus,
+          width: prior.width,
+          closable: false,
+        );
+      }
+    });
+    try {
+      final started = await _backend!.call('addons.catalog');
+      while (mounted) {
+        final status = await _backend!.call('tasks.status', {
+          'task': started['task'],
+        });
+        if (status['state'] == 'done') {
+          final result = status['result'] as Map<String, dynamic>;
+          setState(
+            () => _addonEntries = (result['entries'] as List)
+                .cast<Map<String, dynamic>>(),
+          );
+          return;
+        }
+        if (status['state'] != 'running') {
+          throw StateError('Catalog refresh failed');
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _addonEntries = null);
+        ScaffoldMessenger.of(_navigator.currentContext!).showSnackBar(
+          SnackBar(content: Text(tr('The action could not be completed.'))),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _card = prior;
+          _busy = false;
+          _taskActive = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _installAddon(Map<String, dynamic> entry) async {
+    if (_busy) return;
+    final confirmed = await _cardReview(
+      tr('Add-ons'),
+      entry,
+      (yes, no) =>
+          AddonInstallReview(item: entry, tr: tr, onConfirm: yes, onCancel: no),
+    );
+    if (!mounted || !confirmed) return;
+    final result = await _addonOperation('addons.install', {
+      'preview': entry['preview'],
+    });
+    if (!mounted) return;
+    if (_backend?.isConnected ?? false) await _reloadAddonCatalog();
+    if (!mounted || result == null) return;
+    setState(() {
+      _selected = null;
+      _agentInfo = null;
+    });
+    if (result['enabled'] == true && result['loaded'] != true) _actionFailed();
+  }
+
+  Future<void> _openGuide() async {
+    final result = await _addonOperation('guide.snapshot', const {});
+    if (!mounted || result == null) return;
+    setState(() {
+      _guide = result;
+      _showGuide = true;
+      _showSystemMap = false;
+      _showProviders = false;
+      _showConnections = false;
+      _showSettings = false;
+      _visibleTerminal = null;
+    });
+  }
+
+  Future<void> _chooseGuide(String route) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      await _backend!.call('guide.choose', {'route': route});
+    } catch (_) {
+      _actionFailed();
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+    if (mounted) await _openGuide();
+  }
+
+  void _guideAction(String command, String action) {
+    _connectionCommand = command.isEmpty ? null : command;
+    if (action != 'existing') setState(() => _showSystemMap = false);
+    if (action == 'addons') {
+      _openGroups();
+      return;
+    }
+    if (action == 'existing') {
+      _openExisting();
+      return;
+    }
+    if (['install', 'login', 'verify'].contains(action)) {
+      _agentAction(command, action);
+      return;
+    }
+    setState(() {
+      _showGuide = false;
+      _showProviders = action == 'providers';
+      _showConnections = action == 'connections';
+      _showSettings = false;
+    });
+    _refresh();
+  }
+
+  Future<void> _agentAction(String command, String action) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      var plan = await _backend!.call('agents.action_preview', {
+        'command': command,
+        'action': action,
+      });
+      if (!mounted) return;
+      if (action == 'login' && (plan['logins'] as List).length > 1) {
+        int? index;
+        final chosen = await _cardReview(
+          tr('Sign in…'),
+          plan,
+          (yes, no) => TaskReview(
+            content: Column(
+              children: [
+                for (var i = 0; i < (plan['logins'] as List).length; i++)
+                  ListTile(
+                    title: Text(plan['logins'][i] as String),
+                    onTap: () {
+                      index = i;
+                      yes();
+                    },
+                  ),
+              ],
+            ),
+            actions: [TextButton(onPressed: no, child: Text(tr('Cancel')))],
+          ),
+        );
+        if (!chosen || index == null) return;
+        plan = await _backend!.call('agents.action_preview', {
+          'command': command,
+          'action': action,
+          'login': index,
+        });
+      }
+      if (!mounted ||
+          !await _cardReview(
+            tr(actionLabel(action)),
+            plan,
+            (yes, no) => AgentActionReview(
+              plan: plan,
+              tr: tr,
+              onConfirm: yes,
+              onCancel: no,
+            ),
+          )) {
+        return;
+      }
+      final result = await _backend!.call('agents.action_apply', {
+        'preview': plan['preview'],
+      });
+      if (!mounted) return;
+      _taskResult(tr(actionLabel(action)), result, _focusOf(plan));
+      if (result['session'] != null) {
+        final terminal = AgentTerminal(
+          _backend!,
+          result['session'] as String,
+          result['command'] as String,
+          result['path'] as String,
+          tr: tr,
+        );
+        setState(() {
+          _card = null;
+          _terminals.add(terminal);
+          _visibleTerminal = terminal;
+          _showGuide = false;
+        });
+      }
+      await _refresh();
+    } catch (_) {
+      _actionFailed();
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<Map<String, dynamic>?> _providerOperation(
+    String operation,
+    Map<String, dynamic> params,
+    String title,
+  ) async {
+    setState(() {
+      _taskActive = true;
+      _busy = true;
+    });
+    try {
+      final result = await _runTask(
+        operation: operation,
+        params: params,
+        title: title,
+      );
+      return result;
+    } finally {
+      if (mounted) {
+        setState(() {
+          _taskActive = false;
+          _busy = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _connectionPreview(Map<String, dynamic> params) async {
+    setState(() => _busy = true);
+    try {
+      final plan = await _backend!.call('connections.preview', params);
+      if (!mounted) return;
+      final apply = await _cardReview(
+        tr('Preview'),
+        plan,
+        (yes, no) =>
+            ConnectionReview(plan: plan, tr: tr, onConfirm: yes, onCancel: no),
+      );
+      if (apply) {
+        setState(() => _taskActive = true);
+        var result = await _backend!.call('connections.apply', {
+          'plan': plan['plan'],
+        });
+        final queued = result['task'] != null;
+        if (queued && mounted) {
+          final finished = await _runTask(
+            operation: 'connections.apply',
+            params: const {},
+            existingTask: result['task'] as String,
+            title: tr('Apply'),
+          );
+          if (finished == null) return;
+          result = finished;
+        }
+        if (!queued) {
+          _connectionUndo = result['undo'] as String?;
+          await _refresh(
+            refreshMap: _halfTaskMapVisible(TaskCardWidth.half, _focusOf(plan)),
+          );
+          _taskResult(tr('Apply'), result, _focusOf(plan));
+        }
+        if ((result['context_failures'] as num? ?? 0) > 0 && mounted) {
+          ScaffoldMessenger.of(_navigator.currentContext!).showSnackBar(
+            SnackBar(
+              content: Text(
+                tr(
+                  'Configuration saved; some model context settings could not be applied.',
+                ),
+              ),
+            ),
+          );
+        }
+      }
+    } catch (_) {
+      _actionFailed();
+    } finally {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _taskActive = false;
+        });
+      }
+    }
+  }
+
+  Future<bool> _undoConnection({bool refresh = true}) async {
+    final token = _connectionUndo;
+    if (token == null) return false;
+    setState(() => _busy = true);
+    try {
+      final result = await _backend!.call('connections.undo', {'undo': token});
+      _connectionUndo = null;
+      if (mounted) {
+        ScaffoldMessenger.of(_navigator.currentContext!).showSnackBar(
+          SnackBar(
+            content: Text(
+              '${tr('Restored files')}: ${(result['restored'] as List).length}',
+            ),
+          ),
+        );
+      }
+      if (refresh) await _refresh();
+      return true;
+    } catch (_) {
+      _actionFailed();
+      return false;
+    }
+  }
+
+  Future<void> _removeModel(String key, String model) async {
+    setState(() => _busy = true);
+    try {
+      final preview = await _backend!.call('models.remove_preview', {
+        'key': key,
+        'model': model,
+      });
+      if (!mounted ||
+          !await _cardReview(
+            tr('Remove model'),
+            preview,
+            (yes, no) => ModelRemovalReview(
+              preview: preview,
+              tr: tr,
+              onConfirm: yes,
+              onCancel: no,
+            ),
+          )) {
+        return;
+      }
+      setState(() => _taskActive = true);
+      final started = await _backend!.call('models.remove_apply', {
+        'removal': preview['removal'],
+      });
+      if (!mounted) return;
+      await _runTask(
+        operation: 'models.remove',
+        params: const {},
+        existingTask: started['task'] as String,
+        title: tr('Remove model'),
+      );
+    } catch (_) {
+      _actionFailed();
+    } finally {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _taskActive = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _openGroups({int category = 1}) async {
+    if (_busy) return;
+    setState(() {
+      _focusCategory = category;
+      _showMap = true;
+      _showSystemMap = false;
+      _showGuide = false;
+      _showConnections = false;
+      _showProviders = false;
+      _showSettings = false;
+      _visibleTerminal = null;
+    });
+    await _refresh();
+    if (!_detectionComplete) unawaited(_detectSetup());
+  }
+
+  Future<void> _detectSetup() async {
+    if (_setupDetecting) return;
+    final revision = _setupRevision;
+    setState(() {
+      _setupDetecting = true;
+      _setupDetectionFailed = false;
+    });
+    try {
+      final started = await _backend!.call('setup.detect');
+      while (mounted && revision == _setupRevision) {
+        final status = await _backend!.call('tasks.status', {
+          'task': started['task'],
+        });
+        if (status['state'] == 'done') {
+          final result = status['result'] as Map<String, dynamic>;
+          _detectionComplete = true;
+          setState(
+            () => _setupDetected = (result['installed'] as List)
+                .cast<String>()
+                .toSet(),
+          );
+          return;
+        }
+        if (status['state'] != 'running') throw StateError('Detection failed');
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+      }
+    } catch (_) {
+      if (mounted && revision == _setupRevision) {
+        setState(() => _setupDetectionFailed = true);
+      }
+    } finally {
+      if (mounted && revision == _setupRevision) {
+        setState(() => _setupDetecting = false);
+      }
+    }
+  }
+
+  Future<void> _finishSetup(List<String>? selected) async {
+    if (_busy || (selected != null && _agentsRunning)) return;
+    final before = _addons
+        .where((i) => i['enabled'] == true)
+        .map((i) => i['id'] as String)
+        .toList();
+    final enabled = selected == null
+        ? null
+        : <String>{
+            ...selected,
+            ..._addons
+                .where((i) => i['kind'] != 'agent' && i['enabled'] == true)
+                .map((i) => i['id'] as String),
+          }.toList();
+    setState(() => _busy = true);
+    try {
+      await _backend!.call(
+        enabled == null ? 'setup.later' : 'setup.apply',
+        enabled == null ? const {} : {'enabled': enabled},
+      );
+      if (!mounted) return;
+      setState(() {
+        _welcome = false;
+        _focusCategory = null;
+        _showGuide = false;
+        _showMap = true;
+      });
+      await _refresh();
+      if (enabled != null) {
+        _offerAddonUndo(() async {
+          if (_agentsRunning) return;
+          await _backend!.call('setup.apply', {'enabled': before});
+          await _refresh();
+        });
+      }
+    } catch (_) {
+      _actionFailed();
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _refresh({bool? refreshMap}) async {
+    if (!mounted) return;
+    setState(() => _busy = true);
+    try {
+      final snapshot = await _backend!.call('app.snapshot');
+      final connections = _showConnections
+          ? await _backend!.call('connections.snapshot', {
+              if (_connectionCommand != null) 'command': _connectionCommand,
+            })
+          : null;
+      final providerData = _showProviders
+          ? await _backend!.call('providers.snapshot')
+          : null;
+      final firstSnapshot = !_startupChecked;
+      final openSetup = firstSnapshot && snapshot['setup_needed'] == true;
+      final addons = await _backend!.call('addons.list');
+      final mapVisible =
+          _showMap &&
+          !_showSystemMap &&
+          !_showSettings &&
+          !_showGuide &&
+          !_showProviders &&
+          !_showConnections &&
+          _visibleTerminal == null;
+      final graph =
+          (refreshMap ?? (mapVisible && _card == null && _browser == null))
+          ? await _freshMap()
+          : _graph;
+      if (graph != _graph) _nextMapScan = null;
+      final selected = _selected;
+      final info = selected == null
+          ? null
+          : await _backend!.call('agents.details', {'command': selected});
+      final setting = snapshot['language'] as String? ?? 'auto';
+      var language = setting == 'auto'
+          ? WidgetsBinding.instance.platformDispatcher.locale.languageCode
+          : setting;
+      if (![
+        'en',
+        'de',
+        'es',
+        'fr',
+        'it',
+        'nl',
+        'pl',
+        'pt',
+      ].contains(language)) {
+        language = 'en';
+      }
+      final raw = await rootBundle.loadString(
+        'assets/translations/$language.json',
+      );
+      final strings = Map<String, String>.from(jsonDecode(raw) as Map);
+      if (!mounted) return;
+      setState(() {
+        _snapshot = snapshot;
+        if (connections != null) _connections = connections;
+        if (providerData != null) _providers = providerData;
+        _startupChecked = true;
+        if (openSetup) {
+          _welcome = true;
+          _focusCategory = 1;
+          _showMap = true;
+          _showSystemMap = false;
+          _setupRevision++;
+        }
+        _addons = (addons['addons'] as List).cast<Map<String, dynamic>>();
+        _graph = graph;
+        if (_selected == selected) _agentInfo = info;
+        _strings = strings;
+        _locale = Locale(language);
+        _busy = false;
+        _failed = false;
+      });
+      if (firstSnapshot) unawaited(_detectSetup());
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _failed = true;
+        });
+      }
+    }
+  }
+
+  Color? _color(String key) {
+    final value = (_snapshot?['theme'] as Map?)?[key];
+    if (value is! String || !RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(value)) {
+      return null;
+    }
+    return Color(0xff000000 | int.parse(value.substring(1), radix: 16));
+  }
+
+  ThemeData _theme(Brightness brightness) {
+    var scheme = ColorScheme.fromSeed(
+      seedColor: _color('accent') ?? const Color(0xff517f70),
+      brightness: brightness,
+    );
+    final background = _color('background');
+    if (background != null) {
+      scheme = scheme.copyWith(
+        surface: background,
+        onSurface: _color('foreground') ?? scheme.onSurface,
+      );
+    }
+    return ThemeData(colorScheme: scheme, useMaterial3: true);
+  }
+
+  Future<void> _projectAction(
+    String method,
+    String command,
+    String? path,
+  ) async {
+    setState(() => _busy = true);
+    try {
+      await _backend!.call(method, {'command': command, 'path': path});
+      await _refresh();
+    } catch (_) {
+      _actionFailed();
+    }
+  }
+
+  @override
+  void dispose() {
+    windowManager.removeListener(this);
+    _liveTimer?.cancel();
+    _startMenu.dispose();
+    _aiTransform.dispose();
+    _systemTransform.dispose();
+    for (final terminal in _terminals) {
+      terminal.dispose();
+    }
+    _backend?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => MaterialApp(
+    title: 'Asterism',
+    navigatorKey: _navigator,
+    debugShowCheckedModeBanner: false,
+    locale: _locale,
+    supportedLocales: const [
+      Locale('en'),
+      Locale('de'),
+      Locale('es'),
+      Locale('fr'),
+      Locale('it'),
+      Locale('nl'),
+      Locale('pl'),
+      Locale('pt'),
+    ],
+    localizationsDelegates: GlobalMaterialLocalizations.delegates,
+    theme: _theme(Brightness.light),
+    darkTheme: _theme(Brightness.dark),
+    themeMode: _color('background') == null
+        ? ThemeMode.system
+        : (_color('background')!.computeLuminance() < 0.5
+              ? ThemeMode.dark
+              : ThemeMode.light),
+    home: Scaffold(
+      appBar: AppBar(
+        title: const Text('Asterism'),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: SegmentedButton<bool>(
+              segments: [
+                ButtonSegment(
+                  value: false,
+                  label: DragTarget<Map<String, dynamic>>(
+                    onWillAcceptWithDetails: (details) {
+                      if (details.data['found'] != null) {
+                        setState(() {
+                          _card = null;
+                          _browser = null;
+                          _showSystemMap = false;
+                          _showMap = true;
+                        });
+                        if (_graph == null) _refresh();
+                        return true;
+                      }
+                      return false;
+                    },
+                    builder: (context, candidates, rejected) =>
+                        Text(tr('AI Map')),
+                  ),
+                ),
+                ButtonSegment(value: true, label: Text(tr('System Map'))),
+              ],
+              selected: {_showSystemMap},
+              onSelectionChanged: _navigationBlocked
+                  ? null
+                  : (choice) {
+                      if (choice.single) {
+                        _openSystem();
+                      } else {
+                        setState(() {
+                          _card = null;
+                          _browser = null;
+                          _showSystemMap = false;
+                          _showMap = true;
+                          _showGuide = false;
+                          _showSettings = false;
+                          _showProviders = false;
+                          _showConnections = false;
+                          _visibleTerminal = null;
+                        });
+                        _refresh();
+                      }
+                    },
+            ),
+          ),
+          if (!_showSystemMap)
+            IconButton(
+              tooltip: tr('Usage'),
+              onPressed: _navigationBlocked ? null : _openUsage,
+              icon: const Icon(Icons.bar_chart_outlined),
+            ),
+          IconButton(
+            tooltip: tr('Your first agent'),
+            icon: const Icon(Icons.rocket_launch_outlined),
+            onPressed: _navigationBlocked ? null : _openGuide,
+          ),
+          IconButton(
+            tooltip: tr('Connections'),
+            icon: const Icon(Icons.account_tree_outlined),
+            onPressed: _navigationBlocked
+                ? null
+                : () {
+                    setState(() {
+                      _card = null;
+                      _browser = null;
+                      _connectionCommand = null;
+                      _showConnections = !_showConnections;
+                      _showSystemMap = false;
+                      _showProviders = false;
+                      _showGuide = false;
+                      _showSettings = false;
+                      _visibleTerminal = null;
+                    });
+                    _refresh();
+                  },
+          ),
+          IconButton(
+            tooltip: tr('Providers and models'),
+            icon: const Icon(Icons.memory_outlined),
+            onPressed: _navigationBlocked
+                ? null
+                : () {
+                    setState(() {
+                      _card = null;
+                      _browser = null;
+                      _showProviders = !_showProviders;
+                      _showSystemMap = false;
+                      _showConnections = false;
+                      _showGuide = false;
+                      _showSettings = false;
+                      _visibleTerminal = null;
+                    });
+                    _refresh();
+                  },
+          ),
+          IconButton(
+            tooltip: tr('Settings'),
+            icon: const Icon(Icons.settings_outlined),
+            onPressed: _navigationBlocked || _snapshot == null
+                ? null
+                : () => setState(() {
+                    _card = null;
+                    _browser = null;
+                    _showSettings = !_showSettings;
+                    _showSystemMap = false;
+                    _showConnections = false;
+                    _showProviders = false;
+                    _showGuide = false;
+                    _visibleTerminal = null;
+                  }),
+          ),
+          IconButton(
+            tooltip: tr(_showMap ? 'Agents' : 'Map'),
+            icon: Icon(_showMap ? Icons.list : Icons.hub_outlined),
+            onPressed: _navigationBlocked
+                ? null
+                : () {
+                    setState(() {
+                      _card = null;
+                      _browser = null;
+                      _showMap = !_showMap;
+                      _showSystemMap = false;
+                      _showConnections = false;
+                      _showSettings = false;
+                      _showGuide = false;
+                      _showProviders = false;
+                      _visibleTerminal = null;
+                    });
+                    if (_showMap) _refresh();
+                  },
+          ),
+          IconButton(
+            tooltip: tr('Refresh'),
+            onPressed: _navigationBlocked ? null : _retry,
+            icon: const Icon(Icons.refresh),
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          if (_busy && _taskActive && _card == null && _reviewDepth == 0)
+            const LinearProgressIndicator(),
+          if (_snapshot?['migration_error'] != null)
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    tr(
+                      'Your AI Agents Map settings could not be imported. Asterism will use its current or default settings.',
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  SelectableText(_snapshot!['migration_error'] as String),
+                ],
+              ),
+            ),
+          if (_failed)
+            MaterialBanner(
+              content: Text(
+                tr('The application service could not be reached.'),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: _busy ? null : _retry,
+                  child: Text(tr('Refresh')),
+                ),
+              ],
+            ),
+          if (_welcome)
+            MapWelcome(
+              tr: tr,
+              busy: _busy,
+              skipSearch: _skipWelcomeSearch,
+              searched: _system['search_done'] == true,
+              onLook: _openExisting,
+              onSkip: () => setState(() => _skipWelcomeSearch = true),
+              onSystem: () => _openSystem(),
+              onAgents: () => _openGroups(),
+            ),
+          if (_terminals.isNotEmpty)
+            SizedBox(
+              height: 48,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                children: [
+                  for (final terminal in _terminals)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: ActionChip(
+                        avatar: const Icon(Icons.terminal),
+                        label: Text(terminal.command),
+                        onPressed: () => setState(() {
+                          _visibleTerminal = terminal;
+                          _showSystemMap = false;
+                        }),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          Expanded(
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                if (_backend != null)
+                  Offstage(
+                    key: const ValueKey('system-slot'),
+                    offstage:
+                        !_showSystemMap || _card != null || _browser != null,
+                    child: SystemMapView(
+                      key: const ValueKey("system-state"),
+                      suspended:
+                          !_showSystemMap || _card != null || _browser != null,
+                      data: _system,
+                      backend: _backend!,
+                      tr: tr,
+                      busy: _busy || _systemRefreshing,
+                      controller: _systemTransform,
+                      onRefresh: (search) => _refreshSystem(search),
+                      onOperation: (method, params, title) =>
+                          _addonOperation(method, params),
+                      onSaved: _systemSaved,
+                      onSession: _systemSession,
+                      onShowAI: _showAI,
+                      onHealthAction: (action) {
+                        if (action.first == 'install') {
+                          _openGuide();
+                        } else if ([
+                          'runtime',
+                          'models',
+                        ].contains(action.first)) {
+                          _guideAction('', 'providers');
+                        } else {
+                          setState(() => _systemSelection = 'pc');
+                        }
+                      },
+                      onGroups: _openGroups,
+                      requestedNode: _systemSelection,
+                      onUndo: _connectionUndo == null && _moveUndo == null
+                          ? null
+                          : () async {
+                              if (_moveUndo != null) {
+                                final result = await _addonOperation(
+                                  'system.move_undo',
+                                  {'undo': _moveUndo},
+                                );
+                                if (result?['ok'] == true) _moveUndo = null;
+                              } else {
+                                await _undoConnection();
+                              }
+                              await _reloadSystem();
+                              await _refreshSystem(false, quiet: true);
+                            },
+                    ),
+                  ),
+                if (_browser != null)
+                  Offstage(
+                    key: const ValueKey('browser-slot'),
+                    offstage: _card != null,
+                    child: _viewHost(
+                      'Download model',
+                      ModelBrowser(
+                        hosted: true,
+                        runtime: _browser!,
+                        tr: tr,
+                        onOperation: _providerOperation,
+                        onClose: () => setState(() => _browser = null),
+                      ),
+                      () => setState(() => _browser = null),
+                    ),
+                  ),
+                if (_hasTaskView ||
+                    (_card == null && _browser == null && !_showSystemMap))
+                  RetainedTaskView(
+                    key: const ValueKey('view-slot'),
+                    visible:
+                        _card == null && _browser == null && !_showSystemMap,
+                    child: _showGuide
+                        ? _viewHost(
+                            'Your first agent',
+                            FirstAgentView(
+                              hosted: true,
+                              data: _guide,
+                              busy: _busy,
+                              tr: tr,
+                              onChoose: _chooseGuide,
+                              onAction: _guideAction,
+                              onBack: () => setState(() => _showGuide = false),
+                              onRefresh: _openGuide,
+                            ),
+                            () => setState(() => _showGuide = false),
+                          )
+                        : _visibleTerminal != null
+                        ? AgentTerminalView(
+                            session: _visibleTerminal!,
+                            tr: tr,
+                            onBack: () =>
+                                setState(() => _visibleTerminal = null),
+                            onStop: () => _stopTerminal(_visibleTerminal!),
+                          )
+                        : _showConnections
+                        ? _viewHost(
+                            'Connections',
+                            ConnectionsView(
+                              hosted: true,
+                              data: _connections,
+                              busy: _busy,
+                              tr: tr,
+                              onPreview: _connectionPreview,
+                              onBack: () =>
+                                  setState(() => _showConnections = false),
+                              onUndo: _connectionUndo == null
+                                  ? null
+                                  : _undoConnection,
+                            ),
+                            () => setState(() => _showConnections = false),
+                            width: TaskCardWidth.half,
+                            focus: _focusOf(_connections),
+                          )
+                        : _showProviders
+                        ? _viewHost(
+                            'Providers and models',
+                            ProvidersView(
+                              hosted: true,
+                              data: _providers,
+                              busy: _busy,
+                              tr: tr,
+                              onOperation: _providerOperation,
+                              onConfirm: (title, runtime) => _cardReview(
+                                title,
+                                runtime,
+                                (yes, no) => TaskReview(
+                                  content: Text(
+                                    tr(
+                                      'This can interrupt agents using this provider.',
+                                    ),
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: no,
+                                      child: Text(tr('Cancel')),
+                                    ),
+                                    FilledButton(
+                                      onPressed: yes,
+                                      child: Text(tr('Continue')),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              onRemove: _removeModel,
+                              onBrowse: (runtime) =>
+                                  setState(() => _browser = runtime),
+                              onDiscover: _openExisting,
+                              onBack: () =>
+                                  setState(() => _showProviders = false),
+                            ),
+                            () => setState(() => _showProviders = false),
+                            width: TaskCardWidth.full,
+                          )
+                        : _showSettings && _snapshot != null
+                        ? SettingsView(
+                            settings:
+                                _snapshot!['settings'] as Map<String, dynamic>,
+                            busy: _busy,
+                            tr: tr,
+                            onUpdate: _updateSettings,
+                            onBack: () => setState(() => _showSettings = false),
+                          )
+                        : _showMap && _graph != null
+                        ? AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 200),
+                            child: _focusCategory == null
+                                ? AgentMap(
+                                    key: const ValueKey('ai-map'),
+                                    graph: _mapGraph,
+                                    controller: _aiTransform,
+                                    focusedNode: _aiFocus,
+                                    onNode: _aiNode,
+                                    tr: tr,
+                                    onAgent: _selectAgent,
+                                    onSubagents: _openSubagents,
+                                    onNodeDrop: _systemFolderOnAI,
+                                    onNodeMenu: _nodeMenu,
+                                    groups: MapGroup.fromGraph(
+                                      _mapGraph,
+                                      const [
+                                        'MCP servers and skills',
+                                        'Agents',
+                                        'Providers',
+                                        'Models',
+                                      ],
+                                      found: _groupFound,
+                                      available: _groupAvailable,
+                                    ),
+                                    onExpandGroup: (col) =>
+                                        setState(() => _focusCategory = col),
+                                  )
+                                : _viewHost(
+                                    const [
+                                      'MCP servers and skills',
+                                      'Agents',
+                                      'Providers',
+                                      'Models',
+                                    ][_focusCategory!],
+                                    _groupFocus(),
+                                    () => setState(() => _focusCategory = null),
+                                  ),
+                          )
+                        : LayoutBuilder(
+                            builder: (context, constraints) {
+                              if (constraints.maxWidth < 800) {
+                                return _selected == null
+                                    ? _agents()
+                                    : _details();
+                              }
+                              return Row(
+                                children: [
+                                  SizedBox(width: 310, child: _agents()),
+                                  const VerticalDivider(width: 1),
+                                  Expanded(child: _details()),
+                                ],
+                              );
+                            },
+                          ),
+                  ),
+                if (_card != null) _host(_card!, _closeCard),
+              ],
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+
+  List<Map<String, dynamic>> get _catalog =>
+      (_snapshot?['agents'] as List? ?? []).cast<Map<String, dynamic>>();
+
+  Widget _agents() => AgentListView(
+    catalog: _catalog,
+    search: _search,
+    selected: _selected,
+    busy: _busy,
+    tr: tr,
+    onSearch: (value) => setState(() => _search = value),
+    onSelected: _selectAgent,
+  );
+
+  Widget _details() => AgentDetailsView(
+    catalog: _catalog,
+    selected: _selected,
+    projectsByAgent: _snapshot?['projects'] as Map? ?? {},
+    busy: _busy,
+    info: _agentInfo,
+    tr: tr,
+    onBack: () => setState(() => _selected = null),
+    onStart: _start,
+    startMenu: _startMenu,
+    onProjectAction: _projectAction,
+    onSubagents: _openSubagents,
+    onAction: _agentAction,
+    onConnections: () => _guideAction(_selected ?? '', 'connections'),
+  );
+}

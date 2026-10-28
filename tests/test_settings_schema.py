@@ -70,6 +70,21 @@ class SchemaTest(unittest.TestCase):
             ai_core.update_settings(self.path, termnal_tabs=True)      # a typo
         self.assertFalse(self.path.exists())
 
+    def test_growing_project_history_cannot_make_existing_settings_unreadable(self):
+        self.write({"language": "de", "map_zoom": 1.2})
+        before = self.path.read_bytes()
+        with self.assertRaises(OSError):
+            ai_core.update_settings(self.path, agent_project_history={"agent": ["/project/" + "a" * ai_core.SETTINGS_MAX_BYTES]})
+        self.assertEqual(self.path.read_bytes(), before)
+        self.assertEqual(ai_core.setting("language", self.path), "de")
+
+    def test_settings_limit_counts_utf8_bytes(self):
+        self.write({"language": "pl"})
+        before = self.path.read_bytes()
+        with self.assertRaises(OSError):
+            ai_core.update_settings(self.path, agent_project_history={"agent": ["/" + "é" * (ai_core.SETTINGS_MAX_BYTES // 2)]})
+        self.assertEqual(self.path.read_bytes(), before)
+
     def test_migration_renames_and_drops(self):
         self.write({"animate_lines": False, "hidden_nodes": ["x"], "sidebar_width": 360, "map_zoom": 1.2})
         ai_core.migrate_settings(self.path)

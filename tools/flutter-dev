@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# Developer tooling only. Never installs, launches the live GTK app or publishes.
+set -euo pipefail
+root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+frontend="$root/flutter_app"
+action=${1:-check}
+if [[ $# -gt 1 ]]; then
+    echo 'Usage: tools/flutter-dev prepare|check|build|run' >&2
+    exit 2
+fi
+case "$action" in prepare|check|build|run) ;; *) echo 'Unknown action' >&2; exit 2 ;; esac
+if ! command -v flutter >/dev/null 2>&1; then
+    echo 'Flutter SDK is not on PATH. Install it, then rerun this command.' >&2
+    exit 1
+fi
+python3 "$root/tools/flutter-assets.py"
+if [[ ! -d "$frontend/linux" ]]; then
+    staging=$(mktemp -d)
+    trap 'rm -rf -- "$staging"' EXIT
+    flutter --suppress-analytics --no-version-check create --offline --no-pub --platforms=linux --project-name=asterism \
+        --org=io.github.ubruckhaus "$staging/asterism"
+    # Use the SDK's current Linux runner, retaining the production application id.
+    python3 - "$staging/asterism/linux/CMakeLists.txt" <<'PY'
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+text = path.read_text()
+old = 'set(APPLICATION_ID "io.github.ubruckhaus.asterism")'
+if old not in text:
+    raise SystemExit('Unexpected Flutter runner template; inspect application id before continuing')
+path.write_text(text.replace(old, 'set(APPLICATION_ID "io.github.ubruckhaus.Asterism")'))
+PY
+    cp -R -- "$staging/asterism/linux" "$frontend/linux"
+    cp -- "$staging/asterism/.metadata" "$frontend/.metadata"
+fi
+cd -- "$frontend"
+if [[ ${ASTERISM_PUB_OFFLINE:-0} == 1 ]]; then
+    flutter --suppress-analytics --no-version-check pub get --offline
+else
+    flutter --suppress-analytics --no-version-check pub get
+fi
+case "$action" in
+    prepare) ;;
+    check)
+        dart format --output=none --set-exit-if-changed lib test
+        flutter --suppress-analytics --no-version-check analyze --no-pub
+        flutter --suppress-analytics --no-version-check test --no-pub --timeout 60s
+        ;;
+    build) python3 "$root/tools/build-flutter-preview.py" ;;
+    run)
+        # The isolated builder assigns the Devel identity for every preview.
+        preview_log=$(mktemp)
+        trap 'rm -f -- "$preview_log"' EXIT
+        python3 "$root/tools/build-flutter-preview.py" | tee "$preview_log"
+        preview_binary=$(sed -n 's/^Development preview: //p' "$preview_log" | tail -n 1)
+        test -n "$preview_binary"
+        rm -f -- "$preview_log"
+        exec "$preview_binary"
+        ;;
+esac

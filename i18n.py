@@ -1,4 +1,7 @@
-"""Interface translations (built in; nothing is downloaded or generated).
+"""Asterism fork: settings I/O uses ai_core to preserve bounded project history.
+Do not overwrite from omarchy-plugin-i18n without preserving this integration.
+
+Interface translations (built in; nothing is downloaded or generated).
 
 gettext style: the English text is the key. `_("Add a shortcut")`, and for
 text with values `_("Opens {0}").format(name)`. Anything without a
@@ -31,48 +34,27 @@ def system_language():
 
 
 def language_setting():
-    """'auto' or a language code from the settings file."""
+    """Use the same bounded private-file reader as the settings writer."""
+    global SETTINGS_FILE
     if SETTINGS_FILE is None:
         return "auto"
-    try:
-        with open(SETTINGS_FILE, "rb") as fh:
-            data = json.loads(fh.read(64 * 1024) or b"{}")
-    except (OSError, ValueError):
-        return "auto"
-    value = data.get("language") if isinstance(data, dict) else None
-    return value if value in CODES else "auto"
+    path = Path(SETTINGS_FILE)
+    import ai_core
+    SETTINGS_FILE = path  # preserve an explicit path across ai_core's first lazy import
+    data = ai_core.load_settings(path)
+    value = data.get("language")
+    return value if isinstance(value, str) and value in CODES else "auto"
 
 
 def save_language(code):
-    """Store the choice (atomic, private); "auto" follows the system again."""
-    if SETTINGS_FILE is None:
+    """Preserve large project histories through the shared atomic settings policy."""
+    global SETTINGS_FILE
+    if SETTINGS_FILE is None or not isinstance(code, str) or code not in CODES | {"auto"}:
         return
     path = Path(SETTINGS_FILE)
-    try:
-        with open(path, "rb") as fh:
-            data = json.loads(fh.read(64 * 1024) or b"{}")
-        data = data if isinstance(data, dict) else {}
-    except (OSError, ValueError):
-        data = {}
-    if code == "auto":
-        data.pop("language", None)
-    elif code in CODES:
-        data["language"] = code
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
-    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o600)
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as fh:
-            json.dump(data, fh, indent=2)
-            fh.flush()
-            os.fsync(fh.fileno())
-        os.replace(tmp, path)
-    except BaseException:
-        try:
-            os.unlink(tmp)
-        except FileNotFoundError:
-            pass
-        raise
+    import ai_core
+    SETTINGS_FILE = path
+    ai_core.update_settings(path, language=None if code == "auto" else code)
     global _lang
     _lang = None
 

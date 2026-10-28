@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from typing import Any, Callable
 
 MAP_LAYERS = ("agents", "online", "local", "models", "mcp", "skills")
+MAP_SCAN_INTERVALS = (0, 6, 15, 30, 60, 120, 300)  # 0: startup/manual Refresh only
+MAP_SCAN_TARGETS = ('activity', 'agents', 'inventory')
 MAP_ANIMATIONS = ("all", "agents", "off")
 USAGE_BOX_ITEMS = ("rate", "context", "used")     # as usage_box.ITEMS
 USAGE_BOX_SIZES = (7, 8, 9, 10, 12)                 # text size in pt, as usage_box.SIZES (7: the default)
@@ -42,6 +44,14 @@ def _mapping(v) -> bool:
     return isinstance(v, dict)
 
 
+def _text_mapping(v) -> bool:
+    return isinstance(v, dict) and all(isinstance(k, str) and isinstance(p, str) for k, p in v.items())
+
+
+def _history_mapping(v) -> bool:
+    return isinstance(v, dict) and all(isinstance(k, str) and _texts(paths) for k, paths in v.items())
+
+
 def _one_of(*choices) -> Callable[[Any], bool]:
     return lambda v: v in choices
 
@@ -70,8 +80,16 @@ SCHEMA: dict[str, Setting] = {
     "terminal_tabs": Setting(True, _bool, "Settings › Terminal tabs above the map"),
     "launcher_entry": Setting(None, _bool, "Settings › In the app launcher (None: not asked yet)"),
     "agent_folder": Setting(None, _text, "Settings › Agents start in: the folder agents start in"),
+    "agent_projects": Setting({}, _text_mapping, "Start: the optional project folder pinned as each agent's default"),
+    "agent_project_history": Setting({}, _history_mapping, "Project folders used to start each agent, newest first"),
+    "plugin_migration": Setting({}, _mapping, "One-time legacy plugin import: backup and pending add-on activation"),
     # The map
     "map_layers": Setting(list(MAP_LAYERS), _texts, "the map's Show switches of the full-size window"),
+    "map_scan_interval": Setting(6, lambda v: type(v) is int and v in MAP_SCAN_INTERVALS,
+                                 "Automatic map scan interval in seconds; 0: manual only"),
+    "map_scan_pause_unfocused": Setting(True, _bool, "Pause automatic map scans while the window is unfocused"),
+    "map_scan_targets": Setting(list(MAP_SCAN_TARGETS), lambda v: _texts(v) and set(v) <= set(MAP_SCAN_TARGETS),
+                                "Background scan groups; startup/manual Refresh always refresh everything"),
     "map_animations": Setting("all", _one_of(*MAP_ANIMATIONS), "Settings › Map animations"),
     "usage_box": Setting(True, _bool, "Settings › Usage statistics box: shown on a working agent's line"),
     "usage_box_items": Setting(list(USAGE_BOX_ITEMS), lambda v: _texts(v) and set(v) <= set(USAGE_BOX_ITEMS),

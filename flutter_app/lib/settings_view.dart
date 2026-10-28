@@ -1,0 +1,293 @@
+import 'package:file_selector/file_selector.dart';
+import 'package:flutter/material.dart';
+
+class SettingsView extends StatelessWidget {
+  const SettingsView({
+    super.key,
+    required this.settings,
+    required this.busy,
+    required this.tr,
+    required this.onUpdate,
+    required this.onBack,
+  });
+
+  final Map<String, dynamic> settings;
+  final bool busy;
+  final String Function(String) tr;
+  final Future<void> Function(Map<String, dynamic>) onUpdate;
+  final VoidCallback onBack;
+
+  @override
+  Widget build(BuildContext context) {
+    const languages = {
+      'auto': 'System',
+      'en': 'English',
+      'de': 'Deutsch',
+      'es': 'Español',
+      'fr': 'Français',
+      'it': 'Italiano',
+      'nl': 'Nederlands',
+      'pl': 'Polski',
+      'pt': 'Português',
+    };
+    const layers = {
+      'agents': 'Agents',
+      'online': 'Online',
+      'local': 'Local',
+      'models': 'Models',
+      'mcp': 'MCP servers',
+      'skills': 'Skills',
+    };
+    final enabled = (settings['map_layers'] as List).cast<String>();
+    return Align(
+      alignment: Alignment.topCenter,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 760),
+        child: ListView(
+          padding: const EdgeInsets.all(24),
+          children: [
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: onBack,
+                icon: const Icon(Icons.arrow_back),
+                label: Text(tr('Back')),
+              ),
+            ),
+            Text(
+              tr('Settings'),
+              style: Theme.of(context).textTheme.headlineMedium,
+            ),
+            const SizedBox(height: 24),
+            DropdownButtonFormField<String>(
+              key: ValueKey('language-${settings['language']}'),
+              initialValue: languages.containsKey(settings['language'])
+                  ? settings['language'] as String
+                  : 'auto',
+              decoration: InputDecoration(labelText: tr('Language')),
+              items: [
+                for (final language in languages.entries)
+                  DropdownMenuItem(
+                    value: language.key,
+                    child: Text(
+                      language.key == 'auto'
+                          ? tr('System language')
+                          : language.value,
+                    ),
+                  ),
+              ],
+              onChanged: busy
+                  ? null
+                  : (value) {
+                      if (value != null) onUpdate({'language': value});
+                    },
+            ),
+            const SizedBox(height: 24),
+            DropdownButtonFormField<String>(
+              key: ValueKey('look-${settings['look']}'),
+              initialValue: settings['look'] as String,
+              decoration: InputDecoration(labelText: tr('Look')),
+              items: [
+                DropdownMenuItem(
+                  value: 'omarchy',
+                  child: Text(tr('Omarchy theme')),
+                ),
+                DropdownMenuItem(
+                  value: 'adwaita',
+                  child: Text(tr('System appearance')),
+                ),
+              ],
+              onChanged: busy
+                  ? null
+                  : (value) {
+                      if (value != null) onUpdate({'look': value});
+                    },
+            ),
+            const SizedBox(height: 24),
+            Card(
+              child: Column(
+                children: [
+                  ListTile(
+                    title: Text(tr('Agents start in')),
+                    subtitle: Text(
+                      settings['agent_folder'] as String? ?? tr('Home folder'),
+                    ),
+                    trailing: IconButton(
+                      tooltip: tr('Choose folder…'),
+                      icon: const Icon(Icons.folder_open),
+                      onPressed: busy
+                          ? null
+                          : () async {
+                              final chosen = await getDirectoryPath();
+                              if (chosen != null) {
+                                await onUpdate({'agent_folder': chosen});
+                              }
+                            },
+                    ),
+                  ),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: busy
+                          ? null
+                          : () => onUpdate({'agent_folder': null}),
+                      child: Text(tr('Use home folder')),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              tr('Subagents'),
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<int>(
+              key: ValueKey(
+                'subagents-minutes-${settings['subagents_minutes']}',
+              ),
+              initialValue: settings['subagents_minutes'] as int? ?? 30,
+              decoration: InputDecoration(labelText: tr('Finished ones stay')),
+              items: [
+                for (final minutes in [10, 30, 60, 120])
+                  DropdownMenuItem(
+                    value: minutes,
+                    child: Text(
+                      tr(
+                        minutes == 30 ? '{0} minutes (default)' : '{0} minutes',
+                      ).replaceAll('{0}', '$minutes'),
+                    ),
+                  ),
+              ],
+              onChanged: busy
+                  ? null
+                  : (value) {
+                      if (value != null) onUpdate({'subagents_minutes': value});
+                    },
+            ),
+            const SizedBox(height: 8),
+            Text(
+              tr(
+                'How long a subagent that finished stays on the subagents page, dimmed, after it last worked.',
+              ),
+            ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<int>(
+              key: ValueKey('subagents-kept-${settings['subagents_kept']}'),
+              initialValue: settings['subagents_kept'] as int? ?? 10,
+              decoration: InputDecoration(labelText: tr('At most')),
+              items: [
+                for (final count in [5, 10, 20, 40])
+                  DropdownMenuItem(
+                    value: count,
+                    child: Text(
+                      tr(
+                        count == 10
+                            ? '{0} subagents (default)'
+                            : '{0} subagents',
+                      ).replaceAll('{0}', '$count'),
+                    ),
+                  ),
+              ],
+              onChanged: busy
+                  ? null
+                  : (value) {
+                      if (value != null) onUpdate({'subagents_kept': value});
+                    },
+            ),
+            const SizedBox(height: 8),
+            Text(
+              tr(
+                'How many finished subagents it keeps, the newest first; working ones are always shown.',
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              tr('Automatic map scans'),
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<int>(
+              key: ValueKey('map-scan-${settings['map_scan_interval']}'),
+              initialValue: settings['map_scan_interval'] as int? ?? 6,
+              decoration: InputDecoration(labelText: tr('Automatic map scans')),
+              items: [
+                for (final seconds in [0, 6, 15, 30, 60, 120, 300])
+                  DropdownMenuItem(
+                    value: seconds,
+                    child: Text(
+                      seconds == 0
+                          ? tr('Manual only')
+                          : tr(
+                              'Every {0} seconds',
+                            ).replaceAll('{0}', '$seconds'),
+                    ),
+                  ),
+              ],
+              onChanged: busy
+                  ? null
+                  : (value) {
+                      if (value != null) onUpdate({'map_scan_interval': value});
+                    },
+            ),
+            SwitchListTile(
+              title: Text(tr('Pause scans while unfocused')),
+              value: settings['map_scan_pause_unfocused'] as bool? ?? true,
+              onChanged: busy
+                  ? null
+                  : (value) => onUpdate({'map_scan_pause_unfocused': value}),
+            ),
+            Text(
+              tr('Automatic scan targets'),
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            for (final target in const {
+              'activity': 'Activity and subagents',
+              'agents': 'Agent details',
+              'inventory': 'Models, MCP servers and skills',
+            }.entries)
+              CheckboxListTile(
+                title: Text(tr(target.value)),
+                value:
+                    (settings['map_scan_targets'] as List? ??
+                            ['activity', 'agents', 'inventory'])
+                        .contains(target.key),
+                onChanged: busy
+                    ? null
+                    : (on) {
+                        final next =
+                            (settings['map_scan_targets'] as List? ??
+                                    ['activity', 'agents', 'inventory'])
+                                .cast<String>()
+                                .toSet();
+                        on == true
+                            ? next.add(target.key)
+                            : next.remove(target.key);
+                        onUpdate({'map_scan_targets': next.toList()});
+                      },
+              ),
+            Text(tr('Startup and Refresh scan all targets.')),
+            Text(tr('Updates apply only while the map is visible.')),
+            const SizedBox(height: 24),
+            Text(tr('Map'), style: Theme.of(context).textTheme.titleLarge),
+            for (final layer in layers.entries)
+              CheckboxListTile(
+                title: Text(tr(layer.value)),
+                value: enabled.contains(layer.key),
+                onChanged: busy
+                    ? null
+                    : (on) {
+                        final next = enabled.toSet();
+                        on == true
+                            ? next.add(layer.key)
+                            : next.remove(layer.key);
+                        onUpdate({'map_layers': next.toList()});
+                      },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}

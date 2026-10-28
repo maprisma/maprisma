@@ -66,6 +66,20 @@ class SyncPluginTest(unittest.TestCase):
             handle.write("# edited in the plugin\n")
         self.assertEqual(self.run_quietly(self.tool.check), 1)
 
+    def test_thin_launchers_are_refused_before_sync(self):
+        for manifest, marker in (("{\"id\":\"ubruckhaus.asterism\"}", False),
+                                 ("{\"id\":\"ubruckhaus.ai-agents-map\"}", True)):
+            (self.plugin / "manifest.json").write_text(manifest)
+            if marker:
+                (self.plugin / "THIN_LAUNCHER").touch()
+            with self.assertRaises(SystemExit):
+                self.tool.refuse_thin_launcher(self.plugin)
+            self.assertFalse((self.plugin / "ai_popup.py").exists())
 
-if __name__ == "__main__":
-    unittest.main()
+
+    def test_flutter_service_and_tests_are_excluded(self):
+        files = self.tool.wanted()
+        for rel in files:
+            self.assertFalse(Path(rel).name.startswith(('flutter_', 'test_flutter_')), rel)
+        self.assertNotIn('terminal_sessions.py', files)
+        self.assertNotIn('tests/test_terminal_sessions.py', files)

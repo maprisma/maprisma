@@ -257,6 +257,7 @@ class AgentsMap(TextGuard, PageParts, SettingsPages, ThemeCss, InstallDialog, Se
         except OSError:
             pass
         self.load_addons()
+        self.finish_plugin_migration()
         shown = getattr(self, "splash", None)
         holder = shown.widget.get_parent() if shown is not None else None
         if isinstance(holder, Gtk.Overlay):
@@ -274,6 +275,23 @@ class AgentsMap(TextGuard, PageParts, SettingsPages, ThemeCss, InstallDialog, Se
         self.first_open_content()
 
     # --- add-ons (Asterism only) ---------------------------------------------------------------
+
+    def finish_plugin_migration(self):
+        """After verification, enable the installed adapters just as the welcome page would."""
+        if addons is None:
+            return
+        state = ai_core.setting("plugin_migration")
+        if not state.get("addons_pending"):
+            return
+        adapters = self.adapter_addons()
+        if not adapters:
+            return                         # retry when signed adapter add-ons become available
+        found = self.installed_adapters(adapters)
+        found |= {a.id for a in adapters if a.kind == "provider" and len(a.provides) > 1}
+        enabled = set(ai_core.setting("addons_enabled")) | found
+        self.save_setting(addons_enabled=sorted(enabled), setup_done=True,
+                          plugin_migration={**state, "addons_pending": False})
+        self.load_addons()
 
     def load_addons(self):
         """Verify every add-on found and load the ones switched on (Settings keeps the list)."""
@@ -1977,6 +1995,8 @@ class AgentsMap(TextGuard, PageParts, SettingsPages, ThemeCss, InstallDialog, Se
     def start_outside(self, agent, path: str, folder: str):
         """The agent in a terminal window of its own (the desktop's terminal)."""
         ok = terminal_pane.open_outside(path, folder, agent.command)
+        if ok:
+            self.record_agent_project(agent.command, folder)
         if not ok:
             try:
                 agent_status.remember_issue(agent.command, "terminal")
@@ -2016,14 +2036,7 @@ class AgentsMap(TextGuard, PageParts, SettingsPages, ThemeCss, InstallDialog, Se
 
         def start_outside(*_args):
             popover.popdown()
-            ok = terminal_pane.open_outside(path, folder, agent.command)
-            if not ok:
-                try:
-                    agent_status.remember_issue(agent.command, "terminal")
-                except OSError:
-                    pass
-            self.show_notice(_("{0} opened in your terminal").format(agent.name) if ok
-                             else _("No terminal found (xdg-terminal-exec)"))
+            self.start_outside(agent, path, folder)
         outside.connect("clicked", start_outside)
         row.append(outside)
         box.append(row)
@@ -2032,26 +2045,58 @@ class AgentsMap(TextGuard, PageParts, SettingsPages, ThemeCss, InstallDialog, Se
         popover.connect("closed", lambda p: GLib.idle_add(p.unparent))
         popover.popup()
 
-    def start_agent(self, agent, anchor=None, where: str = "here", checked: bool = False):
+    def start_agent(self, agent, anchor=None, where: str = "here", checked: bool = False, folder: str | None = None,
+                    project: str | None = None):
         """Start an agent: here (its terminal right of the cards; a running one is shown again)
-        or in a terminal window of its own ("terminal"). First, whether its local model still
-        fits in the graphics card's memory (start_gpu_check)."""
+        or in a terminal window of its own ("terminal"). Choose the project first, then check
+        whether its local model fits in video memory (start_gpu_check)."""
         pane = self.sessions.get(agent.command)
-        if pane is not None and pane.running:
+        if where == "here" and pane is not None and pane.running:
             self.show_terminal(agent.command)
             return
         path = terminal_pane.program(agent.command)
         if path is None:
             self.show_notice(_("{0} cannot be started from here").format(agent.name))
             return
-        if not checked:
-            self.start_gpu_check(agent, lambda: self.start_agent(agent, anchor, where, checked=True))
+        if folder is None:
+            import agent_start_dialog
+            import agent_projects
+            default = self.agent_folder()
+            saved = ai_core.setting("agent_projects")
+
+            def selected(chosen, pin_choice):
+                resolved = agent_projects.folder(chosen)
+                if resolved is None:
+                    self.show_notice(_("This folder is unavailable. Choose another folder or use the default."))
+                    return
+                pins = ai_core.setting("agent_projects")
+                if pin_choice is True:
+                    self.save_setting(agent_projects=agent_projects.pin(agent.command, resolved, pins))
+                elif pin_choice is False and pins.get(agent.command) == resolved:
+                    self.save_setting(agent_projects=agent_projects.pin(agent.command, None, pins))
+                self.start_agent(agent, anchor, where, folder=resolved)
+
+            agent_start_dialog.present(self.window, agent.name, project or self.agent_folder(agent.command), default,
+                                       _("Start in terminal") if where == "terminal" else _("Start here"), selected,
+                                       unavailable=bool(saved.get(agent.command))
+                                       and agent_projects.folder(saved.get(agent.command)) is None,
+                                       history=agent_projects.history(agent.command, ai_core.setting("agent_project_history")),
+                                       pinned=saved.get(agent.command, ""),
+                                       anchor=anchor if anchor is not None else getattr(self, "title_label", None))
             return
-        folder = self.agent_folder()
+        import agent_projects
+        folder = agent_projects.folder(folder)
+        if folder is None:
+            self.show_notice(_("This folder is unavailable. Choose another folder or use the default."))
+            return
+        if not checked:
+            self.start_gpu_check(agent, lambda: self.start_agent(agent, anchor, where, checked=True, folder=folder))
+            return
         if where == "terminal":
             self.start_outside(agent, path, folder)
             return
         if pane is not None:
+            pane.cwd = folder
             pane.start()
             self.show_terminal(agent.command)
             return
@@ -2064,10 +2109,22 @@ class AgentsMap(TextGuard, PageParts, SettingsPages, ThemeCss, InstallDialog, Se
             return
         pane = terminal_pane.TerminalPane(agent, folder, self.theme.colors,
                                           on_back=lambda: self.show_view("main", save=False),
-                                          on_state=lambda _p: GLib.idle_add(self.terminal_changed))
+                                          on_state=lambda _p: GLib.idle_add(self.terminal_changed),
+                                          on_restart=lambda: self.start_agent(agent),
+                                          on_started=lambda p: self.record_agent_project(agent.command, p.cwd))
         self.sessions[agent.command] = pane
         self.right_stack.add_named(pane, f"term:{agent.command}")
         self.show_terminal(agent.command)
+
+    def record_agent_project(self, command: str, folder: str):
+        """Record a successfully opened terminal, not a cancelled picker or failed spawn."""
+        import agent_projects
+        try:
+            self.save_setting(agent_project_history=agent_projects.used(
+                command, folder, ai_core.setting("agent_project_history")))
+            self.refresh_recent_projects(command)
+        except ValueError:
+            pass                         # the project may have been removed just after the spawn
 
     def start_gpu_check(self, agent, go):
         """Before an agent starts: would loading its model go past the graphics card's memory?
@@ -2144,12 +2201,12 @@ class AgentsMap(TextGuard, PageParts, SettingsPages, ThemeCss, InstallDialog, Se
         self.refresh_map()
         return False
 
-    def agent_folder(self) -> str:
-        """Where agents start: the folder set in Settings, else home."""
+    def agent_folder(self, command: str = "") -> str:
+        """The per-agent project when selected; otherwise the default in Settings, else home."""
+        import agent_projects
         saved = ai_core.setting("agent_folder")
-        if isinstance(saved, str) and saved and os.path.isdir(os.path.expanduser(saved)):
-            return os.path.realpath(os.path.expanduser(saved))
-        return str(Path.home())
+        default = agent_projects.folder(saved) or str(Path.home())
+        return agent_projects.selected(command, ai_core.setting("agent_projects"), default) if command else default
 
     def start_button(self, agent) -> Gtk.Widget:
         """Start (or Show terminal and Stop while it runs here)."""
@@ -2187,15 +2244,20 @@ class AgentsMap(TextGuard, PageParts, SettingsPages, ThemeCss, InstallDialog, Se
             return b
 
         if shown:
-            return button("utilities-terminal-symbolic", _("Show terminal"),
-                          _("Show the terminal {0} runs in here").format(agent.name), "here")
+            actions = Gtk.Box(spacing=6)
+            actions.append(button("utilities-terminal-symbolic", _("Show terminal"),
+                                  _("Show the terminal {0} runs in here").format(agent.name), "here"))
+            actions.append(button("window-new-symbolic", _("Start in terminal"),
+                                  _("Start {0} in {1}, in a terminal window of its own").format(
+                                      agent.name, self.agent_folder(agent.command)), "terminal"))
+            return actions
         both = Gtk.Box(spacing=6)
         both.append(button("utilities-terminal-symbolic", _("Start here"),
                            _("Start {0} in {1}, in a terminal in this window; Stop ends it").format(
-                               agent.name, self.agent_folder()), "here"))
+                               agent.name, self.agent_folder(agent.command)), "here"))
         both.append(button("window-new-symbolic", _("Start in terminal"),
                            _("Start {0} in {1}, in a terminal window of its own").format(
-                               agent.name, self.agent_folder()), "terminal"))
+                               agent.name, self.agent_folder(agent.command)), "terminal"))
         return both
 
     # --- new apps: programs with an MCP server, skill sets ----------------------------------------
@@ -3971,11 +4033,11 @@ class AgentsMap(TextGuard, PageParts, SettingsPages, ThemeCss, InstallDialog, Se
                     starts.append(self.menu_item(_("Start here"), popover,
                                                  lambda: self.start_agent(agent, None, "here"),
                                                  _("Start {0} in {1}, in a terminal in this window; Stop ends it")
-                                                 .format(agent.name, self.agent_folder())))
-                    starts.append(self.menu_item(_("Start in terminal"), popover,
-                                                 lambda: self.start_agent(agent, None, "terminal"),
-                                                 _("Start {0} in {1}, in a terminal window of its own")
-                                                 .format(agent.name, self.agent_folder())))
+                                                 .format(agent.name, self.agent_folder(agent.command))))
+                starts.append(self.menu_item(_("Start in terminal"), popover,
+                                             lambda: self.start_agent(agent, None, "terminal"),
+                                             _("Start {0} in {1}, in a terminal window of its own")
+                                             .format(agent.name, self.agent_folder(agent.command))))
             details.append(self.menu_item(_("Details"), popover, lambda: self.open_agent_status(agent)))
         elif kind == "runtime":
             details.append(self.menu_item(_("Details"), popover, lambda: self.open_runtime_status(ident)))
@@ -4419,8 +4481,28 @@ class AgentsMap(TextGuard, PageParts, SettingsPages, ThemeCss, InstallDialog, Se
 def main():
     ai_core.drop_agent_session_vars()       # started from an agent's terminal: nothing here inherits its session
     ai_core.add_user_program_dirs()         # started from the launcher: agents installed with mise are found
-    i18n.set_name("AI Agents Map", desktop.app_name())     # "Asterism" outside Omarchy
+    import config_migration
+    migration_error = None
+    try:
+        config_migration.migrate()
+    except (OSError, ValueError) as error:
+        print(f"Asterism could not migrate the plugin settings: {error}", file=sys.stderr)
+        migration_error = str(error)
+    i18n.set_name("AI Agents Map", desktop.app_name())     # Asterism on every desktop; the legacy plugin keeps its name
     app = AgentsMap()
+    if migration_error:
+        migration_notice_pending = True
+        def show_migration_error():
+            nonlocal migration_notice_pending
+            if not migration_notice_pending:
+                return False
+            migration_notice_pending = False
+            app.disconnect(migration_activation)
+            dialog = Adw.AlertDialog(heading=desktop.app_name(), body=_("Your AI Agents Map settings could not be imported. Asterism will use its current or default settings.") + "\n\n" + migration_error)
+            dialog.add_response("close", _("Close"))
+            dialog.present(app.window)
+            return False
+        migration_activation = app.connect("activate", lambda _app: GLib.idle_add(show_migration_error))
     atexit.register(cleanup_pid)
     # Ending AI Agents Map ends the agents running in it too (and so frees their local LLMs).
     atexit.register(lambda: [pane.stop_now() for pane in getattr(app, "sessions", {}).values()])

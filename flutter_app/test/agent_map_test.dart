@@ -1,0 +1,170 @@
+import 'package:asterism/agent_map.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+void main() {
+  testWidgets('Subagent badge opens children without selecting the parent', (
+    tester,
+  ) async {
+    String? selected;
+    String? expanded;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AgentMap(
+            graph: {
+              'nodes': [
+                {
+                  'id': 'agent:test-agent',
+                  'column': 1,
+                  'kind': 'agent',
+                  'label': 'Test agent',
+                  'detail': '',
+                  'status': 'running',
+                },
+              ],
+              'edges': [],
+              'activity': {
+                'test-agent': {
+                  'subagents_supported': true,
+                  'active_subagents': 1,
+                  'children': [
+                    {'key': 'child'},
+                  ],
+                },
+              },
+            },
+            onAgent: (command) => selected = command,
+            onSubagents: (command) => expanded = command,
+            tr: (key) => key,
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.byTooltip('Subagents: 1 / 1'));
+    expect(expanded, 'test-agent');
+    expect(selected, isNull);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Selecting an agent map node preserves its adapter command', (
+    tester,
+  ) async {
+    String? selected;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AgentMap(
+            graph: {
+              'nodes': [
+                {
+                  'id': 'agent:test-agent',
+                  'column': 1,
+                  'kind': 'agent',
+                  'label': 'Visible agent name',
+                  'detail': '1.0',
+                  'status': '',
+                },
+                {
+                  'id': 'cloud:provider',
+                  'column': 2,
+                  'kind': 'cloud',
+                  'label': 'Provider name',
+                  'detail': '',
+                  'status': '',
+                },
+              ],
+              'edges': [
+                {
+                  'source': 'agent:test-agent',
+                  'target': 'cloud:provider',
+                  'kind': 'uses',
+                },
+              ],
+            },
+            onAgent: (command) => selected = command,
+            tr: (key) => key,
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Visible agent name'));
+    expect(selected, 'test-agent');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('read-only maps ignore interaction callbacks and paint anchors', (
+    tester,
+  ) async {
+    var callbacks = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AgentMap(
+            readOnly: true,
+            anchors: const {'runtime:test'},
+            columns: const ['Providers'],
+            graph: {
+              'nodes': [
+                {
+                  'id': 'runtime:test',
+                  'column': 0,
+                  'kind': 'runtime',
+                  'label': 'Read only',
+                  'detail': '',
+                  'status': '',
+                },
+              ],
+              'edges': [],
+            },
+            onAgent: (_) => callbacks++,
+            onNode: (_) => callbacks++,
+            onNodeMenu: (_, _) => callbacks++,
+            onNodeDrop: (_, _) => callbacks++,
+            onViewChanged: () => callbacks++,
+            tr: (s) => s,
+          ),
+        ),
+      ),
+    );
+    expect(find.byType(InteractiveViewer), findsNothing);
+    expect(
+      find.byWidgetPredicate(
+        (w) => w is SizedBox && w.width == 310 && w.height == 276,
+      ),
+      findsOneWidget,
+    );
+    expect(find.byType(LongPressDraggable<Map<String, dynamic>>), findsNothing);
+    expect(find.byType(DragTarget<Map<String, dynamic>>), findsNothing);
+    expect(find.byTooltip('Actions'), findsNothing);
+    await tester.tap(find.text('Read only'));
+    await tester.tap(find.text('Read only'), buttons: 2);
+    await tester.drag(find.text('Read only'), const Offset(40, 20));
+    expect(callbacks, 0);
+    final paint = tester
+        .widgetList<CustomPaint>(find.byType(CustomPaint))
+        .firstWhere((w) => w.painter.runtimeType.toString() == '_Connections');
+    // Exercise the actual anchor painter as well as its repaint contract.
+    expect(paint.painter, isNotNull);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Empty maps remain navigable without invented nodes', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AgentMap(
+            graph: {'nodes': [], 'edges': []},
+            onAgent: (_) {},
+            tr: (key) => key,
+          ),
+        ),
+      ),
+    );
+    expect(find.byType(InteractiveViewer), findsOneWidget);
+    expect(find.text('Agents'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+}

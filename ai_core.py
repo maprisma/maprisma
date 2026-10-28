@@ -1,6 +1,6 @@
 """AI Agents Map - settings and small helpers shared by the popup.
 
-Settings live in desktop.config_dir()/settings.json (~/.config/omarchy/ai-agents-map on Omarchy; private, written
+Settings live in desktop.config_dir()/settings.json (identity.py selects the edition's folder; private, written
 atomically, read with a size cap). Nothing here starts a network request.
 """
 
@@ -202,7 +202,15 @@ def update_settings(path: Path | None = None, **values) -> None:
             data.pop(key, None)
         else:
             data[key] = value
-    atomic_write(path, json.dumps(data, indent=2) + "\n")
+    history = data.get('agent_project_history')
+    if isinstance(history, dict):
+        data['agent_project_history'] = {key: entries[:50] for key, entries in history.items()
+                                         if isinstance(entries, list)}
+    text = json.dumps(data, ensure_ascii=False, indent=2) + "\n"
+    if len(text.encode("utf-8")) > SETTINGS_MAX_BYTES:
+        # Preserve the existing settings if unusually large values still exceed the byte cap.
+        raise OSError("Settings exceed the readable size limit; existing settings were preserved")
+    atomic_write(path, text)
 
 
 def start_view(path: Path | None = None) -> str:

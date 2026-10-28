@@ -94,12 +94,15 @@ def open_outside(path: str, cwd: str, command: str = "") -> bool:
 class TerminalPane(Gtk.Box):
     """Header (Back, title, state, Stop/Start again) over the agent's terminal."""
 
-    def __init__(self, agent, cwd: str, colors: dict, on_back, on_state, argv: list | None = None):
+    def __init__(self, agent, cwd: str, colors: dict, on_back, on_state, argv: list | None = None, on_restart=None,
+                 on_started=None):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=GAP)
         Vte = vte()
         self.agent = agent
         self.argv = list(argv) if argv else None   # a fixed command (an install) instead of the agent
         self.cwd = cwd
+        self.on_restart = on_restart
+        self.on_started = on_started
         self.on_state = on_state          # called when it starts or ends
         self.pid = None
         self.running = False
@@ -118,7 +121,7 @@ class TerminalPane(Gtk.Box):
         header.append(self.state_label)
         self.again = Gtk.Button(label=_("Start again"))
         self.again.add_css_class("am-small-btn")
-        self.again.connect("clicked", lambda *_: self.start())
+        self.again.connect("clicked", lambda *_: self.restart())
         header.append(self.again)
         self.stop_button = Gtk.Button(label=_("Stop"))
         self.stop_button.add_css_class("am-small-btn")
@@ -147,7 +150,17 @@ class TerminalPane(Gtk.Box):
 
     # --- the process ------------------------------------------------------------------------
 
+    def restart(self):
+        if self.running:
+            return
+        if self.on_restart is not None:
+            self.on_restart()
+        else:
+            self.start()
+
     def start(self):
+        if self.running:
+            return
         Vte = vte()
         path = self.argv[0] if self.argv else program(self.agent.command)
         if path is None:
@@ -166,6 +179,8 @@ class TerminalPane(Gtk.Box):
             return
         self.pid = pid
         self.set_state(True, _("running in {0}").format(self.short_cwd()))
+        if self.on_started is not None:
+            self.on_started(self)
         self.terminal.grab_focus()
 
     def on_exited(self, _terminal, status):

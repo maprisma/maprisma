@@ -167,7 +167,10 @@
   "codex-jsonl",
   []
  ],
- "subagents": [],
+ "subagents": [
+  "codex-rollouts",
+  "~/.codex/sessions"
+ ],
  "session_files": "codex-files",
  "asks_setting": "approval_policy",
  "access": {

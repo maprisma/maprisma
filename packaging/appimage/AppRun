@@ -1,9 +1,6 @@
 #!/bin/sh
 # Asterism AppImage: the system's Python with PyGObject, GTK 4 and libadwaita runs the bundled app.
-# Asterism is the app outside Omarchy; on Omarchy the AI Agents Map plugin is the integrated
-# version (same code, its own name, settings and window id).
-: "${ASTERISM_DESKTOP:=generic}"
-export ASTERISM_DESKTOP
+# Detect desktop integration independently of the app's identity.
 here=$(dirname "$(readlink -f "$0")")
 if ! /usr/bin/python3 -c 'import gi; gi.require_version("Gtk", "4.0"); gi.require_version("Adw", "1")' 2>/dev/null; then
     echo "Asterism needs Python 3 with PyGObject, GTK 4 and libadwaita from your distribution:" >&2

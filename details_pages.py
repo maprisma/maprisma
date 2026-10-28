@@ -3,10 +3,12 @@ of ai_popup.AgentsMap, split off to keep ai_popup.py small; its methods use the 
 through self)."""
 
 import datetime as dt
+from pathlib import Path
 
 from gi.repository import Adw, GLib, Gtk
 
 import agent_details
+import agent_projects
 import agent_security
 import agent_status
 import ai_core
@@ -144,6 +146,7 @@ class DetailsPages:
         body.append(hero)
         self.details_cards = {"hero": hero}           # cards add-on sections join (fill_addon_cards)
         self.pending_health = []                      # add-on sections for the Health card, built later
+        self.fill_recent_projects(body, agent)
         if panes is not None:
             # herdr's live state, read again every few seconds while this page shows.
             self.herdr_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=ai_core.GAP_TIGHT)
@@ -179,6 +182,78 @@ class DetailsPages:
         config.add_css_class("am-boxed")
         self.fill_agent(config, agent, summary=True)
         group.append(config)
+
+    def fill_recent_projects(self, body, agent):
+        group = self.group_card(body, "recent-projects", _("Recent projects"), "folder-symbolic", default_open=True)
+        self.details_cards["recent-projects"] = group
+        self.fill_recent_project_rows(group, agent)
+
+    def fill_recent_project_rows(self, group, agent):
+        while (child := group.get_first_child()) is not None:
+            group.remove(child)
+        paths = agent_projects.history(agent.command, ai_core.setting("agent_project_history"))
+        pinned = ai_core.setting("agent_projects").get(agent.command, "")
+        group.group_summary.set_label(ngettext("1 project", "{0} projects", len(paths)).format(len(paths)))
+        self.note(group, _("Projects started from the map, newest first. Pin a folder to use it by default. "
+                          "The trash button removes only the history entry, not the folder."))
+        if not paths:
+            self.note(group, _("No recent projects yet"))
+            return
+        rows = self.boxed_list()
+        for path in paths:
+            available = agent_projects.folder(path) is not None
+            subtitle = inventory.tilde(path)
+            if path == pinned:
+                subtitle += " · " + _("Pinned default")
+            if not available:
+                subtitle += " · " + _("Folder unavailable")
+            row = self.plain_row(Path(path).name or path, subtitle)
+            row.set_tooltip_text(path)
+            row.add_prefix(Gtk.Image.new_from_icon_name("folder-symbolic"))
+            row.set_activatable(bool(agent.installed and available))
+            row.connect("activated", lambda r, p=path: self.start_agent(agent, r, project=p))
+            pin = Gtk.ToggleButton(icon_name="view-pin-symbolic", valign=Gtk.Align.CENTER)
+            pin.add_css_class("flat")
+            pin.set_active(path == pinned)
+            pin.set_sensitive(available or path == pinned)
+            pin.set_tooltip_text(_("Unpin default folder") if path == pinned else _("Pin as default folder"))
+            pin.connect("toggled", lambda b, p=path: self.pin_agent_project(agent, p if b.get_active() else None, group))
+            row.add_suffix(pin)
+            remove = Gtk.Button(icon_name="user-trash-symbolic", valign=Gtk.Align.CENTER)
+            remove.add_css_class("flat")
+            remove.set_tooltip_text(_("Remove from history (keeps the folder)"))
+            remove.connect("clicked", lambda _b, p=path: self.forget_agent_project(agent, p, group))
+            row.add_suffix(remove)
+            rows.append(row)
+        scroll = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER,
+                                    vscrollbar_policy=Gtk.PolicyType.AUTOMATIC,
+                                    propagate_natural_height=True, max_content_height=300)
+        scroll.set_child(rows)
+        group.append(scroll)
+
+    def pin_agent_project(self, agent, path, group):
+        # Unpinning a missing folder is allowed; pinning one cannot change the launch directory silently.
+        try:
+            pins = agent_projects.pin(agent.command, path, ai_core.setting("agent_projects"))
+        except ValueError:
+            self.show_notice(_("This folder is unavailable. Choose another folder or use the default."))
+            return
+        self.save_setting(agent_projects=pins)
+        self.fill_recent_project_rows(group, agent)
+
+    def forget_agent_project(self, agent, path: str, group):
+        history, pins = agent_projects.forget(agent.command, path, ai_core.setting("agent_project_history"),
+                                             ai_core.setting("agent_projects"))
+        self.save_setting(agent_project_history=history, agent_projects=pins)
+        self.fill_recent_project_rows(group, agent)
+
+    def refresh_recent_projects(self, command: str):
+        if self.status_showing != ("agent", command):
+            return
+        group = self.details_cards.get("recent-projects")
+        agent = next((a for a in self.agent_list if a.command == command), None)
+        if group is not None and agent is not None:
+            self.fill_recent_project_rows(group, agent)
 
     def fill_cost_card(self, body, agent, info, spent, rate):
         """What its tokens cost at API prices (agent_status.costs, plugin_costs): today, 7 and 30 days,

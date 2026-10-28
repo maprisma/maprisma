@@ -1,6 +1,6 @@
 """Any other desktop (GNOME, KDE, …): the generic implementation of desktop.py's interface.
 
-- own files: $XDG_CONFIG_HOME/asterism (~/.config/asterism)
+- app identity and configuration paths: identity.py, independently of this backend
 - theme: libadwaita's colours for the system's light or dark style and accent
   colour (Adw.StyleManager, else `gsettings` org.gnome.desktop.interface
   color-scheme / accent-color; light and blue when unknown); windows have
@@ -26,10 +26,7 @@ import subprocess
 from pathlib import Path
 
 NAME = "generic"
-APP_NAME = "Asterism"               # the same app outside Omarchy
-APP_ID = "io.github.ubruckhaus.Asterism"
 HOME = Path.home()
-CONFIG_DIR = Path(os.environ.get("XDG_CONFIG_HOME") or HOME / ".config") / "asterism"
 RADIUS = 12          # libadwaita's window corners
 
 # libadwaita's palette (Adwaita named colours), light and dark.
@@ -55,20 +52,6 @@ MANAGERS = (("apt", "sudo apt install {0}"), ("dnf", "sudo dnf install {0}"), ("
             ("pacman", "sudo pacman -S {0}"))
 
 _window = None
-
-
-# --- the app's name and own files ----------------------------------------------------------------
-
-def app_name() -> str:
-    return APP_NAME
-
-
-def app_id() -> str:
-    return APP_ID
-
-
-def config_dir() -> Path:
-    return CONFIG_DIR
 
 
 # --- theme ----------------------------------------------------------------------------------------
@@ -325,11 +308,6 @@ def text(key: str) -> str:
         "install_coding_agent": _("Claude Code, Codex or OpenCode, each with its own installer."),
         "install_terminal": _("Install a terminal app (Console, Konsole, …):"),
     }[key]
-
-
-def launcher_entry() -> bool:
-    """No entry of our own: an installed package brings its .desktop file."""
-    return False
 
 
 # --- packages -------------------------------------------------------------------------------------

@@ -12,6 +12,7 @@
     "addon_store.py",
     "addons_page.py",
     "ai_popup.py",
+    "agent_start_dialog.py",
     "configure_menu.py",
     "connect_page.py",
     "desktop_generic.py",

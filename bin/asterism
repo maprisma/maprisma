@@ -1,9 +1,6 @@
 #!/bin/sh
 # Asterism: start the app from where the package put it.
-# Asterism is the app outside Omarchy; on Omarchy the AI Agents Map plugin is the integrated
-# version (same code, its own name, settings and window id).
-: "${ASTERISM_DESKTOP:=generic}"
-export ASTERISM_DESKTOP
+# Detect desktop integration independently of the app's identity.
 here=$(dirname "$(readlink -f "$0")")
 for dir in "$here/../lib/asterism" "$here/.."; do
     [ -f "$dir/ai_popup.py" ] && exec /usr/bin/python3 "$dir/ai_popup.py" "$@"

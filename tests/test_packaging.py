@@ -3,6 +3,9 @@ adapters/ was once) makes the packaged app fail although every source test passe
 import ast
 import re
 import unittest
+import hashlib
+import subprocess
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -50,6 +53,41 @@ class PackagesCarryTheAppTest(unittest.TestCase):
         for name in ast.literal_eval(allowed):         # addons.verify's set of file names
             with self.subTest(name=name):
                 self.assertIn(re.escape(name), source)
+
+
+class ReleaseAssetTest(unittest.TestCase):
+    def test_builder_produces_fixed_alias_and_checksums_without_following_stale_output_links(self):
+        # Fixture tools produce inert bytes; no real AppImage, add-on download or signing is run.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for folder in ("packaging/appimage", "translations", "icons", "adapters", "data/icons"):
+                (root / folder).mkdir(parents=True)
+            (root / "packaging/appimage/build.sh").write_text(BUILD)
+            (root / "packaging/appimage/AppRun").write_text("fixture")
+            (root / "app.py").write_text("fixture")
+            (root / "adapters/fake.toml").write_text("fixture")
+            (root / "adapters/fake.py").write_text("fixture")
+            (root / "data/user-manual.pdf").write_bytes(b"fixture")
+            for filename in ("io.github.ubruckhaus.Asterism.desktop", "io.github.ubruckhaus.Asterism.metainfo.xml",
+                             "icons/io.github.ubruckhaus.Asterism.svg"):
+                (root / "data" / filename).write_text("fixture")
+            (root / "packaging/unpack-adapters.py").write_text("import sys; from pathlib import Path; Path(sys.argv[2]).mkdir(parents=True)")
+            tool = root / "appimagetool"
+            tool.write_text('#!/usr/bin/env bash\nprintf "fixture AppImage" > "${@: -1}"\n')
+            tool.chmod(0o700)
+            unrelated = root / "keep"
+            unrelated.write_text("keep")
+            (root / "Asterism-x86_64.AppImage").symlink_to(unrelated)
+            (root / "SHA256SUMS").symlink_to(unrelated)
+            result = subprocess.run(["sh", str(root / "packaging/appimage/build.sh"), "1.2.3", str(tool),
+                                     str(root / "runtime"), str(root / "adapters.zip")], capture_output=True, text=True, timeout=30)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(unrelated.read_text(), "keep")
+            for filename in ("Asterism-1.2.3-x86_64.AppImage", "Asterism-x86_64.AppImage"):
+                self.assertEqual((root / filename).read_bytes(), b"fixture AppImage")
+            sums = (root / "SHA256SUMS").read_text().splitlines()
+            digest = hashlib.sha256(b"fixture AppImage").hexdigest()
+            self.assertEqual(sums, [f"{digest}  Asterism-1.2.3-x86_64.AppImage", f"{digest}  Asterism-x86_64.AppImage"])
 
 
 if __name__ == "__main__":

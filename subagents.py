@@ -229,8 +229,11 @@ def of(command: str, pids=(), now: float | None = None, recent: float = RECENT, 
     path = Path(os.path.expanduser(found[1]))
     if found[0] == "claude-projects":
         subs = claude_projects(command, pids, now, path, recent=recent)
-    else:
+    elif found[0] == "opencode-db":
         subs = opencode_db(command, now, path, recent=recent)
+    else:
+        import subagent_readers
+        subs = subagent_readers.collect(found[0], command, time.time() if now is None else now, path, recent)
     finished = [s for s in subs if not s.running][:max(0, kept)]
     return sorted([s for s in subs if s.running] + finished, key=lambda s: s.age)
 

@@ -10,12 +10,12 @@ Two implementations: desktop_omarchy (Omarchy, Hyprland) and desktop_generic
 ASTERISM_DESKTOP=omarchy|generic decides when set (for testing), else Omarchy
 when its files are there (/usr/share/omarchy or $OMARCHY_PATH), else generic.
 
-The interface (each implementation provides all of it):
+App name, app id and configuration paths come from identity.py. The facade also
+decides whether this edition needs the legacy plugin launcher entry.
+
+The interface (each desktop implementation provides all of it):
 
     NAME                          "omarchy" or "generic"
-    app_name() -> str             "AI Agents Map" (the Omarchy plugin) or "Asterism"
-    app_id() -> str               the GTK application id, window class and icon name
-    config_dir() -> Path          the app's own settings folder
     theme_dir() -> Path | None    a folder to watch for theme changes (None: none)
     theme_colors() -> dict        the theme's colours as a TOML-like dict ({} when unknown)
     window_rounding() -> int|None the windows' corner radius, None when unknown
@@ -44,13 +44,30 @@ The interface (each implementation provides all of it):
     text(key) -> str              a translated text that says how something is done on this desktop:
                                   install_agent, install_agent_first, install_agent_short,
                                   install_coding_agent, install_terminal
-    launcher_entry() -> bool      whether the app offers its own app-launcher entry (Settings)
 """
 
 import os
+import identity
 from pathlib import Path
 
 OMARCHY_ROOT = Path("/usr/share/omarchy")
+
+
+def app_name() -> str:
+    return identity.name()
+
+
+def app_id() -> str:
+    return identity.app_id()
+
+
+def config_dir() -> Path:
+    return identity.config_dir()
+
+
+def launcher_entry() -> bool:
+    # Asterism's package supplies its launcher; only the old plugin offers to create one.
+    return identity.is_plugin() and current().NAME == "omarchy"
 
 
 def detect(environ=None) -> str:

@@ -77,7 +77,7 @@ OUTPUTS = ("text", "claude-json", "codex-jsonl")
 REPLIES = {"folder": STR, "depth": INT, "format": STR, "contexts": TABLE}   # contexts: model name prefix -> tokens
 REPLY_FORMATS = ("claude-jsonl", "codex-jsonl", "pi-jsonl")
 SUBAGENTS = {"format": STR, "path": STR}
-SUBAGENT_FORMATS = ("claude-projects", "opencode-db")    # the readers subagents.py has
+SUBAGENT_FORMATS = ("claude-projects", "opencode-db", "codex-rollouts", "copilot-events", "goose-db")
 SKILLS = {"dirs": STRS, "own": STR, "listed": TABLE_OR_HOOK, "settings_list": BOOL, "settings_file": STR,
           "write": HOOK}
 LISTED = {"file": STR, "format": STR, "key": STR}       # extra skill folders a settings file lists

@@ -34,14 +34,14 @@ HOME = Path.home()
 
 
 def _default_config() -> Path:
-    """Plugin side: in the desktop's folder (desktop.config_dir()). The service runs with
+    """App side: in the edition's folder (identity.config_dir()). The service runs with
     `python3 -I` (the plugin folder is not on sys.path) and gets the file with --config
     from its unit; a unit written before --config existed is an Omarchy one."""
     try:
-        import desktop
+        import identity
     except ImportError:
         return HOME / ".config/omarchy/ai-agents-map/providers-with-agents.json"
-    return desktop.config_dir() / "providers-with-agents.json"
+    return identity.config_dir() / "providers-with-agents.json"
 
 
 CONFIG = _default_config()
@@ -50,10 +50,10 @@ STATE = HOME / ".local/state/ai-agents-map/provider-watch.json"   # what we stil
 def _unit_name() -> str:
     """The plugin's watcher, or Asterism's: two installs on one machine never share a unit."""
     try:
-        import desktop
+        import identity
     except ImportError:
         return "ai-agents-map-providers.service"      # the service itself (python3 -I) never needs it
-    return "ai-agents-map-providers.service" if desktop.NAME == "omarchy" else "asterism-providers.service"
+    return identity.short_name() + "-providers.service"
 
 
 UNIT_NAME = _unit_name()

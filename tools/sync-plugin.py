@@ -32,7 +32,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 ASTERISM_ONLY = {"addons.py", "addon_api.py", "addon_store.py", "addons_page.py"}
-ASTERISM_ONLY_TESTS = {"test_packaging.py"}       # Asterism's packages (packaging/): the plugin has none
+ASTERISM_ONLY_TESTS = {"test_packaging.py", "test_identity_migration.py"}  # packages and migration into Asterism
 ADDON_IMPORT = re.compile(r"^(import|from) (addons|addon_api|addon_store|addons_page)\b", re.M)
 SHARED_DIRS = ("tests", "icons", "translations", "adapters")   # mirrored whole (minus what is left out)
 SKIP = {"__pycache__", ".git", ".pytest_cache"}
@@ -50,11 +50,22 @@ def refuse_playground(plugin: Path):
         sys.exit(f"{plugin}: AI Playground is a plugin of its own; it is not made from Asterism")
 
 
+def refuse_thin_launcher(plugin: Path):
+    """The new launcher and the final legacy handoff must never grow the app source again."""
+    import json
+    try:
+        own = json.loads((plugin / "manifest.json").read_text()).get("id") == "ubruckhaus.asterism"
+    except (OSError, ValueError):
+        own = False
+    if own or (plugin / "THIN_LAUNCHER").exists():
+        sys.exit(f"{plugin}: this is a thin Asterism launcher, not a shared application checkout")
+
+
 def wanted() -> dict[str, Path]:
     """{path in the plugin: source file here} for everything shared."""
     files = {}
     for source in sorted(ROOT.glob("*.py")):
-        if source.name not in ASTERISM_ONLY:
+        if source.name not in ASTERISM_ONLY and not source.name.startswith("flutter_") and source.name != "terminal_sessions.py":
             files[source.name] = source
     for folder in SHARED_DIRS:
         for source in sorted((ROOT / folder).rglob("*")):
@@ -63,6 +74,7 @@ def wanted() -> dict[str, Path]:
                 continue
             if folder == "tests" and source.suffix == ".py" and (
                     source.name.removeprefix("test_") in ASTERISM_ONLY or source.name in ASTERISM_ONLY_TESTS
+                    or source.name.startswith("test_flutter_") or source.name == "test_terminal_sessions.py"
                     or ADDON_IMPORT.search(source.read_text(errors="replace"))):
                 continue                       # tests of (or loading) the add-on modules
             files[str(rel)] = source
@@ -169,6 +181,7 @@ def main() -> int:
     args = parser.parse_args()
     plugin = args.plugin.expanduser().resolve()
     refuse_playground(plugin)
+    refuse_thin_launcher(plugin)
     if not is_plugin(plugin):
         print(f"not the plugin: {plugin}", file=sys.stderr)
         return 2

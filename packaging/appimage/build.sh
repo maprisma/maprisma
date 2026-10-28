@@ -12,9 +12,19 @@ version=${1:?usage: build.sh <version> <appimagetool> <runtime-x86_64>}
 tool=${2:?usage: build.sh <version> <appimagetool> <runtime-x86_64>}
 runtime=${3:?usage: build.sh <version> <appimagetool> <runtime-x86_64> <adapters.zip>}
 adapters=${4:?usage: build.sh <version> <appimagetool> <runtime-x86_64> <adapters.zip>}
-dir=$(mktemp -d)/Asterism.AppDir
+if ! printf '%s\n' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+    echo "build.sh: version must be X.Y.Z" >&2
+    exit 2
+fi
+stage=$(mktemp -d)
+checksums=''
+trap 'rm -rf -- "$stage"; if [ -n "$checksums" ]; then rm -f -- "$checksums"; fi' 0
+dir="$stage/Asterism.AppDir"
 mkdir -p "$dir/usr/lib/asterism"
-cp "$root"/*.py "$dir/usr/lib/asterism/"
+for module in "$root"/*.py; do
+    case "$(basename "$module")" in flutter_*.py|terminal_sessions.py) continue ;; esac
+    cp "$module" "$dir/usr/lib/asterism/"
+done
 cp -r "$root/translations" "$dir/usr/lib/asterism/"
 cp -r "$root/icons" "$dir/usr/lib/asterism/"          # the app's own icons (icons.py)
 mkdir -p "$dir/usr/lib/asterism/adapters"              # the built-in agents as data (adapter_data.py)
@@ -29,4 +39,13 @@ mkdir -p "$dir/usr/share/metainfo"
 cp "$root/data/io.github.ubruckhaus.Asterism.metainfo.xml" "$dir/usr/share/metainfo/"
 ARCH=x86_64 APPIMAGE_EXTRACT_AND_RUN=1 "$tool" --no-appstream --runtime-file "$runtime" "$dir" \
     "$root/Asterism-$version-x86_64.AppImage"
-sha256sum "$root/Asterism-$version-x86_64.AppImage"
+# Fixed release asset for the thin launcher's installer. Keep the versioned asset too.
+# Replace the directory entry, never follow a stale output symlink.
+cp --remove-destination -- "$root/Asterism-$version-x86_64.AppImage" "$root/Asterism-x86_64.AppImage"
+checksums=$(mktemp "$root/.SHA256SUMS.XXXXXXXX")
+(
+    cd "$root"
+    sha256sum "Asterism-$version-x86_64.AppImage" "Asterism-x86_64.AppImage"
+) > "$checksums"
+mv -f -- "$checksums" "$root/SHA256SUMS"
+cat "$root/SHA256SUMS"

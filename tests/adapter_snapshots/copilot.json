@@ -57,7 +57,10 @@
  "tools_setting": [],
  "sandbox_setting": "",
  "replies": [],
- "subagents": [],
+ "subagents": [
+  "copilot-events",
+  "~/.copilot/session-state"
+ ],
  "session_files": "",
  "asks_setting": "defaultPermissionMode",
  "access": {

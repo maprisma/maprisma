@@ -41,6 +41,9 @@ class Provider:
     configure: tuple = ()             # (harnesses.Configure, …): its own setup commands or app window
     engine: object = None             # llm_engine.Engine: how the app starts, stops, asks and explains it
                                       # (None: llm_engine.Engine(), a user service + an OpenAI-compatible API)
+    discover_existing: Callable | None = None  # bounded mounted-folder detector, never executes
+    reconnect_existing: Callable | None = None  # discovered record -> new connecting files
+    model_folder_changes: Callable | None = None  # runtime + folder -> reviewed config changes
     # online providers
     ids: tuple = ()                   # names used in agent settings ("anthropic", "openai-codex")
     agents: tuple = field(default=())  # agents that come with this provider ("claude")

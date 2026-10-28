@@ -22,7 +22,8 @@ class DetectTest(unittest.TestCase):
 
     def test_both_implement_the_whole_interface(self):
         names = [line.split()[0].split("(")[0] for line in desktop.__doc__.split("The interface")[1].splitlines()
-                 if line.startswith("    ") and line.split()[0][0].islower() and "(" in line.split()[0]]
+                 if line.startswith("    ") and line.split()[0][0].islower() and "(" in line.split()[0]
+                 and line.split()[0].split("(")[0] not in ("app_name", "app_id", "config_dir", "launcher_entry")]
         self.assertGreaterEqual(len(names), 20)
         for module in (desktop_omarchy, g):
             missing = [n for n in names if not hasattr(module, n)]
@@ -31,7 +32,9 @@ class DetectTest(unittest.TestCase):
 
 class GenericTest(unittest.TestCase):
     def test_config_folder_is_asterism(self):
-        self.assertEqual(g.CONFIG_DIR.name, "asterism")
+        import identity
+        with mock.patch.object(identity, "is_plugin", return_value=False):
+            self.assertEqual(desktop.config_dir().name, "asterism")
 
     def test_theme_from_the_style_manager(self):
         with mock.patch.object(g, "_adw_style", return_value=(True, "#9141ac")):

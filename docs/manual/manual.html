@@ -117,6 +117,7 @@
   <h1>Installation</h1>
 
   <h2 id="install-asterism">Asterism <span class="badge">Asterism</span></h2>
+  <p>Asterism also runs on Omarchy. It automatically uses the desktop integration while keeping its own name, application identity and <code>~/.config/asterism</code> settings folder. An absolute <code>XDG_CONFIG_HOME</code> moves that folder to <code>$XDG_CONFIG_HOME/asterism</code>.</p>
   <p>Choose one of these ways:</p>
   <ul>
     <li><b>Arch Linux (AUR):</b> install the package <code>asterism</code> with your AUR helper.</li>
@@ -142,8 +143,8 @@
   install. To run agents inside the window, install VTE: <code>sudo pacman -S vte4</code>.</p>
 
   <h2 id="first-start">First start</h2>
-  <p>On the first open, the app asks whether to add itself to the app launcher. Nothing is written
-  there unless you say yes; you can change it later in Settings › <b>In the app launcher</b>.</p>
+  <p>Asterism’s package provides its app-launcher entry. Only the legacy AI Agents Map plugin asks whether to create its own launcher entry.</p>
+  <p>On Asterism’s first start, if it has no settings yet but the legacy plugin has them, it copies the settings, MCP server list, failed-link records, local-LLM launch settings and agent profiles. A private <code>plugin-backup-…</code> folder inside Asterism’s settings folder keeps the original bytes. The plugin’s originals remain untouched, and existing Asterism files are preserved. Verified add-ons for installed agents and local LLMs, plus the online-provider group, are enabled automatically. If Asterism already has settings, no import takes place.</p>
   <p>The window is a normal app window: it can be tiled, floated, moved to another workspace and
   reached with <kbd>Alt</kbd>+<kbd>Tab</kbd>. <span class="badge">Asterism</span> A fresh Asterism opens on
   its <b>welcome page</b>: the agents and local LLMs installed on this computer are cards that are
@@ -406,6 +407,8 @@
   and numbers, never the conversations.</p>
 
   <h2 id="running-agents">Starting and stopping agents</h2>
+  <p>The last 50 project folders are kept per agent.</p>
+  <p>Each agent’s <b>Start</b> submenu has three sections separated by lines: <b>Start</b> with the current folder, <b>Choose folder…</b>, and a searchable <b>Recent projects</b> drop-down. The drop-down scrolls and lists all folders used to start this agent from the map, newest first. Choose a past project, then Start. Choosing a folder in the folder picker starts one session there. No pinned folder is required: without one, Start uses Settings › <b>Agents start in</b>, or your home folder. The agent’s details page has a scrollable <b>Recent projects</b> card with every recorded folder. Click a row to open Start with that folder selected. Its pin sets this agent’s next default; only one folder per agent can be pinned, and unpinning restores the general default. The trash button removes the entry and its pin from this agent’s history, never the folder or its files. The same submenu, history and pins apply to <b>Start here</b> and <b>Start in terminal</b>. <b>Start again</b> offers the submenu again. Running sessions keep their existing folder; cancelled choices and failed launches add no history.</p>
   <ul>
     <li><b>▶</b> on the agent's box, or <b>Start here</b> in its menu, runs the agent in a terminal inside
       the window, in place of the map. This needs VTE (<code>vte4</code>).</li>
@@ -1008,6 +1011,36 @@
 </section>
 
 <!-- ============================== 11 Healthy & Security check ============================== -->
+<section class="chapter" id="map-groups">
+<h1>Group cards and add-ons on the map</h1>
+<h2 id="map-groups-expand">Expand a category</h2>
+<p>In the Flutter preview, every AI Map column has one group card. A dashed card means nothing is set up; its found count reports local detection. These placeholders are display elements, never connected nodes or AI input. Click Expand, double-click the card or press Enter while it has focus. The group appears alone in the centre. Back, Esc, Backspace or the surrounding background restores the map’s zoom and selection. The System Map uses the same controls for hardware, disks, programs, tools and folders.</p>
+<h2 id="map-groups-addons">Manage add-ons</h2>
+<p>Focus groups show On, Off, Found on this PC and Not installed as applicable. Use the overflow menu or right-click for switching, Add-on details, a newer signed version or provider sign-in through an installed agent. Details disclose reads, sends and capabilities. Switches apply immediately with one Undo snackbar. Changes are blocked while this app owns running agent sessions or an installation is active. Agents in other terminals do not block add-on management. Look for add-ons online explicitly loads the signed catalog; merely expanding never requests it. Review Install or Update before execution. New add-ons stay off. Removing a user add-on makes a backup and preserves programs and data; Undo is available until the app closes. Bundled add-ons stay with their package.</p>
+<p>The Flutter preview shares its user add-on folder with Asterism (GTK). Removing an add-on also removes it from GTK; catalog installs and updates affect both applications. These effects are disclosed before confirmation. After a confirmed removal, old backups become eligible for cleanup after 30 days. Backups with an active Undo are kept; links, unrelated folders and foreign-owned folders are skipped. Undo lasts until this app closes. During first use, Welcome’s Agents button reopens the same Agents focus with its fixed Switch on / Later footer; it does not finish welcome or open a plain group view.</p>
+<h2 id="map-groups-welcome">First use and existing flows</h2>
+<p>Welcome appears above the map, with local Look at this PC / Skip and a System Map link. Mount existing data disks before searching. The Agents group opens with detected agents marked. Its fixed Switch on / Later footer stays visible while the list scrolls. Switch on is one batch with one Undo; Later preserves choices. Other enabled add-on kinds are preserved. Later starts do not auto-expand. Models links to existing download/import controls and model-folder reuse; MCP servers and skills links to Connections. New MCP definitions and new skill-folder installation remain unported. The rocket button retains the first-agent guide. Setup and Add-ons pages have been replaced by these groups.</p>
+</section>
+
+<section class="chapter" id="task-cards">
+<h1>Task cards on the map</h1>
+<p>Connections, agent actions, model removal and add-on changes open a task card in the Flutter preview. When the map area is at least 900 logical pixels wide and the task has known map items, a read-only map appears to the left of the card. It shows those items and their direct neighbours, with lines leading to the card. Empty columns are omitted. The main map keeps its zoom, position and selection. The provider overview uses the full width; individual runtime actions show a half card when their map items are known.</p>
+<p>Review the proposed changes before confirming. The same card shows progress and the result; use Undo where offered. Back or Esc cancels a review or closes a finished card. Running work cannot be closed with Back or Esc; only operations that support cancellation show Cancel. Model search/downloads, the add-on catalog and the first-agent guide use full cards. Narrow windows and tasks without known map items also use full cards. Settings, terminals, usage and subagent details retain their existing views.</p>
+</section>
+
+<section class="chapter" id="system-map">
+<h1>System Map</h1>
+<h2 id="system-map-start">First use and separate mounts</h2>
+<p>Flutter development preview: switch between AI Map and System Map. Each keeps its zoom and selection. Mount existing data disks before choosing Look at this PC. The bounded search reads local metadata, never runs detected programs and sends nothing. Skip keeps disk search off. Hardware, disks, agents, runtimes, supporting tools and folders appear together. Missing disks remain visible.</p>
+<h2 id="system-map-refresh">Saved map and refresh</h2>
+<p>The private saved map opens immediately. Startup and visits refresh status without repeating the full search or size measurements. Refresh explicitly searches mounted disks and measures folder sizes. After the first search, newly mounted disks are searched once. While this page is visible, mount checks run no faster than every 15 seconds and respect the background interval, Manual-only and focus pause settings. Tools may need an explicitly confirmed version check.</p>
+<p>For a disk that is permanently gone, select its grey node and Forget this disk. Confirmation removes only its saved map entries, not files or settings. Configured folders can appear again on refresh. Runtime discoveries show the launch path (including current) and the resolved build separately. Sizes follow known wrapper targets; unattributable program sizes are hidden. With an explicit settings profile, system-map.json is kept beside settings.json. The default map uses the application cache folder. New durable Undo journals always live in model-moves/ beside settings.json; existing journals in the old default cache location remain readable. Keep legacy journals until their moves are undone.</p>
+<h2 id="system-map-actions">Reconnect, move and undo</h2>
+<p>Select a found component for Check, Reconnect or Use folder. Hold and drag a runtime onto a model folder to preview Reconnect; drag a folder to the AI Map runtime to preview its configuration. Confirmed connections create configuration and backups, without starting services. Drag a GGUF folder onto a disk for a bounded move preview. Running readers block moves; cross-disk moves copy and verify first. Supported links and references are updated. Undo preserves new files. Custom wrappers and unsupported stores require a reviewed manual or AI plan. Mount suggestions are text only: fstab is never edited.</p>
+<h2 id="system-map-ai">Analysis and AI help</h2>
+<p>Hardware health, GPU stack guidance and findings appear on nodes. Check this system with AI requires consent to the exact summary and prompt: the chosen agent and any online model service receive folder paths and may consume tokens. Fix it with AI and Simplify your AI setup open guarded tasks for review. No credentials are included. Usage on the AI Map shows recent runs and token totals. Review duplicates and unused services before consolidating; keep backups.</p>
+</section>
+
 <section class="chapter" id="security">
   <h1>Healthy &amp; Security check</h1>
   <p>A coding agent reads and writes files and runs commands on your computer. How much it may do
