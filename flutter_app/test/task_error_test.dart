@@ -1,3 +1,4 @@
+import 'package:asterism/python_transport.dart';
 import 'dart:io';
 import 'package:asterism/backend.dart';
 import 'package:asterism/provider_task_dialog.dart';
@@ -19,7 +20,7 @@ for line in sys.stdin:
     print(json.dumps({'id':request['id'],'error':{'code':'invalid_request'}}),flush=True)
 ''');
       final backend = await tester.runAsync(
-        () => Backend.start(directory.path),
+        () => PythonTransport.start(directory.path).then(Backend.fromTransport),
       );
       addTearDown(backend!.dispose);
       await tester.pumpWidget(

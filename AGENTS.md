@@ -6,13 +6,15 @@
 - **Current plan:** `docs/plan-one-app.md`: Asterism as the one app for every distribution, the Omarchy plugin
   as a thin launcher. It has Uwe's decisions, the facts with file paths, the next steps and the state of the repos.
 - **GTK app frozen (Uwe, 2026-10-28):** Flutter replaces it on Linux too. The GTK repo gets fixes only, no
-  new features; new work happens here. Next slice: `docs/plan-flutter-map-editor.md`.
+  new features; new work happens here. Next slice: `docs/plan-flutter-dart-core.md` (phase 2 after Uwe's go).
+- **Flutter only, Python for testing (Uwe, 2026-10-28):** the shipped app contains no Python; the service is
+  ported to Dart (`docs/plan-flutter-dart-core.md`), Python stays as the reference and test oracle.
 - **macOS later:** `docs/plan-macos.md`. Not before Linux is completely done and Uwe's OK; meanwhile keep
   new platform code behind the desktop adapter.
 - **Working with Codex and Claude:** work on `main` here. A new task gets `docs/plan-<topic>.md`; the
   implementing agent answers in `docs/plan-<topic>-responses.md`, a review is
   `docs/review-<reviewer>-<date>-<topic>.md` with its `-responses.md`. Finished plans, reviews and ideas move to
-  `docs/history/` (links among them stay relative). Active: `plan-flutter.md`, `plan-one-app.md`.
+  `docs/history/` (links among them stay relative). Active: `plan-flutter.md`, `plan-one-app.md`, `plan-flutter-dart-core.md`, `plan-macos.md` (later).
 - **Flutter checks:** `tools/flutter-dev check` (format, analyzer, tests), `tools/flutter-dev build` (isolated
   Devel build in `.flutter-previews/`, not launched). The remote `gtk` is the GTK repo
   `/mnt/Data/Projects/asterism`: never push this tree's `main` there.

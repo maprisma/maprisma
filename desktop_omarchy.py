@@ -49,9 +49,8 @@ def theme_dir() -> Path:
 def theme_colors(path: Path = COLORS_TOML) -> dict:
     """The current theme's colors.toml ({} when it cannot be read)."""
     try:
-        fd = os.open(path, os.O_RDONLY | os.O_CLOEXEC)
-        with os.fdopen(fd, "rb") as handle:
-            data = handle.read(MAX_THEME_BYTES + 1)
+        import ai_core
+        data = ai_core.read_head(path, MAX_THEME_BYTES + 1)
         if len(data) > MAX_THEME_BYTES:
             return {}
         theme = tomllib.loads(data.decode("utf-8", "replace"))

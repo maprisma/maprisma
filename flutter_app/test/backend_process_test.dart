@@ -1,3 +1,4 @@
+import 'package:asterism/python_transport.dart';
 import 'dart:io';
 
 import 'package:asterism/backend.dart';
@@ -14,7 +15,9 @@ void main() {
       await File(
         '${directory.path}/flutter_backend.py',
       ).writeAsString('import sys\nsys.stdin.readline()\n');
-      final backend = await Backend.start(directory.path);
+      final backend = await PythonTransport.start(
+        directory.path,
+      ).then(Backend.fromTransport);
       addTearDown(backend.dispose);
       await expectLater(backend.call('app.snapshot'), throwsStateError);
       expect(backend.isConnected, isFalse);

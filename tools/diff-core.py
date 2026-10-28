@@ -1,0 +1,149 @@
+#!/usr/bin/env python3
+"""Dev-only differential oracle: isolated fixture homes, responses, bytes, modes.
+
+Only fixture HOME prefixes are normalized. No blanket masking of error codes,
+handles, times or PIDs: add route-specific normalizers when later phases need
+those. Never initialize adapters or inspect the user's real configuration.
+"""
+from __future__ import annotations
+import argparse
+import json
+import os
+from pathlib import Path
+import shutil
+import stat
+import subprocess
+import sys
+import tempfile
+
+ROOT = Path(__file__).resolve().parent.parent
+
+
+def oracle():
+    sys.path.insert(0, str(ROOT))
+    import flutter_backend
+    import i18n
+    i18n.set_name('AI Agents Map', 'Asterism')
+    import ai_core
+    ai_core.migrate_settings()
+    service = flutter_backend.Service()
+    flutter_backend.serve(service, sys.stdin.buffer, sys.stdout)
+
+
+def expand(value, home):
+    if isinstance(value, str):
+        return value.replace('$HOME', str(home))
+    if isinstance(value, list):
+        return [expand(v, home) for v in value]
+    if isinstance(value, dict):
+        return {k: expand(v, home) for k, v in value.items()}
+    return value
+
+
+def seed(home, fixtures):
+    for item in fixtures:
+        relative = Path(item['path'])
+        if relative.is_absolute() or '..' in relative.parts:
+            raise ValueError('Fixture path escapes HOME')
+        if relative.name in ('auth.json', '.credentials.json'):
+            raise ValueError('Credential fixtures are not needed in phase 1')
+        path = home / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        kind = item.get('type', 'file')
+        if kind == 'symlink':
+            path.symlink_to(expand(item['target'], home))
+        elif kind == 'fifo':
+            os.mkfifo(path, 0o600)
+        elif kind == 'directory':
+            path.mkdir(exist_ok=True)
+        else:
+            content = item.get('content', '')
+            if 'content_repeat' in item:
+                char, count = item['content_repeat']
+                content = item.get('content_prefix', '') + char * count + item.get('content_suffix', '')
+            path.write_text(expand(content, home))
+        if 'mode' in item and kind != 'symlink':
+            path.chmod(int(item['mode'], 8))
+
+
+def tree(home):
+    result = {}
+    # os.walk does not traverse symlink directories; stat is always lstat.
+    for folder, dirs, files in os.walk(home, followlinks=False):
+        for name in sorted(dirs + files):
+            path = Path(folder) / name
+            if name in ('auth.json', '.credentials.json'):
+                raise ValueError('Unexpected credential file in fixture')
+            st = path.lstat()
+            mode = stat.S_IMODE(st.st_mode)
+            if stat.S_ISLNK(st.st_mode):
+                data = ('link', os.readlink(path).replace(str(home), '$HOME'))
+            elif stat.S_ISREG(st.st_mode):
+                data = ('file', path.read_bytes().replace(os.fsencode(home), b'$HOME'))
+            elif stat.S_ISDIR(st.st_mode):
+                data = ('directory',)
+            else:
+                data = ('special', stat.S_IFMT(st.st_mode))
+            result[str(path.relative_to(home))] = (mode, *data)
+    return result
+
+
+def run_side(command, case, home):
+    seed(home, case.get('files', []))
+    env = {**os.environ, 'HOME': str(home), 'XDG_CONFIG_HOME': str(home / '.config'),
+           'XDG_CACHE_HOME': str(home / '.cache'), 'XDG_STATE_HOME': str(home / '.local/state'),
+           'XDG_DATA_HOME': str(home / '.local/share'), 'ASTERISM_DESKTOP': 'generic',
+           'LANG': 'en_US.UTF-8', 'LC_ALL': '', 'LC_MESSAGES': '', 'PYTHONDONTWRITEBYTECODE': '1'}
+    env.update(expand(case.get('environment', {}), home))
+    script = []
+    for i, request in enumerate(case['requests']):
+        if 'raw_repeat' in request:
+            char, count = request['raw_repeat']
+            script.append(char * count)
+        elif 'raw' in request:
+            script.append(request['raw'])
+        else:
+            script.append(json.dumps({'id': i, 'protocol': 1, **expand(request, home)}, ensure_ascii=False))
+    output = subprocess.run(command, input=('\n'.join(script)+'\n').encode(),
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env,
+                            cwd=ROOT / 'packages/asterism_core', timeout=30, check=True)
+    responses = [json.loads(line.replace(os.fsencode(home), b'$HOME')) for line in output.stdout.splitlines()]
+    if len(responses) != len(script):
+        raise AssertionError('Reply count differs from request count')
+    return responses, tree(home)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--oracle', action='store_true', help=argparse.SUPPRESS)
+    parser.add_argument('--dart', default=shutil.which('dart'))
+    parser.add_argument('fixtures', nargs='*', type=Path)
+    args = parser.parse_args()
+    if args.oracle:
+        oracle()
+        return
+    if not args.dart:
+        parser.error('dart must be on PATH or supplied with --dart')
+    cases = args.fixtures or sorted((ROOT / 'tests/core-fixtures').glob('*.json'))
+    count = 0
+    for fixture in cases:
+        document = json.loads(fixture.read_text())
+        for case in document['cases']:
+            with tempfile.TemporaryDirectory(prefix='asterism-diff-') as temp:
+                homes = [Path(temp) / side for side in ('python', 'dart')]
+                for home in homes:
+                    home.mkdir(mode=0o700)
+                expected = run_side([sys.executable, str(Path(__file__).resolve()), '--oracle'], case, homes[0])
+                actual = run_side([args.dart, '--disable-dart-dev', '--packages=.dart_tool/package_config.json', 'bin/asterism-core.dart'], case, homes[1])
+                if expected != actual:
+                    label = 'responses' if expected[0] != actual[0] else 'file bytes/modes'
+                    raise AssertionError(f'{fixture.name}: {case["name"]}: {label} differ\nPython: {expected!r}\nDart: {actual!r}')
+                count += 1
+                print(f'PASS {fixture.name}: {case["name"]}', flush=True)
+    if not count:
+        raise SystemExit('No differential cases found')
+    print(f'{count} differential cases passed')
+
+
+if __name__ == '__main__':
+    main()

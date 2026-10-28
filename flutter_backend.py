@@ -398,6 +398,19 @@ class Service:
             for command in result.pop('agent_commands'):
                 anchors.extend(self.task_focus({'command': command, 'kind': result['kind'], 'item': result['item']}))
             return {**result, 'focus': list(dict.fromkeys(anchors))}
+        if method in ('agents.halt_preview', 'agents.halt_apply'):
+            import flutter_map_instances
+            if not hasattr(self, '_map_instances'):
+                self._map_instances = flutter_map_instances.Instances()
+            if method == 'agents.halt_preview':
+                return self._map_instances.preview(params, self.sessions)
+            return self._map_instances.apply(params, self.tasks.start_halt)
+        if method == 'connections.repair_preview':
+            import flutter_map_editor
+            return flutter_map_editor.repair_preview(params, self._map_result, self.connections, self.settings_path)
+        if method in ('connections.move_preview', 'models.switch_preview', 'models.attach_preview'):
+            import flutter_map_editor
+            return flutter_map_editor.preview(method, params, self._map_result, self.connections, self.settings_path)
         if method == "connections.preview":
             return self.connections.preview(params)
         if method in ("connections.apply", "connections.undo"):
@@ -492,6 +505,33 @@ class Service:
                 self.adapters.reload(before)
                 raise
             return self.adapters.snapshot(enabled)
+        if method == 'app.settings_changed':
+            if params:
+                raise ValueError('Unexpected parameters')
+            # Devel router writes ported settings in Dart; drop only cached
+            # translations here, never replay the settings write.
+            i18n._lang = None
+            return {}
+        if method in ('settings.get', 'app.identity', 'desktop.snapshot'):
+            if params:
+                raise ValueError('Unexpected parameters')
+            if method == 'settings.get':
+                return self.settings()
+            import identity
+            import desktop
+            if method == 'app.identity':
+                return {'name': identity.name(), 'app_id': identity.app_id(),
+                        'short_name': identity.short_name(), 'config_dir': str(identity.config_dir()),
+                        'cache_dir': str(identity.cache_dir())}
+            theme_dir = desktop.theme_dir()
+            return {'name': desktop.NAME, 'theme_dir': str(theme_dir) if theme_dir else None}
+        if method == 'i18n.lookup':
+            if (set(params) not in ({'text'}, {'text', 'other', 'n'})
+                    or not isinstance(params.get('text'), str)
+                    or ('other' in params and (not isinstance(params['other'], str) or type(params['n']) is not int))):
+                raise ValueError('Invalid translation')
+            text = i18n._(params['text']) if 'other' not in params else i18n.ngettext(params['text'], params['other'], params['n'])
+            return {'language': i18n.current(), 'text': text}
         if method == "settings.update":
             if set(params) != {"values"} or not isinstance(params["values"], dict):
                 raise ValueError("Invalid settings request")

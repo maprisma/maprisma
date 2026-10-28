@@ -1,3 +1,4 @@
+import 'package:asterism/python_transport.dart';
 import 'dart:io';
 import 'package:asterism/backend.dart';
 import 'package:asterism/provider_task_dialog.dart';
@@ -31,7 +32,9 @@ for line in sys.stdin:
         result={}
     print(json.dumps({'id':q['id'],'result':result}),flush=True)
 ''');
-      final backend = await tester.runAsync(() => Backend.start(dir.path));
+      final backend = await tester.runAsync(
+        () => PythonTransport.start(dir.path).then(Backend.fromTransport),
+      );
       addTearDown(backend!.dispose);
       tester.view.physicalSize = const Size(1200, 800);
       tester.view.devicePixelRatio = 1;

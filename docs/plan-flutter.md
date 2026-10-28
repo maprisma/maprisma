@@ -13,7 +13,16 @@ milestones and reviews are in `docs/history/`. Work continues on main without
 pushing it to the `gtk` remote.
 
 **Decision (Uwe, 2026-10-28):** Flutter replaces the GTK app on Linux too; the GTK app gets fixes only.
-Next slice: [the map editor](plan-flutter-map-editor.md).
+Map editor (committed 5cb3069): [plan](history/plan-flutter-map-editor.md) and
+[implementation and measurements](history/plan-flutter-map-editor-responses.md):
+bounded light tiles and static caching reduce controlled lights-on Xvfb CPU from 134.53%
+to 56.30% of one core. Claude’s real-desktop GPU measurement, with Uwe’s OK,
+passes the map-editor performance gate: 0.05% idle, 9.57% with lights at zoom .53
+and 9.07% at zoom 1.25, matching GTK’s 8–11% reference. Software figures remain
+the no-GPU/VM worst case. The pacing Low was later fixed with the 20/30/60 fps setting; the pass
+applies to the measured 20 fps implementation.
+The [map-lights review responses](history/review-claude-2026-10-28-map-lights-responses.md)
+cover live-scan reuse and measured continuous hover/high-zoom costs.
 
 The current parity inventory and local connection-authoring slice are in
 [plan-flutter-connections.md](history/plan-flutter-connections.md). Custom MCP definitions
@@ -31,8 +40,9 @@ in the dated implementation notes below are historical; current checks run here.
 
 ## Completion means
 
-Flutter owns the complete interface. Python may remain as the local service for
-existing adapters, providers, scans and jobs. A Flutter shell around a running GTK
+Flutter owns the complete interface **and the service**: the shipped app is Flutter/Dart only, with no
+Python in the bundle (Uwe, 2026-10-28; `plan-flutter-dart-core.md`). Python stays in the repository as the
+reference implementation and test oracle (differential tests) until every route is ported. A Flutter shell around a running GTK
 window does **not** satisfy this goal. Keep the current application available until
 feature parity, migration and packaging have been validated.
 
@@ -69,7 +79,9 @@ a commit.
    lifecycle and singleton/multi-window scenarios still require validation.
 2. **Maps and task cards implemented:** AI/System Map, discovery/reconnect/moves,
    groups, add-on management, metadata/subagents and review/progress/result cards.
-   Remaining: map editing/layout parity, accessibility and desktop performance.
+   Map editing/layout and keyboard alternatives are implemented locally for review;
+   the real-desktop GPU performance gate has passed. Broader desktop validation
+   and the optional pacing Low remain; software-renderer costs are documented.
 3. **Complete feature parity:** work through the inventory linked above. Local
    MCP creation/skill-folder attachment are implemented in the current slice.
    Remaining: MCP/skill catalogs and checks, web skill installation, direct API-key
@@ -706,3 +718,19 @@ higher finding remains. Analysis is clean and 55 Flutter tests pass. Its plan an
 responses are archived in `docs/history/`. Two low argument-entry leftovers are
 noted for the next related edit: representing an intentionally empty argument and
 normalizing/refusing carriage returns from pasted CRLF. No push was performed.
+
+### Appearance and light-rate settings (2026-10-28)
+
+Settings now persists System/Light/Dark choices with small previews, plus a map-light
+frame-rate choice of 20 (default), 30 or 60. See the [plan](history/plan-flutter-appearance.md)
+and [implementation response](history/plan-flutter-appearance-responses.md). Uwe waived
+further measurement; Claude's accepted GPU gate remains based on the earlier
+19–21 fps build. No desktop launch, commit, push or sync was performed.
+
+### Dart-core migration — phase 1 (2026-10-28)
+
+The [Dart-core foundation response](plan-flutter-dart-core-responses.md) records
+isolate transport, the Devel-only router, POSIX policies, differential tests and
+ported settings/identity/theme/desktop/i18n routes. All other routes still use the
+Python reference in Devel; production builds remain blocked. Phase 1 stops for
+review before read-only scans or later phases begin.

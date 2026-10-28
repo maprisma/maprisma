@@ -1,3 +1,4 @@
+import 'package:asterism/python_transport.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'package:asterism/backend.dart';
@@ -102,7 +103,9 @@ Future<Directory> mountApp(
           'install_fails=${installFails ? 'True' : 'False'}',
         ),
   );
-  final backend = await tester.runAsync(() => Backend.start(dir.path));
+  final backend = await tester.runAsync(
+    () => PythonTransport.start(dir.path).then(Backend.fromTransport),
+  );
   tester.view.physicalSize = const Size(1400, 900);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.resetPhysicalSize);

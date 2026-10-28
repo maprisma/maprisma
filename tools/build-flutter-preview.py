@@ -21,11 +21,13 @@ def main():
     stage = Path(tempfile.mkdtemp(prefix='preview-', dir=previews)) / 'flutter_app'
     shutil.copytree(root / 'flutter_app', stage,
                     ignore=shutil.ignore_patterns('build', '.dart_tool', 'ephemeral', '.flutter-plugins*'))
+    shutil.copytree(root / 'packages', stage.parent / 'packages',
+                    ignore=shutil.ignore_patterns('build', '.dart_tool'))
     preview_identity(stage)
     command = ['flutter', '--suppress-analytics', '--no-version-check']
     subprocess.run([*command, 'pub', 'get', '--offline'], cwd=stage, check=True)
     subprocess.run([*command, 'build', 'linux', '--no-pub',
-                    f'--dart-define=ASTERISM_SOURCE={root}'], cwd=stage, check=True)
+                    '--dart-define=ASTERISM_DEVEL=true', f'--dart-define=ASTERISM_SOURCE={root}'], cwd=stage, check=True)
     print(f'\nDevelopment preview: {stage / "build/linux/x64/release/bundle/asterism"}', flush=True)
 
 
