@@ -3,6 +3,7 @@ import 'package:asterism_core/asterism_core.dart';
 import 'package:asterism_core/src/connect_apply.dart';
 import 'package:asterism_core/src/core_tasks.dart';
 import 'package:asterism_core/src/dsh_profile.dart';
+import 'package:asterism_core/src/provider_ops.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -148,4 +149,34 @@ void main() {
       );
     },
   );
+
+  test('only a socket of this account on a loopback address is our server', () {
+    final net = Directory.systemTemp.createTempSync('asterism-net-');
+    addTearDown(() => net.deleteSync(recursive: true));
+    const header =
+        '  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid\n';
+    // 8080 on 127.0.0.1 by uid 1000; 9090 on 0.0.0.0 by uid 0; 7070 on 10.0.0.5 by 1000 (not loopback).
+    File('${net.path}/tcp').writeAsStringSync(
+      '$header'
+      '   0: 0100007F:1F90 00000000:0000 0A 00000000:00000000 00:00000000 00000000  1000 0 1\n'
+      '   1: 00000000:2382 00000000:0000 0A 00000000:00000000 00:00000000 00000000     0 0 2\n'
+      '   2: 0500000A:1B9E 00000000:0000 0A 00000000:00000000 00:00000000 00000000  1000 0 3\n'
+      '   3: 0100007F:1F91 0100007F:9C40 01 00000000:00000000 00:00000000 00000000  1000 0 4\n',
+    );
+    File('${net.path}/tcp6').writeAsStringSync(
+      '$header'
+      '   0: 00000000000000000000000001000000:1F90 00000000000000000000000000000000:0000 0A 00000000:00000000 00:00000000 00000000  1001 0 5\n',
+    );
+    expect(loopbackListeners(8080, proc: net.path), [1000, 1001]);
+    expect(
+      ownPort(8080, 1000, proc: net.path),
+      isFalse,
+    ); // another account listens too
+    expect(ownPort(9090, 1000, proc: net.path), isFalse);
+    expect(loopbackListeners(7070, proc: net.path), isEmpty);
+    expect(
+      loopbackListeners(8081, proc: net.path),
+      isEmpty,
+    ); // connected, not listening
+  });
 }

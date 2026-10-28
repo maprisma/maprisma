@@ -1,0 +1,120 @@
+"""Development parity: the Python and Dart workers run the same provider operations against a fake
+llama.cpp router (own socket on 127.0.0.1) and a fake systemctl, and send the same requests.
+Skipped without a native Dart SDK."""
+import json
+import os
+import socket
+import subprocess
+import sys
+import tempfile
+import time
+import unittest
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / 'tools'))
+try:
+    from dart_sdk import resolve_dart
+    DART = resolve_dart()
+except (OSError, ValueError, RuntimeError):
+    DART = None
+
+SERVER = '''#!/usr/bin/python3
+import http.server, json, os, sys
+port = int(sys.argv[sys.argv.index("--port") + 1])
+log = os.path.expanduser("~/requests.log")
+class Handler(http.server.BaseHTTPRequestHandler):
+    def _answer(self):
+        size = int(self.headers.get("Content-Length") or 0)
+        body = self.rfile.read(size).decode() if size else ""
+        with open(log, "a") as handle:
+            handle.write(json.dumps([self.command, self.path, json.loads(body) if body else None]) + "\\n")
+        reply = b'{"success": true}' if "fail" not in body else b'{"error": "no"}'
+        self.send_response(200 if "fail" not in body else 500)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(reply)))
+        self.end_headers()
+        self.wfile.write(reply)
+    do_GET = do_POST = _answer
+    def log_message(self, *args):
+        pass
+http.server.HTTPServer(("127.0.0.1", port), Handler).serve_forever()
+'''
+
+SYSTEMCTL = '#!/bin/sh\necho "$@" >> "$HOME/systemctl.log"\n'
+
+
+def free_port() -> int:
+    with socket.socket() as s:
+        s.bind(('127.0.0.1', 0))
+        return s.getsockname()[1]
+
+
+@unittest.skipIf(DART is None, 'native Dart SDK not available')
+class DartProviderOpsParityTest(unittest.TestCase):
+    def test_same_requests_and_results(self):
+        with tempfile.TemporaryDirectory() as temp:
+            home = Path(temp)
+            bin_dir = home / '.local/bin'
+            bin_dir.mkdir(parents=True)
+            for name, text in (('llama-server', SERVER), ('systemctl', SYSTEMCTL)):
+                (bin_dir / name).write_text(text)
+                os.chmod(bin_dir / name, 0o700)
+            port = free_port()
+            (home / '.config/systemd/user').mkdir(parents=True)
+            (home / '.config/systemd/user/llama.service').write_text(
+                f'[Service]\nExecStart={bin_dir}/llama-server --port {port}\n')
+            (home / '.cache/llama.cpp').mkdir(parents=True)
+            (home / '.cache/llama.cpp/fixture-chat-Q4_K_M.gguf').write_text('GGUF')
+            env = {'HOME': str(home), 'PATH': f'{bin_dir}:/usr/bin:/bin', 'LANG': 'C.UTF-8',
+                   'XDG_CONFIG_HOME': str(home / '.config'), 'XDG_CACHE_HOME': str(home / '.cache'),
+                   'XDG_DATA_HOME': str(home / '.local/share'), 'ASTERISM_DESKTOP': 'generic'}
+            server = subprocess.Popen([str(bin_dir / 'llama-server'), '--port', str(port)], env=env)
+            try:
+                for _ in range(100):
+                    with socket.socket() as s:
+                        if s.connect_ex(('127.0.0.1', port)) == 0:
+                            break
+                    time.sleep(0.05)
+                operations = [
+                    ('model.load', {'key': 'llamacpp', 'model': 'fixture-chat-Q4_K_M'}),
+                    ('model.unload', {'key': 'llamacpp', 'model': 'fixture-chat-Q4_K_M'}),
+                    ('model.load', {'key': 'llamacpp', 'model': 'not-there'}),
+                    ('model.load', {'key': 'llamacpp', 'model': 'bad name!'}),
+                    ('runtime.stop', {'key': 'llamacpp'}),
+                    ('runtime.start', {'key': 'llamacpp'}),
+                    ('runtime.start', {'key': 'ollama'}),
+                    ('runtime.start', {'key': 'llamacpp', 'extra': 'x'}),
+                ]
+                sides = {}
+                for side, command, cwd in (
+                        ('python', [sys.executable, '-u', str(ROOT / 'flutter_worker.py')], ROOT),
+                        ('dart', [DART, '--disable-dart-dev', '--packages=.dart_tool/package_config.json',
+                                  'bin/asterism-core.dart', 'worker'], ROOT / 'packages/asterism_core')):
+                    results = []
+                    for operation, params in operations:
+                        out = subprocess.run(command, input=json.dumps({'operation': operation, 'params': params}).encode() + b'\n',
+                                             capture_output=True, env=env, cwd=cwd, timeout=120)
+                        lines = [json.loads(line) for line in out.stdout.splitlines() if line.startswith(b'{')]
+                        results.append(lines[-1] if lines else {'stderr': out.stderr.decode()[-300:]})
+                    logs = {}
+                    for name in ('requests.log', 'systemctl.log'):
+                        path = home / name
+                        logs[name] = path.read_text().splitlines() if path.exists() else []
+                        path.unlink(missing_ok=True)
+                    sides[side] = (results, logs)
+                self.assertEqual(sides['python'], sides['dart'])
+                results, logs = sides['dart']
+                self.assertEqual([r.get('type') for r in results],
+                                 ['result', 'result', 'error', 'error', 'result', 'result', 'error', 'error'])
+                self.assertEqual(logs['requests.log'], [
+                    '["POST", "/models/load", {"model": "fixture-chat-Q4_K_M"}]',
+                    '["POST", "/models/unload", {"model": "fixture-chat-Q4_K_M"}]'])
+                self.assertEqual(logs['systemctl.log'], ['--user stop llama.service', '--user start llama.service'])
+            finally:
+                server.kill()
+                server.wait()
+
+
+if __name__ == '__main__':
+    unittest.main()

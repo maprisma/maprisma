@@ -32,6 +32,7 @@ final class ServiceRouter implements ServiceTransport {
       return (await _python()).call(method, params);
     }
     if (method == 'connections.preview' && corePreview(params) ||
+        method == 'providers.run' && coreProviderRun(params) ||
         coreMapEdits.contains(method)) {
       return core.call(method, params);
     }

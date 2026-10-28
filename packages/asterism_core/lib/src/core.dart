@@ -10,6 +10,7 @@ import 'skill_plans.dart';
 import 'mcp_plans.dart';
 import 'llm_plans.dart';
 import 'map_edits.dart';
+import 'provider_ops.dart';
 import 'adapter_assets.g.dart';
 import 'settings.dart';
 import 'service_i18n.dart';
@@ -160,6 +161,20 @@ final class CoreService {
         throw ServiceError('unported_route');
       }
       return dispatchHandle(method, params, connections, tasks);
+    }
+    if (method == 'providers.run') {
+      if (!coreProviderRun(params)) throw ServiceError('unported_route');
+      if (params.length != 2 ||
+          params['operation'] is! String ||
+          params['params'] is! Map) {
+        throw const FormatException('Invalid provider operation');
+      }
+      final inner = Map<String, dynamic>.from(params['params'] as Map);
+      ProviderOps.validate(params['operation'] as String, inner);
+      return {
+        ...tasks.start(params['operation'] as String, inner),
+        'focus': taskFocus(reads.map, inner),
+      };
     }
     if (method == 'connections.move_preview') return edits.movePreview(params);
     if (method == 'connections.repair_preview') {

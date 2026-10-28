@@ -602,3 +602,22 @@ Studio's `lms` control) and the online providers are generated into the provider
 `tools/adapter-assets.py`. Fixture: after a map, the overview with focus, model folders from the settings
 (non-text entries skipped) and a refusal; the real HOME matches except focus (the comparison script runs
 each Dart request in its own process).
+
+### 4b — runtime and model operations
+
+`providers.run` for `runtime.start`, `runtime.stop`, `model.load` and `model.unload` runs in the core's
+worker (`asterism-core worker` without a plan, as `flutter_worker.py` does), with Python's checks and focus.
+`provider_ops.dart`: `loopback_listeners` (`/proc/net/tcp{,6}`, loopback-reachable addresses only) and the
+own-UID check before any request, `http_json` (127.0.0.1 only, 1 MiB replies, one body with its length),
+the engines' actions (systemd user units or `lms` for start/stop; llama.cpp and Jan's router API; Ollama's
+`keep_alive`; `lms load`/`unload`; engines that cannot unload one model stop the server), and
+`runtime_ctl.load` starting the server first and waiting up to 30 s.
+
+`tests/test_dart_provider_ops_parity.py`: a fake llama.cpp router (own socket on 127.0.0.1), a fake
+`systemctl` and a user unit; the Python and Dart workers run the same eight operations (load, unload,
+unknown and malformed model, stop, start, a provider not installed, an unexpected field): same results,
+same HTTP requests and bodies, same `systemctl` calls. Found and fixed on the way: Dart sent request
+bodies chunked, Python with a length. A Dart test covers listeners of another account and non-loopback or
+non-listening sockets.
+
+Not here: the "installation running" guard of the reference (installs still run in Python's tasks).

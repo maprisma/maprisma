@@ -12,4 +12,5 @@ export 'src/core_tasks.dart'
         corePreviewKinds,
         corePreview,
         coreMapEdits,
-        coreFirstRoutes;
+        coreFirstRoutes,
+        coreProviderRun;

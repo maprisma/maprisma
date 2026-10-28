@@ -55,9 +55,20 @@ final class CoreTasks {
   final items = <String, CoreTask>{};
   static const maxFrame = 1024 * 1024, commits = {'connections.apply'};
 
-  Map<String, dynamic> startPlan(
-    List<int> body,
-    Map<String, dynamic> Function(Map<String, dynamic>) finalize,
+  /// A provider operation in its own worker (flutter_tasks.Tasks.start).
+  Map<String, dynamic> start(String operation, Map<String, dynamic> params) {
+    final ident = _slot(operation, null);
+    _run(
+      items[ident]!,
+      null,
+      request: {'operation': operation, 'params': params},
+    );
+    return {'task': ident};
+  }
+
+  String _slot(
+    String operation,
+    Map<String, dynamic> Function(Map<String, dynamic>)? finalize,
   ) {
     final active = items.values.where((t) => t.state == 'running').length;
     if (active >= 4) throw const FormatException('Too many active operations');
@@ -66,23 +77,41 @@ final class CoreTasks {
       if (done.isEmpty) throw const FormatException('Too many operations');
       items.remove(done.first.key);
     }
-    final ident = newHandle(), task = CoreTask('connections.apply', finalize);
-    items[ident] = task;
-    _run(task, body);
+    final ident = newHandle();
+    items[ident] = CoreTask(operation, finalize);
+    return ident;
+  }
+
+  Map<String, dynamic> startPlan(
+    List<int> body,
+    Map<String, dynamic> Function(Map<String, dynamic>) finalize,
+  ) {
+    final ident = _slot('connections.apply', finalize);
+    _run(items[ident]!, body);
     return {'task': ident};
   }
 
-  Future<void> _run(CoreTask task, List<int> body) async {
+  Future<void> _run(
+    CoreTask task,
+    List<int>? body, {
+    Map<String, dynamic>? request,
+  }) async {
     try {
       final process = await Process.start(workerCommand.first, [
         ...workerCommand.skip(1),
-        '--plan-stdin',
+        if (body != null) '--plan-stdin',
       ]);
       process.stderr.drain<void>();
-      process.stdin
-        ..add(utf8.encode('{"operation": "connections.apply", "params": {}}\n'))
-        ..add(utf8.encode('${body.length}\n'))
-        ..add(body);
+      if (body != null) {
+        process.stdin
+          ..add(
+            utf8.encode('{"operation": "connections.apply", "params": {}}\n'),
+          )
+          ..add(utf8.encode('${body.length}\n'))
+          ..add(body);
+      } else {
+        process.stdin.add(utf8.encode('${jsonEncode(request)}\n'));
+      }
       await process.stdin.close();
       final buffer = <int>[];
       await for (final chunk in process.stdout) {
@@ -377,6 +406,14 @@ List<String> taskFocus(
 /// when the core answers unported_route for a line that needs its model.
 const coreMapEdits = {'connections.move_preview', 'connections.author_preview'};
 const coreFirstRoutes = {'connections.repair_preview'};
+
+/// providers.run operations this core runs (the downloads follow in 4d).
+bool coreProviderRun(Map<String, dynamic> params) => const {
+  'runtime.start',
+  'runtime.stop',
+  'model.load',
+  'model.unload',
+}.contains(params['operation']);
 
 /// The connection kinds whose previews this core builds (the others stay with
 /// the Python reference until their phase).

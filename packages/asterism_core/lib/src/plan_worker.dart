@@ -4,6 +4,10 @@ import 'dart:typed_data';
 import 'package:path/path.dart' as p;
 import 'connect_apply.dart';
 import 'posix_ffi.dart';
+import 'identity.dart';
+import 'provider_ops.dart';
+import 'provider_scans.dart';
+import 'scan_files.dart';
 import 'py_values.dart';
 
 /// Python flutter_plan_wire: the private plan between backend and worker.
@@ -175,8 +179,24 @@ Future<int> runWorker(List<String> args) async {
         request.keys.toSet().length != 2 ||
         !request.containsKey('operation') ||
         !request.containsKey('params') ||
-        request['operation'] != 'connections.apply' ||
-        request['params'] is! Map ||
+        request['params'] is! Map) {
+      throw const FormatException('Invalid worker request');
+    }
+    // A provider operation: no private plan, its parameters checked again here.
+    if (args.isEmpty && ProviderOps.shapes.containsKey(request['operation'])) {
+      final identity = AppIdentity();
+      final files = ScanFiles(identity);
+      final ops = ProviderOps(files, ProviderScans(files));
+      send({
+        'type': 'result',
+        'result': await ops.execute(
+          request['operation'] as String,
+          request['params'] as Map,
+        ),
+      });
+      return 0;
+    }
+    if (request['operation'] != 'connections.apply' ||
         (request['params'] as Map).isNotEmpty) {
       throw const FormatException('Invalid private operation');
     }
