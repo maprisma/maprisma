@@ -19,8 +19,8 @@
   Devel build in `.flutter-previews/`, not launched). The remote `gtk` is the GTK repo
   `/mnt/Data/Projects/ai-agents-map` (the folder was `asterism` until 2026-10-28; this one was
   `asterism-flutter`): never push this tree's `main` there. Naming: `docs/plan-naming.md`.
-- **One source:** shared code is edited only here; `tools/sync-plugin.py ~/.config/omarchy/plugins/ubruckhaus.ai-agents-map`
-  copies it into the plugin (whose pre-commit hook refuses drift).
+- **No plugin sync:** this repo shares no code with the AI Agents Map plugin any more; the plugin repo
+  `/mnt/Data/Projects/omarchy-ai-agents-map` is its own GTK source (2026-10-28, `docs/plan-naming.md`).
 - **Before a commit:** `python3 -m unittest discover -s tests -q` and `tools/typecheck.sh` (0 errors).
 - The core names no agent and no local LLM: their facts live in `adapters/` and `provider_*.py`.
 - New UI texts in all 8 languages (`translations/*.json`); feature changes also in the manual (`docs/manual/`).

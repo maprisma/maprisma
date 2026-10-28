@@ -83,7 +83,10 @@ The GTK tree has two identities:
 The generic edition is dropped. Its ID and config folder belong to Asterism (Flutter) from now on, so the two
 apps never clash. Because the plugin already has its own ID and folder, it needs no migration.
 
-1. **Where the GTK code lives** (Uwe to choose):
+1. **Where the GTK code lives.** Decided 2026-10-28: (a), done the same day. The plugin repo's local commit `4493a20`
+   on `dev` (not pushed) carries the final sync from `b38f423`, including the 14 unpublished commits and
+   `data/first-agent.json`, which the sync tool never copied. Its 909 tests pass and `omarchy plugin validate` passes. The
+   archive's remote is renamed `archived-github-asterism`. The original choice:
    - **(a) Recommended:** the plugin repo `uBruckhaus/omarchy-ai-agents-map` becomes the only GTK source, with
      a fresh clone at `/mnt/Data/Projects/omarchy-ai-agents-map`.
      - `tools/sync-plugin.py` and the plugin's drift hook are retired. The rule "edit only in Asterism, then
@@ -154,6 +157,6 @@ people with v0.11 would land on an unfinished app.
 
 ## Open decisions for Uwe
 
-1. Where the GTK code lives: (a) plugin repo only (recommended) or (b) keep the local source with sync.
+1. ~~Where the GTK code lives~~: the plugin repo (decided and done 2026-10-28).
 2. Registering `asterismai.app` (or `.dev`), and whether the README links to it.
 3. The moment of the GitHub/AUR switch. Recommended: the first Flutter release, `v1.0.0`.
