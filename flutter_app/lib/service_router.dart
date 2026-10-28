@@ -21,6 +21,16 @@ final class ServiceRouter implements ServiceTransport {
     Map<String, dynamic> params = const {},
   ]) async {
     if (_disposed) throw StateError('Service closed');
+    // Apply, Undo and task handles belong to the side that made them.
+    final handle = handleRoutes[method];
+    if (handle != null) {
+      final value = params[handle];
+      if (value is String && value.startsWith(coreHandle)) {
+        return core.call(method, params);
+      }
+      if (!develPythonFallback) throw ServiceError('unported_route');
+      return (await _python()).call(method, params);
+    }
     if (portedRoutes.contains(method)) {
       final result = await core.call(method, params);
       if (develPythonFallback &&
@@ -41,12 +51,16 @@ final class ServiceRouter implements ServiceTransport {
       return result;
     }
     if (!develPythonFallback) throw ServiceError('unported_route');
+    return (await _python()).call(method, params);
+  }
+
+  Future<PythonTransport> _python() async {
     final reference = await (_reference ??= PythonTransport.start(root));
     if (_disposed) {
       reference.dispose();
       throw StateError('Service closed');
     }
-    return reference.call(method, params);
+    return reference;
   }
 
   @override

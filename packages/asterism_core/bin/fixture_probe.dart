@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:asterism_core/asterism_core.dart';
 import 'package:asterism_core/src/adapters.dart';
 import 'package:asterism_core/src/connect_apply.dart';
+import 'package:asterism_core/src/line_diff.dart';
 import 'package:asterism_core/src/read_service.dart';
 import 'package:asterism_core/src/security_reports.dart';
 import 'package:asterism_core/src/session_readers.dart';
@@ -40,6 +41,12 @@ Future<void> main() async {
           adapter = Adapter(Map<String, dynamic>.from(params['facts'] as Map));
         }
         result = {'command': adapter.command, 'name': adapter.name};
+      } else if (request.method == 'dev.linechanges') {
+        final (added, removed) = lineChanges(
+          params['old'] as String,
+          params['new'] as String,
+        );
+        result = {'added': added, 'removed': removed};
       } else if (request.method == 'dev.undo') {
         // Undo of a backup folder either side made (development probe only).
         result = {

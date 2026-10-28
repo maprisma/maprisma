@@ -28,6 +28,14 @@ def main():
     subprocess.run([*command, 'pub', 'get', '--offline'], cwd=stage, check=True)
     subprocess.run([*command, 'build', 'linux', '--no-pub',
                     '--dart-define=ASTERISM_DEVEL=true', f'--dart-define=ASTERISM_SOURCE={root}'], cwd=stage, check=True)
+    # The core's plan worker sits next to the app (CoreTasks looks in bundle/lib).
+    import sys
+    sys.path.insert(0, str(root / 'tools'))
+    from dart_sdk import resolve_dart
+    core = stage.parent / 'packages/asterism_core'
+    subprocess.run([resolve_dart(), 'pub', 'get', '--offline'], cwd=core, check=True)
+    subprocess.run([resolve_dart(), 'compile', 'exe', 'bin/asterism-core.dart', '-o',
+                    str(stage / 'build/linux/x64/release/bundle/lib/asterism-core')], cwd=core, check=True)
     print(f'\nDevelopment preview: {stage / "build/linux/x64/release/bundle/asterism"}', flush=True)
 
 

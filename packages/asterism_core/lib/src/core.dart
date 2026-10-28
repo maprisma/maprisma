@@ -4,6 +4,8 @@ import 'identity.dart';
 import 'posix_ffi.dart';
 import 'protocol.dart';
 import 'read_service.dart';
+import 'connect_apply.dart';
+import 'core_tasks.dart';
 import 'settings.dart';
 import 'service_i18n.dart';
 
@@ -28,11 +30,24 @@ final class CoreService {
     i18n = ServiceI18n(identity, settings);
   }
   late final reads = ReadService(identity, settings, desktop, i18n);
+  late final tasks = CoreTasks(defaultWorkerCommand(identity.environment));
+  late final connections = CoreConnections(
+    ConfigFiles(Posix(), identity.home),
+    tasks,
+    '${identity.configDir}/connection-backups',
+  );
   late final AppIdentity identity;
   late final SettingsStore settings;
   late final Desktop desktop;
   late final ServiceI18n i18n;
   Map<String, dynamic> dispatch(String method, Map<String, dynamic> params) {
+    if (handleRoutes.containsKey(method)) {
+      final value = params[handleRoutes[method]];
+      if (value is! String || !value.startsWith(coreHandle)) {
+        throw ServiceError('unported_route');
+      }
+      return dispatchHandle(method, params, connections, tasks);
+    }
     if (!portedRoutes.contains(method)) throw ServiceError('unported_route');
     if (method == 'settings.update') return settings.update(params);
     if (readOnlyRoutes.contains(method)) return reads.dispatch(method, params);

@@ -460,3 +460,23 @@ empty graph. `current_map()` builds one when needed (reused 5 s); task focus sti
   backup and no link.
 
 Not yet: connections routes and the task runner in Dart (3a part 2), plan builders (3b–3e).
+
+### 3a, part 2 — task runner, previews and routing by handle
+
+- `line_diff.dart`: the preview's added/removed line counts as Python computes them
+  (`str.splitlines`, `difflib.SequenceMatcher(None, …)` with autojunk; counts are totals minus matched
+  lines). 300 random cases (up to 400 lines, CRLF, ` `) match Python exactly.
+- `core_tasks.dart`: `CoreTasks` (worker process per commit, progress/result lines, 4 active / 32 kept,
+  commits never cancelled, Python's status shape) and `CoreConnections` (plans for 10 minutes, at most 8,
+  link de-duplication and limits, 8 MiB preview bound, empty plans without a worker, backup check against
+  the backup root, 16 Undo tokens, `restored` in `~` form), `encodePlan` (wire v3).
+- Handles made by the core start with `core-`. `connections.apply`, `connections.undo`, `tasks.status`
+  and `tasks.cancel` with such a handle are served by the core; the Flutter router sends any other handle
+  to the Python reference in Devel and refuses it in release.
+- The worker the core starts: `ASTERISM_CORE_WORKER`, the AOT executable itself, the Dart VM with
+  `bin/asterism-core.dart`, or `bundle/lib/asterism-core`. `tools/build-flutter-preview.py` now compiles
+  it into the bundle; the compiled worker leaves the same tree as the Python worker for the parity plan.
+- Tests: preview → apply through a real worker → status → Undo; a file changed after the preview fails the
+  task and writes nothing; empty plans; unknown handles; router handle routing.
+
+No route produces a core plan yet: the plan builders follow (3b skill links first).

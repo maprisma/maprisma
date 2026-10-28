@@ -87,6 +87,30 @@ void main() {
             ),
           );
         }
+        // Handles go to the side that made them: a core handle to the core
+        // (unknown here), any other one only to the Devel reference.
+        await expectLater(
+          router.call('tasks.status', {'task': 'core-0000'}),
+          throwsA(
+            isA<BackendError>().having(
+              (e) => e.code,
+              'code',
+              'invalid_request',
+            ),
+          ),
+        );
+        if (!develPythonFallback) {
+          await expectLater(
+            router.call('connections.undo', {'undo': 'a1b2c3'}),
+            throwsA(
+              isA<BackendError>().having(
+                (e) => e.code,
+                'code',
+                'unported_route',
+              ),
+            ),
+          );
+        }
         expect(home.listSync(), isEmpty);
       } finally {
         await router.shutdown();
