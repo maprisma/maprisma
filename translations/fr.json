@@ -3090,5 +3090,20 @@
  "This also removes it from Asterism (GTK).": "Cela le retire également d’Asterism (GTK).",
  "After a removal, backups older than 30 days may be deleted. Active Undo backups are kept.": "Après une suppression, les sauvegardes de plus de 30 jours peuvent être effacées. Celles avec une annulation active sont conservées.",
  "Catalog installs and updates also change the add-ons used by Asterism (GTK).": "Les installations et mises à jour du catalogue modifient aussi les extensions utilisées par Asterism (GTK).",
- "Succeeded": "Réussi"
+ "Succeeded": "Réussi",
+ "Use unique variable or header names.": "Utilisez des noms de variables ou d’en-têtes uniques.",
+ "Value": "Valeur",
+ "Transport": "Transport",
+ "Arguments (one per line)": "Arguments (un par ligne)",
+ "Environment variables": "Variables d’environnement",
+ "Server URL": "URL du serveur",
+ "Use an HTTP or HTTPS URL.": "Utilisez une URL HTTP ou HTTPS.",
+ "HTTP headers": "En-têtes HTTP",
+ "Choose the folder that contains skill folders, each with SKILL.md.": "Choisissez le dossier contenant des dossiers de compétences avec chacun un SKILL.md.",
+ "Skill-set folder": "Dossier de compétences",
+ "Asterism saves configuration only. Agents may start this server when they read it.": "Asterism enregistre seulement la configuration. Les agents peuvent démarrer ce serveur en la lisant.",
+ "Existing definitions with this name will be replaced for the selected agents.": "Les définitions existantes de ce nom seront remplacées pour les agents sélectionnés.",
+ "The original skill files stay in place. Agents read linked skills; later edits take effect there too.": "Les fichiers d’origine restent en place. Les agents lisent les compétences liées ; les modifications ultérieures y prennent aussi effet.",
+ "Some agents already read this folder automatically; their native access is unchanged.": "Certains agents lisent déjà ce dossier automatiquement ; leur accès natif reste inchangé.",
+ "Skills may include scripts that agents can run.": "Les compétences peuvent inclure des scripts exécutables par les agents."
 }

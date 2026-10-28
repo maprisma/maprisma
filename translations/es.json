@@ -3090,5 +3090,20 @@
  "This also removes it from Asterism (GTK).": "Esto también lo elimina de Asterism (GTK).",
  "After a removal, backups older than 30 days may be deleted. Active Undo backups are kept.": "Tras una eliminación, pueden borrarse las copias de más de 30 días. Se conservan las copias con Deshacer activo.",
  "Catalog installs and updates also change the add-ons used by Asterism (GTK).": "Las instalaciones y actualizaciones del catálogo también cambian los complementos usados por Asterism (GTK).",
- "Succeeded": "Completado"
+ "Succeeded": "Completado",
+ "Use unique variable or header names.": "Use nombres de variables o cabeceras únicos.",
+ "Value": "Valor",
+ "Transport": "Transporte",
+ "Arguments (one per line)": "Argumentos (uno por línea)",
+ "Environment variables": "Variables de entorno",
+ "Server URL": "URL del servidor",
+ "Use an HTTP or HTTPS URL.": "Use una URL HTTP o HTTPS.",
+ "HTTP headers": "Cabeceras HTTP",
+ "Choose the folder that contains skill folders, each with SKILL.md.": "Elija la carpeta que contiene carpetas de habilidades, cada una con SKILL.md.",
+ "Skill-set folder": "Carpeta del conjunto de habilidades",
+ "Asterism saves configuration only. Agents may start this server when they read it.": "Asterism solo guarda la configuración. Los agentes pueden iniciar este servidor al leerla.",
+ "Existing definitions with this name will be replaced for the selected agents.": "Se sustituirán las definiciones existentes con este nombre para los agentes seleccionados.",
+ "The original skill files stay in place. Agents read linked skills; later edits take effect there too.": "Los archivos originales permanecen en su lugar. Los agentes leen las habilidades enlazadas; las ediciones posteriores también se aplican allí.",
+ "Some agents already read this folder automatically; their native access is unchanged.": "Algunos agentes ya leen esta carpeta automáticamente; su acceso nativo no cambia.",
+ "Skills may include scripts that agents can run.": "Las habilidades pueden incluir scripts que los agentes pueden ejecutar."
 }

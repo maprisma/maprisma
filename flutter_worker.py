@@ -43,6 +43,9 @@ def execute_private(operation,body,progress):
         import connect,flutter_plan_wire,llm_engine
         plan,root=flutter_plan_wire.decode(body)
         contexts,plan.contexts=plan.contexts,[]
+        for _link,target in plan.links_add:
+            if not target.is_dir() or not (target/'SKILL.md').is_file():
+                raise ValueError('Skill source changed; review again')
         backup=connect.apply(plan,backup_root=root)
         failures=0
         for runtime,model,tokens in contexts:

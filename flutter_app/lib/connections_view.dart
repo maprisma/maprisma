@@ -1,4 +1,5 @@
 import 'task_card.dart';
+import 'connection_authoring.dart';
 import 'package:flutter/material.dart';
 import 'provider_connections.dart';
 
@@ -12,7 +13,9 @@ class ConnectionsView extends StatefulWidget {
     required this.onPreview,
     required this.onBack,
     this.onUndo,
+    this.onAuthorPreview,
   });
+  final Future<void> Function(Map<String, dynamic>)? onAuthorPreview;
   final bool hosted;
   final Map<String, dynamic> data;
   final bool busy;
@@ -26,6 +29,7 @@ class ConnectionsView extends StatefulWidget {
 
 class _ConnectionsViewState extends State<ConnectionsView> {
   String _search = '';
+  String? _authorKind;
   final _searchController = TextEditingController();
   @override
   void dispose() {
@@ -64,6 +68,37 @@ class _ConnectionsViewState extends State<ConnectionsView> {
               widget.tr('Connections'),
               style: Theme.of(context).textTheme.headlineMedium,
             ),
+          if (widget.onAuthorPreview != null) ...[
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final kind in ['mcp', 'skills'])
+                  OutlinedButton.icon(
+                    onPressed: widget.busy
+                        ? null
+                        : () => setState(() => _authorKind = kind),
+                    icon: const Icon(Icons.add),
+                    label: Text(
+                      widget.tr(
+                        kind == 'mcp' ? 'Add MCP server' : 'Add skills',
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            if (_authorKind != null)
+              ConnectionAuthoring(
+                key: ValueKey(_authorKind),
+                kind: _authorKind!,
+                agents: (widget.data['agents'] as List? ?? [])
+                    .cast<Map<String, dynamic>>(),
+                busy: widget.busy,
+                tr: widget.tr,
+                onPreview: widget.onAuthorPreview!,
+                onClose: () => setState(() => _authorKind = null),
+              ),
+          ],
           const SizedBox(height: 20),
           TextField(
             key: const ValueKey('connection-search'),
@@ -172,7 +207,9 @@ class ConnectionReview extends StatelessWidget {
                   'Undo restores configuration files; API context changes are not undone.',
                 ),
               ),
-            if (plan['item'] != null)
+            if (plan['agents'] != null)
+              Text('${tr('Agents')}: ${(plan['agents'] as List).join(', ')}'),
+            if (plan['item'] != null && plan['command'] != null)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 child: Text(

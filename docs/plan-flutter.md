@@ -5,6 +5,27 @@ This supersedes the earlier recommendation to retain GTK as the long-term UI.
 The one-application identity, settings migration and thin Omarchy launcher remain.
 No automatic marketplace publication, push, release or upload is authorized.
 
+## Current checkpoint — 2026-10-28
+
+The Flutter migration is a tested development app, not yet the production GTK
+replacement. The baseline was committed on main (`ddae426`, `fb154d2`); finished
+milestones and reviews are in `docs/history/`. Work continues on main without
+pushing it to the `gtk` remote.
+
+The current parity inventory and local connection-authoring slice are in
+[plan-flutter-connections.md](plan-flutter-connections.md). Custom MCP definitions
+and explicit local skill-folder attachment now use the existing reviewed
+configuration/backup/Undo flow. Skill symlink plans can cross the private worker
+wire. Online MCP/skill catalogs, web skill installation and tool probes remain
+unported; this slice does not claim those flows are complete.
+
+Baseline validation before this slice: 50 Flutter tests and 1,381 Python tests,
+clean analysis/typechecking, all eight PDFs rebuilt, native Devel build and
+Claude's seven task-card findings verified. Current slice checks/results are
+recorded in [plan-flutter-connections-responses.md](plan-flutter-connections-responses.md).
+Earlier test counts, uncommitted-tree descriptions and sandbox/socket/PDF blockers
+in the dated implementation notes below are historical; current checks run here.
+
 ## Completion means
 
 Flutter owns the complete interface. Python may remain as the local service for
@@ -14,11 +35,11 @@ feature parity, migration and packaging have been validated.
 
 ## Working copy
 
-`/mnt/Data/Projects/asterism-flutter` contains the previous uncommitted identity,
-migration and project-folder work and this Flutter migration. The original
-`/mnt/Data/Projects/asterism` is read-only in this session and unchanged. Do not
-overwrite either tree or discard the earlier changes. The previous cumulative
-patch predates Flutter; it is not a complete migration deliverable.
+Work on `main` in `/mnt/Data/Projects/asterism-flutter`. The original GTK repository
+at `/mnt/Data/Projects/asterism` is separate and must not be overwritten or synced
+from this migration. Its local remote is named `gtk`; never push Flutter main
+there. The baseline migration and documentation archive are committed. The
+current connection-authoring slice is local work until Uwe requests a commit.
 
 ## Architecture
 
@@ -38,84 +59,49 @@ patch predates Flutter; it is not a complete migration deliverable.
 
 ## Migration checklist
 
-1. **Foundation — in progress:** service protocol, real agent catalog, project
-   history/defaults/pins, Flutter navigation and responsive details. The Linux
-   release-mode development build succeeds; the full Flutter analyzer reports no
-   issues. Language/default-folder/appearance/map-layer settings and existing
-   model/provider/plan/limit/today-usage metadata are now connected. Flutter widget
-   runtime checks are pending on the host.
-2. **Map and sessions — in progress:** graph serialization through the existing
-   graph builder, Flutter pan/zoom map, embedded xterm/PTY and external terminal
-   startup, folder chooser/history, stop and window-close confirmation. Initial
-   implementations exist; validate keyboard, paste, mouse selection, reattach,
-   failed writes, output load, terminal theme, exit/restart and process descendants.
-   Start now uses the requested submenu: default/pinned Start, external-terminal
-   Start, folder chooser and searchable scrollable history separated into groups.
-   History-row activation opens this menu with the folder selected. Widget tests
-   cover both terminal modes without a pin; host runtime results are pending.
-3. **Complete feature parity:** Task reviews, worker progress and results now share responsive map cards; see `docs/history/plan-task-cards-responses.md`.  setup/welcome, signed add-on management, all agent
-   details and usage/limits, provider/model selection, MCP and skills, connection
-   editing/checks, jobs/progress/helper, settings, notifications/help/manual and
-   installed-agent management. Inventory every existing GTK action before removal.
-   Startup settings migration, pending installed-adapter activation and signed
-   agent/provider loading now run in the service without importing GTK. The local
-   Add-ons page can enable/disable those verified adapters. GTK feature/extension
-   add-ons are listed as unavailable here; saved choices are preserved and their
-   code is not executed. The welcome page now detects installed adapters in a
-   worker, offers reviewable selections and Switch on/Later, and can be reopened
-   from Setup in the header. The signed catalog now supports reviewed worker-based
-   installation and updates of service adapters. File import/removal and the Flutter
-   feature/extension add-on UI contract remain. Native singleton behavior needs desktop validation.
-   Subagent tracking now supports five metadata
-   formats; coverage for other relevant adapters remains unfinished.
-4. **Product fit:** Map scans now reuse one worker, with interval/manual-only,
-   focus pausing and selective automatic targets in Settings. Preview builds use
-   a Devel application id, separate from the GTK production app. Remaining work:
-   Omarchy theme watching during active operations, accessibility/keyboard, all eight
-   languages/manuals, selection/navigation state, error recovery, process
-   supervision, multi-window/singleton rules and safe live-agent upgrades.
-5. **Packaging:** bundle the Python service and its dependencies next to Flutter;
-   launcher must resolve bundle-relative paths (development uses an explicit source
-   path). Replace the application entrypoint only after parity. Build and verify
-   Linux/AUR/AppImage; other OS support is not implied by the Linux backend.
-6. **Finish:** complete automated checks, clean VM installation and GUI scenarios,
-   then actual Claude review and fixes. Claude review currently needs a normal host
-   terminal because this session denies network sockets. No publication happens
-   automatically after validation or review.
+1. **Foundation and sessions implemented:** private service protocol, real
+   adapters, project history/defaults/pins, both terminal modes and close guards.
+   Automated tests pass. Real-desktop terminal keyboard/paste/selection, process
+   lifecycle and singleton/multi-window scenarios still require validation.
+2. **Maps and task cards implemented:** AI/System Map, discovery/reconnect/moves,
+   groups, add-on management, metadata/subagents and review/progress/result cards.
+   Remaining: map editing/layout parity, accessibility and desktop performance.
+3. **Complete feature parity:** work through the inventory linked above. Local
+   MCP creation/skill-folder attachment are implemented in the current slice.
+   Remaining: MCP/skill catalogs and checks, web skill installation, direct API-key
+   entry, full settings/security/help/notification views, tuning, durable jobs,
+   prerequisite/runtime installer UI and returning completed setup actions to the
+   guide. Installer service routes exist; their Flutter UI is not yet connected.
+   Signed agent/provider add-ons work; file import and Flutter feature/extension
+   add-on contracts remain. Other adapter readers/collaboration views remain.
+4. **Product fit and migration validation:** finish keyboard/accessibility,
+   recovery, safe live-agent updates, desktop theme behaviour during operations,
+   cross-process settings coordination and clean-VM scenarios. New UI remains in
+   all eight languages with manual updates; current manuals are rebuilt.
+5. **Packaging:** bundle Python and dependencies next to Flutter; resolve bundle
+   paths instead of ASTERISM_SOURCE. Validate Linux/AUR/AppImage on a clean system.
+   Replace the production entrypoint only after parity and delivery are validated.
+6. **Finish:** final independent review at full parity, then release decisions by
+   Uwe. No automatic installation, plugin sync, push, upload or publication.
 
 ## Development commands
 
-Flutter 3.47.7 / Dart 3.13.5 are now installed. The Arch wrapper uses FUSE, which
-is unavailable in this sandbox; a writable copy of the installed SDK at
-`/home/uwe/Work/flutter-sdk` runs here. The generated Linux runner is present.
-`tools/flutter-dev prepare` generates the
-Linux runner using the installed SDK, preserves the production application id,
-and resolves dependencies. `tools/flutter-dev check` runs formatting, analysis and
-Flutter tests. `tools/flutter-dev build` creates an isolated development Linux
-build under `.flutter-previews/` and prints its absolute executable path;
-`tools/flutter-dev run` explicitly opens it. No command installs or publishes.
+From this repository, use the installed SDK directly when the Arch FUSE wrapper
+is unsuitable:
 
-The user downloaded dependencies successfully; the generated runner and
-`pubspec.lock` are present. A Linux release-mode **development** build succeeds at
-`flutter_app/build/linux/x64/release/bundle/asterism`; it still uses the source
-checkout's Python service and is not a distribution package or a feature-complete
-replacement. All native libraries resolve here, and the full Flutter analyzer
-reports no issues. Widget tests cannot create their required loopback server
-socket in this sandbox (errno 1, operation not permitted), so `tools/flutter-dev
-check` is requested in the normal host terminal. Dart transport fixtures pass
-independently. Python protocol and
-real PTY fixtures can be tested independently without starting installed agents:
-
-```
-python3 -m unittest discover -s tests -p test_flutter_backend.py -v
-python3 -m unittest discover -s tests -p test_terminal_sessions.py -v
+```bash
+PATH=/home/uwe/Work/flutter-sdk/bin:$PATH ASTERISM_PUB_OFFLINE=1 tools/flutter-dev check
+PATH=/home/uwe/Work/flutter-sdk/bin:$PATH ASTERISM_PUB_OFFLINE=1 tools/flutter-dev build
+python3 -m unittest discover -s tests -q
 UV_OFFLINE=1 tools/typecheck.sh
 ```
 
-The available Python suite passes **1,171 tests**, excluding the same five
-display/socket-restricted modules. Pyright has zero errors and the existing five
-PyYAML-source warnings. Translation/manual-source checks pass for all eight
-languages. These checks do not establish GUI behavior or complete feature parity.
+Checks and widget tests run here; a separate host terminal is no longer required.
+The builder creates a separate `.flutter-previews/preview-…` bundle with Devel
+identity and prints its executable path. It neither installs nor launches it.
+Development builds still use this checkout's Python service through an explicit
+source define, so a successful build is not a self-contained distribution.
+`tools/flutter-dev run` opens a window explicitly and is not an automated test.
 
 ## Remaining UI coverage
 
@@ -125,13 +111,13 @@ languages. These checks do not establish GUI behavior or complete feature parity
 | Projects/start | Submenu, history/pins/trash and both terminal modes implemented; host interaction checks pending | `agent_projects.py`, `agent_start_dialog.py`, `terminal_pane.py` |
 | Map | Expandable category groups, UI-only empty placeholders, focus controls, retained views, graph, selection, layer filters and live activity/subagent badges built; layout/editing and host interaction checks pending | `graph.py`, `map_view.py`, map helpers in `ai_popup.py` |
 | Settings/theme | Language, start folder, appearance, map layers and subagent history controls built; Omarchy theme refreshes while idle; remaining settings pending | `settings_schema.py`, `settings_pages.py`, `desktop*.py` |
-| Setup and signed add-ons | Welcome in Agents map focus with fixed Switch on/Later, batch Undo, Look/Skip, immediate add-on toggles, signed catalog, details, user-add-on removal/Undo and provider sign-in menus built; startup migration and signed agent/provider enable/disable built; signed catalog/install/update built; file import/removal and feature/extension UI contracts pending | `setup_page.py`, `addons.py`, `addons_page.py`, `addon_store.py` |
+| Setup and signed add-ons | Welcome in Agents map focus with fixed Switch on/Later, batch Undo, Look/Skip, immediate add-on toggles, signed catalog, details, user-add-on removal/Undo and provider sign-in menus built; startup migration and signed agent/provider enable/disable built; signed catalog/install/update built; file import and feature/extension UI contracts pending | `setup_page.py`, `addons.py`, `addons_page.py`, `addon_store.py` |
 | Providers and models | Start/stop, known-model load/unload, GGUF import, HF search/file selection/download and named pulls built; provider-to-agent configuration/model switching and removal previews built; tuning and full catalog details pending | `models_page.py`, `models_ctl.py`, `provider_*.py`, `llm_engine.py` |
-| MCP and skills | Discovered-item browsing and connect/disconnect with structured preview, backup and Undo built; new definitions, tests/checks, skill installation and richer details pending | `mcp_pages.py`, `skills_page.py`, `mcp_ctl.py`, `skills_ctl.py` |
+| MCP and skills | Discovered-item browsing and connect/disconnect with structured preview, backup and Undo built; custom stdio/HTTP/SSE definitions and selected local skill-folder attachment now built; online catalogs, tool tests/checks, web skill installation and richer details pending | `mcp_pages.py`, `skills_page.py`, `mcp_ctl.py`, `skills_ctl.py` |
 | Usage/security/health | System Map health, confirmed Smart Check/fixes and AI-side usage categories built; broader security views and host interaction checks pending | `agent_status.py`, `agent_security.py`, `smart_check_page.py`, `traffic_page.py` |
 | Subagents and collaboration | Five reader formats and Flutter activity/details built; remaining adapter readers and collaboration views pending | `subagents.py`, `subagents_page.py`, separate reader checkout |
 | Jobs/helper/install/configure | Worker jobs and initial first-agent checklist built; supported agent recipes run in an external terminal, sign-in/test in owned terminals; prerequisite/runtime installer pages, starter-model guidance, API keys, helper and durable jobs pending | `jobs.py`, `ai_helper.py`, `first_agent_page.py`, `install_dialog.py`, `configure_menu.py` |
-| Help, notifications and packaging | Pending | `info_page.py`, manual sources, `packaging/`, singleton/window helpers |
+| Help, notifications and packaging | Map help/AI guidance and translated manuals built; complete help/notification UI and bundled delivery pending | `info_page.py`, manual sources, `packaging/`, singleton/window helpers |
 
 Continue this checklist until all required actions are represented in Flutter.
 Do not replace the production entrypoint, publish, or describe this initial build
@@ -663,3 +649,18 @@ are addressed in the [review responses](history/review-claude-2026-10-28-task-ca
 one conditional completion scan, single hosted headers, retained view state,
 explicit full-width provider overview, idle live updates, compact task maps,
 single review counting, post-install catalog refresh and first-result Undo.
+
+
+## Local connection authoring and parity inventory (2026-10-28)
+
+[Plan and current inventory](plan-flutter-connections.md) ·
+[Implementation and checks](plan-flutter-connections-responses.md).
+
+Connections now offers custom stdio/HTTP/SSE definitions and explicit local
+skill-folder attachment with selected agents, structured preview, private worker
+commit, backup and Undo. Version 2 of the private wire supports skill link plans;
+commands/file installation/retire plans remain refused. The shared half-card
+policy now uses measured map-area width for both rendering and scan decisions.
+The completed slice passes 55 Flutter tests and 1,395 Python tests with clean
+analysis/typechecking; all eight manual PDFs rebuilt. Online catalogs, skill
+fetch/install and tool probes remain separate work.

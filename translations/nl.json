@@ -3090,5 +3090,20 @@
  "This also removes it from Asterism (GTK).": "Hierdoor wordt deze ook uit Asterism (GTK) verwijderd.",
  "After a removal, backups older than 30 days may be deleted. Active Undo backups are kept.": "Na een verwijdering kunnen back-ups ouder dan 30 dagen worden gewist. Back-ups met een actieve herstelactie blijven behouden.",
  "Catalog installs and updates also change the add-ons used by Asterism (GTK).": "Catalogusinstallaties en updates wijzigen ook de add-ons die Asterism (GTK) gebruikt.",
- "Succeeded": "Geslaagd"
+ "Succeeded": "Geslaagd",
+ "Use unique variable or header names.": "Gebruik unieke namen voor variabelen of headers.",
+ "Value": "Waarde",
+ "Transport": "Transport",
+ "Arguments (one per line)": "Argumenten (één per regel)",
+ "Environment variables": "Omgevingsvariabelen",
+ "Server URL": "Server-URL",
+ "Use an HTTP or HTTPS URL.": "Gebruik een HTTP- of HTTPS-URL.",
+ "HTTP headers": "HTTP-headers",
+ "Choose the folder that contains skill folders, each with SKILL.md.": "Kies de map met vaardigheidsmappen, elk met een SKILL.md.",
+ "Skill-set folder": "Map met vaardigheden",
+ "Asterism saves configuration only. Agents may start this server when they read it.": "Asterism slaat alleen de configuratie op. Agenten kunnen deze server starten wanneer ze die lezen.",
+ "Existing definitions with this name will be replaced for the selected agents.": "Bestaande definities met deze naam worden vervangen voor de geselecteerde agenten.",
+ "The original skill files stay in place. Agents read linked skills; later edits take effect there too.": "De oorspronkelijke bestanden blijven staan. Agenten lezen de gekoppelde vaardigheden; latere wijzigingen werken daar ook door.",
+ "Some agents already read this folder automatically; their native access is unchanged.": "Sommige agenten lezen deze map al automatisch; hun ingebouwde toegang blijft gelijk.",
+ "Skills may include scripts that agents can run.": "Vaardigheden kunnen scripts bevatten die agenten kunnen uitvoeren."
 }

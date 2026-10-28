@@ -3090,5 +3090,20 @@
  "This also removes it from Asterism (GTK).": "Questo lo rimuove anche da Asterism (GTK).",
  "After a removal, backups older than 30 days may be deleted. Active Undo backups are kept.": "Dopo una rimozione, i backup più vecchi di 30 giorni possono essere eliminati. Quelli con Annulla attivo vengono conservati.",
  "Catalog installs and updates also change the add-ons used by Asterism (GTK).": "Le installazioni e gli aggiornamenti del catalogo modificano anche i componenti aggiuntivi usati da Asterism (GTK).",
- "Succeeded": "Completato"
+ "Succeeded": "Completato",
+ "Use unique variable or header names.": "Usare nomi univoci per variabili o intestazioni.",
+ "Value": "Valore",
+ "Transport": "Trasporto",
+ "Arguments (one per line)": "Argomenti (uno per riga)",
+ "Environment variables": "Variabili d’ambiente",
+ "Server URL": "URL del server",
+ "Use an HTTP or HTTPS URL.": "Usare un URL HTTP o HTTPS.",
+ "HTTP headers": "Intestazioni HTTP",
+ "Choose the folder that contains skill folders, each with SKILL.md.": "Scegliere la cartella contenente le cartelle delle competenze, ciascuna con SKILL.md.",
+ "Skill-set folder": "Cartella delle competenze",
+ "Asterism saves configuration only. Agents may start this server when they read it.": "Asterism salva solo la configurazione. Gli agenti possono avviare questo server quando la leggono.",
+ "Existing definitions with this name will be replaced for the selected agents.": "Le definizioni esistenti con questo nome verranno sostituite per gli agenti selezionati.",
+ "The original skill files stay in place. Agents read linked skills; later edits take effect there too.": "I file originali restano al loro posto. Gli agenti leggono le competenze collegate; anche le modifiche successive hanno effetto.",
+ "Some agents already read this folder automatically; their native access is unchanged.": "Alcuni agenti leggono già questa cartella automaticamente; il loro accesso nativo resta invariato.",
+ "Skills may include scripts that agents can run.": "Le competenze possono includere script che gli agenti possono eseguire."
 }

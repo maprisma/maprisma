@@ -34,6 +34,12 @@ class TaskHost extends StatelessWidget {
   final String Function(String) tr;
   final VoidCallback onClose;
 
+  static bool usesHalfCard(
+    TaskCardWidth width,
+    double availableWidth,
+    bool hasFocusNodes,
+  ) => width == TaskCardWidth.half && availableWidth >= 900 && hasFocusNodes;
+
   @override
   Widget build(BuildContext context) {
     final focused = focusGraph(graph, spec.focus, const [
@@ -52,10 +58,11 @@ class TaskHost extends StatelessWidget {
         autofocus: true,
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final half =
-                spec.width == TaskCardWidth.half &&
-                constraints.maxWidth >= 900 &&
-                (focused.graph['nodes'] as List).isNotEmpty;
+            final half = usesHalfCard(
+              spec.width,
+              constraints.maxWidth,
+              (focused.graph['nodes'] as List).isNotEmpty,
+            );
             final colors = Theme.of(context).colorScheme;
             final card = Stack(
               clipBehavior: Clip.none,

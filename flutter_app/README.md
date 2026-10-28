@@ -1,7 +1,7 @@
 # Asterism Flutter frontend — migration in progress
 
 The final Asterism application will use Flutter. This development frontend is the
-first part of that migration; it is not yet a replacement for every GTK feature.
+development implementation of that migration; it is not yet a replacement for every GTK feature.
 See [the migration plan](../docs/plan-flutter.md) for completion criteria and gaps.
 
 Implemented source: responsive agent list/details, existing graph data with pan
@@ -12,7 +12,7 @@ map layers. Agent details include existing model/provider/plan/limit/today-usage
 metadata. Eight-language UI assets reuse the application's translations.
 Start uses a grouped submenu with searchable project history. Service startup
 reuses the existing one-time settings migration and verifies signed agent/provider
-add-ons; the local Add-ons page can enable/disable them. GTK-specific feature and
+add-ons; the map focus groups can enable/disable them, with a reviewed signed catalog and user-add-on removal/Undo. GTK-specific feature and
 extension add-ons remain listed but unavailable in this frontend, with saved
 enabled choices preserved.
 
@@ -27,8 +27,12 @@ cannot be cancelled mid-write.
 The MCP/skills page browses discovered items and connects/disconnects supported
 agents through a structured preview, private backup and Undo. Configuration
 values stay in Python. Changed files are protected by the existing stale-file
-checks; Undo skips later edits. New server definitions, connection tests, skill
-installation are still migration work. Provider connections/model switching now
+checks; Undo skips later edits. Custom stdio/HTTP/SSE definitions and explicitly chosen local skill-set folders
+now use the same preview, backup and Undo flow. Definitions are saved as data;
+Asterism never executes a new server command while adding it. Agents may start
+it when reading their configuration. Local skill files remain in place and are
+linked or referenced by adapter settings. Online catalogs, connection tests and
+web skill installation remain migration work. Provider connections/model switching now
 use the same preview and backup flow, with private worker-side API contexts.
 Undo restores configuration files only; it cannot undo API context changes.
 
@@ -41,8 +45,8 @@ The Linux development build succeeds and the analyzer reports no issues. The
 initial executable is `build/linux/x64/release/bundle/asterism`. Subsequent
 `tools/flutter-dev build` calls create an isolated `.flutter-previews/` bundle and
 print its absolute executable path, allowing an existing preview to stay open.
-Keep each entire bundle directory together. Flutter widget runtime tests still need the host's loopback
-socket permission. Do not infer complete feature parity from this initial build.
+Keep each entire bundle directory together. The complete Flutter checks run here;
+the current checkpoint is 55 passing Flutter tests and 1,395 passing Python tests. Do not infer complete feature parity from this initial build.
 
 From the repository root:
 
@@ -61,8 +65,7 @@ cross-process coordination is implemented.
 On this machine the Arch Flutter wrapper needs FUSE, unavailable in the Codex
 sandbox. A writable copy of the installed SDK is available at
 `/home/uwe/Work/flutter-sdk`; prefix commands with
-`PATH=/home/uwe/Work/flutter-sdk/bin:$PATH` to use that copy. Dependency downloads
-and Flutter's test-runner loopback socket require a normal host terminal.
+`PATH=/home/uwe/Work/flutter-sdk/bin:$PATH` to use that copy. Use `ASTERISM_PUB_OFFLINE=1` when running with the already resolved dependencies.
 
 The service is a Python child speaking bounded versioned JSON lines on stdin and
 stdout. No network listener is exposed. Frontend data cannot specify arbitrary
@@ -73,6 +76,7 @@ The Unix PTY service currently targets Linux; other platforms need explicit work
 
 Development builds use `ASTERISM_SOURCE` to find the Python checkout. Distribution
 must bundle the service and resolve its location relative to the installed app.
-Signed GTK UI add-ons, setup, jobs, provider/model management, map editing and the
-remaining application pages are still migration work. Nothing installs or
+Signed GTK UI add-ons, complete setup/installer guidance, durable jobs, model
+tuning, map editing and remaining security/settings/help pages are still
+migration work. The active plan carries the current parity inventory. Nothing installs or
 publishes automatically.

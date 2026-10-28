@@ -392,6 +392,12 @@ class Service:
             if set(params) - {'command'} or ('command' in params and not isinstance(params['command'], str)):
                 raise ValueError("Unexpected connection parameters")
             return self.connections.snapshot()
+        if method == 'connections.author_preview':
+            result = self.connections.author_preview(params)
+            anchors = []
+            for command in result.pop('agent_commands'):
+                anchors.extend(self.task_focus({'command': command, 'kind': result['kind'], 'item': result['item']}))
+            return {**result, 'focus': list(dict.fromkeys(anchors))}
         if method == "connections.preview":
             return self.connections.preview(params)
         if method in ("connections.apply", "connections.undo"):

@@ -3090,5 +3090,20 @@
  "This also removes it from Asterism (GTK).": "Isto também o remove do Asterism (GTK).",
  "After a removal, backups older than 30 days may be deleted. Active Undo backups are kept.": "Após uma remoção, as cópias com mais de 30 dias podem ser apagadas. As cópias com Desfazer ativo são mantidas.",
  "Catalog installs and updates also change the add-ons used by Asterism (GTK).": "As instalações e atualizações do catálogo também alteram os complementos utilizados pelo Asterism (GTK).",
- "Succeeded": "Concluído"
+ "Succeeded": "Concluído",
+ "Use unique variable or header names.": "Use nomes únicos para variáveis ou cabeçalhos.",
+ "Value": "Valor",
+ "Transport": "Transporte",
+ "Arguments (one per line)": "Argumentos (um por linha)",
+ "Environment variables": "Variáveis de ambiente",
+ "Server URL": "URL do servidor",
+ "Use an HTTP or HTTPS URL.": "Use um URL HTTP ou HTTPS.",
+ "HTTP headers": "Cabeçalhos HTTP",
+ "Choose the folder that contains skill folders, each with SKILL.md.": "Escolha a pasta que contém pastas de competências, cada uma com SKILL.md.",
+ "Skill-set folder": "Pasta de competências",
+ "Asterism saves configuration only. Agents may start this server when they read it.": "O Asterism apenas guarda a configuração. Os agentes podem iniciar este servidor quando a lerem.",
+ "Existing definitions with this name will be replaced for the selected agents.": "As definições existentes com este nome serão substituídas para os agentes selecionados.",
+ "The original skill files stay in place. Agents read linked skills; later edits take effect there too.": "Os ficheiros originais ficam no lugar. Os agentes leem as competências ligadas; as alterações posteriores também têm efeito.",
+ "Some agents already read this folder automatically; their native access is unchanged.": "Alguns agentes já leem esta pasta automaticamente; o acesso nativo não é alterado.",
+ "Skills may include scripts that agents can run.": "As competências podem incluir scripts que os agentes podem executar."
 }

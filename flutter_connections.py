@@ -81,7 +81,104 @@ class Connections:
         result.update({'kind': params['kind'], 'command': command, 'item': params['item'], 'remove': params['remove']})
         return result
 
+    def author_preview(self, params: dict) -> dict:
+        """New definitions are data saved to adapter-owned files, never executed."""
+        import os, re
+        if not isinstance(params, dict) or params.get('kind') not in ('mcp', 'skills'):
+            raise ValueError('Invalid authoring request')
+        kind = params['kind']
+        fields = {'kind', 'agents', 'name', 'entry'} if kind == 'mcp' else {'kind', 'agents', 'folder'}
+        if set(params) != fields:
+            raise ValueError('Unexpected authoring fields')
+        selected = params['agents']
+        if (not isinstance(selected, list) or not 1 <= len(selected) <= 32
+                or any(not isinstance(c, str) or not c or len(c) > 128 for c in selected)
+                or len(set(selected)) != len(selected)):
+            raise ValueError('Choose installed agents')
+        catalog = {a.command: a for a in agents.list_agents() if a.installed}
+        if any(c not in catalog for c in selected):
+            raise ValueError('Agent unavailable')
+        plans, notes = [], []
+        if kind == 'mcp':
+            name, entry = params['name'], params['entry']
+            if (not isinstance(name, str) or not mcp_ctl.NAME_RE.fullmatch(name)
+                    or not isinstance(entry, dict)
+                    or set(entry) != {'transport', 'command', 'args', 'url', 'env', 'headers'}):
+                raise ValueError('Invalid server definition')
+            if (any(not isinstance(entry[k], str) or len(entry[k]) > 4096 or '\0' in entry[k]
+                    for k in ('transport', 'command', 'url'))
+                    or not isinstance(entry['args'], list) or len(entry['args']) > 128
+                    or any(not isinstance(a, str) or len(a) > 4096 or '\0' in a for a in entry['args'])):
+                raise ValueError('Invalid server arguments')
+            for field in ('env', 'headers'):
+                values = entry[field]
+                if (not isinstance(values, dict) or len(values) > 64
+                        or any(not isinstance(k, str) or not isinstance(v, str) or len(v) > 8192
+                               or any(char in v for char in ('\0', '\n', '\r'))
+                               or not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_-]{0,127}', k) for k, v in values.items())):
+                    raise ValueError('Invalid server fields')
+            if any(char in entry['url'] for char in ('\n', '\r')):
+                raise ValueError('Invalid server address')
+            clean = mcp_ctl.check_entry(entry)
+            if clean['transport'] == 'stdio' and (not clean['command'].strip() or '\r' in clean['command']):
+                raise ValueError('Invalid executable name')
+            if any(not mcp_ctl.supported(c) for c in selected):
+                raise ValueError('MCP configuration unavailable')
+            if any(mcp_ctl.is_connected(c, name) for c in selected):
+                notes.append('Existing definitions with this name will be replaced for the selected agents.')
+            plans = [mcp_ctl.plan(c, name, entry=clean) for c in selected]
+            notes.append('Asterism saves configuration only. Agents may start this server when they read it.')
+            item = name
+        else:
+            folder = params['folder']
+            if not isinstance(folder, str) or not folder or len(folder) > 4096 or '\0' in folder:
+                raise ValueError('Choose a skill-set folder')
+            source = skills_ctl.expand(folder)
+            if not source.is_absolute():
+                raise ValueError('Choose an absolute skill folder')
+            source = source.resolve(strict=True)
+            if not source.is_dir():
+                raise ValueError('Choose a skill-set folder')
+            # Bound the existing one-category-level discovery before its sorted reads.
+            count = 0
+            def bounded(directory):
+                nonlocal count
+                with os.scandir(directory) as entries:
+                    result = []
+                    for entry in entries:
+                        count += 1
+                        if len(result) >= 200 or count > 1000:
+                            raise ValueError('Choose a smaller skill-set folder')
+                        result.append(entry)
+                    return result
+            for entry in bounded(source):
+                if not entry.name.startswith('.') and entry.is_dir() and not (Path(entry.path) / 'SKILL.md').is_file():
+                    bounded(entry.path)
+            if not skills_ctl.skills_of(source):
+                raise ValueError('No skill folders found')
+            if any(not skills_ctl.own_dir(c) for c in selected):
+                raise ValueError('Skill configuration unavailable')
+            plans = [skills_ctl.plan(c, str(source)) for c in selected]
+            item = skills_ctl.tilde(source)
+            notes.append('Skills may include scripts that agents can run.')
+            notes.append('The original skill files stay in place. Agents read linked skills; later edits take effect there too.')
+            if any(skills_ctl.reach(c, source).native for c in selected):
+                notes.append('Some agents already read this folder automatically; their native access is unchanged.')
+        result = self.keep(connect.merge(plans))
+        result.update({'kind': kind, 'item': item, 'agents': [catalog[c].name for c in selected],
+                       'notes': notes, 'agent_commands': list(selected)})
+        return result
+
     def keep(self, plan: connect.Plan) -> dict:
+        for field in ('links_add', 'links_remove'):
+            unique = {}
+            for link, target in getattr(plan, field):
+                if link in unique and unique[link] != target:
+                    raise ValueError('Conflicting skill names')
+                unique[link] = target
+            if len(unique) > 200:
+                raise ValueError('Too many skill links; select fewer agents or skills')
+            setattr(plan, field, list(unique.items()))
         if plan.commands or plan.undo_commands or plan.files_add or plan.retire:
             raise ValueError('This connection needs a background operation')
         if sum(len(c.old.encode()) + len(c.new.encode()) for c in plan.changes) > 8 * 1024 * 1024:

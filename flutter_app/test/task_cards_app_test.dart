@@ -41,6 +41,7 @@ for line in sys.stdin:
  elif m=='providers.snapshot':r={'local':[runtime],'online':[],'folders':[]}
  elif m=='connections.snapshot':r={'agents':[{'command':'test','name':'Test agent','mcp':True,'skills':False}],
   'providers':[],'skills':[],'mcp':[{'id':'known-server','name':'Known server','target':'example.test','agents':['test'] if connected else []}], 'focus':['agent:test']}
+ elif m=='connections.author_preview':r={'plan':'opaque','empty':False,'files':[],'links_add':[],'links_remove':[],'kind':p['kind'],'agents':['Test agent'],'focus':['agent:test']}
  elif m=='connections.preview':r={'plan':'opaque','empty':False,'files':[],'links_add':[],'links_remove':[],
   'command':'test','item':'known-server','remove':False,'focus':['agent:test','mcp:known-server']}
  elif m=='connections.apply':connected=True;tasks['connect']={'ok':True,'undo':'undo-token'};r={'task':'connect'}
@@ -83,6 +84,7 @@ Future<Directory> mountApp(
   WidgetTester tester, {
   bool welcome = false,
   bool installFails = false,
+  double? areaWidth,
 }) async {
   rootBundle.clear();
   final dir = Directory.systemTemp.createTempSync('asterism-review-cards-');
@@ -100,8 +102,16 @@ Future<Directory> mountApp(
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
   addTearDown(() => dir.deleteSync(recursive: true));
+  final app = AsterismApp(
+    key: UniqueKey(),
+    connectBackend: () async => backend!,
+  );
   await tester.pumpWidget(
-    AsterismApp(key: UniqueKey(), connectBackend: () async => backend!),
+    areaWidth == null
+        ? app
+        : Align(
+            child: SizedBox(width: areaWidth, child: app),
+          ),
   );
   await settleService(tester);
   return dir;
@@ -306,4 +316,70 @@ void main() {
       },
     );
   }
+  testWidgets(
+    'a narrow map area in a wider window does not trigger a completion scan',
+    (tester) async {
+      final dir = await mountApp(tester, areaWidth: 880);
+      final scans = forcedScans(dir);
+      await tester.tap(find.byTooltip('Providers and models'));
+      await settleService(tester);
+      await tester.tap(find.text('Models (1)'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Load'));
+      await settleService(tester);
+      expect(find.text('Succeeded'), findsOneWidget);
+      expect(find.byKey(const ValueKey('full-task')), findsOneWidget);
+      expect(forcedScans(dir), scans);
+      expect(tester.takeException(), isNull);
+      await unmountApp(tester);
+    },
+  );
+
+  testWidgets(
+    'new MCP form requests a private preview and Cancel performs no apply',
+    (tester) async {
+      final dir = await mountApp(tester);
+      await tester.tap(find.byTooltip('Connections'));
+      await settleService(tester);
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Add MCP server'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('mcp-name')),
+        'new-server',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('mcp-command')),
+        '/test/program',
+      );
+      final recipient = find.widgetWithText(CheckboxListTile, 'Test agent');
+      await tester.ensureVisible(recipient);
+      await tester.pumpAndSettle();
+      await tester.tap(recipient);
+      final preview = find.widgetWithText(FilledButton, 'Preview');
+      await tester.ensureVisible(preview);
+      await tester.pumpAndSettle();
+      await tester.tap(preview);
+      await settleService(tester);
+      final calls = requests(dir);
+      expect(
+        calls.singleWhere(
+          (q) => q['method'] == 'connections.author_preview',
+        )['params']['name'],
+        'new-server',
+      );
+      expect(find.text('Agents: Test agent'), findsOneWidget);
+      await tester.tap(find.text('Cancel'));
+      await settleService(tester);
+      expect(
+        requests(dir).where((q) => q['method'] == 'connections.apply'),
+        isEmpty,
+      );
+      final name = find.byKey(const ValueKey('mcp-name'));
+      await tester.ensureVisible(name);
+      await tester.pumpAndSettle();
+      expect(tester.widget<TextFormField>(name).controller!.text, 'new-server');
+      expect(tester.takeException(), isNull);
+      await unmountApp(tester);
+    },
+  );
 }
