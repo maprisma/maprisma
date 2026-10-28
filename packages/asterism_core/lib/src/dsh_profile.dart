@@ -293,3 +293,29 @@ String dshConnectText(
   }
   return dshJoin(header, blocks);
 }
+
+/// dsh_ctl.model_text: the default model set to `model` of `provider` (one
+/// of its routes); the entry's other settings and every other entry stay.
+String dshModelText(String text, String provider, String model) {
+  if (!RegExp(r'^[a-z][a-z0-9_-]{0,63}$').hasMatch(provider) ||
+      !RegExp(r'^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,159}$').hasMatch(model)) {
+    throw const FormatException('bad provider or model');
+  }
+  final (header, blocks) = dshSplit(text);
+  final index = _find(blocks, _defaultId);
+  final entry = index != null
+      ? _reloaded(blocks[index])
+      : <dynamic, dynamic>{'id': _defaultId, 'name': _defaultName};
+  final config = entry['config'] is Map
+      ? entry['config'] as Map
+      : <dynamic, dynamic>{};
+  config['provider'] = provider;
+  config['model'] = model;
+  entry['config'] = config;
+  if (index == null) {
+    blocks.add(pyYamlDump([entry]));
+  } else {
+    blocks[index] = pyYamlDump([entry]);
+  }
+  return dshJoin(header, blocks);
+}

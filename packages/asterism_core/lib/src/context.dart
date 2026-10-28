@@ -268,6 +268,8 @@ final class ContextReader {
         '$entry/device/mem_info_vram_total',
         limit: 64,
         follow: true,
+        // sysfs files report 4096 bytes: read the head, as the reference does.
+        portion: 'head',
         allowRootOwned: true,
       );
       final size = int.tryParse((text ?? '').trim());
@@ -586,6 +588,168 @@ final class ContextReader {
     return '${pyJsonDumps(data, indent: 2)}\n';
   }
 
+  // --- Jan ---------------------------------------------------------------------------------
+
+  static final _janId = RegExp(
+    r'^[A-Za-z0-9][A-Za-z0-9._+-]{0,119}(/[A-Za-z0-9][A-Za-z0-9._+-]{0,119})?$',
+  );
+
+  /// inventory.jan_data_folder: settings.json's data_folder, else data/.
+  String janDataFolder() {
+    final root = p.join(home, '.local/share/Jan');
+    final value = files.json('$root/settings.json')['data_folder'];
+    if (value is String && value.trim().isNotEmpty) {
+      final path = files.expand(value.trim());
+      return p.isAbsolute(path) ? path : p.join(root, path);
+    }
+    return '$root/data';
+  }
+
+  /// jan_ctl._read: at most 256 KiB, strict UTF-8 (an undecodable file fails).
+  static String _janRead(String path) {
+    try {
+      final file = File(path);
+      if (file.lengthSync() > 256 * 1024) return '';
+      return utf8.decode(file.readAsBytesSync());
+    } on FileSystemException {
+      return '';
+    }
+  }
+
+  String? janModelYml(String name, String data) {
+    if (!_janId.hasMatch(name)) return null;
+    final path = p.join(data, 'llamacpp/models', name, 'model.yml');
+    return FileSystemEntity.isFileSync(path) ? path : null;
+  }
+
+  /// jan_ctl.settings: (context, KV cache type, model file) from the preset
+  /// section, else the model.yml.
+  (int, String, String?) janSettings(String name) {
+    final data = janDataFolder();
+    final sections = iniSections(
+      _janRead(p.join(data, 'llamacpp/router.preset.ini')),
+    );
+    final own = sections[name] ?? {}, shared = sections['*'] ?? {};
+    String first(List<String?> values, String fallback) =>
+        values.firstWhere(
+          (v) => v != null && v.isNotEmpty,
+          orElse: () => null,
+        ) ??
+        fallback;
+    var ctx = first([own['ctx-size'], shared['ctx-size']], '');
+    final cache = first([own['cache-type-k'], shared['cache-type-k']], 'f16');
+    var model = own['model'] ?? '';
+    final yml = janModelYml(name, data);
+    final text = yml != null ? _janRead(yml) : '';
+    if (ctx.isEmpty) {
+      ctx =
+          RegExp(
+            r'^ctx_size:\s*(\d{1,8})\s*$',
+            multiLine: true,
+          ).firstMatch(text)?[1] ??
+          '0';
+    }
+    if (model.isEmpty) {
+      final found = RegExp(
+        r'''^model_path:\s*['"]?([^'"\n]+?)['"]?\s*$''',
+        multiLine: true,
+      ).firstMatch(text);
+      if (found != null) {
+        model = found[1]!;
+        if (!p.isAbsolute(model)) model = p.join(data, model);
+      }
+    }
+    final path =
+        model.isNotEmpty &&
+            FileSystemEntity.typeSync(model) != FileSystemEntityType.notFound
+        ? File(model).resolveSymbolicLinksSync()
+        : null;
+    return (RegExp(r'^\d+$').hasMatch(ctx) ? int.parse(ctx) : 0, cache, path);
+  }
+
+  /// jan_ctl.yml_context_text: ctx_size set (added at the end if missing).
+  static String janYmlText(String old, int ctx) {
+    if (!(0 < ctx && ctx < 10000000)) {
+      throw const FormatException('bad context');
+    }
+    final line = RegExp(r'^ctx_size:.*$', multiLine: true);
+    if (line.hasMatch(old)) return old.replaceFirst(line, 'ctx_size: $ctx');
+    return '${old.replaceFirst(RegExp(r'\n+$'), '')}\nctx_size: $ctx\n';
+  }
+
+  /// jan_ctl.context_changes: the preset and the model.yml, one backup.
+  List<Change> janContextChanges(String name, int ctx) {
+    final data = janDataFolder(), changes = <Change>[];
+    final preset = p.join(data, 'llamacpp/router.preset.ini');
+    if (FileSystemEntity.isFileSync(preset)) {
+      if (!(0 < ctx && ctx < 10000000)) {
+        throw const FormatException('bad model or context');
+      }
+      final old = config.read(preset);
+      changes.add(Change(preset, old, iniText(old, name, 'ctx-size', '$ctx')));
+    }
+    final yml = janModelYml(name, data);
+    if (yml != null) {
+      final old = config.read(yml);
+      changes.add(Change(yml, old, janYmlText(old, ctx)));
+    }
+    if (changes.isEmpty) {
+      throw const FormatException('Jan does not list this model');
+    }
+    return changes;
+  }
+
+  // --- KoboldCPP ---------------------------------------------------------------------------
+
+  String get koboldConfigs => p.join(home, '.config/koboldcpp/models');
+
+  /// kobold_ctl.read: a .kcpps of at most 64 KiB, an object, else {}.
+  static Map _koboldRead(String path) {
+    try {
+      final file = File(path);
+      if (file.lengthSync() > 64 * 1024) return {};
+      final data = jsonDecode(utf8.decode(file.readAsBytesSync()));
+      return data is Map ? data : {};
+    } on FileSystemException {
+      return {};
+    } on FormatException {
+      return {};
+    }
+  }
+
+  /// kobold_ctl.settings: (context, "f16", model file) of a model id.
+  (int, String, String?) koboldSettings(String name) {
+    if (name.contains('/') || !name.endsWith('.kcpps')) return (0, 'f16', null);
+    final data = _koboldRead(p.join(koboldConfigs, name));
+    final v = data['contextsize'];
+    final ctx = v is int ? v : 0;
+    final model = '${data['model_param'] ?? ''}';
+    final path =
+        p.isAbsolute(model) &&
+            FileSystemEntity.typeSync(model) != FileSystemEntityType.notFound
+        ? File(model).resolveSymbolicLinksSync()
+        : null;
+    return (ctx, 'f16', path);
+  }
+
+  /// The .kcpps with its context set (kobold_ctl.context_text), one change.
+  List<Change> koboldContextChanges(String name, int ctx) {
+    final path = p.join(koboldConfigs, name);
+    if (name.contains('/') ||
+        !name.endsWith('.kcpps') ||
+        !FileSystemEntity.isFileSync(path)) {
+      throw const FormatException('KoboldCpp does not list this model');
+    }
+    final before = config.read(path);
+    if (!(0 < ctx && ctx <= 262144)) {
+      throw const FormatException('KoboldCpp takes 256 to 262144 tokens');
+    }
+    final data = jsonDecode(before.isEmpty ? '{}' : before);
+    if (data is! Map) throw const FormatException('not a .kcpps file');
+    data['contextsize'] = ctx;
+    return [Change(path, before, '${pyJsonDumps(data, indent: 2)}\n')];
+  }
+
   // --- the engines' connect_extra --------------------------------------------------------
 
   /// llm_engine.connect_extra: (contexts for the agent, file changes, contexts
@@ -622,6 +786,26 @@ final class ContextReader {
         return (
           {model: best},
           [if (next != old) Change(path, old, next)],
+          <Map<String, dynamic>>[],
+        );
+      }
+      if (rt.key == 'jan' || rt.key == 'koboldcpp') {
+        // Jan's models live in its own data folder; KoboldCPP needs its folder.
+        if (rt.key == 'koboldcpp' && rt.modelsDir.isEmpty) return none;
+        final (now, cache, file) = rt.key == 'jan'
+            ? janSettings(model)
+            : koboldSettings(model);
+        if (now != 0) {
+          return ({model: now}, <Change>[], <Map<String, dynamic>>[]);
+        }
+        if (file == null || vram <= 0) return none;
+        final best = bestContext(file, vram, cache.isEmpty ? 'f16' : cache);
+        if (best <= 0) return none;
+        return (
+          {model: best},
+          rt.key == 'jan'
+              ? janContextChanges(model, best)
+              : koboldContextChanges(model, best),
           <Map<String, dynamic>>[],
         );
       }

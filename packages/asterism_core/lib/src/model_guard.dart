@@ -25,8 +25,16 @@ final class GpuUsage {
     return RegExp(r'PCI_SLOT_NAME=(\S+)').firstMatch(text)?[1] ?? '';
   }();
 
+  /// gpu_usage._read: the head of a file (sysfs files report 4096 bytes).
   String _read(String path, {int limit = 65536}) =>
-      files.text(path, limit: limit, follow: true, allowRootOwned: true) ?? '';
+      files.text(
+        path,
+        limit: limit,
+        follow: true,
+        portion: 'head',
+        allowRootOwned: true,
+      ) ??
+      '';
 
   /// gpu_usage.discrete_gpu: the card with the largest VRAM.
   String? _discreteGpu() {
@@ -110,6 +118,7 @@ final class GpuUsage {
       final info = files.text(
         '/proc/$pid/fdinfo/${p.basename(fd)}',
         limit: 8192,
+        portion: 'head',
       );
       if (info == null) continue;
       final client = RegExp(r'drm-client-id:\s*(\d+)').firstMatch(info);
@@ -165,7 +174,13 @@ final class GpuUsage {
   Map<String, Set<int>> runtimePids(List<ProcessRecord> processes) {
     final parent = <int, int>{}, roots = <int, String>{};
     for (final process in processes) {
-      final stat = files.text('/proc/${process.pid}/stat', limit: 1024) ?? '';
+      final stat =
+          files.text(
+            '/proc/${process.pid}/stat',
+            limit: 1024,
+            portion: 'head',
+          ) ??
+          '';
       final fields = stat
           .substring(stat.lastIndexOf(')') + 1)
           .trim()

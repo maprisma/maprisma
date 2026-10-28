@@ -694,3 +694,35 @@ Checks:
 - A Dart test checks process ownership (`runtime_of`) against 13 Python answers.
 
 Still Python (2b): online model plans (`online_models`), Jan/KoboldCPP contexts.
+
+### 4c part 2b — online models on the map, Jan and KoboldCPP contexts
+
+- **Online models:** `online_models.dart` ports `online_models` (`choices`, `target`, `plan`) with the
+  switchers of the built-in adapters:
+  - Claude Code's aliases, and Codex's `models_cache.json` and `config.toml`.
+  - The `models_choices`/`models_plan` hooks of Pi, OpenCode, Hermes and DeepSeek Harness (the new
+    `dshModelText` = `dsh_ctl.model_text`).
+  - The model previews build online switches and attaches in the core. An add-on agent's own switcher
+    (its hooks) answers `unported_route` and stays with the reference until phase 5.
+- **Jan and KoboldCPP contexts** are in `connectExtra`:
+  - Jan: `jan_ctl.settings` and `context_changes` (its preset and `model.yml` in one backup).
+  - KoboldCPP: `kobold_ctl.settings` and `context_text` (the `.kcpps`, ASCII-escaped as Python dumps it).
+  - With these, every provider preview is built in the core, and repair no longer falls back.
+- **Found and fixed (a 4c part 1 bug):**
+  - The VRAM read refused sysfs files, because they report 4096 bytes and the read checked the size
+    against its 64-byte limit. So Dart never fitted a context.
+  - The 4c-1 real-HOME check didn't show it: every model there already had a context.
+  - Reads of sysfs and `/proc` now take the head, as Python does (`vramTotal`; `gpu_usage` busy, uevent,
+    fdinfo, stat). Dart now reads the same VRAM (25.7 GB), card and PCI slot as Python.
+
+Checks:
+- New fixtures, all Python = Dart:
+  - `jan_kobold_contexts.json`: a synthetic GGUF; Jan fit (preset + `model.yml`), kept, missing file;
+    KoboldCPP fit, kept, no model file; applied for two agents.
+  - `online_models.json`: switches for Claude, Codex, Hermes + Pi together, and OpenCode; an attach;
+    four refusals; applied.
+- Real HOME, read-only: 155 model previews (local and online providers, every agent) give the same
+  results: 50 plans, 105 refusals. The 72 provider plans with models are still identical.
+
+Phase 4c is done. Still Python in phase 4: 4d (model search, downloads, pulls, import), 4e
+(`provider-watch`), 4f (terminals, agent start, halt).

@@ -592,10 +592,8 @@ final class LlmPlans {
     if (model.isNotEmpty && !remove) {
       // What the local LLM brings along: a context for this card, in the same
       // preview, backup and Undo (a file), or set through its API (Ollama).
-      if (rt.key == 'jan' || rt.key == 'koboldcpp' || contexts == null) {
-        throw UnsupportedError(
-          'This local LLM keeps its contexts in a way the core does not edit yet',
-        );
+      if (contexts == null) {
+        throw UnsupportedError('No context reader for this core');
       }
       final (more, changes, apiContexts) = contexts!.connectExtra(rt, model);
       context = more;

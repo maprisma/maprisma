@@ -402,9 +402,9 @@ List<String> taskFocus(
   ];
 }
 
-/// Map edits this core builds. The others fall back to the reference (Devel)
-/// when the core answers unported_route: repair for Jan and KoboldCPP
-/// contexts, the model previews for online models (phase 4c part 2b).
+/// Map edits this core builds. The model previews fall back to the reference
+/// (Devel) when the core answers unported_route: an add-on agent's own model
+/// switcher (its hooks, phase 5).
 const coreMapEdits = {'connections.move_preview', 'connections.author_preview'};
 const coreFirstRoutes = {
   'connections.repair_preview',
@@ -426,8 +426,4 @@ const corePreviewKinds = {'skills', 'mcp', 'provider'};
 
 /// Whether this core builds the preview.
 bool corePreview(Map<String, dynamic> params) =>
-    corePreviewKinds.contains(params['kind']) &&
-    (params['kind'] != 'provider' ||
-        params['remove'] == true ||
-        params['model'] == '' ||
-        !const {'jan', 'koboldcpp'}.contains(params['item']));
+    corePreviewKinds.contains(params['kind']);

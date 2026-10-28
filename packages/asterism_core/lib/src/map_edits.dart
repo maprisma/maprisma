@@ -9,7 +9,7 @@ import 'inventory.dart' show chatModels;
 import 'llm_plans.dart';
 import 'map_graph.dart' show splitModel;
 import 'mcp_plans.dart';
-import 'protocol.dart';
+import 'online_models.dart';
 import 'py_values.dart';
 import 'read_service.dart';
 import 'skill_plans.dart';
@@ -80,7 +80,13 @@ final class MapEdits {
     this.skills,
     this.connections,
     this.configDir,
-  );
+  ) : online = OnlineModels(
+        reads.files,
+        config,
+        reads.files.identity.home,
+        reads.graph.ownFolder,
+      );
+  final OnlineModels online;
   final ReadService reads;
   final ConfigFiles config;
   final LlmPlans llm;
@@ -403,7 +409,39 @@ final class MapEdits {
       ?next,
       for (final c in selected) 'agent:$c',
     };
-    if (provider['kind'] == 'cloud') throw ServiceError('unported_route');
+    final builders = <Plan Function()>[];
+    final actions = <Map<String, dynamic>>[], notes = <String>[];
+    if (provider['kind'] == 'cloud') {
+      if (next == null || selected.isEmpty) {
+        throw const FormatException(
+          'Online models require agents and another model',
+        );
+      }
+      for (final command in selected) {
+        if (!linked('agent:$command', pid, {'uses', 'available', 'offer'})) {
+          throw const FormatException('Agent/provider mismatch');
+        }
+        final adapter = catalog[command]!.adapter;
+        final chosen = online.target(
+          adapter,
+          provider['label'] as String,
+          nodes[next]!['label'] as String,
+        );
+        if (chosen == null) {
+          throw const FormatException('Unsupported online model');
+        }
+        builders.add(() => online.plan(adapter, chosen));
+      }
+      return _modelResult(
+        builders,
+        actions,
+        notes,
+        nodes,
+        focus,
+        selected,
+        catalog,
+      );
+    }
     final rt = runtimes[pid];
     node(pid, {'runtime'});
     if (rt == null) throw const FormatException('Runtime unavailable');
@@ -412,7 +450,6 @@ final class MapEdits {
         name.isNotEmpty && !chatModels(rt.models).contains(name)) {
       throw const FormatException('Model unavailable');
     }
-    final builders = <Plan Function()>[];
     for (final command in selected) {
       final adapter = catalog[command]!.adapter;
       final fixed = adapter.facts['fixed_provider'];
@@ -427,7 +464,6 @@ final class MapEdits {
             llm.plan(command, rt, name, name.isNotEmpty, remove: name.isEmpty),
       );
     }
-    final actions = <Map<String, dynamic>>[], notes = <String>[];
     if ((providerFacts['engines'] as Map)[rt.key]?['can_load'] == true) {
       // The worker checks these again before it writes any configuration.
       if (switching) {
@@ -451,6 +487,26 @@ final class MapEdits {
         'Undo restores configuration files; runtime load and unload actions are not undone.',
       );
     }
+    return _modelResult(
+      builders,
+      actions,
+      notes,
+      nodes,
+      focus,
+      selected,
+      catalog,
+    );
+  }
+
+  Map<String, dynamic> _modelResult(
+    List<Plan Function()> builders,
+    List<Map<String, dynamic>> actions,
+    List<String> notes,
+    Map<String, Map> nodes,
+    Set<String> focus,
+    List<String> selected,
+    Map<String, AgentRecord> catalog,
+  ) {
     if (builders.isEmpty && actions.isEmpty) {
       throw const FormatException('No editable model users');
     }
@@ -477,7 +533,7 @@ final class MapEdits {
 
   /// flutter_map_editor.repair_preview: retry a known failed edge and clear
   /// its hints in the same backup and Undo (a local LLM line with its model
-  /// again; Jan and KoboldCPP contexts stay with the reference for now).
+  /// again).
   Map<String, dynamic> repairPreview(
     Map<String, dynamic> params,
     Map<String, dynamic> Function(Map<String, dynamic>) preview,
@@ -514,8 +570,6 @@ final class MapEdits {
           : '${entry?['target'] ?? ''}';
       request.addAll({'model': model, 'use_now': model.isNotEmpty});
     }
-    // What the core cannot build yet (Jan, KoboldCPP contexts): the reference.
-    if (!corePreview(request)) throw ServiceError('unported_route');
     final result = preview(request);
     final plan = connections.take(result['plan'] as String);
     if (entry != null) plan.changes.add(_failureRemoved('$aid|$target'));
