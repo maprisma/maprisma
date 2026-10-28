@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'adapter_assets.g.dart';
+import 'model_hub.dart';
 import 'provider_scans.dart';
 import 'scan_files.dart';
 
@@ -129,8 +130,14 @@ final class ProviderOps {
     'runtime.stop': {'key'},
     'model.load': {'key', 'model'},
     'model.unload': {'key', 'model'},
+    'model.import': {'key', 'path'},
+    'models.search': {'query'},
+    'models.files': {'repo'},
+    'models.download': {'key', 'repo', 'file', 'size'},
+    'models.pull': {'key', 'name'},
   };
 
+  /// flutter_providers.validate.
   static void validate(String operation, Map params) {
     final shape = shapes[operation];
     if (shape == null) {
@@ -138,12 +145,41 @@ final class ProviderOps {
     }
     if (params.length != shape.length ||
         !params.keys.every(shape.contains) ||
-        params.values.any((v) => v is! String || v.length > 4096)) {
+        params.entries.any(
+          (e) =>
+              e.key != 'size' && (e.value is! String || e.value.length > 4096),
+        )) {
       throw const FormatException('Invalid provider operation');
+    }
+    if (operation == 'models.download' &&
+        (params['size'] is! int || (params['size'] as int) < 0)) {
+      throw const FormatException('Invalid model size');
+    }
+    if (params.containsKey('repo') &&
+        !ModelHub.repoRe.hasMatch(params['repo'] as String)) {
+      throw const FormatException('Invalid model repository');
     }
     if (params.containsKey('model') &&
         !modelKey.hasMatch(params['model'] as String)) {
       throw const FormatException('Invalid model name');
+    }
+    if (operation == 'models.search') {
+      final length = (params['query'] as String).trim().length;
+      if (length < 1 || length > 120) {
+        throw const FormatException('Invalid search');
+      }
+    }
+    if (operation == 'models.pull' &&
+        !ModelHub.ollamaNameRe.hasMatch(params['name'] as String)) {
+      throw const FormatException('Invalid pull name');
+    }
+    if (operation == 'models.download') {
+      final file = params['file'] as String;
+      if (!ModelHub.fileRe.hasMatch(file) ||
+          file.startsWith('/') ||
+          file.split('/').any((part) => part == '.' || part == '..')) {
+        throw const FormatException('Invalid model filename');
+      }
     }
   }
 
@@ -285,8 +321,28 @@ final class ProviderOps {
     return found.first;
   }
 
-  Future<Map<String, dynamic>> execute(String operation, Map params) async {
+  Future<Map<String, dynamic>> execute(
+    String operation,
+    Map params, {
+    ModelHub? hub,
+  }) async {
     validate(operation, params);
+    hub ??= ModelHub();
+    if (operation == 'models.search') {
+      return {
+        'repos': await hub.search(
+          (params['query'] as String).trim(),
+          limit: 25,
+        ),
+      };
+    }
+    if (operation == 'models.files') {
+      final repo = params['repo'] as String;
+      return {
+        'repo': repo,
+        'files': (await hub.files(repo)).take(100).toList(),
+      };
+    }
     final rt = runtime(params['key'] as String);
     if (!rt.installed) throw const FormatException('Provider is not installed');
     if (operation.startsWith('runtime.')) {

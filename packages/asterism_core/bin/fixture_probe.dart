@@ -5,6 +5,7 @@ import 'package:asterism_core/asterism_core.dart';
 import 'package:asterism_core/src/adapters.dart';
 import 'package:asterism_core/src/connect_apply.dart';
 import 'package:asterism_core/src/line_diff.dart';
+import 'package:asterism_core/src/model_hub.dart';
 import 'package:asterism_core/src/context.dart';
 import 'package:asterism_core/src/py_values.dart';
 import 'package:asterism_core/src/py_yaml.dart';
@@ -98,6 +99,28 @@ Future<void> main() async {
             for (final c in plan.contexts) [c['model'], c['tokens']],
           ],
         };
+      } else if (request.method == 'dev.hfparse') {
+        // models_ctl.search/files on given API answers (the URL asked is returned).
+        final urls = <String>[];
+        final hub = ModelHub(
+          jsonList: (url) async {
+            urls.add(url);
+            return params['items'] as List;
+          },
+        );
+        try {
+          result = {
+            'found': params['kind'] == 'search'
+                ? await hub.search(
+                    params['query'] as String,
+                    limit: params['limit'] as int,
+                  )
+                : await hub.files(params['repo'] as String),
+            'urls': urls,
+          };
+        } on FormatException catch (e) {
+          result = {'error': 'FormatException', 'message': e.message};
+        }
       } else if (request.method == 'dev.fit') {
         final path = params['path'] as String;
         try {

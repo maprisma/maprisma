@@ -412,12 +412,15 @@ const coreFirstRoutes = {
   'models.attach_preview',
 };
 
-/// providers.run operations this core runs (the downloads follow in 4d).
+/// providers.run operations this core runs (downloads, pulls and imports
+/// follow in 4d part 2).
 bool coreProviderRun(Map<String, dynamic> params) => const {
   'runtime.start',
   'runtime.stop',
   'model.load',
   'model.unload',
+  'models.search',
+  'models.files',
 }.contains(params['operation']);
 
 /// The connection kinds whose previews this core builds (the others stay with

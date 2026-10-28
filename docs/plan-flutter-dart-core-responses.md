@@ -726,3 +726,23 @@ Checks:
 
 Phase 4c is done. Still Python in phase 4: 4d (model search, downloads, pulls, import), 4e
 (`provider-watch`), 4f (terminals, agent start, halt).
+
+### 4d part 1 — Hugging Face search and file lists
+
+`models.search` and `models.files` (`providers.run`) run in the core's worker:
+- `model_hub.dart` makes web requests as `netfetch.fetch` does: `curl` with its config and headers on
+  stdin (never in argv), https only, at most 3 https redirects, `--fail`, the answer capped in size and
+  time (`read_bounded_output`).
+- It ports `models_ctl`: `_repo_from`, `capabilities`, `search` (URL with `urllib.parse.quote`, chat and
+  vision tasks only) and `files` (split files as one entry, no `mmproj`, a stable sort by size, quant
+  tags, `recommend`).
+- `ProviderOps.validate` now has all nine shapes and rules of `flutter_providers.validate`. Downloads,
+  pulls and imports are validated the same way but still run in the reference (4d part 2).
+
+Checks:
+- `tests/test_dart_model_hub_parity.py`: a live Hugging Face answer (50 repos, 34 files), saved trimmed
+  in `tests/data/hf_answers.json` with hand-made edge cases (bad IDs, negative/huge/bool counts, odd
+  dates, non-chat tasks, split parts, sub-folders, `..`, string and float sizes, size ties, unicode).
+  Both sides get it for four searches and two file lists: same results and the same URLs.
+- Live, read-only: both workers run search and file list against Hugging Face and give the same results
+  (25 repos, 25 files), and the same error for an empty query and a repository that doesn't exist.
