@@ -45,6 +45,7 @@ MAP_SCAN_SETTINGS = (
 
 PROTOCOL = 1
 MAX_REQUEST = 64 * 1024
+MAP_REUSE = 5.0                 # seconds a self-built map serves previews and task focus
 UI_SETTINGS = frozenset(("flutter_theme_mode", "map_light_fps", "flutter_map_layout", "map_animations", "language", "look", "agent_folder", "map_layers", "subagents_minutes", "subagents_kept", "addons_online", "map_scan_interval", "map_scan_pause_unfocused", "map_scan_targets"))
 
 
@@ -74,6 +75,7 @@ class Service:
         self._map_started = float("-inf")
         self._map_inputs = None
         self._map_result = {'activity': {}, 'nodes': [], 'edges': []}
+        self._map_built = float('-inf')
 
     def system_public(self, result: dict) -> dict:
         if not result:
@@ -207,7 +209,19 @@ class Service:
         ident = params.get('id')
         if self.adapters is not None and isinstance(ident, str):
             addon = next((item for item in self.adapters.items if item.id == ident), None)
-        return flutter_task_focus.resolve(self._map_result, params, addon)
+        return flutter_task_focus.resolve(self._map_result, params, addon)   # never scans
+
+    def current_map(self) -> dict:
+        """The map the map editor's previews resolve against. In the Flutter Devel app the Dart core
+        answers map.snapshot, so this reference builds its own (reused for MAP_REUSE seconds); task
+        focus keeps using the last known map and never scans."""
+        now = time.monotonic()
+        if self._map_result.get('nodes') and now - getattr(self, '_map_built', float('-inf')) < MAP_REUSE:
+            return self._map_result
+        if self._map_task is None:
+            self._map_result = self.build_map()
+        self._map_built = now
+        return self._map_result
 
     def catalog_focus(self, result: dict) -> dict:
         result = self.addon_catalog.register(result)
@@ -407,10 +421,10 @@ class Service:
             return self._map_instances.apply(params, self.tasks.start_halt)
         if method == 'connections.repair_preview':
             import flutter_map_editor
-            return flutter_map_editor.repair_preview(params, self._map_result, self.connections, self.settings_path)
+            return flutter_map_editor.repair_preview(params, self.current_map(), self.connections, self.settings_path)
         if method in ('connections.move_preview', 'models.switch_preview', 'models.attach_preview'):
             import flutter_map_editor
-            return flutter_map_editor.preview(method, params, self._map_result, self.connections, self.settings_path)
+            return flutter_map_editor.preview(method, params, self.current_map(), self.connections, self.settings_path)
         if method == "connections.preview":
             return self.connections.preview(params)
         if method in ("connections.apply", "connections.undo"):
@@ -590,6 +604,7 @@ class Service:
                     return reply()
                 if status['state'] == 'done':
                     self._map_result = status['result']
+                    self._map_built = time.monotonic()
                 self._map_task = None
             if params.get('poll') and not self._map_force_pending:
                 return reply()

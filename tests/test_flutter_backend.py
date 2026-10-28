@@ -260,3 +260,14 @@ class FlutterBackendTest(unittest.TestCase):
         theme.assert_called_once()
         with self.assertRaises(ValueError):
             self.service.dispatch('app.theme', {'path':'/arbitrary'})
+
+    def test_previews_build_their_own_map_when_dart_serves_map_snapshot(self):
+        built = {'activity': {}, 'nodes': [{'id': 'agent:x'}], 'edges': []}
+        with mock.patch.object(self.service, 'build_map', return_value=built) as build:
+            self.assertIs(self.service.current_map(), built)
+            self.assertIs(self.service.current_map(), built)      # reused within MAP_REUSE
+        build.assert_called_once()
+        self.service._map_built -= flutter_backend.MAP_REUSE + 1
+        with mock.patch.object(self.service, 'build_map', return_value=built) as build:
+            self.service.current_map()
+        build.assert_called_once()
