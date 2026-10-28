@@ -12,6 +12,9 @@ replacement. The baseline was committed on main (`ddae426`, `fb154d2`); finished
 milestones and reviews are in `docs/history/`. Work continues on main without
 pushing it to the `gtk` remote.
 
+**Decision (Uwe, 2026-10-28):** Flutter replaces the GTK app on Linux too; the GTK app gets fixes only.
+Next slice: [the map editor](plan-flutter-map-editor.md).
+
 The current parity inventory and local connection-authoring slice are in
 [plan-flutter-connections.md](history/plan-flutter-connections.md). Custom MCP definitions
 and explicit local skill-folder attachment now use the existing reviewed
