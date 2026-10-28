@@ -3,6 +3,7 @@ import 'package:path/path.dart' as p;
 import 'adapter_assets.g.dart';
 import 'agent_catalog.dart';
 import 'connect_apply.dart';
+import 'context.dart';
 import 'dsh_profile.dart';
 import 'inventory.dart' show chatModels;
 import 'local_llm.dart';
@@ -456,7 +457,8 @@ String openclawLlmText(
 }
 
 final class LlmPlans {
-  LlmPlans(this.config, this.catalog, this.home);
+  LlmPlans(this.config, this.catalog, this.home, [this.contexts]);
+  final ContextReader? contexts;
   final ConfigFiles config;
   final AgentCatalog catalog;
   final String home;
@@ -580,26 +582,39 @@ final class LlmPlans {
     RuntimeRecord? replaces,
   }) {
     if (!supported(agent)) throw FormatException(agent);
-    if (model.isNotEmpty && !remove) {
-      throw UnsupportedError('Model extras need the provider engines');
-    }
     final result = Plan(
       agent,
       rt.key,
       (providerFacts['connect_keys'] as Map)[rt.key] as String,
     );
+    var context = const <String, int>{};
+    final extra = <Change>[];
+    if (model.isNotEmpty && !remove) {
+      // What the local LLM brings along: a context for this card, in the same
+      // preview, backup and Undo (a file), or set through its API (Ollama).
+      if (rt.key == 'jan' || rt.key == 'koboldcpp' || contexts == null) {
+        throw UnsupportedError(
+          'This local LLM keeps its contexts in a way the core does not edit yet',
+        );
+      }
+      final (more, changes, apiContexts) = contexts!.connectExtra(rt, model);
+      context = more;
+      extra.addAll(changes);
+      result.contexts.addAll(apiContexts);
+    }
     final paths = files(agent);
     final old = [for (final path in paths) config.read(path)];
     var texts = [...old];
     if (replaces != null && replaces.key != rt.key) {
       texts = transform(agent, texts, replaces, '', false, true, const {});
     }
-    texts = transform(agent, texts, rt, model, useNow, remove, const {});
+    texts = transform(agent, texts, rt, model, useNow, remove, context);
     for (var i = 0; i < paths.length; i++) {
       if (texts[i] != old[i]) {
         result.changes.add(Change(paths[i], old[i], texts[i]));
       }
     }
+    result.changes.addAll(extra);
     return result;
   }
 }

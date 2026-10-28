@@ -238,7 +238,7 @@ final class CoreConnections {
       'contexts': [
         for (final c in plan.contexts)
           {
-            'provider': c['provider'],
+            'provider': (c['runtime'] as Map)['name'],
             'model': c['model'],
             'tokens': c['tokens'],
           },
@@ -421,4 +421,8 @@ const corePreviewKinds = {'skills', 'mcp', 'provider'};
 
 /// Whether this core builds the preview.
 bool corePreview(Map<String, dynamic> params) =>
-    corePreviewKinds.contains(params['kind']);
+    corePreviewKinds.contains(params['kind']) &&
+    (params['kind'] != 'provider' ||
+        params['remove'] == true ||
+        params['model'] == '' ||
+        !const {'jan', 'koboldcpp'}.contains(params['item']));

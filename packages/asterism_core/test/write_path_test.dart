@@ -3,7 +3,9 @@ import 'package:asterism_core/asterism_core.dart';
 import 'package:asterism_core/src/connect_apply.dart';
 import 'package:asterism_core/src/core_tasks.dart';
 import 'package:asterism_core/src/dsh_profile.dart';
+import 'package:asterism_core/src/plan_worker.dart';
 import 'package:asterism_core/src/provider_ops.dart';
+import 'package:asterism_core/src/provider_scans.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -178,5 +180,26 @@ void main() {
       loopbackListeners(8081, proc: net.path),
       isEmpty,
     ); // connected, not listening
+  });
+
+  test('contexts travel as flutter_plan_wire carries them', () {
+    final rt = RuntimeRecord('ollama', 'Ollama')..address = '127.0.0.1:11434';
+    final plan = Plan(
+      'pi',
+      'ollama',
+      'ollama-local',
+      contexts: [
+        {'runtime': rt.toJson(), 'model': 'gemma:latest', 'tokens': 8192},
+      ],
+    );
+    final (back, root) = decodePlan(encodePlan(plan, '/tmp/backups'));
+    expect(root, '/tmp/backups');
+    expect(back.contexts, plan.contexts);
+    final odd = Map<String, dynamic>.from(rt.toJson())..['shell'] = 'x';
+    plan.contexts[0] = {'runtime': odd, 'model': 'm', 'tokens': 1};
+    expect(
+      () => decodePlan(encodePlan(plan, '/tmp/backups')),
+      throwsFormatException,
+    );
   });
 }

@@ -51,7 +51,13 @@ const planMaxBytes = 24 * 1024 * 1024;
   final contexts = <Map<String, dynamic>>[];
   for (final entry in data['contexts'] as List) {
     final tokens = entry['tokens'];
-    if (tokens is! int || tokens <= 0 || entry['model'] is! String) {
+    final rt = entry['runtime'];
+    if (tokens is! int ||
+        tokens <= 0 ||
+        entry['model'] is! String ||
+        rt is! Map ||
+        rt['key'] is! String ||
+        !rt.keys.every(_runtimeFields.contains)) {
       throw const FormatException('Invalid model context');
     }
     contexts.add(Map<String, dynamic>.from(entry as Map));
@@ -140,10 +146,14 @@ const planMaxBytes = 24 * 1024 * 1024;
 /// flutter_worker connections.apply: check skill sources, back up and write.
 /// Context sizes and model load/unload need the provider engines (phase 4):
 /// such a plan is refused before anything is written.
-Map<String, dynamic> applyPlan(List<int> body, Posix posix, String home) {
+Future<Map<String, dynamic>> applyPlan(
+  List<int> body,
+  Posix posix,
+  String home,
+) async {
   final (plan, root) = decodePlan(body);
-  if (plan.contexts.isNotEmpty || plan.modelActions.isNotEmpty) {
-    throw UnsupportedError('Provider operations are not in the core yet');
+  if (plan.modelActions.isNotEmpty) {
+    throw UnsupportedError('Model actions are not in the core yet');
   }
   for (final (_, target) in plan.linksAdd) {
     if (!Directory(target).existsSync() ||
@@ -151,8 +161,16 @@ Map<String, dynamic> applyPlan(List<int> body, Posix posix, String home) {
       throw StateError('Skill source changed; review again');
     }
   }
+  final contexts = [...plan.contexts];
+  plan.contexts.clear();
   final backup = ConfigFiles(posix, home).apply(plan, root);
-  return {'backup': backup, 'context_failures': 0};
+  // Context sizes set through the local LLM's API (Ollama), after the files:
+  // the connection stands even when one fails (counted, as the reference does).
+  var failures = 0;
+  for (final c in contexts) {
+    if (!await setOllamaContext(c, posix.uid)) failures++;
+  }
+  return {'backup': backup, 'context_failures': failures};
 }
 
 /// The worker process: one request line, the plan from an inherited private
@@ -228,11 +246,43 @@ Future<int> runWorker(List<String> args) async {
     }
     send({
       'type': 'result',
-      'result': applyPlan(body, posix, Platform.environment['HOME'] ?? ''),
+      'result': await applyPlan(
+        body,
+        posix,
+        Platform.environment['HOME'] ?? '',
+      ),
     });
     return 0;
   } catch (_) {
     send({'type': 'error', 'code': 'operation_failed'});
     return 0;
   }
+}
+
+/// inventory.Runtime's fields (Runtime(**record) refuses any other).
+final _runtimeFields = RuntimeRecord('', '').toJson().keys.toSet();
+
+/// context_ctl.ollama_set_context: num_ctx given to the model through
+/// /api/create, only on this account's own Ollama.
+Future<bool> setOllamaContext(Map<String, dynamic> c, int uid) async {
+  final rt = c['runtime'];
+  if (rt is! Map || rt['key'] != 'ollama') return false;
+  final address = '${rt['address'] ?? ''}';
+  final port =
+      int.tryParse(address.substring(address.lastIndexOf(':') + 1)) ?? 0;
+  if (port == 0 || !ownPort(port, uid)) return false;
+  final answer = await httpJson(
+    port,
+    '/api/create',
+    uid,
+    method: 'POST',
+    body: {
+      'model': c['model'],
+      'from': c['model'],
+      'parameters': {'num_ctx': c['tokens']},
+      'stream': false,
+    },
+    timeout: const Duration(seconds: 120),
+  );
+  return answer is Map && answer['error'] == null;
 }

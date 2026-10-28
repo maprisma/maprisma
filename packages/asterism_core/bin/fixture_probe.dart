@@ -5,6 +5,7 @@ import 'package:asterism_core/asterism_core.dart';
 import 'package:asterism_core/src/adapters.dart';
 import 'package:asterism_core/src/connect_apply.dart';
 import 'package:asterism_core/src/line_diff.dart';
+import 'package:asterism_core/src/context.dart';
 import 'package:asterism_core/src/py_values.dart';
 import 'package:asterism_core/src/py_yaml.dart';
 import 'package:asterism_core/src/read_service.dart';
@@ -85,15 +86,32 @@ Future<void> main() async {
         final plan = core.llm.plan(
           params['agent'] as String,
           rt,
-          '',
-          false,
+          params['model'] as String? ?? '',
+          params['use_now'] as bool? ?? false,
           remove: params['remove'] as bool,
         );
         result = {
           'changes': [
             for (final c in plan.changes) {'path': c.path, 'new': c.next},
           ],
+          'contexts': [
+            for (final c in plan.contexts) [c['model'], c['tokens']],
+          ],
         };
+      } else if (request.method == 'dev.fit') {
+        final path = params['path'] as String;
+        try {
+          final meta = readGguf(path);
+          result = {
+            'layout': kvLayout(meta, params['cache'] as String).toString(),
+            'best': [
+              for (final v in params['vram'] as List)
+                bestContext(path, v as int, params['cache'] as String),
+            ],
+          };
+        } on FormatException catch (e) {
+          result = {'error': e.message};
+        }
       } else if (request.method == 'dev.undo') {
         // Undo of a backup folder either side made (development probe only).
         result = {

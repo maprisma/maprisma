@@ -12,6 +12,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / 'tools'))
 try:
     from dart_sdk import resolve_dart
@@ -111,6 +112,64 @@ class DartProviderOpsParityTest(unittest.TestCase):
                     '["POST", "/models/load", {"model": "fixture-chat-Q4_K_M"}]',
                     '["POST", "/models/unload", {"model": "fixture-chat-Q4_K_M"}]'])
                 self.assertEqual(logs['systemctl.log'], ['--user stop llama.service', '--user start llama.service'])
+            finally:
+                server.kill()
+                server.wait()
+
+    def test_same_ollama_context_requests_after_the_files(self):
+        import connect
+        import flutter_plan_wire
+        import inventory
+        with tempfile.TemporaryDirectory() as temp:
+            home = Path(temp)
+            bin_dir = home / '.local/bin'
+            bin_dir.mkdir(parents=True)
+            (bin_dir / 'ollama').write_text(SERVER)
+            os.chmod(bin_dir / 'ollama', 0o700)
+            port = free_port()
+            env = {'HOME': str(home), 'PATH': f'{bin_dir}:/usr/bin:/bin', 'LANG': 'C.UTF-8',
+                   'XDG_CONFIG_HOME': str(home / '.config'), 'XDG_CACHE_HOME': str(home / '.cache'),
+                   'XDG_DATA_HOME': str(home / '.local/share'), 'ASTERISM_DESKTOP': 'generic'}
+            server = subprocess.Popen([str(bin_dir / 'ollama'), '--port', str(port)], env=env)
+            try:
+                for _ in range(100):
+                    with socket.socket() as s:
+                        if s.connect_ex(('127.0.0.1', port)) == 0:
+                            break
+                    time.sleep(0.05)
+                rt = inventory.Runtime('ollama', 'Ollama', installed=True, address=f'127.0.0.1:{port}')
+                closed = inventory.Runtime('ollama', 'Ollama', installed=True, address=f'127.0.0.1:{free_port()}')
+                sides = {}
+                for side, command, cwd in (
+                        ('python', [sys.executable, '-u', str(ROOT / 'flutter_worker.py')], ROOT),
+                        ('dart', [DART, '--disable-dart-dev', '--packages=.dart_tool/package_config.json',
+                                  'bin/asterism-core.dart', 'worker'], ROOT / 'packages/asterism_core')):
+                    target = home / f'{side}/settings.json'
+                    plan = connect.Plan('pi', 'ollama', 'ollama-local', changes=[
+                        connect.Change(target, '', '{"model": "m"}\n')],
+                        contexts=[(rt, 'gemma:latest', 16384), (rt, 'fail:latest', 8192),
+                                  (closed, 'gemma:latest', 4096)])
+                    with tempfile.TemporaryFile() as private:
+                        private.write(flutter_plan_wire.encode(plan, home / f'{side}/backups'))
+                        private.seek(0)
+                        os.fchmod(private.fileno(), 0o600)
+                        out = subprocess.run(command + ['--plan-fd', str(private.fileno())],
+                                             input=b'{"operation": "connections.apply", "params": {}}\n',
+                                             capture_output=True, pass_fds=(private.fileno(),), env=env,
+                                             cwd=cwd, timeout=120)
+                    lines = [json.loads(line) for line in out.stdout.splitlines() if line.startswith(b'{')]
+                    result = lines[-1] if lines else {'stderr': out.stderr.decode()[-300:]}
+                    self.assertEqual(result.get('type'), 'result', result)
+                    self.assertEqual(target.read_text(), '{"model": "m"}\n')
+                    log = home / 'requests.log'
+                    sides[side] = (result['result']['context_failures'], log.read_text().splitlines())
+                    log.unlink()
+                self.assertEqual(sides['python'], sides['dart'])
+                self.assertEqual(sides['dart'], (2, [
+                    '["POST", "/api/create", {"model": "gemma:latest", "from": "gemma:latest", '
+                    '"parameters": {"num_ctx": 16384}, "stream": false}]',
+                    '["POST", "/api/create", {"model": "fail:latest", "from": "fail:latest", '
+                    '"parameters": {"num_ctx": 8192}, "stream": false}]']))
             finally:
                 server.kill()
                 server.wait()

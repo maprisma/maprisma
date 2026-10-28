@@ -57,11 +57,14 @@ Plan mergePlans(List<Plan> plans) {
     }
     result.linksAdd.addAll(item.linksAdd);
     result.linksRemove.addAll(item.linksRemove);
+    // Python compares these by value.
+    bool seen(List<Map<String, dynamic>> list, Map v) =>
+        list.any((x) => jsonEncode(x) == jsonEncode(v));
     for (final c in item.contexts) {
-      if (!result.contexts.contains(c)) result.contexts.add(c);
+      if (!seen(result.contexts, c)) result.contexts.add(c);
     }
     for (final a in item.modelActions) {
-      if (!result.modelActions.contains(a)) result.modelActions.add(a);
+      if (!seen(result.modelActions, a)) result.modelActions.add(a);
     }
   }
   return result;

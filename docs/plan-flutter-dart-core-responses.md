@@ -621,3 +621,36 @@ bodies chunked, Python with a length. A Dart test covers listeners of another ac
 non-listening sockets.
 
 Not here: the "installation running" guard of the reference (installs still run in Python's tasks).
+
+### 4c part 1 — connections with a chosen model
+
+A provider preview with a model (agent card, map drag with a model) is planned in the core. New
+`context.dart` ports `llm_engine.connect_extra` and the parts of `context_ctl` it uses: GGUF headers
+(`read_gguf`, KV layout, size per token), `best_context` against the total VRAM (sysfs, then
+`nvidia-smi`), llama.cpp's `models.ini`, Ollama's manifests and `server.env`, LM Studio's model entries,
+defaults and `.internal` settings. The agent gets the context size in its config. LM Studio gets a
+defaults file change. Ollama gets an API context that is set after the files. The worker applies it
+through `/api/create` on the account's own port, counting failures as `context_failures`, the way the
+reference does.
+
+Validation as in Python: a model must be a valid name and one of the runtime's chat models. Use now needs
+a model. Jan and KoboldCPP contexts are refused with a model (`Unsupported`); they stay in Python until
+4c part 2.
+
+Checks:
+- Real HOME: 72 plans with models (6 agents × llama.cpp/Ollama × 3 models × use now on/off) give
+  identical texts and contexts in Python and Dart.
+- 45 context fits on 15 real GGUF files match Python.
+- `tests/test_dart_provider_ops_parity.py` has a fake Ollama. Both workers apply a plan with three
+  contexts (one accepted, one refused by the server, one on a closed port). Results: same file, same
+  requests and bodies, 2 failures on each side.
+
+Found and fixed on the way:
+- Dart carried a context as a flat `runtime`/`address`, while `flutter_plan_wire` carries the whole
+  runtime record. Dart now uses the record, and `decodePlan` refuses unknown record fields, as
+  `Runtime(**record)` does.
+- `mergePlans` compared contexts and model actions by identity (Dart maps). It now compares them by
+  value, like Python.
+
+Still Python (4c part 2): `models.switch_preview`/`models.attach_preview`, model actions in plans
+(`validate_actions`, the model guard), online model plans, repair with a model, Jan/KoboldCPP contexts.

@@ -9,8 +9,10 @@ import 'core_tasks.dart';
 import 'skill_plans.dart';
 import 'mcp_plans.dart';
 import 'llm_plans.dart';
+import 'context.dart';
 import 'map_edits.dart';
 import 'provider_ops.dart';
+import 'inventory.dart' show chatModels;
 import 'adapter_assets.g.dart';
 import 'settings.dart';
 import 'service_i18n.dart';
@@ -52,7 +54,12 @@ final class CoreService {
     AgentProfiles(reads.files, identity.configDir),
     '${identity.configDir}/mcp-servers.json',
   );
-  late final llm = LlmPlans(config, reads.catalog, identity.home);
+  late final llm = LlmPlans(
+    config,
+    reads.catalog,
+    identity.home,
+    ContextReader(reads.files, config),
+  );
   late final edits = MapEdits(
     reads,
     config,
@@ -107,7 +114,11 @@ final class CoreService {
       if (rt == null) throw const FormatException('Provider unavailable');
       final remove = params['remove'] as bool,
           model = params['model'] as String;
-      if (!remove && params['use_now'] == true && model.isEmpty) {
+      if (!remove &&
+          (model.isNotEmpty &&
+                  (!modelKey.hasMatch(model) ||
+                      !chatModels(rt.models).contains(model)) ||
+              params['use_now'] == true && model.isEmpty)) {
         throw const FormatException('Choose an available chat model');
       }
       plan = llm.plan(
