@@ -19,9 +19,6 @@ def service():
     system = Path(os.environ['ASTERISM_SCAN_SYSTEM_ROOT'])
     real_list = agents.list_agents
     agents.list_agents = lambda **kw: real_list(db=system / 'var/lib/pacman/local', **kw)
-    # The Dart core gains the MCP library write with the write phase; compare reads only.
-    import mcp_library
-    mcp_library.remember = lambda used: None
     def own_processes():
         found = []
         for path in list(Path(proc).iterdir())[:4000] if Path(proc).is_dir() else []:

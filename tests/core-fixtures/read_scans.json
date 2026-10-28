@@ -1985,6 +1985,783 @@
      }
     }
    ]
+  },
+  {
+   "name": "MCP servers: JSON, TOML, YAML, Goose, Muse defaults, OpenClaw, library, Undo, refusals",
+   "environment": {
+    "ASTERISM_DIFF_COMPONENT": "scans",
+    "ASTERISM_SCAN_NOW": "1793188800",
+    "ASTERISM_SCAN_PROC": "$HOME/proc",
+    "ASTERISM_SCAN_SYSTEM_ROOT": "$HOME/system",
+    "PATH": "$HOME/.local/bin"
+   },
+   "files": [
+    {
+     "path": "proc",
+     "type": "directory"
+    },
+    {
+     "path": "system/var/lib/pacman/local",
+     "type": "directory"
+    },
+    {
+     "path": ".local/bin",
+     "type": "directory"
+    },
+    {
+     "path": ".local/bin/opencode",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/codex",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/dsh",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/muse",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/grok",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/goose",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/gemini",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/crush",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/claude",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/cursor-agent",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/hermes",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/copilot",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/pi",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/omp",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/openclaw",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/bionic",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/agy",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": "system/var/lib/pacman/local/hermes-desktop-1.2.3-1",
+     "type": "directory"
+    },
+    {
+     "path": "system/var/lib/pacman/local/openclaw-1.2.3-1",
+     "type": "directory"
+    },
+    {
+     "path": ".codex/config.toml",
+     "content": "model = \"x\"\n\n[mcp_servers.files]\ncommand = \"npx\"\nargs = [\"-y\", \"@test/files\"]\n[mcp_servers.files.env]\nTOKEN = \"s3cret-value\"\n\n[mcp_servers.\"web search\"]\nurl = \"https://example.invalid/mcp\"\n"
+    },
+    {
+     "path": ".claude.json",
+     "content": "{\n  \"numStartups\": 3,\n  \"ratio\": 0.25,\n  \"tiny\": 1e-05,\n  \"mcpServers\": {\n    \"remote\": {\n      \"type\": \"sse\",\n      \"url\": \"https://h.invalid/sse\",\n      \"headers\": {\n        \"Authorization\": \"Bearer abcd\"\n      }\n    }\n  },\n  \"projects\": {\n    \"/tmp\": {\n      \"x\": \"\\u00fc\"\n    }\n  }\n}\n"
+    },
+    {
+     "path": ".hermes/config.yaml",
+     "content": "model:\n  default: x\nmcp_servers: {}\nother: 1\n"
+    },
+    {
+     "path": ".config/goose/config.yaml",
+     "content": "GOOSE_PROVIDER: openai\nextensions:\n  developer:\n    enabled: true\n    type: builtin\n"
+    },
+    {
+     "path": ".config/muse/settings.json",
+     "content": "{\n  \"theme\": \"dark\"\n}\n"
+    },
+    {
+     "path": ".openclaw/openclaw.json",
+     "content": "{\n  \"agents\": {\n    \"defaults\": {}\n  },\n  \"mcp\": {\n    \"servers\": {}\n  }\n}\n"
+    },
+    {
+     "path": ".config/asterism/mcp-servers.json",
+     "content": "{\n  \"servers\": {\n    \"kept\": {\n      \"transport\": \"stdio\",\n      \"command\": \"/opt/kept\",\n      \"args\": [\n        \"serve\"\n      ],\n      \"env\": {},\n      \"url\": \"\",\n      \"headers\": {}\n    },\n    \"Bad Name!\": {\n      \"transport\": \"stdio\",\n      \"command\": \"x\"\n    }\n  }\n}\n"
+    }
+   ],
+   "requests": [
+    {
+     "method": "connections.snapshot",
+     "params": {}
+    },
+    {
+     "method": "connections.preview",
+     "params": {
+      "kind": "mcp",
+      "command": "claude",
+      "item": "files",
+      "remove": false
+     }
+    },
+    {
+     "method": "connections.apply",
+     "params": {},
+     "refs": {
+      "plan": [
+       1,
+       "result",
+       "plan"
+      ]
+     }
+    },
+    {
+     "method": "tasks.status",
+     "params": {},
+     "refs": {
+      "task": [
+       2,
+       "result",
+       "task"
+      ]
+     },
+     "until_done": true
+    },
+    {
+     "method": "connections.preview",
+     "params": {
+      "kind": "mcp",
+      "command": "hermes",
+      "item": "files",
+      "remove": false
+     }
+    },
+    {
+     "method": "connections.apply",
+     "params": {},
+     "refs": {
+      "plan": [
+       4,
+       "result",
+       "plan"
+      ]
+     }
+    },
+    {
+     "method": "tasks.status",
+     "params": {},
+     "refs": {
+      "task": [
+       5,
+       "result",
+       "task"
+      ]
+     },
+     "until_done": true
+    },
+    {
+     "method": "connections.preview",
+     "params": {
+      "kind": "mcp",
+      "command": "goose",
+      "item": "remote",
+      "remove": false
+     }
+    },
+    {
+     "method": "connections.apply",
+     "params": {},
+     "refs": {
+      "plan": [
+       7,
+       "result",
+       "plan"
+      ]
+     }
+    },
+    {
+     "method": "tasks.status",
+     "params": {},
+     "refs": {
+      "task": [
+       8,
+       "result",
+       "task"
+      ]
+     },
+     "until_done": true
+    },
+    {
+     "method": "connections.preview",
+     "params": {
+      "kind": "mcp",
+      "command": "muse",
+      "item": "remote",
+      "remove": false
+     }
+    },
+    {
+     "method": "connections.apply",
+     "params": {},
+     "refs": {
+      "plan": [
+       10,
+       "result",
+       "plan"
+      ]
+     }
+    },
+    {
+     "method": "tasks.status",
+     "params": {},
+     "refs": {
+      "task": [
+       11,
+       "result",
+       "task"
+      ]
+     },
+     "until_done": true
+    },
+    {
+     "method": "connections.preview",
+     "params": {
+      "kind": "mcp",
+      "command": "openclaw",
+      "item": "files",
+      "remove": false
+     }
+    },
+    {
+     "method": "connections.apply",
+     "params": {},
+     "refs": {
+      "plan": [
+       13,
+       "result",
+       "plan"
+      ]
+     }
+    },
+    {
+     "method": "tasks.status",
+     "params": {},
+     "refs": {
+      "task": [
+       14,
+       "result",
+       "task"
+      ]
+     },
+     "until_done": true
+    },
+    {
+     "method": "connections.preview",
+     "params": {
+      "kind": "mcp",
+      "command": "codex",
+      "item": "remote",
+      "remove": false
+     }
+    },
+    {
+     "method": "connections.apply",
+     "params": {},
+     "refs": {
+      "plan": [
+       16,
+       "result",
+       "plan"
+      ]
+     }
+    },
+    {
+     "method": "tasks.status",
+     "params": {},
+     "refs": {
+      "task": [
+       17,
+       "result",
+       "task"
+      ]
+     },
+     "until_done": true
+    },
+    {
+     "method": "connections.preview",
+     "params": {
+      "kind": "mcp",
+      "command": "claude",
+      "item": "remote",
+      "remove": true
+     }
+    },
+    {
+     "method": "connections.apply",
+     "params": {},
+     "refs": {
+      "plan": [
+       19,
+       "result",
+       "plan"
+      ]
+     }
+    },
+    {
+     "method": "tasks.status",
+     "params": {},
+     "refs": {
+      "task": [
+       20,
+       "result",
+       "task"
+      ]
+     },
+     "until_done": true
+    },
+    {
+     "method": "connections.undo",
+     "params": {},
+     "refs": {
+      "undo": [
+       21,
+       "result",
+       "result",
+       "undo"
+      ]
+     }
+    },
+    {
+     "method": "connections.preview",
+     "params": {
+      "kind": "mcp",
+      "command": "hermes",
+      "item": "kept",
+      "remove": false
+     }
+    },
+    {
+     "method": "connections.apply",
+     "params": {},
+     "refs": {
+      "plan": [
+       23,
+       "result",
+       "plan"
+      ]
+     }
+    },
+    {
+     "method": "tasks.status",
+     "params": {},
+     "refs": {
+      "task": [
+       24,
+       "result",
+       "task"
+      ]
+     },
+     "until_done": true
+    },
+    {
+     "method": "connections.preview",
+     "params": {
+      "kind": "mcp",
+      "command": "codex",
+      "item": "files",
+      "remove": true
+     }
+    },
+    {
+     "method": "connections.apply",
+     "params": {},
+     "refs": {
+      "plan": [
+       26,
+       "result",
+       "plan"
+      ]
+     }
+    },
+    {
+     "method": "tasks.status",
+     "params": {},
+     "refs": {
+      "task": [
+       27,
+       "result",
+       "task"
+      ]
+     },
+     "until_done": true
+    },
+    {
+     "method": "connections.preview",
+     "params": {
+      "kind": "mcp",
+      "command": "bionic",
+      "item": "files",
+      "remove": false
+     }
+    },
+    {
+     "method": "connections.preview",
+     "params": {
+      "kind": "mcp",
+      "command": "claude",
+      "item": "nope",
+      "remove": false
+     }
+    },
+    {
+     "method": "connections.preview",
+     "params": {
+      "kind": "mcp",
+      "command": "claude",
+      "item": "Bad Name!",
+      "remove": false
+     }
+    },
+    {
+     "method": "connections.preview",
+     "params": {
+      "kind": "mcp",
+      "command": "claude",
+      "item": "files",
+      "remove": false,
+      "x": 1
+     }
+    },
+    {
+     "method": "connections.preview",
+     "params": {
+      "kind": "mcp",
+      "command": "goose",
+      "item": "files",
+      "remove": true
+     }
+    },
+    {
+     "method": "connections.preview",
+     "params": {
+      "kind": "mcp",
+      "command": "goose",
+      "item": "web search",
+      "remove": false
+     }
+    }
+   ]
+  },
+  {
+   "name": "DeepSeek Harness MCP inserts: PyYAML-identical add, remove, Undo",
+   "environment": {
+    "ASTERISM_DIFF_COMPONENT": "scans",
+    "ASTERISM_SCAN_NOW": "1793188800",
+    "ASTERISM_SCAN_PROC": "$HOME/proc",
+    "ASTERISM_SCAN_SYSTEM_ROOT": "$HOME/system",
+    "PATH": "$HOME/.local/bin"
+   },
+   "files": [
+    {
+     "path": "proc",
+     "type": "directory"
+    },
+    {
+     "path": "system/var/lib/pacman/local",
+     "type": "directory"
+    },
+    {
+     "path": ".local/bin",
+     "type": "directory"
+    },
+    {
+     "path": ".local/bin/opencode",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/codex",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/dsh",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/muse",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/grok",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/goose",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/gemini",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/crush",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/claude",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/cursor-agent",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/hermes",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/copilot",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/pi",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/omp",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/openclaw",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/bionic",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/agy",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": "system/var/lib/pacman/local/hermes-desktop-1.2.3-1",
+     "type": "directory"
+    },
+    {
+     "path": "system/var/lib/pacman/local/openclaw-1.2.3-1",
+     "type": "directory"
+    },
+    {
+     "path": ".dsh/profiles/web/cordis.patch.yml",
+     "content": "# Your patch layer for this dsh profile, applied after every bundle layer:\n# a top-level YAML array of loader patch entries (id-targeted config\n# overrides, disables, and insert lists; `!!js` expressions allowed).\n- id: ui-settings-general\n  name: \"@deepseek-ai/dsh-client-ui-settings-general\"\n  config:\n    welcomeNoticeVersion: 2026-09-28.1\n    hook: !!js \"() => 1\"\n- insert:\n  - id: mcp-pdfcraft\n    name: '@deepseek-ai/dsh-mcp-client'\n    config:\n      serverName: pdfcraft\n      transport: stdio\n      command: /home/u/pdfcraft-cli\n      args:\n      - mcp\n"
+    },
+    {
+     "path": ".codex/config.toml",
+     "content": "[mcp_servers.files]\ncommand = \"npx\"\nargs = [\"-y\", \"@test/files\", \"--root\", \"/tmp/a b\"]\n[mcp_servers.files.env]\nTOKEN = \"true\"\nLONG = \"word word word word word word word word word word word word word word word word word word word word end\"\n\n[mcp_servers.remote]\nurl = \"https://h.invalid/mcp\"\nhttp_headers = { Authorization = \"Bearer x: y\" }\n"
+    }
+   ],
+   "requests": [
+    {
+     "method": "connections.snapshot",
+     "params": {}
+    },
+    {
+     "method": "connections.preview",
+     "params": {
+      "kind": "mcp",
+      "command": "dsh",
+      "item": "files",
+      "remove": false
+     }
+    },
+    {
+     "method": "connections.apply",
+     "params": {},
+     "refs": {
+      "plan": [
+       1,
+       "result",
+       "plan"
+      ]
+     }
+    },
+    {
+     "method": "tasks.status",
+     "params": {},
+     "refs": {
+      "task": [
+       2,
+       "result",
+       "task"
+      ]
+     },
+     "until_done": true
+    },
+    {
+     "method": "connections.preview",
+     "params": {
+      "kind": "mcp",
+      "command": "dsh",
+      "item": "remote",
+      "remove": false
+     }
+    },
+    {
+     "method": "connections.apply",
+     "params": {},
+     "refs": {
+      "plan": [
+       4,
+       "result",
+       "plan"
+      ]
+     }
+    },
+    {
+     "method": "tasks.status",
+     "params": {},
+     "refs": {
+      "task": [
+       5,
+       "result",
+       "task"
+      ]
+     },
+     "until_done": true
+    },
+    {
+     "method": "connections.preview",
+     "params": {
+      "kind": "mcp",
+      "command": "dsh",
+      "item": "pdfcraft",
+      "remove": true
+     }
+    },
+    {
+     "method": "connections.apply",
+     "params": {},
+     "refs": {
+      "plan": [
+       7,
+       "result",
+       "plan"
+      ]
+     }
+    },
+    {
+     "method": "tasks.status",
+     "params": {},
+     "refs": {
+      "task": [
+       8,
+       "result",
+       "task"
+      ]
+     },
+     "until_done": true
+    },
+    {
+     "method": "connections.undo",
+     "params": {},
+     "refs": {
+      "undo": [
+       9,
+       "result",
+       "result",
+       "undo"
+      ]
+     }
+    },
+    {
+     "method": "connections.preview",
+     "params": {
+      "kind": "mcp",
+      "command": "codex",
+      "item": "pdfcraft",
+      "remove": false
+     }
+    },
+    {
+     "method": "connections.apply",
+     "params": {},
+     "refs": {
+      "plan": [
+       11,
+       "result",
+       "plan"
+      ]
+     }
+    },
+    {
+     "method": "tasks.status",
+     "params": {},
+     "refs": {
+      "task": [
+       12,
+       "result",
+       "task"
+      ]
+     },
+     "until_done": true
+    }
+   ]
   }
  ]
 }

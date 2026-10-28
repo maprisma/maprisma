@@ -28,7 +28,7 @@ Future<void> main() async {
   try {
     final settings = await backend.call('settings.get');
     if (settings['map_light_fps'] != 20) throw StateError('Wrong defaults');
-    try { await backend.call('connections.preview', {'kind': 'mcp', 'command': 'x', 'item': 'y', 'remove': false}); throw StateError('Fallback allowed'); }
+    try { await backend.call('sessions.start', {}); throw StateError('Fallback allowed'); }
     on BackendError catch(e) { if(e.code != 'unported_route') rethrow; }
     stdout.writeln('Dart-only router refuses unported routes');
   } finally { await backend.shutdown(); }

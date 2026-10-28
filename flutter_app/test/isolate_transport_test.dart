@@ -72,12 +72,7 @@ void main() {
         );
         if (!develPythonFallback) {
           await expectLater(
-            router.call('connections.preview', {
-              'kind': 'mcp',
-              'command': 'x',
-              'item': 'y',
-              'remove': false,
-            }),
+            router.call('sessions.start', {}),
             throwsA(
               isA<BackendError>().having(
                 (e) => e.code,

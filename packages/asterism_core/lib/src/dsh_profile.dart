@@ -1,4 +1,5 @@
 import 'package:yaml/yaml.dart';
+import 'py_yaml.dart';
 
 /// DeepSeek Harness's profile patch (Python dsh_ctl, read side): a top-level
 /// YAML list of loader patch entries, read block by block like the reference.
@@ -33,9 +34,14 @@ Iterable<String> _lines(String text) sync* {
   if (start < text.length) yield text.substring(start);
 }
 
+/// dsh_ctl's loader constructs `!!js` expressions as their text; package:yaml
+/// refuses the unknown tag, so it is dropped before reading (never written back).
+String _untagged(String block) =>
+    block.replaceAll(RegExp(r'(?<=[\s:\-\[,{])!!js(?=\s)'), '');
+
 Map _entry(String block) {
   try {
-    final data = loadYaml(block);
+    final data = loadYaml(_untagged(block));
     return data is List && data.isNotEmpty && data.first is Map
         ? data.first as Map
         : {};
@@ -101,4 +107,92 @@ List<String> dshBuiltinChoices(String baseProfile, String deepseekIndex) {
     for (final m in _modelId.allMatches(catalog[1]!)) m[1]!,
   };
   return [for (final m in models) '${found[1]}/$m'].take(12).toList();
+}
+
+const _header =
+    '# Your patch layer for this dsh profile, applied after every bundle layer:\n'
+    '# a top-level YAML array of loader patch entries (id-targeted config\n'
+    '# overrides, disables, and insert lists; `!!js` expressions allowed).\n';
+
+/// dsh_ctl.split: (the comments before the list, one text block per entry).
+(String, List<String>) dshSplit(String text) {
+  final header = StringBuffer(), blocks = <String>[];
+  for (final line in _lines(text)) {
+    if (line.startsWith('- ') || line.trimRight() == '-') {
+      blocks.add(line);
+    } else if (blocks.isNotEmpty) {
+      blocks[blocks.length - 1] += line;
+    } else if (line.trim() == '[]' || line.trim().isEmpty) {
+      continue; // the empty list dsh starts with
+    } else {
+      header.write(line);
+    }
+  }
+  return (header.toString(), blocks);
+}
+
+String dshJoin(String header, List<String> blocks) {
+  final head = header.isEmpty ? _header : header;
+  if (blocks.isEmpty) return '$head[]\n';
+  return head + blocks.map((b) => b.endsWith('\n') ? b : '$b\n').join();
+}
+
+/// dsh_ctl.parse for writes: a block PyYAML cannot read refuses the edit.
+Map _strictEntry(String block) {
+  final dynamic data;
+  try {
+    data = loadYaml(_untagged(block));
+  } on YamlException {
+    throw const FormatException('The profile has an entry YAML cannot read');
+  }
+  return data is List && data.isNotEmpty && data.first is Map
+      ? data.first as Map
+      : {};
+}
+
+/// dsh_ctl.mcp_text: MCP server [name] set to [config] (an insert of its own),
+/// or removed. An insert that holds other entries too would be dumped again
+/// from its parsed data; that needs PyYAML's YAML 1.1 reading (dates, yes/on,
+/// !!js tags), so such an edit is refused here instead of written differently.
+String dshMcpText(String text, String name, Map? config) {
+  final (header, blocks) = dshSplit(text);
+  final kept = <String>[];
+  for (final block in blocks) {
+    final rows = _strictEntry(block)['insert'];
+    if (rows is! List) {
+      kept.add(block);
+      continue;
+    }
+    bool ours(dynamic r) =>
+        r is Map &&
+        r['name'] == _mcpName &&
+        r['config'] is Map &&
+        (r['config'] as Map)['serverName'] == name;
+    final others = rows.where((r) => !ours(r)).toList();
+    if (others.length == rows.length) {
+      kept.add(block);
+    } else if (others.isNotEmpty) {
+      throw UnsupportedError(
+        'This insert holds other entries too; edit it in dsh',
+      );
+    }
+  }
+  if (config != null) {
+    final id =
+        'mcp-${name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9_-]'), '-')}';
+    kept.add(
+      pyYamlDump([
+        {
+          'insert': [
+            {
+              'id': id.length > 64 ? id.substring(0, 64) : id,
+              'name': _mcpName,
+              'config': {'serverName': name, ...config},
+            },
+          ],
+        },
+      ]),
+    );
+  }
+  return dshJoin(header, kept);
 }

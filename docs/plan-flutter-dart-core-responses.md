@@ -503,3 +503,32 @@ Fixture: Claude links (with a category skill, a hidden and a non-skill folder), 
 Pi removal, an empty removal without a worker, three refusals, Hermes removal, then a map and a preview with
 `focus` — same replies, same trees, same backups and manifests. On the real HOME: 100 previews (10 agents ×
 5 skill sets × add/remove, 31 with changes) match.
+
+### 3c — MCP servers (Claude, 2026-10-28)
+
+`connections.preview` with `kind: "mcp"` is built by the core. `mcp_plans.dart` ports `mcp_ctl`: every
+agent's entries read in its own format (JSON with dotted keys, Claude's `~/.claude.json`, TOML, YAML,
+DeepSeek Harness's profile, LM Studio's chat, web profiles), `normal`, `native` for every shape (Claude,
+Copilot, Gemini, Codex, OMP, Muse, OpenClaw, Crush, Goose with its name inside, OpenCode, profiles), the
+app's server list (`mcp_library.load` with `check_entry`, used when no agent has the server any more) and
+every writer: JSON (`_json_text`, `_json_dotted`), Codex/Grok TOML text, Hermes/Goose YAML text, Muse with
+its required `schema_version`, OpenClaw, Claude's file, and DeepSeek Harness's inserts.
+
+`py_yaml.dart` is PyYAML's `yaml.dump` (SafeDumper, block style, `allow_unicode`) for str, int, float,
+bool, None, lists and maps: scalar analysis, YAML 1.1 implicit types, plain/single/double quoting, the
+indentless sequences, 80-column splitting, escapes. 2,900 random documents match PyYAML byte for byte
+(keys containing line breaks, which PyYAML writes as complex `? ` keys, are not supported).
+
+Known limit: removing one server from a DeepSeek Harness insert that holds other entries too makes the
+reference dump that whole insert again from parsed data, which needs PyYAML's YAML 1.1 reading (dates,
+`yes`/`on`, `!!js` tags). The core refuses that edit before writing; the app itself always writes one
+insert per server. `!!js` tags are now read like the reference (before, a profile with one showed no MCP
+servers in Dart).
+
+`mcp_library.remember` runs in Dart inventory scans too (servers in use added to `mcp-servers.json`,
+0600); the oracle no longer disables it, so all fixtures compare the written list.
+
+Fixtures: Claude/Hermes/Goose/Muse/OpenClaw/Codex adds, a removal with Undo, a server from the app's list,
+five refusals; DeepSeek Harness add (with a wrapped long value and quoted `'true'`), remote add, removal,
+Undo. Real HOME: 252 previews and 448 plans (15 agents × 14 servers × add/remove, all formats including
+DeepSeek Harness): 300 planned file texts identical byte for byte, `~/.claude.json` (89 KB) included.

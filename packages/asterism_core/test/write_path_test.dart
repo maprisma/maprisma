@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:asterism_core/asterism_core.dart';
 import 'package:asterism_core/src/connect_apply.dart';
 import 'package:asterism_core/src/core_tasks.dart';
+import 'package:asterism_core/src/dsh_profile.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -114,4 +115,37 @@ void main() {
     });
     expect(() => connections.undo('core-unknown'), throwsFormatException);
   });
+
+  test(
+    'a DeepSeek Harness insert holding other servers is refused, not rewritten',
+    () {
+      const profile =
+          '- insert:\n'
+          '  - id: mcp-a\n'
+          "    name: '@deepseek-ai/dsh-mcp-client'\n"
+          '    config:\n'
+          '      serverName: a\n'
+          '  - id: mcp-b\n'
+          "    name: '@deepseek-ai/dsh-mcp-client'\n"
+          '    config:\n'
+          '      serverName: b\n'
+          '      when: !!js "() => Date.now()"\n';
+      expect(dshMcpServers(profile).keys, ['a', 'b']);
+      expect(() => dshMcpText(profile, 'a', null), throwsUnsupportedError);
+      // Untouched inserts stay byte for byte; a new server is its own insert.
+      final added = dshMcpText(profile, 'c', {
+        'transport': 'stdio',
+        'command': 'x',
+        'args': <String>[],
+      });
+      expect(added, startsWith('# Your patch layer'));
+      expect(added, contains(profile));
+      expect(
+        added,
+        endsWith(
+          "      serverName: c\n      transport: stdio\n      command: x\n      args: []\n",
+        ),
+      );
+    },
+  );
 }

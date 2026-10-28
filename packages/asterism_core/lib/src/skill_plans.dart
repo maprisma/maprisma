@@ -30,6 +30,63 @@ final class AgentProfiles {
       !_private.hasMatch(path) &&
       '/'.allMatches(path).length >= 2;
 
+  static final _key = RegExp(
+    r'^[A-Za-z_][A-Za-z0-9_-]{0,40}(\.[A-Za-z_][A-Za-z0-9_-]{0,40}){0,3}$',
+  );
+  static const _fields = {
+    'type_field': ['', 'type', 'transport'],
+    'stdio_type': ['', 'stdio', 'local'],
+    'http_type': [
+      '',
+      'http',
+      'streamable_http',
+      'streamable-http',
+      'remote',
+      'sse',
+    ],
+    'url_field': ['url', 'httpUrl', 'serverUrl'],
+    'env_field': ['env', 'environment'],
+    'headers_field': ['headers', 'http_headers'],
+  };
+
+  Map<String, dynamic> _load(String command) => _command.hasMatch(command)
+      ? files.json(
+          '$configDir/agents/$command.json',
+          limit: 64 * 1024,
+          comments: false,
+        )
+      : {};
+
+  /// load(command)["mcp"]: where its MCP servers go and how an entry looks.
+  /// A profile whose skills and MCP parts are both unusable is no profile.
+  Map<String, dynamic>? mcp(String command) {
+    final data = _load(command);
+    if (data['status'] != 'ok') return null;
+    final raw = data['mcp'];
+    if (raw is! Map ||
+        !pathOk(raw['file']) ||
+        !const {'json', 'toml', 'yaml'}.contains(raw['format']) ||
+        raw['key'] is! String ||
+        !_key.hasMatch(raw['key'] as String)) {
+      return null;
+    }
+    if (raw['format'] != 'json' && (raw['key'] as String).contains('.')) {
+      return null;
+    }
+    return {
+      'file': raw['file'],
+      'format': raw['format'],
+      'key': raw['key'],
+      'command_list': raw['command_list'] == true,
+      for (final e in _fields.entries)
+        e.key:
+            e.value.contains(pyTruthy(raw[e.key]) ? raw[e.key] : '') &&
+                pyTruthy(raw[e.key])
+            ? raw[e.key]
+            : e.value.first,
+    };
+  }
+
   /// load(command)["skills"] when the profile is "ok" and usable.
   Map<String, dynamic>? skills(String command) {
     if (!_command.hasMatch(command)) return null;

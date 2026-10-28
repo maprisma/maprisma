@@ -7,6 +7,7 @@ import 'read_service.dart';
 import 'connect_apply.dart';
 import 'core_tasks.dart';
 import 'skill_plans.dart';
+import 'mcp_plans.dart';
 import 'settings.dart';
 import 'service_i18n.dart';
 
@@ -29,6 +30,8 @@ final class CoreService {
     settings.migrate();
     desktop = detectDesktop(identity, Posix());
     i18n = ServiceI18n(identity, settings);
+    // Inventory scans remember the MCP servers in use, as the reference does.
+    reads.inventory.knownServers = mcp.knownServers;
   }
   late final reads = ReadService(identity, settings, desktop, i18n);
   late final tasks = CoreTasks(defaultWorkerCommand(identity.environment));
@@ -37,6 +40,13 @@ final class CoreService {
     config,
     tasks,
     '${identity.configDir}/connection-backups',
+  );
+  late final mcp = McpPlans(
+    reads.files,
+    config,
+    reads.catalog,
+    AgentProfiles(reads.files, identity.configDir),
+    '${identity.configDir}/mcp-servers.json',
   );
   late final skills = SkillPlans(
     reads.files,
@@ -50,7 +60,7 @@ final class CoreService {
     final fields = {'kind', 'command', 'item', 'remove'};
     if (params.length != fields.length ||
         !params.keys.every(fields.contains) ||
-        !corePreviewKinds.contains(params['kind']) ||
+        !corePreview(params) ||
         params['remove'] is! bool ||
         params['command'] is! String ||
         params['item'] is! String) {
@@ -62,17 +72,30 @@ final class CoreService {
       throw const FormatException('Agent unavailable');
     }
     final inventory = reads.inventory.collect(agents);
-    final folder = inventory.skillSets
-        .where((s) => s['path'] == params['item'])
-        .firstOrNull;
-    if (folder == null || skills.ownDir(command) == null) {
-      throw const FormatException('Skill folder unavailable');
+    final Plan plan;
+    if (params['kind'] == 'mcp') {
+      final server = inventory.mcp
+          .where((s) => s['name'] == params['item'])
+          .firstOrNull;
+      if (server == null || !mcp.supported(command)) {
+        throw const FormatException('MCP server unavailable');
+      }
+      plan = mcp.plan(command, server['name'] as String, [
+        for (final a in server['agents'] as List) a as String,
+      ], remove: params['remove'] as bool);
+    } else {
+      final folder = inventory.skillSets
+          .where((s) => s['path'] == params['item'])
+          .firstOrNull;
+      if (folder == null || skills.ownDir(command) == null) {
+        throw const FormatException('Skill folder unavailable');
+      }
+      plan = skills.plan(
+        command,
+        folder['path'] as String,
+        remove: params['remove'] as bool,
+      );
     }
-    final plan = skills.plan(
-      command,
-      folder['path'] as String,
-      remove: params['remove'] as bool,
-    );
     return {
       ...connections.keep(plan),
       'kind': params['kind'],
@@ -96,7 +119,7 @@ final class CoreService {
       return dispatchHandle(method, params, connections, tasks);
     }
     if (method == 'connections.preview') {
-      if (!corePreviewKinds.contains(params['kind'])) {
+      if (!corePreview(params)) {
         throw ServiceError('unported_route');
       }
       return preview(params);

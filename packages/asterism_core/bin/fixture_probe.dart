@@ -6,6 +6,7 @@ import 'package:asterism_core/src/adapters.dart';
 import 'package:asterism_core/src/connect_apply.dart';
 import 'package:asterism_core/src/line_diff.dart';
 import 'package:asterism_core/src/py_values.dart';
+import 'package:asterism_core/src/py_yaml.dart';
 import 'package:asterism_core/src/read_service.dart';
 import 'package:asterism_core/src/security_reports.dart';
 import 'package:asterism_core/src/session_readers.dart';
@@ -55,6 +56,21 @@ Future<void> main() async {
           'flat': pyJsonDumps(value),
           'indented': pyJsonDumps(value, indent: 2, ensureAscii: false),
         };
+      } else if (request.method == 'dev.mcpplan') {
+        // The planned texts themselves (development probe only).
+        final plan = core.mcp.plan(
+          params['agent'] as String,
+          params['name'] as String,
+          [for (final a in params['sources'] as List) a as String],
+          remove: params['remove'] as bool,
+        );
+        result = {
+          'changes': [
+            for (final c in plan.changes) {'path': c.path, 'new': c.next},
+          ],
+        };
+      } else if (request.method == 'dev.yamldump') {
+        result = {'text': pyYamlDump(jsonDecode(params['json'] as String))};
       } else if (request.method == 'dev.undo') {
         // Undo of a backup folder either side made (development probe only).
         result = {
@@ -70,7 +86,9 @@ Future<void> main() async {
         };
       } else if (request.method == 'scan.inventory') {
         if (params.isNotEmpty) throw const FormatException('Unexpected params');
-        result = reads.inventory.collect(reads.catalog.scan()).toJson();
+        result = reads.inventory
+            .collect(reads.catalog.scan(), remember: false)
+            .toJson();
       } else if ([
         'scan.sessions',
         'scan.security',

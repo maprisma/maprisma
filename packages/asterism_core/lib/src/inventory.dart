@@ -224,7 +224,14 @@ final class InventoryReader {
     return result.take(500).toList();
   }
 
-  InventorySnapshot collect(List<AgentRecord> agents) {
+  /// mcp_library: remember(used) and load(), given the servers' agents.
+  Map<String, dynamic> Function(
+    Map<String, List<String>> serverAgents,
+    bool remember,
+  )?
+  knownServers;
+
+  InventorySnapshot collect(List<AgentRecord> agents, {bool remember = true}) {
     final inv = InventorySnapshot();
     inv.runtimes.addAll(providers.scan());
     final serversByName = <String, Map<String, dynamic>>{},
@@ -299,28 +306,33 @@ final class InventoryReader {
       mapOf(files.json('~/.lmstudio/mcp.json', comments: false)['mcpServers']),
       'lmstudio',
     );
-    final library = mapOf(
-      files.json(
-        '${files.identity.configDir}/mcp-servers.json',
-        comments: false,
-      )['servers'],
-    );
+    // The servers the app knows: remember what is in use, list the rest too.
+    final Map library;
+    if (knownServers != null) {
+      library = knownServers!({
+        for (final e in serversByName.entries)
+          e.key: [for (final a in e.value['agents'] as List) a as String],
+      }, remember);
+    } else {
+      library = mapOf(
+        files.json(
+          '${files.identity.configDir}/mcp-servers.json',
+          comments: false,
+        )['servers'],
+      );
+    }
     for (final e in library.entries.take(200)) {
       if (serversByName.containsKey(e.key) || e.value is! Map) continue;
       final entry = e.value as Map, transport = entry['transport'];
       if (transport == 'stdio' &&
-          entry['command'] is String &&
-          entry['args'] is List) {
-        final (kind, target) = serverTarget(entry);
-        serversByName[e.key] = {
-          'name': e.key,
-          'kind': kind,
-          'target': target,
-          'agents': <String>[],
-        };
-      } else if (['http', 'sse'].contains(transport) &&
-          entry['url'] is String) {
-        final (kind, target) = serverTarget(entry);
+              entry['command'] is String &&
+              entry['args'] is List ||
+          ['http', 'sse'].contains(transport) && entry['url'] is String) {
+        final (kind, target) = serverTarget(
+          transport == 'stdio'
+              ? {'command': entry['command'], 'args': entry['args']}
+              : {'url': entry['url']},
+        );
         serversByName[e.key] = {
           'name': e.key,
           'kind': kind,
