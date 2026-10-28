@@ -215,3 +215,81 @@ Validation for this correction:
 
 No commit, push, sync, real-desktop run or performance measurement. Phase 1
 remains stopped for review.
+
+### Phase 1 tooling follow-up — native SDK and mount guard (2026-10-28)
+
+Fixed the Medium in `tools/diff-core.py`: PATH's Dart can be the AUR shell
+wrapper, which mounts the SDK under a fixture's XDG cache. Avoiding Dart's CLI
+frontend alone did not avoid that wrapper.
+
+`tools/dart_sdk.py` now locates the native SDK executable without running any
+candidate. It prefers `FLUTTER_ROOT/bin/cache/dart-sdk/bin/dart`, then checks SDK
+locations inferred from the resolved Flutter/Dart PATH entries. A directly
+installed native Dart is also accepted. The selected executable must have an ELF
+header and execute permission. An explicitly supplied shell wrapper is refused
+before fixture creation; it is never probed by executing it.
+
+`tools/flutter-dev` selects that binary once, uses it for Dart checks and passes
+`--dart` explicitly to both the differential harness and AOT transport check.
+The AOT helper uses the same native-binary validation when invoked separately.
+
+The differential harness checks `/proc/self/mountinfo` after each subprocess,
+including timeout/failure, before comparing the file tree. It decodes mountinfo
+path escapes and tests path-component boundaries. A final guard covers the
+whole case before temporary-tree cleanup. If an unexpected mount is found, it
+reports the mount paths and preserves the fixture without recursing into the
+mount or attempting an automatic unmount. Native SDK selection prevents the
+reported wrapper side effect; the guard detects regressions rather than hiding
+SDK files from the comparison.
+
+Seven regression tests cover SDK discovery, wrapper rejection without execution,
+mount-path parsing, guards on subprocess failure and refusal to recurse during
+cleanup. No FUSE mount is created by these tests.
+
+Validation: all **36 differential cases pass** with explicit
+`--dart /opt/flutter/bin/cache/dart-sdk/bin/dart`. `tools/flutter-dev check`
+passes with clean analyzers, **18 Dart tests, 36 differential cases, 93 Flutter
+tests**, and the AOT check. All **1,432 Python tests pass**, including the seven
+new tooling regressions; typecheck reports **0 errors, 0 warnings, 0 informations**.
+`git diff --check` passes. No mounts remain under `/tmp/asterism-diff-*`.
+No app build or launch was needed for this tooling-only correction.
+
+Phase 2 is not started;
+the `toml ^0.18.0` upgrade remains its first parser task after Uwe's go-ahead.
+Nothing committed, pushed or synced.
+
+### Phase 1 follow-up — retired Python provider watcher (2026-10-28)
+
+Uwe removed the GTK app/plugin, its launchers and shortcut, old binaries, and the
+Python `asterism-providers.service`. The retained settings/add-ons/agent data and
+source repository are not an instruction to restore that unit.
+
+Code trace: the only application callers of `provider_watch.ensure_service` and
+`write_config` are in `ai_popup.py`, the frozen GTK UI. Flutter initialization,
+provider snapshots/worker operations, map scans and terminal starts do not call
+`ensure_service`. Merely starting an agent in Flutter does not schedule automatic
+provider startup/shutdown; that remains absent pending the phase-4 Dart watcher.
+Manual provider Start/Stop and model Load/Unload operations remain explicit
+user-requested actions through the existing fixed-operation worker routes.
+
+Added a guard against future indirect reference calls: `PythonTransport` sets
+`ASTERISM_FLUTTER_DEVEL=1` in the subprocess environment, and the Python backend's
+entry point sets it before initialization even when launched directly. Workers
+inherit that environment. With this marker, `provider_watch.ensure_service`
+returns `False` immediately for both on/off: no unit-file access, unit generation,
+write, enable/start/restart, disable/stop, removal or daemon reload. The Python
+reference's ordinary non-Flutter watcher behavior remains available to tests;
+the Flutter reference cannot restore the removed unit through this helper.
+
+Regression coverage mocks unit access and systemctl for both on/off, and uses a
+fake reference subprocess plus its child to verify marker inheritance. No real
+systemd operation or app launch was used to validate this change.
+
+Validation: `tools/flutter-dev check` passes with **18 Dart core tests,
+36 differential cases, the AOT release check, clean analyzers and 94 Flutter
+tests**. The full Python suite passes **1,433 tests** on a private Xvfb display;
+the focused watcher suite passes 23 tests. Typecheck reports **0 errors,
+0 warnings, 0 informations**. `git diff --check` passes.
+
+The tooling follow-up and this guard are uncommitted; no push or sync. Phase 2
+still requires Uwe's go and starts with the `toml ^0.18.0` upgrade.

@@ -33,7 +33,10 @@ and translations, runs core format/analyze/`dart test`, fixture differentials,
 an AOT transport exclusion check, and Flutter checks. `tools/diff-core.py` can
 also run selected fixture documents from `tests/core-fixtures/`. Each side has
 its own temporary HOME; only that HOME prefix is normalized in responses and
-file bytes. Refusals and file modes are compared too. New routes must add normal
+file bytes. Refusals and file modes are compared too. The harness resolves a
+native SDK Dart binary without executing PATH wrappers; `--dart` also refuses
+shell scripts. Mount guards run before fixture traversal and cleanup, reporting
+unexpected mounts without recursing into them. New routes must add normal
 and hostile cases before joining `portedRoutes`.
 
 No release is ready. All other service routes, full agent/project snapshots,

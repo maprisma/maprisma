@@ -11,12 +11,47 @@ import json
 import os
 from pathlib import Path
 import shutil
+import re
+from contextlib import contextmanager
+from dart_sdk import resolve_dart
 import stat
 import subprocess
 import sys
 import tempfile
 
 ROOT = Path(__file__).resolve().parent.parent
+
+
+def fixture_mounts(home):
+    root = Path(os.path.abspath(home))
+    mounts = []
+    for line in Path('/proc/self/mountinfo').read_text().splitlines():
+        fields = line.split()
+        if len(fields) < 6:
+            raise RuntimeError('Invalid mountinfo; refusing fixture traversal')
+        decoded = re.sub(r'\\([0-7]{3})', lambda match: chr(int(match[1], 8)), fields[4])
+        mount = Path(decoded)
+        if mount == root or root in mount.parents:
+            mounts.append(str(mount))
+    return mounts
+
+
+def assert_no_mounts(home):
+    mounts = fixture_mounts(home)
+    if mounts:
+        raise RuntimeError('Unexpected fixture mount(s); stop and unmount explicitly: ' + ', '.join(mounts))
+
+
+@contextmanager
+def fixture_root():
+    root = Path(tempfile.mkdtemp(prefix='asterism-diff-'))
+    try:
+        yield root
+    finally:
+        # Never recurse into a mounted SDK during cleanup, even on subprocess
+        # failure or timeout. Preserve the fixture and report the mount paths.
+        assert_no_mounts(root)
+        shutil.rmtree(root)
 
 
 def oracle():
@@ -104,9 +139,12 @@ def run_side(command, case, home):
             script.append(request['raw'])
         else:
             script.append(json.dumps({'id': i, 'protocol': 1, **expand(request, home)}, ensure_ascii=False))
-    output = subprocess.run(command, input=('\n'.join(script)+'\n').encode(),
-                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env,
-                            cwd=ROOT / 'packages/asterism_core', timeout=30, check=True)
+    try:
+        output = subprocess.run(command, input=('\n'.join(script)+'\n').encode(),
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env,
+                                cwd=ROOT / 'packages/asterism_core', timeout=30, check=True)
+    finally:
+        assert_no_mounts(home)
     responses = [json.loads(line.replace(os.fsencode(home), b'$HOME')) for line in output.stdout.splitlines()]
     if len(responses) != len(script):
         raise AssertionError('Reply count differs from request count')
@@ -116,20 +154,22 @@ def run_side(command, case, home):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--oracle', action='store_true', help=argparse.SUPPRESS)
-    parser.add_argument('--dart', default=shutil.which('dart'))
+    parser.add_argument('--dart', help='Native SDK executable; shell wrappers are refused')
     parser.add_argument('fixtures', nargs='*', type=Path)
     args = parser.parse_args()
     if args.oracle:
         oracle()
         return
-    if not args.dart:
-        parser.error('dart must be on PATH or supplied with --dart')
+    try:
+        args.dart = resolve_dart(args.dart)
+    except (OSError, ValueError, RuntimeError) as error:
+        parser.error(str(error))
     cases = args.fixtures or sorted((ROOT / 'tests/core-fixtures').glob('*.json'))
     count = 0
     for fixture in cases:
         document = json.loads(fixture.read_text())
         for case in document['cases']:
-            with tempfile.TemporaryDirectory(prefix='asterism-diff-') as temp:
+            with fixture_root() as temp:
                 homes = [Path(temp) / side for side in ('python', 'dart')]
                 for home in homes:
                     home.mkdir(mode=0o700)

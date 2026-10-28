@@ -30,10 +30,12 @@ class PythonTransport implements ServiceTransport {
       throw StateError('Asterism service was not found');
     }
     return PythonTransport._(
-      await Process.start('/usr/bin/python3', [
-        '-u',
-        '$root/flutter_backend.py',
-      ], workingDirectory: root),
+      await Process.start(
+        '/usr/bin/python3',
+        ['-u', '$root/flutter_backend.py'],
+        workingDirectory: root,
+        environment: const {'ASTERISM_FLUTTER_DEVEL': '1'},
+      ),
     );
   }
 

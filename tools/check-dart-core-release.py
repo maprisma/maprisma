@@ -2,7 +2,8 @@
 """Phase-1 regression: AOT tree shaking excludes the Devel Python fallback."""
 from pathlib import Path
 import os
-import shutil
+import argparse
+from dart_sdk import resolve_dart
 import subprocess
 import tempfile
 
@@ -10,9 +11,13 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 def main():
-    dart = shutil.which('dart')
-    if not dart:
-        raise SystemExit('dart must be on PATH')
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--dart')
+    args = parser.parse_args()
+    try:
+        dart = resolve_dart(args.dart)
+    except (OSError, ValueError, RuntimeError) as error:
+        parser.error(str(error))
     with tempfile.TemporaryDirectory(prefix='asterism-core-release-') as temp:
         folder = Path(temp)
         source = folder / 'probe.dart'

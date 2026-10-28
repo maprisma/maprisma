@@ -13,6 +13,7 @@ if ! command -v flutter >/dev/null 2>&1; then
     echo 'Flutter SDK is not on PATH. Install it, then rerun this command.' >&2
     exit 1
 fi
+dart_binary=$(python3 "$root/tools/dart_sdk.py")
 python3 "$root/tools/flutter-assets.py"
 python3 "$root/tools/core-assets.py"
 if [[ ! -d "$frontend/linux" ]]; then
@@ -45,14 +46,14 @@ case "$action" in
     check)
         (
             cd "$root/packages/asterism_core"
-            dart pub get --offline
-            dart format --output=none --set-exit-if-changed lib bin test
-            dart analyze --fatal-infos
-            dart test
+            "$dart_binary" pub get --offline
+            "$dart_binary" format --output=none --set-exit-if-changed lib bin test
+            "$dart_binary" analyze --fatal-infos
+            "$dart_binary" test
         )
-        python3 "$root/tools/diff-core.py"
-        python3 "$root/tools/check-dart-core-release.py"
-        dart format --output=none --set-exit-if-changed lib test
+        python3 "$root/tools/diff-core.py" --dart "$dart_binary"
+        python3 "$root/tools/check-dart-core-release.py" --dart "$dart_binary"
+        "$dart_binary" format --output=none --set-exit-if-changed lib test
         flutter --suppress-analytics --no-version-check analyze --no-pub
         flutter --suppress-analytics --no-version-check test --no-pub --timeout 60s
         ;;
