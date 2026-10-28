@@ -106,8 +106,10 @@ a commit.
 6. **Packaging:** bundle Python and dependencies next to Flutter; resolve bundle
    paths instead of ASTERISM_SOURCE. Validate Linux/AUR/AppImage on a clean system.
    Replace the production entrypoint only after parity and delivery are validated.
-7. **Omarchy plugin as a thin launcher** (`plan-one-app.md`): the marketplace plugin
-   becomes a small QML bar widget + toggle that focuses or starts the installed
+7. **A new Omarchy plugin "Asterism" as a thin launcher** (Uwe, 2026-10-28; `plan-one-app.md`):
+   a new marketplace plugin `ubruckhaus.asterism` with its own repository, not the old
+   AI Agents Map plugin (that one only points its users to the new plugin and gets
+   fixes until then). It is a small QML bar widget + toggle that focuses or starts the installed
    Asterism (popup mode from step 5) and offers its installation when missing (AUR
    via yay/paru, else the AppImage with SHA-256 check, shown in a visible terminal).
    It ships no Flutter binary or Python bundle: the marketplace reviews source only.
