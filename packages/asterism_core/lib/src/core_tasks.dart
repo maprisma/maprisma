@@ -368,7 +368,7 @@ List<String> taskFocus(
 
 /// The connection kinds whose previews this core builds (the others stay with
 /// the Python reference until their phase).
-const corePreviewKinds = {'skills', 'mcp'};
+const corePreviewKinds = {'skills', 'mcp', 'provider'};
 
 /// Whether this core builds the preview.
 bool corePreview(Map<String, dynamic> params) =>

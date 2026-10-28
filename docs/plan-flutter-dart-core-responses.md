@@ -532,3 +532,30 @@ Fixtures: Claude/Hermes/Goose/Muse/OpenClaw/Codex adds, a removal with Undo, a s
 five refusals; DeepSeek Harness add (with a wrapped long value and quoted `'true'`), remote add, removal,
 Undo. Real HOME: 252 previews and 448 plans (15 agents × 14 servers × add/remove, all formats including
 DeepSeek Harness): 300 planned file texts identical byte for byte, `~/.claude.json` (89 KB) included.
+
+### 3d — local LLM connections (Claude, 2026-10-28)
+
+`connections.preview` with `kind: "provider"` is built by the core when it disconnects, or connects without
+a chosen model. `llm_plans.dart` ports `connect.plan` (with `replaces` for moves) and the six agents'
+`local_llm_transform` hooks 1:1: Hermes (providers block as text; the model block taken over by the next
+provider or removed; `model_text` with its layout checks), Oh My Pi (models.yml and modelRoles), Pi
+(models.json keeping input/reasoning/compat; settings.json default), OpenCode, OpenClaw (keeping per-model
+settings, empty tables removed) and DeepSeek Harness (`connect_text`). Provider labels come from the
+generated provider facts (`connect_labels`).
+
+`pyYamlLoad` reads YAML like PyYAML's SafeLoader for entries that are dumped again (`yes`/`on` booleans,
+`0x`/octal/sexagesimal ints, floats only with a dot, `~`/empty as null); dates, explicit tags, anchors,
+aliases and merge keys refuse. 716 documents match `yaml.safe_load`. With it, removing one server from a
+DeepSeek Harness insert holding others now works as in the reference (the 3c limit is gone; entries with
+such values still refuse).
+
+**Not yet:** a connection with a chosen model brings the provider's extras (`connect_extra`: LM Studio's
+model context in its settings, llama.cpp/Ollama contexts sized for the graphics card through
+`context_ctl` and `gpu_usage`, Ollama's API). Those previews stay with the Python reference until the
+provider engines move (phase 4); the router decides by `remove`/`model`.
+
+Fixture: six agents disconnected from llama.cpp (each with its default-model rule, Hermes switching to the
+remaining provider, a DeepSeek Harness entry with `yes` and `0x1F` dumped again as `true` and `31`), then
+connected to Ollama without a model, Undo, four refusals. Real HOME: 36 plans (6 agents × 3 local LLMs ×
+connect/disconnect), 25 new texts identical byte for byte, DeepSeek Harness's real `llm-pi-ai` entry
+included. Checks: 65 differential cases, 29 Dart tests, 94 Flutter tests, Python suite and typecheck clean.

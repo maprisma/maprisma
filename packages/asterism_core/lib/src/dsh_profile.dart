@@ -1,4 +1,5 @@
 import 'package:yaml/yaml.dart';
+import 'py_values.dart';
 import 'py_yaml.dart';
 
 /// DeepSeek Harness's profile patch (Python dsh_ctl, read side): a top-level
@@ -151,9 +152,8 @@ Map _strictEntry(String block) {
 }
 
 /// dsh_ctl.mcp_text: MCP server [name] set to [config] (an insert of its own),
-/// or removed. An insert that holds other entries too would be dumped again
-/// from its parsed data; that needs PyYAML's YAML 1.1 reading (dates, yes/on,
-/// !!js tags), so such an edit is refused here instead of written differently.
+/// or removed. An insert that holds other entries too is dumped again from its
+/// YAML 1.1 values; one PyYAML would write differently (dates, tags) refuses.
 String dshMcpText(String text, String name, Map? config) {
   final (header, blocks) = dshSplit(text);
   final kept = <String>[];
@@ -172,9 +172,13 @@ String dshMcpText(String text, String name, Map? config) {
     if (others.length == rows.length) {
       kept.add(block);
     } else if (others.isNotEmpty) {
-      throw UnsupportedError(
-        'This insert holds other entries too; edit it in dsh',
-      );
+      // Dumped again from its YAML 1.1 values, as the reference does.
+      final entry = _reloaded(block);
+      entry['insert'] = [
+        for (final r in entry['insert'] as List)
+          if (!ours(r)) r,
+      ];
+      kept.add(pyYamlDump([entry]));
     }
   }
   if (config != null) {
@@ -195,4 +199,97 @@ String dshMcpText(String text, String name, Map? config) {
     );
   }
   return dshJoin(header, kept);
+}
+
+const _llmName = '@deepseek-ai/dsh-llm-pi-ai';
+const _defaultName = '@deepseek-ai/dsh-agent-default-model';
+
+int? _find(List<String> blocks, String id) {
+  for (var i = 0; i < blocks.length; i++) {
+    if (_strictEntry(blocks[i])['id'] == id) return i;
+  }
+  return null;
+}
+
+/// dsh_ctl.parse for an entry that is dumped again: PyYAML's YAML 1.1 values.
+Map _reloaded(String block) {
+  final data = pyYamlLoad(block);
+  return data is List && data.isNotEmpty && data.first is Map
+      ? Map.of(data.first as Map)
+      : {};
+}
+
+/// dsh_ctl.connect_text: the local LLM's provider set (or removed), and the
+/// default model pointing at it (use_now) or away from it (remove).
+String dshConnectText(
+  String text,
+  String provider,
+  String label,
+  String url,
+  List<String> models,
+  Map context,
+  String model,
+  bool useNow,
+  bool remove,
+) {
+  if (!RegExp(r'^[a-z][a-z0-9_-]{0,63}$').hasMatch(provider)) {
+    throw const FormatException('bad provider id');
+  }
+  final (header, blocks) = dshSplit(text);
+  final index = _find(blocks, _llmId);
+  final entry = index != null
+      ? _reloaded(blocks[index])
+      : <dynamic, dynamic>{'id': _llmId, 'name': _llmName};
+  final config = entry['config'] is Map
+      ? entry['config'] as Map
+      : <dynamic, dynamic>{};
+  final found = config['providers'] is Map
+      ? config['providers'] as Map
+      : <dynamic, dynamic>{};
+  if (remove) {
+    found.remove(provider);
+  } else {
+    found[provider] = {
+      'displayName': label,
+      'api': 'openai-completions',
+      'baseURL': url,
+      'headers': {'Authorization': 'Bearer local'},
+      'models': [
+        for (final name in models)
+          {
+            'id': name,
+            if (pyTruthy(context[name]))
+              'contextWindow': (context[name] as num).toInt(),
+          },
+      ],
+    };
+  }
+  config['providers'] = found;
+  entry['config'] = config;
+  if (index == null) {
+    if (!remove) blocks.add(pyYamlDump([entry]));
+  } else if (found.isEmpty && config.keys.length == 1) {
+    blocks.removeAt(index);
+  } else {
+    blocks[index] = pyYamlDump([entry]);
+  }
+  final current = dshDefaultModel(dshJoin(header, blocks)).$1;
+  final defaultIndex = _find(blocks, _defaultId);
+  if (!remove && useNow && model.isNotEmpty) {
+    final next = pyYamlDump([
+      {
+        'id': _defaultId,
+        'name': _defaultName,
+        'config': {'provider': provider, 'model': model},
+      },
+    ]);
+    if (defaultIndex == null) {
+      blocks.add(next);
+    } else {
+      blocks[defaultIndex] = next;
+    }
+  } else if (remove && current == provider && defaultIndex != null) {
+    blocks.removeAt(defaultIndex);
+  }
+  return dshJoin(header, blocks);
 }

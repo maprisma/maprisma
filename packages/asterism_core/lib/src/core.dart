@@ -8,6 +8,8 @@ import 'connect_apply.dart';
 import 'core_tasks.dart';
 import 'skill_plans.dart';
 import 'mcp_plans.dart';
+import 'llm_plans.dart';
+import 'adapter_assets.g.dart';
 import 'settings.dart';
 import 'service_i18n.dart';
 
@@ -48,6 +50,7 @@ final class CoreService {
     AgentProfiles(reads.files, identity.configDir),
     '${identity.configDir}/mcp-servers.json',
   );
+  late final llm = LlmPlans(config, reads.catalog, identity.home);
   late final skills = SkillPlans(
     reads.files,
     config,
@@ -57,7 +60,10 @@ final class CoreService {
 
   /// flutter_connections.preview for the kinds this core builds.
   Map<String, dynamic> preview(Map<String, dynamic> params) {
-    final fields = {'kind', 'command', 'item', 'remove'};
+    final fields = {
+      'kind', 'command', 'item', 'remove', //
+      if (params['kind'] == 'provider') ...['model', 'use_now'],
+    };
     if (params.length != fields.length ||
         !params.keys.every(fields.contains) ||
         !corePreview(params) ||
@@ -73,7 +79,34 @@ final class CoreService {
     }
     final inventory = reads.inventory.collect(agents);
     final Plan plan;
-    if (params['kind'] == 'mcp') {
+    if (params['kind'] == 'provider') {
+      if (!llm.supported(command) ||
+          params['use_now'] is! bool ||
+          params['model'] is! String) {
+        throw const FormatException('Agent provider configuration unavailable');
+      }
+      final rt = inventory.runtimes
+          .where(
+            (r) =>
+                r.key == params['item'] &&
+                r.installed &&
+                (providerFacts['connect_keys'] as Map).containsKey(r.key),
+          )
+          .firstOrNull;
+      if (rt == null) throw const FormatException('Provider unavailable');
+      final remove = params['remove'] as bool,
+          model = params['model'] as String;
+      if (!remove && params['use_now'] == true && model.isEmpty) {
+        throw const FormatException('Choose an available chat model');
+      }
+      plan = llm.plan(
+        command,
+        rt,
+        remove ? '' : model,
+        remove ? false : params['use_now'] as bool,
+        remove: remove,
+      );
+    } else if (params['kind'] == 'mcp') {
       final server = inventory.mcp
           .where((s) => s['name'] == params['item'])
           .firstOrNull;

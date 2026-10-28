@@ -71,6 +71,29 @@ Future<void> main() async {
         };
       } else if (request.method == 'dev.yamldump') {
         result = {'text': pyYamlDump(jsonDecode(params['json'] as String))};
+      } else if (request.method == 'dev.yamlload') {
+        try {
+          result = {'json': pyJsonDumps(pyYamlLoad(params['text'] as String))};
+        } on UnsupportedError {
+          result = {'unsupported': true};
+        }
+      } else if (request.method == 'dev.llmplan') {
+        final rt = core.reads.inventory
+            .collect(core.reads.catalog.scan(), remember: false)
+            .runtimes
+            .firstWhere((r) => r.key == params['runtime']);
+        final plan = core.llm.plan(
+          params['agent'] as String,
+          rt,
+          '',
+          false,
+          remove: params['remove'] as bool,
+        );
+        result = {
+          'changes': [
+            for (final c in plan.changes) {'path': c.path, 'new': c.next},
+          ],
+        };
       } else if (request.method == 'dev.undo') {
         // Undo of a backup folder either side made (development probe only).
         result = {

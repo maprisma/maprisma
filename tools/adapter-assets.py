@@ -20,7 +20,7 @@ def main():
         schema = {name:getattr(source,name) for name in names}
         schema['NOT_OWN'] = sorted(harnesses.NOT_OWN)
         import providers, llm_engine, plugin_costs
-        provider_facts = {'local':[{'key':p.key,'name':p.name,'ports':list(llm_engine.of(p.key).ports),'connect_key':p.connect_key,'data':list(p.data),'stays_up':p.stays_up} for p in providers.built_in_local()], 'cloud':providers.cloud_of_agent(), 'names':providers.online_names(), 'connect_keys':providers.connect_keys(), 'prices':plugin_costs.PRICES}
+        provider_facts = {'local':[{'key':p.key,'name':p.name,'ports':list(llm_engine.of(p.key).ports),'connect_key':p.connect_key,'data':list(p.data),'stays_up':p.stays_up} for p in providers.built_in_local()], 'cloud':providers.cloud_of_agent(), 'names':providers.online_names(), 'connect_keys':providers.connect_keys(), 'connect_labels':providers.connect_labels(), 'prices':plugin_costs.PRICES}
         import agent_security, dataclasses
         hook_security = {}
         for h in harnesses.built_in_adapters():

@@ -1,3 +1,5 @@
+import 'package:yaml/yaml.dart';
+
 /// PyYAML's yaml.dump(data, Dumper=SafeDumper, sort_keys=False,
 /// default_flow_style=False, allow_unicode=True) for str, int, float, bool,
 /// None, lists and maps: the emitter's block layout, scalar analysis, style
@@ -432,4 +434,130 @@ final class _Emitter {
     }
     indicator('"', false);
   }
+}
+
+/// What PyYAML's SafeLoader constructs, for documents this app writes back:
+/// plain scalars resolved by YAML 1.1 (yes/on booleans, 0x/0o/sexagesimal
+/// ints, floats only with a dot, ~ and empty as null). Values PyYAML would
+/// write back differently from their source and this dumper cannot write
+/// (dates, explicit tags such as !!js, anchors and aliases, merge keys) refuse.
+dynamic pyYamlLoad(String text) {
+  if (RegExp(r'(^|[\s\[{,:-])[&*][^\s]').hasMatch(text)) {
+    throw UnsupportedError('anchors and aliases');
+  }
+  if (RegExp(r'(^|[\s\[{,:-])!').hasMatch(text)) {
+    throw UnsupportedError('explicit tags');
+  }
+  return _construct(loadYamlNode(text));
+}
+
+dynamic _construct(YamlNode node) {
+  if (node is YamlMap) {
+    final out = <dynamic, dynamic>{};
+    for (final e in node.nodes.entries) {
+      final key = _construct(e.key as YamlNode);
+      if (key == '<<' && (e.key as YamlScalar).style == ScalarStyle.PLAIN) {
+        throw UnsupportedError('merge keys');
+      }
+      out[key] = _construct(e.value);
+    }
+    return out;
+  }
+  if (node is YamlList) return [for (final n in node.nodes) _construct(n)];
+  final scalar = node as YamlScalar;
+  if (scalar.style != ScalarStyle.PLAIN) return '${scalar.value ?? ''}';
+  return _resolvePlain(scalar.span.text, scalar.value);
+}
+
+dynamic _resolvePlain(String raw, dynamic parsed) {
+  final text = raw.trim();
+  if (text.isEmpty || const {'~', 'null', 'Null', 'NULL'}.contains(text)) {
+    return null;
+  }
+  if (const {
+    'yes',
+    'Yes',
+    'YES',
+    'true',
+    'True',
+    'TRUE',
+    'on',
+    'On',
+    'ON',
+  }.contains(text)) {
+    return true;
+  }
+  if (const {
+    'no',
+    'No',
+    'NO',
+    'false',
+    'False',
+    'FALSE',
+    'off',
+    'Off',
+    'OFF',
+  }.contains(text)) {
+    return false;
+  }
+  if (RegExp(
+    r'^[-+]?(?:0b[0-1_]+|0[0-7_]+|(?:0|[1-9][0-9_]*)|0x[0-9a-fA-F_]+|[1-9][0-9_]*(?::[0-5]?[0-9])+)$',
+  ).hasMatch(text)) {
+    return _int(text);
+  }
+  if (RegExp(
+    r'^(?:[-+]?(?:[0-9][0-9_]*)\.[0-9_]*(?:[eE][-+][0-9]+)?|\.[0-9][0-9_]*(?:[eE][-+][0-9]+)?'
+    r'|[-+]?[0-9][0-9_]*(?::[0-5]?[0-9])+\.[0-9_]*|[-+]?\.(?:inf|Inf|INF)|\.(?:nan|NaN|NAN))$',
+  ).hasMatch(text)) {
+    return _float(text);
+  }
+  if (RegExp(r'^[0-9][0-9][0-9][0-9]-[0-9][0-9]?-[0-9][0-9]?').hasMatch(text) &&
+      _resolvesToOtherType(text)) {
+    throw UnsupportedError('dates');
+  }
+  if (text == '=' || text == '<<') {
+    throw UnsupportedError('value and merge keys');
+  }
+  // A plain string: package:yaml folds multi-line plain scalars as YAML does.
+  return parsed is String ? parsed : text;
+}
+
+int _int(String text) {
+  var value = text.replaceAll('_', '');
+  var sign = 1;
+  if (value.startsWith('-')) sign = -1;
+  if ('+-'.contains(value[0])) value = value.substring(1);
+  if (value == '0') return 0;
+  if (value.startsWith('0b')) {
+    return sign * int.parse(value.substring(2), radix: 2);
+  }
+  if (value.startsWith('0x')) {
+    return sign * int.parse(value.substring(2), radix: 16);
+  }
+  if (value.startsWith('0')) return sign * int.parse(value, radix: 8);
+  if (value.contains(':')) {
+    var total = 0;
+    for (final part in value.split(':')) {
+      total = total * 60 + int.parse(part);
+    }
+    return sign * total;
+  }
+  return sign * int.parse(value);
+}
+
+double _float(String text) {
+  var value = text.replaceAll('_', '').toLowerCase();
+  var sign = 1.0;
+  if (value.startsWith('-')) sign = -1.0;
+  if ('+-'.contains(value[0])) value = value.substring(1);
+  if (value == '.inf') return sign * double.infinity;
+  if (value == '.nan') return double.nan;
+  if (value.contains(':')) {
+    var total = 0.0;
+    for (final part in value.split(':')) {
+      total = total * 60 + double.parse(part);
+    }
+    return sign * total;
+  }
+  return sign * double.parse(value);
 }
