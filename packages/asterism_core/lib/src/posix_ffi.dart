@@ -653,4 +653,40 @@ class Posix {
       close(fd);
     }
   }
+
+  // --- pidfds held across a stop (provider_watch.stop_lmstudio_service) ----------------
+
+  static final _pidfdOpen = _lib
+      .lookupFunction<Int Function(Int, Uint32), int Function(int, int)>(
+        'pidfd_open',
+      );
+  static final _pidfdSend = _lib
+      .lookupFunction<
+        Int Function(Int, Int, Pointer<Void>, Uint32),
+        int Function(int, int, Pointer<Void>, int)
+      >('pidfd_send_signal');
+  static final _poll = _lib
+      .lookupFunction<
+        Int Function(Pointer<Int32>, Uint64, Int),
+        int Function(Pointer<Int32>, int, int)
+      >('poll');
+
+  /// os.pidfd_open: the pidfd pins this process; -1 when it is gone.
+  int pidfdOpen(int pid) => pid > 0 ? _pidfdOpen(pid, 0) : -1;
+
+  /// signal.pidfd_send_signal (errors ignored, as the reference does).
+  void pidfdSignal(int fd, int signal) => _pidfdSend(fd, signal, nullptr, 0);
+
+  /// A pidfd is readable once its process has exited (select with no wait).
+  bool pidfdExited(int fd) {
+    final entry = calloc<Int32>(2);
+    try {
+      entry[0] = fd;
+      entry[1] = 1; // POLLIN in events (the low 16 bits); revents above
+      final ready = _poll(entry, 1, 0);
+      return ready > 0 && (entry[1] >> 16) & 0x39 != 0;
+    } finally {
+      calloc.free(entry);
+    }
+  }
 }

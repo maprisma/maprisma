@@ -49,6 +49,10 @@ final class ReadService {
   late final InventoryReader inventory;
   late final ActivityReaders activity;
   late final MapGraph graph;
+
+  /// Called after each inventory scan (the provider watcher's config).
+  void Function(InventorySnapshot inventory, List<AgentRecord> agents)?
+  onInventory;
   Map<String, dynamic> map = {
     'activity': <String, dynamic>{},
     'nodes': <dynamic>[],
@@ -320,6 +324,7 @@ final class ReadService {
         targets.contains('inventory') ||
         targets.contains('agents')) {
       _inventory = inventory.collect(_agents!);
+      onInventory?.call(_inventory!, _agents!);
     }
     final saved = settings.load();
     if (_activity == null ||

@@ -239,11 +239,28 @@ def ensure_service(on: bool, script: Path | None = None) -> bool:
 # --- processes ------------------------------------------------------------------------------
 
 def _read(path: str, limit: int) -> bytes:
-    import ai_core
+    """ai_core.read_head(path, limit, follow=False), in the standard library only: the service runs
+    with `python3 -I`, where the app's modules cannot be imported."""
+    import stat
     try:
-        return ai_core.read_head(path,limit,follow=False)
+        fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW)
     except OSError:
         return b""
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            return b""
+        chunks, left = [], limit
+        while left > 0:
+            chunk = os.read(fd, min(left, 1 << 20))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            left -= len(chunk)
+        return b"".join(chunks)
+    except OSError:
+        return b""
+    finally:
+        os.close(fd)
 
 
 def _bare(name: str) -> str:
@@ -725,7 +742,7 @@ class Watcher:
                     self.started[f"{key}:ok"] = ok
                     log(f"start {key} for {', '.join(sorted(a for a in self.running if key in self.agents[a]))}: "
                         f"{'ok' if ok else 'failed'}")
-        for key in self.needed - needed:
+        for key in sorted(self.needed - needed):       # sorted: a set's order differs per run
             self.stop_at.setdefault(key, now + GRACE)
         for key, when in list(self.stop_at.items()):
             if key not in needed and now >= when and self.stop(key, "no agent using it is running"):

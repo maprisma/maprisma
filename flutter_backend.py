@@ -790,6 +790,14 @@ class Service:
         catalog, details = cache['catalog'], cache['details']
         if 'inventory' not in cache or 'inventory' in targets:
             cache['inventory'] = inventory.collect(catalog)
+            # The provider watcher's config after each scan, as the Dart core writes it (the core,
+            # not this reference, manages the watcher's user service).
+            import provider_watch
+            try:
+                provider_watch.write_config(cache['inventory'], (self.settings_path.parent if self.settings_path
+                                                                 else provider_watch.CONFIG.parent) / 'providers-with-agents.json')
+            except OSError:
+                pass
         if 'activity' not in cache or 'activity' in targets:
             cache['activity'] = self.activity(catalog)
         running, activity = cache['activity']

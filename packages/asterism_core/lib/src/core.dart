@@ -4,6 +4,8 @@ import 'desktop.dart';
 import 'identity.dart';
 import 'posix_ffi.dart';
 import 'protocol.dart';
+import 'provider_scans.dart' show ProviderScans;
+import 'provider_watch.dart';
 import 'read_service.dart';
 import 'connect_apply.dart';
 import 'core_tasks.dart';
@@ -39,6 +41,8 @@ final class CoreService {
     i18n = ServiceI18n(identity, settings);
     // Inventory scans remember the MCP servers in use, as the reference does.
     reads.inventory.knownServers = mcp.knownServers;
+    // After each scan the provider watcher's config, and its service on or off.
+    reads.onInventory = watch.sync;
   }
   late final reads = ReadService(identity, settings, desktop, i18n);
   late final tasks = CoreTasks(defaultWorkerCommand(identity.environment));
@@ -60,6 +64,12 @@ final class CoreService {
     reads.catalog,
     identity.home,
     ContextReader(reads.files, config),
+  );
+  late final watch = WatchService(
+    identity,
+    settings,
+    tasks.workerCommand,
+    ProviderOps(reads.files, ProviderScans(reads.files)),
   );
   late final edits = MapEdits(
     reads,
@@ -234,7 +244,13 @@ final class CoreService {
       return preview(params);
     }
     if (!portedRoutes.contains(method)) throw ServiceError('unported_route');
-    if (method == 'settings.update') return settings.update(params);
+    if (method == 'settings.update') {
+      final result = settings.update(params);
+      if ((params['values'] as Map).containsKey('providers_with_agents')) {
+        watch.settingChanged();
+      }
+      return result;
+    }
     if (readOnlyRoutes.contains(method)) return reads.dispatch(method, params);
     if (method == 'i18n.lookup') {
       if (params.keys.any((k) => !['text', 'other', 'n'].contains(k)) ||

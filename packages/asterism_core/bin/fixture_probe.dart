@@ -6,6 +6,7 @@ import 'package:asterism_core/src/adapters.dart';
 import 'package:asterism_core/src/connect_apply.dart';
 import 'package:asterism_core/src/line_diff.dart';
 import 'package:asterism_core/src/model_hub.dart';
+import 'package:asterism_core/src/provider_watch.dart';
 import 'package:asterism_core/src/context.dart';
 import 'package:asterism_core/src/py_values.dart';
 import 'package:asterism_core/src/py_yaml.dart';
@@ -121,6 +122,75 @@ Future<void> main() async {
         } on FormatException catch (e) {
           result = {'error': 'FormatException', 'message': e.message};
         }
+      } else if (request.method == 'dev.watch') {
+        // A scripted provider_watch.Watcher run: what it runs, unloads and saves.
+        final dir = Directory.systemTemp.createTempSync('asterism-watch-');
+        final config = '${dir.path}/c.json', state = '${dir.path}/state.json';
+        File(config).writeAsStringSync(jsonEncode(params['config']));
+        var now = 0.0, running = <String>{}, busy = <int>{};
+        final calls = <dynamic>[], states = <dynamic>[];
+        Watcher make() => Watcher(
+          config,
+          run: (argv) async {
+            calls.add(['run', ...argv]);
+            return params['fail'] != true;
+          },
+          clock: () => now,
+          agentsNow: (names) => (running.intersection(names), <int>{}),
+          busy: (port, _) => busy.contains(port),
+          lmsUp: () {
+            calls.add(['lms_up']);
+            return params['lms_up'] == true;
+          },
+          stopLms: (argv0) async => calls.add(['stop_lms', argv0]),
+          sockets: (_) => <String>{},
+          unload: (entry, port) async {
+            calls.add(['unload', port, entry['unload']]);
+            return true;
+          },
+          lmsBinary: () => params['lms'] as String?,
+          state: state,
+        );
+        var watcher = make();
+        for (final step in params['steps'] as List) {
+          now += (step['advance'] as num?)?.toDouble() ?? 0;
+          if (step['running'] != null) {
+            running = {for (final a in step['running'] as List) a as String};
+          }
+          if (step['busy'] != null) {
+            busy = {for (final b in step['busy'] as List) b as int};
+          }
+          if (step['config'] != null) {
+            File(config).writeAsStringSync(jsonEncode(step['config']));
+            // a new mtime even within the same second
+            File(config).setLastModifiedSync(
+              DateTime.now().add(Duration(seconds: states.length + 1)),
+            );
+          }
+          switch (step['op']) {
+            case 'new':
+              watcher = make();
+            case 'shutdown':
+              await watcher.shutdown();
+            default:
+              await watcher.tick();
+          }
+          states.add([
+            File(state).existsSync() ? File(state).readAsStringSync() : null,
+            watcher.needed.toList()..sort(),
+          ]);
+        }
+        dir.deleteSync(recursive: true);
+        result = {'calls': calls, 'states': states};
+      } else if (request.method == 'dev.watchconfig') {
+        final agents = core.reads.catalog.scan();
+        final inv = core.reads.inventory.collect(agents, remember: false);
+        result = {
+          'text': watchConfigText(inv.runtimes, {
+            for (final a in agents)
+              if (a.adapter.facts['self_served'] == true) a.command,
+          }),
+        };
       } else if (request.method == 'dev.fit') {
         final path = params['path'] as String;
         try {

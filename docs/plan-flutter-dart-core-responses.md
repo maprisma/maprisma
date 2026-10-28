@@ -790,3 +790,47 @@ Checks:
   or a second name.
 
 Phase 4d is done.
+
+### 4e — the provider watcher
+
+The Flutter app had no "Start local LLMs with their agents" yet: the Python backend never wrote the
+watcher's config, and Devel blocks its unit. Now:
+- **The service loop:** `asterism-core provider-watch --config FILE` (`provider_watch.dart`) ports the
+  watcher:
+  - checked config entries (units, ports, the `lms` controller, the stays-up unload request) and the
+    `Watcher` loop: start on the first agent, stop after the 5 s grace time, not while another program
+    has a connection open (ESTABLISHED, background servers' sockets left out), a failed start tried
+    again after 30 s;
+  - the saved state (`~/.local/state/ai-agents-map/provider-watch.json`, shared with the reference) and
+    shutdown on SIGTERM;
+  - LM Studio: `lms server`, and after it the background app we started, every process held by a pidfd
+    (engines with SIGTERM, then the program and helpers with SIGKILL, the AppImage last);
+  - exit 75 when the binary was updated.
+- **The app side:** `WatchService` writes `providers-with-agents.json` after each inventory scan
+  (`ReadService.onInventory`). It turns the user unit `asterism-providers.service` on or off when the
+  file or the setting changes, the way `sync_provider_watch` / `ensure_service` did. A unit pointing at
+  the old Python script is rewritten, which is the unit migration.
+  - Only a compiled release core manages the unit: never a Devel build (`ASTERISM_FLUTTER_DEVEL`,
+    `ASTERISM_DEVEL`) and never a run from source, because Devel has the same identity and config folder
+    as the release.
+  - The reference's `build_map` writes the same config (it never manages the unit).
+- `Posix` gains `pidfdOpen` / `pidfdSignal` / `pidfdExited`. The provider facts gain the `unload`
+  request.
+
+**Found and fixed in the reference:**
+- `provider_watch._read` imported `ai_core`, but the service runs with `python3 -I`, where that import
+  fails. So every tick ended in "No module named 'ai_core'" and the watcher never started or stopped
+  anything. It's now `read_head` in the standard library. The published plugin and the plugin repo
+  never had this import.
+- The order in which runtimes were stopped came from a set of strings, so it differed per process (hash
+  seed). Both sides now sort it.
+
+Checks:
+- All 69 differential cases pass with the config written on both sides.
+- Real HOME, read-only: the config text is byte-identical in Python and Dart.
+- `tests/test_dart_provider_watch_parity.py`:
+  - 12 scripted scenarios, built from the reference's tests: the same commands, unloads, LM Studio
+    calls and saved state after every step. They hold across hash seeds.
+  - Both services as real processes, with a fake `systemctl` and a fake agent process started, ended,
+    started again, then SIGTERM: the same `systemctl` calls and the same saved state.
+- A Dart test checks that only a compiled release core manages the unit.

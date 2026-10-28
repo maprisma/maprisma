@@ -4,11 +4,17 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:asterism_core/asterism_core.dart';
 import 'package:asterism_core/src/plan_worker.dart';
+import 'package:asterism_core/src/provider_watch.dart';
 
-// `worker`: one private plan (phase 3). provider-watch comes with phase 4.
+// `worker`: one private plan or provider operation; `provider-watch`: the
+// service that starts local LLMs with their agents.
 Future<void> main(List<String> args) async {
   if (args.isNotEmpty && args.first == 'worker') {
     exitCode = await runWorker(args.sublist(1));
+    return;
+  }
+  if (args.isNotEmpty && args.first == 'provider-watch') {
+    exitCode = await runProviderWatch(args.sublist(1));
     return;
   }
   if (args.isNotEmpty) {

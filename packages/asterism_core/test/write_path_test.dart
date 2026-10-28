@@ -5,6 +5,8 @@ import 'package:asterism_core/src/core_tasks.dart';
 import 'package:asterism_core/src/dsh_profile.dart';
 import 'package:asterism_core/src/model_downloads.dart';
 import 'package:asterism_core/src/model_guard.dart';
+import 'package:asterism_core/src/provider_watch.dart';
+import 'package:asterism_core/src/scan_files.dart';
 import 'package:asterism_core/src/plan_worker.dart';
 import 'package:asterism_core/src/provider_ops.dart';
 import 'package:asterism_core/src/provider_scans.dart';
@@ -304,5 +306,46 @@ void main() {
     );
     expect(other.readAsStringSync(), 'x');
     expect(files.ownRegularFile(other.path), isFalse); // two names now
+  });
+
+  test('only a compiled release core manages the watcher unit', () async {
+    final home = Directory.systemTemp.createTempSync('asterism-watchunit-');
+    addTearDown(() => home.deleteSync(recursive: true));
+    WatchService service(Map<String, String> env, List<String> worker) {
+      final identity = AppIdentity(environment: {'HOME': home.path, ...env});
+      final files = ScanFiles(identity);
+      return WatchService(
+        identity,
+        SettingsStore(identity),
+        worker,
+        ProviderOps(files, ProviderScans(files)),
+      );
+    }
+
+    const core = '/usr/lib/asterism/lib/asterism-core';
+    expect(service({}, [core, 'worker']).binary, core);
+    expect(
+      service({'ASTERISM_FLUTTER_DEVEL': '1'}, [core, 'worker']).binary,
+      isNull,
+    );
+    expect(service({'ASTERISM_DEVEL': '1'}, [core, 'worker']).binary, isNull);
+    expect(
+      service({}, ['/usr/bin/dart', 'bin/asterism-core.dart', 'worker']).binary,
+      isNull,
+    );
+    expect(service({}, ['/tmp/x y/asterism-core', 'worker']).binary, isNull);
+    // Not managed: nothing written, no systemctl.
+    final devel = service({'ASTERISM_FLUTTER_DEVEL': '1'}, [core, 'worker']);
+    expect(await devel.ensure(true), isFalse);
+    expect(File(devel.unitFile).existsSync(), isFalse);
+    expect(
+      watchUnitText(
+        core,
+        '/home/u/.config/asterism/providers-with-agents.json',
+      ),
+      contains(
+        'ExecStart=$core provider-watch --config /home/u/.config/asterism/providers-with-agents.json\n',
+      ),
+    );
   });
 }
