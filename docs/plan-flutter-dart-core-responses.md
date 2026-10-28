@@ -746,3 +746,47 @@ Checks:
   Both sides get it for four searches and two file lists: same results and the same URLs.
 - Live, read-only: both workers run search and file list against Hugging Face and give the same results
   (25 repos, 25 files), and the same error for an empty query and a repository that doesn't exist.
+
+### 4d part 2 — downloads, pulls and imports
+
+`models.download`, `models.pull` and `model.import` run in the core's worker, and their progress lines are
+written as `flutter_worker` writes them. `model_downloads.dart` ports:
+- **Downloads:**
+  - `install_ctl.open_staging`: created exclusively and no-follow, or our own regular file with one name
+    to resume.
+  - `install_ctl.download`: curl writes to the open file (here through a pipe), resumes at our own size,
+    is capped by the announced size, and the file is renamed only while the name still points at it.
+  - `gguf_target`: LM Studio's publisher layout; a llama.cpp router folder of links gets the file next to
+    its link targets, but only into private folders.
+  - `_part_sizes` and `download_gguf`.
+- **Imports:** `add_local` (a hard link on the same disk, else a symlink; LM Studio's `local/<name>/`
+  with its vision projector; split parts) and `ollama create` from a Modelfile.
+- **Pulls:** `ollama_pull`, Ollama's progress stream from its own port with the reference's limits
+  (headers in 30 s, 120 s of silence at most, 12 h overall, 64 KiB lines, 200000 lines).
+- `Posix` gains `truncate`, `statFull` / `lstatOwn` (link count, identity) and `hardLink`
+  (`AT_SYMLINK_FOLLOW`, as `os.link`). The provider facts gain each engine's `layout`.
+
+KoboldCPP's downloads and imports stay with the reference (router by `key`): its refresh writes a `.kcpps`
+per new file through its installer class (phase 5).
+
+**Found and fixed in the reference too:** `flutter_providers.validate` asked `models.download`'s `file`
+to be a `.gguf` path. But the app sends the entry's shown name (`models_ctl.files`: no folder, no
+`.gguf`), which `execute` looks up. So every download started from the Flutter app was refused as
+"Invalid model filename", and the unit tests hid it with unrealistic names. Both sides now check the
+shown name (`ENTRY_NAME_RE`), with a test that real `files()` names pass.
+
+Checks:
+- `tests/test_dart_model_files_parity.py`, two identical homes, a fake `ollama` CLI and a fake Ollama
+  server on its own port:
+  - imports into llama.cpp (a hard link, split parts), LM Studio (`local/a/` with `mmproj`, an odd
+    name), Ollama (`ollama create`, Modelfile, `OLLAMA_HOST`), and three refusals;
+  - pulls (progress fractions 0, 0.25, 1, a `null` status, an error, a provider without pulls, a bad
+    name);
+  - result: the same answers and progress lines, the same trees and link counts, the same requests.
+- Live, read-only on the network (llama.cpp's own test models from Hugging Face): fresh, resume from
+  our own partial file, kept complete file, split file, LM Studio's layout, a router folder of links,
+  changed size, missing entry. Both workers give the same answers and trees.
+- A Dart test checks the staging file: resumed only when it's ours with one name, never through a link
+  or a second name.
+
+Phase 4d is done.

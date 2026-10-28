@@ -412,16 +412,23 @@ const coreFirstRoutes = {
   'models.attach_preview',
 };
 
-/// providers.run operations this core runs (downloads, pulls and imports
-/// follow in 4d part 2).
-bool coreProviderRun(Map<String, dynamic> params) => const {
-  'runtime.start',
-  'runtime.stop',
-  'model.load',
-  'model.unload',
-  'models.search',
-  'models.files',
-}.contains(params['operation']);
+/// providers.run operations this core runs. Adding a KoboldCPP model writes
+/// its .kcpps through its installer: that stays with the reference (phase 5).
+bool coreProviderRun(Map<String, dynamic> params) {
+  final inner = params['params'];
+  final key = inner is Map ? inner['key'] : null;
+  return const {
+        'runtime.start',
+        'runtime.stop',
+        'model.load',
+        'model.unload',
+        'models.search',
+        'models.files',
+        'models.pull',
+      }.contains(params['operation']) ||
+      const {'models.download', 'model.import'}.contains(params['operation']) &&
+          key != 'koboldcpp';
+}
 
 /// The connection kinds whose previews this core builds (the others stay with
 /// the Python reference until their phase).

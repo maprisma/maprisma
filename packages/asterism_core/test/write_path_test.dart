@@ -3,6 +3,7 @@ import 'package:asterism_core/asterism_core.dart';
 import 'package:asterism_core/src/connect_apply.dart';
 import 'package:asterism_core/src/core_tasks.dart';
 import 'package:asterism_core/src/dsh_profile.dart';
+import 'package:asterism_core/src/model_downloads.dart';
 import 'package:asterism_core/src/model_guard.dart';
 import 'package:asterism_core/src/plan_worker.dart';
 import 'package:asterism_core/src/provider_ops.dart';
@@ -276,5 +277,32 @@ void main() {
         reason: '$c',
       );
     }
+  });
+
+  test('a download continues only our own staging file with one name', () {
+    final dir = Directory.systemTemp.createTempSync('asterism-staging-');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final posix = Posix(), files = ModelFiles(posix);
+    // New: created exclusively; again: our own file with one name, resumed.
+    final fresh = '${dir.path}/a.gguf.part';
+    posix.close(files.openStaging(fresh));
+    File(fresh).writeAsStringSync('half');
+    final fd = files.openStaging(fresh);
+    expect(posix.statFull(fd).size, 4);
+    posix.close(fd);
+    // A link in its place, and a file with a second name, are refused.
+    final other = File('${dir.path}/elsewhere')..writeAsStringSync('x');
+    Link('${dir.path}/b.gguf.part').createSync(other.path);
+    expect(
+      () => files.openStaging('${dir.path}/b.gguf.part'),
+      throwsStateError,
+    );
+    expect(posix.hardLink(other.path, '${dir.path}/c.gguf.part'), isTrue);
+    expect(
+      () => files.openStaging('${dir.path}/c.gguf.part'),
+      throwsStateError,
+    );
+    expect(other.readAsStringSync(), 'x');
+    expect(files.ownRegularFile(other.path), isFalse); // two names now
   });
 }

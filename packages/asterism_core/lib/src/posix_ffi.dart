@@ -102,6 +102,59 @@ class Posix {
     if (_chmod(fd, mode) != 0) _fail();
   }
 
+  static final _ftruncate = _lib
+      .lookupFunction<Int Function(Int, Int64), int Function(int, int)>(
+        'ftruncate',
+      );
+
+  static final _linkat = _lib
+      .lookupFunction<
+        Int Function(Int, Pointer<Utf8>, Int, Pointer<Utf8>, Int),
+        int Function(int, Pointer<Utf8>, int, Pointer<Utf8>, int)
+      >('linkat');
+
+  /// os.link: a hard link (a link given as the existing name is followed,
+  /// AT_SYMLINK_FOLLOW, as os.link does); false on failure.
+  bool hardLink(String existing, String link) {
+    final from = existing.toNativeUtf8(), to = link.toNativeUtf8();
+    try {
+      return _linkat(-100, from, -100, to, 0x400) == 0;
+    } finally {
+      calloc.free(from);
+      calloc.free(to);
+    }
+  }
+
+  void truncate(int fd, int length) {
+    if (_ftruncate(fd, length) != 0) _fail();
+  }
+
+  /// fstat's type, owner, size, link count and identity (device, inode).
+  ({int mode, int uid, int size, int nlink, List<int> identity}) statFull(
+    int fd,
+  ) {
+    final buffer = calloc<Uint8>(256);
+    try {
+      _path('', (name) {
+        if (_statx(fd, name, 0x1000, 0x7ff, buffer) != 0) _fail();
+      });
+      final b = ByteData.sublistView(buffer.asTypedList(256));
+      return (
+        mode: b.getUint16(28, Endian.host),
+        uid: b.getUint32(20, Endian.host),
+        size: b.getUint64(40, Endian.host),
+        nlink: b.getUint32(16, Endian.host),
+        identity: [
+          b.getUint32(136, Endian.host),
+          b.getUint32(140, Endian.host),
+          b.getUint64(32, Endian.host),
+        ],
+      );
+    } finally {
+      calloc.free(buffer);
+    }
+  }
+
   ({int mode, int uid, int size}) stat(int fd) {
     final buffer = calloc<Uint8>(256);
     try {
@@ -174,6 +227,33 @@ class Posix {
           b.getUint32(120, Endian.host),
           b.getInt64(96, Endian.host),
           b.getUint32(104, Endian.host),
+        ],
+      );
+    } finally {
+      calloc.free(buffer);
+    }
+  }
+
+  /// lstat's type, owner, size, link count and identity; null when the path
+  /// cannot be examined.
+  ({int mode, int uid, int size, int nlink, List<int> identity})? lstatOwn(
+    String path,
+  ) {
+    final buffer = calloc<Uint8>(256);
+    try {
+      var ok = false;
+      _path(path, (name) => ok = _statx(-100, name, 0x100, 0x7ff, buffer) == 0);
+      if (!ok) return null;
+      final b = ByteData.sublistView(buffer.asTypedList(256));
+      return (
+        mode: b.getUint16(28, Endian.host),
+        uid: b.getUint32(20, Endian.host),
+        size: b.getUint64(40, Endian.host),
+        nlink: b.getUint32(16, Endian.host),
+        identity: [
+          b.getUint32(136, Endian.host),
+          b.getUint32(140, Endian.host),
+          b.getUint64(32, Endian.host),
         ],
       );
     } finally {

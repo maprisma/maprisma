@@ -53,11 +53,11 @@ class FlutterProvidersTest(unittest.TestCase):
                 api.execute('runtime.stop', {'key': 'fixture'})
 
     def test_download_resolves_metadata_and_destination_in_the_backend(self):
-        entry = models_ctl.GgufFile('model.gguf', ['part-one.gguf', 'part-two.gguf'], 100)
+        entry = models_ctl.GgufFile('model', ['part-one.gguf', 'part-two.gguf'], 100)
         progress = mock.Mock()
         with mock.patch.object(models_ctl, 'files', return_value=[entry]) as files, \
                 mock.patch.object(models_ctl, 'download_gguf') as download:
-            api.execute('models.download', {'key': 'fixture', 'repo': 'owner/repo', 'file': 'model.gguf', 'size': 100}, progress)
+            api.execute('models.download', {'key': 'fixture', 'repo': 'owner/repo', 'file': 'model', 'size': 100}, progress)
         files.assert_called_once_with('owner/repo')
         self.assertEqual(download.call_args.args[:5], ('fixture', Path('/fixture/models'), 'owner/repo', entry, progress))
         self.engine.refresh.assert_called_once_with(self.rt)
@@ -66,16 +66,30 @@ class FlutterProvidersTest(unittest.TestCase):
         with mock.patch.object(models_ctl, 'files', return_value=[]), \
                 mock.patch.object(models_ctl, 'download_gguf') as download:
             with self.assertRaises(ValueError):
-                api.execute('models.download', {'key': 'fixture', 'repo': 'owner/repo', 'file': 'gone.gguf', 'size': 100})
+                api.execute('models.download', {'key': 'fixture', 'repo': 'owner/repo', 'file': 'gone', 'size': 100})
             download.assert_not_called()
 
     def test_changed_download_size_requires_a_fresh_selection(self):
-        entry = models_ctl.GgufFile('model.gguf', ['model.gguf'], 200)
+        entry = models_ctl.GgufFile('model', ['model.gguf'], 200)
         with mock.patch.object(models_ctl, 'files', return_value=[entry]), \
                 mock.patch.object(models_ctl, 'download_gguf') as download:
             with self.assertRaisesRegex(ValueError, 'metadata changed'):
-                api.execute('models.download', {'key': 'fixture', 'repo': 'owner/repo', 'file': 'model.gguf', 'size': 100})
+                api.execute('models.download', {'key': 'fixture', 'repo': 'owner/repo', 'file': 'model', 'size': 100})
             download.assert_not_called()
+
+    def test_download_names_are_the_shown_entry_names(self):
+        # models_ctl.files names an entry without its folder and .gguf; that name is what the app sends.
+        tree = [{'type': 'file', 'path': 'sub/Model-UD-Q4_K_M-00001-of-00002.gguf', 'size': 1},
+                {'type': 'file', 'path': 'sub/Model-UD-Q4_K_M-00002-of-00002.gguf', 'size': 1},
+                {'type': 'file', 'path': 'small.Q8_0.gguf', 'size': 1}]
+        with mock.patch.object(models_ctl, '_json_list', return_value=tree):
+            names = [f.name for f in models_ctl.files('owner/repo')]
+        self.assertEqual(sorted(names), ['Model-UD-Q4_K_M', 'small.Q8_0'])
+        for name in names:
+            api.validate('models.download', {'key': 'fixture', 'repo': 'owner/repo', 'file': name, 'size': 1})
+        for bad in ('sub/model', '..', '.', 'a b', ''):
+            with self.assertRaises(ValueError):
+                api.validate('models.download', {'key': 'fixture', 'repo': 'owner/repo', 'file': bad, 'size': 1})
 
     def test_import_rejects_relative_missing_and_non_gguf_targets(self):
         with tempfile.TemporaryDirectory() as directory:

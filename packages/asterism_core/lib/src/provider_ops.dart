@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:path/path.dart' as p;
 import 'adapter_assets.g.dart';
+import 'model_downloads.dart';
 import 'model_hub.dart';
 import 'provider_scans.dart';
 import 'scan_files.dart';
@@ -173,11 +175,13 @@ final class ProviderOps {
         !ModelHub.ollamaNameRe.hasMatch(params['name'] as String)) {
       throw const FormatException('Invalid pull name');
     }
+    // The entry's shown name, as models_ctl.files gives it (no folder, no
+    // .gguf); its paths are looked up again from the model host.
     if (operation == 'models.download') {
       final file = params['file'] as String;
-      if (!ModelHub.fileRe.hasMatch(file) ||
-          file.startsWith('/') ||
-          file.split('/').any((part) => part == '.' || part == '..')) {
+      if (!RegExp(r'^[A-Za-z0-9._-]{1,255}$').hasMatch(file) ||
+          file == '.' ||
+          file == '..') {
         throw const FormatException('Invalid model filename');
       }
     }
@@ -325,7 +329,11 @@ final class ProviderOps {
     String operation,
     Map params, {
     ModelHub? hub,
+    Progress? progress,
+    String Function(String)? translate,
   }) async {
+    progress ??= (_, _) {};
+    translate ??= (text) => text;
     validate(operation, params);
     hub ??= ModelHub();
     if (operation == 'models.search') {
@@ -353,7 +361,7 @@ final class ProviderOps {
           ? await start(rt)
           : await stop(rt);
       if (!ok) throw StateError('Provider operation failed');
-    } else {
+    } else if (operation == 'model.load' || operation == 'model.unload') {
       final model = params['model'] as String;
       if (!rt.models.contains(model) ||
           (_engines[rt.key] as Map?)?['can_load'] != true) {
@@ -363,7 +371,101 @@ final class ProviderOps {
           ? await load(rt, model)
           : await unloadModel(rt, model);
       if (!ok) throw StateError('Model operation failed');
+    } else {
+      await _addModel(operation, params, rt, hub, progress, translate);
     }
     return {'ok': true};
+  }
+
+  /// flutter_providers.execute for model.import, models.pull and
+  /// models.download. KoboldCPP's (a .kcpps per new file, written through
+  /// its installer) stay with the reference until phase 5.
+  Future<void> _addModel(
+    String operation,
+    Map params,
+    RuntimeRecord rt,
+    ModelHub hub,
+    Progress progress,
+    String Function(String) translate,
+  ) async {
+    if (rt.key == 'koboldcpp') {
+      throw StateError('KoboldCpp models are added by the reference for now');
+    }
+    final download = '${(_engines[rt.key] as Map?)?['download'] ?? ''}';
+    final models = ModelFiles(files.posix, hub: hub);
+    Future<void> pull(String name) async {
+      final port = portOf(rt);
+      if (loopbackListeners(port).isEmpty) {
+        progress(0.0, translate('Starting Ollama…'));
+        await start(rt);
+        for (var attempt = 0; attempt < 40; attempt++) {
+          if (loopbackListeners(port).isNotEmpty) break;
+          await Future<void>.delayed(const Duration(milliseconds: 500));
+        }
+      }
+      await models.ollamaPull(name, rt.address, progress);
+    }
+
+    if (operation == 'model.import') {
+      final given = files.expand(params['path'] as String);
+      if (!p.isAbsolute(given)) {
+        throw const FormatException('Expected an absolute model path');
+      }
+      final path = File(given).resolveSymbolicLinksSync();
+      if (!FileSystemEntity.isFileSync(path) ||
+          p.extension(path).toLowerCase() != '.gguf' ||
+          !const {'file', 'pull'}.contains(download)) {
+        throw const FormatException('Expected a GGUF model file');
+      }
+      if (rt.key == 'ollama') {
+        await models.ollamaCreate(path, rt.address);
+      } else {
+        if (rt.modelsDir.isEmpty) {
+          throw FormatException('${rt.name} has no model folder yet');
+        }
+        models.addLocal(rt.key, files.expand(rt.modelsDir), path);
+      }
+    } else if (operation == 'models.pull') {
+      if (download != 'pull') {
+        throw const FormatException('Provider does not support pulls');
+      }
+      await pull(params['name'] as String);
+    } else {
+      // The file's metadata again from the fixed model host: no client URLs,
+      // destination paths, sizes or split-part paths enter the downloader.
+      final entries = await hub.files(params['repo'] as String);
+      final entry = entries
+          .where((e) => e['name'] == params['file'])
+          .firstOrNull;
+      if (entry == null) throw const FormatException('Model file unavailable');
+      if (entry['size'] != params['size']) {
+        throw const FormatException(
+          'Model metadata changed; select the file again',
+        );
+      }
+      if (download == 'pull') {
+        if (ModelFiles.ollamaPullProblem(entry, entries).isNotEmpty) {
+          throw const FormatException(
+            'This model cannot be pulled by this provider',
+          );
+        }
+        if (hub.base != ModelHub.hf) {
+          throw const FormatException(
+            'Ollama downloads Hugging Face models only from huggingface.co.',
+          );
+        }
+        await pull(ModelFiles.ollamaNameFor(params['repo'] as String, entry));
+      } else if (download == 'file' && rt.modelsDir.isNotEmpty) {
+        await models.downloadGguf(
+          rt.key,
+          files.expand(rt.modelsDir),
+          params['repo'] as String,
+          entry,
+          progress,
+        );
+      } else {
+        throw const FormatException('Provider has no model destination');
+      }
+    }
   }
 }

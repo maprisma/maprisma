@@ -11,10 +11,16 @@ Future<(List<int>, bool)> boundedOutput(
   int maxBytes = 64 * 1024,
   Duration timeout = const Duration(seconds: 5),
   List<int>? stdin,
+  bool mergeStderr = false,
+  Map<String, String>? environment,
 }) async {
   final Process process;
   try {
-    process = await Process.start(argv.first, argv.skip(1).toList());
+    process = await Process.start(
+      argv.first,
+      argv.skip(1).toList(),
+      environment: environment,
+    );
   } on ProcessException {
     return (<int>[], false);
   }
@@ -22,12 +28,17 @@ Future<(List<int>, bool)> boundedOutput(
     process.stdin.add(stdin);
   }
   unawaited(process.stdin.close().catchError((_) {}));
-  unawaited(process.stderr.drain<void>().catchError((_) {}));
   final out = <int>[];
   var over = false;
   final reading = Completer<void>();
+  final source = mergeStderr
+      ? _merged([process.stdout, process.stderr])
+      : process.stdout;
+  if (!mergeStderr) {
+    unawaited(process.stderr.drain<void>().catchError((_) {}));
+  }
   late final StreamSubscription<List<int>> subscription;
-  subscription = process.stdout.listen(
+  subscription = source.listen(
     (chunk) {
       if (out.length + chunk.length > maxBytes) {
         over = true;
@@ -62,6 +73,22 @@ Future<(List<int>, bool)> boundedOutput(
     out.length > maxBytes ? out.sublist(0, maxBytes) : out,
     code == 0 && !over,
   );
+}
+
+/// Both output streams into one (merge_stderr), done when both are.
+Stream<List<int>> _merged(List<Stream<List<int>>> streams) {
+  final controller = StreamController<List<int>>();
+  var open = streams.length;
+  for (final stream in streams) {
+    stream.listen(
+      controller.add,
+      onError: controller.addError,
+      onDone: () {
+        if (--open == 0) controller.close();
+      },
+    );
+  }
+  return controller.stream;
 }
 
 final class FetchError implements Exception {

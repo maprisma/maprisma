@@ -71,8 +71,10 @@ def validate(operation: str, params: dict) -> None:
         raise ValueError('Invalid search')
     if operation == 'models.pull' and not models_ctl.OLLAMA_NAME_RE.fullmatch(params['name']):
         raise ValueError('Invalid pull name')
-    if operation == 'models.download' and (not models_ctl.FILE_RE.fullmatch(params['file']) or
-            params['file'].startswith('/') or any(part in ('.', '..') for part in params['file'].split('/'))):
+    # The entry's shown name, as models_ctl.files gives it (no folder, no .gguf); its paths are
+    # looked up again from the model host.
+    if operation == 'models.download' and (not models_ctl.ENTRY_NAME_RE.fullmatch(params['file']) or
+            params['file'] in ('.', '..')):
         raise ValueError('Invalid model filename')
 
 

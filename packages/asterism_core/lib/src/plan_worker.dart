@@ -9,6 +9,8 @@ import 'model_guard.dart';
 import 'provider_ops.dart';
 import 'provider_scans.dart';
 import 'scan_files.dart';
+import 'service_i18n.dart';
+import 'settings.dart';
 import 'py_values.dart';
 
 /// Python flutter_plan_wire: the private plan between backend and worker.
@@ -255,11 +257,19 @@ Future<int> runWorker(List<String> args) async {
       final identity = AppIdentity();
       final files = ScanFiles(identity);
       final ops = ProviderOps(files, ProviderScans(files));
+      final i18n = ServiceI18n(identity, SettingsStore(identity));
       send({
         'type': 'result',
         'result': await ops.execute(
           request['operation'] as String,
           request['params'] as Map,
+          // flutter_worker's progress line: the fraction clamped, the text cut.
+          progress: (fraction, text) => send({
+            'type': 'progress',
+            'fraction': fraction.isFinite ? fraction.clamp(0.0, 1.0) : 0.0,
+            'text': text.length > 300 ? text.substring(0, 300) : text,
+          }),
+          translate: i18n.text,
         ),
       });
       return 0;
