@@ -53,7 +53,7 @@ patch predates Flutter; it is not a complete migration deliverable.
    Start, folder chooser and searchable scrollable history separated into groups.
    History-row activation opens this menu with the folder selected. Widget tests
    cover both terminal modes without a pin; host runtime results are pending.
-3. **Complete feature parity:** Task reviews, worker progress and results now share responsive map cards; see `docs/plan-task-cards-responses.md`.  setup/welcome, signed add-on management, all agent
+3. **Complete feature parity:** Task reviews, worker progress and results now share responsive map cards; see `docs/history/plan-task-cards-responses.md`.  setup/welcome, signed add-on management, all agent
    details and usage/limits, provider/model selection, MCP and skills, connection
    editing/checks, jobs/progress/helper, settings, notifications/help/manual and
    installed-agent management. Inventory every existing GTK action before removal.
@@ -199,7 +199,7 @@ as the completed migration. The requested final Claude review remains pending.
 ## Interim Claude review response (2026-10-27)
 
 The interim review is addressed item by item in
-`docs/review-claude-2026-10-27-responses.md`. Service resolution, sync boundaries,
+`docs/history/review-claude-2026-10-27-responses.md`. Service resolution, sync boundaries,
 non-interruptible commit shutdown, recoverable framing, terminal input/cleanup,
 map workers, confirmation/close behavior and bounded client buffers are corrected.
 Project history now retains 50 folders per agent. Flutter requests native singleton
@@ -318,7 +318,7 @@ first-agent guide and remaining agent install/sign-in/configure actions.
 
 ## Claude recheck fixes and configurable map scans (2026-10-27)
 
-`docs/review-claude-2026-10-27-recheck-responses.md` records N1–N7 individually.
+`docs/history/review-claude-2026-10-27-recheck-responses.md` records N1–N7 individually.
 The map scanner is persistent, isolated from work slots, and defaults to full
 scans no more often than every six seconds while visible. Settings now allows
 manual-only or 6/15/30/60/120/300 seconds; automatic scans pause while unfocused
@@ -356,7 +356,7 @@ No commit, installation, live plugin sync or publication was performed.
 
 ## Second Claude recheck fixes (2026-10-27)
 
-`docs/review-claude-2026-10-27-recheck-2-responses.md` answers R1–R4.
+`docs/history/review-claude-2026-10-27-recheck-2-responses.md` answers R1–R4.
 The task-error widget fixture now performs file setup synchronously, and the check
 command sets a 60-second per-test timeout. Manual Refresh arriving during a partial
 automatic scan queues a full scan and remains pending until it finishes, including
@@ -434,7 +434,7 @@ remain outstanding.
 
 ## Reuse AI installations on a separate mount (2026-10-27)
 
-Uwe approved the scenario in `docs/idea-detect-existing-ai-installs.md`. The
+Uwe approved the scenario in `docs/history/idea-detect-existing-ai-installs.md`. The
 Flutter Providers and models page and first-agent guide now offer **Find existing
 AI**. Discovery is explicit, not a startup or automatic map scan.
 
@@ -539,7 +539,7 @@ Latest isolated build (not launched or installed):
 
 ## Claude's separate-mount review responses (2026-10-28)
 
-`docs/review-claude-2026-10-28-responses.md` answers E1–E6. Welcome now has a
+`docs/history/review-claude-2026-10-28-responses.md` answers E1–E6. Welcome now has a
 fixed bottom action row. Discovery preserves and validates `current` launch
 aliases (including indirect link components and targets) instead of pinning
 build versions. Generated services identify their provider and use `%h`; the
@@ -572,9 +572,9 @@ was changed.
 
 ## Permanent System Map (2026-10-28)
 
-User-approved implementation plan: [plan-system-map.md](plan-system-map.md).
+User-approved implementation plan: [plan-system-map.md](history/plan-system-map.md).
 Implementation details, replaced-action inventory, measurements and host checks:
-[plan-system-map-responses.md](plan-system-map-responses.md).
+[plan-system-map-responses.md](history/plan-system-map-responses.md).
 
 The Flutter preview now has AI Map / System Map pages with separate retained views,
 private cached topology, cheap metadata refresh, explicit bounded disk search,
@@ -588,8 +588,8 @@ migration or replace the production entrypoint.
 
 ### System Map review corrections and storage decision (2026-10-28)
 
-See [Claude’s review](review-claude-2026-10-28-system-map.md) and
-[the responses](review-claude-2026-10-28-system-map-responses.md) for S1–S6.
+See [Claude’s review](history/review-claude-2026-10-28-system-map.md) and
+[the responses](history/review-claude-2026-10-28-system-map-responses.md) for S1–S6.
 Confirmation dialogs disable controls without animating an idle progress bar.
 Missing disks can be forgotten from saved topology only; settings and files stay.
 Program sizes resolve known wrapper targets, and discoveries display `current`
@@ -607,8 +607,8 @@ Undo journals and their configuration backups are durable recovery data.
 
 ## Group cards and map add-on management (2026-10-28)
 
-Active approved plan: [plan-map-addons.md](plan-map-addons.md).
-Action inventory and results: [plan-map-addons-responses.md](plan-map-addons-responses.md).
+Active approved plan: [plan-map-addons.md](history/plan-map-addons.md).
+Action inventory and results: [plan-map-addons-responses.md](history/plan-map-addons-responses.md).
 
 1. Inventory completed before removing UI pages; gaps in new MCP/skill creation
    remain explicit.
@@ -636,7 +636,7 @@ entrypoint replacement, commit, plugin sync or publication.
 
 ### Map add-on review corrections A1–A5 (2026-10-28)
 
-See [review responses](review-claude-2026-10-28-map-addons-responses.md).
+See [review responses](history/review-claude-2026-10-28-map-addons-responses.md).
 External agent processes no longer block add-on changes in either the frontend
 or service; owned sessions and installs remain guarded. Group activation uses one
 tap handler, avoiding the double-tap recognizer’s delay. The shared GTK add-on
@@ -649,17 +649,17 @@ Welcome’s Agents button retains first-use mode and its fixed Switch on/Later r
 
 ## Task cards (2026-10-28)
 
-Implementation of [plan-task-cards.md](plan-task-cards.md): task reviews, polling and
+Implementation of [plan-task-cards.md](history/plan-task-cards.md): task reviews, polling and
 results now use the map area, with a read-only focused subgraph for wide half cards.
 Model browsing, catalog and guide remain full cards. The main AI map is not built
 behind tasks; its external transform/focus state is preserved. See the
-[implementation response](plan-task-cards-responses.md) for checks and limitations.
+[implementation response](history/plan-task-cards-responses.md) for checks and limitations.
 
 
 ### Task-card review fixes (2026-10-28)
 
-All findings in [Claude's task-card review](review-claude-2026-10-28-task-cards.md)
-are addressed in the [review responses](review-claude-2026-10-28-task-cards-responses.md):
+All findings in [Claude's task-card review](history/review-claude-2026-10-28-task-cards.md)
+are addressed in the [review responses](history/review-claude-2026-10-28-task-cards-responses.md):
 one conditional completion scan, single hosted headers, retained view state,
 explicit full-width provider overview, idle live updates, compact task maps,
 single review counting, post-install catalog refresh and first-result Undo.
