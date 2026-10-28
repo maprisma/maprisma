@@ -44,6 +44,10 @@ def service():
     if os.environ.get('ASTERISM_SCAN_NOW'):
         now=float(os.environ['ASTERISM_SCAN_NOW'])
         time.time=lambda:now
+        import smart_check
+        real_categories=smart_check.categories
+        smart_check.categories=lambda runs,days=30,now=None:real_categories(
+            runs,days,now or __import__('datetime').datetime.fromtimestamp(float(os.environ['ASTERISM_SCAN_NOW'])))
     result=flutter_backend.Service()
     result.adapters=SimpleNamespace(items=[])
     class MapTasks:

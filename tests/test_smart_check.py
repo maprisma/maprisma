@@ -100,6 +100,9 @@ class SmartCheckTest(unittest.TestCase):
         many = [{"when": "2026-10-22T10:00:00", "plugin": "p", "task": f"t{i}", "agent": "a", "ok": True}
                 for i in range(500)]
         self.assertEqual(len(smart_check.categories(many, now=now)), smart_check.MAX_CATEGORIES)
+        # A run logged with an offset is compared as local time, not a TypeError for the whole page.
+        aware = [{"when": "2026-10-22T10:00:00+00:00", "plugin": "p", "task": "t", "agent": "a", "input": 3}]
+        self.assertEqual([g.totals.tokens for g in smart_check.categories(aware, now=now)], [3])
 
 
 if __name__ == "__main__":

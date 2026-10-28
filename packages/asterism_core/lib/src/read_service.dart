@@ -12,6 +12,7 @@ import 'map_graph.dart';
 import 'scan_files.dart';
 import 'service_i18n.dart';
 import 'settings.dart';
+import 'system_reads.dart';
 
 // Each route here has passed its differential fixtures (normal and hostile) and
 // a read-only comparison with the Python reference on a real HOME.
@@ -21,6 +22,9 @@ const readOnlyRoutes = <String>{
   'agents.details',
   'agents.activity',
   'connections.snapshot',
+  'usage.snapshot',
+  'existing.mounts',
+  'system.mount_signature',
 };
 
 final class ReadService {
@@ -104,6 +108,30 @@ final class ReadService {
       return {...result, 'focus': focus};
     }
     if (params.isNotEmpty) throw const FormatException('Unexpected parameters');
+    if (method == 'usage.snapshot') {
+      // Fixtures pin the clock (ASTERISM_SCAN_NOW), as the session readers do.
+      final pinned = double.tryParse(
+        identity.environment['ASTERISM_SCAN_NOW'] ?? '',
+      );
+      return UsageReader(files).snapshot(
+        now: pinned == null
+            ? null
+            : DateTime.fromMicrosecondsSinceEpoch((pinned * 1e6).round()),
+      );
+    }
+    if (method == 'existing.mounts' || method == 'system.mount_signature') {
+      final text =
+          files.text(
+            '/proc/self/mountinfo',
+            limit: 4 << 20,
+            allowRootOwned: true,
+          ) ??
+          '';
+      final mounts = localMounts(text);
+      return method == 'existing.mounts'
+          ? {'mounts': mounts}
+          : {'signature': mountSignature(mounts)};
+    }
     if (method == 'app.snapshot') {
       final saved = settings.load(), agents = catalog.scan();
       final defaultPath = settings.value(saved, 'agent_folder');

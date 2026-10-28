@@ -382,3 +382,27 @@ two new map cases (DeepSeek Harness profile with `!!js` and an MCP insert plus f
 profile with a linked failed-lines file). Release probe now uses a write route as its unported example.
 Flutter: 94 tests, analyzer clean. Python: full suite OK, typecheck 0/0/0. No real-desktop UI run.
 Nothing committed or pushed.
+
+### Phase 2, part 2 — usage and mounts (Claude, 2026-10-28)
+
+New Dart routes: `usage.snapshot` (the shared AI run log of plugin_ai, grouped as Smart Check does),
+`existing.mounts` and `system.mount_signature` (local data disks from `/proc/self/mountinfo`, the
+signature in `json.dumps` form). Python-exact helpers: `py_values.dart` (`str()`, truthiness, code-point
+order, `json.dumps` defaults) and `pyFromIsoformat` (Python 3.11+ calendar forms, any single separator,
+basic and extended times, `,`/`.` fractions, offsets converted to local time, `24:00`; week dates are not
+accepted). Six new fixture cases (a varied run log; symlink, FIFO, malformed, oversized, wrong shape). On the
+real HOME all three match.
+
+**Python bug fixed:** a run logged with an offset (`…+00:00`) made the whole Usage page fail
+(`TypeError` comparing naive and aware times). `plugin_ai._when` now converts it to local time and
+`smart_check.categories` uses it; test in `tests/test_smart_check.py`. The shared library
+`~/Projects/omarchy-plugin-ai/plugin_ai.py` has the same bug and was not changed (its plugins are
+published; Uwe decides).
+
+**Not ported in phase 2, because they belong to Python's task or handle state:** `providers.snapshot`
+(adds the focus of running tasks), `guide.snapshot` and `setup.detect` (start tasks), `system.cached` and
+`system.view` (register handles for later previews), `existing.scan` (a task), `addons.list` (phase 5).
+They move with the task runner (phases 3–4).
+
+Checks: 60 differential cases, 25 Dart tests, 94 Flutter tests, AOT release probe, Python suite and
+typecheck clean.
