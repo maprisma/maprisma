@@ -116,6 +116,76 @@ class DartProviderOpsParityTest(unittest.TestCase):
                 server.kill()
                 server.wait()
 
+    def test_same_model_actions_after_the_files(self):
+        import connect
+        import flutter_plan_wire
+        with tempfile.TemporaryDirectory() as temp:
+            home = Path(temp)
+            bin_dir = home / '.local/bin'
+            bin_dir.mkdir(parents=True)
+            (bin_dir / 'llama-server').write_text(SERVER)
+            os.chmod(bin_dir / 'llama-server', 0o700)
+            port = free_port()
+            (home / '.config/systemd/user').mkdir(parents=True)
+            (home / '.config/systemd/user/llama.service').write_text(
+                f'[Service]\nExecStart={bin_dir}/llama-server --port {port}\n')
+            (home / '.cache/llama.cpp').mkdir(parents=True)
+            for name in ('fixture-chat-Q4_K_M', 'fixture-next-Q4_K_M'):
+                (home / f'.cache/llama.cpp/{name}.gguf').write_text('GGUF')
+            env = {'HOME': str(home), 'PATH': f'{bin_dir}:/usr/bin:/bin', 'LANG': 'C.UTF-8',
+                   'XDG_CONFIG_HOME': str(home / '.config'), 'XDG_CACHE_HOME': str(home / '.cache'),
+                   'XDG_DATA_HOME': str(home / '.local/share'), 'ASTERISM_DESKTOP': 'generic'}
+            server = subprocess.Popen([str(bin_dir / 'llama-server'), '--port', str(port)], env=env)
+            try:
+                for _ in range(100):
+                    with socket.socket() as s:
+                        if s.connect_ex(('127.0.0.1', port)) == 0:
+                            break
+                    time.sleep(0.05)
+                sides = {}
+                for side, command, cwd in (
+                        ('python', [sys.executable, '-u', str(ROOT / 'flutter_worker.py')], ROOT),
+                        ('dart', [DART, '--disable-dart-dev', '--packages=.dart_tool/package_config.json',
+                                  'bin/asterism-core.dart', 'worker'], ROOT / 'packages/asterism_core')):
+                    target = home / f'{side}/settings.json'
+                    plan = connect.Plan('pi', 'llamacpp', 'llama-local', changes=[
+                        connect.Change(target, '', '{"model": "next"}\n')])
+                    plan.model_actions = [
+                        {'operation': 'model.unload', 'key': 'llamacpp', 'model': 'fixture-chat-Q4_K_M', 'agents': []},
+                        {'operation': 'model.load', 'key': 'llamacpp', 'model': 'fixture-next-Q4_K_M', 'agents': []}]
+                    results = []
+                    for actions in (plan.model_actions, [dict(plan.model_actions[1], model='not-there')]):
+                        plan.model_actions = actions
+                        with tempfile.TemporaryFile() as private:
+                            private.write(flutter_plan_wire.encode(plan, home / f'{side}/backups'))
+                            private.seek(0)
+                            os.fchmod(private.fileno(), 0o600)
+                            out = subprocess.run(command + ['--plan-fd', str(private.fileno())],
+                                                 input=b'{"operation": "connections.apply", "params": {}}\n',
+                                                 capture_output=True, pass_fds=(private.fileno(),), env=env,
+                                                 cwd=cwd, timeout=120)
+                        lines = [json.loads(line) for line in out.stdout.splitlines() if line.startswith(b'{')]
+                        result = lines[-1] if lines else {'stderr': out.stderr.decode()[-300:]}
+                        results.append(result.get('type'))
+                        if result.get('type') == 'result':
+                            results.append(result['result']['context_failures'])
+                        target.unlink(missing_ok=True)
+                    log = home / 'requests.log'
+                    sides[side] = (results, log.read_text().splitlines() if log.exists() else [])
+                    log.unlink(missing_ok=True)
+                self.assertEqual(sides['python'], sides['dart'])
+                # The first plan unloads and loads after its file (the guard asks the running
+                # runtime for its models before writing and again before the unload); the second
+                # names a model the runtime does not have and is refused before anything is written.
+                self.assertEqual(sides['dart'], (['result', 0, 'error'], [
+                    '["GET", "/models", null]',
+                    '["GET", "/models", null]',
+                    '["POST", "/models/unload", {"model": "fixture-chat-Q4_K_M"}]',
+                    '["POST", "/models/load", {"model": "fixture-next-Q4_K_M"}]']))
+            finally:
+                server.kill()
+                server.wait()
+
     def test_same_ollama_context_requests_after_the_files(self):
         import connect
         import flutter_plan_wire

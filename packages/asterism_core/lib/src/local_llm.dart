@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'adapter_assets.g.dart';
 import 'adapters.dart';
 import 'dsh_profile.dart';
+import 'py_values.dart';
 import 'scan_files.dart';
 
 /// Python connect.is_connected / is_active: whether an agent's own settings
@@ -98,6 +99,56 @@ final class LocalLlm {
             (models['providers'] as Map).containsKey(key);
       case 'dsh':
         return dshProviders(texts[0]).containsKey(key);
+    }
+    return false;
+  }
+
+  /// connect.is_active: the agent uses this runtime's provider right now (its
+  /// current model); an agent with a fixed provider uses only that one.
+  bool active(Adapter adapter, String runtime) {
+    final fixed = adapter.facts['fixed_provider'];
+    if (fixed is String && fixed.isNotEmpty) return fixed == runtime;
+    if (adapter.table('local_llm').isEmpty) return false;
+    final key = provider(runtime), texts = _texts(adapter);
+    if (texts.isEmpty || texts.any((t) => t == '\u0000')) return false;
+    String second() => texts.length > 1 ? texts[1] : '\u0000';
+    switch (adapter.command) {
+      case 'hermes':
+        final block = topBlock(texts[0], 'model');
+        return block != null &&
+            RegExp(
+              '^  provider:\\s*["\']?${RegExp.escape(key)}["\']?\\s*\$',
+              multiLine: true,
+            ).hasMatch(block);
+      case 'omp':
+        final text = second();
+        if (text == '\u0000') return false;
+        final block = topBlock(text, 'modelRoles');
+        if (block == null) return false;
+        final found = RegExp(
+          r'^  default:\s*(.*?)\s*$',
+          multiLine: true,
+        ).firstMatch(block);
+        if (found == null) return false;
+        final value = found[1]!.replaceAll(RegExp('^[\'"]+|[\'"]+\$'), '');
+        return value.startsWith('$key/');
+      case 'pi':
+        final text = second();
+        return text != '\u0000' && _json(text)?['defaultProvider'] == key;
+      case 'opencode':
+        final data = _json(texts[0]);
+        return data != null && pyStr(data['model'] ?? '').startsWith('$key/');
+      case 'openclaw':
+        final data = _json(texts[0]);
+        if (data == null) return false;
+        final agents = data['agents'];
+        final chosen = agents is Map && agents['defaults'] is Map
+            ? (agents['defaults'] as Map)['model']
+            : null;
+        final value = chosen is Map ? chosen['primary'] : chosen;
+        return value is String && value.startsWith('$key/');
+      case 'dsh':
+        return dshDefaultModel(texts[0]).$1 == key;
     }
     return false;
   }

@@ -402,10 +402,15 @@ List<String> taskFocus(
   ];
 }
 
-/// Map edits this core builds. Repair falls back to the reference (Devel)
-/// when the core answers unported_route for a line that needs its model.
+/// Map edits this core builds. The others fall back to the reference (Devel)
+/// when the core answers unported_route: repair for Jan and KoboldCPP
+/// contexts, the model previews for online models (phase 4c part 2b).
 const coreMapEdits = {'connections.move_preview', 'connections.author_preview'};
-const coreFirstRoutes = {'connections.repair_preview'};
+const coreFirstRoutes = {
+  'connections.repair_preview',
+  'models.switch_preview',
+  'models.attach_preview',
+};
 
 /// providers.run operations this core runs (the downloads follow in 4d).
 bool coreProviderRun(Map<String, dynamic> params) => const {

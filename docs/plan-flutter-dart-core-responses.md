@@ -654,3 +654,43 @@ Found and fixed on the way:
 
 Still Python (4c part 2): `models.switch_preview`/`models.attach_preview`, model actions in plans
 (`validate_actions`, the model guard), online model plans, repair with a model, Jan/KoboldCPP contexts.
+
+### 4c part 2a — model previews on the map (local LLMs) and model actions
+
+`models.switch_preview` and `models.attach_preview` for local LLMs are built in the core
+(`MapEdits.modelPreview`, a port of `flutter_map_editor.preview`). It checks the shown map against a fresh
+build for switches. The model's users move to another of its models or lose it; attach gives chosen agents
+the model. An engine that can load gets the unload/load actions and the note that Undo does not reverse
+them.
+
+Online models answer `unported_route`. The router falls back to the reference in Devel (now in
+`coreFirstRoutes`); they follow in 2b.
+
+New pieces:
+- `LocalLlm.active`: `connect.is_active` with each adapter's `local_llm_active` reader (Hermes, Oh My Pi,
+  Pi, OpenCode, OpenClaw, DeepSeek Harness) and the fixed-provider rule.
+- `model_guard.dart`:
+  - `gpu_usage` as far as `snapshot(...).generating` needs it: discrete GPU, busy percent, the
+    runtimes' processes and their children, DRM `fdinfo` VRAM per process, and each engine's
+    `loaded_models` (including `lms ps --json`). The snapshot is taken whole, as the reference takes it.
+  - `agent_instances`, `_guard_model` and `validate_actions`.
+- The worker validates the model actions before writing. After the files and the contexts it runs each
+  action, checking it again first; a failure is counted in `context_failures`, as `flutter_worker` does.
+- **The guard in a synchronous service:** the preview asks the worker (`asterism-core worker --guard
+  JSON`, answered before stdin is read). The worker reads the GPU and asks the runtime with the
+  reference's time limits. A synchronous socket has no timeouts, which is why it isn't used.
+- Repair with a model: `use_now` follows the model, as in the reference. Jan and KoboldCPP contexts go to
+  the reference through `corePreview`.
+
+Checks:
+- New fixture `model_previews.json` (switch, detach, attach, 5 refusals): Python = Dart. The batch path of
+  `diff-core.py` now masks plan handles too.
+- Real HOME, read-only: 69 previews (all llama.cpp/Ollama models with users, plus attaches for every
+  agent) give the same results in Python and Dart: 38 plans and 31 refusals. The guard ran against the
+  real GPU and llama.cpp, read-only.
+- `tests/test_dart_provider_ops_parity.py`: both workers apply a plan with unload and load against a fake
+  llama.cpp router. Results: same file, same requests (the guard's `GET /models` before writing and again
+  before the unload), and the same refusal for a model the runtime does not have.
+- A Dart test checks process ownership (`runtime_of`) against 13 Python answers.
+
+Still Python (2b): online model plans (`online_models`), Jan/KoboldCPP contexts.

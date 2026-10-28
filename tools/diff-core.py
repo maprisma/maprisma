@@ -265,7 +265,7 @@ def run_side(command, case, home):
     responses = [json.loads(line.replace(os.fsencode(home), b'$HOME')) for line in output.stdout.splitlines()]
     if len(responses) != len(script):
         raise AssertionError('Reply count differs from request count')
-    return responses, tree(home)
+    return masked(responses), tree(home)
 
 
 def main():

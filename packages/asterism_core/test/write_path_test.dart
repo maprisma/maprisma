@@ -3,6 +3,7 @@ import 'package:asterism_core/asterism_core.dart';
 import 'package:asterism_core/src/connect_apply.dart';
 import 'package:asterism_core/src/core_tasks.dart';
 import 'package:asterism_core/src/dsh_profile.dart';
+import 'package:asterism_core/src/model_guard.dart';
 import 'package:asterism_core/src/plan_worker.dart';
 import 'package:asterism_core/src/provider_ops.dart';
 import 'package:asterism_core/src/provider_scans.dart';
@@ -201,5 +202,79 @@ void main() {
       () => decodePlan(encodePlan(plan, '/tmp/backups')),
       throwsFormatException,
     );
+  });
+
+  test('processes belong to the local LLM the reference names', () {
+    // Expected values from Python's llm_engine.runtime_of.
+    const cases = [
+      [
+        'llama-server',
+        ['/usr/bin/llama-server', '--port', '8080'],
+        'llamacpp',
+      ],
+      [
+        'python3',
+        ['/usr/bin/python3', '/x/llama-server'],
+        '',
+      ],
+      [
+        'ollama',
+        ['/usr/bin/ollama', 'serve'],
+        'ollama',
+      ],
+      [
+        'ollama_llama_se',
+        ['/tmp/ollama/runners/llama-server'],
+        'llamacpp',
+      ],
+      [
+        'llama-server',
+        ['/home/u/.lmstudio/bin/llama-server'],
+        'lmstudio',
+      ],
+      [
+        'LM Studio',
+        ['/opt/LM Studio/lm-studio'],
+        'lmstudio',
+      ],
+      [
+        'VLLM::EngineCor',
+        ['python'],
+        'vllm',
+      ],
+      [
+        'python3',
+        ['python3', '/usr/bin/vllm', 'serve', 'm'],
+        'vllm',
+      ],
+      [
+        'python3',
+        ['/usr/bin/vllm', 'serve'],
+        'vllm',
+      ],
+      [
+        'jan-llama-worke',
+        ['/opt/jan/jan-llama-worker'],
+        'jan',
+      ],
+      [
+        'koboldcpp',
+        ['/opt/koboldcpp-linux'],
+        'koboldcpp',
+      ],
+      [
+        'bash',
+        ['/bin/bash'],
+        '',
+      ],
+      ['x', <String>[], ''],
+    ];
+    for (final c in cases) {
+      expect(
+        GpuUsage.runtimeOf(c[0] as String, [...c[1] as List<String>]),
+        c[2],
+        reason: '$c',
+      );
+    }
   });
 }

@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 import 'connect_apply.dart';
 import 'posix_ffi.dart';
 import 'identity.dart';
+import 'model_guard.dart';
 import 'provider_ops.dart';
 import 'provider_scans.dart';
 import 'scan_files.dart';
@@ -143,18 +144,21 @@ const planMaxBytes = 24 * 1024 * 1024;
   );
 }
 
-/// flutter_worker connections.apply: check skill sources, back up and write.
-/// Context sizes and model load/unload need the provider engines (phase 4):
-/// such a plan is refused before anything is written.
+/// flutter_worker connections.apply: check the model actions and the skill
+/// sources, back up and write; then the context sizes and the model actions
+/// (each checked again; a failure is counted, the files stay).
 Future<Map<String, dynamic>> applyPlan(
   List<int> body,
   Posix posix,
-  String home,
-) async {
+  String home, {
+  ProviderOps? ops,
+}) async {
   final (plan, root) = decodePlan(body);
-  if (plan.modelActions.isNotEmpty) {
-    throw UnsupportedError('Model actions are not in the core yet');
-  }
+  ops ??= () {
+    final files = ScanFiles(AppIdentity());
+    return ProviderOps(files, ProviderScans(files));
+  }();
+  final actions = await validateActions(ops, plan.modelActions);
   for (final (_, target) in plan.linksAdd) {
     if (!Directory(target).existsSync() ||
         !File(p.join(target, 'SKILL.md')).existsSync()) {
@@ -170,6 +174,17 @@ Future<Map<String, dynamic>> applyPlan(
   for (final c in contexts) {
     if (!await setOllamaContext(c, posix.uid)) failures++;
   }
+  for (final action in actions) {
+    try {
+      await validateActions(ops, [action]);
+      await ops.execute(action['operation'] as String, {
+        'key': action['key'],
+        'model': action['model'],
+      });
+    } catch (_) {
+      failures++;
+    }
+  }
   return {'backup': backup, 'context_failures': failures};
 }
 
@@ -179,6 +194,41 @@ Future<Map<String, dynamic>> applyPlan(
 Future<int> runWorker(List<String> args) async {
   void send(Map<String, dynamic> message) =>
       stdout.writeln(pyJsonDumps(message));
+  // The map editor's model guard (asterism-core worker --guard JSON), asked
+  // before stdin is read: its caller waits for it and sends nothing.
+  if (args.length == 2 && args[0] == '--guard') {
+    try {
+      final request = jsonDecode(args[1]);
+      if (request is! Map ||
+          request.length != 2 ||
+          request['key'] is! String ||
+          request['agents'] is! List ||
+          (request['agents'] as List).any((a) => a is! String)) {
+        throw const FormatException('Invalid guard request');
+      }
+      final files = ScanFiles(AppIdentity());
+      final ops = ProviderOps(files, ProviderScans(files));
+      await guardModel(
+        files,
+        ops.providers,
+        ops.runtime(request['key'] as String),
+        [for (final a in request['agents'] as List) a as String],
+      );
+      send({
+        'type': 'result',
+        'result': {'ok': true},
+      });
+    } on FormatException catch (error) {
+      send({
+        'type': 'error',
+        'code': 'operation_failed',
+        'message': error.message,
+      });
+    } catch (_) {
+      send({'type': 'error', 'code': 'operation_failed'});
+    }
+    return 0;
+  }
   try {
     final input = BytesBuilder(copy: false);
     await for (final chunk in stdin) {

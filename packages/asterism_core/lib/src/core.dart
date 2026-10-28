@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'desktop.dart';
 import 'identity.dart';
 import 'posix_ffi.dart';
@@ -161,6 +162,34 @@ final class CoreService {
     };
   }
 
+  /// flutter_map_editor._guard_model, asked of the worker: it reads the GPU
+  /// and asks the runtime with the reference's time limits, while this
+  /// synchronous service waits for its one answer line.
+  void guardModel(String key, List<String> commands) {
+    const inUse = 'Model is in use; stop its users first';
+    final command = tasks.workerCommand;
+    final ProcessResult out;
+    try {
+      out = Process.runSync(command.first, [
+        ...command.skip(1),
+        '--guard',
+        jsonEncode({'key': key, 'agents': commands}),
+      ]);
+    } on ProcessException {
+      throw const FormatException(inUse);
+    }
+    final lines = const LineSplitter()
+        .convert('${out.stdout}')
+        .where((l) => l.startsWith('{'));
+    final reply = lines.isEmpty ? null : jsonDecode(lines.last);
+    if (reply is Map && reply['type'] == 'result') return;
+    throw FormatException(
+      reply is Map && reply['message'] is String
+          ? reply['message'] as String
+          : inUse,
+    );
+  }
+
   late final AppIdentity identity;
   late final SettingsStore settings;
   late final Desktop desktop;
@@ -188,6 +217,10 @@ final class CoreService {
       };
     }
     if (method == 'connections.move_preview') return edits.movePreview(params);
+    if (method == 'models.switch_preview' ||
+        method == 'models.attach_preview') {
+      return edits.modelPreview(method, params, guardModel);
+    }
     if (method == 'connections.repair_preview') {
       return edits.repairPreview(params, preview);
     }

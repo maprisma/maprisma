@@ -150,7 +150,7 @@ final class ProviderOps {
   Map get _engines => providerFacts['engines'] as Map;
   int get uid => files.posix.uid;
 
-  String? _lms() {
+  String? lmsBinary() {
     for (final folder in (files.identity.environment['PATH'] ?? '').split(
       ':',
     )) {
@@ -164,14 +164,14 @@ final class ProviderOps {
 
   bool canControl(RuntimeRecord rt) =>
       (_engines[rt.key] as Map?)?['lms_control'] == true
-      ? rt.installed && (rt.service.isNotEmpty || _lms() != null)
+      ? rt.installed && (rt.service.isNotEmpty || lmsBinary() != null)
       : rt.installed && rt.service.isNotEmpty;
 
   Future<(bool, String)> _systemctl(String verb, RuntimeRecord rt) =>
       runCommand(['systemctl', '--user', verb, '${rt.service}.service']);
 
   Future<(bool, String)> _lmsRun(List<String> args) async {
-    final binary = _lms();
+    final binary = lmsBinary();
     return binary == null
         ? (false, 'lms not found')
         : runCommand([binary, ...args]);

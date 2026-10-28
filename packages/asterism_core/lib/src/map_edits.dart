@@ -5,6 +5,7 @@ import 'adapter_assets.g.dart';
 import 'agent_catalog.dart';
 import 'connect_apply.dart';
 import 'core_tasks.dart';
+import 'inventory.dart' show chatModels;
 import 'llm_plans.dart';
 import 'map_graph.dart' show splitModel;
 import 'mcp_plans.dart';
@@ -307,9 +308,176 @@ final class MapEdits {
     };
   }
 
+  /// flutter_map_editor.preview for models.switch_preview and
+  /// models.attach_preview on a local LLM: the model's users move to another
+  /// of its models (or lose it), or chosen agents get it; the runtime unloads
+  /// and loads the models after the files (the guard refuses a model in use).
+  /// Online models follow in part 2b (the reference builds them meanwhile).
+  Map<String, dynamic> modelPreview(
+    String method,
+    Map<String, dynamic> params,
+    void Function(String key, List<String> commands) guard,
+  ) {
+    final switching = method == 'models.switch_preview';
+    _ids(
+      params,
+      switching ? {'provider', 'old', 'new'} : {'provider', 'model', 'agents'},
+    );
+    final graph = currentMap();
+    final nodes = {
+      for (final n in graph['nodes'] as List) n['id'] as String: n as Map,
+    };
+    final edges = [for (final e in graph['edges'] as List) e as Map];
+    final catalog = {
+      for (final a in reads.catalog.scan().where((a) => a.installed))
+        a.command: a,
+    };
+    final inv = reads.inventory.collect(catalog.values.toList());
+    final runtimes = {
+      for (final r in inv.runtimes)
+        if (r.installed &&
+            (providerFacts['connect_keys'] as Map).containsKey(r.key))
+          'runtime:${r.key}': r,
+    };
+    Map node(String? ident, Set<String> kinds) {
+      final n = nodes[ident];
+      if (n == null || !kinds.contains(n['kind'])) {
+        throw const FormatException('Map item unavailable; refresh');
+      }
+      return n;
+    }
+
+    String agent(String ident) {
+      node(ident, {'agent'});
+      final command = ident.substring('agent:'.length);
+      if (!catalog.containsKey(command)) {
+        throw const FormatException('Agent unavailable');
+      }
+      return command;
+    }
+
+    bool linked(String source, String target, Set<String> kinds) => edges.any(
+      (e) =>
+          e['source'] == source &&
+          e['target'] == target &&
+          kinds.contains(e['kind']),
+    );
+    final pid = params['provider'] as String?;
+    final provider = node(pid, {'runtime', 'cloud'});
+    final old = (switching ? params['old'] : params['model']) as String?;
+    final modelNode = node(old, {'model'});
+    if (!linked(pid!, old!, {'serves'})) {
+      throw const FormatException('Model/provider mismatch');
+    }
+    final next = switching ? params['new'] as String? : old;
+    if (next != null) {
+      node(next, {'model'});
+      if (!linked(pid, next, {'serves'}) || switching && next == old) {
+        throw const FormatException('Choose another model of this provider');
+      }
+    }
+    List<String> selected;
+    if (!switching) {
+      selected = [for (final c in params['agents'] as List) agent('agent:$c')];
+    } else {
+      Set<String> users(List edges) => {
+        for (final e in edges)
+          if (e['kind'] == 'default' && e['target'] == old)
+            e['source'] as String,
+      };
+      // As the reference: the users on the shown map, against a fresh build.
+      final expected = users(edges),
+          actual = users(reads.buildMap()['edges'] as List);
+      if (expected.length != actual.length || !expected.containsAll(actual)) {
+        throw const FormatException('Model users changed; refresh');
+      }
+      selected = {
+        for (final e in edges)
+          if (e['target'] == old && e['kind'] == 'default')
+            agent(e['source'] as String),
+      }.toList();
+    }
+    final focus = <String>{
+      pid,
+      old,
+      ?next,
+      for (final c in selected) 'agent:$c',
+    };
+    if (provider['kind'] == 'cloud') throw ServiceError('unported_route');
+    final rt = runtimes[pid];
+    node(pid, {'runtime'});
+    if (rt == null) throw const FormatException('Runtime unavailable');
+    final name = next != null ? nodes[next]!['label'] as String : '';
+    if (!rt.models.contains(modelNode['label']) ||
+        name.isNotEmpty && !chatModels(rt.models).contains(name)) {
+      throw const FormatException('Model unavailable');
+    }
+    final builders = <Plan Function()>[];
+    for (final command in selected) {
+      final adapter = catalog[command]!.adapter;
+      final fixed = adapter.facts['fixed_provider'];
+      if (!llm.supported(command) || fixed is String && fixed.isNotEmpty) {
+        throw const FormatException('Agent cannot switch provider');
+      }
+      if (switching && !reads.inventory.llm.active(adapter, rt.key)) {
+        throw const FormatException('Model users changed; refresh');
+      }
+      builders.add(
+        () =>
+            llm.plan(command, rt, name, name.isNotEmpty, remove: name.isEmpty),
+      );
+    }
+    final actions = <Map<String, dynamic>>[], notes = <String>[];
+    if ((providerFacts['engines'] as Map)[rt.key]?['can_load'] == true) {
+      // The worker checks these again before it writes any configuration.
+      if (switching) {
+        guard(rt.key, selected);
+        actions.add({
+          'operation': 'model.unload',
+          'key': rt.key,
+          'model': modelNode['label'],
+          'agents': selected,
+        });
+      }
+      if (next != null) {
+        actions.add({
+          'operation': 'model.load',
+          'key': rt.key,
+          'model': name,
+          'agents': <String>[],
+        });
+      }
+      notes.add(
+        'Undo restores configuration files; runtime load and unload actions are not undone.',
+      );
+    }
+    if (builders.isEmpty && actions.isEmpty) {
+      throw const FormatException('No editable model users');
+    }
+    final plan = builders.isNotEmpty
+        ? chainPlans(config, builders)
+        : Plan('', '', '');
+    plan.modelActions.addAll(actions);
+    final result = connections.keep(plan);
+    if (actions.isNotEmpty) result['empty'] = false;
+    return {
+      ...result,
+      'focus': [
+        for (final n in nodes.keys)
+          if (focus.contains(n)) n,
+      ],
+      'agents': [for (final c in selected) catalog[c]!.name],
+      'notes': notes,
+      'model_actions': [
+        for (final a in actions)
+          {'operation': a['operation'], 'model': a['model']},
+      ],
+    };
+  }
+
   /// flutter_map_editor.repair_preview: retry a known failed edge and clear
-  /// its hints in the same backup and Undo. A local LLM line that needs its
-  /// model again brings the provider's extras: that one stays with Python.
+  /// its hints in the same backup and Undo (a local LLM line with its model
+  /// again; Jan and KoboldCPP contexts stay with the reference for now).
   Map<String, dynamic> repairPreview(
     Map<String, dynamic> params,
     Map<String, dynamic> Function(Map<String, dynamic>) preview,
@@ -344,9 +512,10 @@ final class MapEdits {
       final model = pyTruthy(edge['dangling'])
           ? edge['dangling'] as String
           : '${entry?['target'] ?? ''}';
-      if (model.isNotEmpty) throw ServiceError('unported_route');
-      request.addAll({'model': model, 'use_now': false});
+      request.addAll({'model': model, 'use_now': model.isNotEmpty});
     }
+    // What the core cannot build yet (Jan, KoboldCPP contexts): the reference.
+    if (!corePreview(request)) throw ServiceError('unported_route');
     final result = preview(request);
     final plan = connections.take(result['plan'] as String);
     if (entry != null) plan.changes.add(_failureRemoved('$aid|$target'));
