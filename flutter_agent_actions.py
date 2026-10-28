@@ -50,7 +50,7 @@ def resolve(params: dict) -> Plan:
                   'runnable':True,'external':True,'logins':[]}
         return Plan(public,[],step)
     command, action = params['command'], params['action']
-    if action not in ('install', 'update', 'uninstall', 'login', 'verify'):
+    if action not in ('install', 'update', 'uninstall', 'login', 'logout', 'verify'):
         raise ValueError('Unknown agent action')
     ai_core.add_user_program_dirs()
     agent = next((item for item in agents.list_agents() if item.command == command), None)
@@ -71,7 +71,11 @@ def resolve(params: dict) -> Plan:
         return Plan(public, [], step)
     if not agent.installed:
         raise ValueError('Agent is not installed')
-    if action == 'verify':
+    if action == 'logout':
+        if 'login' in params or not harness.logout:
+            raise ValueError('No registered sign-out command')
+        argv = list(harness.logout)
+    elif action == 'verify':
         if 'login' in params:
             raise ValueError('Invalid test request')
         argv = first_agent.verify_argv(command)

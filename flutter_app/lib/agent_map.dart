@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'map_groups.dart';
+import 'map_editor.dart';
 
 class AgentMap extends StatelessWidget {
   const AgentMap({
@@ -10,6 +11,15 @@ class AgentMap extends StatelessWidget {
     required this.onAgent,
     required this.tr,
     this.readOnly = false,
+    this.onEdit,
+    this.selection,
+    this.controls,
+    this.staticState,
+    this.savedLayout = const {},
+    this.onLayout,
+    this.animate = 'all',
+    this.lightFps = 20,
+    this.onAnimationChanged,
     this.anchors = const {},
     this.onSubagents,
     this.onNode,
@@ -28,6 +38,15 @@ class AgentMap extends StatelessWidget {
     ],
   });
 
+  final Object? staticState;
+  final Set<String>? selection;
+  final Widget Function(Map<String, dynamic>)? controls;
+  final Future<void> Function(Map<String, dynamic>)? onEdit;
+  final Map<String, dynamic> savedLayout;
+  final ValueChanged<Map<String, dynamic>>? onLayout;
+  final String animate;
+  final int lightFps;
+  final ValueChanged<String>? onAnimationChanged;
   final bool readOnly;
   final Set<String> anchors;
   final Map<String, dynamic> graph;
@@ -151,6 +170,27 @@ class AgentMap extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (!readOnly && onEdit != null) {
+      return MapEditor(
+        graph: graph,
+        saved: savedLayout,
+        onLayout: onLayout,
+        onEdit: onEdit!,
+        selection: selection,
+        controls: controls,
+        staticState: staticState,
+        onSubagents: onSubagents,
+        tr: tr,
+        controller: controller,
+        groups: this.groups,
+        onExpandGroup: onExpandGroup,
+        onOpen: onNode,
+        onMenu: onNodeMenu,
+        animate: animate,
+        lightFps: lightFps,
+        onAnimationChanged: onAnimationChanged,
+      );
+    }
     final groups = readOnly ? null : this.groups;
     final nodes = (graph['nodes'] as List).cast<Map<String, dynamic>>();
     final edges = (graph['edges'] as List).cast<Map<String, dynamic>>();

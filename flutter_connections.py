@@ -209,10 +209,10 @@ class Connections:
         created, plan = self.plans[ident]
         if time.monotonic() - created >= 600:
             raise ValueError('Connection preview expired')
-        if plan.empty() and not plan.contexts:
+        if plan.empty() and not plan.contexts and not getattr(plan, 'model_actions', []):
             del self.plans[ident]
             return {'ok': True, 'undo': None}
-        if queue is not None or plan.runtime or plan.contexts:
+        if queue is not None or plan.runtime or plan.contexts or plan.model_actions:
             if queue is None:
                 raise ValueError('This connection requires a worker')
             result = queue(plan, self.backup_root, self.register_backup)

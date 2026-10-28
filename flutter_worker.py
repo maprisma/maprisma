@@ -14,6 +14,9 @@ import flutter_providers
 
 def execute_private(operation,body,progress):
     from pathlib import Path
+    if operation == 'agents.halt':
+        import flutter_map_instances
+        return flutter_map_instances.execute(body)
     if operation.startswith('system.move_'):
         import system_moves
         record=json.loads(body)
@@ -42,6 +45,8 @@ def execute_private(operation,body,progress):
     if operation=='connections.apply':
         import connect,flutter_plan_wire,llm_engine
         plan,root=flutter_plan_wire.decode(body)
+        import flutter_map_editor, flutter_providers
+        actions = flutter_map_editor.validate_actions(getattr(plan, 'model_actions', []))
         contexts,plan.contexts=plan.contexts,[]
         for _link,target in plan.links_add:
             if not target.is_dir() or not (target/'SKILL.md').is_file():
@@ -51,6 +56,12 @@ def execute_private(operation,body,progress):
         for runtime,model,tokens in contexts:
             try:llm_engine.of(runtime).set_context(runtime,model,tokens)
             except Exception:failures+=1
+        for action in actions:
+            try:
+                flutter_map_editor.validate_actions([action])
+                flutter_providers.execute(action['operation'], {'key':action['key'], 'model':action['model']}, progress)
+            except Exception:
+                failures += 1
         return {'backup':str(backup),'context_failures':failures}
     if operation=='models.remove':
         import flutter_removals

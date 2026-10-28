@@ -70,6 +70,8 @@ class Setting:
 SCHEMA: dict[str, Setting] = {
     # Look and language
     "language": Setting("auto", _text, "Settings › Language: \"auto\" (the system's) or a language code"),
+    "flutter_theme_mode": Setting("system", _one_of("system", "light", "dark"), "Flutter Settings › Theme"),
+    "map_light_fps": Setting(20, lambda v: type(v) is int and v in (20, 30, 60), "Flutter map-light frame rate: 20, 30 or 60 fps"),
     "look": Setting("omarchy", _one_of(*LOOKS), "Settings › Look on Omarchy: its theme or GNOME's Adwaita"),
     "choice_text": Setting("bright", _one_of("bright", "dim"),
                            "Settings › Text in choice boxes: bright (white on dark themes) or dimmed"),
@@ -84,6 +86,8 @@ SCHEMA: dict[str, Setting] = {
     "agent_project_history": Setting({}, _history_mapping, "Project folders used to start each agent, newest first"),
     "plugin_migration": Setting({}, _mapping, "One-time legacy plugin import: backup and pending add-on activation"),
     # The map
+    "flutter_map_layout": Setting({}, lambda v: __import__("flutter_map_editor").valid_layout(v),
+                                  "Flutter map card positions/order/folds and node pins (bounded schema)"),
     "map_layers": Setting(list(MAP_LAYERS), _texts, "the map's Show switches of the full-size window"),
     "map_scan_interval": Setting(6, lambda v: type(v) is int and v in MAP_SCAN_INTERVALS,
                                  "Automatic map scan interval in seconds; 0: manual only"),

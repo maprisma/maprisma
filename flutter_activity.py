@@ -8,7 +8,7 @@ import provider_watch
 import subagents
 
 
-def snapshot(catalog, sessions, recent: int = 1800, kept: int = 10) -> tuple[dict, dict]:
+def snapshot(catalog, sessions, recent: int = 1800, kept: int = 10, tracker=None) -> tuple[dict, dict]:
     commands = [agent.command for agent in catalog if agent.installed]
     pids: dict = {}
     found = provider_watch.agent_instances(commands, pids=pids)
@@ -19,6 +19,10 @@ def snapshot(catalog, sessions, recent: int = 1800, kept: int = 10) -> tuple[dic
         if code is None and session.process.pid not in pids.get(session.command, []):
             pids.setdefault(session.command, []).append(session.process.pid)
             running.setdefault(session.command, []).append('')
+    if tracker is None:
+        import agent_activity
+        tracker = agent_activity.Activity()
+    working = tracker.working(pids)
     activity = {}
     for command in commands:
         location = subagents.where(command)
@@ -35,7 +39,7 @@ def snapshot(catalog, sessions, recent: int = 1800, kept: int = 10) -> tuple[dic
         # Do not export task descriptions, transcripts or model answers.
         children = [{'key': row.key, 'kind': row.kind, 'folder': row.folder, 'age': row.age,
                      'running': bool(pids.get(command)) and row.running} for row in rows]
-        activity[command] = {'instances': len(running.get(command, [])), 'subagents_supported': supported,
+        activity[command] = {'instances': len(running.get(command, [])), 'working': command in working, 'subagents_supported': supported,
                              'active_subagents': sum(child['running'] for child in children) if supported else None,
                              'children': children}
     return running, activity

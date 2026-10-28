@@ -8,6 +8,7 @@ String actionLabel(String action) =>
       'update': 'Update',
       'uninstall': 'Remove',
       'login': 'Sign in…',
+      'logout': 'Sign out',
       'verify': 'Send the test question',
     }[action] ??
     'Continue';

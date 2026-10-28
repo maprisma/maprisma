@@ -207,6 +207,10 @@ class ConnectionReview extends StatelessWidget {
                   'Undo restores configuration files; API context changes are not undone.',
                 ),
               ),
+            for (final action in plan['model_actions'] as List? ?? [])
+              Text(
+                '${tr(action['operation'] == 'model.load' ? 'Load' : 'Unload')}: ${action['model']}',
+              ),
             if (plan['agents'] != null)
               Text('${tr('Agents')}: ${(plan['agents'] as List).join(', ')}'),
             if (plan['item'] != null && plan['command'] != null)

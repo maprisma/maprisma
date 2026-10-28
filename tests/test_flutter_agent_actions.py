@@ -55,6 +55,14 @@ class AgentActionsTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.actions.apply(plan['preview'],self.sessions)
 
+    def test_logout_uses_registered_argv_and_rechecks_before_launch(self):
+        self.harness.logout=('fixture','logout')
+        plan=self.actions.preview({'command':'fixture','action':'logout'})
+        self.assertEqual(plan['commands'],['/fixture/fixture logout'])
+        self.harness.logout=('fixture','changed-logout')
+        with self.assertRaises(ValueError):self.actions.apply(plan['preview'],self.sessions)
+        self.sessions.start.assert_not_called()
+
     def test_changed_recipe_or_install_state_requires_new_review(self):
         token = self.actions.preview({'command':'fixture','action':'login'})['preview']
         self.harness.access=lambda:SimpleNamespace(logins=(signin.Login('Different account',('fixture','other-login')),))

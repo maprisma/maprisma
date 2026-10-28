@@ -116,6 +116,11 @@ class Tasks:
         self._snapshot_id = result['task']
         return result
 
+    def start_halt(self, operation: str, body: bytes) -> dict:
+        if operation != 'agents.halt' or len(body) > 4096:
+            raise ValueError('Invalid halt plan')
+        return self._private(operation, body)
+
     def start_plan(self, plan, backup_root: Path, finalize) -> dict:
         import flutter_plan_wire
         if not callable(finalize):

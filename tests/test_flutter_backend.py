@@ -146,6 +146,23 @@ class FlutterBackendTest(unittest.TestCase):
         self.service.dispatch('settings.update', {'values': {'agent_folder': None}})
         self.assertIsNone(self.service.settings()['agent_folder'])
 
+    def test_flutter_appearance_and_light_rate_defaults_persist_and_validate_atomically(self):
+        self.assertEqual(self.service.settings()['flutter_theme_mode'], 'system')
+        self.assertEqual(self.service.settings()['map_light_fps'], 20)
+        for mode, fps in [('light', 30), ('dark', 60), ('system', 20)]:
+            result = self.service.dispatch('settings.update', {'values': {
+                'flutter_theme_mode': mode, 'map_light_fps': fps}})
+            self.assertEqual(result['flutter_theme_mode'], mode)
+            self.assertEqual(result['map_light_fps'], fps)
+            self.assertEqual(ai_core.load_settings(self.settings)['map_light_fps'], fps)
+        before = self.settings.read_bytes()
+        for key, values in [('map_light_fps', [None, True, 20.0, '20', 0, 25, 120]),
+                            ('flutter_theme_mode', [None, True, 'auto', 'omarchy', 'LIGHT', []])]:
+            for value in values:
+                with self.subTest(key=key, value=value), self.assertRaises(ValueError):
+                    self.service.dispatch('settings.update', {'values': {'language': 'de', key: value}})
+                self.assertEqual(self.settings.read_bytes(), before)
+
     def test_details_are_explicit_metadata_and_datetime_fields_are_json_safe(self):
         import datetime
         import agent_details

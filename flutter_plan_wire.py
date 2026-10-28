@@ -14,7 +14,7 @@ MAX_BYTES = 24 * 1024 * 1024
 def encode(plan: connect.Plan, backup_root: Path) -> bytes:
     if plan.commands or plan.undo_commands or plan.files_add or plan.retire:
         raise ValueError('Unsupported private plan')
-    body = json.dumps({'version': 2, 'backup_root': str(backup_root), 'agent': plan.agent,
+    body = json.dumps({'version': 3, 'model_actions': getattr(plan, 'model_actions', []), 'backup_root': str(backup_root), 'agent': plan.agent,
                        'runtime': plan.runtime, 'provider': plan.provider,
                        'links_add': [[str(p), str(t)] for p, t in plan.links_add],
                        'links_remove': [[str(p), str(t)] for p, t in plan.links_remove],
@@ -34,9 +34,11 @@ def decode(body: bytes) -> tuple[connect.Plan, Path]:
     if not isinstance(data, dict) or type(data.get('version')) is not int:
         raise ValueError('Invalid private plan')
     fields = {'version', 'backup_root', 'agent', 'runtime', 'provider', 'changes', 'contexts'}
-    if data.get('version') == 2:
+    if data.get('version') in (2, 3):
         fields |= {'links_add', 'links_remove'}
-    if data.get('version') not in (1, 2) or set(data) != fields:
+    if data.get('version') == 3:
+        fields.add('model_actions')
+    if data.get('version') not in (1, 2, 3) or set(data) != fields:
         raise ValueError('Invalid private plan')
     root = Path(data['backup_root'])
     if not root.is_absolute():
@@ -66,5 +68,18 @@ def decode(body: bytes) -> tuple[connect.Plan, Path]:
                 raise ValueError('Expected absolute skill paths')
             result.append((link, target))
         return result
-    return connect.Plan(data['agent'], data['runtime'], data['provider'], changes=changes,
-                        contexts=contexts, links_add=links('links_add'), links_remove=links('links_remove')), root
+    plan = connect.Plan(data['agent'], data['runtime'], data['provider'], changes=changes,
+                        contexts=contexts, links_add=links('links_add'), links_remove=links('links_remove'))
+    actions = data.get('model_actions', [])
+    if not isinstance(actions, list) or len(actions) > 2:
+        raise ValueError('Invalid model actions')
+    for action in actions:
+        if (not isinstance(action, dict) or set(action) != {'operation', 'key', 'model', 'agents'}
+                or action['operation'] not in ('model.load', 'model.unload')
+                or any(not isinstance(action[k], str) or not action[k] or len(action[k]) > 4096 for k in ('key', 'model'))
+                or not isinstance(action['agents'], list) or len(action['agents']) > 32
+                or any(not isinstance(c, str) or not c or len(c) > 128 for c in action['agents'])
+                or len(set(action['agents'])) != len(action['agents'])):
+            raise ValueError('Invalid model action')
+    plan.model_actions = actions
+    return plan, root

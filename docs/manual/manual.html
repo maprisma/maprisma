@@ -840,7 +840,11 @@
 <section class="chapter" id="settings">
   <h1>Settings and Help</h1>
 
-  <h2 id="settings-list">Settings</h2>
+  <h2 id="flutter-appearance">Flutter themes and map lights</h2>
+<p>In the Flutter app, Settings offers System, Light and Dark with small previews. System follows the desktop appearance and the existing desktop palette; Light and Dark set a fixed brightness with matching backgrounds and readable colours. The choice is saved and also applies to task cards. The GTK appearance preference is kept separately.</p>
+<p>Map light frame rate offers 20 fps (default), 30 and 60. It is a maximum for flowing map lights, not the automatic scan interval. The light speed stays the same; higher rates add intermediate frames. Actual delivery depends on the display and available rendering time. Lights off, reduced motion, an unfocused window or a hidden map still stop the animation. The choice is saved.</p>
+
+<h2 id="settings-list">Settings</h2>
   <p>The gear (<kbd>Ctrl</kbd>+<kbd>,</kbd>) opens the settings. <kbd>Backspace</kbd> or <kbd>Esc</kbd> goes back.</p>
   <table>
     <thead><tr><th>Setting</th><th>What it does</th></tr></thead>
@@ -1024,6 +1028,15 @@
 <p>The Flutter preview shares its user add-on folder with Asterism (GTK). Removing an add-on also removes it from GTK; catalog installs and updates affect both applications. These effects are disclosed before confirmation. After a confirmed removal, old backups become eligible for cleanup after 30 days. Backups with an active Undo are kept; links, unrelated folders and foreign-owned folders are skipped. Undo lasts until this app closes. During first use, Welcome’s Agents button reopens the same Agents focus with its fixed Switch on / Later footer; it does not finish welcome or open a plain group view.</p>
 <h2 id="map-groups-welcome">First use and existing flows</h2>
 <p>Welcome appears above the map, with local Look at this PC / Skip and a System Map link. Mount existing data disks before searching. The Agents group opens with detected agents marked. Its fixed Switch on / Later footer stays visible while the list scrolls. Switch on is one batch with one Undo; Later preserves choices. Other enabled add-on kinds are preserved. Later starts do not auto-expand. Models links to existing download/import controls and model-folder reuse; MCP servers and skills links to Connections. New MCP definitions and new skill-folder installation remain unported. The rocket button retains the first-agent guide. Setup and Add-ons pages have been replaced by these groups.</p>
+</section>
+
+<section class="chapter" id="flutter-map-editor">
+<h1>Editing the Flutter AI Map</h1>
+<p>Drag an agent box to a provider, MCP server or skill set, or draw in the opposite direction. Click an agent and then a model of a connected provider to choose that model. Drawing a provider to its own model opens an agent selection; local providers that support loading can also load without choosing an agent. Every configuration edit opens Preview, then Apply, progress and a result with Undo. Cancel writes nothing.</p>
+<p>Select a box to reveal orange connection hooks. Drag a hook to another compatible provider or model, or to empty space to disconnect. A provider’s model hook switches all configured users together, or disconnects them and unloads where supported. Busy runtimes refuse unloading. Online provider lines use the agent’s registered sign-in or sign-out command in a reviewed terminal.</p>
+<p>Hover highlights neighbours. Shift-click adds boxes, with at most one agent selected. Pin keeps a box highlighted. Fold a card with its arrow, drag its header to move it, or use the card menu. Drag a box’s reorder handle or choose Move up / Move down. Layout and pins are saved separately from connections; task cards retain selection and zoom.</p>
+<p>Keyboard users can open Actions on a box, choose Connect or Move connection, and activate the destination box. Disconnect removes the pending connection; Cancel or Esc cancels. Card arrows and movement menus, Pin and reorder menu items provide alternatives to dragging. Open shows existing details and management actions. Agent buttons start in the saved default folder, show or stop an owned console, or offer a reviewed external instance to stop.</p>
+<p>All lights, Agent lights and Lights off control estimated activity. Lights stop when no line is active, the map is hidden, the window loses focus, or reduced motion is enabled. Failed lines open bounded hints with Repair or Disconnect. Undo restores configuration and failed-link metadata; runtime load/unload and sign-in/sign-out actions are not reversed. A partial model operation keeps the configuration backup and offers Undo.</p>
 </section>
 
 <section class="chapter" id="task-cards">

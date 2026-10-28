@@ -9,12 +9,15 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'backend.dart';
+import 'map_benchmark.dart';
+import 'map_snapshot.dart';
 import 'task_card.dart';
 import 'agent_terminal.dart';
 import 'agent_map.dart';
 import 'agent_list_view.dart';
 import 'agent_details_view.dart';
 import 'settings_view.dart';
+import 'app_theme.dart';
 import 'project_start_menu.dart';
 import 'addon_details.dart';
 import 'map_groups.dart';
@@ -29,7 +32,15 @@ import 'connections_view.dart';
 import 'model_removal_dialog.dart';
 import 'subagents_dialog.dart';
 
-void main() async {
+void main(List<String> args) async {
+  if (args.isNotEmpty && args.first.startsWith('--map-benchmark')) {
+    final options = MapBenchmarkOptions.parse(args);
+    WidgetsFlutterBinding.ensureInitialized();
+    await windowManager.ensureInitialized();
+    await windowManager.setSize(const Size(1600, 1400));
+    runApp(MapBenchmark(options: options));
+    return;
+  }
   WidgetsFlutterBinding.ensureInitialized();
   await windowManager.ensureInitialized();
   await windowManager.setPreventClose(true);
@@ -95,7 +106,24 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
   String? _moveUndo;
   String? _systemSelection;
   String? _aiFocus;
+  final _mapSelection = <String>{};
   Timer? _liveTimer;
+  Map<String, dynamic>? _mapLayoutOverride;
+  Timer? _mapLayoutTimer;
+  void _saveMapLayout(Map<String, dynamic> value) {
+    _mapLayoutOverride = value;
+    _mapLayoutTimer?.cancel();
+    _mapLayoutTimer = Timer(const Duration(milliseconds: 300), () async {
+      try {
+        await _backend?.call('settings.update', {
+          'values': {'flutter_map_layout': value},
+        });
+      } catch (_) {
+        if (mounted) _actionFailed();
+      }
+    });
+  }
+
   bool _livePending = false;
   bool _windowFocused = true;
   DateTime? _nextMapScan;
@@ -546,6 +574,16 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
       }
     }
     if (mounted) setState(() => _busy = true);
+    _mapLayoutTimer?.cancel();
+    if (_mapLayoutOverride != null) {
+      try {
+        await _backend?.call('settings.update', {
+          'values': {'flutter_map_layout': _mapLayoutOverride},
+        });
+      } catch (_) {
+        /* Keep normal close available if the service has disconnected. */
+      }
+    }
     await _backend?.shutdown();
     await windowManager.destroy();
   }
@@ -622,12 +660,12 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
 
   @override
   void onWindowFocus() {
-    _windowFocused = true;
+    setState(() => _windowFocused = true);
   }
 
   @override
   void onWindowBlur() {
-    _windowFocused = false;
+    setState(() => _windowFocused = false);
   }
 
   Future<Map<String, dynamic>> _freshMap() async {
@@ -703,9 +741,10 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
       if (!pending) {
         _nextMapScan = DateTime.now().add(Duration(seconds: interval));
       }
-      if (mounted) {
+      final next = retainMapSnapshot(_graph, graph);
+      if (mounted && (!identical(next, _graph) || _failed)) {
         setState(() {
-          _graph = graph;
+          _graph = next;
           _failed = false;
         });
       }
@@ -1602,14 +1641,334 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
     }
   }
 
+  Widget _mapControls(Map<String, dynamic> node) {
+    final command = (node['id'] as String).replaceFirst('agent:', '');
+    final terminals = _terminals
+        .where((t) => t.command == command && !t.ended)
+        .toList();
+    return SizedBox(
+      height: 26,
+      child: Row(
+        children: [
+          IconButton(
+            padding: EdgeInsets.zero,
+            tooltip: tr('Open'),
+            onPressed: () => _aiNode(node),
+            icon: const Icon(Icons.open_in_new, size: 16),
+          ),
+          if (node['kind'] == 'runtime')
+            IconButton(
+              padding: EdgeInsets.zero,
+              tooltip: tr(node['status'] == 'running' ? 'Stop' : 'Start'),
+              onPressed: () => _mapRuntimeControl(node),
+              icon: Icon(
+                node['status'] == 'running' ? Icons.stop : Icons.play_arrow,
+                size: 18,
+              ),
+            ),
+          if (node['kind'] == 'agent') ...[
+            IconButton(
+              padding: EdgeInsets.zero,
+              tooltip: tr('Start'),
+              onPressed: () {
+                final projects =
+                    (_snapshot?['projects'] as Map?)?[command] as Map?;
+                if (projects != null) {
+                  _start({
+                    'command': command,
+                    'path': projects['default'],
+                    'outside': false,
+                  });
+                }
+              },
+              icon: const Icon(Icons.play_arrow, size: 18),
+            ),
+            if (terminals.isNotEmpty) ...[
+              IconButton(
+                padding: EdgeInsets.zero,
+                tooltip: tr('Console'),
+                onPressed: () =>
+                    setState(() => _visibleTerminal = terminals.first),
+                icon: const Icon(Icons.terminal, size: 16),
+              ),
+              IconButton(
+                padding: EdgeInsets.zero,
+                tooltip: tr('Stop'),
+                onPressed: () => _stopTerminal(terminals.first),
+                icon: const Icon(Icons.stop, size: 16),
+              ),
+            ],
+            IconButton(
+              padding: EdgeInsets.zero,
+              tooltip: tr('Stop external instance'),
+              onPressed: () => _haltMapAgent(command),
+              icon: const Icon(Icons.stop_circle_outlined, size: 16),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _mapRuntimeControl(Map<String, dynamic> node) async {
+    if (_busy) return;
+    final action = node['status'] == 'running' ? 'Stop' : 'Start';
+    final yes = await _cardReview(
+      tr(action),
+      {
+        'focus': [node['id']],
+      },
+      (confirm, cancel) => TaskReview(
+        content: Text('${tr(action)} ${node['label']}?'),
+        actions: [
+          TextButton(onPressed: cancel, child: Text(tr('Cancel'))),
+          FilledButton(onPressed: confirm, child: Text(tr(action))),
+        ],
+      ),
+    );
+    if (!yes) {
+      if (mounted) setState(() => _busy = false);
+      return;
+    }
+    await _providerOperation(
+      action == 'Stop' ? 'runtime.stop' : 'runtime.start',
+      {'key': (node['id'] as String).substring(8)},
+      tr(action),
+    );
+  }
+
+  Future<void> _haltMapAgent(String command) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      final reply = await _backend!.call('agents.halt_preview', {
+        'command': command,
+      });
+      if (!mounted) return;
+      String? token;
+      final yes = await _cardReview(
+        tr('Stop external instance'),
+        {
+          'focus': ['agent:$command'],
+        },
+        (confirm, cancel) => TaskReview(
+          content: Column(
+            children: [
+              for (final item in reply['instances'] as List)
+                ListTile(
+                  title: Text(item['label'] as String),
+                  onTap: () {
+                    token = item['preview'] as String;
+                    confirm();
+                  },
+                ),
+            ],
+          ),
+          actions: [TextButton(onPressed: cancel, child: Text(tr('Cancel')))],
+        ),
+      );
+      if (!yes || token == null) return;
+      final result = await _backend!.call('agents.halt_apply', {
+        'preview': token,
+      });
+      await _runTask(
+        operation: 'agents.halt',
+        params: const {},
+        existingTask: result['task'] as String,
+        title: tr('Stop'),
+      );
+    } catch (_) {
+      _actionFailed();
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _mapEdit(Map<String, dynamic> edit) async {
+    if (_busy) return;
+    final nodes = {
+      for (final n in (_mapGraph['nodes'] as List).cast<Map<String, dynamic>>())
+        n['id'] as String: n,
+    };
+    Map<String, dynamic>? edge = edit['edge'] as Map<String, dynamic>?;
+    if (edit['failure'] != null) {
+      edge = edit['failure'] as Map<String, dynamic>;
+      var repair = false;
+      final chosen = await _cardReview(
+        tr('Connection'),
+        {
+          'focus': [edge['source'], edge['target']],
+        },
+        (yes, no) => TaskReview(
+          content: Column(
+            children: [
+              for (final hint in edge!['hints'] as List)
+                Text(tr(hint['text'] as String)),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: no, child: Text(tr('Cancel'))),
+            TextButton(onPressed: yes, child: Text(tr('Disconnect'))),
+            FilledButton(
+              onPressed: () {
+                repair = true;
+                yes();
+              },
+              child: Text(tr('Repair')),
+            ),
+          ],
+        ),
+      );
+      if (mounted) setState(() => _busy = false);
+      if (!chosen) return;
+      if (repair) {
+        return _connectionPreview({
+          'agent': edge['source'],
+          'target': edge['target'],
+        }, method: 'connections.repair_preview');
+      }
+      return _mapEdit({'source': edge['source'], 'target': null, 'edge': edge});
+    }
+    final source = nodes[edit['source']], target = nodes[edit['target']];
+    if (source == null) return;
+    if (edge != null) {
+      final old = nodes[edge['target']];
+      if (source['kind'] == 'agent' && old?['kind'] == 'cloud') {
+        await _agentAction((source['id'] as String).substring(6), 'logout');
+        return;
+      }
+      if (['runtime', 'cloud'].contains(source['kind']) &&
+          old?['kind'] == 'model') {
+        await _connectionPreview({
+          'provider': source['id'],
+          'old': old!['id'],
+          'new': target?['id'],
+        }, method: 'models.switch_preview');
+        return;
+      }
+      if (source['kind'] == 'agent' && old?['kind'] == 'model') {
+        if (target != null) {
+          return _mapEdit({'source': source['id'], 'target': target['id']});
+        }
+        final provider = (_mapGraph['edges'] as List)
+            .cast<Map<String, dynamic>>()
+            .where((e) => e['kind'] == 'serves' && e['target'] == old!['id'])
+            .firstOrNull;
+        if (provider == null) return;
+        return _mapEdit({
+          'source': source['id'],
+          'target': null,
+          'edge': {'source': source['id'], 'target': provider['source']},
+        });
+      }
+      await _connectionPreview({
+        'agent': source['id'],
+        'old': edge['target'],
+        'new': target?['id'],
+      }, method: 'connections.move_preview');
+      return;
+    }
+    if (target == null) return;
+    final agent = source['kind'] == 'agent'
+        ? source
+        : target['kind'] == 'agent'
+        ? target
+        : null;
+    final item = source['kind'] == 'model'
+        ? source
+        : target['kind'] == 'model'
+        ? target
+        : agent == source
+        ? target
+        : source;
+    if (item['kind'] == 'model') {
+      final provider = (_mapGraph['edges'] as List)
+          .cast<Map<String, dynamic>>()
+          .where((e) => e['kind'] == 'serves' && e['target'] == item['id'])
+          .firstOrNull;
+      if (provider == null) return;
+      final selected = <String>{
+        if (agent != null) (agent['id'] as String).substring(6),
+      };
+      if (agent == null) {
+        final candidates = nodes.values
+            .where((n) => n['kind'] == 'agent')
+            .toList();
+        final chosen = await _cardReview(
+          tr('Agents'),
+          {
+            'focus': [provider['source'], item['id']],
+          },
+          (yes, no) => StatefulBuilder(
+            builder: (context, update) => TaskReview(
+              content: SingleChildScrollView(
+                child: Column(
+                  children: [
+                    for (final n in candidates)
+                      CheckboxListTile(
+                        title: Text(n['label'] as String),
+                        value: selected.contains(
+                          (n['id'] as String).substring(6),
+                        ),
+                        onChanged: (v) => update(() {
+                          final c = (n['id'] as String).substring(6);
+                          if (v == true) {
+                            selected.add(c);
+                          } else {
+                            selected.remove(c);
+                          }
+                        }),
+                      ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(onPressed: no, child: Text(tr('Cancel'))),
+                FilledButton(onPressed: yes, child: Text(tr('Preview'))),
+              ],
+            ),
+          ),
+        );
+        if (mounted) setState(() => _busy = false);
+        if (!chosen) return;
+      }
+      await _connectionPreview({
+        'provider': provider['source'],
+        'model': item['id'],
+        'agents': selected.toList(),
+      }, method: 'models.attach_preview');
+      return;
+    }
+    if (agent == null) return;
+    final command = (agent['id'] as String).substring(6);
+    if (item['kind'] == 'cloud') {
+      await _agentAction(command, 'login');
+      return;
+    }
+    final kind = item['kind'] == 'runtime' ? 'provider' : item['kind'];
+    if (!['provider', 'mcp', 'skills'].contains(kind)) return;
+    await _connectionPreview({
+      'kind': kind,
+      'command': command,
+      'item': (item['id'] as String).substring(
+        (item['kind'] as String).length + 1,
+      ),
+      'remove': false,
+      if (kind == 'provider') 'model': '',
+      if (kind == 'provider') 'use_now': false,
+    });
+  }
+
   Future<void> _connectionPreview(
     Map<String, dynamic> params, {
     bool author = false,
+    String? method,
   }) async {
     setState(() => _busy = true);
     try {
       final plan = await _backend!.call(
-        author ? 'connections.author_preview' : 'connections.preview',
+        method ??
+            (author ? 'connections.author_preview' : 'connections.preview'),
         params,
       );
       if (!mounted) return;
@@ -1647,7 +2006,7 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
             SnackBar(
               content: Text(
                 tr(
-                  'Configuration saved; some model context settings could not be applied.',
+                  'Configuration saved; some model operations could not be completed.',
                 ),
               ),
             ),
@@ -1913,28 +2272,11 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
     }
   }
 
-  Color? _color(String key) {
-    final value = (_snapshot?['theme'] as Map?)?[key];
-    if (value is! String || !RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(value)) {
-      return null;
-    }
-    return Color(0xff000000 | int.parse(value.substring(1), radix: 16));
-  }
-
-  ThemeData _theme(Brightness brightness) {
-    var scheme = ColorScheme.fromSeed(
-      seedColor: _color('accent') ?? const Color(0xff517f70),
-      brightness: brightness,
-    );
-    final background = _color('background');
-    if (background != null) {
-      scheme = scheme.copyWith(
-        surface: background,
-        onSurface: _color('foreground') ?? scheme.onSurface,
-      );
-    }
-    return ThemeData(colorScheme: scheme, useMaterial3: true);
-  }
+  String get _themePreference =>
+      _snapshot?['settings']['flutter_theme_mode'] as String? ?? 'system';
+  Map get _desktopTheme => _snapshot?['theme'] as Map? ?? const {};
+  ThemeData _theme(Brightness brightness) =>
+      appTheme(brightness, mode: _themePreference, desktop: _desktopTheme);
 
   Future<void> _projectAction(
     String method,
@@ -1954,6 +2296,7 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
   void dispose() {
     windowManager.removeListener(this);
     _liveTimer?.cancel();
+    _mapLayoutTimer?.cancel();
     _startMenu.dispose();
     _aiTransform.dispose();
     _systemTransform.dispose();
@@ -1983,11 +2326,7 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
     localizationsDelegates: GlobalMaterialLocalizations.delegates,
     theme: _theme(Brightness.light),
     darkTheme: _theme(Brightness.dark),
-    themeMode: _color('background') == null
-        ? ThemeMode.system
-        : (_color('background')!.computeLuminance() < 0.5
-              ? ThemeMode.dark
-              : ThemeMode.light),
+    themeMode: appThemeMode(_themePreference, _desktopTheme),
     home: Scaffold(
       appBar: AppBar(
         title: const Text('Asterism'),
@@ -2377,6 +2716,7 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
                                 busy: _busy,
                                 tr: tr,
                                 onUpdate: _updateSettings,
+                                desktopTheme: _desktopTheme,
                                 onBack: () =>
                                     setState(() => _showSettings = false),
                               )
@@ -2387,6 +2727,36 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
                                     ? AgentMap(
                                         key: const ValueKey('ai-map'),
                                         graph: _mapGraph,
+                                        onEdit: _mapEdit,
+                                        lightFps:
+                                            _snapshot!['settings']['map_light_fps']
+                                                as int? ??
+                                            20,
+                                        selection: _mapSelection,
+                                        controls: _mapControls,
+                                        staticState: (
+                                          _snapshot,
+                                          _busy,
+                                          _strings,
+                                          _terminals
+                                              .map((t) => '${t.id}:${t.ended}')
+                                              .join(','),
+                                        ),
+                                        savedLayout:
+                                            _mapLayoutOverride ??
+                                            (_snapshot!['settings']['flutter_map_layout']
+                                                    as Map<String, dynamic>? ??
+                                                {}),
+                                        onLayout: _saveMapLayout,
+                                        animate: _windowFocused
+                                            ? (_snapshot!['settings']['map_animations']
+                                                      as String? ??
+                                                  'all')
+                                            : 'off',
+                                        onAnimationChanged: (mode) =>
+                                            _updateSettings({
+                                              'map_animations': mode,
+                                            }),
                                         controller: _aiTransform,
                                         focusedNode: _aiFocus,
                                         onNode: _aiNode,

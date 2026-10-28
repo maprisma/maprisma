@@ -45,7 +45,7 @@ MAP_SCAN_SETTINGS = (
 
 PROTOCOL = 1
 MAX_REQUEST = 64 * 1024
-UI_SETTINGS = frozenset(("language", "look", "agent_folder", "map_layers", "subagents_minutes", "subagents_kept", "addons_online", "map_scan_interval", "map_scan_pause_unfocused", "map_scan_targets"))
+UI_SETTINGS = frozenset(("flutter_theme_mode", "map_light_fps", "flutter_map_layout", "map_animations", "language", "look", "agent_folder", "map_layers", "subagents_minutes", "subagents_kept", "addons_online", "map_scan_interval", "map_scan_pause_unfocused", "map_scan_targets"))
 
 
 class Service:
@@ -499,7 +499,7 @@ class Service:
             if not values or set(values) - UI_SETTINGS:
                 raise ValueError("Unknown setting")
             for key, value in values.items():
-                if value is not None and not settings_schema.SCHEMA[key].valid(value):
+                if (value is not None or key in ("flutter_theme_mode", "map_light_fps", "flutter_map_layout", "map_animations")) and not settings_schema.SCHEMA[key].valid(value):
                     raise ValueError("Invalid setting value")
             if "language" in values and values["language"] not in {"auto", *i18n.CODES}:
                 raise ValueError("Unknown language")
@@ -632,9 +632,12 @@ class Service:
     def activity(self, catalog) -> tuple[dict, dict]:
         import flutter_activity
         saved = ai_core.load_settings(self.settings_path)
+        if not hasattr(self, "_activity_tracker"):
+            import agent_activity
+            self._activity_tracker = agent_activity.Activity()
         return flutter_activity.snapshot(catalog, self.sessions,
             recent=cast(int, settings_schema.value(saved, 'subagents_minutes')) * 60,
-            kept=cast(int, settings_schema.value(saved, 'subagents_kept')))
+            kept=cast(int, settings_schema.value(saved, 'subagents_kept')), tracker=self._activity_tracker)
 
     def action_choices(self, agent) -> dict:
         import install_recipes
@@ -740,11 +743,15 @@ class Service:
                   "running": lambda n: i18n._("running") if n == 1 else i18n._("{0} running").format(n),
                   "in_use": lambda names: i18n._("in use · {0}").format(names),
                   "server_off": i18n._("server off")}
-        built = graph.build(catalog, details, cache['inventory'], labels=labels, running=running)
+        import flutter_map_payload
+        failures = flutter_map_payload.failures(self.settings_path)
+        built = graph.build(catalog, details, cache['inventory'], labels=labels, running=running, failures=failures)
+        payload_edges = flutter_map_payload.edges(built, activity, failures, cache['inventory'],
+            self.settings().get('map_animations', 'all'))
         hidden = graph.hidden_by_layers(built, self.settings()["map_layers"])
         return {"activity": activity, "nodes": [asdict(node) for node in built.nodes if node.id not in hidden],
-                "edges": [asdict(edge) for edge in built.edges
-                          if edge.source not in hidden and edge.target not in hidden]}
+                "edges": [edge for edge in payload_edges
+                          if edge["source"] not in hidden and edge["target"] not in hidden]}
 
 
 def serve(service: Service, source, output: TextIO) -> None:

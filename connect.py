@@ -79,6 +79,7 @@ class Plan:
     notes: list = field(default_factory=list)          # what stays as it is (skills: folders read anyway)
     files_add: list = field(default_factory=list)      # (path, bytes, executable): new files (a fetched skill)
     retire: list = field(default_factory=list)         # folders moved into the backup (an app's old version)
+    model_actions: list = field(default_factory=list)  # trusted worker-only load/unload API operations
     contexts: list = field(default_factory=list)       # (runtime, model, context) set through the local
                                                        # LLM's API after writing (Ollama; not undone)
 
@@ -105,7 +106,7 @@ class Plan:
 
     def empty(self) -> bool:
         return not self.changes and not self.commands and not self.links_add and not self.links_remove \
-            and not self.files_add and not self.retire
+            and not self.files_add and not self.retire and not self.model_actions
 
 
 def chat_models(models) -> list:
@@ -471,5 +472,6 @@ def merge(plans: list) -> Plan:
         result.files_add += item.files_add
         result.retire += [path for path in item.retire if path not in result.retire]
         result.contexts += [c for c in item.contexts if c not in result.contexts]
+        result.model_actions += [a for a in item.model_actions if a not in result.model_actions]
         result.notes += [n for n in item.notes if n not in result.notes]
     return result

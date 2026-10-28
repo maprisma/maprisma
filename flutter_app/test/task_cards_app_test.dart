@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:asterism/backend.dart';
+import 'package:asterism/agent_map.dart';
+import 'package:asterism/settings_view.dart';
 import 'package:asterism/main.dart';
 import 'package:asterism/connections_view.dart';
 import 'package:asterism/task_card.dart';
@@ -17,6 +19,7 @@ welcome=False
 install_fails=False
 installed=False
 catalog_loads=0
+settings={'map_scan_interval':6,'map_light_fps':20,'flutter_theme_mode':'system','map_layers':['agents']}
 addon={'id':'fixture-addon','name':'Fixture adapter','version':'1.0','summary':'Summary',
  'kind':'agent','state':'verified','enabled':False,'supported':True,'verified':True,'provides':['test']}
 new_addon={**addon,'id':'catalog-addon','name':'Catalog adapter','version':'2.0','provides':['new']}
@@ -31,11 +34,12 @@ tasks={}
 for line in sys.stdin:
  q=json.loads(line);m=q['method'];p=q.get('params',{})
  with open('requests.jsonl','a') as log:log.write(json.dumps(q)+'\n')
- if m=='app.snapshot':r={'agents':[],'projects':{},'settings':{'map_scan_interval':6},'language':'en','setup_needed':welcome,'theme':{}}
+ if m=='app.snapshot':r={'agents':[],'projects':{},'settings':settings,'language':'en','setup_needed':welcome,'theme':{}}
+ elif m=='settings.update':settings.update(p['values']);r=settings
  elif m=='app.theme':r={'theme':{}}
  elif m=='addons.list':r={'addons':[addon]+([new_addon] if installed else [])}
  elif m=='system.cached':r={'nodes':[],'edges':[],'notes':[],'helpers':[]}
- elif m=='map.snapshot':r={'nodes':nodes,'edges':[{'source':'agent:test','target':'mcp:known-server','kind':'mcp'}] if connected else [],'activity':{}}
+ elif m=='map.snapshot':r={'nodes':nodes,'edges':[{'source':'agent:test','target':'mcp:known-server','kind':'mcp'}] if connected else [],'activity':{},'pending':Path('pending').exists()}
  elif m=='system.refresh':tasks['system']={'nodes':[],'edges':[],'notes':[],'helpers':[]};r={'task':'system'}
  elif m=='setup.detect':tasks['detect']={'installed':['fixture-addon']};r={'task':'detect'}
  elif m=='providers.snapshot':r={'local':[runtime],'online':[],'folders':[]}
@@ -44,7 +48,9 @@ for line in sys.stdin:
  elif m=='connections.author_preview':r={'plan':'opaque','empty':False,'files':[],'links_add':[],'links_remove':[],'kind':p['kind'],'agents':['Test agent'],'focus':['agent:test']}
  elif m=='connections.preview':r={'plan':'opaque','empty':False,'files':[],'links_add':[],'links_remove':[],
   'command':'test','item':'known-server','remove':False,'focus':['agent:test','mcp:known-server']}
- elif m=='connections.apply':connected=True;tasks['connect']={'ok':True,'undo':'undo-token'};r={'task':'connect'}
+ elif m=='connections.move_preview':r={'plan':'opaque-remove','empty':False,'files':[],'links_add':[],'links_remove':[],'focus':['agent:test','mcp:known-server']}
+ elif m=='connections.undo':connected=False;r={'restored':['fixture']}
+ elif m=='connections.apply':connected=p['plan']!='opaque-remove';tasks['connect']={'ok':True,'undo':'undo-token'};r={'task':'connect'}
  elif m=='providers.run':
   op=p['operation'];tasks[op]=({'repos':[{'id':'owner/repo'}]} if op=='models.search' else
    {'files':[{'name':'model.gguf','quant':'Q4','size':123}]} if op=='models.files' else {'ok':True})
@@ -382,4 +388,161 @@ void main() {
       await unmountApp(tester);
     },
   );
+  testWidgets(
+    'map drag opens review, Cancel has no apply, Apply and Undo restore connection',
+    (tester) async {
+      final dir = await mountApp(tester);
+      Future<void> draw() async {
+        final from = tester.getCenter(find.text('Test agent'));
+        final to = tester.getCenter(find.text('Known server'));
+        await tester.dragFrom(from, to - from);
+        await settleService(tester);
+      }
+
+      await draw();
+      expect(find.byType(ConnectionReview), findsOneWidget);
+      await tester.tap(find.text('Cancel'));
+      await settleService(tester);
+      expect(
+        requests(dir).where((q) => q['method'] == 'connections.apply'),
+        isEmpty,
+      );
+      await draw();
+      await tester.tap(find.text('Apply'));
+      await settleService(tester);
+      expect(find.text('Undo'), findsOneWidget);
+      await tester.tap(find.text('Undo'));
+      await settleService(tester);
+      expect(
+        requests(dir).where((q) => q['method'] == 'connections.undo').length,
+        1,
+      );
+      expect(tester.takeException(), isNull);
+      await unmountApp(tester);
+    },
+  );
+  testWidgets(
+    'hook to empty opens removal review; Cancel leaves the connection',
+    (tester) async {
+      final dir = await mountApp(tester);
+      final from = tester.getCenter(find.text('Test agent')),
+          to = tester.getCenter(find.text('Known server'));
+      await tester.dragFrom(from, to - from);
+      await settleService(tester);
+      await tester.tap(find.text('Apply'));
+      await settleService(tester);
+      await tester.tap(find.widgetWithText(TextButton, 'Close'));
+      await settleService(tester);
+      await tester.tap(find.text('Test agent'));
+      await tester.pumpAndSettle();
+      await tester.drag(
+        find.byTooltip(
+          'Move this connection to another compatible box, or to empty space to disconnect.',
+        ),
+        const Offset(0, 240),
+      );
+      await settleService(tester);
+      expect(find.byType(ConnectionReview), findsOneWidget);
+      final move = requests(
+        dir,
+      ).singleWhere((q) => q['method'] == 'connections.move_preview');
+      expect(move['params'], {
+        'agent': 'agent:test',
+        'old': 'mcp:known-server',
+        'new': null,
+      });
+      await tester.tap(find.text('Cancel'));
+      await settleService(tester);
+      expect(
+        requests(dir).where((q) => q['method'] == 'connections.apply').length,
+        1,
+      );
+      expect(tester.takeException(), isNull);
+      await unmountApp(tester);
+    },
+  );
+  for (final pending in [false, true]) {
+    testWidgets(
+      'live scans retain equal snapshots and map widgets (pending=$pending)',
+      (tester) async {
+        final dir = await mountApp(tester);
+        if (pending) File('${dir.path}/pending').writeAsStringSync('pending');
+        final before = requests(
+          dir,
+        ).where((q) => q['method'] == 'map.snapshot').length;
+        final original = tester.widget<AgentMap>(
+          find.byKey(const ValueKey('ai-map')),
+        );
+        await tester.pump(const Duration(seconds: 8));
+        await settleService(tester);
+        final current = tester.widget<AgentMap>(
+          find.byKey(const ValueKey('ai-map')),
+        );
+        if (!pending) expect(identical(original, current), true);
+        expect(
+          requests(dir).where((q) => q['method'] == 'map.snapshot').length,
+          greaterThan(before),
+        );
+        if (pending) {
+          expect(current.graph['pending'], true);
+          final polls = requests(
+            dir,
+          ).where((q) => q['method'] == 'map.snapshot').length;
+          await tester.pump(const Duration(seconds: 4));
+          await settleService(tester);
+          expect(
+            requests(dir).where((q) => q['method'] == 'map.snapshot').length,
+            greaterThan(polls),
+          );
+          expect(
+            identical(
+              tester.widget<AgentMap>(find.byKey(const ValueKey('ai-map'))),
+              current,
+            ),
+            true,
+          );
+        }
+        expect(tester.takeException(), isNull);
+        await unmountApp(tester);
+      },
+    );
+  }
+  testWidgets('theme and frame-rate settings apply through the service', (
+    tester,
+  ) async {
+    final dir = await mountApp(tester);
+    await tester.tap(find.byTooltip('Settings'));
+    await settleService(tester);
+    await tester.tap(find.byKey(const ValueKey('theme-dark')));
+    await settleService(tester);
+    expect(
+      tester.widget<MaterialApp>(find.byType(MaterialApp)).themeMode,
+      ThemeMode.dark,
+    );
+    expect(
+      Theme.of(tester.element(find.byType(SettingsView))).brightness,
+      Brightness.dark,
+    );
+    final rate = find.byKey(const ValueKey('map-light-fps-20'));
+    await tester.ensureVisible(rate);
+    await tester.pumpAndSettle();
+    await tester.tap(rate);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('60 fps').last);
+    await settleService(tester);
+    expect(
+      requests(dir)
+          .where((q) => q['method'] == 'settings.update')
+          .any((q) => q['params']['values']['map_light_fps'] == 60),
+      isTrue,
+    );
+    tester.widget<SettingsView>(find.byType(SettingsView)).onBack();
+    await settleService(tester);
+    expect(
+      tester.widget<AgentMap>(find.byKey(const ValueKey('ai-map'))).lightFps,
+      60,
+    );
+    expect(tester.takeException(), isNull);
+    await unmountApp(tester);
+  });
 }

@@ -1,5 +1,6 @@
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
+import 'app_theme.dart';
 
 class SettingsView extends StatelessWidget {
   const SettingsView({
@@ -9,9 +10,11 @@ class SettingsView extends StatelessWidget {
     required this.tr,
     required this.onUpdate,
     required this.onBack,
+    this.desktopTheme = const {},
   });
 
   final Map<String, dynamic> settings;
+  final Map desktopTheme;
   final bool busy;
   final String Function(String) tr;
   final Future<void> Function(Map<String, dynamic>) onUpdate;
@@ -83,25 +86,46 @@ class SettingsView extends StatelessWidget {
                     },
             ),
             const SizedBox(height: 24),
-            DropdownButtonFormField<String>(
-              key: ValueKey('look-${settings['look']}'),
-              initialValue: settings['look'] as String,
-              decoration: InputDecoration(labelText: tr('Look')),
+            Text(tr('Theme'), style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 12),
+            ThemeChoices(
+              value: settings['flutter_theme_mode'] as String? ?? 'system',
+              enabled: !busy,
+              tr: tr,
+              desktop: desktopTheme,
+              onChanged: (mode) => onUpdate({'flutter_theme_mode': mode}),
+            ),
+            const SizedBox(height: 12),
+            Text(tr('System follows the desktop appearance.')),
+            const SizedBox(height: 24),
+            DropdownButtonFormField<int>(
+              key: ValueKey('map-light-fps-${settings['map_light_fps'] ?? 20}'),
+              initialValue: settings['map_light_fps'] as int? ?? 20,
+              decoration: InputDecoration(
+                labelText: tr('Map light frame rate'),
+              ),
               items: [
-                DropdownMenuItem(
-                  value: 'omarchy',
-                  child: Text(tr('Omarchy theme')),
-                ),
-                DropdownMenuItem(
-                  value: 'adwaita',
-                  child: Text(tr('System appearance')),
-                ),
+                for (final fps in [20, 30, 60])
+                  DropdownMenuItem(
+                    value: fps,
+                    child: Text(
+                      tr(
+                        fps == 20 ? '{0} fps (default)' : '{0} fps',
+                      ).replaceAll('{0}', '$fps'),
+                    ),
+                  ),
               ],
               onChanged: busy
                   ? null
-                  : (value) {
-                      if (value != null) onUpdate({'look': value});
+                  : (fps) {
+                      if (fps != null) onUpdate({'map_light_fps': fps});
                     },
+            ),
+            const SizedBox(height: 8),
+            Text(
+              tr(
+                'Maximum frame rate for map lights. Reduced motion and Lights off stop animation.',
+              ),
             ),
             const SizedBox(height: 24),
             Card(
