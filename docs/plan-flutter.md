@@ -13,7 +13,7 @@ milestones and reviews are in `docs/history/`. Work continues on main without
 pushing it to the `gtk` remote.
 
 The current parity inventory and local connection-authoring slice are in
-[plan-flutter-connections.md](plan-flutter-connections.md). Custom MCP definitions
+[plan-flutter-connections.md](history/plan-flutter-connections.md). Custom MCP definitions
 and explicit local skill-folder attachment now use the existing reviewed
 configuration/backup/Undo flow. Skill symlink plans can cross the private worker
 wire. Online MCP/skill catalogs, web skill installation and tool probes remain
@@ -22,7 +22,7 @@ unported; this slice does not claim those flows are complete.
 Baseline validation before this slice: 50 Flutter tests and 1,381 Python tests,
 clean analysis/typechecking, all eight PDFs rebuilt, native Devel build and
 Claude's seven task-card findings verified. Current slice checks/results are
-recorded in [plan-flutter-connections-responses.md](plan-flutter-connections-responses.md).
+recorded in [plan-flutter-connections-responses.md](history/plan-flutter-connections-responses.md).
 Earlier test counts, uncommitted-tree descriptions and sandbox/socket/PDF blockers
 in the dated implementation notes below are historical; current checks run here.
 
@@ -38,8 +38,9 @@ feature parity, migration and packaging have been validated.
 Work on `main` in `/mnt/Data/Projects/asterism-flutter`. The original GTK repository
 at `/mnt/Data/Projects/asterism` is separate and must not be overwritten or synced
 from this migration. Its local remote is named `gtk`; never push Flutter main
-there. The baseline migration and documentation archive are committed. The
-current connection-authoring slice is local work until Uwe requests a commit.
+there. The baseline migration, documentation archive and reviewed connection-authoring
+slice (`69464c8`) are committed. Further work remains local unless Uwe requests
+a commit.
 
 ## Architecture
 
@@ -653,8 +654,8 @@ single review counting, post-install catalog refresh and first-result Undo.
 
 ## Local connection authoring and parity inventory (2026-10-28)
 
-[Plan and current inventory](plan-flutter-connections.md) ·
-[Implementation and checks](plan-flutter-connections-responses.md).
+[Plan and current inventory](history/plan-flutter-connections.md) ·
+[Implementation and checks](history/plan-flutter-connections-responses.md).
 
 Connections now offers custom stdio/HTTP/SSE definitions and explicit local
 skill-folder attachment with selected agents, structured preview, private worker
@@ -664,3 +665,12 @@ policy now uses measured map-area width for both rendering and scan decisions.
 The completed slice passes 55 Flutter tests and 1,395 Python tests with clean
 analysis/typechecking; all eight manual PDFs rebuilt. Online catalogs, skill
 fetch/install and tool probes remain separate work.
+
+
+### Connections review checkpoint (2026-10-28)
+
+Claude reviewed and committed the connections slice as `69464c8`; no Medium or
+higher finding remains. Analysis is clean and 55 Flutter tests pass. Its plan and
+responses are archived in `docs/history/`. Two low argument-entry leftovers are
+noted for the next related edit: representing an intentionally empty argument and
+normalizing/refusing carriage returns from pasted CRLF. No push was performed.

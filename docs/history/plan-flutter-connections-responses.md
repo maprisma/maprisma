@@ -80,3 +80,16 @@ management and remaining GTK actions are not claimed complete. Desktop/VM and
 full migration/packaging review remain outstanding. Existing `about` and
 `running-agents` manual fingerprint drift remains separate; only the new
 `connect-local-flutter` section was stamped, without masking unrelated drift.
+
+
+## Claude review / archive checkpoint — 2026-10-28
+
+Committed on main as `69464c8` after Claude's review, with no Medium or higher
+finding. Claude rechecked the bounds, private summaries, skill-source validation,
+wire compatibility, actual map-area width rule and additive translations; analysis
+and 55 Flutter tests passed. This plan and response are now archived.
+
+Two low argument-form issues remain for the next related code change: empty lines
+are dropped, so intentionally empty arguments cannot be represented, and pasted
+CRLF can leave a trailing carriage return in an argument. This documentation
+archive does not change application code. Nothing was pushed.
