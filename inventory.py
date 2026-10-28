@@ -541,8 +541,15 @@ def server_target(entry: dict) -> tuple[str, str]:
     name = Path(command).name
     if name in LAUNCHERS:
         for arg in args[:10]:
-            if isinstance(arg, str) and arg and not arg.startswith("-") and "=" not in arg:
-                return "command", f"{name} {Path(arg).name if arg.startswith('/') else arg}"[:80]
+            if not isinstance(arg, str) or not arg:
+                continue
+            if arg.startswith('-'):
+                if arg not in ('-y', '--yes', '-m', '--quiet'):
+                    break
+                continue
+            if '=' in arg or '://' in arg:
+                break
+            return "command", f"{name} {Path(arg).name if arg.startswith('/') else arg}"[:80]
     return "command", name[:80]
 
 
@@ -616,7 +623,7 @@ def skills_in(folder: Path, depth: int = 0) -> list[tuple[Path, Path]]:
 
 # --- all together -----------------------------------------------------------------------
 
-def collect(agent_list) -> Inventory:
+def collect(agent_list, *, remember: bool = True) -> Inventory:
     inv = Inventory()
     processes = own_processes()
     inv.runtimes = [p.detect(processes) for p in providers.local() if p.detect is not None]
@@ -677,10 +684,11 @@ def collect(agent_list) -> Inventory:
     for name, server in servers.items():
         _source, entry = mcp_ctl.entry_from(server.agents, name)
         used[name] = entry
-    try:
-        mcp_library.remember(used)
-    except OSError:
-        pass
+    if remember:
+        try:
+            mcp_library.remember(used)
+        except OSError:
+            pass
     for name, entry in mcp_library.load().items():
         if name not in servers:
             if entry["transport"] == "stdio":

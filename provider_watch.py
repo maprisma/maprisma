@@ -239,9 +239,9 @@ def ensure_service(on: bool, script: Path | None = None) -> bool:
 # --- processes ------------------------------------------------------------------------------
 
 def _read(path: str, limit: int) -> bytes:
+    import ai_core
     try:
-        with open(path, "rb") as handle:
-            return handle.read(limit)
+        return ai_core.read_head(path,limit,follow=False)
     except OSError:
         return b""
 

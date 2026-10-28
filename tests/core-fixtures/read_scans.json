@@ -1,0 +1,1190 @@
+{
+ "cases": [
+  {
+   "name": "empty installed-agent catalog and details",
+   "environment": {
+    "ASTERISM_DIFF_COMPONENT": "scans",
+    "ASTERISM_SCAN_NOW": "1793188800",
+    "ASTERISM_SCAN_PROC": "$HOME/proc",
+    "ASTERISM_SCAN_SYSTEM_ROOT": "$HOME/system",
+    "PATH": "$HOME/.local/bin"
+   },
+   "files": [
+    {
+     "path": "proc",
+     "type": "directory"
+    },
+    {
+     "path": "system/var/lib/pacman/local",
+     "type": "directory"
+    },
+    {
+     "path": ".local/bin",
+     "type": "directory"
+    }
+   ],
+   "requests": [
+    {
+     "method": "scan.catalog"
+    },
+    {
+     "method": "app.snapshot"
+    },
+    {
+     "method": "agents.details",
+     "params": {
+      "command": "opencode"
+     }
+    },
+    {
+     "method": "agents.details",
+     "params": {
+      "command": "codex"
+     }
+    },
+    {
+     "method": "agents.details",
+     "params": {
+      "command": "dsh"
+     }
+    },
+    {
+     "method": "agents.details",
+     "params": {
+      "command": "muse"
+     }
+    },
+    {
+     "method": "agents.details",
+     "params": {
+      "command": "grok"
+     }
+    },
+    {
+     "method": "agents.details",
+     "params": {
+      "command": "goose"
+     }
+    },
+    {
+     "method": "agents.details",
+     "params": {
+      "command": "gemini"
+     }
+    },
+    {
+     "method": "agents.details",
+     "params": {
+      "command": "crush"
+     }
+    },
+    {
+     "method": "agents.details",
+     "params": {
+      "command": "claude"
+     }
+    },
+    {
+     "method": "agents.details",
+     "params": {
+      "command": "cursor-agent"
+     }
+    },
+    {
+     "method": "agents.details",
+     "params": {
+      "command": "hermes"
+     }
+    },
+    {
+     "method": "agents.details",
+     "params": {
+      "command": "copilot"
+     }
+    },
+    {
+     "method": "agents.details",
+     "params": {
+      "command": "pi"
+     }
+    },
+    {
+     "method": "agents.details",
+     "params": {
+      "command": "omp"
+     }
+    },
+    {
+     "method": "agents.details",
+     "params": {
+      "command": "openclaw"
+     }
+    },
+    {
+     "method": "agents.details",
+     "params": {
+      "command": "bionic"
+     }
+    },
+    {
+     "method": "agents.details",
+     "params": {
+      "command": "agy"
+     }
+    },
+    {
+     "method": "scan.inventory"
+    },
+    {
+     "method": "connections.snapshot"
+    },
+    {
+     "method": "scan.security",
+     "params": {
+      "command": "opencode"
+     }
+    },
+    {
+     "method": "scan.security",
+     "params": {
+      "command": "codex"
+     }
+    },
+    {
+     "method": "scan.security",
+     "params": {
+      "command": "dsh"
+     }
+    },
+    {
+     "method": "scan.security",
+     "params": {
+      "command": "muse"
+     }
+    },
+    {
+     "method": "scan.security",
+     "params": {
+      "command": "grok"
+     }
+    },
+    {
+     "method": "scan.security",
+     "params": {
+      "command": "goose"
+     }
+    },
+    {
+     "method": "scan.security",
+     "params": {
+      "command": "gemini"
+     }
+    },
+    {
+     "method": "scan.security",
+     "params": {
+      "command": "crush"
+     }
+    },
+    {
+     "method": "scan.security",
+     "params": {
+      "command": "claude"
+     }
+    },
+    {
+     "method": "scan.security",
+     "params": {
+      "command": "cursor-agent"
+     }
+    },
+    {
+     "method": "scan.security",
+     "params": {
+      "command": "hermes"
+     }
+    },
+    {
+     "method": "scan.security",
+     "params": {
+      "command": "copilot"
+     }
+    },
+    {
+     "method": "scan.security",
+     "params": {
+      "command": "pi"
+     }
+    },
+    {
+     "method": "scan.security",
+     "params": {
+      "command": "omp"
+     }
+    },
+    {
+     "method": "scan.security",
+     "params": {
+      "command": "openclaw"
+     }
+    },
+    {
+     "method": "scan.security",
+     "params": {
+      "command": "bionic"
+     }
+    },
+    {
+     "method": "scan.security",
+     "params": {
+      "command": "agy"
+     }
+    }
+   ]
+  },
+  {
+   "name": "installed catalog configured providers MCP skills",
+   "environment": {
+    "ASTERISM_DIFF_COMPONENT": "scans",
+    "ASTERISM_SCAN_NOW": "1793188800",
+    "ASTERISM_SCAN_PROC": "$HOME/proc",
+    "ASTERISM_SCAN_SYSTEM_ROOT": "$HOME/system",
+    "PATH": "$HOME/.local/bin"
+   },
+   "files": [
+    {
+     "path": "proc",
+     "type": "directory"
+    },
+    {
+     "path": "system/var/lib/pacman/local",
+     "type": "directory"
+    },
+    {
+     "path": ".local/bin",
+     "type": "directory"
+    },
+    {
+     "path": ".local/bin/opencode",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/codex",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/dsh",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/muse",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/grok",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/goose",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/gemini",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/crush",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/claude",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/cursor-agent",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/hermes",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/copilot",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/pi",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/omp",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/openclaw",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/bionic",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/agy",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": "system/var/lib/pacman/local/hermes-desktop-1.2.3-1",
+     "type": "directory"
+    },
+    {
+     "path": "system/var/lib/pacman/local/openclaw-1.2.3-1",
+     "type": "directory"
+    },
+    {
+     "path": ".codex/config.toml",
+     "content": "model=\"test-model\"\nmodel_provider=\"local\"\n[model_providers.local]\nname=\"Local Test\"\nbase_url=\"http://127.0.0.1:8080/v1\"\n[mcp_servers.files]\ncommand=\"npx\"\nargs=[\"-y\",\"@test/files\"]\n[mcp_servers.files.env]\nSECRET=\"DO_NOT_EXPOSE_ENV\"\n"
+    },
+    {
+     "path": ".claude/settings.json",
+     "content": "{\"model\": \"claude-fixture\", \"env\": {\"ANTHROPIC_BASE_URL\": \"http://127.0.0.1:1234/v1\", \"API_KEY\": \"DO_NOT_EXPOSE_KEY\"}, \"sandbox\": {\"enabled\": true}, \"permissions\": {\"defaultMode\": \"acceptEdits\", \"allow\": [\"Bash(git status)\"]}}"
+    },
+    {
+     "path": ".claude.json",
+     "content": "{\"mcpServers\": {\"web\": {\"url\": \"https://private:DO_NOT_EXPOSE_PASSWORD@example.invalid/mcp?token=DO_NOT_EXPOSE_QUERY\", \"headers\": {\"Authorization\": \"DO_NOT_EXPOSE_HEADER\"}}}}"
+    },
+    {
+     "path": ".pi/agent/settings.json",
+     "content": "{\"defaultProvider\": \"anthropic\", \"defaultModel\": \"test-pi-model\"}"
+    },
+    {
+     "path": ".config/opencode/opencode.json",
+     "content": "{\"model\": \"test-provider/test-opencode\", \"permission\": {\"bash\": \"ask\"}, \"provider\": {\"test-provider\": {\"options\": {\"baseURL\": \"http://127.0.0.1:8000/v1\"}, \"models\": {\"test-opencode\": {}}}}, \"mcp\": {\"disabled\": {\"enabled\": false, \"command\": [\"bad\"]}}}"
+    },
+    {
+     "path": ".hermes/config.yaml",
+     "content": "model:\n  default: test-hermes\n  provider: local-test\n  base_url: http://127.0.0.1:6767/v1\n"
+    },
+    {
+     "path": ".codex/skills/fixture-skill/SKILL.md",
+     "content": "# Fixture only\n"
+    }
+   ],
+   "requests": [
+    {
+     "method": "scan.catalog"
+    },
+    {
+     "method": "app.snapshot"
+    },
+    {
+     "method": "agents.details",
+     "params": {
+      "command": "opencode"
+     }
+    },
+    {
+     "method": "agents.details",
+     "params": {
+      "command": "codex"
+     }
+    },
+    {
+     "method": "agents.details",
+     "params": {
+      "command": "dsh"
+     }
+    },
+    {
+     "method": "agents.details",
+     "params": {
+      "command": "muse"
+     }
+    },
+    {
+     "method": "agents.details",
+     "params": {
+      "command": "grok"
+     }
+    },
+    {
+     "method": "agents.details",
+     "params": {
+      "command": "goose"
+     }
+    },
+    {
+     "method": "agents.details",
+     "params": {
+      "command": "gemini"
+     }
+    },
+    {
+     "method": "agents.details",
+     "params": {
+      "command": "crush"
+     }
+    },
+    {
+     "method": "agents.details",
+     "params": {
+      "command": "claude"
+     }
+    },
+    {
+     "method": "agents.details",
+     "params": {
+      "command": "cursor-agent"
+     }
+    },
+    {
+     "method": "agents.details",
+     "params": {
+      "command": "hermes"
+     }
+    },
+    {
+     "method": "agents.details",
+     "params": {
+      "command": "copilot"
+     }
+    },
+    {
+     "method": "agents.details",
+     "params": {
+      "command": "pi"
+     }
+    },
+    {
+     "method": "agents.details",
+     "params": {
+      "command": "omp"
+     }
+    },
+    {
+     "method": "agents.details",
+     "params": {
+      "command": "openclaw"
+     }
+    },
+    {
+     "method": "agents.details",
+     "params": {
+      "command": "bionic"
+     }
+    },
+    {
+     "method": "agents.details",
+     "params": {
+      "command": "agy"
+     }
+    },
+    {
+     "method": "scan.inventory"
+    },
+    {
+     "method": "connections.snapshot"
+    },
+    {
+     "method": "scan.security",
+     "params": {
+      "command": "opencode"
+     }
+    },
+    {
+     "method": "scan.security",
+     "params": {
+      "command": "codex"
+     }
+    },
+    {
+     "method": "scan.security",
+     "params": {
+      "command": "dsh"
+     }
+    },
+    {
+     "method": "scan.security",
+     "params": {
+      "command": "muse"
+     }
+    },
+    {
+     "method": "scan.security",
+     "params": {
+      "command": "grok"
+     }
+    },
+    {
+     "method": "scan.security",
+     "params": {
+      "command": "goose"
+     }
+    },
+    {
+     "method": "scan.security",
+     "params": {
+      "command": "gemini"
+     }
+    },
+    {
+     "method": "scan.security",
+     "params": {
+      "command": "crush"
+     }
+    },
+    {
+     "method": "scan.security",
+     "params": {
+      "command": "claude"
+     }
+    },
+    {
+     "method": "scan.security",
+     "params": {
+      "command": "cursor-agent"
+     }
+    },
+    {
+     "method": "scan.security",
+     "params": {
+      "command": "hermes"
+     }
+    },
+    {
+     "method": "scan.security",
+     "params": {
+      "command": "copilot"
+     }
+    },
+    {
+     "method": "scan.security",
+     "params": {
+      "command": "pi"
+     }
+    },
+    {
+     "method": "scan.security",
+     "params": {
+      "command": "omp"
+     }
+    },
+    {
+     "method": "scan.security",
+     "params": {
+      "command": "openclaw"
+     }
+    },
+    {
+     "method": "scan.security",
+     "params": {
+      "command": "bionic"
+     }
+    },
+    {
+     "method": "scan.security",
+     "params": {
+      "command": "agy"
+     }
+    }
+   ]
+  },
+  {
+   "name": "agent configuration malformed",
+   "environment": {
+    "ASTERISM_DIFF_COMPONENT": "scans",
+    "ASTERISM_SCAN_NOW": "1793188800",
+    "ASTERISM_SCAN_PROC": "$HOME/proc",
+    "ASTERISM_SCAN_SYSTEM_ROOT": "$HOME/system",
+    "PATH": "$HOME/.local/bin"
+   },
+   "files": [
+    {
+     "path": "proc",
+     "type": "directory"
+    },
+    {
+     "path": "system/var/lib/pacman/local",
+     "type": "directory"
+    },
+    {
+     "path": ".local/bin",
+     "type": "directory"
+    },
+    {
+     "path": ".local/bin/claude",
+     "content": "# not run",
+     "mode": "0700"
+    },
+    {
+     "path": "target.json",
+     "content": "{\"model\":\"must-not-read\"}"
+    },
+    {
+     "path": ".claude/settings.json",
+     "content": "{broken"
+    }
+   ],
+   "requests": [
+    {
+     "method": "agents.details",
+     "params": {
+      "command": "claude"
+     }
+    },
+    {
+     "method": "scan.inventory"
+    }
+   ]
+  },
+  {
+   "name": "agent configuration fifo",
+   "environment": {
+    "ASTERISM_DIFF_COMPONENT": "scans",
+    "ASTERISM_SCAN_NOW": "1793188800",
+    "ASTERISM_SCAN_PROC": "$HOME/proc",
+    "ASTERISM_SCAN_SYSTEM_ROOT": "$HOME/system",
+    "PATH": "$HOME/.local/bin"
+   },
+   "files": [
+    {
+     "path": "proc",
+     "type": "directory"
+    },
+    {
+     "path": "system/var/lib/pacman/local",
+     "type": "directory"
+    },
+    {
+     "path": ".local/bin",
+     "type": "directory"
+    },
+    {
+     "path": ".local/bin/claude",
+     "content": "# not run",
+     "mode": "0700"
+    },
+    {
+     "path": "target.json",
+     "content": "{\"model\":\"must-not-read\"}"
+    },
+    {
+     "path": ".claude/settings.json",
+     "type": "fifo"
+    }
+   ],
+   "requests": [
+    {
+     "method": "agents.details",
+     "params": {
+      "command": "claude"
+     }
+    },
+    {
+     "method": "scan.inventory"
+    }
+   ]
+  },
+  {
+   "name": "agent configuration symlink",
+   "environment": {
+    "ASTERISM_DIFF_COMPONENT": "scans",
+    "ASTERISM_SCAN_NOW": "1793188800",
+    "ASTERISM_SCAN_PROC": "$HOME/proc",
+    "ASTERISM_SCAN_SYSTEM_ROOT": "$HOME/system",
+    "PATH": "$HOME/.local/bin"
+   },
+   "files": [
+    {
+     "path": "proc",
+     "type": "directory"
+    },
+    {
+     "path": "system/var/lib/pacman/local",
+     "type": "directory"
+    },
+    {
+     "path": ".local/bin",
+     "type": "directory"
+    },
+    {
+     "path": ".local/bin/claude",
+     "content": "# not run",
+     "mode": "0700"
+    },
+    {
+     "path": "target.json",
+     "content": "{\"model\":\"must-not-read\"}"
+    },
+    {
+     "path": ".claude/settings.json",
+     "type": "symlink",
+     "target": "$HOME/target.json"
+    }
+   ],
+   "requests": [
+    {
+     "method": "agents.details",
+     "params": {
+      "command": "claude"
+     }
+    },
+    {
+     "method": "scan.inventory"
+    }
+   ]
+  },
+  {
+   "name": "agent configuration oversized",
+   "environment": {
+    "ASTERISM_DIFF_COMPONENT": "scans",
+    "ASTERISM_SCAN_NOW": "1793188800",
+    "ASTERISM_SCAN_PROC": "$HOME/proc",
+    "ASTERISM_SCAN_SYSTEM_ROOT": "$HOME/system",
+    "PATH": "$HOME/.local/bin"
+   },
+   "files": [
+    {
+     "path": "proc",
+     "type": "directory"
+    },
+    {
+     "path": "system/var/lib/pacman/local",
+     "type": "directory"
+    },
+    {
+     "path": ".local/bin",
+     "type": "directory"
+    },
+    {
+     "path": ".local/bin/claude",
+     "content": "# not run",
+     "mode": "0700"
+    },
+    {
+     "path": "target.json",
+     "content": "{\"model\":\"must-not-read\"}"
+    },
+    {
+     "path": ".claude/settings.json",
+     "content_repeat": [
+      "x",
+      524289
+     ]
+    }
+   ],
+   "requests": [
+    {
+     "method": "agents.details",
+     "params": {
+      "command": "claude"
+     }
+    },
+    {
+     "method": "scan.inventory"
+    }
+   ]
+  },
+  {
+   "name": "map snapshot with dsh profile and failed-line hints",
+   "environment": {
+    "ASTERISM_DIFF_COMPONENT": "scans",
+    "ASTERISM_SCAN_NOW": "1793188800",
+    "ASTERISM_SCAN_PROC": "$HOME/proc",
+    "ASTERISM_SCAN_SYSTEM_ROOT": "$HOME/system",
+    "PATH": "$HOME/.local/bin"
+   },
+   "files": [
+    {
+     "path": "proc",
+     "type": "directory"
+    },
+    {
+     "path": "system/var/lib/pacman/local",
+     "type": "directory"
+    },
+    {
+     "path": ".local/bin",
+     "type": "directory"
+    },
+    {
+     "path": ".local/bin/opencode",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/codex",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/dsh",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/muse",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/grok",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/goose",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/gemini",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/crush",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/claude",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/cursor-agent",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/hermes",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/copilot",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/pi",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/omp",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/openclaw",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/bionic",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/agy",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": "system/var/lib/pacman/local/hermes-desktop-1.2.3-1",
+     "type": "directory"
+    },
+    {
+     "path": "system/var/lib/pacman/local/openclaw-1.2.3-1",
+     "type": "directory"
+    },
+    {
+     "path": ".codex/config.toml",
+     "content": "model=\"test-model\"\nmodel_provider=\"local\"\n[model_providers.local]\nname=\"Local Test\"\nbase_url=\"http://127.0.0.1:8080/v1\"\n[mcp_servers.files]\ncommand=\"npx\"\nargs=[\"-y\",\"@test/files\"]\n[mcp_servers.files.env]\nSECRET=\"DO_NOT_EXPOSE_ENV\"\n"
+    },
+    {
+     "path": ".claude/settings.json",
+     "content": "{\"model\": \"claude-fixture\", \"env\": {\"ANTHROPIC_BASE_URL\": \"http://127.0.0.1:1234/v1\", \"API_KEY\": \"DO_NOT_EXPOSE_KEY\"}, \"sandbox\": {\"enabled\": true}, \"permissions\": {\"defaultMode\": \"acceptEdits\", \"allow\": [\"Bash(git status)\"]}}"
+    },
+    {
+     "path": ".claude.json",
+     "content": "{\"mcpServers\": {\"web\": {\"url\": \"https://private:DO_NOT_EXPOSE_PASSWORD@example.invalid/mcp?token=DO_NOT_EXPOSE_QUERY\", \"headers\": {\"Authorization\": \"DO_NOT_EXPOSE_HEADER\"}}}}"
+    },
+    {
+     "path": ".pi/agent/settings.json",
+     "content": "{\"defaultProvider\": \"anthropic\", \"defaultModel\": \"test-pi-model\"}"
+    },
+    {
+     "path": ".config/opencode/opencode.json",
+     "content": "{\"model\": \"test-provider/test-opencode\", \"permission\": {\"bash\": \"ask\"}, \"provider\": {\"test-provider\": {\"options\": {\"baseURL\": \"http://127.0.0.1:8000/v1\"}, \"models\": {\"test-opencode\": {}}}}, \"mcp\": {\"disabled\": {\"enabled\": false, \"command\": [\"bad\"]}}}"
+    },
+    {
+     "path": ".hermes/config.yaml",
+     "content": "model:\n  default: test-hermes\n  provider: local-test\n  base_url: http://127.0.0.1:6767/v1\n"
+    },
+    {
+     "path": ".codex/skills/fixture-skill/SKILL.md",
+     "content": "# Fixture only\n"
+    },
+    {
+     "path": ".dsh/profiles/web/cordis.patch.yml",
+     "content": "# header\n- id: ui-settings-general\n  name: x\n  config:\n    welcome: 1\n- id: llm-pi-ai\n  name: '@deepseek-ai/dsh-llm-pi-ai'\n  config:\n    providers:\n      llama-local:\n        baseURL: http://127.0.0.1:8080/v1\n        models:\n        - id: fixture-model\n          contextWindow: 4096\n- id: agent-default-model\n  name: '@deepseek-ai/dsh-agent-default-model'\n  config:\n    provider: llama-local\n    model: fixture-model\n- insert:\n  - id: mcp-files\n    name: '@deepseek-ai/dsh-mcp-client'\n    config:\n      serverName: files\n      transport: stdio\n      command: npx\n      args:\n      - -y\n      - '@test/files'\n- id: js-entry\n  name: x\n  config:\n    value: !!js \"() => 1\"\n"
+    },
+    {
+     "path": ".config/asterism/failed-links.json",
+     "content": "{\"agent:codex|runtime:llamacpp\": {\"kind\": \"provider\", \"applied\": true, \"when\": \"2026-10-28\", \"target\": \"x\", \"hints\": [{\"level\": \"error\", \"text\": \"fixture failure\"}, {\"level\": \"bogus\", \"text\": \"dropped\"}]}, \"bad key\": {\"kind\": \"provider\", \"hints\": [{\"level\": \"error\", \"text\": \"x\"}]}}"
+    }
+   ],
+   "requests": [
+    {
+     "method": "agents.details",
+     "params": {
+      "command": "opencode"
+     }
+    },
+    {
+     "method": "agents.details",
+     "params": {
+      "command": "codex"
+     }
+    },
+    {
+     "method": "agents.details",
+     "params": {
+      "command": "dsh"
+     }
+    },
+    {
+     "method": "agents.details",
+     "params": {
+      "command": "dsh"
+     }
+    },
+    {
+     "method": "map.snapshot",
+     "params": {
+      "force": true
+     }
+    },
+    {
+     "method": "map.snapshot",
+     "params": {
+      "poll": true
+     }
+    },
+    {
+     "method": "map.snapshot",
+     "params": {
+      "poll": true
+     }
+    }
+   ]
+  },
+  {
+   "name": "map snapshot with malformed dsh profile and linked failed-lines file",
+   "environment": {
+    "ASTERISM_DIFF_COMPONENT": "scans",
+    "ASTERISM_SCAN_NOW": "1793188800",
+    "ASTERISM_SCAN_PROC": "$HOME/proc",
+    "ASTERISM_SCAN_SYSTEM_ROOT": "$HOME/system",
+    "PATH": "$HOME/.local/bin"
+   },
+   "files": [
+    {
+     "path": "proc",
+     "type": "directory"
+    },
+    {
+     "path": "system/var/lib/pacman/local",
+     "type": "directory"
+    },
+    {
+     "path": ".local/bin",
+     "type": "directory"
+    },
+    {
+     "path": ".local/bin/opencode",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/codex",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/dsh",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/muse",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/grok",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/goose",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/gemini",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/crush",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/claude",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/cursor-agent",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/hermes",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/copilot",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/pi",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/omp",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/openclaw",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/bionic",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/agy",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": "system/var/lib/pacman/local/hermes-desktop-1.2.3-1",
+     "type": "directory"
+    },
+    {
+     "path": "system/var/lib/pacman/local/openclaw-1.2.3-1",
+     "type": "directory"
+    },
+    {
+     "path": ".codex/config.toml",
+     "content": "model=\"test-model\"\nmodel_provider=\"local\"\n[model_providers.local]\nname=\"Local Test\"\nbase_url=\"http://127.0.0.1:8080/v1\"\n[mcp_servers.files]\ncommand=\"npx\"\nargs=[\"-y\",\"@test/files\"]\n[mcp_servers.files.env]\nSECRET=\"DO_NOT_EXPOSE_ENV\"\n"
+    },
+    {
+     "path": ".claude/settings.json",
+     "content": "{\"model\": \"claude-fixture\", \"env\": {\"ANTHROPIC_BASE_URL\": \"http://127.0.0.1:1234/v1\", \"API_KEY\": \"DO_NOT_EXPOSE_KEY\"}, \"sandbox\": {\"enabled\": true}, \"permissions\": {\"defaultMode\": \"acceptEdits\", \"allow\": [\"Bash(git status)\"]}}"
+    },
+    {
+     "path": ".claude.json",
+     "content": "{\"mcpServers\": {\"web\": {\"url\": \"https://private:DO_NOT_EXPOSE_PASSWORD@example.invalid/mcp?token=DO_NOT_EXPOSE_QUERY\", \"headers\": {\"Authorization\": \"DO_NOT_EXPOSE_HEADER\"}}}}"
+    },
+    {
+     "path": ".pi/agent/settings.json",
+     "content": "{\"defaultProvider\": \"anthropic\", \"defaultModel\": \"test-pi-model\"}"
+    },
+    {
+     "path": ".config/opencode/opencode.json",
+     "content": "{\"model\": \"test-provider/test-opencode\", \"permission\": {\"bash\": \"ask\"}, \"provider\": {\"test-provider\": {\"options\": {\"baseURL\": \"http://127.0.0.1:8000/v1\"}, \"models\": {\"test-opencode\": {}}}}, \"mcp\": {\"disabled\": {\"enabled\": false, \"command\": [\"bad\"]}}}"
+    },
+    {
+     "path": ".hermes/config.yaml",
+     "content": "model:\n  default: test-hermes\n  provider: local-test\n  base_url: http://127.0.0.1:6767/v1\n"
+    },
+    {
+     "path": ".codex/skills/fixture-skill/SKILL.md",
+     "content": "# Fixture only\n"
+    },
+    {
+     "path": ".dsh/profiles/web/cordis.patch.yml",
+     "content": "- id: llm-pi-ai\n  config: [unclosed\n- id: agent-default-model\n  config:\n    provider: {\n"
+    },
+    {
+     "path": "elsewhere.json",
+     "content": "{\"agent:codex|runtime:llamacpp\": {\"kind\": \"provider\", \"applied\": true, \"when\": \"2026-10-28\", \"target\": \"x\", \"hints\": [{\"level\": \"error\", \"text\": \"fixture failure\"}, {\"level\": \"bogus\", \"text\": \"dropped\"}]}, \"bad key\": {\"kind\": \"provider\", \"hints\": [{\"level\": \"error\", \"text\": \"x\"}]}}"
+    },
+    {
+     "path": ".config/asterism/failed-links.json",
+     "type": "symlink",
+     "target": "$HOME/elsewhere.json"
+    }
+   ],
+   "requests": [
+    {
+     "method": "agents.details",
+     "params": {
+      "command": "dsh"
+     }
+    },
+    {
+     "method": "connections.snapshot",
+     "params": {}
+    },
+    {
+     "method": "map.snapshot",
+     "params": {
+      "force": true
+     }
+    },
+    {
+     "method": "map.snapshot",
+     "params": {
+      "poll": true
+     }
+    },
+    {
+     "method": "map.snapshot",
+     "params": {
+      "poll": true
+     }
+    }
+   ]
+  }
+ ]
+}

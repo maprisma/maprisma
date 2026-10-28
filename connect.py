@@ -127,11 +127,25 @@ def _read(path: Path) -> str:
     staged = getattr(_STAGED, "texts", None)
     if staged is not None and Path(path) in staged:
         return staged[Path(path)]
+    import ai_core
+    if path.name in ('auth.json', '.credentials.json', 'credentials.json'):
+        raise OSError('Credential file unavailable')
     try:
         limit = 8 * 1024 * 1024 if path.name == ".claude.json" else MAX_BYTES
-        if path.stat().st_size > limit:
-            raise ValueError(f"{path} is too large")
-        return path.read_text(encoding="utf-8")
+        fd = ai_core.open_regular(path, follow=False)
+        try:
+            info = os.fstat(fd)
+            if info.st_uid != os.getuid():
+                raise OSError('Foreign configuration unavailable')
+            if info.st_size > limit:
+                raise ValueError(f"{path} is too large")
+            with os.fdopen(fd, 'rb', closefd=False) as handle:
+                data = handle.read(limit + 1)
+            if len(data) > limit:
+                raise ValueError(f"{path} is too large")
+            return data.decode('utf-8')
+        finally:
+            os.close(fd)
     except FileNotFoundError:
         return ""
 

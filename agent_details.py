@@ -80,19 +80,22 @@ class Details:
 
 # --- reading ----------------------------------------------------------------
 
-def _read(path: Path) -> str | None:
+def _read(path: Path, limit: int = MAX_FILE_BYTES) -> str | None:
+    if path.name in ('auth.json', '.credentials.json', 'credentials.json'):
+        return None
     try:
         fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)   # a FIFO in its place cannot hang it
     except OSError:
         return None
     try:
         with os.fdopen(fd, "rb") as handle:
-            if not stat.S_ISREG(os.fstat(handle.fileno()).st_mode):
+            info = os.fstat(handle.fileno())
+            if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid():
                 return None
-            data = handle.read(MAX_FILE_BYTES + 1)
+            data = handle.read(limit + 1)
     except OSError:
         return None
-    return None if len(data) > MAX_FILE_BYTES else data.decode("utf-8", "replace")
+    return None if len(data) > limit else data.decode("utf-8", "replace")
 
 
 def _strip_jsonc(text: str) -> str:

@@ -7,6 +7,7 @@ those. Never initialize adapters or inspect the user's real configuration.
 """
 from __future__ import annotations
 import argparse
+import base64
 import json
 import os
 from pathlib import Path
@@ -60,7 +61,55 @@ def oracle():
     import i18n
     i18n.set_name('AI Agents Map', 'Asterism')
     import ai_core
+    if os.environ.get('ASTERISM_DIFF_COMPONENT') == 'scans':
+        import core_scan_oracle
+        service=core_scan_oracle.service()
+        for line in sys.stdin:
+            request=json.loads(line)
+            try:
+                result=core_scan_oracle.dispatch(service,request['method'],request.get('params',{}))
+                response={'id':request['id'],'result':result}
+            except Exception:
+                response={'id':request.get('id'),'error':{'code':'invalid_request'}}
+            print(json.dumps(response,default=str),flush=True)
+        return
     ai_core.migrate_settings()
+    if os.environ.get('ASTERISM_DIFF_COMPONENT') == 'adapters':
+        import adapter_data
+        import tomllib
+        for line in sys.stdin:
+            request = json.loads(line)
+            ident = request.get('id')
+            try:
+                if request['method'] != 'adapter.validate':
+                    raise ValueError('Invalid component')
+                params = request['params']
+                if set(params) not in ({'file'}, {'facts'}):
+                    raise ValueError('Invalid fields')
+                if 'file' in params:
+                    path = Path(params['file'])
+                    if path.is_absolute() or '..' in path.parts:
+                        raise ValueError('Escaping path')
+                    import ai_core
+                    fd = ai_core.open_regular(Path.home() / path, follow=False)
+                    try:
+                        if os.fstat(fd).st_uid not in (0, os.getuid()):
+                            raise ValueError('Foreign owner')
+                        with os.fdopen(fd, 'rb', closefd=False) as handle:
+                            raw = handle.read(adapter_data.MAX_BYTES + 1)
+                        if len(raw) > adapter_data.MAX_BYTES:
+                            raise ValueError('Oversized')
+                        facts = tomllib.loads(raw.decode('utf-8'))
+                    finally:
+                        os.close(fd)
+                else:
+                    facts = params['facts']
+                adapter_data.check(facts, 'fixture')
+                response = {'id':ident, 'result':{'command':facts['command'], 'name':facts['name']}}
+            except Exception:
+                response = {'id':ident, 'error':{'code':'invalid_request'}}
+            print(json.dumps(response), flush=True)
+        return
     service = flutter_backend.Service()
     flutter_backend.serve(service, sys.stdin.buffer, sys.stdout)
 
@@ -96,7 +145,10 @@ def seed(home, fixtures):
             if 'content_repeat' in item:
                 char, count = item['content_repeat']
                 content = item.get('content_prefix', '') + char * count + item.get('content_suffix', '')
-            path.write_text(expand(content, home))
+            if 'base64' in item:
+                path.write_bytes(base64.b64decode(item['base64'],validate=True))
+            else:
+                path.write_text(expand(content, home))
         if 'mode' in item and kind != 'symlink':
             path.chmod(int(item['mode'], 8))
 
@@ -125,6 +177,13 @@ def tree(home):
 
 def run_side(command, case, home):
     seed(home, case.get('files', []))
+    timestamp=case.get('environment', {}).get('ASTERISM_SCAN_NOW')
+    if timestamp is not None:
+        timestamp=float(timestamp)
+        for folder, dirs, files in os.walk(home, topdown=False, followlinks=False):
+            for name in dirs+files:
+                os.utime(Path(folder)/name,(timestamp,timestamp),follow_symlinks=False)
+            os.utime(folder,(timestamp,timestamp),follow_symlinks=False)
     env = {**os.environ, 'HOME': str(home), 'XDG_CONFIG_HOME': str(home / '.config'),
            'XDG_CACHE_HOME': str(home / '.cache'), 'XDG_STATE_HOME': str(home / '.local/state'),
            'XDG_DATA_HOME': str(home / '.local/share'), 'ASTERISM_DESKTOP': 'generic',
@@ -174,7 +233,8 @@ def main():
                 for home in homes:
                     home.mkdir(mode=0o700)
                 expected = run_side([sys.executable, str(Path(__file__).resolve()), '--oracle'], case, homes[0])
-                actual = run_side([args.dart, '--disable-dart-dev', '--packages=.dart_tool/package_config.json', 'bin/asterism-core.dart'], case, homes[1])
+                entry = 'bin/fixture_probe.dart' if case.get('environment', {}).get('ASTERISM_DIFF_COMPONENT') in ('adapters','scans') else 'bin/asterism-core.dart'
+                actual = run_side([args.dart, '--disable-dart-dev', '--packages=.dart_tool/package_config.json', entry], case, homes[1])
                 if expected != actual:
                     label = 'responses' if expected[0] != actual[0] else 'file bytes/modes'
                     raise AssertionError(f'{fixture.name}: {case["name"]}: {label} differ\nPython: {expected!r}\nDart: {actual!r}')

@@ -213,13 +213,9 @@ class Harness:
 # --- helpers for the adapters ----------------------------------------------------------------------
 
 def connect(path: Path):
-    """Read-only, never creating anything; None when it cannot be opened."""
-    if not path.is_file():
-        return None
-    try:
-        return sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=DB_TIMEOUT)
-    except sqlite3.Error:
-        return None
+    """A bounded, own-UID read-only memory snapshot; no SQLite sidecar writes."""
+    import readonly_sqlite
+    return readonly_sqlite.connect(path)
 
 
 def number(value) -> int:

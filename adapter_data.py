@@ -11,6 +11,7 @@ the places the TOML marks "hook".
 from __future__ import annotations
 
 import importlib.util
+import os
 import re
 import tomllib
 import types
@@ -549,9 +550,19 @@ def hooks_module(command: str):
 def load(path: Path) -> Harness:
     """adapters/<command>.toml (and its hooks, adapters/<command>.py) → its Harness (AdapterError with
     the reason when it cannot be used)."""
-    raw = path.read_bytes()
-    if len(raw) > MAX_BYTES:
-        raise AdapterError(f"{path.name}: larger than {MAX_BYTES // 1024} KiB")
+    import ai_core
+    if path.name in ('auth.json', '.credentials.json', 'credentials.json'):
+        raise AdapterError('Credential files are not adapters')
+    fd = ai_core.open_regular(path, follow=False)
+    try:
+        if os.fstat(fd).st_uid not in (0, os.getuid()):
+            raise AdapterError('Adapter owner unavailable')
+        with os.fdopen(fd, 'rb', closefd=False) as handle:
+            raw = handle.read(MAX_BYTES + 1)
+        if len(raw) > MAX_BYTES:
+            raise AdapterError(f"{path.name}: larger than {MAX_BYTES // 1024} KiB")
+    finally:
+        os.close(fd)
     try:
         data = tomllib.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, tomllib.TOMLDecodeError) as error:

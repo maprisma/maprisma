@@ -1,0 +1,91 @@
+"""Development-only scan differentials against an isolated reference HOME."""
+from dataclasses import asdict
+import datetime as dt
+import json
+import os
+from pathlib import Path
+from types import SimpleNamespace
+
+
+def service():
+    import agents
+    import inventory
+    import provider_watch
+    import agent_activity
+    import flutter_backend
+    import time
+    home = Path.home()
+    proc = os.environ['ASTERISM_SCAN_PROC']
+    system = Path(os.environ['ASTERISM_SCAN_SYSTEM_ROOT'])
+    real_list = agents.list_agents
+    agents.list_agents = lambda **kw: real_list(db=system / 'var/lib/pacman/local', **kw)
+    # The Dart core gains the MCP library write with the write phase; compare reads only.
+    import mcp_library
+    mcp_library.remember = lambda used: None
+    def own_processes():
+        found = []
+        for path in list(Path(proc).iterdir())[:4000] if Path(proc).is_dir() else []:
+            if not path.name.isdigit() or path.stat().st_uid != os.getuid():
+                continue
+            try:
+                import ai_core
+                comm=ai_core.read_head(path/'comm',65536,False).decode('utf-8','replace').strip()
+                argv=[a.decode('utf-8','replace') for a in ai_core.read_head(path/'cmdline',65536,False).split(b'\0') if a]
+                found.append((int(path.name),comm,argv))
+            except OSError:
+                continue
+        return found
+    inventory.own_processes = own_processes
+    original_scan=provider_watch._scan_agents
+    # Callers pass /proc positionally: always scan the fixture's own process tree.
+    provider_watch._scan_agents=lambda names,_proc=None,pids_out=None:original_scan(names,proc,pids_out)
+    original_working=agent_activity.Activity.working
+    agent_activity.Activity.working=lambda self,pids,**kw: original_working(self,pids,proc=proc,**kw)
+    if os.environ.get('ASTERISM_SCAN_NOW'):
+        now=float(os.environ['ASTERISM_SCAN_NOW'])
+        time.time=lambda:now
+    result=flutter_backend.Service()
+    result.adapters=SimpleNamespace(items=[])
+    class MapTasks:
+        def __init__(self): self.items={}
+        def poll(self): pass
+        def start_snapshot(self,settings_path,owned,force=False):
+            self.items['fixture']=result.build_map()
+            return {'task':'fixture'}
+        def status(self,handle):return {'state':'done','result':self.items[handle]}
+    result.tasks=MapTasks()
+    result._fixture_proc=proc
+    return result
+
+
+def dispatch(current,method,params):
+    import agents,agent_details,harnesses,inventory,agent_security,agent_status
+    if method=='scan.catalog':
+        if params:raise ValueError('Unexpected fields')
+        return {'agents':[asdict(a) for a in agents.list_agents()]}
+    if method=='scan.inventory':
+        if params:raise ValueError('Unexpected fields')
+        return asdict(inventory.collect(agents.list_agents(),remember=False))
+    if method in ('scan.sessions','scan.security','scan.costs','scan.usage'):
+        if set(params)!={'command'} or not isinstance(params['command'],str):raise ValueError('Expected command')
+        h=harnesses.get(params['command'])
+        if h is None:raise ValueError('Unknown command')
+        if method=='scan.security':
+            report=agent_security.report_for(h.command)
+            return json.loads(json.dumps(asdict(report),default=str)) | {'level':report.level()}
+        now=float(os.environ['ASTERISM_SCAN_NOW'])
+        today=dt.datetime.fromtimestamp(now).date()
+        # Claude's generic API writes a rebuildable on-disk cache. Disable it in
+        # this read-only fixture via an explicit, supported memory-only option.
+        if h.session_files=='claude-files':
+            import claude_sessions
+            found=claude_sessions.collect_by_id(cache=None)
+        else:
+            found=h.sessions.collect() if h.sessions else {}
+        if method=='scan.sessions':return {'sessions':{str(key):asdict(s) for key,s in found.items()}}
+        if method=='scan.costs':
+            value=agent_status.costs(h.command,today,sessions=found)
+        else:
+            value=agent_status.from_sessions(list(found.values()),'fixture',today)
+        return {'value':json.loads(json.dumps(asdict(value),default=lambda v:v.isoformat() if isinstance(v,(dt.datetime,dt.date)) else str(v))) if value is not None else None}
+    return current.dispatch(method,params)

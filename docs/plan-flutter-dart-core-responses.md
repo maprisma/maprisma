@@ -293,3 +293,92 @@ the focused watcher suite passes 23 tests. Typecheck reports **0 errors,
 
 The tooling follow-up and this guard are uncommitted; no push or sync. Phase 2
 still requires Uwe's go and starts with the `toml ^0.18.0` upgrade.
+
+## Phase 2 — read-only scans (2026-10-28, Claude; Codex stopped mid-phase)
+
+Codex wrote most of the Dart readers (catalog, details, inventory, provider scans, activity, sessions/usage,
+security, map graph, read-only SQLite) and three fixture files, but switched no route on. Claude finished the
+slice, compared it read-only against the Python reference on Uwe's real HOME (Asterism's own config, cache
+and data folders redirected to a temporary copy; agent files only read; credential files never opened),
+fixed every difference found, and switched the routes on.
+
+### Routes now served by Dart
+
+`app.snapshot`, `map.snapshot`, `agents.details`, `agents.activity`, `connections.snapshot`
+(`readOnlyRoutes` in `read_service.dart`, added to `portedRoutes`). On the real HOME all five match Python
+byte for byte, except Claude's live "last used" (its session files change during the run).
+
+Still Python fallback in Devel (read-only, ported later in this phase or the next): `usage.snapshot`,
+`providers.snapshot`, `guide.snapshot`, `system.view` / `system.cached` / `system.refresh` /
+`system.mount_signature`, `existing.scan` / `existing.mounts`, `setup.detect`, `addons.list`. The session,
+usage and cost readers exist in Dart with differential fixtures (`numeric_readers.json`), but no route uses
+them yet.
+
+### Differences found on the real HOME and fixed
+
+1. **Agent list (25 vs 17):** Dart built the list from the adapters; Python uses Omarchy's agent menu
+   (`setup.default.agent.*` in `omarchy-menu.jsonc`, with its icons and font) plus the app's own agents,
+   and a generic-desktop fallback. Ported `agents.list_agents`/`detect` exactly; menu agents without an
+   adapter (Amp, Kimi, …) use an empty `Adapter.unknown`, as Python's `harnesses.get() is None`. Cause of
+   the miss: `ScanFiles.text` dropped `allowRootOwned`, so the root-owned menu was never read.
+2. **DeepSeek Harness:** its hooks were not ported. New `dsh_profile.dart` (blocks, providers, default
+   model, MCP inserts, built-in model choices) used by details, MCP reading, map model choices and the
+   connection check.
+3. **"Last used":** ported `newest_mtime` exactly (two levels with one 3,000-entry budget, then along the
+   last-named date folders, link entries counted by their own mtime), with nanosecond `statx` and Python's
+   float timestamp and half-even microsecond rounding (`py_time.dart`). The activity "just written" check
+   uses the same function.
+4. **Connections:** provider agents now come from each agent's own settings (`local_llm.dart`, the
+   read side of the six `local_llm_connected` hooks), models through `chat_models`, only runtimes with a
+   connect key; root-owned system skill sets (Omarchy's, OmaRAW's) are listed.
+
+### Reference changes
+
+- **Python bug fixed:** a DeepSeek Harness profile PyYAML cannot parse made `agents.details`,
+  `connections.snapshot` and `map.snapshot` fail. `dsh_ctl.providers/default_model/mcp_servers` now read
+  it as empty; writes (`connect_text`) still refuse it. Test in `tests/test_dsh_bionic.py`.
+- **Reverted Codex's `remember=False`** in `flutter_backend.py` and `flutter_connections.py`: it stopped
+  the MCP server library from growing (servers set up later could not be re-added from it). Only the
+  differential oracle disables the write now. The Dart map does not write the library yet: that comes
+  with phase 3 (writes) and is a known Devel gap until then.
+- **Oracle fix:** `core_scan_oracle` patched `_scan_agents` with a default `proc` that callers override
+  positionally, so map fixtures read the real `/proc`. It now always scans the fixture tree.
+- Kept from Codex: no credential file reads, own-UID checks, `O_NOFOLLOW` on agent settings reads,
+  `readonly_sqlite` (in-memory snapshot with WAL merge; reads up to 512 MB, today ~21 MB per scan for
+  OpenCode), the narrower MCP `server_target` labels.
+
+### Reads without the pinned walk
+
+`ScanFiles` now opens a file with one `openat(AT_FDCWD, path, O_NOFOLLOW|O_NONBLOCK)` and checks the
+opened descriptor (regular, own UID or allowed root, bounded), like the Python reference. The pinned,
+trusted-parent walk from `/` stays for private writes. This also removed a behaviour difference (Python
+reads through group-writable folders and folder links) and halved the scan time.
+
+### Map scan time (real HOME, AOT, 4 runs)
+
+| | First | Steady |
+|---|---:|---:|
+| Python `build_map` | 80 ms | 60 ms |
+| Dart `buildMap` (before) | 242 ms | 224 ms |
+| Dart `buildMap` (now) | — | 134–136 ms |
+
+The rest is mostly the per-scan re-reading of large session data (Codex rollouts, the OpenCode database
+snapshot, Claude transcripts: 12–20 ms each) and the runtime scan (~17 ms), where Python keeps caches. The
+scan runs in the core isolate every 6 s, so the UI isolate never waits; other core requests wait up to one
+scan. Phase 4 must not put terminal I/O behind scans in the same isolate (scans in their own isolate, or
+cached readers). Not yet done: mtime caches for the session readers.
+
+### Remaining gaps (Devel only, documented)
+
+- Add-on agents/providers (signed add-ons) are read only by Python (phase 5); Dart uses the built-in
+  adapters. Uwe's enabled add-ons are all built-in agents, so his lists match.
+- The one-time settings import from the old plugin (`config_migration`) still runs when the Python
+  reference starts; a first `app.snapshot` from Dart can come before it.
+
+### Checks
+
+Dart core: `dart analyze --fatal-infos` clean (191 issues before), 25 tests. **54 differential cases**,
+two new map cases (DeepSeek Harness profile with `!!js` and an MCP insert plus failed-line hints; a broken
+profile with a linked failed-lines file). Release probe now uses a write route as its unported example.
+Flutter: 94 tests, analyzer clean. Python: full suite OK, typecheck 0/0/0. No real-desktop UI run.
+Nothing committed or pushed.

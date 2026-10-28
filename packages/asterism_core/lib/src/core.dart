@@ -3,6 +3,7 @@ import 'desktop.dart';
 import 'identity.dart';
 import 'posix_ffi.dart';
 import 'protocol.dart';
+import 'read_service.dart';
 import 'settings.dart';
 import 'service_i18n.dart';
 
@@ -13,6 +14,7 @@ const portedRoutes = {
   'app.identity',
   'desktop.snapshot',
   'i18n.lookup',
+  ...readOnlyRoutes,
 };
 // Phase 7 removes this blocker only after every route has differential coverage.
 const dartCoreComplete = false;
@@ -25,6 +27,7 @@ final class CoreService {
     desktop = detectDesktop(identity, Posix());
     i18n = ServiceI18n(identity, settings);
   }
+  late final reads = ReadService(identity, settings, desktop, i18n);
   late final AppIdentity identity;
   late final SettingsStore settings;
   late final Desktop desktop;
@@ -32,6 +35,7 @@ final class CoreService {
   Map<String, dynamic> dispatch(String method, Map<String, dynamic> params) {
     if (!portedRoutes.contains(method)) throw ServiceError('unported_route');
     if (method == 'settings.update') return settings.update(params);
+    if (readOnlyRoutes.contains(method)) return reads.dispatch(method, params);
     if (method == 'i18n.lookup') {
       if (params.keys.any((k) => !['text', 'other', 'n'].contains(k)) ||
           params['text'] is! String ||

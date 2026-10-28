@@ -119,6 +119,38 @@ class Posix {
     }
   }
 
+  /// lstat's modification time and type bits, without following a final link
+  /// (statx AT_SYMLINK_NOFOLLOW); null when the path cannot be examined.
+  ({int sec, int nsec, int mode})? lstatTime(String path) {
+    final buffer = calloc<Uint8>(256);
+    try {
+      var ok = false;
+      _path(path, (name) => ok = _statx(-100, name, 0x100, 0x7ff, buffer) == 0);
+      if (!ok) return null;
+      final bytes = ByteData.sublistView(buffer.asTypedList(256));
+      return (
+        sec: bytes.getInt64(112, Endian.host),
+        nsec: bytes.getUint32(120, Endian.host),
+        mode: bytes.getUint16(28, Endian.host),
+      );
+    } finally {
+      calloc.free(buffer);
+    }
+  }
+
+  String stamp(int fd) {
+    final buffer = calloc<Uint8>(256);
+    try {
+      _path('', (name) {
+        if (_statx(fd, name, 0x1000, 0x7ff, buffer) != 0) _fail();
+      });
+      final data = ByteData.sublistView(buffer.asTypedList(256));
+      return '${data.getUint64(32, Endian.host)}:${data.getUint64(40, Endian.host)}:${data.getInt64(96, Endian.host)}:${data.getUint32(104, Endian.host)}:${data.getInt64(112, Endian.host)}:${data.getUint32(120, Endian.host)}';
+    } finally {
+      calloc.free(buffer);
+    }
+  }
+
   Uint8List readRegular(String path, int limit, {bool follow = false}) {
     final fd = openAt(-100, path, nonBlock | (follow ? 0 : noFollow));
     try {
@@ -128,9 +160,44 @@ class Posix {
     }
   }
 
+  Uint8List readSuffix(int fd, int limit) {
+    final seek = _lib
+        .lookupFunction<
+          Int64 Function(Int, Int64, Int),
+          int Function(int, int, int)
+        >('lseek');
+    final info = stat(fd);
+    if ((info.mode & 0xf000) != 0x8000 ||
+        limit < 0 ||
+        limit > 8 * 1024 * 1024) {
+      throw const FileSystemException('Invalid suffix read');
+    }
+    if (seek(fd, max(0, info.size - limit), 0) < 0) _fail();
+    return readPrefix(fd, limit);
+  }
+
+  Uint8List readPrefix(int fd, int limit) {
+    if ((stat(fd).mode & 0xf000) != 0x8000 ||
+        limit < 0 ||
+        limit > 8 * 1024 * 1024) {
+      throw const FileSystemException('Invalid prefix read');
+    }
+    final buffer = calloc<Uint8>(max(1, limit));
+    try {
+      final size = _read(fd, buffer, limit);
+      if (size < 0) _fail();
+      return Uint8List.fromList(buffer.asTypedList(size));
+    } finally {
+      calloc.free(buffer);
+    }
+  }
+
   Uint8List readDescriptor(int fd, int limit) {
     if ((stat(fd).mode & 0xf000) != 0x8000) {
       throw const FileSystemException('Not a regular file');
+    }
+    if (stat(fd).size > limit) {
+      throw const FileSystemException('File exceeds bound');
     }
     final buffer = calloc<Uint8>(min(limit + 1, 65536));
     final bytes = BytesBuilder(copy: false);
@@ -273,6 +340,25 @@ class Posix {
           close(fd);
           fd = child;
         }
+        _trustedDirectory(fd);
+      }
+      return fd;
+    } catch (_) {
+      close(fd);
+      rethrow;
+    }
+  }
+
+  /// Resolve trusted aliases and pin an existing directory without creating it.
+  int existingDirectory(String absolute) {
+    final resolved = resolveParent(p.normalize(absolute));
+    var fd = openAt(-100, '/', directory | noFollow);
+    try {
+      _trustedDirectory(fd);
+      for (final part in p.split(resolved).skip(1)) {
+        final child = openAt(fd, part, directory | noFollow);
+        close(fd);
+        fd = child;
         _trustedDirectory(fd);
       }
       return fd;
