@@ -6,4 +6,10 @@ export 'src/protocol.dart';
 export 'src/service_i18n.dart';
 export 'src/settings.dart';
 export 'src/core_tasks.dart'
-    show coreHandle, handleRoutes, corePreviewKinds, corePreview;
+    show
+        coreHandle,
+        handleRoutes,
+        corePreviewKinds,
+        corePreview,
+        coreMapEdits,
+        coreFirstRoutes;

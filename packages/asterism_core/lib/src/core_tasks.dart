@@ -223,6 +223,13 @@ final class CoreConnections {
     };
   }
 
+  /// The plan behind a preview handle, taken out (repair adds to it).
+  Plan take(String ident) {
+    final kept = _plans.remove(ident);
+    if (kept == null) throw const FormatException('Unknown connection preview');
+    return kept.$2;
+  }
+
   Map<String, dynamic> apply(String ident) {
     final kept = _plans[ident];
     if (kept == null) throw const FormatException('Unknown connection preview');
@@ -365,6 +372,11 @@ List<String> taskFocus(
         n['id'] as String,
   ];
 }
+
+/// Map edits this core builds. Repair falls back to the reference (Devel)
+/// when the core answers unported_route for a line that needs its model.
+const coreMapEdits = {'connections.move_preview', 'connections.author_preview'};
+const coreFirstRoutes = {'connections.repair_preview'};
 
 /// The connection kinds whose previews this core builds (the others stay with
 /// the Python reference until their phase).

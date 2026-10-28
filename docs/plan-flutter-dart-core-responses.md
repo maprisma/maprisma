@@ -559,3 +559,30 @@ remaining provider, a DeepSeek Harness entry with `yes` and `0x1F` dumped again 
 connected to Ollama without a model, Undo, four refusals. Real HOME: 36 plans (6 agents × 3 local LLMs ×
 connect/disconnect), 25 new texts identical byte for byte, DeepSeek Harness's real `llm-pi-ai` entry
 included. Checks: 65 differential cases, 29 Dart tests, 94 Flutter tests, Python suite and typecheck clean.
+
+### 3e — map edits and authoring (Claude, 2026-10-28)
+
+`map_edits.dart`: `connect.chain` (staged reads in `ConfigFiles`) and `connect.merge`;
+`connections.move_preview` (a provider line moved to another local LLM with `replaces`, provider, MCP and
+skill lines removed, the dangling-model check, an unapplied failure cleared alone, the failure entry removed
+in the same backup and Undo); `connections.author_preview` (a new MCP server for chosen agents through
+`check_entry`, or a skill-set folder with the bounded scan; Python's notes; focus from the last map);
+`connections.repair_preview` for MCP and skill lines and local LLM lines without a model. The core keeps
+Python's `current_map` rule (rebuilt after 5 s).
+
+Routing: move and authoring always go to the core. Repair goes to the core first; a local LLM line that
+needs its model back answers `unported_route`, and the Devel router then asks the reference (previews
+change nothing). `models.switch_preview` and `models.attach_preview` plan connections with a chosen model,
+load/unload actions and cloud model changes: they stay with the reference until phase 4.
+
+Fixture: repair (Claude's file and the failure entry in one Undo), Pi moved from llama.cpp to Ollama, a Codex
+MCP line and a Pi skill line removed, an unapplied OpenCode failure cleared, a new MCP server for Claude and
+Hermes, a skill folder for Claude, five refusals — a fresh map before each edit. Checks: 66 differential
+cases, 29 Dart tests, 94 Flutter tests, Python suite and typecheck clean.
+
+### Phase 3 status
+
+In the core: apply/Undo, the worker, the task runner, routing by handle, and every connection preview
+except those that choose a model. Waiting for the provider engines (phase 4): connections with a chosen
+model (`connect_extra`/`context_ctl`, Ollama's API), `models.switch_preview`/`models.attach_preview`
+(model load/unload, online model plans), and the model actions in plans.

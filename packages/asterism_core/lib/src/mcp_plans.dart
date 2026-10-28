@@ -675,13 +675,17 @@ final class McpPlans {
     String name,
     List<String> sources, {
     required bool remove,
+    Map<String, dynamic>? entry,
   }) {
     if (!supported(agent) || !_name.hasMatch(name)) {
       throw FormatException(agent);
     }
     final result = Plan(agent, '', name);
-    Map<String, dynamic>? entry;
-    if (!remove) {
+    if (remove) {
+      entry = null;
+    } else if (entry != null) {
+      entry = checkEntry(entry); // a new server's definition
+    } else {
       entry = entryFrom([
         for (final s in sources)
           if (s != agent) s,

@@ -34,13 +34,20 @@ final class Plan {
   final List<Change> changes;
   final List<(String, String)> linksAdd, linksRemove;
   final List<Map<String, dynamic>> contexts, modelActions;
-  bool get empty => changes.isEmpty && linksAdd.isEmpty && linksRemove.isEmpty;
+  bool get empty =>
+      changes.isEmpty &&
+      linksAdd.isEmpty &&
+      linksRemove.isEmpty &&
+      modelActions.isEmpty;
 }
 
 final class ConfigFiles {
   ConfigFiles(this.posix, this.home);
   final Posix posix;
   final String home;
+
+  /// connect.chain: texts planned so far, read instead of the files.
+  Map<String, String>? staged;
   static const maxBytes = 2 * 1024 * 1024, claudeBytes = 8 * 1024 * 1024;
 
   String tilde(String path) => path == home || path.startsWith('$home/')
@@ -50,6 +57,8 @@ final class ConfigFiles {
   /// connect._read: "" when missing; this account's own regular file, not
   /// through a link, bounded, UTF-8 (anything else raises).
   String read(String path) {
+    final planned = staged?[path];
+    if (planned != null) return planned;
     if (const {
       'auth.json',
       '.credentials.json',

@@ -9,6 +9,7 @@ import 'core_tasks.dart';
 import 'skill_plans.dart';
 import 'mcp_plans.dart';
 import 'llm_plans.dart';
+import 'map_edits.dart';
 import 'adapter_assets.g.dart';
 import 'settings.dart';
 import 'service_i18n.dart';
@@ -51,6 +52,15 @@ final class CoreService {
     '${identity.configDir}/mcp-servers.json',
   );
   late final llm = LlmPlans(config, reads.catalog, identity.home);
+  late final edits = MapEdits(
+    reads,
+    config,
+    llm,
+    mcp,
+    skills,
+    connections,
+    identity.configDir,
+  );
   late final skills = SkillPlans(
     reads.files,
     config,
@@ -150,6 +160,13 @@ final class CoreService {
         throw ServiceError('unported_route');
       }
       return dispatchHandle(method, params, connections, tasks);
+    }
+    if (method == 'connections.move_preview') return edits.movePreview(params);
+    if (method == 'connections.repair_preview') {
+      return edits.repairPreview(params, preview);
+    }
+    if (method == 'connections.author_preview') {
+      return edits.authorPreview(params, reads.catalog.scan());
     }
     if (method == 'connections.preview') {
       if (!corePreview(params)) {
