@@ -82,10 +82,37 @@ a commit.
    recovery, safe live-agent updates, desktop theme behaviour during operations,
    cross-process settings coordination and clean-VM scenarios. New UI remains in
    all eight languages with manual updates; current manuals are rebuilt.
-5. **Packaging:** bundle Python and dependencies next to Flutter; resolve bundle
+5. **Omarchy integration (Uwe, 2026-10-28):** on Omarchy the Flutter app must feel
+   like the plugin does today, without becoming a different app elsewhere. Only when
+   `desktop.NAME == "omarchy"`; other desktops keep a normal window.
+   - **Popup under the bar icon:** an optional popup mode as a layer-shell surface
+     (Flutter's Linux embedder is GTK, so gtk-layer-shell via a pinned, reviewed pub
+     package such as `wayland_layer_shell`, or a small own plugin in `linux/`),
+     anchored top-right under the bar with the bar's real thickness (the shell's
+     `barSizeFor`, see the 4.5.0rc2 bar-window change), Esc/outside click closes,
+     keyboard focus only while open, no grab on a bare Super press. Normal-window
+     mode stays the default off Omarchy and selectable on it.
+   - **Theme:** follow Omarchy's theme live from the existing `app.theme` service
+     route (`desktop_omarchy.theme_colors`, `colors.toml`), including theme switches
+     while a task card or terminal is open; rounding from `window_rounding()`.
+   - **Hyprland:** floating size/position and focus-or-start through the existing
+     `desktop_omarchy` helpers (`focus_window`, `own_window`, window rules in
+     `window_rules.py`), one instance per user (the toggle's PID file + SIGUSR1
+     contract from `ai-agents-map-toggle`), floating terminal for external starts.
+   - **Omarchy data:** agent menu entries and Omarchy's usage records, as
+     `desktop_omarchy` provides them to the GTK app today.
+   - Tests: widget tests with a fake desktop, plus a check in the edge VM; never
+     run Omarchy edge code on Uwe's desktop.
+6. **Packaging:** bundle Python and dependencies next to Flutter; resolve bundle
    paths instead of ASTERISM_SOURCE. Validate Linux/AUR/AppImage on a clean system.
    Replace the production entrypoint only after parity and delivery are validated.
-6. **Finish:** final independent review at full parity, then release decisions by
+7. **Omarchy plugin as a thin launcher** (`plan-one-app.md`): the marketplace plugin
+   becomes a small QML bar widget + toggle that focuses or starts the installed
+   Asterism (popup mode from step 5) and offers its installation when missing (AUR
+   via yay/paru, else the AppImage with SHA-256 check, shown in a visible terminal).
+   It ships no Flutter binary or Python bundle: the marketplace reviews source only.
+   Existing settings move over once with a backup (`config_migration.py`).
+8. **Finish:** final independent review at full parity, then release decisions by
    Uwe. No automatic installation, plugin sync, push, upload or publication.
 
 ## Development commands

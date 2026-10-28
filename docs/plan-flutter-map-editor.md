@@ -4,7 +4,7 @@
 
 The Flutter app replaces the GTK app on Linux too; the GTK app is no longer needed once Flutter runs there.
 From now on the GTK app (`/mnt/Data/Projects/asterism`, remote `gtk`) gets **fixes only, no new features**.
-New work happens here. The GTK app retires at parity (plan-flutter.md, steps 3–6).
+New work happens here. The GTK app retires at parity (plan-flutter.md, steps 3–8).
 
 The map is the product's core: everything a user connects or disconnects should be doable by drawing or
 dragging on the map, with tooltips and Undo. The Flutter map today is a read-only grid (`agent_map.dart`:
