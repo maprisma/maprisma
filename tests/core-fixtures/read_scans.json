@@ -1636,6 +1636,355 @@
      }
     }
    ]
+  },
+  {
+   "name": "skill sets: links for Claude, Hermes list, Pi removal, Undo, refusals",
+   "environment": {
+    "ASTERISM_DIFF_COMPONENT": "scans",
+    "ASTERISM_SCAN_NOW": "1793188800",
+    "ASTERISM_SCAN_PROC": "$HOME/proc",
+    "ASTERISM_SCAN_SYSTEM_ROOT": "$HOME/system",
+    "PATH": "$HOME/.local/bin"
+   },
+   "files": [
+    {
+     "path": "proc",
+     "type": "directory"
+    },
+    {
+     "path": "system/var/lib/pacman/local",
+     "type": "directory"
+    },
+    {
+     "path": ".local/bin",
+     "type": "directory"
+    },
+    {
+     "path": ".local/bin/opencode",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/codex",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/dsh",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/muse",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/grok",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/goose",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/gemini",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/crush",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/claude",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/cursor-agent",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/hermes",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/copilot",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/pi",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/omp",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/openclaw",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/bionic",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": ".local/bin/agy",
+     "content": "#!/bin/sh\nexit 99\n",
+     "mode": "0700"
+    },
+    {
+     "path": "system/var/lib/pacman/local/hermes-desktop-1.2.3-1",
+     "type": "directory"
+    },
+    {
+     "path": "system/var/lib/pacman/local/openclaw-1.2.3-1",
+     "type": "directory"
+    },
+    {
+     "path": "work/team-skills/alpha/SKILL.md",
+     "content": "---\nname: alpha\ndescription: alpha skill\n---\n"
+    },
+    {
+     "path": "work/team-skills/beta/SKILL.md",
+     "content": "---\nname: beta\ndescription: beta skill\n---\n"
+    },
+    {
+     "path": "work/team-skills/tools/gamma/SKILL.md",
+     "content": "---\nname: gamma\ndescription: gamma skill\n---\n"
+    },
+    {
+     "path": "work/team-skills/.hidden/SKILL.md",
+     "content": "x"
+    },
+    {
+     "path": "work/team-skills/notes",
+     "type": "directory"
+    },
+    {
+     "path": ".agents/skills/shared-one/SKILL.md",
+     "content": "---\nname: shared-one\ndescription: shared-one skill\n---\n"
+    },
+    {
+     "path": ".claude/skills",
+     "type": "directory"
+    },
+    {
+     "path": ".claude/skills/alpha-own/SKILL.md",
+     "content": "---\nname: own\ndescription: own skill\n---\n"
+    },
+    {
+     "path": ".pi/agent/settings.json",
+     "content": "{\n  \"defaultProvider\": \"anthropic\",\n  \"skills\": [\n    \"~/work/team-skills\",\n    \"/opt/other\"\n  ],\n  \"theme\": 0.5\n}\n"
+    },
+    {
+     "path": ".hermes/config.yaml",
+     "content": "model:\n  default: x\n\nskills:\n  external_dirs:\n    - ~/somewhere\n  disabled: []\nother: 1\n"
+    }
+   ],
+   "requests": [
+    {
+     "method": "connections.snapshot",
+     "params": {}
+    },
+    {
+     "method": "connections.preview",
+     "params": {
+      "kind": "skills",
+      "command": "claude",
+      "item": "~/work/team-skills",
+      "remove": false
+     }
+    },
+    {
+     "method": "connections.apply",
+     "params": {},
+     "refs": {
+      "plan": [
+       1,
+       "result",
+       "plan"
+      ]
+     }
+    },
+    {
+     "method": "tasks.status",
+     "params": {},
+     "refs": {
+      "task": [
+       2,
+       "result",
+       "task"
+      ]
+     },
+     "until_done": true
+    },
+    {
+     "method": "connections.undo",
+     "params": {},
+     "refs": {
+      "undo": [
+       3,
+       "result",
+       "result",
+       "undo"
+      ]
+     }
+    },
+    {
+     "method": "connections.preview",
+     "params": {
+      "kind": "skills",
+      "command": "hermes",
+      "item": "~/work/team-skills",
+      "remove": false
+     }
+    },
+    {
+     "method": "connections.apply",
+     "params": {},
+     "refs": {
+      "plan": [
+       5,
+       "result",
+       "plan"
+      ]
+     }
+    },
+    {
+     "method": "tasks.status",
+     "params": {},
+     "refs": {
+      "task": [
+       6,
+       "result",
+       "task"
+      ]
+     },
+     "until_done": true
+    },
+    {
+     "method": "connections.preview",
+     "params": {
+      "kind": "skills",
+      "command": "pi",
+      "item": "~/work/team-skills",
+      "remove": true
+     }
+    },
+    {
+     "method": "connections.apply",
+     "params": {},
+     "refs": {
+      "plan": [
+       8,
+       "result",
+       "plan"
+      ]
+     }
+    },
+    {
+     "method": "tasks.status",
+     "params": {},
+     "refs": {
+      "task": [
+       9,
+       "result",
+       "task"
+      ]
+     },
+     "until_done": true
+    },
+    {
+     "method": "connections.preview",
+     "params": {
+      "kind": "skills",
+      "command": "claude",
+      "item": "~/work/team-skills",
+      "remove": true
+     }
+    },
+    {
+     "method": "connections.apply",
+     "params": {},
+     "refs": {
+      "plan": [
+       11,
+       "result",
+       "plan"
+      ]
+     }
+    },
+    {
+     "method": "connections.preview",
+     "params": {
+      "kind": "skills",
+      "command": "claude",
+      "item": "~/nowhere",
+      "remove": false
+     }
+    },
+    {
+     "method": "connections.preview",
+     "params": {
+      "kind": "skills",
+      "command": "claude",
+      "item": "~/work/team-skills",
+      "remove": false,
+      "extra": 1
+     }
+    },
+    {
+     "method": "connections.preview",
+     "params": {
+      "kind": "skills",
+      "command": "claude",
+      "item": "~/work/team-skills",
+      "remove": "no"
+     }
+    },
+    {
+     "method": "connections.preview",
+     "params": {
+      "kind": "skills",
+      "command": "hermes",
+      "item": "~/work/team-skills",
+      "remove": true
+     }
+    },
+    {
+     "method": "map.snapshot",
+     "params": {
+      "force": true
+     }
+    },
+    {
+     "method": "map.snapshot",
+     "params": {
+      "poll": true
+     }
+    },
+    {
+     "method": "connections.preview",
+     "params": {
+      "kind": "skills",
+      "command": "claude",
+      "item": "~/work/team-skills",
+      "remove": false
+     }
+    }
+   ]
   }
  ]
 }

@@ -31,60 +31,111 @@ int pyCompare(String a, String b) {
   return x.length - y.length;
 }
 
-/// json.dumps(value) with its defaults: ", " and ": " separators, ASCII only.
-String pyJsonDumps(dynamic value) {
+/// Python's repr() of a float: shortest round-trip digits, exponent form
+/// below 1e-4 and from 1e16 on (as "1e-05", "1e+16").
+String pyFloat(double d) {
+  if (d.isNaN) return 'NaN';
+  if (d.isInfinite) return d > 0 ? 'Infinity' : '-Infinity';
+  if (d == 0) return d.isNegative ? '-0.0' : '0.0';
+  final sign = d < 0 ? '-' : '';
+  // Shortest digits and decimal exponent from Dart's own shortest form.
+  final text = d.abs().toStringAsExponential(); // e.g. "1.2345e-5"
+  final mantissa = text.split('e')[0].replaceAll('.', '');
+  final exponent = int.parse(text.split('e')[1]);
+  final digits = mantissa.replaceFirst(RegExp(r'0+$'), '');
+  final shortest = digits.isEmpty ? '0' : digits;
+  if (exponent < -4 || exponent >= 16) {
+    final m = shortest.length > 1
+        ? '${shortest[0]}.${shortest.substring(1)}'
+        : shortest;
+    final e = exponent.abs().toString().padLeft(2, '0');
+    return '$sign${m}e${exponent < 0 ? '-' : '+'}$e';
+  }
+  if (exponent >= 0) {
+    final whole = shortest.length > exponent + 1
+        ? '${shortest.substring(0, exponent + 1)}.${shortest.substring(exponent + 1)}'
+        : '${shortest.padRight(exponent + 1, '0')}.0';
+    return '$sign$whole';
+  }
+  return '${sign}0.${'0' * (-exponent - 1)}$shortest';
+}
+
+/// json.dumps(value, indent=…, ensure_ascii=…): Python's separators, escapes
+/// and number forms (", "/": " flat; "," and ": " with an indent).
+String pyJsonDumps(dynamic value, {int? indent, bool ensureAscii = true}) {
   final out = StringBuffer();
-  void write(dynamic v) {
-    if (v is String) {
-      out.write('"');
-      for (final unit in v.codeUnits) {
-        switch (unit) {
-          case 0x22:
-            out.write(r'\"');
-          case 0x5c:
-            out.write(r'\\');
-          case 0x0a:
-            out.write(r'\n');
-          case 0x0d:
-            out.write(r'\r');
-          case 0x09:
-            out.write(r'\t');
-          case 0x08:
-            out.write(r'\b');
-          case 0x0c:
-            out.write(r'\f');
-          default:
-            if (unit < 0x20 || unit > 0x7e) {
-              out.write('\\u${unit.toRadixString(16).padLeft(4, '0')}');
-            } else {
-              out.writeCharCode(unit);
-            }
-        }
+  void string(String v) {
+    out.write('"');
+    for (final unit in v.codeUnits) {
+      switch (unit) {
+        case 0x22:
+          out.write(r'\"');
+        case 0x5c:
+          out.write(r'\\');
+        case 0x0a:
+          out.write(r'\n');
+        case 0x0d:
+          out.write(r'\r');
+        case 0x09:
+          out.write(r'\t');
+        case 0x08:
+          out.write(r'\b');
+        case 0x0c:
+          out.write(r'\f');
+        default:
+          if (unit < 0x20 || ensureAscii && unit > 0x7e) {
+            out.write('\\u${unit.toRadixString(16).padLeft(4, '0')}');
+          } else {
+            out.writeCharCode(unit);
+          }
       }
-      out.write('"');
+    }
+    out.write('"');
+  }
+
+  void write(dynamic v, int level) {
+    final pad = indent == null ? '' : '\n${' ' * (indent * (level + 1))}';
+    final close = indent == null ? '' : '\n${' ' * (indent * level)}';
+    final comma = indent == null ? ', ' : ',';
+    if (v is String) {
+      string(v);
+    } else if (v is bool) {
+      out.write(v ? 'true' : 'false');
+    } else if (v is int) {
+      out.write('$v');
+    } else if (v is double) {
+      out.write(pyFloat(v));
     } else if (v is List) {
+      if (v.isEmpty) {
+        out.write('[]');
+        return;
+      }
       out.write('[');
       for (var i = 0; i < v.length; i++) {
-        if (i > 0) out.write(', ');
-        write(v[i]);
+        out.write(i == 0 ? pad : '$comma$pad');
+        write(v[i], level + 1);
       }
-      out.write(']');
+      out.write('$close]');
     } else if (v is Map) {
+      if (v.isEmpty) {
+        out.write('{}');
+        return;
+      }
       out.write('{');
       var first = true;
       for (final e in v.entries) {
-        if (!first) out.write(', ');
+        out.write(first ? pad : '$comma$pad');
         first = false;
-        write('${e.key}');
+        string('${e.key}');
         out.write(': ');
-        write(e.value);
+        write(e.value, level + 1);
       }
-      out.write('}');
+      out.write('$close}');
     } else {
-      out.write(v == null ? 'null' : '$v');
+      out.write('null');
     }
   }
 
-  write(value);
+  write(value, 0);
   return out.toString();
 }

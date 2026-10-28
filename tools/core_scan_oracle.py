@@ -52,15 +52,19 @@ def service():
         real_categories=smart_check.categories
         smart_check.categories=lambda runs,days=30,now=None:real_categories(
             runs,days,now or __import__('datetime').datetime.fromtimestamp(float(os.environ['ASTERISM_SCAN_NOW'])))
-    result=flutter_backend.Service()
+    import ai_core
+    result=flutter_backend.Service(ai_core.settings_file())
     result.adapters=SimpleNamespace(items=[])
-    class MapTasks:
-        def __init__(self): self.items={}
-        def poll(self): pass
+    import flutter_tasks
+    class MapTasks(flutter_tasks.Tasks):
+        # Map scans finish at once in fixtures; commits run the real private worker.
         def start_snapshot(self,settings_path,owned,force=False):
-            self.items['fixture']=result.build_map()
+            self.maps={'fixture':result.build_map()}
+            self.items['fixture']=SimpleNamespace(state='done',operation='map.snapshot',process=SimpleNamespace(poll=lambda:0))
             return {'task':'fixture'}
-        def status(self,handle):return {'state':'done','result':self.items[handle]}
+        def status(self,handle):
+            maps=getattr(self,'maps',{})
+            return {'state':'done','result':maps[handle]} if handle in maps else super().status(handle)
     result.tasks=MapTasks()
     result._fixture_proc=proc
     return result

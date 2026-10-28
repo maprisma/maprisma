@@ -480,3 +480,26 @@ Not yet: connections routes and the task runner in Dart (3a part 2), plan builde
   task and writes nothing; empty plans; unknown handles; router handle routing.
 
 No route produces a core plan yet: the plan builders follow (3b skill links first).
+
+### 3b — skill sets (Claude, 2026-10-28)
+
+`connections.preview` with `kind: "skills"` is built by the core (`corePreviewKinds`; the router sends the
+other kinds to the Python reference in Devel). `skill_plans.dart` ports `skills_ctl` 1:1: native, listed and
+own folders (adapters, or a checked web profile from `agent_profiles` for agents without one), `reach`
+(read by itself, listed, own links into the set), `plan` (links per skill in the agent's own folder,
+category folders included; Pi's and Hermes's settings lists instead), and both list writers: Hermes's
+`config.yaml` as text (`skills.external_dirs`), Pi's `settings.json` through `json.dumps(indent=2,
+ensure_ascii=False)`. The reply carries Python's `focus` from the last map. Hermes's listed folders in the
+inventory are now read by the same text rules as Python (before: a YAML parser).
+
+New Python-exact helpers: `pyJsonDumps` with `indent`/`ensure_ascii` and `pyFloat` (Python `repr`):
+421 random documents match `json.dumps` flat and indented.
+
+Harness: interactive cases (`refs` take a handle from an earlier reply, `until_done` polls a task), handles
+masked, backup folders compared by place. The scan oracle now uses the real task runner (commits through
+the Python worker) and a settings path (backup root).
+
+Fixture: Claude links (with a category skill, a hidden and a non-skill folder), Undo, Hermes list entry,
+Pi removal, an empty removal without a worker, three refusals, Hermes removal, then a map and a preview with
+`focus` — same replies, same trees, same backups and manifests. On the real HOME: 100 previews (10 agents ×
+5 skill sets × add/remove, 31 with changes) match.

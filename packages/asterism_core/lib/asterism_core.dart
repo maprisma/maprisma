@@ -5,4 +5,4 @@ export 'src/posix_ffi.dart';
 export 'src/protocol.dart';
 export 'src/service_i18n.dart';
 export 'src/settings.dart';
-export 'src/core_tasks.dart' show coreHandle, handleRoutes;
+export 'src/core_tasks.dart' show coreHandle, handleRoutes, corePreviewKinds;

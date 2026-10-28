@@ -3,6 +3,7 @@ import 'package:path/path.dart' as p;
 import 'adapters.dart';
 import 'dsh_profile.dart';
 import 'local_llm.dart';
+import 'skill_plans.dart' show hermesSkillDirs;
 import 'adapter_assets.g.dart';
 import 'agent_catalog.dart';
 import 'agent_details.dart';
@@ -160,9 +161,8 @@ final class InventoryReader {
       );
     } else if (listed == 'hook') {
       if (adapter.command == 'hermes') {
-        extras = dig(
-          yamlMap(files.text('~/.hermes/config.yaml') ?? ''),
-          'skills.external_dirs',
+        extras = hermesSkillDirs(
+          files.text('~/.hermes/config.yaml', limit: 2 * 1024 * 1024) ?? '',
         );
       }
       if (adapter.command == 'openclaw') {

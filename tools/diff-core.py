@@ -19,8 +19,52 @@ import stat
 import subprocess
 import sys
 import tempfile
+import time
 
 ROOT = Path(__file__).resolve().parent.parent
+BACKUP = re.compile(r'^\d{8}-\d{6}-\d{6}$')
+HANDLE = re.compile(r'^(core-)?[0-9a-f]{32}$')
+
+
+def masked(value, key=None):
+    """Opaque handles (plan, undo, task) are random on each side: compare them as placeholders."""
+    if isinstance(value, dict):
+        return {k: masked(v, k) for k, v in value.items()}
+    if isinstance(value, list):
+        return [masked(v) for v in value]
+    if key in ('plan', 'undo', 'task') and isinstance(value, str) and HANDLE.match(value):
+        return '<handle>'
+    return value
+
+
+def interactive(command, case, home, env):
+    """Requests one at a time: "refs" take a parameter from an earlier reply ({"plan": [3,
+    "result", "plan"]}), "until_done" repeats a tasks.status until it no longer runs."""
+    process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                               env=env, cwd=ROOT / 'packages/asterism_core')
+    replies = []
+    try:
+        for i, request in enumerate(case['requests']):
+            body = {k: v for k, v in expand(request, home).items() if k not in ('refs', 'until_done')}
+            params = dict(body.get('params', {}))
+            for name, path in request.get('refs', {}).items():
+                value = replies[path[0]]
+                for step in path[1:]:
+                    value = value[step]
+                params[name] = value
+            body['params'] = params
+            for attempt in range(600):
+                process.stdin.write((json.dumps({'id': i, 'protocol': 1, **body}, ensure_ascii=False) + '\n').encode())
+                process.stdin.flush()
+                reply = json.loads(process.stdout.readline())
+                if not request.get('until_done') or reply.get('result', {}).get('state') != 'running':
+                    break
+                time.sleep(0.05)
+            replies.append(reply)
+    finally:
+        process.stdin.close()
+        process.wait(timeout=60)
+    return replies
 
 
 def fixture_mounts(home):
@@ -171,7 +215,9 @@ def tree(home):
                 data = ('directory',)
             else:
                 data = ('special', stat.S_IFMT(st.st_mode))
-            result[str(path.relative_to(home))] = (mode, *data)
+            # Backup folders are named by the time of the apply: compare them by place.
+            key = '/'.join('<backup>' if BACKUP.match(part) else part for part in path.relative_to(home).parts)
+            result[key] = (mode, *data)
     return result
 
 
@@ -203,6 +249,13 @@ def run_side(command, case, home):
             script.append(request['raw'])
         else:
             script.append(json.dumps({'id': i, 'protocol': 1, **expand(request, home)}, ensure_ascii=False))
+    if any('refs' in r or 'until_done' in r for r in case['requests']):
+        try:
+            replies = interactive(command, case, home, env)
+        finally:
+            assert_no_mounts(home)
+        text = json.dumps(replies, ensure_ascii=False).replace(str(home), '$HOME')
+        return masked(json.loads(text)), tree(home)
     try:
         output = subprocess.run(command, input=('\n'.join(script)+'\n').encode(),
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env,

@@ -337,3 +337,35 @@ Map<String, dynamic> dispatchHandle(
     _ => tasks.cancel(value),
   };
 }
+
+/// flutter_task_focus.resolve: the map's node ids a task concerns (never scans).
+List<String> taskFocus(
+  Map<String, dynamic> graph,
+  Map<String, dynamic> params,
+) {
+  final nodes = graph['nodes'] as List? ?? [];
+  final known = {for (final n in nodes) n['id']};
+  final candidates = <String>{};
+  final command = params['command'];
+  if (command is String) candidates.add('agent:$command');
+  var key = params['key'] ?? params['runtime'];
+  if (key is String) candidates.add('runtime:$key');
+  final kind = params['kind'], item = params['item'];
+  if (item is String && const {'mcp', 'skills', 'provider'}.contains(kind)) {
+    candidates.add('${kind == 'provider' ? 'runtime' : kind}:$item');
+    if (kind == 'provider') key = item;
+  }
+  final model = params['model'];
+  if (key is String && model is String && model.isNotEmpty) {
+    candidates.add('model:runtime:$key:${model.toLowerCase()}');
+  }
+  return [
+    for (final n in nodes)
+      if (candidates.contains(n['id']) && known.contains(n['id']))
+        n['id'] as String,
+  ];
+}
+
+/// The connection kinds whose previews this core builds (the others stay with
+/// the Python reference until their phase).
+const corePreviewKinds = {'skills'};

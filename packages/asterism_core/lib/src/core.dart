@@ -6,6 +6,7 @@ import 'protocol.dart';
 import 'read_service.dart';
 import 'connect_apply.dart';
 import 'core_tasks.dart';
+import 'skill_plans.dart';
 import 'settings.dart';
 import 'service_i18n.dart';
 
@@ -31,11 +32,57 @@ final class CoreService {
   }
   late final reads = ReadService(identity, settings, desktop, i18n);
   late final tasks = CoreTasks(defaultWorkerCommand(identity.environment));
+  late final config = ConfigFiles(Posix(), identity.home);
   late final connections = CoreConnections(
-    ConfigFiles(Posix(), identity.home),
+    config,
     tasks,
     '${identity.configDir}/connection-backups',
   );
+  late final skills = SkillPlans(
+    reads.files,
+    config,
+    reads.catalog,
+    AgentProfiles(reads.files, identity.configDir),
+  );
+
+  /// flutter_connections.preview for the kinds this core builds.
+  Map<String, dynamic> preview(Map<String, dynamic> params) {
+    final fields = {'kind', 'command', 'item', 'remove'};
+    if (params.length != fields.length ||
+        !params.keys.every(fields.contains) ||
+        !corePreviewKinds.contains(params['kind']) ||
+        params['remove'] is! bool ||
+        params['command'] is! String ||
+        params['item'] is! String) {
+      throw const FormatException('Invalid connection request');
+    }
+    final command = params['command'] as String;
+    final agents = reads.catalog.scan();
+    if (!agents.any((a) => a.command == command && a.installed)) {
+      throw const FormatException('Agent unavailable');
+    }
+    final inventory = reads.inventory.collect(agents);
+    final folder = inventory.skillSets
+        .where((s) => s['path'] == params['item'])
+        .firstOrNull;
+    if (folder == null || skills.ownDir(command) == null) {
+      throw const FormatException('Skill folder unavailable');
+    }
+    final plan = skills.plan(
+      command,
+      folder['path'] as String,
+      remove: params['remove'] as bool,
+    );
+    return {
+      ...connections.keep(plan),
+      'kind': params['kind'],
+      'command': command,
+      'item': params['item'],
+      'remove': params['remove'],
+      'focus': taskFocus(reads.map, params),
+    };
+  }
+
   late final AppIdentity identity;
   late final SettingsStore settings;
   late final Desktop desktop;
@@ -47,6 +94,12 @@ final class CoreService {
         throw ServiceError('unported_route');
       }
       return dispatchHandle(method, params, connections, tasks);
+    }
+    if (method == 'connections.preview') {
+      if (!corePreviewKinds.contains(params['kind'])) {
+        throw ServiceError('unported_route');
+      }
+      return preview(params);
     }
     if (!portedRoutes.contains(method)) throw ServiceError('unported_route');
     if (method == 'settings.update') return settings.update(params);

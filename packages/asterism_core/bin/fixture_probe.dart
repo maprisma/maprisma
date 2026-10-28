@@ -5,6 +5,7 @@ import 'package:asterism_core/asterism_core.dart';
 import 'package:asterism_core/src/adapters.dart';
 import 'package:asterism_core/src/connect_apply.dart';
 import 'package:asterism_core/src/line_diff.dart';
+import 'package:asterism_core/src/py_values.dart';
 import 'package:asterism_core/src/read_service.dart';
 import 'package:asterism_core/src/security_reports.dart';
 import 'package:asterism_core/src/session_readers.dart';
@@ -13,9 +14,10 @@ import 'package:asterism_core/src/usage_readers.dart';
 Future<void> main() async {
   final identity = AppIdentity(),
       settings = SettingsStore(identity),
-      desktop = detectDesktop(identity, Posix()),
       i18n = ServiceI18n(identity, settings);
-  final reads = ReadService(identity, settings, desktop, i18n);
+  // Write routes go to a full core; scans use its read service (one map).
+  final core = CoreService();
+  final reads = core.reads;
   await for (final line
       in stdin.transform(utf8.decoder).transform(const LineSplitter())) {
     int? id;
@@ -47,6 +49,12 @@ Future<void> main() async {
           params['new'] as String,
         );
         result = {'added': added, 'removed': removed};
+      } else if (request.method == 'dev.jsondumps') {
+        final value = jsonDecode(params['text'] as String);
+        result = {
+          'flat': pyJsonDumps(value),
+          'indented': pyJsonDumps(value, indent: 2, ensureAscii: false),
+        };
       } else if (request.method == 'dev.undo') {
         // Undo of a backup folder either side made (development probe only).
         result = {
@@ -94,7 +102,9 @@ Future<void> main() async {
           }
         }
       } else {
-        result = reads.dispatch(request.method, params);
+        result = readOnlyRoutes.contains(request.method)
+            ? reads.dispatch(request.method, params)
+            : core.dispatch(request.method, params);
       }
       response = {'id': id, 'result': result};
     } catch (_) {

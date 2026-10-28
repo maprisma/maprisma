@@ -31,6 +31,10 @@ final class ServiceRouter implements ServiceTransport {
       if (!develPythonFallback) throw ServiceError('unported_route');
       return (await _python()).call(method, params);
     }
+    if (method == 'connections.preview' &&
+        corePreviewKinds.contains(params['kind'])) {
+      return core.call(method, params);
+    }
     if (portedRoutes.contains(method)) {
       final result = await core.call(method, params);
       if (develPythonFallback &&
