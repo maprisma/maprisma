@@ -31,6 +31,7 @@ import 'api_key_review.dart';
 import 'performance_view.dart';
 import 'interrupted_jobs.dart';
 import 'help_view.dart';
+import 'map_layout.dart' show withAgentLinks;
 import 'open_problems_view.dart';
 import 'agent_action_dialog.dart';
 import 'providers_view.dart';
@@ -825,7 +826,9 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
   Map<String, dynamic> get _mapGraph =>
       _welcome && !_addons.any((i) => i['enabled'] == true)
       ? {'nodes': <dynamic>[], 'edges': <dynamic>[]}
-      : _graph ?? {'nodes': <dynamic>[], 'edges': <dynamic>[]};
+      : _graph == null
+      ? {'nodes': <dynamic>[], 'edges': <dynamic>[]}
+      : withAgentLinks(_graph!);
 
   Map<int, int> get _groupAvailable => {
     for (final col in [1, 2])

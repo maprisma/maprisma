@@ -6,6 +6,37 @@ const mapBoxWidth = 242.0, mapBoxHeight = 128.0, mapRowStep = 146.0;
 String edgeKey(Map<String, dynamic> e) =>
     '${e['source']}|${e['target']}|${e['kind']}';
 
+/// subagents.agents_using_agents on the map: an agent that started another
+/// one and uses it (activity.uses), an arrow from the first to the second,
+/// lit while either works. Drawn only, never edited.
+const agentLink = 'agent-link';
+
+Map<String, dynamic> withAgentLinks(Map<String, dynamic> graph) {
+  final activity = (graph['activity'] as Map?) ?? const {};
+  final nodes = {
+    for (final n in (graph['nodes'] as List? ?? const []).cast<Map>()) n['id'],
+  };
+  final links = <Map<String, dynamic>>[
+    for (final e in activity.entries)
+      for (final used in ((e.value as Map?)?['uses'] as List? ?? const []))
+        if (nodes.contains('agent:${e.key}') && nodes.contains('agent:$used'))
+          {
+            'source': 'agent:${e.key}',
+            'target': 'agent:$used',
+            'kind': agentLink,
+            'activity': 'agent',
+            'active':
+                (e.value as Map)['working'] == true ||
+                (activity[used] as Map?)?['working'] == true,
+          },
+  ];
+  if (links.isEmpty) return graph;
+  return {
+    ...graph,
+    'edges': [...(graph['edges'] as List? ?? const []), ...links],
+  };
+}
+
 class MapCardLayout {
   MapCardLayout(
     this.id,
@@ -23,10 +54,13 @@ class MapCardLayout {
 }
 
 class MapCurve {
-  MapCurve(this.edge, this.start, this.end);
+  MapCurve(this.edge, this.start, this.end, {this.side});
   Map<String, dynamic> edge;
   final Offset start, end;
-  double get middle => (start.dx + end.dx) / 2;
+
+  /// For two boxes of one column: how far right the bend goes.
+  final double? side;
+  double get middle => side ?? (start.dx + end.dx) / 2;
   Offset point(double t) {
     final u = 1 - t;
     return Offset(
@@ -141,6 +175,18 @@ class MapLayout {
     for (final e in allEdges) {
       final a = boxes[e['source']], b = boxes[e['target']];
       if (a == null || b == null) continue;
+      if (e['kind'] == agentLink) {
+        // Both agents in one column: a bend on the right of their boxes.
+        curves.add(
+          MapCurve(
+            e,
+            Offset(a.right, a.center.dy),
+            Offset(b.right, b.center.dy),
+            side: math.max(a.right, b.right) + 22,
+          ),
+        );
+        continue;
+      }
       final forward = a.center.dx <= b.center.dx;
       curves.add(
         MapCurve(
@@ -195,6 +241,7 @@ class MapLayout {
     MapCurve? result;
     var distance = tolerance;
     for (final curve in curves) {
+      if (curve.edge['kind'] == agentLink) continue; // shown, never edited
       final d = curve.distance(point);
       if (d < distance) {
         result = curve;

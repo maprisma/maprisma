@@ -23,6 +23,8 @@ def snapshot(catalog, sessions, recent: int = 1800, kept: int = 10, tracker=None
         import agent_activity
         tracker = agent_activity.Activity()
     working = tracker.working(pids)
+    # Agents that started another agent and use it (from the process tree): the map's arrows.
+    using = subagents.agents_using_agents(pids)
     activity = {}
     for command in commands:
         location = subagents.where(command)
@@ -41,5 +43,6 @@ def snapshot(catalog, sessions, recent: int = 1800, kept: int = 10, tracker=None
                      'running': bool(pids.get(command)) and row.running} for row in rows]
         activity[command] = {'instances': len(running.get(command, [])), 'working': command in working, 'subagents_supported': supported,
                              'active_subagents': sum(child['running'] for child in children) if supported else None,
-                             'children': children}
+                             'children': children,
+                             'uses': sorted(used for user, used in using if user == command)}
     return running, activity

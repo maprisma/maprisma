@@ -121,6 +121,17 @@ final class ActivityReaders {
       running.putIfAbsent(name, () => []).add(boundedText(model, 200));
       pids.putIfAbsent(name, () => []).add(process.pid);
     }
+    // subagents.agents_using_agents: an agent that started another one (directly
+    // or through a shell, a script, a tool) and uses it: the map's arrows.
+    final using = agentsUsingAgents(pids, (pid) {
+      final stat = files.text('${provider.proc}/$pid/stat', limit: 1024);
+      if (stat == null || !stat.contains(')')) return 0;
+      final fields = stat
+          .substring(stat.lastIndexOf(')') + 1)
+          .trim()
+          .split(RegExp(r'\s+'));
+      return fields.length > 1 ? int.tryParse(fields[1]) ?? 0 : 0;
+    });
     final now = scanNow(files),
         clock = elapsed.elapsedMicroseconds / 1e6,
         seen = <int, (int, double)>{},
@@ -200,6 +211,10 @@ final class ActivityReaders {
             ? children.where((c) => c['running'] == true).length
             : null,
         'children': children,
+        'uses': [
+          for (final (user, used) in using)
+            if (user == agent.command) used,
+        ]..sort(),
       };
     }
     previous
@@ -207,4 +222,34 @@ final class ActivityReaders {
       ..addAll(seen);
     return (running, activity);
   }
+}
+
+/// subagents.agents_using_agents: {(user, used)} where a running instance of
+/// `used` was started by one of `user`, up to [depth] parents up; an agent
+/// inside another instance of itself does not count.
+Set<(String, String)> agentsUsingAgents(
+  Map<String, List<int>> pidsByAgent,
+  int Function(int pid) parent, {
+  int depth = 12,
+}) {
+  final owner = <int, String>{
+    for (final e in pidsByAgent.entries)
+      for (final pid in e.value.take(64)) pid: e.key,
+  };
+  final found = <(String, String)>{};
+  for (final e in pidsByAgent.entries) {
+    for (final pid in e.value.take(64)) {
+      var current = pid;
+      for (var step = 0; step < depth; step++) {
+        current = parent(current);
+        if (current <= 1) break;
+        final user = owner[current];
+        if (user != null) {
+          if (user != e.key) found.add((user, e.key));
+          break;
+        }
+      }
+    }
+  }
+  return found;
 }

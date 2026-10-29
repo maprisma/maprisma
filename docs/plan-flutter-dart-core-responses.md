@@ -1821,3 +1821,25 @@ It covers:
 Python and Dart give the same updates. `test/agent_updates_test.dart` covers version order and
 `updates.run`'s refusals. There are widget and app tests. It was also run once on this PC (cache in
 the scratchpad): OpenCode 2.2.1 → 2.2.2 by mise, and the app's Ollama v0.40.11 → v0.40.13.
+
+### 6b-13 — Agents working together
+
+- **Subagent readers:** all five formats the reference allows (`adapter_data.SUBAGENT_FORMATS`) were
+  already read by the Dart core: claude-projects, opencode-db, codex-rollouts, copilot-events,
+  goose-db. No adapter declares another. "Remaining readers" in plan-flutter.md meant agents with
+  subagents but no reader; there are none to port until a new format is added on both sides.
+- **Collaboration, the missing part:** `subagents.agents_using_agents`, ported as `agentsUsingAgents`.
+  An agent whose running instance was started by another agent's process (directly or through a
+  shell, a script, a tool; at most 12 parents up, an agent inside itself not counted) is used by it.
+  The activity of each agent gains **`uses`**, on both sides (`flutter_activity.py` and
+  `activity_readers.dart`), so `agents.activity` and `map.snapshot` stay equal in the differential
+  cases.
+- **Flutter:** `withAgentLinks` adds an `agent-link` edge per use. It is lit while either agent works
+  (the light layer's agent mode), drawn as a bend along the right of the agents' boxes, and skipped by
+  `lineAt` and `movable`: shown, never edited. The geometry only changes when a link comes or goes. The
+  manual's "Agents working together in the Flutter preview" in all eight languages; PDFs rebuilt.
+
+Check: Dart `agents_using_agents_test.dart` (a shell between them, an agent inside itself, the depth
+limit) and Flutter `agent_links_test.dart` (edges from activity, lit, unknown agents dropped; the bend,
+not pickable, not movable). The Python activity tests and the 69 differential cases pass with the new
+field.
