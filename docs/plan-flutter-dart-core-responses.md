@@ -1782,3 +1782,42 @@ model, LM Studio without models), three doubled models, and all five use cases r
 
 Next, 6b-12b-3: Updates and suggestions (`agent_updates`, add-on suggestions and updates, new MCP
 servers and skills on this PC).
+
+### 6b-12b-3 — Updates of agents and local LLMs
+
+New in the core (`agent_updates.dart`, the reference is `agent_updates`):
+- **`updates.check {}`**, in the worker. Each agent and local LLM is checked the way it was installed:
+  - `mise outdated --json` (odd tool names and versions dropped) for mise agents;
+  - an agent's own release channel (`update.latest = "claude-channel"`: npm's dist-tags for Claude
+    Code's `autoUpdatesChannel`, stable or latest), with its own updater (`update.self`, plain words
+    only) or `mise upgrade`;
+  - the app's own installs (the installer's newest release for the installed build; Update opens
+    the install review).
+  - The web is asked at most every six hours. The answer is cached 0600 in the app's own
+    `cacheDir/updates.json`; cached entries are checked again (`_usable`: only mise's upgrade or an
+    agent's own updater) and dropped once installed (`still_open`).
+- **`updates.run {key}`** runs only an update of the last check whose command is allowed and plain
+  words. It runs in a terminal of its own with `env MISE_USE_VERSIONS_HOST=0` for mise, as the
+  reference does, and the cache is forgotten. An install-page update is refused here; the app opens
+  its install review.
+- **Flutter:** the check runs quietly after the first snapshot. The header's **!** also counts
+  updates. Open problems gains **Updates and suggestions**: "X 2.2.2 is available (you have 2.2.1)"
+  with **Update**. **Check again** reads both. All texts were already translated; the manual's Flutter
+  Open problems section says so in all eight languages; PDFs rebuilt.
+- **Not taken over yet:** GTK's other lines in that area:
+  - new MCP servers and skills found on this PC (mcp_scan, not in the core);
+  - newer app versions next to the ones in use (fold_versions);
+  - add-ons on this PC but switched off, and add-on updates;
+  - the daily AI checks' MCP updates.
+
+Check: `tests/test_dart_agent_updates_parity.py` gives the web and mise as sources and uses a real
+fixture of the app's own llama.cpp install (link, `current`, marker) and Claude Code's stable channel.
+It covers:
+- a fresh check;
+- the cache within six hours (an update installed since drops out);
+- stale caches with the same and an older release;
+- a cache with a forbidden command, an unknown kind and a runtime not installed.
+
+Python and Dart give the same updates. `test/agent_updates_test.dart` covers version order and
+`updates.run`'s refusals. There are widget and app tests. It was also run once on this PC (cache in
+the scratchpad): OpenCode 2.2.1 → 2.2.2 by mise, and the app's Ollama v0.40.11 → v0.40.13.

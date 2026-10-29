@@ -27,6 +27,7 @@ import 'mcp_tools.dart';
 import 'skills_web.dart' as skills_web;
 import 'llm_tuning.dart';
 import 'health_report.dart' show pcInfo;
+import 'agent_updates.dart' show AgentUpdates;
 import 'context.dart' show ContextReader;
 import 'model_hub.dart' show netFetch;
 import 'model_downloads.dart' show DownloadError;
@@ -586,6 +587,58 @@ Future<int> runWorker(List<String> args) async {
             llamaVersion: () async => installer.currentVersion(),
           );
       send({'type': 'result', 'result': facts});
+      return 0;
+    }
+    // agent_updates.check: mise outdated, an agent's own channel, the app's
+    // own installs' latest releases; cached six hours (owner-only).
+    if (args.isEmpty && request['operation'] == 'updates.check') {
+      final params = request['params'] as Map;
+      if (params.length != 1 || params['settings_path'] is! String) {
+        throw const FormatException('Invalid worker request');
+      }
+      final identity = AppIdentity();
+      final registry = _reloadAddons(params['settings_path'] as String);
+      final files = ScanFiles(identity);
+      final catalog = AgentCatalog(
+        files,
+        detectDesktop(identity, Posix()),
+        adapters: registry.adapters,
+      );
+      final installers = Installers(
+        files,
+        settingsPath: params['settings_path'] as String,
+      );
+      final posix = Posix();
+      final updates = AgentUpdates(
+        adapters: registry.adapters,
+        installer: (key) =>
+            installers.find('runtime', key) ?? installers.find('agent', key),
+        agentInstaller: (c) => installers.find('agent', c) != null,
+        home: identity.home,
+        cachePath: p.join(identity.cacheDir, 'updates.json'),
+        path: identity.environment['PATH'],
+        writeCache: posix.atomicWrite,
+      );
+      send({
+        'type': 'result',
+        'result': {
+          'updates': await updates.check(
+            [
+              for (final a in catalog.scan())
+                {
+                  'command': a.command,
+                  'name': a.name,
+                  'installed': a.installed,
+                  'version': a.version,
+                  'source': a.source,
+                },
+            ],
+            [for (final r in ProviderScans(files).scan()) r.toJson()],
+            now: DateTime.now().millisecondsSinceEpoch / 1000,
+            gpu: detectGpu,
+          ),
+        },
+      });
       return 0;
     }
     // health.pc_info: the card (lspci), the memory, the free space in the

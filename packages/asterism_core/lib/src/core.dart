@@ -49,6 +49,7 @@ import 'llm_tuning.dart';
 import 'core_jobs.dart';
 import 'setup_checks.dart';
 import 'health_report.dart';
+import 'agent_updates.dart';
 import 'mcp_tools.dart' show cachedTools;
 
 const portedRoutes = {
@@ -126,6 +127,8 @@ const portedRoutes = {
   'agents.health',
   'providers.health',
   'health.report',
+  'updates.check',
+  'updates.run',
   ...readOnlyRoutes,
 };
 // Phase 7 removes this blocker only after every route has differential coverage.
@@ -1493,6 +1496,64 @@ final class CoreService {
     });
   }
 
+  /// The updates the last check found (updates.check), for updates.run.
+  List<Map<String, dynamic>> lastUpdates = [];
+
+  /// updates.check / updates.run (agent_updates and the GTK hint area's
+  /// "X is available (you have Y)" with Update).
+  Map<String, dynamic> updatesRoute(
+    String method,
+    Map<String, dynamic> params,
+  ) {
+    if (method == 'updates.check') {
+      if (params.isNotEmpty) {
+        throw const FormatException('Unexpected parameters');
+      }
+      return tasks.start(
+        'updates.check',
+        {'settings_path': identity.settingsPath},
+        (result) {
+          lastUpdates = [
+            for (final u in result['updates'] as List)
+              Map<String, dynamic>.from(u as Map),
+          ];
+          return result;
+        },
+      );
+    }
+    final key = params['key'];
+    final found = lastUpdates.where((u) => u['key'] == key).firstOrNull;
+    if (params.length != 1 || found == null) {
+      throw const FormatException('Unknown update');
+    }
+    final argv = (found['command'] as List).cast<String>();
+    if (argv.isEmpty ||
+        !allowedUpdate(argv, addons.adapters) ||
+        !argv.every(toolRe.hasMatch)) {
+      throw const FormatException('This update opens its install page');
+    }
+    // mise's version service can lag behind a release: read the versions
+    // from the source (still checksummed), as the reference does.
+    final words = [
+      if (argv.first == 'mise') ...['env', 'MISE_USE_VERSIONS_HOST=0'],
+      ...argv,
+    ];
+    if (!desktop.runStepsInTerminal([
+      words,
+    ], i18n.text('Done. Press Enter to close.'))) {
+      throw const FormatException('No terminal available');
+    }
+    // agent_updates.forget: ask again on the next check.
+    try {
+      final cache = File(p.join(identity.cacheDir, 'updates.json'));
+      if (cache.existsSync()) cache.deleteSync();
+    } on FileSystemException {
+      // Asked again after six hours at the latest.
+    }
+    lastUpdates.remove(found);
+    return {'started': true};
+  }
+
   /// agent_status.load_issues: the problem the last Start ran into.
   Map? _startIssue(String command) {
     final data = reads.files.json(
@@ -2038,6 +2099,9 @@ final class CoreService {
       return healthRoute(method, params);
     }
     if (method == 'health.report') return healthReportRoute(params);
+    if (method == 'updates.check' || method == 'updates.run') {
+      return updatesRoute(method, params);
+    }
     if (method == 'help.snapshot' || method == 'help.open_manual') {
       if (params.isNotEmpty) {
         throw const FormatException('Unexpected parameters');

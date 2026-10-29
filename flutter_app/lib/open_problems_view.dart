@@ -23,12 +23,18 @@ class OpenProblemsView extends StatelessWidget {
     required this.report,
     required this.tr,
     required this.onAction,
+    this.updates = const [],
+    this.onUpdate,
     required this.onCheckAgain,
     required this.onClose,
   });
   final Map<String, dynamic> report;
   final String Function(String) tr;
   final void Function(List<String> action) onAction;
+
+  /// agent_updates: newer versions of agents and local LLMs (updates.check).
+  final List<Map<String, dynamic>> updates;
+  final ValueChanged<Map<String, dynamic>>? onUpdate;
   final VoidCallback onCheckAgain;
   final VoidCallback onClose;
 
@@ -91,6 +97,28 @@ class OpenProblemsView extends StatelessWidget {
             Text('${report['open_text']}', style: text.titleMedium),
             Text(tr('Each one opens where it is fixed.')),
             for (final f in problems) _finding(context, f),
+          ],
+          if (updates.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Text(tr('Updates and suggestions'), style: text.titleMedium),
+            for (final u in updates)
+              ListTile(
+                key: ValueKey('update-${u['key']}'),
+                dense: true,
+                leading: const Icon(Icons.upgrade),
+                title: Text(
+                  tr('{0} {1} is available (you have {2})')
+                      .replaceAll('{0}', '${u['name']}')
+                      .replaceAll('{1}', '${u['available']}')
+                      .replaceAll('{2}', '${u['current']}'),
+                ),
+                trailing: onUpdate == null
+                    ? null
+                    : OutlinedButton(
+                        onPressed: () => onUpdate!(u),
+                        child: Text(tr('Update')),
+                      ),
+              ),
           ],
           if (uses.isNotEmpty) ...[
             const SizedBox(height: 16),

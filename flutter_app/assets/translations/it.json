@@ -1,4 +1,7 @@
 {
+  "{0} {1} is available (you have {2})": "{0} {1} è disponibile (hai {2})",
+  "Update": "Aggiorna",
+  "Updates and suggestions": "Aggiornamenti e suggerimenti",
   "Open problems": "Problemi aperti",
   "Check again": "Controlla di nuovo",
   "Nothing to fix.": "Niente da sistemare.",
@@ -389,7 +392,6 @@
   "Nothing matches.": "Nessun risultato.",
   "Only add-ons signed by Uwe Bruckhaus are offered and loaded.": "Vengono offerti e caricati solo componenti firmati da Uwe Bruckhaus.",
   "Install": "Installa",
-  "Update": "Aggiorna",
   "Install {0}?": "Installare {0}?",
   "Update {0}?": "Aggiornare {0}?",
   "Numbers only": "Solo numeri",

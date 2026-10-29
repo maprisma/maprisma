@@ -9,6 +9,7 @@ import 'package:asterism_core/src/skills_web.dart' as skw;
 import 'package:asterism_core/src/llm_tuning.dart' as tun;
 import 'package:asterism_core/src/setup_checks.dart' as chk;
 import 'package:asterism_core/src/health_report.dart' as hr;
+import 'package:asterism_core/src/agent_updates.dart' as upd;
 import 'package:asterism_core/src/installers.dart' as inst;
 import 'package:asterism_core/src/provider_scans.dart' show RuntimeRecord;
 import 'package:asterism_core/src/system_map.dart' show SystemMapReader;
@@ -296,6 +297,35 @@ Future<void> main() async {
           params['cache'] as String,
           search: params['search'] == true,
         );
+      } else if (request.method == 'dev.agentupdates') {
+        // agent_updates.check with the web and mise given.
+        final installers = inst.Installers(ScanFiles(identity));
+        final mise = (params['mise'] as Map).map(
+          (k, v) => MapEntry('$k', ('${(v as List)[0]}', '${v[1]}')),
+        );
+        final latest = (params['latest'] as Map).cast<String, String?>();
+        final updates = upd.AgentUpdates(
+          adapters: core.addons.adapters,
+          installer: (key) =>
+              installers.find('runtime', key) ?? installers.find('agent', key),
+          agentInstaller: (c) => installers.find('agent', c) != null,
+          home: identity.home,
+          cachePath: params['cache'] as String,
+          path: Platform.environment['PATH'],
+          writeCache: (path, bytes) => File(path).writeAsBytesSync(bytes),
+        );
+        result = {
+          'updates': await updates.check(
+            (params['agents'] as List).cast<Map>(),
+            (params['runtimes'] as List).cast<Map>(),
+            now: (params['now'] as num).toDouble(),
+            mise: () async => mise,
+            latest: (command, channel) async => latest['$command:$channel'],
+            gpu: () async => inst.Gpu(),
+            installerLatest: (i, g) async =>
+                params['installer_latest'] as String?,
+          ),
+        };
       } else if (request.method == 'dev.healthreport') {
         // health.check over given checks, inventory, graph and PC facts.
         final setup = chk.SetupChecks(

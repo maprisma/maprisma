@@ -1236,7 +1236,49 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
   Map<String, dynamic>? _healthReport;
   int get _healthCount =>
       (_healthReport?['warn'] as int? ?? 0) +
-      (_healthReport?['hint'] as int? ?? 0);
+      (_healthReport?['hint'] as int? ?? 0) +
+      _updates.length;
+
+  /// Newer versions of agents and local LLMs (updates.check, cached 6 h).
+  List<Map<String, dynamic>> _updates = [];
+
+  Future<void> _checkUpdates() async {
+    try {
+      final found = await _quietTask('updates.check', {});
+      if (mounted) {
+        setState(
+          () => _updates = (found['updates'] as List? ?? const [])
+              .cast<Map<String, dynamic>>(),
+        );
+      }
+    } catch (_) {
+      // Shown next time.
+    }
+  }
+
+  /// Update: its own command in a terminal, or the app's install review.
+  Future<void> _runUpdate(Map<String, dynamic> update) async {
+    if ((update['command'] as List? ?? const []).isEmpty) {
+      await _installProgram(
+        update['kind'] == 'runtime' ? 'runtime' : 'agent',
+        '${update['key']}',
+      );
+      return;
+    }
+    try {
+      await _backend!.call('updates.run', {'key': update['key']});
+      if (mounted) {
+        setState(
+          () => _updates = [
+            for (final u in _updates)
+              if (u['key'] != update['key']) u,
+          ],
+        );
+      }
+    } catch (_) {
+      _actionFailed();
+    }
+  }
 
   Future<void> _checkHealth() async {
     try {
@@ -1260,9 +1302,14 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
           _cancelReview?.call();
           _healthAction(action);
         },
+        updates: _updates,
+        onUpdate: (update) {
+          _cancelReview?.call();
+          _runUpdate(update);
+        },
         onCheckAgain: () async {
           _cancelReview?.call();
-          await _checkHealth();
+          await Future.wait([_checkHealth(), _checkUpdates()]);
           if (mounted) await _openProblems();
         },
         onClose: no,
@@ -2827,6 +2874,7 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
         unawaited(_detectSetup());
         unawaited(_loadJobs());
         unawaited(_checkHealth());
+        unawaited(_checkUpdates());
       }
     } catch (_) {
       if (mounted) {

@@ -1,4 +1,7 @@
 {
+  "{0} {1} is available (you have {2})": "{0} {1} is beschikbaar (je hebt {2})",
+  "Update": "Bijwerken",
+  "Updates and suggestions": "Updates en suggesties",
   "Open problems": "Open problemen",
   "Check again": "Opnieuw controleren",
   "Nothing to fix.": "Niets op te lossen.",
@@ -389,7 +392,6 @@
   "Nothing matches.": "Niets gevonden.",
   "Only add-ons signed by Uwe Bruckhaus are offered and loaded.": "Alleen add-ons die door Uwe Bruckhaus zijn ondertekend worden aangeboden en geladen.",
   "Install": "Installeren",
-  "Update": "Bijwerken",
   "Install {0}?": "{0} installeren?",
   "Update {0}?": "{0} bijwerken?",
   "Numbers only": "Alleen cijfers",

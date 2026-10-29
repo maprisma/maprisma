@@ -5,6 +5,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 KEYS = (
+    # Updates of agents and local LLMs (updates.check).
+    "{0} {1} is available (you have {2})",
+    "Update",
+    "Updates and suggestions",
     # Open problems (health.report).
     "Open problems",
     "Check again",

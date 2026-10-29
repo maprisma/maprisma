@@ -91,4 +91,42 @@ void main() {
     expect(find.text('Nothing to fix.'), findsOneWidget);
     expect(find.text('Works well · 1 tip'), findsOneWidget);
   });
+
+  testWidgets('updates: each with what is new and Update', (tester) async {
+    final updated = <String>[];
+    await tester.binding.setSurfaceSize(const Size(1000, 1400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: OpenProblemsView(
+            report: _report(problems: false),
+            tr: (k) => k,
+            onAction: (_) {},
+            updates: const [
+              {
+                'kind': 'agent',
+                'key': 'opencode',
+                'name': 'OpenCode',
+                'current': '2.2.1',
+                'available': '2.2.2',
+                'command': ['mise', 'upgrade', 'opencode'],
+                'page': false,
+              },
+            ],
+            onUpdate: (u) => updated.add('${u['key']}'),
+            onCheckAgain: () {},
+            onClose: () {},
+          ),
+        ),
+      ),
+    );
+    expect(find.text('Updates and suggestions'), findsOneWidget);
+    expect(
+      find.text('OpenCode 2.2.2 is available (you have 2.2.1)'),
+      findsOneWidget,
+    );
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Update'));
+    expect(updated, ['opencode']);
+  });
 }
