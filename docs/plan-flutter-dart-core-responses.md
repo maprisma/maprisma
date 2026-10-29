@@ -1246,3 +1246,40 @@ wrapper connected earlier and a fake terminal that only logs:
 - a found GGUF folder connected to llama.cpp (preview, refused for Ollama, bad shape, applied).
 
 The same answers, terminal log, settings and rewritten files on both sides.
+
+### 6a-3b — moving a model folder
+
+`system.move_preview`, `system.move_apply` and `system.move_undo` are served by the core
+(`model_moves.dart`, ports of `system_moves`, `model_folders` and `model_move`):
+- **Preview** (worker, private): the folder's own GGUF files (`model_folders.discover`), refused while a
+  runtime reading it runs; the plan (`model_folders.plan`): every step never over an existing name,
+  each file's identity and both folders' anchors; what follows the files: the app's `model_folders`,
+  llama.cpp's `models.ini` (also through a same-disk alias), the links of a router folder, a runtime
+  whose own model folder it was (Ollama and llama.cpp through their `model_folder_changes`), else named
+  as losing the models. A signature over all of it.
+- **Apply** (worker, private, under the installers' lock): prepared again and the same; a private journal
+  (`<config>/model-moves/<token>/journal.json`, 0600) records every file moved; the files move one by
+  one (`FileMover`):
+  - both folders reached by walking from / one name at a time, never through a link, the anchors as in
+    the preview, every folder below them this account's alone;
+  - the file opened once and required to be the preview's;
+  - on one disk a hard link of the open file (through `/proc/self/fd`) to its new name; to another a
+    copy into an owner-only `.part` file (fsync, size, times and mode), linked into place;
+  - never over an existing name; the old name removed only while it is still that file.
+  Then the settings with a backup; the saved map's discoveries follow the files. A failure undoes what
+  was done and keeps an Undo for what could not be.
+- **Undo** (worker, private): the journal's files back (last first), then the settings' backup.
+- `posix_ffi.dart` gained `mkdirAt`, `statAt` (relative, no-follow), `linkAt`, `unlinkAt`, `setTimes`.
+- Found on the way: the add-on lock's folder (`~/.local/share/asterism`) is now made 0700 when the
+  core creates it, as the reference does (it was 0755 since 5a-2).
+
+Check:
+- `tests/test_dart_system_moves_parity.py` runs both workers on their own copy of the same layout:
+  - a model folder with its own files (a split model, a vision file), a llama.cpp router folder of links
+    to them, a `models.ini` naming one, the app's settings;
+  - moved on one disk (hard links) and to another (from `/tmp`, a copy), the same preview refused once
+    the files are gone, then undone.
+  The same previews, files (contents, modes, link counts), links and settings on both sides, after the
+  move and after Undo.
+- `tests/test_dart_system_map_parity.py` also checks the routes: a move before any refresh, a preview
+  from the map onto `/mnt/Data` (never applied), refused targets and handles.

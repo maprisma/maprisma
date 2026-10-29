@@ -62,6 +62,11 @@ class Posix {
         Int Function(Int, Pointer<Utf8>, Uint32),
         int Function(int, Pointer<Utf8>, int)
       >('mkdirat');
+  static final _utimensat = _lib
+      .lookupFunction<
+        Int Function(Int, Pointer<Utf8>, Pointer<Int64>, Int),
+        int Function(int, Pointer<Utf8>, Pointer<Int64>, int)
+      >('utimensat');
   static final _errno = _lib
       .lookupFunction<Pointer<Int> Function(), Pointer<Int> Function()>(
         '__errno_location',
@@ -301,6 +306,96 @@ class Posix {
       );
     } finally {
       calloc.free(buffer);
+    }
+  }
+
+  /// mkdirat; false when the name exists already (EEXIST), else it throws.
+  bool mkdirAt(int dir, String name, int mode) => _path(name, (native) {
+    if (_mkdir(dir, native, mode) == 0) return true;
+    if (_errno().value == 17) return false;
+    _fail();
+  });
+
+  /// os.stat(name, dir_fd=dir, follow_symlinks=False) as Python gives it:
+  /// st_dev (made the glibc way), st_ino, st_mode, st_uid, st_size,
+  /// st_nlink; null when it cannot be looked at. An empty name: dir itself.
+  ({
+    int dev,
+    int ino,
+    int mode,
+    int uid,
+    int size,
+    int nlink,
+    int atimeNs,
+    int mtimeNs,
+  })?
+  statAt(int dir, String name) {
+    final buffer = calloc<Uint8>(256);
+    try {
+      var ok = false;
+      _path(
+        name,
+        (native) => ok =
+            _statx(dir, native, name.isEmpty ? 0x1100 : 0x100, 0x7ff, buffer) ==
+            0,
+      );
+      if (!ok) return null;
+      final b = ByteData.sublistView(buffer.asTypedList(256));
+      final major = b.getUint32(136, Endian.host),
+          minor = b.getUint32(140, Endian.host);
+      return (
+        dev:
+            ((major & 0xfffff000) << 32) |
+            ((major & 0xfff) << 8) |
+            ((minor & 0xffffff00) << 12) |
+            (minor & 0xff),
+        ino: b.getUint64(32, Endian.host),
+        mode: b.getUint16(28, Endian.host),
+        uid: b.getUint32(20, Endian.host),
+        size: b.getUint64(40, Endian.host),
+        nlink: b.getUint32(16, Endian.host),
+        atimeNs:
+            b.getInt64(64, Endian.host) * 1000000000 +
+            b.getUint32(72, Endian.host),
+        mtimeNs:
+            b.getInt64(112, Endian.host) * 1000000000 +
+            b.getUint32(120, Endian.host),
+      );
+    } finally {
+      calloc.free(buffer);
+    }
+  }
+
+  /// linkat(fromDir, from, toDir, to, flags); throws on failure.
+  void linkAt(
+    int fromDir,
+    String from,
+    int toDir,
+    String to, {
+    bool follow = false,
+  }) => _path(
+    from,
+    (a) => _path(to, (b) {
+      if (_linkat(fromDir, a, toDir, b, follow ? 0x400 : 0) != 0) _fail();
+    }),
+  );
+
+  /// unlinkat(dir, name, 0); throws on failure.
+  void unlinkAt(int dir, String name) => _path(name, (native) {
+    if (_unlink(dir, native, 0) != 0) _fail();
+  });
+
+  /// futimens: the file's access and modification times, in nanoseconds.
+  void setTimes(int fd, int atimeNs, int mtimeNs) {
+    final times = calloc<Int64>(4);
+    try {
+      times[0] = atimeNs ~/ 1000000000;
+      times[1] = atimeNs % 1000000000;
+      times[2] = mtimeNs ~/ 1000000000;
+      times[3] = mtimeNs % 1000000000;
+      if (_utimensat(fd, nullptr, times, 0) != 0) _fail();
+    } finally {
+      calloc.free(times);
     }
   }
 

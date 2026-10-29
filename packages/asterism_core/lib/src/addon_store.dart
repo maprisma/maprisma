@@ -508,7 +508,11 @@ final class AddonStore {
   /// reference takes it).
   Future<T> locked<T>(Future<T> Function() body) async {
     final root = p.dirname(userDir);
-    Directory(root).createSync(recursive: true);
+    // mkdir(mode=0o700, parents=True): only the folder itself is private.
+    if (!Directory(root).existsSync()) {
+      Directory(root).createSync(recursive: true);
+      posix.chmodPath(root, 0x1c0);
+    }
     final st = posix.lstatOwn(root);
     if (st == null ||
         st.mode & 0xf000 != 0x4000 ||

@@ -13,6 +13,8 @@ import 'model_removals.dart';
 import 'existing_ai.dart' as existing_ai;
 import 'system_map.dart' show SystemMapReader;
 import 'system_actions.dart' show checkTool;
+import 'model_moves.dart' show SystemMoves, ScanFilesLike;
+import 'dart:math' show Random;
 import 'first_agent.dart';
 import 'agent_catalog.dart';
 import 'desktop.dart' show detectDesktop;
@@ -439,6 +441,9 @@ Future<int> runWorker(List<String> args) async {
           'existing.check',
           'existing.apply',
           'system.tool_check',
+          'system.move_preview',
+          'system.move_apply',
+          'system.move_undo',
         }.contains(operation) ||
         (request['params'] as Map).isNotEmpty) {
       throw const FormatException('Invalid private operation');
@@ -492,6 +497,48 @@ Future<int> runWorker(List<String> args) async {
           ),
         ),
       });
+      return 0;
+    }
+    if (operation.startsWith('system.move_')) {
+      if (body.length > 700 * 1024) {
+        throw const FormatException('Move plan too large');
+      }
+      final record = jsonDecode(utf8.decode(body));
+      if (record is! Map || record['settings_path'] is! String) {
+        throw const FormatException('Invalid move record');
+      }
+      final identity = AppIdentity();
+      final files = ScanFiles(identity);
+      _reloadAddons(record['settings_path'] as String);
+      final moves = SystemMoves(
+        ScanFilesLike(ProviderScans(files)),
+        identity.home,
+        record['settings_path'] as String,
+        p.join(identity.cacheDir, 'system-map.json'),
+      );
+      void progress(double fraction, String text) => send({
+        'type': 'progress',
+        'fraction': fraction.isFinite ? fraction.clamp(0.0, 1.0) : 0.0,
+        'text': text.length > 300 ? text.substring(0, 300) : text,
+      });
+      if (operation == 'system.move_preview') {
+        send({'type': 'result', 'result': moves.prepare(record)});
+        return 0;
+      }
+      // The installers' lock: one installation or move at a time.
+      final store = _addonStore();
+      final result = await store.$1.locked(() async {
+        if (operation == 'system.move_undo') {
+          return moves.undo('${record['undo']}', progress);
+        }
+        final random = Random.secure();
+        final token = [
+          for (var i = 0; i < 16; i++)
+            random.nextInt(256).toRadixString(16).padLeft(2, '0'),
+        ].join();
+        return moves.execute(body, token, progress);
+      });
+      send({'type': 'result', 'result': result});
       return 0;
     }
     if (operation == 'system.tool_check') {

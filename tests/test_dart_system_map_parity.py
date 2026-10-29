@@ -95,6 +95,8 @@ class DartSystemMapParityTest(unittest.TestCase):
 
                 try:
                     call('empty', 'system.cached')
+                    call('move before refresh', 'system.move_preview',
+                         {'source': 'folder:' + str(home / 'models'), 'target': 'disk:/mnt/Data'})
                     call('view on nothing', 'system.view', {'selected': None, 'transform': IDENTITY})
                     call('refresh', 'system.refresh')
                     call('cached', 'system.cached')
@@ -109,6 +111,13 @@ class DartSystemMapParityTest(unittest.TestCase):
                     call('scan', 'existing.scan', {'path': str(disk)})
                     call('cached after scan', 'system.cached')
                     call('search', 'system.refresh', {'search': True})
+                    # A preview only (nothing is applied): the models folder to the data disk.
+                    call('move preview', 'system.move_preview',
+                         {'source': 'folder:' + str(home / 'models'), 'target': 'disk:/mnt/Data'})
+                    call('move to a folder', 'system.move_preview',
+                         {'source': 'folder:' + str(home / 'models'), 'target': 'folder:' + str(home / 'models')})
+                    call('move unknown', 'system.move_apply', {'preview': 'nothing'})
+                    call('undo bad token', 'system.move_undo', {'undo': 'x'})
                 finally:
                     runner.close()
                 cache = json.loads((home / '.cache/asterism/system-map.json').read_text())
@@ -130,6 +139,9 @@ class DartSystemMapParityTest(unittest.TestCase):
         self.assertNotIn('disk:/mnt/Gone', {n['id'] for n in results['forget']['nodes']})
         self.assertIn('found:$DISK/gguf', {n['id'] for n in results['cached after scan']['nodes']})
         self.assertTrue(any('size' in n for n in results['search'][1]['nodes']))
+        self.assertEqual(results['move before refresh'], {'error': 'refused'})
+        self.assertEqual(results['move preview'][0], 'done')
+        self.assertEqual(results['move preview'][1]['destination'], '/mnt/Data/models')
 
 
 if __name__ == '__main__':

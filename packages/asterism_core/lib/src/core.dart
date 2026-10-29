@@ -24,6 +24,7 @@ import 'existing_ai.dart' as existing_ai;
 import 'system_map_cache.dart';
 import 'system_map.dart' show forgetDisk, systemPublic;
 import 'system_actions.dart';
+import 'model_moves.dart' show MovePreviews;
 import 'agent_catalog.dart' show AgentCatalog;
 import 'skill_plans.dart';
 import 'mcp_plans.dart';
@@ -72,6 +73,9 @@ const portedRoutes = {
   'system.stack_preview',
   'system.stack_apply',
   'system.folder_preview',
+  'system.move_preview',
+  'system.move_apply',
+  'system.move_undo',
   'sessions.start',
   'projects.pin',
   'projects.forget',
@@ -353,6 +357,97 @@ final class CoreService {
     () => newHandle().substring(coreHandle.length),
     i18n.text,
   );
+
+  late final movePreviews = MovePreviews(
+    () => newHandle().substring(coreHandle.length),
+  );
+
+  /// finish_system_move: the saved map remembers the move's Undo.
+  Map<String, dynamic> _finishSystemMove(Map<String, dynamic> result) {
+    final posix = Posix();
+    if (loadMapCache(systemMapPath, posix).isNotEmpty &&
+        result.containsKey('move_undo')) {
+      updateMapCache(systemMapPath, posix, {'move_undo': result['move_undo']});
+    }
+    return result;
+  }
+
+  /// system.move_preview / move_apply / move_undo (flutter_backend).
+  Map<String, dynamic> moveRoute(String method, Map<String, dynamic> params) {
+    if (method == 'system.move_preview') {
+      if (params.length != 2 ||
+          !params.containsKey('source') ||
+          !params.containsKey('target')) {
+        throw const FormatException('Invalid folder move');
+      }
+      final last = systemMapLast;
+      if (last == null) throw const FormatException('Refresh the System Map');
+      final nodes = (last['nodes'] as List).cast<Map>();
+      final source = nodes
+          .where(
+            (n) =>
+                n['id'] == params['source'] &&
+                const {'models', 'folder'}.contains(n['kind']),
+          )
+          .firstOrNull;
+      final target = nodes
+          .where((n) => n['id'] == params['target'] && n['kind'] == 'disk')
+          .firstOrNull;
+      if (source == null ||
+          target == null ||
+          source['status'] == 'missing' ||
+          target['status'] == 'missing') {
+        throw const FormatException('Folder/disk unavailable');
+      }
+      final mount = existing_ai.rootFor(
+        target['path'] as String,
+        existing_ai.mounts(),
+      );
+      final record = {
+        'source': source['path'],
+        'disk': target['path'],
+        'mount': mount,
+        'settings_path': identity.settingsPath,
+      };
+      return tasks.startPrivate(
+        'system.move_preview',
+        utf8.encode(jsonEncode(record)),
+        movePreviews.register,
+      );
+    }
+    if (method == 'system.move_apply') {
+      if (params.length != 1 ||
+          !params.containsKey('preview') ||
+          addonInstalling ||
+          _systemRefreshing) {
+        throw const FormatException('Invalid/busy move request');
+      }
+      return movePreviews.apply(
+        params['preview'],
+        (record) => tasks.startPrivate(
+          'system.move_apply',
+          utf8.encode(jsonEncode(record)),
+          _finishSystemMove,
+        ),
+      );
+    }
+    final undo = params['undo'];
+    if (params.length != 1 ||
+        undo is! String ||
+        !RegExp(r'^[0-9a-f]{32}$').hasMatch(undo) ||
+        addonInstalling) {
+      throw const FormatException('Invalid/busy move Undo');
+    }
+    return tasks.startPrivate(
+      'system.move_undo',
+      utf8.encode(
+        jsonEncode({'undo': undo, 'settings_path': identity.settingsPath}),
+      ),
+      (result) => _finishSystemMove(
+        result['ok'] == true ? {...result, 'move_undo': null} : result,
+      ),
+    );
+  }
 
   /// system.tool_check / stack_* / folder_preview (flutter_backend).
   Map<String, dynamic> systemActionRoute(
@@ -957,6 +1052,7 @@ final class CoreService {
     }
     if (method.startsWith('addons.')) return addonStoreRoute(method, params);
     if (method.startsWith('installers.')) return installerRoute(method, params);
+    if (method.startsWith('system.move_')) return moveRoute(method, params);
     if (const {
       'system.tool_check',
       'system.stack_preview',
