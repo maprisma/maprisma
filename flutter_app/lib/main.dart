@@ -3568,6 +3568,13 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
                                       ),
                                   showFound: _showFound,
                                   onFoundChanged: _loadFoundHints,
+                                  onUpdatePreview: (params) async {
+                                    await _connectionPreview(
+                                      params,
+                                      method: 'found.update_preview',
+                                    );
+                                    await _lookForNewApps();
+                                  },
                                   onBack: () {
                                     setState(() {
                                       _showConnections = false;

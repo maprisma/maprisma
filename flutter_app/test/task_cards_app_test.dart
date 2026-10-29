@@ -103,8 +103,9 @@ for line in sys.stdin:
  elif m=='updates.run':r={'started':True}
  elif m=='found.scan':tasks['found']={'mcp':[],'versions':[],'not_looked':[],'skills':[]};r={'task':'found'}
  elif m=='found.hints':r={'lines':[{'kind':'found','text':'New on this PC: wordcraft','mcp':True,'skills':False}]}
- elif m=='found.list':r=({'checked':True,'set_up':1,'not_looked':[],'items':[{'name':'wordcraft','where':'~/.local/bin/wordcraft-cli','command':['/h/.local/bin/wordcraft-cli','mcp','--headless'],'sure':True,'version':'','new':True,'ready':True},{'name':'vectorcraft','where':'vectorcraft.AppImage','command':['/h/Applications/vectorcraft-1.2.0/usr/bin/vectorcraft-cli','mcp'],'sure':True,'version':'1.2.0','new':False,'ready':False,'program':'/h/Applications/vectorcraft-1.2.0/usr/bin/vectorcraft-cli','unpack_text':'Unpacks vectorcraft.AppImage into ~/Applications/vectorcraft-1.2.0 first (the server lives inside it).'}],'not_looked_text':'1 AppImage not looked into yet (wordcraft.AppImage).','looking_text':'Looking inside 1 AppImages…'} if p['kind']=='mcp' else {'checked':True,'items':[]})
+ elif m=='found.list':r=({'checked':True,'set_up':1,'not_looked':[],'items':[{'name':'wordcraft','where':'~/.local/bin/wordcraft-cli','command':['/h/.local/bin/wordcraft-cli','mcp','--headless'],'sure':True,'version':'','new':True,'ready':True},{'name':'vectorcraft','where':'vectorcraft.AppImage','command':['/h/Applications/vectorcraft-1.2.0/usr/bin/vectorcraft-cli','mcp'],'sure':True,'version':'1.2.0','new':False,'ready':False,'program':'/h/Applications/vectorcraft-1.2.0/usr/bin/vectorcraft-cli','unpack_text':'Unpacks vectorcraft.AppImage into ~/Applications/vectorcraft-1.2.0 first (the server lives inside it).'}],'updates':[{'name':'gridcraft','from':'0.7.0','to':'0.8.0','program':'/h/Applications/gridcraft-0.8.0/usr/bin/gridcraft-cli','ready':True,'used_by':'Update · used by Claude Code'}],'not_looked_text':'1 AppImage not looked into yet (wordcraft.AppImage).','looking_text':'Looking inside 1 AppImages…'} if p['kind']=='mcp' else {'checked':True,'items':[]})
  elif m=='found.seen':r={'ok':True}
+ elif m=='found.update_preview':r={'plan':'opaque-update','empty':False,'files':[{'path':'~/.claude.json','added':1,'removed':1}],'links_add':[['~/.local/bin/gridcraft','/h/Applications/gridcraft-0.8.0/usr/bin/gridcraft-cli']],'links_remove':[['~/.local/bin/gridcraft','/h/Applications/gridcraft-0.7.0/usr/bin/gridcraft-cli']],'retire':['~/Applications/gridcraft-0.7.0'],'notes':['The old version is kept with the backup for 7 days: Undo brings everything back.'],'kind':'mcp','focus':['mcp:gridcraft']}
  elif m in ('found.look_inside','found.unpack'):tasks[m]={'ok':True};r={'task':m}
  elif m=='addons.hints':r={'lines':[{'kind':'new','text':'Goose is on this PC but not on the map','ids':['agent-goose'],'column':1},{'kind':'updates','text':'Add-on updates ready: Catalog adapter','updates':[{'id':'catalog-addon','name':'Catalog adapter','version':'2.1','current':'2.0','preview':'catalog-1'}]}]}
  elif m=='health.report':tasks['hr']={'warn':1,'hint':0,'level':'warn','summary':'1 thing to fix','open_text':'1 open problem','areas':[{'key':'agents','title':'Agents','icon':'','findings':[{'level':'warn','title':'Test agent: Not signed in','text':'','action':['details','test']}]}],'uses':[]};r={'task':'hr'}
@@ -1098,6 +1099,52 @@ void main() {
       find.widgetWithText(TextFormField, '/h/.local/bin/wordcraft-cli'),
       findsOneWidget,
     );
+    expect(tester.takeException(), isNull);
+    await unmountApp(tester);
+  });
+
+  testWidgets('an app update moves its users to the newer version', (
+    tester,
+  ) async {
+    final dir = await mountApp(tester);
+    await settleService(tester);
+    await tester.tap(find.byKey(const ValueKey('problems-open')));
+    await settleService(tester);
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Add MCP server…'));
+    await settleService(tester);
+    expect(find.text('gridcraft  0.7.0 → 0.8.0'), findsOneWidget);
+    expect(find.text('↑ Update · used by Claude Code'), findsOneWidget);
+    final scans = requests(
+      dir,
+    ).where((q) => q['method'] == 'found.scan').length;
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Update…'));
+    await settleService(tester);
+    expect(
+      requests(
+        dir,
+      ).lastWhere((q) => q['method'] == 'found.update_preview')['params'],
+      {'program': '/h/Applications/gridcraft-0.8.0/usr/bin/gridcraft-cli'},
+    );
+    expect(find.text('~/Applications/gridcraft-0.7.0/'), findsOneWidget);
+    expect(
+      find.text(
+        'The old version is kept with the backup for 7 days: Undo brings everything back.',
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.widgetWithText(FilledButton, 'Apply'));
+    await settleService(tester);
+    expect(
+      requests(
+        dir,
+      ).lastWhere((q) => q['method'] == 'connections.apply')['params'],
+      {'plan': 'opaque-update'},
+    );
+    await settleService(tester);
+    expect(
+      requests(dir).where((q) => q['method'] == 'found.scan').length,
+      greaterThan(scans),
+    ); // looked again: the update is done
     expect(tester.takeException(), isNull);
     await unmountApp(tester);
   });

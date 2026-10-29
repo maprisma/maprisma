@@ -28,7 +28,9 @@ final class Plan {
     List<(String, List<int>, bool)>? filesAdd,
     List<(String, String, String, bool)>? filesStaged,
     List<String>? notes,
+    List<String>? retire,
   }) : changes = changes ?? [],
+       retire = retire ?? [],
        filesAdd = filesAdd ?? [],
        filesStaged = filesStaged ?? [],
        notes = notes ?? [],
@@ -45,13 +47,61 @@ final class Plan {
   // path, staged file, its SHA-256, executable. The worker reads them back.
   final List<(String, String, String, bool)> filesStaged;
   final List<String> notes;
+
+  /// Folders moved into the backup (an app's old version), deleted after
+  /// [retiredDays]; Undo within that time brings them back.
+  final List<String> retire;
   bool get empty =>
       changes.isEmpty &&
       filesAdd.isEmpty &&
       filesStaged.isEmpty &&
       linksAdd.isEmpty &&
       linksRemove.isEmpty &&
+      retire.isEmpty &&
       modelActions.isEmpty;
+}
+
+/// connect.RETIRED_DAYS.
+const retiredDays = 7;
+
+/// connect.prune_retired: old app versions kept with a backup go after
+/// [retiredDays] (Undo then puts the settings back, but not the folder).
+void pruneRetired(String backupRoot, {int days = retiredDays, DateTime? now}) {
+  final limit = (now ?? DateTime.now()).subtract(Duration(days: days));
+  final stamp = RegExp(
+    r'^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})-(\d{6})$',
+  );
+  List<FileSystemEntity> backups;
+  try {
+    backups = Directory(backupRoot).listSync(followLinks: false);
+  } on FileSystemException {
+    return;
+  }
+  for (final backup in backups) {
+    final m = stamp.firstMatch(p.basename(backup.path));
+    if (m == null || backup is! Directory) continue;
+    final made = DateTime(
+      int.parse(m[1]!),
+      int.parse(m[2]!),
+      int.parse(m[3]!),
+      int.parse(m[4]!),
+      int.parse(m[5]!),
+      int.parse(m[6]!),
+      0,
+      int.parse(m[7]!),
+    );
+    if (!made.isBefore(limit)) continue;
+    try {
+      for (final retired in backup.listSync(followLinks: false)) {
+        if (retired is Directory &&
+            p.basename(retired.path).startsWith('retired-')) {
+          retired.deleteSync(recursive: true);
+        }
+      }
+    } on FileSystemException {
+      continue;
+    }
+  }
 }
 
 final class ConfigFiles {
@@ -126,8 +176,8 @@ final class ConfigFiles {
         '${(t.millisecond * 1000 + t.microsecond).toString().padLeft(6, '0')}';
   }
 
-  /// connect.apply (no commands or retired folders: the app's plans have
-  /// none). Returns the backup folder.
+  /// connect.apply (no commands: the app's plans have none). Returns the
+  /// backup folder.
   String apply(Plan plan, String backupRoot, {DateTime? now}) {
     void unchanged() {
       for (final change in plan.changes) {
@@ -190,6 +240,10 @@ final class ConfigFiles {
         if (!_exists(parent) && !created.contains(parent)) created.add(parent);
       }
     }
+    final retired = [
+      for (var i = 0; i < plan.retire.length; i++)
+        [plan.retire[i], 'retired-$i-${p.basename(plan.retire[i])}'],
+    ];
     final body = pyJsonDumps({
       'files': manifest,
       'undo_commands': <dynamic>[],
@@ -208,7 +262,7 @@ final class ConfigFiles {
         ],
         'dirs': created,
       },
-      'retired': <dynamic>[],
+      'retired': retired,
     });
     File(p.join(folder, 'manifest.json')).writeAsStringSync(body);
     posix.chmodPath(p.join(folder, 'manifest.json'), 0x180);
@@ -235,6 +289,14 @@ final class ConfigFiles {
         posix.write(fd, data);
       } finally {
         posix.close(fd);
+      }
+    }
+    for (final entry in retired) {
+      try {
+        // Same file system: instant, nothing copied.
+        Directory(entry[0]).renameSync(p.join(folder, entry[1]));
+      } on FileSystemException {
+        // elsewhere (or in use oddly): it stays where it is
       }
     }
     return folder;

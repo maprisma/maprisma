@@ -2013,3 +2013,45 @@ filled-in form. Not run on this PC's real AppImages: that is the user's click.
 Next, 6b-18b: moving agents from an older app version to the newer one (`mcp_update`: entries, the
 list, links in `~/.local/bin`, old folders retired with Undo).
 
+### 6b-18b — An app's users moved to its newer version
+
+New in the core (`mcp_update.dart`, the reference is `mcp_update`, `connect.apply`'s `retire`, and
+`connect.prune_retired`):
+- **The plan:** for a found program in a newer version (`update_from`) whose older one is still started
+  by an agent, the list or a link in `~/.local/bin` / `~/bin`:
+  - each agent's entry and the list's entry that starts an older program gets the new one, and
+    arguments into the old folder move along; an entry that starts a link that moves stays as it is;
+  - the links into the old folder point into the new one;
+  - the old folders are retired.
+
+  Several apps are chained on top of each other, as one plan.
+- **`retire` in plans:** the Plan has `retire`, merged without doubles. The preview lists it, the wire
+  carries it (only when there is something to retire), and `apply` moves each folder into the backup
+  (`retired-<n>-<name>`, in the manifest). Undo already brought them back. The worker accepts only real
+  folders right in `~/Applications` (no link, no dot folder, normalized), so a plan can never move
+  anything else.
+- **`pruneRetired`:** retired folders of backups older than seven days are deleted (the backup itself
+  stays). It runs with each `found.scan`, as the reference does with each look for new apps.
+- **`found.update_preview {program?}`:** the connection preview for one app, or for all of them, with
+  the "kept with the backup for 7 days" note. An AppImage has to be unpacked first. `found.hints` and
+  `found.list` now count an update whose old version is only started through a link, as the reference
+  does. `found.list` carries the updates with "Update · used by …" (agents, the list, or the links).
+- **Flutter:** the found panel lists the updates (`gridcraft  0.7.0 → 0.8.0`) with **Update…**. Inside
+  an AppImage it asks to unpack first. Then comes the usual preview, which now lists the retired
+  folders, then Apply and Undo; afterwards the app looks again. The manual's found section has a
+  paragraph on it in all eight languages; PDFs rebuilt.
+
+Not ported: testing the updated servers right after (`updated_entries`); a test is one click on the
+server.
+
+Check:
+- `tests/test_dart_mcp_update_parity.py`: both sides plan from the reference scan's own candidates.
+  The fixture has Claude Code's and Codex's entries (an arg into the old folder, an entry starting a
+  moved link, an unrelated one), the list, an absolute and a relative link, and the old folder
+  retired. Python and Dart give the same changes byte for byte, and the same links and retired
+  folders.
+- `test/retire_test.dart`: apply moves the folder into the backup and writes the manifest, Undo
+  brings it and the file back; the prune keeps recent ones and other folders; the worker refuses a
+  folder outside `~/Applications`, `/etc`, a `..` path and a dot folder.
+- An app test: Update… → the preview with the retired folder and the note → Apply → a new look.
+

@@ -11,6 +11,7 @@ import 'connect_apply.dart';
 import 'addon_store.dart';
 import 'addon_hints.dart';
 import 'found_scan.dart';
+import 'mcp_update.dart';
 import 'addons.dart';
 import 'py_values.dart';
 import 'package:path/path.dart' as p;
@@ -143,6 +144,7 @@ const portedRoutes = {
   'found.seen',
   'found.look_inside',
   'found.unpack',
+  'found.update_preview',
   ...readOnlyRoutes,
 };
 // Phase 7 removes this blocker only after every route has differential coverage.
@@ -335,6 +337,7 @@ final class CoreService {
           ],
           'mcp_folders': _savedList('mcp_folders'),
           'skill_folders': _savedList('skill_folders'),
+          'backup_root': connections.backupRoot,
         },
         (result) {
           lastFound = result;
@@ -387,9 +390,24 @@ final class CoreService {
     bool installed(Map c) =>
         configured.containsKey(FoundScan.resolve('${c['program']}')) ||
         mcpNames.contains(c['name']);
-    bool update(Map c) =>
-        '${c['update_from']}'.isNotEmpty &&
-        (c['users'] as List? ?? const []).isNotEmpty;
+    final updater = McpUpdate(
+      identity.home,
+      mcp,
+      config,
+      searchPath: identity.environment['PATH'],
+    );
+    // mcp_updates: a newer version whose older one is still started (by an
+    // agent, the list or a link in ~/.local/bin).
+    bool update(Map c) {
+      if ('${c['update_from']}'.isEmpty) return false;
+      if ((c['users'] as List? ?? const []).isNotEmpty) return true;
+      try {
+        return updater.links(c).isNotEmpty;
+      } on FormatException {
+        return false;
+      }
+    }
+
     final seen = _seenFound();
     if (method == 'found.hints') {
       if (params.isNotEmpty) throw const FormatException('Invalid request');
@@ -438,6 +456,37 @@ final class CoreService {
               'skills': false,
             },
         ],
+      };
+    }
+    if (method == 'found.update_preview') {
+      final program = params['program'];
+      if (params.length > 1 || params.length == 1 && program is! String) {
+        throw const FormatException('Invalid request');
+      }
+      final chosen = [
+        for (final c in found)
+          if (update(c) && (program == null || c['program'] == program)) c,
+      ];
+      if (chosen.isEmpty) throw const FormatException('Nothing to update');
+      if (chosen.any((c) => '${c['appimage']}'.isNotEmpty)) {
+        throw const FormatException('Unpack the newer version first');
+      }
+      final plan = updater.planAll(chosen, [
+        for (final a in agents)
+          if (a.installed) a.command,
+      ]);
+      return {
+        ...connections.keep(plan),
+        'kind': 'mcp',
+        'notes': [
+          if (plan.retire.isNotEmpty)
+            i18n
+                .text(
+                  'The old version is kept with the backup for {0} days: Undo brings everything back.',
+                )
+                .replaceAll('{0}', '$retiredDays'),
+        ],
+        'focus': [for (final c in chosen) 'mcp:${c['name']}'],
       };
     }
     if (params.length != 1 ||
@@ -500,8 +549,45 @@ final class CoreService {
       for (final x in lastFound['not_looked'] as List? ?? const [])
         p.basename('$x'),
     ];
+    final names = {for (final a in agents) a.command: a.name};
+    String usedBy(Map c) {
+      final users = [
+        for (final u in c['users'] as List? ?? const [])
+          if (u != 'list') names[u] ?? '$u',
+      ];
+      if (users.isNotEmpty) return users.join(', ');
+      if ((c['users'] as List? ?? const []).isNotEmpty) {
+        return i18n.text('the list of MCP servers');
+      }
+      return [
+        for (final (link, _, _) in updater.links(c)) tildeOf(link),
+      ].join(', ');
+    }
+
+    final updates = [
+      for (final c in found)
+        if (update(c))
+          {
+            'name': c['name'],
+            'from': c['update_from'],
+            'to': c['version'],
+            'program': c['program'],
+            'ready': '${c['appimage']}'.isEmpty,
+            'used_by': i18n
+                .text('Update · used by {0}')
+                .replaceAll('{0}', usedBy(c)),
+            if ('${c['appimage']}'.isNotEmpty)
+              'unpack_text': i18n
+                  .text(
+                    'Unpacks {0} into {1} first (the server lives inside it).',
+                  )
+                  .replaceAll('{0}', p.basename('${c['appimage']}'))
+                  .replaceAll('{1}', tildeOf(updater.newFolder(c))),
+          },
+    ];
     return {
       'checked': lastFound.isNotEmpty,
+      'updates': updates,
       'set_up': found.length - fresh.length,
       'not_looked': notLooked,
       'not_looked_text': notLooked.isEmpty

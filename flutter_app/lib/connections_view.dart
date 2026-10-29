@@ -23,7 +23,11 @@ class ConnectionsView extends StatefulWidget {
     this.onSkillPreview,
     this.showFound = false,
     this.onFoundChanged,
+    this.onUpdatePreview,
   });
+
+  /// mcp_update: an app's users moved to its newer version (a preview).
+  final Future<void> Function(Map<String, dynamic>)? onUpdatePreview;
 
   /// After a look inside AppImages or an unpack: the hints follow.
   final VoidCallback? onFoundChanged;
@@ -124,7 +128,7 @@ class _ConnectionsViewState extends State<ConnectionsView> {
 
   /// A server inside an AppImage: the whole AppImage unpacked into
   /// ~/Applications first (the user's yes), then the form.
-  Future<void> _unpackAndAdd(Map item) async {
+  Future<void> _unpackAndAdd(Map item, {bool update = false}) async {
     final yes = await showDialog<bool>(
       context: context,
       builder: (dialog) => AlertDialog(
@@ -154,7 +158,22 @@ class _ConnectionsViewState extends State<ConnectionsView> {
         done = true;
       },
     );
-    if (done && mounted) _addFound('mcp', item);
+    if (!done || !mounted) return;
+    if (update) {
+      await _update(item);
+    } else {
+      _addFound('mcp', item);
+    }
+  }
+
+  /// Update…: everyone starting the older version moves to the newer one.
+  Future<void> _update(Map item) async {
+    if (item['ready'] == false) {
+      await _unpackAndAdd(item, update: true);
+      return;
+    }
+    setState(() => _found = null);
+    await widget.onUpdatePreview!({'program': item['program']});
   }
 
   void _addFound(String kind, Map item) => setState(() {
@@ -234,6 +253,23 @@ class _ConnectionsViewState extends State<ConnectionsView> {
                   (mcp['set_up'] as int? ?? 0) > 0
                       ? 'Every program found here is set up already.'
                       : 'Nothing found.',
+                ),
+              ),
+            for (final u in (mcp['updates'] as List? ?? const []).cast<Map>())
+              ListTile(
+                key: ValueKey('found-update-${u['name']}'),
+                dense: true,
+                leading: const Icon(Icons.upgrade),
+                title: Text('${u['name']}  ${u['from']} → ${u['to']}'),
+                subtitle: Text('↑ ${u['used_by']}'),
+                trailing: OutlinedButton(
+                  onPressed:
+                      widget.busy ||
+                          _foundWork != null ||
+                          widget.onUpdatePreview == null
+                      ? null
+                      : () => _update(u),
+                  child: Text(tr('Update…')),
                 ),
               ),
             for (final c in programs)
@@ -531,6 +567,12 @@ class ConnectionReview extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.all(8),
                 child: Text('− ${link[0]} → ${link[1]}'),
+              ),
+            // An app update: its old version goes into the backup.
+            for (final folder in plan['retire'] as List? ?? [])
+              ListTile(
+                leading: const Icon(Icons.inventory_2_outlined),
+                title: Text('$folder/'),
               ),
           ],
         ),

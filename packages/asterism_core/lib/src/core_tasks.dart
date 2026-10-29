@@ -275,6 +275,9 @@ final class CoreConnections {
       'links_remove': [
         for (final (l, t) in plan.linksRemove) [files.tilde(l), files.tilde(t)],
       ],
+      // Only an app update moves its old folders into the backup.
+      if (plan.retire.isNotEmpty)
+        'retire': [for (final path in plan.retire) files.tilde(path)],
     };
   }
 
@@ -364,6 +367,7 @@ List<int> encodePlan(Plan plan, String backupRoot) {
           {'path': c.path, 'old': c.old, 'new': c.next},
       ],
       'contexts': plan.contexts,
+      if (plan.retire.isNotEmpty) 'retire': plan.retire,
       if (plan.filesStaged.isNotEmpty)
         'files_staged': [
           for (final (path, staged, digest, executable) in plan.filesStaged)

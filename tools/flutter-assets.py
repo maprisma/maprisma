@@ -9,6 +9,7 @@ KEYS = (
     "Unpack",
     "Unpacking {0}…",
     "Look inside…",
+    "Update…",
     "Found on this PC",
     "Add…",
     "new",

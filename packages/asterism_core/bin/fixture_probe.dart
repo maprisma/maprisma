@@ -12,6 +12,7 @@ import 'package:asterism_core/src/health_report.dart' as hr;
 import 'package:asterism_core/src/agent_updates.dart' as upd;
 import 'package:asterism_core/src/model_slots.dart' as slots;
 import 'package:asterism_core/src/found_scan.dart' as fs;
+import 'package:asterism_core/src/mcp_update.dart' as mu;
 import 'package:asterism_core/src/installers.dart' as inst;
 import 'package:asterism_core/src/provider_scans.dart' show RuntimeRecord;
 import 'package:asterism_core/src/system_map.dart' show SystemMapReader;
@@ -299,6 +300,36 @@ Future<void> main() async {
           params['cache'] as String,
           search: params['search'] == true,
         );
+      } else if (request.method == 'dev.mcpupdate') {
+        // mcp_update.plan_all for the given candidates.
+        final update = mu.McpUpdate(
+          identity.home,
+          core.mcp,
+          core.config,
+          searchPath: identity.environment['PATH'],
+        );
+        final plan = update.planAll(
+          (params['candidates'] as List).cast<Map>(),
+          (params['agents'] as List).cast<String>(),
+        );
+        result = {
+          'changes': [
+            for (final c in plan.changes) [c.path, c.old, c.next],
+          ],
+          'links_add': [
+            for (final (l, t) in plan.linksAdd) [l, t],
+          ],
+          'links_remove': [
+            for (final (l, t) in plan.linksRemove) [l, t],
+          ],
+          'retire': plan.retire,
+          'links': [
+            for (final c in (params['candidates'] as List).cast<Map>())
+              [
+                for (final (l, t, n) in update.links(c)) [l, t, n],
+              ],
+          ],
+        };
       } else if (request.method == 'dev.foundlook') {
         // mcp_scan.look_inside, scan, unpack and scan again.
         final scan = fs.FoundScan(

@@ -58,6 +58,8 @@ const planMaxBytes = 24 * 1024 * 1024;
     if (version == 3) 'model_actions',
     // Only this core's own plans (a skill from the web) carry it.
     if (version == 3 && data.containsKey('files_staged')) 'files_staged',
+    // Only an app update (mcp_update) moves old folders into the backup.
+    if (version == 3 && data.containsKey('retire')) 'retire',
   };
   if (![1, 2, 3].contains(version) ||
       data.keys.toSet().length != fields.length ||
@@ -182,6 +184,23 @@ const planMaxBytes = 24 * 1024 * 1024;
       entry[3] as bool,
     ));
   }
+  // An app's old version: only a real folder right in ~/Applications.
+  final retire = data['retire'] ?? [];
+  final apps = p.join(AppIdentity().home, 'Applications');
+  if (retire is! List || retire.length > 20) {
+    throw const FormatException('Invalid retired folders');
+  }
+  for (final path in retire) {
+    if (path is! String ||
+        !p.isAbsolute(path) ||
+        p.normalize(path) != path ||
+        p.dirname(path) != apps ||
+        p.basename(path).startsWith('.') ||
+        FileSystemEntity.typeSync(path, followLinks: false) !=
+            FileSystemEntityType.directory) {
+      throw const FormatException('Invalid retired folder');
+    }
+  }
   return (
     Plan(
       pyStr(data['agent']),
@@ -195,6 +214,7 @@ const planMaxBytes = 24 * 1024 * 1024;
         for (final a in actions) Map<String, dynamic>.from(a as Map),
       ],
       filesStaged: filesStaged,
+      retire: retire.cast<String>(),
     ),
     root,
   );
@@ -649,7 +669,10 @@ Future<int> runWorker(List<String> args) async {
       bool strings(dynamic v) =>
           v is List && v.length <= 2000 && v.every((x) => x is String);
       final configured = params['configured'];
-      if (params.length != 5 ||
+      final backups = params['backup_root'];
+      if (params.length != 6 ||
+          backups is! String ||
+          !p.isAbsolute(backups) ||
           configured is! Map ||
           configured.length > 2000 ||
           !configured.values.every(strings) ||
@@ -659,6 +682,8 @@ Future<int> runWorker(List<String> args) async {
           !strings(params['skill_folders'])) {
         throw const FormatException('Invalid worker request');
       }
+      // connect.prune_retired: old app versions kept with a backup go.
+      pruneRetired(backups);
       final identity = AppIdentity();
       final scan = FoundScan(
         identity.home,

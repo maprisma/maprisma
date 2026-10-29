@@ -60,6 +60,9 @@ Plan mergePlans(List<Plan> plans) {
     result.linksAdd.addAll(item.linksAdd);
     result.linksRemove.addAll(item.linksRemove);
     result.filesStaged.addAll(item.filesStaged);
+    for (final path in item.retire) {
+      if (!result.retire.contains(path)) result.retire.add(path);
+    }
     // Python compares these by value.
     bool seen(List<Map<String, dynamic>> list, Map v) =>
         list.any((x) => jsonEncode(x) == jsonEncode(v));
