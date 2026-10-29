@@ -3138,5 +3138,6 @@
  "System follows the desktop appearance.": "Sistema sigue la apariencia del escritorio.",
  "Maximum frame rate for map lights. Reduced motion and Lights off stop animation.": "Frecuencia máxima de las luces del mapa. El movimiento reducido y Luces apagadas detienen la animación.",
  "The download is checked against the checksum its release lists; nothing of it runs while it is installed.": "La descarga se comprueba con la suma de verificación que indica su versión; nada de ella se ejecuta durante la instalación.",
- "The app does not keep it.": "La aplicación no la guarda."
+ "The app does not keep it.": "La aplicación no la guarda.",
+ "Offered first for AI help and the Smart Check on the System Map; its tokens are used for them.": "Se ofrece primero para la ayuda de IA y el Smart Check del mapa del sistema; para ello se usan sus tokens."
 }

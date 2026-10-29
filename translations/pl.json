@@ -3219,5 +3219,6 @@
  "System follows the desktop appearance.": "System korzysta z wyglądu pulpitu.",
  "Maximum frame rate for map lights. Reduced motion and Lights off stop animation.": "Maksymalna liczba klatek świateł mapy. Ograniczony ruch i wyłączone światła zatrzymują animację.",
  "The download is checked against the checksum its release lists; nothing of it runs while it is installed.": "Pobrany plik jest sprawdzany z sumą kontrolną podaną w jego wydaniu; podczas instalacji nic z niego nie jest uruchamiane.",
- "The app does not keep it.": "Aplikacja go nie przechowuje."
+ "The app does not keep it.": "Aplikacja go nie przechowuje.",
+ "Offered first for AI help and the Smart Check on the System Map; its tokens are used for them.": "Proponowany jako pierwszy do pomocy AI i Smart Check na mapie systemu; zużywa na to swoje tokeny."
 }

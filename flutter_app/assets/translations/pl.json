@@ -1,4 +1,10 @@
 {
+  "Local LLMs": "Lokalne LLM",
+  "Start local LLMs with their agents": "Uruchamiaj lokalne LLM razem z agentami",
+  "When an agent connected to a local LLM starts, its LLM starts too; when the last such agent closes, the LLM stops and its GPU memory is free again. Works with this window closed and after a reboot (user service {0}).": "Gdy uruchamia się agent połączony z lokalnym LLM, LLM też się uruchamia; gdy zamknie się ostatni taki agent, LLM się zatrzymuje, a jego pamięć GPU jest znów wolna. Działa przy zamkniętym oknie i po ponownym uruchomieniu (usługa użytkownika {0}).",
+  "Agent for AI checks": "Agent do kontroli AI",
+  "None installed": "Brak zainstalowanych",
+  "Offered first for AI help and the Smart Check on the System Map; its tokens are used for them.": "Proponowany jako pierwszy do pomocy AI i Smart Check na mapie systemu; zużywa na to swoje tokeny.",
   "Install from file…": "Zainstaluj z pliku…",
   "Add-on (.zip)": "Dodatek (.zip)",
   "{0} is installed; switch it on on its card.": "{0} jest zainstalowany; włącz go na jego karcie.",

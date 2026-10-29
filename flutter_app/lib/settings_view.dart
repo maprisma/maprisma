@@ -11,6 +11,8 @@ class SettingsView extends StatelessWidget {
     required this.onUpdate,
     required this.onBack,
     this.desktopTheme = const {},
+    this.checkers = const [],
+    this.unitName = '',
   });
 
   final Map<String, dynamic> settings;
@@ -19,6 +21,12 @@ class SettingsView extends StatelessWidget {
   final String Function(String) tr;
   final Future<void> Function(Map<String, dynamic>) onUpdate;
   final VoidCallback onBack;
+
+  /// The installed agents that can do the System Map's checks (command, name).
+  final List<Map> checkers;
+
+  /// The provider watcher's user service, as the user sees it in systemctl.
+  final String unitName;
 
   @override
   Widget build(BuildContext context) {
@@ -224,6 +232,62 @@ class SettingsView extends StatelessWidget {
             Text(
               tr(
                 'How many finished subagents it keeps, the newest first; working ones are always shown.',
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              tr('Local LLMs'),
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            SwitchListTile(
+              title: Text(tr('Start local LLMs with their agents')),
+              subtitle: Text(
+                tr(
+                  'When an agent connected to a local LLM starts, its LLM starts too; when the last such agent closes, the LLM stops and its GPU memory is free again. Works with this window closed and after a reboot (user service {0}).',
+                ).replaceAll('{0}', unitName),
+              ),
+              value: settings['providers_with_agents'] as bool? ?? true,
+              onChanged: busy
+                  ? null
+                  : (value) => onUpdate({'providers_with_agents': value}),
+            ),
+            const SizedBox(height: 24),
+            Text(tr('AI help'), style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 16),
+            if (checkers.isEmpty)
+              ListTile(
+                title: Text(tr('Agent for AI checks')),
+                subtitle: Text(tr('None installed')),
+              )
+            else
+              DropdownButtonFormField<String>(
+                key: ValueKey('checks-agent-${settings['ai_checks_agent']}'),
+                initialValue:
+                    checkers.any(
+                      (c) => c['command'] == settings['ai_checks_agent'],
+                    )
+                    ? settings['ai_checks_agent'] as String
+                    : checkers.first['command'] as String,
+                decoration: InputDecoration(
+                  labelText: tr('Agent for AI checks'),
+                ),
+                items: [
+                  for (final c in checkers)
+                    DropdownMenuItem(
+                      value: c['command'] as String,
+                      child: Text('${c['name']}'),
+                    ),
+                ],
+                onChanged: busy
+                    ? null
+                    : (value) {
+                        if (value != null) onUpdate({'ai_checks_agent': value});
+                      },
+              ),
+            const SizedBox(height: 8),
+            Text(
+              tr(
+                'Offered first for AI help and the Smart Check on the System Map; its tokens are used for them.',
               ),
             ),
             const SizedBox(height: 24),

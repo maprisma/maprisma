@@ -1549,8 +1549,21 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
   /// A step of the first-agent guide left it (providers, connections, a
   /// sign-in or test terminal): Back returns to the guide, refreshed, so the
   /// step just done shows as done.
+  /// The app's short name (app.identity), for names the user sees in
+  /// systemctl; loaded when Settings first opens.
+  String? _shortName;
+
   bool _guideReturn = false;
   final _guideTerminals = <AgentTerminal>{};
+
+  Future<void> _loadShortName() async {
+    try {
+      final identity = await _backend!.call('app.identity', const {});
+      if (mounted) setState(() => _shortName = '${identity['short_name']}');
+    } catch (_) {
+      // the description then names no service
+    }
+  }
 
   void _backToGuideIfFromIt() {
     if (!_guideReturn) return;
@@ -2660,6 +2673,7 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
                     _browser = null;
                     _guideReturn = false; // chosen from the menu
                     _showSettings = !_showSettings;
+                    if (_showSettings && _shortName == null) _loadShortName();
                     _showSystemMap = false;
                     _showConnections = false;
                     _showProviders = false;
@@ -2959,6 +2973,14 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
                                 tr: tr,
                                 onUpdate: _updateSettings,
                                 desktopTheme: _desktopTheme,
+                                checkers: [
+                                  for (final h
+                                      in (_system['helpers'] as List? ?? []))
+                                    if (h is Map && h['check'] == true) h,
+                                ],
+                                unitName: _shortName == null
+                                    ? ''
+                                    : '$_shortName-providers.service',
                                 onBack: () =>
                                     setState(() => _showSettings = false),
                               )

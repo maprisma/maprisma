@@ -29,7 +29,8 @@ void main() {
         ),
       ),
     );
-    await tester.scrollUntilVisible(find.text('Automatic scan targets'), 250);
+    // Down to the last target this test uses: the list builds only what it shows.
+    await tester.scrollUntilVisible(find.text('Agent details'), 250);
     final activity = tester.widget<CheckboxListTile>(
       find.widgetWithText(CheckboxListTile, 'Activity and subagents'),
     );

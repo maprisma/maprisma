@@ -5,6 +5,13 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 KEYS = (
+    # Settings: local LLMs with their agents, the agent for AI checks.
+    "Local LLMs",
+    "Start local LLMs with their agents",
+    "When an agent connected to a local LLM starts, its LLM starts too; when the last such agent closes, the LLM stops and its GPU memory is free again. Works with this window closed and after a reboot (user service {0}).",
+    "Agent for AI checks",
+    "None installed",
+    "Offered first for AI help and the Smart Check on the System Map; its tokens are used for them.",
     # Add-ons from a file (addons.file_preview / addons.file_install).
     "Install from file…",
     "Add-on (.zip)",

@@ -851,6 +851,7 @@
   <h2 id="flutter-appearance">Flutter themes and map lights</h2>
 <p>In the Flutter app, Settings offers System, Light and Dark with small previews. System follows the desktop appearance and the existing desktop palette; Light and Dark set a fixed brightness with matching backgrounds and readable colours. The choice is saved and also applies to task cards. The GTK appearance preference is kept separately.</p>
 <p>Map light frame rate offers 20 fps (default), 30 and 60. It is a maximum for flowing map lights, not the automatic scan interval. The light speed stays the same; higher rates add intermediate frames. Actual delivery depends on the display and available rendering time. Lights off, reduced motion, an unfocused window or a hidden map still stop the animation. The choice is saved.</p>
+<p>Settings also offers <b>Start local LLMs with their agents</b>: when an agent connected to a local LLM starts, its LLM starts too, and when the last such agent closes, the LLM stops and its GPU memory is free again (a user service does this, also with the window closed). <b>Agent for AI checks</b> chooses which installed agent is offered first for AI help and the Smart Check on the System Map; its tokens are used for them. It lists the agents the System Map found able to do that.</p>
 
 <h2 id="settings-list">Settings</h2>
   <p>The gear (<kbd>Ctrl</kbd>+<kbd>,</kbd>) opens the settings. <kbd>Backspace</kbd> or <kbd>Esc</kbd> goes back.</p>

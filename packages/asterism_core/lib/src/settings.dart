@@ -21,6 +21,8 @@ const uiSettings = {
   'map_scan_interval',
   'map_scan_pause_unfocused',
   'map_scan_targets',
+  'providers_with_agents',
+  'ai_checks_agent',
 };
 const languages = {'en', 'de', 'fr', 'es', 'it', 'pt', 'nl', 'pl'};
 const mapLayers = ['agents', 'online', 'local', 'models', 'mcp', 'skills'];

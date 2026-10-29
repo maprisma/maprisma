@@ -3138,5 +3138,6 @@
  "System follows the desktop appearance.": "Systeem volgt het uiterlijk van het bureaublad.",
  "Maximum frame rate for map lights. Reduced motion and Lights off stop animation.": "Maximale beeldsnelheid van kaartlichten. Verminderde beweging en Lichten uit stoppen de animatie.",
  "The download is checked against the checksum its release lists; nothing of it runs while it is installed.": "De download wordt gecontroleerd met de checksum die de release vermeldt; tijdens het installeren wordt er niets van uitgevoerd.",
- "The app does not keep it.": "De app bewaart hem niet."
+ "The app does not keep it.": "De app bewaart hem niet.",
+ "Offered first for AI help and the Smart Check on the System Map; its tokens are used for them.": "Wordt als eerste aangeboden voor AI-hulp en de Smart Check op de systeemkaart; daarvoor worden zijn tokens gebruikt."
 }

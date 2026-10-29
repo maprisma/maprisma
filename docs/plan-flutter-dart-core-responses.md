@@ -1395,3 +1395,22 @@ New in the core (Dart only; the GTK page's "Install from file…" is `addon_stor
 Check: `test/addon_files_test.dart` with Uwe's signed `agent-goose-0.11.1.zip`: reviewed without
 installing, a preview used once, installed from the same bytes, reviewed again as an update; refused
 when the file changed after the review, a link, not a .zip, garbage, over 8 MiB.
+
+### 6b-5 — the settings that work in Flutter
+
+Settings now also offers the two GTK settings whose features the Flutter app has:
+- **Start local LLMs with their agents** (`providers_with_agents`): the provider watcher of 4e; the
+  description names its user service from `app.identity` (`<short name>-providers.service`), so it
+  follows a rename.
+- **Agent for AI checks** (`ai_checks_agent`): which installed agent the System Map's AI help and
+  Smart Check offer first; the list is the System Map's helpers that can check (`None installed` when
+  there are none). A new description, since the GTK one names features Flutter does not have.
+- Both are UI settings now on both sides (`UI_SETTINGS`, `uiSettings`), so `settings.get/update` stay
+  equal in the differential cases.
+- The GTK settings of features the Flutter app does not have yet (the usage box, cost limits and
+  warnings, daily AI checks and new-agent look-ups, terminal tabs, the MCP list, GTK looks) are not
+  offered: they come with their features.
+- One new text in eight languages; the manual's Flutter settings section in all eight; PDFs rebuilt.
+
+Check: a widget test for both settings (the switch, the service name, the agent list, none installed);
+the scan-settings test scrolls to the last target it uses, since the longer list builds lazily.
