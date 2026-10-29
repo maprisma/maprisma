@@ -36,6 +36,11 @@ def main():
     subprocess.run([resolve_dart(), 'pub', 'get', '--offline'], cwd=core, check=True)
     subprocess.run([resolve_dart(), 'compile', 'exe', 'bin/asterism-core.dart', '-o',
                     str(stage / 'build/linux/x64/release/bundle/lib/asterism-core')], cwd=core, check=True)
+    # The user manuals beside the app (Help opens the one in the interface language).
+    data = stage / 'build/linux/x64/release/bundle/data'
+    data.mkdir(exist_ok=True)
+    for manual in sorted((root / 'data').glob('user-manual*.pdf')):
+        shutil.copy2(manual, data / manual.name)
     print(f'\nDevelopment preview: {stage / "build/linux/x64/release/bundle/asterism"}', flush=True)
 
 

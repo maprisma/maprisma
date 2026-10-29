@@ -1667,3 +1667,33 @@ task polled). No file is written in the real state folder by the suites.
 
 Not durable (as before): installs (`installers.install` runs from a reviewed, expiring plan), which the
 GTK app also kept. They come with the Flutter installer jobs, if wanted.
+
+### 6b-12a — Help
+
+- **Core:**
+  - `help.snapshot` says whether a user manual came with the app.
+  - `help.open_manual` opens it in the desktop's PDF viewer: `xdg-open` in a process of its own, no
+    shell, the path never built from text (`desktop.openDocument`). This is the reference's
+    `settings_pages.manual_path`: `user-manual.LANG.pdf` in the interface language, else the English
+    `user-manual.pdf`. It is looked for in `data/` beside the app, then `ASTERISM_DATA_DIR`
+    (development). A link in place of the file is not opened.
+- **Packaging:** `tools/build-flutter-preview.py` copies the eight PDFs into `bundle/data/`.
+- **Flutter:**
+  - **?** in the header and **F1** (app-wide, as GTK) open **Help** as a card: **Open user manual**,
+    with a message when no viewer starts.
+  - **Where to start** leads to Your first agent, Find existing AI, Providers and models and
+    Connections, and closes Help.
+  - GTK's "Start here" was not reused: it means starting an agent in the window, and its translations
+    say so. The intro sentence is new as well, since the GTK one still says the PDF is in English. Two
+    new texts in eight languages; the manual's "Help in the Flutter preview" in all eight; PDFs
+    rebuilt.
+- **Not taken over:** GTK's other help cards (disk space, the setting-up-by-drawing animation, the
+  LLM Monitor promotion) and the Information page (cards for the author's Omarchy plugins). The System
+  Map already shows sizes, and the rest belongs to the Omarchy plugin.
+
+Check: `test/help_test.dart` covers the language, the English fallback, no manual, a link refused, no
+xdg-open, and unexpected parameters. There are widget tests and an app test (F1 → Help → manual → a
+start that closes Help).
+
+Next, 6b-12b: Open problems, and Updates and suggestions (`health.check`, `agent_status`,
+`agent_updates`, add-on hints).

@@ -96,6 +96,8 @@ for line in sys.stdin:
  elif m=='models.tuning':tasks['tune']={'runtime':'Fixture provider','key':'fixture','gpu':'GPU','vram':8<<30,'stacks':[],'build':'','builds':[],'devices':'','settings':{'*':{}},'tuning':{'mode':['a|b','A mode']},'per_model':False,'models':[],'loaded':[],'vram_used':0,'helpers':[{'command':'test','name':'Test agent'}]};r={'task':'tune'}
  elif m=='models.tuning_ask':tasks['ask']={'summary':'One thing.','agent':p['command'],'suggestions':[{'kind':'setting','title':'Use b','why':'Faster.','model':'*','key':'mode','value':'b'}]};r={'task':'ask'}
  elif m=='models.tuning_preview':r={'plan':'opaque-tune','empty':False,'files':[{'path':'~/.config/x.ini','added':1,'removed':0}],'links_add':[],'links_remove':[],'item':'Fixture provider','notes':[],'focus':['runtime:fixture']}
+ elif m=='help.snapshot':r={'manual':True}
+ elif m=='help.open_manual':r={'opened':True}
  elif m=='jobs.list':r={'jobs':[{'id':'aaaaaaaaaaaa','kind':'model','title':'m.gguf · Fixture provider','state':'interrupted','fraction':0.4}] if interrupted else []}
  elif m=='jobs.discard':interrupted=False;r={'ok':True}
  elif m=='jobs.continue':interrupted=False;tasks['cont']={'ok':True};r={'task':'cont','focus':['runtime:fixture']}
@@ -653,6 +655,30 @@ void main() {
         dir,
       ).lastWhere((q) => q['method'] == 'models.tuning_preview')['params'],
       {'key': 'fixture', 'section': '*', 'setting': 'mode', 'value': 'b'},
+    );
+    expect(tester.takeException(), isNull);
+    await unmountApp(tester);
+  });
+
+  testWidgets('F1 opens Help: the manual, and a start that closes it', (
+    tester,
+  ) async {
+    final dir = await mountApp(tester);
+    await tester.sendKeyEvent(LogicalKeyboardKey.f1);
+    await settleService(tester);
+    expect(find.text('Open user manual'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('help-manual')));
+    await settleService(tester);
+    expect(
+      requests(dir).where((q) => q['method'] == 'help.open_manual'),
+      hasLength(1),
+    );
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Your first agent'));
+    await settleService(tester);
+    expect(find.text('Open user manual'), findsNothing);
+    expect(
+      requests(dir).where((q) => q['method'] == 'guide.snapshot'),
+      isNotEmpty,
     );
     expect(tester.takeException(), isNull);
     await unmountApp(tester);

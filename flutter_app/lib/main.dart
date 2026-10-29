@@ -30,6 +30,7 @@ import 'agent_security_view.dart';
 import 'api_key_review.dart';
 import 'performance_view.dart';
 import 'interrupted_jobs.dart';
+import 'help_view.dart';
 import 'agent_action_dialog.dart';
 import 'providers_view.dart';
 import 'system_map_view.dart';
@@ -1227,6 +1228,59 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
       'setting': chosen.$2,
       'value': chosen.$3,
     }, method: 'models.tuning_preview');
+  }
+
+  /// Help (F1): the user manual and where to start.
+  Future<void> _openHelp() async {
+    if (_busy) return;
+    var manual = false;
+    try {
+      manual = (await _backend!.call('help.snapshot'))['manual'] == true;
+    } catch (_) {
+      // Shown without the manual.
+    }
+    if (!mounted) return;
+    VoidCallback after(void Function() open) => () {
+      _cancelReview?.call();
+      open();
+    };
+    await _cardReview(
+      tr('Help'),
+      const {},
+      (yes, no) => HelpView(
+        manual: manual,
+        tr: tr,
+        onOpenManual: () async =>
+            (await _backend!.call('help.open_manual'))['opened'] == true,
+        starts: [
+          ('Your first agent', Icons.rocket_launch_outlined, after(_openGuide)),
+          ('Find existing AI', Icons.manage_search, after(_openExisting)),
+          (
+            'Providers and models',
+            Icons.memory,
+            after(
+              () => setState(() {
+                _showProviders = true;
+                _showConnections = false;
+                _showSystemMap = false;
+              }),
+            ),
+          ),
+          (
+            'Connections',
+            Icons.account_tree_outlined,
+            after(
+              () => setState(() {
+                _showConnections = true;
+                _showProviders = false;
+                _showSystemMap = false;
+              }),
+            ),
+          ),
+        ],
+        onClose: no,
+      ),
+    );
   }
 
   /// Downloads a previous run left unfinished (jobs.list), shown in a
@@ -2749,6 +2803,20 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
   Widget build(BuildContext context) => MaterialApp(
     title: 'Asterism',
     navigatorKey: _navigator,
+    // F1 opens Help, as in the GTK app.
+    shortcuts: {
+      ...WidgetsApp.defaultShortcuts,
+      const SingleActivator(LogicalKeyboardKey.f1): const _HelpIntent(),
+    },
+    actions: {
+      ...WidgetsApp.defaultActions,
+      _HelpIntent: CallbackAction<_HelpIntent>(
+        onInvoke: (_) {
+          if (!_navigationBlocked && _snapshot != null) _openHelp();
+          return null;
+        },
+      ),
+    },
     debugShowCheckedModeBanner: false,
     locale: _locale,
     supportedLocales: const [
@@ -2824,6 +2892,14 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
               onPressed: _navigationBlocked ? null : _openUsage,
               icon: const Icon(Icons.bar_chart_outlined),
             ),
+          IconButton(
+            key: const ValueKey('help-open'),
+            tooltip: tr('Help (F1)'),
+            icon: const Icon(Icons.help_outline),
+            onPressed: _navigationBlocked || _snapshot == null
+                ? null
+                : _openHelp,
+          ),
           IconButton(
             tooltip: tr('Your first agent'),
             icon: const Icon(Icons.rocket_launch_outlined),
@@ -3334,4 +3410,8 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
     onAction: _agentAction,
     onConnections: () => _guideAction(_selected ?? '', 'connections'),
   );
+}
+
+class _HelpIntent extends Intent {
+  const _HelpIntent();
 }

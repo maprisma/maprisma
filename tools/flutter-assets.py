@@ -5,6 +5,17 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 KEYS = (
+    # Help (F1).
+    "Where to start",
+    "Help",
+    "Help (F1)",
+    "User manual",
+    "Open user manual",
+    "Everything this app does, step by step, as a PDF for this version in your language.",
+    "Could not open the manual: {0}",
+    "Your first agent",
+    "Find existing AI",
+    "Providers and models",
     # Downloads a previous run left unfinished (jobs.list).
     "Interrupted at {0} · Continue goes on where it stopped",
     "Continue",

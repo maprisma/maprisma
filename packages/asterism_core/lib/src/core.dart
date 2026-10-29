@@ -118,6 +118,8 @@ const portedRoutes = {
   'jobs.list',
   'jobs.continue',
   'jobs.discard',
+  'help.snapshot',
+  'help.open_manual',
   ...readOnlyRoutes,
 };
 // Phase 7 removes this blocker only after every route has differential coverage.
@@ -1386,6 +1388,32 @@ final class CoreService {
     return {...started, 'focus': taskFocus(reads.map, inner)};
   }
 
+  /// settings_pages.manual_path: the user manual that comes with this
+  /// version, in the interface language (user-manual.LANG.pdf), else the
+  /// English one: data/ beside the app, or ASTERISM_DATA_DIR (development).
+  String? manualPath() {
+    final language = i18n.language;
+    final names = [
+      if (language != 'en') 'user-manual.$language.pdf',
+      'user-manual.pdf',
+    ];
+    final folders = [
+      p.join(p.dirname(Platform.resolvedExecutable), 'data'),
+      if ((identity.environment['ASTERISM_DATA_DIR'] ?? '').isNotEmpty)
+        identity.environment['ASTERISM_DATA_DIR']!,
+    ];
+    for (final name in names) {
+      for (final folder in folders) {
+        final path = p.join(folder, name);
+        if (FileSystemEntity.typeSync(path, followLinks: false) ==
+            FileSystemEntityType.file) {
+          return path;
+        }
+      }
+    }
+    return null;
+  }
+
   /// What the job strip shows: "model.gguf · llama.cpp".
   String _jobTitle(String operation, Map<String, dynamic> params) {
     final key = '${params['key'] ?? ''}';
@@ -1890,6 +1918,15 @@ final class CoreService {
     if (method.startsWith('mcp.')) return mcpCatalogRoute(method, params);
     if (method.startsWith('skills.web_')) return webSkillRoute(method, params);
     if (method.startsWith('jobs.')) return jobRoute(method, params);
+    if (method == 'help.snapshot' || method == 'help.open_manual') {
+      if (params.isNotEmpty) {
+        throw const FormatException('Unexpected parameters');
+      }
+      final manual = manualPath();
+      if (method == 'help.snapshot') return {'manual': manual != null};
+      if (manual == null) throw const FormatException('No user manual here');
+      return {'opened': openDocument(manual, identity.environment['PATH'])};
+    }
     if (method == 'models.tuning' ||
         method == 'models.tuning_preview' ||
         method == 'models.tuning_ask') {

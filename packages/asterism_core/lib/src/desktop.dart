@@ -59,6 +59,14 @@ bool _detached(List<String> argv, String cwd) {
   return true;
 }
 
+/// A document opened in the desktop's default viewer (xdg-open, a process
+/// of its own; no shell, no command line built from text). False when there
+/// is no xdg-open.
+bool openDocument(String path, String? searchPath) {
+  final opener = whichIn('xdg-open', searchPath);
+  return opener != null && _detached([opener, path], p.dirname(path));
+}
+
 /// desktop_generic.TERMINALS: a terminal and what comes before the command.
 const terminals = [
   ('xdg-terminal-exec', <String>[]),
