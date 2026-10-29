@@ -1697,3 +1697,41 @@ start that closes Help).
 
 Next, 6b-12b: Open problems, and Updates and suggestions (`health.check`, `agent_status`,
 `agent_updates`, add-on hints).
+
+### 6b-12b-1 — Health of an agent and of a local LLM
+
+New in the core (`setup_checks.dart`, the reference is `agent_status.agent_checks`, `runtime_checks`,
+`summary_line` with `credentials_present`, `sign_in_expired`, `issue_text`, `graph.split_model`,
+`link_check.add_model_step`, `agent_details.plan_label`, and `desktop.text` / `install_command`):
+- **`agents.health {command}`** checks an agent: installed, start problems
+  (`start-issues.json`), sign-in, paused limits, model, its local LLMs, failed connections
+  (`failed-links.json`), MCP servers and skills.
+  - Sign-in comes from the desktop's usage record, the adapter's `access` table, and credential files
+    or variables. These are only checked for existence; files are stat'ed, never read.
+- **`providers.health {key}`** checks a local LLM: installed, running or able to start, models,
+  connected agents, failed connections.
+- Both answer with the state, the summary line and each check (state, title, detail, step, command to
+  copy, sign-in).
+- **Inputs:** the inventory's runtimes with their agents and the snapshot's `can_control`. The usage
+  record reader is now shared (`DetailReaders.usageRecord`).
+- **`desktop.installCommand`** is the reference's `install_command`: pacman on Omarchy; generically,
+  the first of apt, dnf, zypper and pacman on PATH.
+- **Flutter:** `HealthCard` sits in an installed agent's details and on each installed local LLM in
+  Providers and models. It shows the badge (Healthy / Needs a look / Not set up), the summary and the
+  checks, with Copy for a command, and is open by itself when something needs doing. Five texts were
+  already translated; the check texts come translated from the core. The manual's "Health in the
+  Flutter preview" in all eight languages; PDFs rebuilt.
+
+Check: `tests/test_dart_setup_checks_parity.py`. Over 150 cases on the generic desktop (dnf on PATH, no
+credential file) and the Omarchy one (a credential file and a key):
+- every usage-record state, access shape and kind of model and provider;
+- local LLMs not installed, without models, server off, stopped, running;
+- failed connections, start issues, logged-in true, false and unknown;
+- runtimes in every state, with and without start at login.
+
+Python and Dart give the same checks and summaries. The core names the app Asterism in its texts, so
+the test maps the reference's "AI Agents Map". There are widget tests and an app test (details →
+agents.health → the card). It was also run once on this PC: Claude Code with its plan, MCP servers and
+skills, and llama.cpp with its connected agents.
+
+Next, 6b-12b-2: Open problems (the whole report of `health.check`, its use cases, the header's "!").

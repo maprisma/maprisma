@@ -1127,6 +1127,9 @@
   <h2 id="security-flutter">Security in the Flutter preview</h2>
   <p>In the Flutter preview, an installed agent’s details have <b>Security settings</b>. The card shows the risk badge, every setting with its choices in a list (a coloured dot gives each choice’s risk, the safer default says <b>recommended</b>; a setting the file does not name says that the agent’s own default applies), the allow and deny rules, the settings file, and <b>Risk management</b> with <b>Lower it…</b> where one setting lowers a risk. Choosing another value or <b>Lower it…</b> opens the <b>Preview</b> a connection change uses: the lines of the settings file that change. <b>Apply</b> backs the file up and writes it, with <b>Undo</b> afterwards; only the one key changes, comments and the rest of the file stay as written.</p>
 
+  <h2 id="health-flutter">Health in the Flutter preview</h2>
+  <p>In the Flutter preview, an installed agent’s details and each local LLM in <b>Providers and models</b> have a <b>Health</b> card: <b>Healthy</b>, <b>Needs a look</b> or <b>Not set up</b>, one sentence, and every check — installed, signed in (only whether a credential file or key is there is looked at), model, its local LLMs, failed connections, MCP servers and skills; for a local LLM whether it runs, its models and the agents connected to it. A check that is not ok says what to do next, with a command to <b>Copy</b> where there is one. It opens by itself when something needs doing.</p>
+
   <h2 id="security-agents">What is checked for each agent</h2>
   <table>
     <thead><tr><th>Agent</th><th>Settings shown and changeable</th><th>File</th></tr></thead>

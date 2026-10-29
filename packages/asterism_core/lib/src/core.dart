@@ -46,6 +46,7 @@ import 'mcp_catalog.dart';
 import 'skills_web.dart';
 import 'llm_tuning.dart';
 import 'core_jobs.dart';
+import 'setup_checks.dart';
 import 'mcp_tools.dart' show cachedTools;
 
 const portedRoutes = {
@@ -120,6 +121,8 @@ const portedRoutes = {
   'jobs.discard',
   'help.snapshot',
   'help.open_manual',
+  'agents.health',
+  'providers.health',
   ...readOnlyRoutes,
 };
 // Phase 7 removes this blocker only after every route has differential coverage.
@@ -1388,6 +1391,87 @@ final class CoreService {
     return {...started, 'focus': taskFocus(reads.map, inner)};
   }
 
+  /// agents.health / providers.health (agent_status.agent_checks and
+  /// runtime_checks, the details pages' Health card): is it ready to use,
+  /// and what to do next. Reads only; credential files are only stat'ed.
+  Map<String, dynamic> healthRoute(String method, Map<String, dynamic> params) {
+    final agents = reads.catalog.scan();
+    final checks = SetupChecks(
+      tr: i18n.text,
+      home: identity.home,
+      environment: identity.environment,
+      desktop: desktop.name,
+      installCommand: (pkg) =>
+          installCommand(desktop.name, pkg, identity.environment['PATH']),
+    );
+    final snapshot = {
+      for (final r in reads.providersSnapshot()['local'] as List) r['key']: r,
+    };
+    final inventory = reads.inventory.collect(agents, remember: false);
+    final runtimes = [
+      for (final rt in inventory.runtimes)
+        {
+          ...rt.toJson(),
+          'can_control': (snapshot[rt.key] as Map?)?['can_control'] == true,
+        },
+    ];
+    final failures = reads.files.json(edits.failurePath);
+    final hints = {
+      for (final e in failures.entries)
+        if (e.value is Map) e.key: e.value,
+    };
+    final names = {for (final a in agents) a.command: a.name};
+    final List<Map<String, dynamic>> found;
+    if (method == 'providers.health') {
+      final key = params['key'];
+      final rt = runtimes.where((r) => r['key'] == key).firstOrNull;
+      if (params.length != 1 || rt == null) {
+        throw const FormatException('Unknown local provider');
+      }
+      found = checks.runtimeChecks(rt, hints, names, null);
+    } else {
+      final command = params['command'];
+      final agent = agents.where((a) => a.command == command).firstOrNull;
+      final adapter = addons.adapters
+          .where((a) => a.command == command)
+          .firstOrNull;
+      if (params.length != 1 || agent == null || adapter == null) {
+        throw const FormatException('Unknown agent');
+      }
+      final info = reads.details.read(adapter);
+      final access = adapter.table('access');
+      found = checks.agentChecks(
+        agent: {
+          'command': agent.command,
+          'name': agent.name,
+          'installed': agent.installed,
+          'version': agent.version,
+        },
+        info: {'model': info.model, 'providers': info.providers},
+        record: reads.details.usageRecord(adapter.command),
+        runtimes: runtimes,
+        mcp: inventory.agentMcp[command] ?? const [],
+        skills: inventory.agentSkills[command] ?? const [],
+        hints: hints,
+        access: access.isEmpty ? null : access,
+        issue: _startIssue('$command'),
+      );
+    }
+    final (state, line) = checks.summaryLine(found);
+    return {'state': state, 'summary': line, 'checks': found};
+  }
+
+  /// agent_status.load_issues: the problem the last Start ran into.
+  Map? _startIssue(String command) {
+    final data = reads.files.json(
+      '~/.local/state/ai-agents-map/start-issues.json',
+      limit: 64 * 1024,
+    );
+    final issue =
+        data[command.length > 64 ? command.substring(0, 64) : command];
+    return issue is Map && issueKinds.contains(issue['kind']) ? issue : null;
+  }
+
   /// settings_pages.manual_path: the user manual that comes with this
   /// version, in the interface language (user-manual.LANG.pdf), else the
   /// English one: data/ beside the app, or ASTERISM_DATA_DIR (development).
@@ -1918,6 +2002,9 @@ final class CoreService {
     if (method.startsWith('mcp.')) return mcpCatalogRoute(method, params);
     if (method.startsWith('skills.web_')) return webSkillRoute(method, params);
     if (method.startsWith('jobs.')) return jobRoute(method, params);
+    if (method == 'agents.health' || method == 'providers.health') {
+      return healthRoute(method, params);
+    }
     if (method == 'help.snapshot' || method == 'help.open_manual') {
       if (params.isNotEmpty) {
         throw const FormatException('Unexpected parameters');

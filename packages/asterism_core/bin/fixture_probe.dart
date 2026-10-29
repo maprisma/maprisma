@@ -7,6 +7,7 @@ import 'package:asterism_core/src/mcp_catalog.dart' as mcpc;
 import 'package:asterism_core/src/mcp_tools.dart' as mcpt;
 import 'package:asterism_core/src/skills_web.dart' as skw;
 import 'package:asterism_core/src/llm_tuning.dart' as tun;
+import 'package:asterism_core/src/setup_checks.dart' as chk;
 import 'package:asterism_core/src/installers.dart' as inst;
 import 'package:asterism_core/src/provider_scans.dart' show RuntimeRecord;
 import 'package:asterism_core/src/system_map.dart' show SystemMapReader;
@@ -294,6 +295,48 @@ Future<void> main() async {
           params['cache'] as String,
           search: params['search'] == true,
         );
+      } else if (request.method == 'dev.setupchecks') {
+        // agent_status.agent_checks / runtime_checks / summary_line.
+        final checks = chk.SetupChecks(
+          tr: i18n.text,
+          home: identity.home,
+          environment: Platform.environment,
+          desktop: params['desktop'] as String,
+          installCommand: (pkg) => installCommand(
+            params['desktop'] as String,
+            pkg,
+            Platform.environment['PATH'],
+          ),
+        );
+        final runtimes = (params['runtimes'] as List).cast<Map>();
+        final agent = params['agent'] as Map?;
+        final List<Map<String, dynamic>> found;
+        if (agent != null) {
+          found = checks.agentChecks(
+            agent: agent,
+            info: params['info'] as Map,
+            record: params['record'] as Map,
+            runtimes: runtimes,
+            mcp: (params['mcp'] as List).cast<String>(),
+            skills: (params['skills'] as List).cast<String>(),
+            hints: params['hints'] as Map,
+            access: params['access'] as Map?,
+            loggedIn: params['logged_in'] as bool?,
+            issue: params['issue'] as Map?,
+          );
+        } else {
+          found = checks.runtimeChecks(
+            params['runtime'] as Map,
+            params['hints'] as Map,
+            (params['names'] as Map).cast<String, String>(),
+            params['login'] as bool?,
+          );
+        }
+        final (state, line) = checks.summaryLine(found);
+        result = {
+          'checks': found,
+          'summary': [state, line],
+        };
       } else if (request.method == 'dev.tuningtips') {
         // llm_tuning.facts_text, prompt and validate.
         final facts = params['facts'] as Map;

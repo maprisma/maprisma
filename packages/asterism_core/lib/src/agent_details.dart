@@ -346,10 +346,7 @@ final class DetailReaders {
         if (found.isNotEmpty) info.model = found.last[1]!;
       }
     }
-    final usagePath = desktop.name == 'omarchy'
-        ? '${files.identity.root('XDG_STATE_HOME', '.local/state')}/omarchy/agents/usage/${adapter.command}.json'
-        : '~/.local/state/ai-agents-map/no-usage/${adapter.command}.json';
-    final usage = files.json(usagePath);
+    final usage = usageRecord(adapter.command);
     final tier = boundedText(usage['tierLabel'], 40);
     info.plan =
         {
@@ -391,6 +388,15 @@ final class DetailReaders {
     final home = adapter.facts['home'] as String? ?? '';
     info.configDir = home.isNotEmpty && files.exists(home) ? home : '';
     return info;
+  }
+
+  /// agent_details.usage_record: the desktop's usage record of an agent.
+  Map<String, dynamic> usageRecord(String command) {
+    if (!RegExp(r'^[a-z0-9-]{1,64}$').hasMatch(command)) return {};
+    final path = desktop.name == 'omarchy'
+        ? '${files.identity.root('XDG_STATE_HOME', '.local/state')}/omarchy/agents/usage/$command.json'
+        : '~/.local/state/ai-agents-map/no-usage/$command.json';
+    return Map<String, dynamic>.from(files.json(path));
   }
 
   static const maxScan = 3000, dateDepth = 2;

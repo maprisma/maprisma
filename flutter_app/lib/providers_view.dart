@@ -1,3 +1,4 @@
+import 'health_card.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 
@@ -30,7 +31,10 @@ class ProvidersView extends StatelessWidget {
     this.onConfirm,
     this.onInstall,
     this.onPerformance,
+    this.onCall,
   });
+  final Future<Map<String, dynamic>> Function(String, Map<String, dynamic>)?
+  onCall;
   final ValueChanged<Map<String, dynamic>>? onPerformance;
   final bool hosted;
   final Map<String, dynamic> data;
@@ -206,6 +210,14 @@ class ProvidersView extends StatelessWidget {
                           ),
                       ],
                     ),
+                    if (onCall != null && rt['installed'] == true)
+                      HealthCard(
+                        key: ValueKey('health-${rt['key']}'),
+                        method: 'providers.health',
+                        params: {'key': rt['key']},
+                        call: onCall!,
+                        tr: tr,
+                      ),
                     ExpansionTile(
                       tilePadding: EdgeInsets.zero,
                       title: Text(

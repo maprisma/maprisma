@@ -96,6 +96,7 @@ for line in sys.stdin:
  elif m=='models.tuning':tasks['tune']={'runtime':'Fixture provider','key':'fixture','gpu':'GPU','vram':8<<30,'stacks':[],'build':'','builds':[],'devices':'','settings':{'*':{}},'tuning':{'mode':['a|b','A mode']},'per_model':False,'models':[],'loaded':[],'vram_used':0,'helpers':[{'command':'test','name':'Test agent'}]};r={'task':'tune'}
  elif m=='models.tuning_ask':tasks['ask']={'summary':'One thing.','agent':p['command'],'suggestions':[{'kind':'setting','title':'Use b','why':'Faster.','model':'*','key':'mode','value':'b'}]};r={'task':'ask'}
  elif m=='models.tuning_preview':r={'plan':'opaque-tune','empty':False,'files':[{'path':'~/.config/x.ini','added':1,'removed':0}],'links_add':[],'links_remove':[],'item':'Fixture provider','notes':[],'focus':['runtime:fixture']}
+ elif m=='agents.health':r={'state':'warn','summary':'Works, one thing to look at: No model chosen','checks':[{'state':'warn','title':'No model chosen','detail':'','step':'Select it on the map.','command':'','sign_in':''}]}
  elif m=='help.snapshot':r={'manual':True}
  elif m=='help.open_manual':r={'opened':True}
  elif m=='jobs.list':r={'jobs':[{'id':'aaaaaaaaaaaa','kind':'model','title':'m.gguf · Fixture provider','state':'interrupted','fraction':0.4}] if interrupted else []}
@@ -656,6 +657,22 @@ void main() {
       ).lastWhere((q) => q['method'] == 'models.tuning_preview')['params'],
       {'key': 'fixture', 'section': '*', 'setting': 'mode', 'value': 'b'},
     );
+    expect(tester.takeException(), isNull);
+    await unmountApp(tester);
+  });
+
+  testWidgets('the details of an agent show its health', (tester) async {
+    final dir = await mountApp(tester);
+    tester
+        .widget<AgentMap>(find.byKey(const ValueKey('ai-map')))
+        .onAgent('test');
+    await settleService(tester);
+    expect(
+      requests(dir).lastWhere((q) => q['method'] == 'agents.health')['params'],
+      {'command': 'test'},
+    );
+    expect(find.text('Needs a look'), findsOneWidget);
+    expect(find.text('Select it on the map.'), findsOneWidget);
     expect(tester.takeException(), isNull);
     await unmountApp(tester);
   });

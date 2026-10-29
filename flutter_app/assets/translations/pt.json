@@ -1,4 +1,9 @@
 {
+  "Health": "Estado",
+  "Healthy": "Saudável",
+  "Needs a look": "Precisa de atenção",
+  "Not set up": "Não configurado",
+  "Copy": "Copiar",
   "Where to start": "Por onde começar",
   "Help": "Ajuda",
   "Help (F1)": "Ajuda (F1)",

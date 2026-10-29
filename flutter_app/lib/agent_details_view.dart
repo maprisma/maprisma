@@ -1,3 +1,4 @@
+import 'health_card.dart';
 import 'package:flutter/material.dart';
 import 'agent_usage.dart';
 import 'project_start_menu.dart';
@@ -18,6 +19,7 @@ class AgentDetailsView extends StatelessWidget {
     this.onSubagents,
     this.onAction,
     this.onConnections,
+    this.onCall,
   });
   final List<Map<String, dynamic>> catalog;
   final String? selected;
@@ -32,6 +34,10 @@ class AgentDetailsView extends StatelessWidget {
   final ValueChanged<String>? onSubagents;
   final void Function(String, String)? onAction;
   final VoidCallback? onConnections;
+
+  /// A plain service call (the Health card's agents.health).
+  final Future<Map<String, dynamic>> Function(String, Map<String, dynamic>)?
+  onCall;
   @override
   Widget build(BuildContext context) {
     final matches = catalog.where((agent) => agent['command'] == selected);
@@ -57,6 +63,14 @@ class AgentDetailsView extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         SelectableText('${tr('Version')}: ${agent['version']}'),
+        if (onCall != null && agent['installed'] == true)
+          HealthCard(
+            key: ValueKey('health-$command'),
+            method: 'agents.health',
+            params: {'command': command},
+            call: onCall!,
+            tr: tr,
+          ),
         if (info != null) AgentUsage(info: info!, tr: tr),
         const SizedBox(height: 16),
         if (onAction != null)

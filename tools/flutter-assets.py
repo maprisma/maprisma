@@ -5,6 +5,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 KEYS = (
+    # Health of an agent or a local LLM (agents.health, providers.health).
+    "Health",
+    "Healthy",
+    "Needs a look",
+    "Not set up",
+    "Copy",
     # Help (F1).
     "Where to start",
     "Help",

@@ -3247,6 +3247,8 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
                                   ),
                                   onRemove: _removeModel,
                                   onPerformance: _performance,
+                                  onCall: (method, params) =>
+                                      _backend!.call(method, params),
                                   onBrowse: (runtime) =>
                                       setState(() => _browser = runtime),
                                   onDiscover: _openExisting,
@@ -3409,6 +3411,7 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
     onSubagents: _openSubagents,
     onAction: _agentAction,
     onConnections: () => _guideAction(_selected ?? '', 'connections'),
+    onCall: (method, params) => _backend!.call(method, params),
   );
 }
 

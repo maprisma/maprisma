@@ -59,6 +59,36 @@ bool _detached(List<String> argv, String cwd) {
   return true;
 }
 
+/// desktop.install_command: the command that installs vte4 or
+/// xdg-terminal-exec here ('' when not known).
+String installCommand(String desktop, String package, String? searchPath) {
+  if (desktop == 'omarchy') {
+    return const ['vte4', 'xdg-terminal-exec'].contains(package)
+        ? 'sudo pacman -S $package'
+        : '';
+  }
+  const packages = {
+    'vte4': {
+      'apt': 'gir1.2-vte-3.91',
+      'dnf': 'vte291-gtk4',
+      'zypper': 'typelib-1_0-Vte-3_91',
+      'pacman': 'vte4',
+    },
+    'xdg-terminal-exec': {'pacman': 'xdg-terminal-exec'},
+  };
+  const managers = [
+    ('apt', 'sudo apt install {0}'),
+    ('dnf', 'sudo dnf install {0}'),
+    ('zypper', 'sudo zypper install {0}'),
+    ('pacman', 'sudo pacman -S {0}'),
+  ];
+  final manager = managers
+      .where((m) => whichIn(m.$1, searchPath) != null)
+      .firstOrNull;
+  final name = manager == null ? null : packages[package]?[manager.$1];
+  return name == null ? '' : manager!.$2.replaceAll('{0}', name);
+}
+
 /// A document opened in the desktop's default viewer (xdg-open, a process
 /// of its own; no shell, no command line built from text). False when there
 /// is no xdg-open.
