@@ -85,6 +85,14 @@ for line in sys.stdin:
    'choices':[{'value':'always','label':'Always','explain':'','risk':1},{'value':'never','label':'Never','explain':'','risk':3}]}],
   'risks':[{'level':'high','title':'It never asks','why':'','lower':'','fix_key':'ask','fix_value':'always'}]}
  elif m=='agents.security_preview':r={'plan':'opaque-security','empty':False,'files':[],'links_add':[],'links_remove':[],'focus':['agent:test']}
+ elif m=='mcp.catalog':
+  tasks['mcpcat']={'groups':[{'key':'think','label':'Thinking and memory'}],'picks':[{'key':'time','title':'Time','group':'think','maker':'MCP project',
+   'trust':'Reference server · MCP project','trust_hint':'','about':'The current time.','tries':[],'needs':'Nothing.','repository':'https://github.com/x/time','key_url':'',
+   'server':{'name':'time','short':'time','title':'Time','description':'','version':'1.0','repository':'','website':'','updated':'','status':'',
+    'publisher':{'kind':'','who':''},'options':[{'option':'opt-time','kind':'pypi','label':'pypi · mcp-server-time 1.0','runnable':True,'command':'uvx',
+     'args':['mcp-server-time==1.0'],'env':[],'url':'','headers':[],'needs':[],'on_command_line':[]}]}}]}
+  r={'task':'mcpcat'}
+ elif m=='mcp.option_preview':r={'plan':'opaque-catalog','empty':False,'files':[],'links_add':[],'links_remove':[],'kind':'mcp','agents':['Test agent'],'focus':['agent:test']}
  elif m=='tasks.status':r=({'state':'failed'} if p['task']=='install' and install_fails else {'state':'done','result':tasks[p['task']]})
  else:r={}
  print(json.dumps({'id':q['id'],'result':r}),flush=True)
@@ -569,13 +577,51 @@ void main() {
     await unmountApp(tester);
   });
 
+  testWidgets('a recommended MCP server goes through the preview', (
+    tester,
+  ) async {
+    final dir = await mountApp(tester);
+    await tester.tap(find.byTooltip('Connections'));
+    await settleService(tester);
+    await tester.tap(find.byKey(const ValueKey('mcp-catalog-open')));
+    await settleService(tester);
+    await tester.tap(find.byKey(const ValueKey('mcp-pick-time')));
+    await tester.pumpAndSettle();
+    final preview = find.widgetWithText(FilledButton, 'Preview');
+    await tester.ensureVisible(preview);
+    await tester.pumpAndSettle();
+    await tester.tap(preview);
+    await settleService(tester);
+    expect(
+      requests(
+        dir,
+      ).lastWhere((q) => q['method'] == 'mcp.option_preview')['params'],
+      {
+        'option': 'opt-time',
+        'name': 'time',
+        'values': {},
+        'agents': ['test'],
+      },
+    );
+    await tester.tap(find.widgetWithText(FilledButton, 'Apply'));
+    await settleService(tester);
+    expect(
+      requests(
+        dir,
+      ).lastWhere((q) => q['method'] == 'connections.apply')['params'],
+      {'plan': 'opaque-catalog'},
+    );
+    expect(tester.takeException(), isNull);
+    await unmountApp(tester);
+  });
+
   testWidgets('a security setting is lowered through the preview', (
     tester,
   ) async {
     final dir = await mountApp(tester);
-    tester.widget<AgentMap>(find.byKey(const ValueKey('ai-map'))).onAgent!(
-      'test',
-    );
+    tester
+        .widget<AgentMap>(find.byKey(const ValueKey('ai-map')))
+        .onAgent('test');
     await settleService(tester);
     await tester.tap(find.text('Security settings'));
     await settleService(tester);

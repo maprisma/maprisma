@@ -1437,3 +1437,42 @@ is not a choice) of the seven agents with security facts, in a HOME whose files 
 other keys: the same file text from Python and Dart, comments kept, the invalid value refused on both
 sides. Widget tests for the view (level, settings, rules, risks, choices and Lower it…, not editable,
 not set) and an app test with the fake service (details → security → Lower it… → preview → apply).
+
+### 6b-7 — MCP servers from the catalog and the registry
+
+New in the core (`mcp_catalog.dart`; the reference is `mcp_catalog` and `mcp_registry`):
+- **`mcp.catalog {}`**: the twelve servers to start with, pinned in the worker to their newest npm/PyPI
+  versions (unpinned when offline), their texts translated; it also starts **`mcp.registry_refresh`**
+  (the registry's list saved in `~/.cache/ai-agents-map/mcp-registry.json`, at most every 12 hours,
+  resumed where a cut-short download stopped) unless one is running.
+- **`mcp.search {query, cursor}`**: the saved list when it was downloaded in full once ("#offset"
+  cursors, the total known), else the registry's own search.
+- Each way to run a shown server (npm/npx, PyPI/uvx, Docker with only `-e` runtime arguments, or a
+  https remote) stays in the core behind an opaque, expiring handle. The app gets its label, whether
+  its runner is on PATH, the field names (secret defaults not shown), and which secret fields would end
+  up on the command line.
+- **`mcp.option_preview {option, name, values, agents}`**: only the typed values come from the app;
+  they are bounded, `~/` is expanded, required fields are checked, a secret on the command line is
+  refused, empty optional fields go with their flag, and the result becomes a new server definition's
+  preview (`connections.author_preview`: backup, Undo). A typed value replaces a registry default
+  (GTK did that through its free-form lines, which the Flutter card does not have).
+- **Python fixes, both sides:** an environment variable's name must be a whole string match (`re.match`
+  with `$` let a trailing newline through, and a missing name became `"None"`); a package whose
+  `transport` is not an object no longer stops the whole answer from parsing.
+- **Flutter:** **Find MCP servers…** in Connections opens `McpCatalogView` with the tabs Recommended and
+  MCP registry (paging by cursor), the server page (who made it, about, needs, things to ask, how it
+  runs with the recommended way and a missing runner named, fields, name, agents) and Preview. One new
+  text in eight languages; the manual's "MCP servers in the Flutter preview" in all eight; PDFs rebuilt.
+
+Check: `tests/test_dart_mcp_catalog_parity.py`. It covers:
+- registry answers with odd and hostile entries: bad identifiers, an SSE package, too many arguments,
+  Docker `-v`, http remotes, Unicode names, whitespace, statuses;
+- filling and dropping fields;
+- the saved list searched with order, paging and status filters, and a list never fully downloaded;
+- the picks pinned;
+- the download: fresh, resumed, up to date, offline.
+
+Python and Dart give equal results in all of these. `test/mcp_options_test.dart` covers the handles
+and the filled entry. There are widget tests for the view and an app test with the fake service
+(Connections → Find MCP servers… → a pick → preview → apply). The worker ops were also run once for
+real: a saved list searched, and the picks pinned against npm and PyPI.

@@ -1,5 +1,6 @@
 import 'task_card.dart';
 import 'connection_authoring.dart';
+import 'mcp_catalog_view.dart';
 import 'package:flutter/material.dart';
 import 'provider_connections.dart';
 
@@ -14,7 +15,12 @@ class ConnectionsView extends StatefulWidget {
     required this.onBack,
     this.onUndo,
     this.onAuthorPreview,
+    this.onCatalogTask,
+    this.onCatalogPreview,
   });
+  final Future<Map<String, dynamic>> Function(String, Map<String, dynamic>)?
+  onCatalogTask;
+  final Future<void> Function(Map<String, dynamic>)? onCatalogPreview;
   final Future<void> Function(Map<String, dynamic>)? onAuthorPreview;
   final bool hosted;
   final Map<String, dynamic> data;
@@ -30,6 +36,7 @@ class ConnectionsView extends StatefulWidget {
 class _ConnectionsViewState extends State<ConnectionsView> {
   String _search = '';
   String? _authorKind;
+  bool _catalog = false;
   final _searchController = TextEditingController();
   @override
   void dispose() {
@@ -73,6 +80,16 @@ class _ConnectionsViewState extends State<ConnectionsView> {
               spacing: 8,
               runSpacing: 8,
               children: [
+                if (widget.onCatalogTask != null &&
+                    widget.onCatalogPreview != null)
+                  FilledButton.tonalIcon(
+                    key: const ValueKey('mcp-catalog-open'),
+                    onPressed: widget.busy
+                        ? null
+                        : () => setState(() => _catalog = true),
+                    icon: const Icon(Icons.travel_explore),
+                    label: Text(widget.tr('Find MCP servers…')),
+                  ),
                 for (final kind in ['mcp', 'skills'])
                   OutlinedButton.icon(
                     onPressed: widget.busy
@@ -87,6 +104,16 @@ class _ConnectionsViewState extends State<ConnectionsView> {
                   ),
               ],
             ),
+            if (_catalog)
+              McpCatalogView(
+                agents: (widget.data['agents'] as List? ?? [])
+                    .cast<Map<String, dynamic>>(),
+                busy: widget.busy,
+                tr: widget.tr,
+                run: widget.onCatalogTask!,
+                onPreview: widget.onCatalogPreview!,
+                onClose: () => setState(() => _catalog = false),
+              ),
             if (_authorKind != null)
               ConnectionAuthoring(
                 key: ValueKey(_authorKind),

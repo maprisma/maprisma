@@ -1175,6 +1175,27 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
     }
   }
 
+  /// A service task started and waited for without a task card (the view
+  /// that asked shows its own progress).
+  Future<Map<String, dynamic>> _quietTask(
+    String method,
+    Map<String, dynamic> params,
+  ) async {
+    final started = await _backend!.call(method, params);
+    while (true) {
+      final status = await _backend!.call('tasks.status', {
+        'task': started['task'],
+      });
+      if (status['state'] == 'done') {
+        return status['result'] as Map<String, dynamic>;
+      }
+      if (status['state'] != 'running' || !mounted) {
+        throw StateError('$method failed');
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+    }
+  }
+
   Future<void> _refreshSystem(bool search, {bool quiet = false}) async {
     if (_systemRefreshing) return;
     setState(() => _systemRefreshing = true);
@@ -2942,6 +2963,12 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
                                   onPreview: _connectionPreview,
                                   onAuthorPreview: (params) =>
                                       _connectionPreview(params, author: true),
+                                  onCatalogTask: _quietTask,
+                                  onCatalogPreview: (params) =>
+                                      _connectionPreview(
+                                        params,
+                                        method: 'mcp.option_preview',
+                                      ),
                                   onBack: () {
                                     setState(() => _showConnections = false);
                                     _backToGuideIfFromIt();

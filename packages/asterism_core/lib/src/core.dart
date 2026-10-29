@@ -42,6 +42,7 @@ import 'inventory.dart' show chatModels;
 import 'settings.dart';
 import 'service_i18n.dart';
 import 'provider_facts.dart';
+import 'mcp_catalog.dart';
 
 const portedRoutes = {
   'settings.get',
@@ -98,6 +99,9 @@ const portedRoutes = {
   'agents.key_apply',
   'agents.security',
   'agents.security_preview',
+  'mcp.catalog',
+  'mcp.search',
+  'mcp.option_preview',
   ...readOnlyRoutes,
 };
 // Phase 7 removes this blocker only after every route has differential coverage.
@@ -224,6 +228,10 @@ final class CoreService {
           'system.move_undo',
         }.contains(t.operation) &&
         t.state == 'running',
+  );
+
+  late final mcpOptions = McpOptions(
+    () => newHandle().substring(coreHandle.length),
   );
 
   late final installerPlans = InstallerPlans(
@@ -969,6 +977,104 @@ final class CoreService {
     return addons.snapshot(enabled, addonSignIns, addonUserDir);
   }
 
+  /// mcp.catalog / mcp.search / mcp.option_preview (mcp_catalog,
+  /// mcp_registry and the GTK Add MCP server page): servers to start with
+  /// and the registry's, looked up in the worker; a chosen way to run one,
+  /// filled with the user's values, becomes a new server definition's preview.
+  Map<String, dynamic> mcpCatalogRoute(
+    String method,
+    Map<String, dynamic> params,
+  ) {
+    String tr(String text) => i18n.text(text);
+    Map<String, dynamic> shown(Map server) =>
+        mcpOptions.server(Map<String, dynamic>.from(server), translate: tr);
+    if (method == 'mcp.catalog') {
+      if (params.isNotEmpty) {
+        throw const FormatException('Unexpected catalog parameters');
+      }
+      // The registry's list, saved for searching (at most every 12 hours).
+      if (!tasks.items.values.any(
+        (t) => t.operation == 'mcp.registry_refresh' && t.state == 'running',
+      )) {
+        try {
+          tasks.start('mcp.registry_refresh', {});
+        } on FormatException {
+          // Too many operations now: the next catalog tries again.
+        }
+      }
+      return tasks.start('mcp.catalog', {}, (result) {
+        final servers = (result['servers'] as List).cast<Map>();
+        return {
+          'groups': [
+            for (final (key, label) in catalogGroups)
+              {'key': key, 'label': tr(label)},
+          ],
+          'picks': [
+            for (final (i, pick) in catalogPicks.indexed)
+              {
+                'key': pick['key'],
+                'title': pick['title'],
+                'group': pick['group'],
+                'maker': pick['maker'],
+                'trust': tr(
+                  catalogTrust[pick['trust']]!,
+                ).replaceAll('{0}', pick['maker'] as String),
+                'trust_hint': tr(catalogTrustHints[pick['trust']]!),
+                'about': tr(pick['about'] as String),
+                'tries': [for (final t in pick['tries'] as List) tr(t)],
+                'needs': tr(pick['needs'] as String),
+                'repository': pick['repository'],
+                'key_url': pick['key_url'],
+                'server': shown(servers[i]),
+              },
+          ],
+        };
+      });
+    }
+    if (method == 'mcp.search') {
+      final query = params['query'], cursor = params['cursor'] ?? '';
+      if (params.keys.any((k) => k != 'query' && k != 'cursor') ||
+          query is! String ||
+          query.trim().isEmpty ||
+          query.length > 200 ||
+          cursor is! String ||
+          cursor.length > 310) {
+        throw const FormatException('Invalid registry search');
+      }
+      return tasks.start(
+        'mcp.search',
+        {'query': query, 'cursor': cursor},
+        (result) => {
+          ...result,
+          'servers': [
+            for (final s in (result['servers'] as List).cast<Map>()) shown(s),
+          ],
+        },
+      );
+    }
+    if (method != 'mcp.option_preview') throw ServiceError('unported_route');
+    if (params.length != 4 ||
+        !const {
+          'option',
+          'name',
+          'values',
+          'agents',
+        }.every(params.containsKey)) {
+      throw const FormatException('Invalid server choice');
+    }
+    final entry = mcpOptions.entryFor(
+      params['option'],
+      params['values'],
+      identity.home,
+    );
+    return edits.authorPreview({
+      'kind': 'mcp',
+      'agents': params['agents'],
+      'name': params['name'],
+      'entry': entry,
+    }, reads.catalog.scan());
+  }
+
   /// installers.preview / installers.install (flutter_backend).
   Map<String, dynamic> installerRoute(
     String method,
@@ -1437,6 +1543,7 @@ final class CoreService {
       }
       return actions.apply(params['preview'] as String);
     }
+    if (method.startsWith('mcp.')) return mcpCatalogRoute(method, params);
     if (method == 'agents.security' || method == 'agents.security_preview') {
       return securityRoute(method, params);
     }

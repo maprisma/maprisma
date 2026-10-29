@@ -21,6 +21,8 @@ import 'first_agent.dart';
 import 'agent_catalog.dart';
 import 'desktop.dart' show detectDesktop;
 import 'model_guard.dart';
+import 'mcp_catalog.dart';
+import 'model_hub.dart' show netFetch;
 import 'provider_ops.dart';
 import 'provider_scans.dart';
 import 'scan_files.dart';
@@ -409,6 +411,70 @@ Future<int> runWorker(List<String> args) async {
           settingsPath: chosen,
         ).prepare(params['selection'] as Map),
       });
+      return 0;
+    }
+    // MCP servers to start with, pinned to their newest versions; a registry
+    // search; the registry's list saved for searching (mcp_catalog,
+    // mcp_registry). Nothing found here runs.
+    if (args.isEmpty &&
+        const {
+          'mcp.catalog',
+          'mcp.search',
+          'mcp.registry_refresh',
+        }.contains(request['operation'])) {
+      final params = request['params'] as Map;
+      final identity = AppIdentity();
+      final path = identity.environment['PATH'];
+      final listPath =
+          '${identity.home}/.cache/ai-agents-map/mcp-registry.json';
+      final dynamic result;
+      switch (request['operation']) {
+        case 'mcp.catalog':
+          if (params.isNotEmpty) {
+            throw const FormatException('Invalid worker request');
+          }
+          result = {
+            'servers': await Future.wait([
+              for (final pick in catalogPicks) resolvePick(pick, path),
+            ]),
+          };
+        case 'mcp.search':
+          if (params.length != 2 ||
+              params['query'] is! String ||
+              params['cursor'] is! String) {
+            throw const FormatException('Invalid worker request');
+          }
+          result = await searchPage(
+            params['query'] as String,
+            listPath,
+            path,
+            cursor: params['cursor'] as String,
+          );
+        default:
+          if (params.isNotEmpty) {
+            throw const FormatException('Invalid worker request');
+          }
+          final posix = Posix();
+          result = {
+            'ok': await refreshList(
+              listPath,
+              now: DateTime.now().millisecondsSinceEpoch / 1000,
+              fetch: (url) async => jsonDecode(
+                utf8.decode(
+                  await netFetch(
+                    url,
+                    maxBytes: registryMaxBytes,
+                    timeout: listPageTimeout,
+                    redirects: 0,
+                    headers: const {'Accept': 'application/json'},
+                  ),
+                ),
+              ),
+              write: posix.atomicWrite,
+            ),
+          };
+      }
+      send({'type': 'result', 'result': result});
       return 0;
     }
     // A provider operation: no private plan, its parameters checked again here.

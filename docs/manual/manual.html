@@ -806,6 +806,9 @@
   in headers, never on a command line where other users of the computer could read them. A server
   that would need a secret on its command line has to be set up by hand.</p></div>
 
+  <h2 id="mcp-flutter">MCP servers in the Flutter preview</h2>
+  <p>In the Flutter preview, <b>Find MCP servers…</b> in <b>Connections</b> opens the tabs <b>Recommended</b> (pinned to their newest version when the card opens) and <b>MCP registry</b> (20 results at a time with <b>‹ Previous 20</b> and <b>Next 20 ›</b>; the registry’s list is downloaded in the background for a faster search). A server’s page says who made it, what it does, what it needs and <b>How it runs</b>; the way that can run on this PC is marked <b>recommended</b>, and a missing <code>npx</code>, <code>uvx</code> or Docker is named. Fill in the fields it needs (secret ones are hidden), check the <b>Name</b>, tick the agents and click <b>Preview</b>: the preview, <b>Apply</b> and <b>Undo</b> are the ones of a connection change. Only the values you typed go to the service; the command itself comes from the server’s entry and is checked there again. A secret that would end up on a command line is refused; such a server has to be set up by hand.</p>
+
   <h2 id="mcp-manage">Managing servers</h2>
   <p><b>ⓘ Details</b> on an MCP server card shows each agent's settings file, the command or
   address, and on request the server's tools; values of keys are never shown. <b>Remove</b> takes the

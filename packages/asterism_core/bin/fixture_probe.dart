@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:asterism_core/asterism_core.dart';
 import 'package:asterism_core/src/security_plans.dart' show securityPlan;
+import 'package:asterism_core/src/mcp_catalog.dart' as mcpc;
 import 'package:asterism_core/src/system_map.dart' show SystemMapReader;
 import 'package:asterism_core/src/agent_catalog.dart' show AgentCatalog;
 import 'package:asterism_core/src/scan_files.dart' show ScanFiles;
@@ -288,6 +289,73 @@ Future<void> main() async {
           params['cache'] as String,
           search: params['search'] == true,
         );
+      } else if (request.method == 'dev.mcpparse') {
+        // mcp_registry.parse and _kept for one registry answer.
+        final path = Platform.environment['PATH'];
+        result = {
+          'servers': mcpc.parseServers(params['data'], path),
+          'kept': [
+            for (final item
+                in (params['data'] as Map)['servers'] as List? ?? [])
+              mcpc.keptItem(item),
+          ],
+        };
+      } else if (request.method == 'dev.mcpfill') {
+        final entry = params['entry'] as Map;
+        final filled = mcpc.fillEntry(
+          entry,
+          (params['values'] as Map).cast<String, String>(),
+        );
+        final dropped = mcpc.dropUnfilled(
+          filled,
+          (params['optional'] as List).cast<String>(),
+        );
+        result = {
+          'filled': filled,
+          'dropped': dropped,
+          'unfilled': mcpc.unfilled(dropped),
+          'secret': mcpc.secretInArgs(
+            entry,
+            (params['secrets'] as List).cast<String>(),
+          ),
+        };
+      } else if (request.method == 'dev.mcpsearch') {
+        final found = mcpc.searchList(
+          params['query'] as String,
+          params['list'] as String,
+          Platform.environment['PATH'],
+          offset: params['offset'] as int,
+        );
+        result = {
+          'found': found == null ? null : [found.$1, found.$2, found.$3],
+        };
+      } else if (request.method == 'dev.mcppicks') {
+        final versions = (params['versions'] as Map).cast<String, String>();
+        result = {
+          'servers': [
+            for (final pick in mcpc.catalogPicks)
+              await mcpc.resolvePick(
+                pick,
+                Platform.environment['PATH'],
+                ask: (kind, name) async => versions['$kind:$name'] ?? '',
+              ),
+          ],
+        };
+      } else if (request.method == 'dev.mcprefresh') {
+        final pages = params['pages'] as Map;
+        final asked = <String>[];
+        final ok = await mcpc.refreshList(
+          params['list'] as String,
+          now: (params['now'] as num).toDouble(),
+          fetch: (url) async {
+            asked.add(url);
+            final page = pages[url];
+            if (page == null) throw StateError('offline');
+            return page;
+          },
+          write: (path, bytes) => File(path).writeAsBytesSync(bytes),
+        );
+        result = {'ok': ok, 'asked': asked};
       } else if (request.method == 'dev.securityplan') {
         // agent_security.plan's new text for one setting and value.
         final adapter = core.addons.adapters
