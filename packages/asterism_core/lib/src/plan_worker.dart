@@ -23,6 +23,7 @@ import 'desktop.dart' show detectDesktop;
 import 'model_guard.dart';
 import 'mcp_catalog.dart';
 import 'mcp_tools.dart';
+import 'skills_web.dart' as skills_web;
 import 'model_hub.dart' show netFetch;
 import 'provider_ops.dart';
 import 'provider_scans.dart';
@@ -48,6 +49,8 @@ const planMaxBytes = 24 * 1024 * 1024;
     'contexts',
     if (version == 2 || version == 3) ...['links_add', 'links_remove'],
     if (version == 3) 'model_actions',
+    // Only this core's own plans (a skill from the web) carry it.
+    if (version == 3 && data.containsKey('files_staged')) 'files_staged',
   };
   if (![1, 2, 3].contains(version) ||
       data.keys.toSet().length != fields.length ||
@@ -147,6 +150,31 @@ const planMaxBytes = 24 * 1024 * 1024;
       throw const FormatException('Invalid private plan');
     }
   }
+  final staged = data['files_staged'] ?? [];
+  if (staged is! List || staged.length > skills_web.maxFiles) {
+    throw const FormatException('Invalid fetched files');
+  }
+  final filesStaged = <(String, String, String, bool)>[];
+  for (final entry in staged) {
+    if (entry is! List ||
+        entry.length != 4 ||
+        entry[0] is! String ||
+        !p.isAbsolute(entry[0] as String) ||
+        (entry[0] as String).length > 4096 ||
+        entry[1] is! String ||
+        !p.isAbsolute(entry[1] as String) ||
+        entry[2] is! String ||
+        !RegExp(r'^[0-9a-f]{64}$').hasMatch(entry[2] as String) ||
+        entry[3] is! bool) {
+      throw const FormatException('Invalid fetched file');
+    }
+    filesStaged.add((
+      entry[0] as String,
+      entry[1] as String,
+      entry[2] as String,
+      entry[3] as bool,
+    ));
+  }
   return (
     Plan(
       pyStr(data['agent']),
@@ -159,6 +187,7 @@ const planMaxBytes = 24 * 1024 * 1024;
       modelActions: [
         for (final a in actions) Map<String, dynamic>.from(a as Map),
       ],
+      filesStaged: filesStaged,
     ),
     root,
   );
@@ -172,6 +201,7 @@ Future<Map<String, dynamic>> applyPlan(
   Posix posix,
   String home, {
   ProviderOps? ops,
+  String? stagingRoot,
 }) async {
   final (plan, root) = decodePlan(body);
   ops ??= () {
@@ -185,9 +215,22 @@ Future<Map<String, dynamic>> applyPlan(
       throw StateError('Skill source changed; review again');
     }
   }
+  // Fetched files read back from staging, checked against the review.
+  final staging =
+      stagingRoot ?? p.join(AppIdentity().cacheDir, 'skill-staging');
+  plan.filesAdd.addAll(skills_web.readStaged(plan.filesStaged, staging, posix));
   final contexts = [...plan.contexts];
   plan.contexts.clear();
   final backup = ConfigFiles(posix, home).apply(plan, root);
+  for (final folder in {
+    for (final (_, file, _, _) in plan.filesStaged) p.dirname(file),
+  }) {
+    try {
+      Directory(folder).deleteSync(recursive: true);
+    } on FileSystemException {
+      // Swept with the next fetch.
+    }
+  }
   // Context sizes set through the local LLM's API (Ollama), after the files:
   // the connection stands even when one fails (counted, as the reference does).
   var failures = 0;
@@ -474,6 +517,40 @@ Future<int> runWorker(List<String> args) async {
               write: posix.atomicWrite,
             ),
           };
+      }
+      send({'type': 'result', 'result': result});
+      return 0;
+    }
+    // skills_web: a search on skills.sh, or one skill's files fetched into
+    // the private staging folder. Nothing fetched runs.
+    if (args.isEmpty &&
+        const {
+          'skills.web_search',
+          'skills.web_fetch',
+        }.contains(request['operation'])) {
+      final params = request['params'] as Map;
+      final Map<String, dynamic> result;
+      if (request['operation'] == 'skills.web_search') {
+        if (params.length != 1 || params['query'] is! String) {
+          throw const FormatException('Invalid worker request');
+        }
+        result = {
+          'skills': (await skills_web.searchSkills(
+            params['query'] as String,
+          )).take(25).toList(),
+        };
+      } else {
+        if (params.length != 2 ||
+            params['repo'] is! String ||
+            params['skill_id'] is! String) {
+          throw const FormatException('Invalid worker request');
+        }
+        result = await skills_web.fetchSkill(
+          params['repo'] as String,
+          params['skill_id'] as String,
+          p.join(AppIdentity().cacheDir, 'skill-staging'),
+          Posix(),
+        );
       }
       send({'type': 'result', 'result': result});
       return 0;

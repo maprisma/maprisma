@@ -5,6 +5,20 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 KEYS = (
+    # Skills from the web (skills.web_search, skills.web_fetch).
+    "Find skills on the web…",
+    "No skill found.",
+    "Search the web",
+    "e.g. pdf, docker, testing",
+    "Into",
+    "Also for",
+    "Agents that do not read this folder yet get it too.",
+    "Skills teach your agents how to do a task.",
+    "Fetching the file list of {0}…",
+    "Could not fetch {0}: {1}",
+    "Skills may include scripts that agents can run.",
+    "Files",
+    "Add skills",
     # An MCP server's tools (mcp.tools, mcp.option_test).
     "Tools",
     "Prompts",

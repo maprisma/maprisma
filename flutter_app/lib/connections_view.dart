@@ -2,6 +2,7 @@ import 'task_card.dart';
 import 'connection_authoring.dart';
 import 'mcp_catalog_view.dart';
 import 'mcp_tools_view.dart';
+import 'skills_web_view.dart';
 import 'package:flutter/material.dart';
 import 'provider_connections.dart';
 
@@ -19,7 +20,9 @@ class ConnectionsView extends StatefulWidget {
     this.onCatalogTask,
     this.onCatalogPreview,
     this.onCall,
+    this.onSkillPreview,
   });
+  final Future<void> Function(Map<String, dynamic>)? onSkillPreview;
   final Future<Map<String, dynamic>> Function(String, Map<String, dynamic>)?
   onCall;
   final Future<Map<String, dynamic>> Function(String, Map<String, dynamic>)?
@@ -41,6 +44,7 @@ class _ConnectionsViewState extends State<ConnectionsView> {
   String _search = '';
   String? _authorKind;
   bool _catalog = false;
+  bool _skillsWeb = false;
   final _searchController = TextEditingController();
   @override
   void dispose() {
@@ -94,6 +98,16 @@ class _ConnectionsViewState extends State<ConnectionsView> {
                     icon: const Icon(Icons.travel_explore),
                     label: Text(widget.tr('Find MCP servers…')),
                   ),
+                if (widget.onCatalogTask != null &&
+                    widget.onSkillPreview != null)
+                  FilledButton.tonalIcon(
+                    key: const ValueKey('skills-web-open'),
+                    onPressed: widget.busy
+                        ? null
+                        : () => setState(() => _skillsWeb = true),
+                    icon: const Icon(Icons.travel_explore),
+                    label: Text(widget.tr('Find skills on the web…')),
+                  ),
                 for (final kind in ['mcp', 'skills'])
                   OutlinedButton.icon(
                     onPressed: widget.busy
@@ -117,6 +131,14 @@ class _ConnectionsViewState extends State<ConnectionsView> {
                 run: widget.onCatalogTask!,
                 onPreview: widget.onCatalogPreview!,
                 onClose: () => setState(() => _catalog = false),
+              ),
+            if (_skillsWeb)
+              SkillsWebView(
+                busy: widget.busy,
+                tr: widget.tr,
+                run: widget.onCatalogTask!,
+                onPreview: widget.onSkillPreview!,
+                onClose: () => setState(() => _skillsWeb = false),
               ),
             if (_authorKind != null)
               ConnectionAuthoring(
@@ -265,6 +287,11 @@ class ConnectionReview extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.only(top: 12),
                 child: Text(tr('No changes to apply')),
+              ),
+            for (final file in plan['new_files'] as List? ?? [])
+              ListTile(
+                leading: const Icon(Icons.note_add_outlined),
+                title: Text(file as String),
               ),
             for (final file in plan['files'] as List)
               ListTile(

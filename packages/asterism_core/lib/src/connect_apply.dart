@@ -26,9 +26,11 @@ final class Plan {
     List<Map<String, dynamic>>? contexts,
     List<Map<String, dynamic>>? modelActions,
     List<(String, List<int>, bool)>? filesAdd,
+    List<(String, String, String, bool)>? filesStaged,
     List<String>? notes,
   }) : changes = changes ?? [],
        filesAdd = filesAdd ?? [],
+       filesStaged = filesStaged ?? [],
        notes = notes ?? [],
        linksAdd = linksAdd ?? [],
        linksRemove = linksRemove ?? [],
@@ -39,10 +41,14 @@ final class Plan {
   final List<(String, String)> linksAdd, linksRemove;
   final List<Map<String, dynamic>> contexts, modelActions;
   final List<(String, List<int>, bool)> filesAdd; // path, bytes, executable
+  // New files fetched into a private staging folder (a skill from the web):
+  // path, staged file, its SHA-256, executable. The worker reads them back.
+  final List<(String, String, String, bool)> filesStaged;
   final List<String> notes;
   bool get empty =>
       changes.isEmpty &&
       filesAdd.isEmpty &&
+      filesStaged.isEmpty &&
       linksAdd.isEmpty &&
       linksRemove.isEmpty &&
       modelActions.isEmpty;

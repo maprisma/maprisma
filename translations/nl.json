@@ -3140,5 +3140,7 @@
  "The download is checked against the checksum its release lists; nothing of it runs while it is installed.": "De download wordt gecontroleerd met de checksum die de release vermeldt; tijdens het installeren wordt er niets van uitgevoerd.",
  "The app does not keep it.": "De app bewaart hem niet.",
  "Offered first for AI help and the Smart Check on the System Map; its tokens are used for them.": "Wordt als eerste aangeboden voor AI-hulp en de Smart Check op de systeemkaart; daarvoor worden zijn tokens gebruikt.",
- "Find MCP servers…": "MCP-servers zoeken…"
+ "Find MCP servers…": "MCP-servers zoeken…",
+ "Find skills on the web…": "Skills op het web zoeken…",
+ "No skill found.": "Geen skill gevonden."
 }

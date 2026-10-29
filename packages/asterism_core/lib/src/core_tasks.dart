@@ -263,6 +263,12 @@ final class CoreConnections {
             'tokens': c['tokens'],
           },
       ],
+      // Only this core's own plans add files (a skill from the web).
+      if (plan.filesAdd.isNotEmpty || plan.filesStaged.isNotEmpty)
+        'new_files': [
+          for (final (path, _, _) in plan.filesAdd) files.tilde(path),
+          for (final (path, _, _, _) in plan.filesStaged) files.tilde(path),
+        ],
       'links_add': [
         for (final (l, t) in plan.linksAdd) [files.tilde(l), files.tilde(t)],
       ],
@@ -358,6 +364,11 @@ List<int> encodePlan(Plan plan, String backupRoot) {
           {'path': c.path, 'old': c.old, 'new': c.next},
       ],
       'contexts': plan.contexts,
+      if (plan.filesStaged.isNotEmpty)
+        'files_staged': [
+          for (final (path, staged, digest, executable) in plan.filesStaged)
+            [path, staged, digest, executable],
+        ],
     }),
   );
   if (body.length > 24 * 1024 * 1024) {

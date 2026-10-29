@@ -43,6 +43,7 @@ import 'settings.dart';
 import 'service_i18n.dart';
 import 'provider_facts.dart';
 import 'mcp_catalog.dart';
+import 'skills_web.dart';
 import 'mcp_tools.dart' show cachedTools;
 
 const portedRoutes = {
@@ -106,6 +107,9 @@ const portedRoutes = {
   'mcp.option_test',
   'mcp.tools',
   'mcp.tools_cached',
+  'skills.web_search',
+  'skills.web_fetch',
+  'skills.web_preview',
   ...readOnlyRoutes,
 };
 // Phase 7 removes this blocker only after every route has differential coverage.
@@ -232,6 +236,10 @@ final class CoreService {
           'system.move_undo',
         }.contains(t.operation) &&
         t.state == 'running',
+  );
+
+  late final webSkills = WebSkills(
+    () => newHandle().substring(coreHandle.length),
   );
 
   late final mcpOptions = McpOptions(
@@ -1112,6 +1120,112 @@ final class CoreService {
     }, reads.catalog.scan());
   }
 
+  /// skills.web_search / skills.web_fetch / skills.web_preview (skills_web
+  /// and the GTK Add skills page): a skill from skills.sh fetched (nothing
+  /// of it runs), then put into a skill folder with the agents ticked.
+  Map<String, dynamic> webSkillRoute(
+    String method,
+    Map<String, dynamic> params,
+  ) {
+    final agents = reads.catalog.scan();
+    // The shared folder first, then the user's own skill folders.
+    final targets = {
+      sharedSkills,
+      for (final s in reads.inventory.collect(agents).skillSets)
+        if ((s['path'] as String).startsWith('~/')) s['path'] as String,
+    }.toList();
+    if (method == 'skills.web_search') {
+      final query = params['query'];
+      if (params.length != 1 ||
+          query is! String ||
+          query.trim().isEmpty ||
+          query.length > 200) {
+        throw const FormatException('Invalid skill search');
+      }
+      return tasks.start('skills.web_search', {'query': query});
+    }
+    if (method == 'skills.web_fetch') {
+      final repo = params['repo'], id = params['skill_id'];
+      final name = params['name'] ?? id;
+      if (params.keys.any(
+            (k) => !const {'repo', 'skill_id', 'name'}.contains(k),
+          ) ||
+          repo is! String ||
+          !repoRe.hasMatch(repo) ||
+          id is! String ||
+          !skillIdRe.hasMatch(id) ||
+          name is! String ||
+          name.length > 100) {
+        throw const FormatException('Invalid skill');
+      }
+      return tasks.start(
+        'skills.web_fetch',
+        {'repo': repo, 'skill_id': id},
+        (result) => {
+          ...webSkills.register(result, name),
+          'targets': targets,
+          'agents': [
+            for (final a in agents)
+              if (a.installed && skills.ownDir(a.command) != null)
+                {'command': a.command, 'name': a.name},
+          ],
+        },
+      );
+    }
+    if (params.length != 3 ||
+        !const {'fetched', 'folder', 'agents'}.every(params.containsKey)) {
+      throw const FormatException('Invalid skill preview');
+    }
+    final fetched = webSkills.get(params['fetched']);
+    final folder = params['folder'], chosen = params['agents'];
+    if (folder is! String || !targets.contains(folder)) {
+      throw const FormatException('Choose a skill folder');
+    }
+    final installed = {
+      for (final a in agents)
+        if (a.installed && skills.ownDir(a.command) != null) a.command: a,
+    };
+    if (chosen is! List ||
+        chosen.length > 32 ||
+        chosen.any((c) => c is! String || !installed.containsKey(c)) ||
+        chosen.toSet().length != chosen.length) {
+      throw const FormatException('Choose installed agents');
+    }
+    final target = p.join(skills.expand(folder), fetched['skill_id'] as String);
+    if (FileSystemEntity.typeSync(target, followLinks: false) !=
+        FileSystemEntityType.notFound) {
+      throw FormatException('${config.tilde(target)} is there already');
+    }
+    final install = Plan(
+      '',
+      '',
+      fetched['skill_id'] as String,
+      filesStaged: [
+        for (final f in fetched['files'] as List)
+          (
+            p.join(target, f[0] as String),
+            f[1] as String,
+            f[2] as String,
+            f[3] as bool,
+          ),
+      ],
+    );
+    final plans = [
+      install,
+      for (final c in chosen.cast<String>())
+        if (!skills.plan(c, folder, remove: false).empty)
+          skills.plan(c, folder, remove: false),
+    ];
+    return {
+      ...connections.keep(mergePlans(plans)),
+      'kind': 'skills',
+      'item': config.tilde(target),
+      'agents': [for (final c in chosen) installed[c]!.name],
+      'notes': ['Skills may include scripts that agents can run.'],
+      'focus': taskFocus(reads.map, {'kind': 'skills', 'item': folder}),
+    };
+  }
+
   /// One MCP server asked at a time: asking starts its program.
   Map<String, dynamic> _askTools(Map<String, dynamic> body, String operation) {
     if (tasks.items.values.any(
@@ -1597,6 +1711,7 @@ final class CoreService {
       return actions.apply(params['preview'] as String);
     }
     if (method.startsWith('mcp.')) return mcpCatalogRoute(method, params);
+    if (method.startsWith('skills.web_')) return webSkillRoute(method, params);
     if (method == 'agents.security' || method == 'agents.security_preview') {
       return securityRoute(method, params);
     }

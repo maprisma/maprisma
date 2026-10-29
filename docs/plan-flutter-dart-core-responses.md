@@ -1513,3 +1513,45 @@ Check: `tests/test_dart_mcp_tools_parity.py` runs fixture servers.
 
 `test/mcp_tools_test.dart` covers the private worker path and the kept answer. There are widget tests
 and an app test (Connections → a server's card → Ask the server).
+
+### 6b-9 — skills from the web
+
+New in the core (`skills_web.dart`, the reference is `skills_web` and the GTK Add skills page):
+- **`skills.web_search {query}`**: skills.sh's search in the worker (only the three fixed hosts, no
+  redirects); name, repository and installs, 25 shown.
+- **`skills.web_fetch {repo, skill_id, name}`**: GitHub's file list and the skill's folder (the
+  shortest one named after it, or a repository that is one skill). Plain files only: no links or
+  submodules, no `..`, at most 8 levels, 150 files, 5 MiB each, 30 MiB in all. They are fetched into a
+  private staging folder (`<cache>/skill-staging/<random>/`, 0600 files, folders older than an hour
+  swept). The core keeps them behind a handle; the app gets the description, the file names, the
+  scripts an agent may run, the target folders (`~/.agents/skills` and the user's own skill folders)
+  and the agents that read skills. Nothing fetched runs.
+- **`skills.web_preview {fetched, folder, agents}`**: the files into `<folder>/<skill id>`, refused
+  when that is there already, plus each ticked agent's plan for the folder. It is shown as a connection
+  preview with the new files listed (`new_files`, only when there are some, so the differential cases
+  stay equal).
+- **Files staged on the wire:** `Plan.filesStaged` (path, staged file, SHA-256, executable) travels as
+  an optional `files_staged` field of wire version 3; only this core's own plans carry it. Before
+  writing, the worker reads each file back without following links, as this account's regular file
+  inside the staging folder, checks its size and SHA-256 against the review, and creates it with
+  `O_EXCL`. The backup's manifest lists it, so Undo removes it. The staging folder goes after the
+  apply.
+- **Python fixes, both sides:**
+  - repository, skill id and file-name parts must match in full (`re.match`'s `$`);
+  - `installs` and `size` must be real numbers (`True` counted as 1).
+- **Flutter:** **Find skills on the web…** in Connections opens `SkillsWebView`: search, a result, its
+  description, file count and scripts, **Into**, **Also for**, Preview. Connection previews list new
+  files. Two new texts in eight languages; the manual's "Skills from the web in the Flutter preview" in
+  all eight; PDFs rebuilt.
+
+Check: `tests/test_dart_skills_web_parity.py`. It compares Python and Dart on:
+- search answers: bad repositories and ids, trailing newlines, a bool count;
+- file lists: links, submodules, `..`, too deep, too large, too many, no SKILL.md, a one-skill
+  repository, the shortest folder;
+- SKILL.md descriptions: folded, quoted, long, CRLF, none.
+
+`test/skills_web_test.dart` fetches into staging with fake hosts, applies through the worker's
+`applyPlan`, and checks that Undo removes the files. A changed staged file, a staged file outside the
+folder and bad `files_staged` entries are refused. There are widget tests and an app test. It was also
+run once for real: skills.sh's search for "pdf" and anthropics/skills' pdf skill (12 files, 5 scripts
+named) fetched into staging, then removed.

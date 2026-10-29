@@ -3140,5 +3140,7 @@
  "The download is checked against the checksum its release lists; nothing of it runs while it is installed.": "Il download viene verificato con il checksum indicato dalla sua release; durante l’installazione non ne viene eseguito nulla.",
  "The app does not keep it.": "L’app non la conserva.",
  "Offered first for AI help and the Smart Check on the System Map; its tokens are used for them.": "Viene proposto per primo per l’aiuto IA e lo Smart Check della mappa di sistema; per questo si usano i suoi token.",
- "Find MCP servers…": "Trova server MCP…"
+ "Find MCP servers…": "Trova server MCP…",
+ "Find skills on the web…": "Trova skill sul web…",
+ "No skill found.": "Nessuna skill trovata."
 }

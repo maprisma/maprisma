@@ -3221,5 +3221,7 @@
  "The download is checked against the checksum its release lists; nothing of it runs while it is installed.": "Pobrany plik jest sprawdzany z sumą kontrolną podaną w jego wydaniu; podczas instalacji nic z niego nie jest uruchamiane.",
  "The app does not keep it.": "Aplikacja go nie przechowuje.",
  "Offered first for AI help and the Smart Check on the System Map; its tokens are used for them.": "Proponowany jako pierwszy do pomocy AI i Smart Check na mapie systemu; zużywa na to swoje tokeny.",
- "Find MCP servers…": "Znajdź serwery MCP…"
+ "Find MCP servers…": "Znajdź serwery MCP…",
+ "Find skills on the web…": "Znajdź skille w sieci…",
+ "No skill found.": "Nie znaleziono skilla."
 }

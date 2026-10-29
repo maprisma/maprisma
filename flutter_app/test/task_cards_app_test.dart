@@ -92,6 +92,9 @@ for line in sys.stdin:
     'publisher':{'kind':'','who':''},'options':[{'option':'opt-time','kind':'pypi','label':'pypi · mcp-server-time 1.0','runnable':True,'command':'uvx',
      'args':['mcp-server-time==1.0'],'env':[],'url':'','headers':[],'needs':[],'on_command_line':[]}]}}]}
   r={'task':'mcpcat'}
+ elif m=='skills.web_search':tasks['sks']={'skills':[{'name':'pdf','skill_id':'pdf','repo':'a/skills','installs':3}]};r={'task':'sks'}
+ elif m=='skills.web_fetch':tasks['skf']={'fetched':'f1','name':'pdf','repo':'a/skills','skill_id':'pdf','description':'Reads PDFs.','files':['SKILL.md'],'scripts':[],'targets':['~/.agents/skills'],'agents':[{'command':'test','name':'Test agent'}]};r={'task':'skf'}
+ elif m=='skills.web_preview':r={'plan':'opaque-skill','empty':False,'files':[],'new_files':['~/.agents/skills/pdf/SKILL.md'],'links_add':[],'links_remove':[],'kind':'skills','agents':[],'focus':['agent:test']}
  elif m=='mcp.tools_cached':r={'cached':None}
  elif m=='mcp.tools':tasks['tools']={'status':'ok','checked':'2026-10-29T12:00:00','server':'known 1','tools':[{'name':'lookup','description':'Looks up'}],'prompts':[]};r={'task':'tools'}
  elif m=='mcp.option_preview':r={'plan':'opaque-catalog','empty':False,'files':[],'links_add':[],'links_remove':[],'kind':'mcp','agents':['Test agent'],'focus':['agent:test']}
@@ -574,6 +577,44 @@ void main() {
     expect(
       tester.widget<AgentMap>(find.byKey(const ValueKey('ai-map'))).lightFps,
       60,
+    );
+    expect(tester.takeException(), isNull);
+    await unmountApp(tester);
+  });
+
+  testWidgets('a skill from the web goes through the preview', (tester) async {
+    final dir = await mountApp(tester);
+    await tester.tap(find.byTooltip('Connections'));
+    await settleService(tester);
+    await tester.tap(find.byKey(const ValueKey('skills-web-open')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('skills-web-search')),
+      'pdf',
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await settleService(tester);
+    await tester.tap(find.byKey(const ValueKey('skill-a/skills/pdf')));
+    await settleService(tester);
+    final preview = find.widgetWithText(FilledButton, 'Preview');
+    await tester.ensureVisible(preview);
+    await tester.pumpAndSettle();
+    await tester.tap(preview);
+    await settleService(tester);
+    expect(
+      requests(
+        dir,
+      ).lastWhere((q) => q['method'] == 'skills.web_preview')['params'],
+      {'fetched': 'f1', 'folder': '~/.agents/skills', 'agents': []},
+    );
+    expect(find.text('~/.agents/skills/pdf/SKILL.md'), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, 'Apply'));
+    await settleService(tester);
+    expect(
+      requests(
+        dir,
+      ).lastWhere((q) => q['method'] == 'connections.apply')['params'],
+      {'plan': 'opaque-skill'},
     );
     expect(tester.takeException(), isNull);
     await unmountApp(tester);

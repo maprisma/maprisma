@@ -5,6 +5,7 @@ import 'package:asterism_core/asterism_core.dart';
 import 'package:asterism_core/src/security_plans.dart' show securityPlan;
 import 'package:asterism_core/src/mcp_catalog.dart' as mcpc;
 import 'package:asterism_core/src/mcp_tools.dart' as mcpt;
+import 'package:asterism_core/src/skills_web.dart' as skw;
 import 'package:asterism_core/src/system_map.dart' show SystemMapReader;
 import 'package:asterism_core/src/agent_catalog.dart' show AgentCatalog;
 import 'package:asterism_core/src/scan_files.dart' show ScanFiles;
@@ -290,6 +291,28 @@ Future<void> main() async {
           params['cache'] as String,
           search: params['search'] == true,
         );
+      } else if (request.method == 'dev.skillsweb') {
+        // skills_web.parse_search, files_of and the SKILL.md description.
+        dynamic files;
+        try {
+          final (folder, found) = skw.skillFiles(
+            params['tree'],
+            params['skill_id'] as String,
+          );
+          files = [
+            folder,
+            [
+              for (final f in found) [f.$1, f.$2, f.$3, f.$4],
+            ],
+          ];
+        } on FormatException catch (e) {
+          files = {'error': e.message};
+        }
+        result = {
+          'search': skw.parseSkillSearch(params['search']),
+          'files': files,
+          'description': skw.skillDescription(params['text'] as String),
+        };
       } else if (request.method == 'dev.mcptools') {
         // mcp_tools.ask against a fixture server.
         try {
