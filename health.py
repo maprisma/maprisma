@@ -288,7 +288,10 @@ def check(agent_list, details: dict, inventory, built, pc: PC, agent_checks: dic
 
     # Tools: MCP servers and skills ----------------------------------------------------------------
     area = Area("tools", _("Tools: MCP servers and skills"), "\U000f0841")
-    for (source, target), hint in sorted(failed_links.items()) if isinstance(failed_links, dict) else []:
+    import link_hints
+    # link_hints.load keys are "source|target" strings: split them (unpacking a string key failed).
+    for link_key, hint in sorted(failed_links.items()) if isinstance(failed_links, dict) else []:
+        source, target = link_hints.split(str(link_key))
         area.findings.append(Finding("warn", _("A connection does not work: {0} → {1}").format(
             names.get(str(source).split(":", 1)[-1], str(source).split(":", 1)[-1]), str(target).split(":", 1)[-1]),
             _("Click its dotted red line on the map for what to do."), ("link", str(source), str(target))))

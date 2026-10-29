@@ -31,6 +31,7 @@ import 'api_key_review.dart';
 import 'performance_view.dart';
 import 'interrupted_jobs.dart';
 import 'help_view.dart';
+import 'open_problems_view.dart';
 import 'agent_action_dialog.dart';
 import 'providers_view.dart';
 import 'system_map_view.dart';
@@ -1228,6 +1229,78 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
       'setting': chosen.$2,
       'value': chosen.$3,
     }, method: 'models.tuning_preview');
+  }
+
+  /// The health report (health.report): the header's "!" while something
+  /// needs fixing or there are tips; Open problems lists them.
+  Map<String, dynamic>? _healthReport;
+  int get _healthCount =>
+      (_healthReport?['warn'] as int? ?? 0) +
+      (_healthReport?['hint'] as int? ?? 0);
+
+  Future<void> _checkHealth() async {
+    try {
+      final report = await _quietTask('health.report', {});
+      if (mounted) setState(() => _healthReport = report);
+    } catch (_) {
+      // No "!": the rest of the app is unaffected.
+    }
+  }
+
+  Future<void> _openProblems() async {
+    final report = _healthReport;
+    if (report == null || _busy) return;
+    await _cardReview(
+      tr('Open problems'),
+      const {},
+      (yes, no) => OpenProblemsView(
+        report: report,
+        tr: tr,
+        onAction: (action) {
+          _cancelReview?.call();
+          _healthAction(action);
+        },
+        onCheckAgain: () async {
+          _cancelReview?.call();
+          await _checkHealth();
+          if (mounted) await _openProblems();
+        },
+        onClose: no,
+      ),
+    );
+  }
+
+  /// ai_popup.health_action: each finding opens where it is fixed.
+  void _healthAction(List<String> action) {
+    switch (action.first) {
+      case 'details':
+        _selectAgent(action[1]);
+      case 'firstagent':
+        _openGuide();
+      case 'install':
+        _installProgram('runtime', action[1]);
+      case 'runtime' || 'models':
+        setState(() {
+          _showProviders = true;
+          _showConnections = false;
+          _showSystemMap = false;
+        });
+      case 'addmcp' || 'addskills':
+        setState(() {
+          _showConnections = true;
+          _showProviders = false;
+          _showSystemMap = false;
+        });
+      case 'reorganize':
+        _openSystem();
+      default:
+        setState(() {
+          _showMap = true;
+          _showConnections = false;
+          _showProviders = false;
+          _showSystemMap = false;
+        });
+    }
   }
 
   /// Help (F1): the user manual and where to start.
@@ -2753,6 +2826,7 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
       if (firstSnapshot) {
         unawaited(_detectSetup());
         unawaited(_loadJobs());
+        unawaited(_checkHealth());
       }
     } catch (_) {
       if (mounted) {
@@ -2891,6 +2965,18 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
               tooltip: tr('Usage'),
               onPressed: _navigationBlocked ? null : _openUsage,
               icon: const Icon(Icons.bar_chart_outlined),
+            ),
+          if (_healthCount > 0)
+            IconButton(
+              key: const ValueKey('problems-open'),
+              tooltip: '${_healthReport?['summary'] ?? ''}',
+              icon: Icon(
+                Icons.priority_high,
+                color: (_healthReport?['warn'] as int? ?? 0) > 0
+                    ? Theme.of(context).colorScheme.error
+                    : null,
+              ),
+              onPressed: _navigationBlocked ? null : _openProblems,
             ),
           IconButton(
             key: const ValueKey('help-open'),

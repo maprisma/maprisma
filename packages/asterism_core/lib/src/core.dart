@@ -30,15 +30,16 @@ import 'agent_keys.dart';
 import 'security_plans.dart';
 import 'security_reports.dart';
 import 'adapters.dart' show Adapter;
+import 'agent_details.dart' show AgentInfo;
 import 'system_map.dart' show SystemMapReader;
-import 'agent_catalog.dart' show AgentCatalog;
+import 'agent_catalog.dart' show AgentCatalog, AgentRecord;
 import 'skill_plans.dart';
 import 'mcp_plans.dart';
 import 'llm_plans.dart';
 import 'context.dart';
 import 'map_edits.dart';
 import 'provider_ops.dart';
-import 'inventory.dart' show chatModels;
+import 'inventory.dart' show chatModels, InventorySnapshot;
 import 'settings.dart';
 import 'service_i18n.dart';
 import 'provider_facts.dart';
@@ -47,6 +48,7 @@ import 'skills_web.dart';
 import 'llm_tuning.dart';
 import 'core_jobs.dart';
 import 'setup_checks.dart';
+import 'health_report.dart';
 import 'mcp_tools.dart' show cachedTools;
 
 const portedRoutes = {
@@ -123,6 +125,7 @@ const portedRoutes = {
   'help.open_manual',
   'agents.health',
   'providers.health',
+  'health.report',
   ...readOnlyRoutes,
 };
 // Phase 7 removes this blocker only after every route has differential coverage.
@@ -1395,70 +1398,99 @@ final class CoreService {
   /// runtime_checks, the details pages' Health card): is it ready to use,
   /// and what to do next. Reads only; credential files are only stat'ed.
   Map<String, dynamic> healthRoute(String method, Map<String, dynamic> params) {
-    final agents = reads.catalog.scan();
-    final checks = SetupChecks(
-      tr: i18n.text,
-      home: identity.home,
-      environment: identity.environment,
-      desktop: desktop.name,
-      installCommand: (pkg) =>
-          installCommand(desktop.name, pkg, identity.environment['PATH']),
-    );
-    final snapshot = {
-      for (final r in reads.providersSnapshot()['local'] as List) r['key']: r,
-    };
-    final inventory = reads.inventory.collect(agents, remember: false);
-    final runtimes = [
-      for (final rt in inventory.runtimes)
-        {
-          ...rt.toJson(),
-          'can_control': (snapshot[rt.key] as Map?)?['can_control'] == true,
-        },
-    ];
-    final failures = reads.files.json(edits.failurePath);
-    final hints = {
-      for (final e in failures.entries)
-        if (e.value is Map) e.key: e.value,
-    };
-    final names = {for (final a in agents) a.command: a.name};
+    final h = _HealthInputs(this);
     final List<Map<String, dynamic>> found;
     if (method == 'providers.health') {
-      final key = params['key'];
-      final rt = runtimes.where((r) => r['key'] == key).firstOrNull;
+      final rt = h.runtimes.where((r) => r['key'] == params['key']).firstOrNull;
       if (params.length != 1 || rt == null) {
         throw const FormatException('Unknown local provider');
       }
-      found = checks.runtimeChecks(rt, hints, names, null);
+      found = h.runtimeChecks(rt);
     } else {
       final command = params['command'];
-      final agent = agents.where((a) => a.command == command).firstOrNull;
-      final adapter = addons.adapters
-          .where((a) => a.command == command)
-          .firstOrNull;
-      if (params.length != 1 || agent == null || adapter == null) {
+      if (params.length != 1 || command is! String) {
         throw const FormatException('Unknown agent');
       }
-      final info = reads.details.read(adapter);
-      final access = adapter.table('access');
-      found = checks.agentChecks(
-        agent: {
-          'command': agent.command,
-          'name': agent.name,
-          'installed': agent.installed,
-          'version': agent.version,
-        },
-        info: {'model': info.model, 'providers': info.providers},
-        record: reads.details.usageRecord(adapter.command),
-        runtimes: runtimes,
-        mcp: inventory.agentMcp[command] ?? const [],
-        skills: inventory.agentSkills[command] ?? const [],
-        hints: hints,
-        access: access.isEmpty ? null : access,
-        issue: _startIssue('$command'),
-      );
+      found = h.agentChecks(command);
     }
-    final (state, line) = checks.summaryLine(found);
+    final (state, line) = h.checks.summaryLine(found);
     return {'state': state, 'summary': line, 'checks': found};
+  }
+
+  /// health.report (the GTK Open problems page): the PC's facts read in the
+  /// worker (the card through lspci, the memory, the free space in the
+  /// model folders), then the whole report from what the core knows.
+  Map<String, dynamic> healthReportRoute(Map<String, dynamic> params) {
+    if (params.isNotEmpty) {
+      throw const FormatException('Unexpected parameters');
+    }
+    final agents = reads.catalog.scan();
+    final inventory = reads.inventory.collect(agents, remember: false);
+    final dirs = {
+      for (final rt in inventory.runtimes)
+        if (rt.installed && rt.modelsDir.isNotEmpty) rt.modelsDir,
+    }.toList();
+    return tasks.start('health.pc', {'dirs': dirs}, (pc) {
+      final h = _HealthInputs(this);
+      final installed = h.agents.where((a) => a.installed).toList();
+      final report =
+          HealthReport(
+            tr: i18n.text,
+            plural: i18n.plural,
+            desktopText: h.checks.desktopText,
+            home: identity.home,
+            searchPath: identity.environment['PATH'],
+          ).check(
+            agents: [
+              for (final a in h.agents)
+                {
+                  'command': a.command,
+                  'name': a.name,
+                  'installed': a.installed,
+                },
+            ],
+            agentChecks: {
+              for (final a in installed) a.command: h.agentChecks(a.command),
+            },
+            runtimeChecks: {
+              for (final rt in h.runtimes)
+                if (rt['installed'] == true)
+                  '${rt['key']}': h.runtimeChecks(rt),
+            },
+            runtimes: h.runtimes,
+            mcp: h.inventory.mcp,
+            skillSets: h.inventory.skillSets,
+            providers: {
+              for (final a in installed)
+                if (h.adapter(a.command) != null)
+                  a.command: h.info(a.command)!.providers,
+            },
+            facts: {
+              for (final a in installed)
+                if (h.adapter(a.command) != null)
+                  a.command: {
+                    'chat_app': h.adapter(a.command)!.facts['chat_app'] == true,
+                    'web_search':
+                        h.adapter(a.command)!.facts['web_search'] == true,
+                  },
+            },
+            graph: reads.map,
+            pc: pc,
+            failedLinks: h.hints,
+          );
+      // The page's heading, counted in the interface language.
+      final open = [
+        for (final a in report['areas'] as List)
+          for (final f in (a as Map)['findings'] as List)
+            if ((f as Map)['level'] == 'warn') f,
+      ].length;
+      return {
+        ...report,
+        'open_text': i18n
+            .plural('1 open problem', '{0} open problems', open)
+            .replaceAll('{0}', '$open'),
+      };
+    });
   }
 
   /// agent_status.load_issues: the problem the last Start ran into.
@@ -2005,6 +2037,7 @@ final class CoreService {
     if (method == 'agents.health' || method == 'providers.health') {
       return healthRoute(method, params);
     }
+    if (method == 'health.report') return healthReportRoute(params);
     if (method == 'help.snapshot' || method == 'help.open_manual') {
       if (params.isNotEmpty) {
         throw const FormatException('Unexpected parameters');
@@ -2172,5 +2205,89 @@ final class CoreService {
       });
     }
     return result;
+  }
+}
+
+/// What the health checks read, collected once per request.
+final class _HealthInputs {
+  _HealthInputs(this.core) {
+    agents = core.reads.catalog.scan();
+    checks = SetupChecks(
+      tr: core.i18n.text,
+      home: core.identity.home,
+      environment: core.identity.environment,
+      desktop: core.desktop.name,
+      installCommand: (pkg) => installCommand(
+        core.desktop.name,
+        pkg,
+        core.identity.environment['PATH'],
+      ),
+    );
+    final snapshot = {
+      for (final r in core.reads.providersSnapshot()['local'] as List)
+        r['key']: r,
+    };
+    inventory = core.reads.inventory.collect(agents, remember: false);
+    runtimes = [
+      for (final rt in inventory.runtimes)
+        {
+          ...rt.toJson(),
+          'can_control': (snapshot[rt.key] as Map?)?['can_control'] == true,
+        },
+    ];
+    final failures = core.reads.files.json(core.edits.failurePath);
+    hints = {
+      for (final e in failures.entries)
+        if (e.value is Map) e.key: e.value,
+    };
+    names = {for (final a in agents) a.command: a.name};
+  }
+
+  final CoreService core;
+  late final List<AgentRecord> agents;
+  late final SetupChecks checks;
+  late final InventorySnapshot inventory;
+  late final List<Map<String, dynamic>> runtimes;
+  late final Map<String, dynamic> hints;
+  late final Map<String, String> names;
+  final _infos = <String, AgentInfo>{};
+
+  Adapter? adapter(String command) =>
+      core.addons.adapters.where((a) => a.command == command).firstOrNull;
+
+  AgentInfo? info(String command) {
+    final a = adapter(command);
+    return a == null
+        ? null
+        : _infos.putIfAbsent(command, () => core.reads.details.read(a));
+  }
+
+  List<Map<String, dynamic>> runtimeChecks(Map rt) =>
+      checks.runtimeChecks(rt, hints, names, null);
+
+  List<Map<String, dynamic>> agentChecks(String command) {
+    final agent = agents.where((a) => a.command == command).firstOrNull;
+    final a = adapter(command);
+    if (agent == null || a == null) {
+      throw const FormatException('Unknown agent');
+    }
+    final details = info(command)!;
+    final access = a.table('access');
+    return checks.agentChecks(
+      agent: {
+        'command': agent.command,
+        'name': agent.name,
+        'installed': agent.installed,
+        'version': agent.version,
+      },
+      info: {'model': details.model, 'providers': details.providers},
+      record: core.reads.details.usageRecord(command),
+      runtimes: runtimes,
+      mcp: inventory.agentMcp[command] ?? const [],
+      skills: inventory.agentSkills[command] ?? const [],
+      hints: hints,
+      access: access.isEmpty ? null : access,
+      issue: core._startIssue(command),
+    );
   }
 }

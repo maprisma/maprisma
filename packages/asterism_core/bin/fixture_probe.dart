@@ -8,6 +8,7 @@ import 'package:asterism_core/src/mcp_tools.dart' as mcpt;
 import 'package:asterism_core/src/skills_web.dart' as skw;
 import 'package:asterism_core/src/llm_tuning.dart' as tun;
 import 'package:asterism_core/src/setup_checks.dart' as chk;
+import 'package:asterism_core/src/health_report.dart' as hr;
 import 'package:asterism_core/src/installers.dart' as inst;
 import 'package:asterism_core/src/provider_scans.dart' show RuntimeRecord;
 import 'package:asterism_core/src/system_map.dart' show SystemMapReader;
@@ -295,6 +296,39 @@ Future<void> main() async {
           params['cache'] as String,
           search: params['search'] == true,
         );
+      } else if (request.method == 'dev.healthreport') {
+        // health.check over given checks, inventory, graph and PC facts.
+        final setup = chk.SetupChecks(
+          tr: i18n.text,
+          home: identity.home,
+          environment: Platform.environment,
+          desktop: params['desktop'] as String,
+          installCommand: (_) => '',
+        );
+        Map<String, List<Map>> lists(dynamic m) => {
+          for (final e in (m as Map).entries)
+            '${e.key}': (e.value as List).cast<Map>(),
+        };
+        result =
+            hr.HealthReport(
+              tr: i18n.text,
+              plural: i18n.plural,
+              desktopText: setup.desktopText,
+              home: identity.home,
+              searchPath: Platform.environment['PATH'],
+            ).check(
+              agents: (params['agents'] as List).cast<Map>(),
+              agentChecks: lists(params['agent_checks']),
+              runtimeChecks: lists(params['runtime_checks']),
+              runtimes: (params['runtimes'] as List).cast<Map>(),
+              mcp: (params['mcp'] as List).cast<Map>(),
+              skillSets: (params['skill_sets'] as List).cast<Map>(),
+              providers: lists(params['providers']),
+              facts: (params['facts'] as Map).cast<String, Map>(),
+              graph: params['graph'] as Map?,
+              pc: params['pc'] as Map,
+              failedLinks: params['failed_links'] as Map,
+            );
       } else if (request.method == 'dev.setupchecks') {
         // agent_status.agent_checks / runtime_checks / summary_line.
         final checks = chk.SetupChecks(

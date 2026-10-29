@@ -5,6 +5,23 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 KEYS = (
+    # Open problems (health.report).
+    "Open problems",
+    "Check again",
+    "Nothing to fix.",
+    "Each one opens where it is fixed.",
+    "Ready",
+    "Almost",
+    "Not yet",
+    "Details",
+    "Models…",
+    "Install…",
+    "Map",
+    "Get started",
+    "Add MCP server",
+    "Tidy up…",
+    "What you can do with it",
+    "Everything set up and working",
     # Health of an agent or a local LLM (agents.health, providers.health).
     "Health",
     "Healthy",

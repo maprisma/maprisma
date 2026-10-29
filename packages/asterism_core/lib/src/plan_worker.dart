@@ -26,6 +26,7 @@ import 'mcp_catalog.dart';
 import 'mcp_tools.dart';
 import 'skills_web.dart' as skills_web;
 import 'llm_tuning.dart';
+import 'health_report.dart' show pcInfo;
 import 'context.dart' show ContextReader;
 import 'model_hub.dart' show netFetch;
 import 'model_downloads.dart' show DownloadError;
@@ -585,6 +586,23 @@ Future<int> runWorker(List<String> args) async {
             llamaVersion: () async => installer.currentVersion(),
           );
       send({'type': 'result', 'result': facts});
+      return 0;
+    }
+    // health.pc_info: the card (lspci), the memory, the free space in the
+    // model folders. Read only.
+    if (args.isEmpty && request['operation'] == 'health.pc') {
+      final params = request['params'] as Map;
+      final dirs = params['dirs'];
+      if (params.length != 1 ||
+          dirs is! List ||
+          dirs.length > 64 ||
+          dirs.any((d) => d is! String || d.length > 4096)) {
+        throw const FormatException('Invalid worker request');
+      }
+      send({
+        'type': 'result',
+        'result': await pcInfo(dirs.cast<String>(), AppIdentity().home),
+      });
       return 0;
     }
     // A provider operation: no private plan, its parameters checked again here.

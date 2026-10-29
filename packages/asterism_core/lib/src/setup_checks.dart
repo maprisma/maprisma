@@ -73,11 +73,22 @@ final class SetupChecks {
         ? const {
             'install_agent':
                 "Install it from Omarchy's menu: Setup → Defaults → Agent.",
+            'install_agent_first':
+                "Install one from Omarchy's menu: Setup → Defaults → Agent (Claude Code, Codex or OpenCode to start with).",
+            'install_agent_short': "Omarchy's menu: Setup → Defaults → Agent.",
+            'install_coding_agent':
+                "Claude Code, Codex or OpenCode: Omarchy's menu → Setup → Defaults → Agent.",
             'install_terminal': 'Install the terminal launcher Omarchy uses:',
           }[key]!
         : const {
             'install_agent':
                 "Install it with its own installer (see the agent's website).",
+            'install_agent_first':
+                'Install one with its own installer (Claude Code, Codex or OpenCode to start with).',
+            'install_agent_short':
+                'Each agent has its own installer (see its website).',
+            'install_coding_agent':
+                'Claude Code, Codex or OpenCode, each with its own installer.',
             'install_terminal': 'Install a terminal app (Console, Konsole, …):',
           }[key]!,
   );

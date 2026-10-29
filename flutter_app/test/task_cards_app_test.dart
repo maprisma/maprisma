@@ -96,6 +96,7 @@ for line in sys.stdin:
  elif m=='models.tuning':tasks['tune']={'runtime':'Fixture provider','key':'fixture','gpu':'GPU','vram':8<<30,'stacks':[],'build':'','builds':[],'devices':'','settings':{'*':{}},'tuning':{'mode':['a|b','A mode']},'per_model':False,'models':[],'loaded':[],'vram_used':0,'helpers':[{'command':'test','name':'Test agent'}]};r={'task':'tune'}
  elif m=='models.tuning_ask':tasks['ask']={'summary':'One thing.','agent':p['command'],'suggestions':[{'kind':'setting','title':'Use b','why':'Faster.','model':'*','key':'mode','value':'b'}]};r={'task':'ask'}
  elif m=='models.tuning_preview':r={'plan':'opaque-tune','empty':False,'files':[{'path':'~/.config/x.ini','added':1,'removed':0}],'links_add':[],'links_remove':[],'item':'Fixture provider','notes':[],'focus':['runtime:fixture']}
+ elif m=='health.report':tasks['hr']={'warn':1,'hint':0,'level':'warn','summary':'1 thing to fix','open_text':'1 open problem','areas':[{'key':'agents','title':'Agents','icon':'','findings':[{'level':'warn','title':'Test agent: Not signed in','text':'','action':['details','test']}]}],'uses':[]};r={'task':'hr'}
  elif m=='agents.health':r={'state':'warn','summary':'Works, one thing to look at: No model chosen','checks':[{'state':'warn','title':'No model chosen','detail':'','step':'Select it on the map.','command':'','sign_in':''}]}
  elif m=='help.snapshot':r={'manual':True}
  elif m=='help.open_manual':r={'opened':True}
@@ -656,6 +657,28 @@ void main() {
         dir,
       ).lastWhere((q) => q['method'] == 'models.tuning_preview')['params'],
       {'key': 'fixture', 'section': '*', 'setting': 'mode', 'value': 'b'},
+    );
+    expect(tester.takeException(), isNull);
+    await unmountApp(tester);
+  });
+
+  testWidgets('the header shows open problems; one opens the agent', (
+    tester,
+  ) async {
+    final dir = await mountApp(tester);
+    await settleService(tester);
+    expect(
+      requests(dir).where((q) => q['method'] == 'health.report'),
+      isNotEmpty,
+    );
+    await tester.tap(find.byKey(const ValueKey('problems-open')));
+    await settleService(tester);
+    expect(find.text('1 open problem'), findsOneWidget);
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Details'));
+    await settleService(tester);
+    expect(
+      requests(dir).lastWhere((q) => q['method'] == 'agents.health')['params'],
+      {'command': 'test'},
     );
     expect(tester.takeException(), isNull);
     await unmountApp(tester);

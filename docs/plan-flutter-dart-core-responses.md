@@ -1735,3 +1735,50 @@ agents.health → the card). It was also run once on this PC: Claude Code with i
 skills, and llama.cpp with its connected agents.
 
 Next, 6b-12b-2: Open problems (the whole report of `health.check`, its use cases, the header's "!").
+
+### 6b-12b-2 — Open problems
+
+New in the core (`health_report.dart`, the reference is `health.check`, `pc_info`, `card_name`,
+`fits_text`, `matches`, `first_local_llm`, `graph.idle_folders`):
+- **`health.report {}`**: the PC's facts are read in a worker (`health.pc`): the card through lspci, the
+  memory, and the free space where each model folder is or would be (statvfs). The report is then
+  built from what the core knows: every agent's and local LLM's checks (6b-12b-1), the inventory
+  (runtimes, MCP servers, skill sets), each agent's providers, the adapters' `chat_app` / `web_search`,
+  the map (idle model folders) and the failed connections.
+  - **Areas:** This PC, Agents, Local LLMs and models, Tools. Each finding has an action.
+  - **Use cases:** everyday help, vibe coding, images, voice, research and writing, with what is there
+    and the next step.
+  - Also the counts, the level, the summary and `open_text` (the plural heading, which Flutter cannot
+    form).
+  - The input gathering of 6b-12b-1 is shared (`_HealthInputs`), so each agent's details are read once.
+- **Python fix, both sides:** `health.check` unpacked `link_hints.load()`'s `"source|target"` string keys
+  as tuples. With any failed connection it raised, and the GTK window got no report. It now splits
+  them (`link_hints.split`).
+- **Not ported:** `model_slots`' warnings (agents on different models of one local LLM, too big
+  together for the card). The slots feature itself (`slots_kind`, `--models-max`, Ollama's
+  `OLLAMA_MAX_LOADED_MODELS`) is not in the core yet; it comes with it.
+- **Flutter:**
+  - After the first snapshot the report is read quietly. A **!** shows in the header while there are
+    problems or tips (red for problems), with the summary as tooltip.
+  - `OpenProblemsView` lists the problems, each with the GTK action: Details, Models…, Install…, Map,
+    Get started, Add MCP server, Add skills, Tidy up….
+  - **What you can do with it** shows the use cases (Ready / Almost / Not yet) with what is there and
+    up to two steps. **Check again** reads the report again.
+  - All texts were already translated; the manual's "Open problems in the Flutter preview" in all
+    eight languages; PDFs rebuilt.
+
+Check: `tests/test_dart_health_report_parity.py`, on both desktops, with fixture programs on PATH
+(krita, whisper-cli). It covers:
+- a full setup: a big AMD card, full and roomy disks, agents with problems and tips, a chat app, local
+  LLMs with coder, vision, image and speech models, idle folders, a model in two local LLMs, failed
+  connections, used and unused MCP servers, skills;
+- an empty one: no card, no agents;
+- a small card with little memory;
+- a card without a bracketed name.
+
+Python and Dart give the same report. There are widget tests and an app test (the header's ! → Open
+problems → Details opens the agent). It was also run once on this PC: four problems (agents without a
+model, LM Studio without models), three doubled models, and all five use cases ready.
+
+Next, 6b-12b-3: Updates and suggestions (`agent_updates`, add-on suggestions and updates, new MCP
+servers and skills on this PC).
