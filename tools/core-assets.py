@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Dev-only: embed reference defaults and built-in service translations in Dart."""
+"""Dev-only: embed reference defaults, built-in service translations and the first-agent catalog in Dart."""
 import json
 from pathlib import Path
 import sys
@@ -22,7 +22,9 @@ def main():
                       "import 'dart:convert';\n"
                       f'final Map<String, dynamic> defaults = jsonDecode({literal(defaults)}) as Map<String, dynamic>;\n'
                       f'final List<dynamic> retiredSettings = jsonDecode({literal(retired)}) as List<dynamic>;\n'
-                      f'final Map<String, dynamic> serviceTables = jsonDecode({literal(tables)}) as Map<String, dynamic>;\n')
+                      f'final Map<String, dynamic> serviceTables = jsonDecode({literal(tables)}) as Map<String, dynamic>;\n'
+                      # The app's own first-agent.json, as its bytes (first_agent.load reads the file).
+                      f"const String firstAgentCatalogText = {json.dumps((ROOT / 'data/first-agent.json').read_text(encoding='utf-8'), ensure_ascii=False).replace('$', chr(92) + '$')};\n")
 
 
 if __name__ == '__main__':

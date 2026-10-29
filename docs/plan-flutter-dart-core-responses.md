@@ -1076,3 +1076,34 @@ Check: `tests/test_dart_installers_parity.py`:
   - a used preview and a preview of an installed program.
 
 The same answers, files (contents and modes) and service calls on both sides.
+
+### 5c — setup and the first-agent guide
+
+The core serves `setup.detect`, `setup.apply`, `setup.later`, `guide.snapshot` and `guide.choose`
+(`first_agent.dart`):
+- **The routes:** `first_agent.load`/`parse`. A loaded add-on's `first-agent.json` comes first (its
+  verified bytes), else the app's own, now embedded by `tools/core-assets.py`. Only entries that hold
+  up are kept.
+- **`guide.snapshot`** (worker, with the add-ons of the chosen settings): each route's checklist as in
+  `flutter_first_agent.snapshot`:
+  - its add-on, mise and Node, the agent (`install-agent` for an adapter with an installer);
+  - online: sign-in or key (`credentials_present`: a variable or a file that exists, never read);
+  - local: the local LLM (`install-runtime` when `installers.dart` can install it), a model and the
+    connection (`LocalLlm.connected` and `active`);
+  - the test question.
+  Texts are translated by the service tables.
+- **`setup.detect`** (worker): `AdapterRegistry.installed`. Every agent and provider add-on is switched
+  on for the look (the agent detected, the local LLM scanned), then the choice is put back.
+- **`setup.apply`:** the add-on guard; the selection checked (no duplicates, only verified add-ons);
+  other add-on choices kept; reloaded and put back on failure; `addons_enabled` and `setup_done` saved.
+  Returns the add-on list.
+- **`setup.later`** saves `setup_done`. **`guide.choose`** saves the route in `first_agent`
+  (`later: false`).
+
+Check: `tests/test_dart_setup_guide_parity.py` installs seven of Uwe's signed add-ons in a temporary
+HOME with a fake Claude (signed in, already tested) and a fake llama.cpp:
+- detection, the guide with the add-ons off and on, choosing a route;
+- setup with duplicates, an unknown add-on and a valid choice; later, and refused shapes.
+
+The same answers and saved settings on both sides. (The reference needs `initialize()` and `ssh-keygen`
+on PATH for its add-on registry; the Dart core verifies natively.)

@@ -9,6 +9,9 @@ import 'connect_apply.dart';
 import 'posix_ffi.dart';
 import 'identity.dart';
 import 'installers.dart';
+import 'first_agent.dart';
+import 'agent_catalog.dart';
+import 'desktop.dart' show detectDesktop;
 import 'model_guard.dart';
 import 'provider_ops.dart';
 import 'provider_scans.dart';
@@ -266,6 +269,56 @@ Future<int> runWorker(List<String> args) async {
       });
       return 0;
     }
+    // The setup page's look (setup.detect) and the first-agent guide
+    // (guide.snapshot), with the add-ons of the chosen settings.
+    if (args.isEmpty &&
+        const {
+          'setup.detect',
+          'guide.snapshot',
+        }.contains(request['operation'])) {
+      final params = request['params'] as Map;
+      if (params.length != 1 ||
+          !params.containsKey('settings_path') ||
+          (params['settings_path'] != null &&
+              params['settings_path'] is! String)) {
+        throw const FormatException('Invalid worker request');
+      }
+      final chosen = params['settings_path'] as String?;
+      final identity = AppIdentity();
+      final files = ScanFiles(identity);
+      final desktop = detectDesktop(identity, Posix());
+      final path = chosen != null && chosen.isNotEmpty
+          ? chosen
+          : identity.settingsPath;
+      final enabled = _enabledIn(path);
+      final registry = _registryFor(enabled);
+      if (request['operation'] == 'setup.detect') {
+        send({
+          'type': 'result',
+          'result': {
+            'installed': setupInstalled(
+              registry,
+              enabled,
+              files,
+              (adapters) => AgentCatalog(files, desktop, adapters: adapters),
+            ),
+          },
+        });
+        return 0;
+      }
+      final settings = SettingsStore(identity);
+      send({
+        'type': 'result',
+        'result': guideSnapshot(
+          registry,
+          files,
+          AgentCatalog(files, desktop, adapters: registry.adapters),
+          settings.value(settings.load(), 'first_agent') as Map,
+          ServiceI18n(identity, settings).text,
+        ),
+      });
+      return 0;
+    }
     // An installer preview: the release looked up with the add-ons switched
     // on in the chosen settings (flutter_installers.prepare).
     if (args.isEmpty && request['operation'] == 'installers.preview') {
@@ -472,10 +525,18 @@ Future<bool> setOllamaContext(Map<String, dynamic> c, int uid) async {
 
 /// AdapterRegistry.reload with the add-ons switched on in the chosen
 /// settings: the providers they hide and add (provider_facts).
-void _reloadAddons(String? settingsPath) {
+AddonRegistry _reloadAddons(String? settingsPath) {
   final path = settingsPath != null && settingsPath.isNotEmpty
       ? settingsPath
       : p.join(AppIdentity().configDir, 'settings.json');
+  return _registryFor(_enabledIn(path));
+}
+
+AddonRegistry _registryFor(Set<String> enabled) =>
+    AddonRegistry(AddonVerifier(Posix()), _addonStore().$2)..reload(enabled);
+
+/// settings_schema.value(..., 'addons_enabled') of the chosen settings.
+Set<String> _enabledIn(String path) {
   var enabled = <String>{};
   try {
     final data = jsonDecode(File(path).readAsStringSync());
@@ -484,7 +545,7 @@ void _reloadAddons(String? settingsPath) {
   } catch (_) {
     /* the default: none */
   }
-  AddonRegistry(AddonVerifier(Posix()), _addonStore().$2).reload(enabled);
+  return enabled;
 }
 
 /// settings_schema.value(..., 'addons_online') is True: on unless set off.

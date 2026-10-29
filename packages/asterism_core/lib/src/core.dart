@@ -18,6 +18,7 @@ import 'agent_halt.dart';
 import 'agent_start.dart';
 import 'core_tasks.dart';
 import 'installers.dart' show InstallerPlans, maxPlan;
+import 'first_agent.dart' show loadRoutes;
 import 'skill_plans.dart';
 import 'mcp_plans.dart';
 import 'llm_plans.dart';
@@ -45,6 +46,11 @@ const portedRoutes = {
   'addons.remove_undo',
   'installers.preview',
   'installers.install',
+  'setup.detect',
+  'setup.apply',
+  'setup.later',
+  'guide.snapshot',
+  'guide.choose',
   'sessions.start',
   'projects.pin',
   'projects.forget',
@@ -183,6 +189,90 @@ final class CoreService {
   late final installerPlans = InstallerPlans(
     () => newHandle().substring(coreHandle.length),
   );
+
+  /// setup.* and guide.* (flutter_backend, flutter_setup, flutter_first_agent).
+  Map<String, dynamic> setupRoute(String method, Map<String, dynamic> params) {
+    if (method == 'guide.snapshot' || method == 'setup.detect') {
+      if (params.isNotEmpty) {
+        throw FormatException(
+          method == 'guide.snapshot'
+              ? 'Unexpected guide parameters'
+              : 'Unexpected setup parameters',
+        );
+      }
+      return tasks.start(method, {'settings_path': identity.settingsPath});
+    }
+    if (method == 'guide.choose') {
+      if (params.length != 1 || !params.containsKey('route')) {
+        throw const FormatException('Invalid route selection');
+      }
+      final route = params['route'];
+      if (route is! String ||
+          !loadRoutes(addons.items).any((r) => r.id == route)) {
+        throw const FormatException('Unknown first-agent route');
+      }
+      final saved = Map<String, dynamic>.from(
+        settings.value(settings.load(), 'first_agent') as Map,
+      );
+      settings.saveOwn({
+        'first_agent': {...saved, 'route': route, 'later': false},
+      });
+      return {'ok': true};
+    }
+    if (method == 'setup.later') {
+      if (params.isNotEmpty) {
+        throw const FormatException('Unexpected setup parameters');
+      }
+      settings.saveOwn({'setup_done': true});
+      return {'ok': true};
+    }
+    // setup.apply: the agents' and local LLMs' add-ons chosen on first run.
+    guardAddonChanges();
+    if (params.length != 1 || !params.containsKey('enabled')) {
+      throw const FormatException('Invalid setup request');
+    }
+    final selected = params['enabled'];
+    if (selected is! List ||
+        selected.length > 200 ||
+        selected.any((x) => x is! String) ||
+        selected.toSet().length != selected.length) {
+      throw const FormatException('Invalid setup selection');
+    }
+    final available = {
+      for (final i in addons.items)
+        if (supportedKinds.contains(i.kind) &&
+            (i.state == 'verified' || i.state == 'loaded'))
+          i.id,
+    };
+    if (selected.any((x) => !available.contains(x))) {
+      throw const FormatException('Unavailable setup selection');
+    }
+    final before = enabledAddons();
+    final managed = {
+      for (final i in addons.items)
+        if (supportedKinds.contains(i.kind)) i.id,
+    };
+    // Feature and extension choices, and add-ons not here, stay.
+    final enabled = {...before.difference(managed), ...selected.cast<String>()};
+    try {
+      _reloadAddons(enabled);
+      final loaded = {
+        for (final i in addons.items)
+          if (i.state == 'loaded') i.id,
+      };
+      if (selected.any((x) => !loaded.contains(x))) {
+        throw const FormatException('An adapter could not be loaded');
+      }
+      settings.saveOwn({
+        'addons_enabled': enabled.toList()..sort(),
+        'setup_done': true,
+      });
+    } catch (_) {
+      _reloadAddons(before);
+      rethrow;
+    }
+    return addons.snapshot(enabled, addonSignIns, addonUserDir);
+  }
 
   /// installers.preview / installers.install (flutter_backend).
   Map<String, dynamic> installerRoute(
@@ -558,6 +648,9 @@ final class CoreService {
     }
     if (method.startsWith('addons.')) return addonStoreRoute(method, params);
     if (method.startsWith('installers.')) return installerRoute(method, params);
+    if (method.startsWith('setup.') || method.startsWith('guide.')) {
+      return setupRoute(method, params);
+    }
     if (method == 'sessions.start') return starter.start(params);
     if (method == 'agents.action_preview') {
       return {
