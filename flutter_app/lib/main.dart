@@ -1491,9 +1491,22 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
     if (result['enabled'] == true && result['loaded'] != true) _actionFailed();
   }
 
+  /// A step of the first-agent guide left it (providers, connections, a
+  /// sign-in or test terminal): Back returns to the guide, refreshed, so the
+  /// step just done shows as done.
+  bool _guideReturn = false;
+  final _guideTerminals = <AgentTerminal>{};
+
+  void _backToGuideIfFromIt() {
+    if (!_guideReturn) return;
+    _guideReturn = false;
+    _openGuide();
+  }
+
   Future<void> _openGuide() async {
     final result = await _addonOperation('guide.snapshot', const {});
     if (!mounted || result == null) return;
+    _guideReturn = false;
     setState(() {
       _guide = result;
       _showGuide = true;
@@ -1520,6 +1533,7 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
 
   void _guideAction(String command, String action) {
     _connectionCommand = command.isEmpty ? null : command;
+    _guideReturn = action != 'addons' && action != 'existing';
     if (action != 'existing') setState(() => _showSystemMap = false);
     if (action == 'addons') {
       _openGroups();
@@ -1748,6 +1762,7 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
           result['path'] as String,
           tr: tr,
         );
+        if (_guideReturn) _guideTerminals.add(terminal);
         setState(() {
           _card = null;
           _terminals.add(terminal);
@@ -2549,6 +2564,7 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
                       _card = null;
                       _browser = null;
                       _connectionCommand = null;
+                      _guideReturn = false; // chosen from the menu
                       _showConnections = !_showConnections;
                       _showSystemMap = false;
                       _showProviders = false;
@@ -2568,6 +2584,7 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
                     setState(() {
                       _card = null;
                       _browser = null;
+                      _guideReturn = false; // chosen from the menu
                       _showProviders = !_showProviders;
                       _showSystemMap = false;
                       _showConnections = false;
@@ -2586,6 +2603,7 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
                 : () => setState(() {
                     _card = null;
                     _browser = null;
+                    _guideReturn = false; // chosen from the menu
                     _showSettings = !_showSettings;
                     _showSystemMap = false;
                     _showConnections = false;
@@ -2603,6 +2621,7 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
                     setState(() {
                       _card = null;
                       _browser = null;
+                      _guideReturn = false; // chosen from the menu
                       _showMap = !_showMap;
                       _showSystemMap = false;
                       _showConnections = false;
@@ -2791,8 +2810,16 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
                             ? AgentTerminalView(
                                 session: _visibleTerminal!,
                                 tr: tr,
-                                onBack: () =>
-                                    setState(() => _visibleTerminal = null),
+                                onBack: () {
+                                  final fromGuide = _guideTerminals.remove(
+                                    _visibleTerminal,
+                                  );
+                                  setState(() => _visibleTerminal = null);
+                                  if (fromGuide) {
+                                    _guideReturn = true;
+                                    _backToGuideIfFromIt();
+                                  }
+                                },
                                 onStop: () => _stopTerminal(_visibleTerminal!),
                               )
                             : _showConnections
@@ -2806,13 +2833,18 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
                                   onPreview: _connectionPreview,
                                   onAuthorPreview: (params) =>
                                       _connectionPreview(params, author: true),
-                                  onBack: () =>
-                                      setState(() => _showConnections = false),
+                                  onBack: () {
+                                    setState(() => _showConnections = false);
+                                    _backToGuideIfFromIt();
+                                  },
                                   onUndo: _connectionUndo == null
                                       ? null
                                       : _undoConnection,
                                 ),
-                                () => setState(() => _showConnections = false),
+                                () {
+                                  setState(() => _showConnections = false);
+                                  _backToGuideIfFromIt();
+                                },
                                 width: TaskCardWidth.half,
                                 focus: _focusOf(_connections),
                               )
@@ -2852,10 +2884,15 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
                                   onBrowse: (runtime) =>
                                       setState(() => _browser = runtime),
                                   onDiscover: _openExisting,
-                                  onBack: () =>
-                                      setState(() => _showProviders = false),
+                                  onBack: () {
+                                    setState(() => _showProviders = false);
+                                    _backToGuideIfFromIt();
+                                  },
                                 ),
-                                () => setState(() => _showProviders = false),
+                                () {
+                                  setState(() => _showProviders = false);
+                                  _backToGuideIfFromIt();
+                                },
                                 width: TaskCardWidth.full,
                               )
                             : _showSettings && _snapshot != null

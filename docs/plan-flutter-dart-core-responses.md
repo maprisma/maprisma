@@ -1362,3 +1362,17 @@ New in the core (Dart only; the reference's GTK dialog is `install_dialog.ask_ke
 Check: `test/agent_keys_test.dart` (the `.env` file, a link at its path, private new folders, the
 agent's own command on stdin without session variables and with the key hidden in its answer, refused
 keys and steps, a preview used once and checked again); a widget test for the card.
+
+### 6b-3 — completed setup actions return to the guide
+
+A step started from the first-agent guide (Providers and models, Connections, an install, a sign-in,
+the test question) returns to the guide with Back (or the card's close), and the guide is loaded again,
+so the step just done shows as done. Terminals started from the guide (sign-in, test) return to it when
+their view is left. The same views opened from the menu keep going back to the map: choosing a view
+from the menu ends the guide's return. The manual's "Installing in the Flutter preview" says so in all
+eight languages; PDFs rebuilt.
+
+Check: an app-level widget test with the fake service: the guide, an install from a guide step
+(review with its build and service switches, then installers.install with the chosen switches, the
+guide reloaded), Providers from the guide and Back (reloaded again), Providers from the menu and Back
+(no reload).

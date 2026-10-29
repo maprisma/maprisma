@@ -88,7 +88,8 @@ a commit.
    entry, full settings/security/help/notification views, tuning, durable jobs,
    prerequisite/runtime installer UI and returning completed setup actions to the
    guide. Installer service routes and their Flutter UI are connected (6b-1, 2026-10-29): the
-   first-agent guide's mise/Node.js/local-LLM steps and Install under Providers and models.
+   first-agent guide's mise/Node.js/local-LLM steps and Install under Providers and models. Steps
+   started from the guide return to it, refreshed (6b-3).
    Signed agent/provider add-ons work; file import and Flutter feature/extension
    add-on contracts remain. Other adapter readers/collaboration views remain.
 4. **Product fit and migration validation:** finish keyboard/accessibility,

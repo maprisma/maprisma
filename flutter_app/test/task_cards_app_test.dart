@@ -19,6 +19,7 @@ connected=False
 welcome=False
 install_fails=False
 installed=False
+installed_runtime=False
 catalog_loads=0
 settings={'map_scan_interval':6,'map_light_fps':20,'flutter_theme_mode':'system','map_layers':['agents']}
 addon={'id':'fixture-addon','name':'Fixture adapter','version':'1.0','summary':'Summary',
@@ -65,6 +66,18 @@ for line in sys.stdin:
  elif m=='addons.install':
   installed=not install_fails
   tasks['install']={'ok':True};r={'task':'install'}
+ elif m=='guide.snapshot':
+  guides=sum(1 for l in open('requests.jsonl') if '"guide.snapshot"' in l)
+  steps=[{'title':'llama.cpp','done':installed_runtime,'detail':'','action':'providers' if installed_runtime else 'install-runtime','target':'llamacpp'},
+         {'title':'Connections','done':False,'detail':'','action':'providers'}]
+  tasks['guide']={'routes':[{'id':'local','kind':'local','title':'Local route','access':'On this PC','command':'test','name':'Test agent','verified':False,'steps':steps}],'selected':'local','loads':guides}
+  r={'task':'guide'}
+ elif m=='installers.preview':
+  tasks['ipreview']={'installer':'inst-1','kind':p['kind'],'key':p['key'],'name':'llama.cpp','version':'b9000-'+p.get('build','vulkan'),'size':10,
+   'files':[{'name':'llama.tar.gz','size':10}],'folder':'/home/u/.local/share/ai-agents-map/llamacpp','models':'/home/u/.local/share/ai-agents-map/llamacpp/models',
+   'gpu':{'vendor':'amd','name':'AMD · card1'},'build':p.get('build','vulkan'),'builds':[['vulkan','Vulkan'],['cpu','CPU']],'has_service':True}
+  r={'task':'ipreview'}
+ elif m=='installers.install':installed_runtime=True;tasks['iinstall']={'ok':True,'kind':'runtime','key':'llamacpp','version':'b9000'};r={'task':'iinstall'}
  elif m=='tasks.status':r=({'state':'failed'} if p['task']=='install' and install_fails else {'state':'done','result':tasks[p['task']]})
  else:r={}
  print(json.dumps({'id':q['id'],'result':r}),flush=True)
@@ -545,6 +558,51 @@ void main() {
       tester.widget<AgentMap>(find.byKey(const ValueKey('ai-map'))).lightFps,
       60,
     );
+    expect(tester.takeException(), isNull);
+    await unmountApp(tester);
+  });
+
+  testWidgets('steps taken from the guide return to it, refreshed', (
+    tester,
+  ) async {
+    final dir = await mountApp(tester);
+    int guides() =>
+        requests(dir).where((q) => q['method'] == 'guide.snapshot').length;
+    await tester.tap(find.byTooltip('Your first agent'));
+    await settleService(tester);
+    expect(guides(), 1);
+    // Install the route's local LLM: reviewed, installed, the guide again.
+    await tester.tap(find.text('Install llama.cpp…'));
+    await settleService(tester);
+    expect(find.textContaining('b9000-vulkan'), findsWidgets);
+    await tester.ensureVisible(find.text('Start at login'));
+    await tester.tap(find.text('Start at login'));
+    await tester.pump();
+    await tester.ensureVisible(find.widgetWithText(FilledButton, 'Install'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Install'));
+    await settleService(tester);
+    final install = requests(
+      dir,
+    ).lastWhere((q) => q['method'] == 'installers.install');
+    expect(install['params'], {
+      'installer': 'inst-1',
+      'start_now': false,
+      'start_at_login': true,
+    });
+    expect(guides(), 2);
+    // Providers from the guide: Back comes back to the guide, refreshed.
+    await tester.tap(find.text('Providers and models').first);
+    await settleService(tester);
+    await tester.tap(find.text('Back').first);
+    await settleService(tester);
+    expect(guides(), 3);
+    expect(find.text('Local route'), findsWidgets);
+    // Chosen from the menu, Providers goes back to the map, not the guide.
+    await tester.tap(find.byTooltip('Providers and models'));
+    await settleService(tester);
+    await tester.tap(find.text('Back').first);
+    await settleService(tester);
+    expect(guides(), 3);
     expect(tester.takeException(), isNull);
     await unmountApp(tester);
   });
