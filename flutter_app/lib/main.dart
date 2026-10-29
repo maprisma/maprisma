@@ -1242,6 +1242,8 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
       (_healthReport?['hint'] as int? ?? 0) +
       _updates.length;
 
+  Timer? _limitsTimer;
+
   /// Newer versions of agents and local LLMs (updates.check, cached 6 h).
   List<Map<String, dynamic>> _updates = [];
 
@@ -2947,6 +2949,14 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
         unawaited(_loadJobs());
         unawaited(_checkHealth());
         unawaited(_checkUpdates());
+        // Settings › Costs: a desktop notification when a plan limit turns red.
+        _limitsTimer ??= Timer.periodic(const Duration(minutes: 1), (_) {
+          if (_backend?.isConnected == true) {
+            unawaited(
+              _backend!.call('limits.notify').then((_) {}, onError: (_) {}),
+            );
+          }
+        });
       }
     } catch (_) {
       if (mounted) {
@@ -2980,6 +2990,7 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
 
   @override
   void dispose() {
+    _limitsTimer?.cancel();
     windowManager.removeListener(this);
     _liveTimer?.cancel();
     _mapLayoutTimer?.cancel();

@@ -3145,5 +3145,6 @@
  "No skill found.": "Nessuna skill trovata.",
  "Settings for every model": "Impostazioni per tutti i modelli",
  "Everything this app does, step by step, as a PDF for this version in your language.": "Tutto ciò che fa questa app, passo per passo, in un PDF per questa versione nella tua lingua.",
- "Where to start": "Da dove iniziare"
+ "Where to start": "Da dove iniziare",
+ "A desktop notification when an agent's plan limit turns red: once for each limit until it resets.": "Una notifica sul desktop quando un limite del piano di un agente diventa rosso: una volta per limite finché non si azzera."
 }

@@ -1,4 +1,6 @@
 {
+  "Notify when red": "Avisar no vermelho",
+  "A desktop notification when an agent's plan limit turns red: once for each limit until it resets.": "Uma notificação no ambiente de trabalho quando um limite do plano de um agente fica vermelho: uma vez por limite até ser reposto.",
   "{0} {1} is available (you have {2})": "{0} {1} está disponível (você tem {2})",
   "Update": "Atualizar",
   "Updates and suggestions": "Atualizações e sugestões",

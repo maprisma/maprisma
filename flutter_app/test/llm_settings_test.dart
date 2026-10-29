@@ -68,4 +68,16 @@ void main() {
     await tester.scrollUntilVisible(find.text('Agent for AI checks'), 250);
     expect(find.text('None installed'), findsOneWidget);
   });
+
+  testWidgets('notify when an agent turns red, on by default', (tester) async {
+    Map<String, dynamic>? updated;
+    await tester.pumpWidget(view({}, const [], (values) => updated = values));
+    await tester.scrollUntilVisible(find.text('Notify when red'), 250);
+    final notify = tester.widget<SwitchListTile>(
+      find.byKey(const ValueKey('warn-notify')),
+    );
+    expect(notify.value, isTrue);
+    notify.onChanged!(false);
+    expect(updated, {'warn_notify': false});
+  });
 }

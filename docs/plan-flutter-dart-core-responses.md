@@ -1880,3 +1880,31 @@ test covers the provider change → the second preview → apply → reload. It 
 PC, read only: llama.cpp's number is fixed by the user's wrapper `~/.local/bin/llama-server` (left
 alone). Ollama already keeps 2 for Hermes and OpenCode; its two models need about 37 GB together for
 a 24 GB card, which is now said as a warning.
+
+### 6b-15 — The red-limit notification
+
+New in the core (`red_limits.dart`, the reference is `agent_details.warn_levels` / `red_limits`,
+`ai_core.plain_text` and `ai_popup.warn_red`):
+- **The limits:** `warnLevels` from Settings › Costs (`warn_yellow`, `warn_red`; red always above
+  yellow, else the defaults 75 % / 90 %). `redLimits` keeps the limits still counting (a past reset is
+  left out) used up to red, rounded to four places as the reference does.
+- **`limits.notify {}`** reads each installed agent's usage record (`reads.details`), and for every red
+  limit not shown yet sends one desktop notification ("{0} is in the red", "{0}: {1} % used, resets
+  Mon 14:00") through `notify-send --app-name=Asterism`. What was shown is kept in
+  `$XDG_STATE_HOME/asterism/red-notified.json` (atomic write, entries older than eight days pruned),
+  so a restart does not show it again; if that file cannot be written, nothing is sent. Title and body
+  are plain text (markup and control characters out, length capped). It does nothing when
+  `warn_notify` is off.
+- **Settings:** `warn_notify` joins the UI settings on both sides; Flutter shows **Notify when red**
+  (on by default) in Settings.
+- **Flutter:** a one-minute timer after the first snapshot calls `limits.notify`.
+- The manual's "Red limits in the Flutter preview" in all eight languages; PDFs rebuilt.
+
+Not yet: the once-a-day cost notification of an agent paid per token, since costs are not in the
+Flutter preview yet.
+
+Check: `test/red_limits_test.dart` (levels, past resets, rounding, plain text; one notification per
+limit and reset, kept across a second check, pruning, nothing sent when the file can't be written) and
+a Flutter settings test for the switch. Not run for real on this PC: it would send a real desktop
+notification.
+

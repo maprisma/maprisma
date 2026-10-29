@@ -3145,5 +3145,6 @@
  "No skill found.": "Geen skill gevonden.",
  "Settings for every model": "Instellingen voor alle modellen",
  "Everything this app does, step by step, as a PDF for this version in your language.": "Alles wat deze app doet, stap voor stap, als pdf voor deze versie in jouw taal.",
- "Where to start": "Waar je begint"
+ "Where to start": "Waar je begint",
+ "A desktop notification when an agent's plan limit turns red: once for each limit until it resets.": "Een bureaubladmelding wanneer een planlimiet van een agent rood wordt: één keer per limiet tot die wordt gereset."
 }

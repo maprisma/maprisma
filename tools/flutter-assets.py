@@ -5,6 +5,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 KEYS = (
+    # The red-limit notification (limits.notify).
+    "Notify when red",
+    "A desktop notification when an agent's plan limit turns red: once for each limit until it resets.",
     # Updates of agents and local LLMs (updates.check).
     "{0} {1} is available (you have {2})",
     "Update",

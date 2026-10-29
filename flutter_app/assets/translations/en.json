@@ -1,4 +1,6 @@
 {
+  "Notify when red": "Notify when red",
+  "A desktop notification when an agent's plan limit turns red: once for each limit until it resets.": "A desktop notification when an agent's plan limit turns red: once for each limit until it resets.",
   "{0} {1} is available (you have {2})": "{0} {1} is available (you have {2})",
   "Update": "Update",
   "Updates and suggestions": "Updates and suggestions",

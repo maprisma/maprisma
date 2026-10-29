@@ -1,4 +1,6 @@
 {
+  "Notify when red": "Melden bij rood",
+  "A desktop notification when an agent's plan limit turns red: once for each limit until it resets.": "Een bureaubladmelding wanneer een planlimiet van een agent rood wordt: één keer per limiet tot die wordt gereset.",
   "{0} {1} is available (you have {2})": "{0} {1} is beschikbaar (je hebt {2})",
   "Update": "Bijwerken",
   "Updates and suggestions": "Updates en suggesties",

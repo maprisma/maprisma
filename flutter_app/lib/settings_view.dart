@@ -251,6 +251,19 @@ class SettingsView extends StatelessWidget {
                   ? null
                   : (value) => onUpdate({'providers_with_agents': value}),
             ),
+            SwitchListTile(
+              key: const ValueKey('warn-notify'),
+              title: Text(tr('Notify when red')),
+              subtitle: Text(
+                tr(
+                  "A desktop notification when an agent's plan limit turns red: once for each limit until it resets.",
+                ),
+              ),
+              value: settings['warn_notify'] as bool? ?? true,
+              onChanged: busy
+                  ? null
+                  : (value) => onUpdate({'warn_notify': value}),
+            ),
             const SizedBox(height: 24),
             Text(tr('AI help'), style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 16),

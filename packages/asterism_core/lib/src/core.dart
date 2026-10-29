@@ -51,6 +51,7 @@ import 'setup_checks.dart';
 import 'health_report.dart';
 import 'agent_updates.dart';
 import 'model_slots.dart';
+import 'red_limits.dart';
 import 'mcp_tools.dart' show cachedTools;
 
 const portedRoutes = {
@@ -132,6 +133,7 @@ const portedRoutes = {
   'updates.run',
   'models.slots_preview',
   'models.slots_reload',
+  'limits.notify',
   ...readOnlyRoutes,
 };
 // Phase 7 removes this blocker only after every route has differential coverage.
@@ -1500,6 +1502,36 @@ final class CoreService {
     });
   }
 
+  /// ai_popup.warn_red for the agents' plan limits: a desktop notification
+  /// once per limit and reset while Settings › Costs › notify is on.
+  List<Map<String, String>> redLimitsCheck() {
+    final saved = settings.load();
+    if (saved['warn_notify'] == false) return [];
+    final (_, red) = warnLevels(saved['warn_yellow'], saved['warn_red']);
+    final agents = <String, (String, List<Map>)>{};
+    for (final a in reads.catalog.scan().where((a) => a.installed)) {
+      final adapter = addons.adapters
+          .where((x) => x.command == a.command)
+          .firstOrNull;
+      if (adapter == null) continue;
+      final limits = reads.details.read(adapter).limits;
+      if (limits.isNotEmpty) agents[a.command] = (a.name, limits);
+    }
+    final state = (identity.environment['XDG_STATE_HOME'] ?? '').isNotEmpty
+        ? identity.environment['XDG_STATE_HOME']!
+        : p.join(identity.home, '.local/state');
+    return RedLimits(
+      p.join(state, identity.shortName, 'red-notified.json'),
+      searchPath: identity.environment['PATH'],
+    ).check(
+      agents,
+      red,
+      DateTime.now().toUtc(),
+      i18n.text,
+      Posix().atomicWrite,
+    );
+  }
+
   /// model_slots.plan for the map as it is now: what each local LLM must
   /// keep loaded for its agents, with what its engine says.
   List<Map<String, dynamic>> slotNeeds() {
@@ -2219,6 +2251,12 @@ final class CoreService {
       return healthRoute(method, params);
     }
     if (method == 'health.report') return healthReportRoute(params);
+    if (method == 'limits.notify') {
+      if (params.isNotEmpty) {
+        throw const FormatException('Unexpected parameters');
+      }
+      return {'sent': redLimitsCheck()};
+    }
     if (method == 'models.slots_preview' || method == 'models.slots_reload') {
       return slotsRoute(method, params);
     }
