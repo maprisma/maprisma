@@ -1318,3 +1318,23 @@ was started):
 The same answers, argv, stdin and log on both sides.
 
 Codex reviewed this step (2026-10-29): CLEAN; its one Low (a malformed cached finding list) is fixed.
+
+### 6b-1 — installing programs from the Flutter app
+
+The Flutter app now uses the installer routes (5b-2):
+- **Where:** the first-agent guide's steps `install-tool` (mise), `install-runtime` (the route's local
+  LLM, named by the step's target) and `install-node` (Node.js through mise, the agent action of kind
+  `tool`), and **Install** under Providers and models for a local LLM that is not installed yet.
+  `install-agent` (an agent the app installs itself) shows its recipe, since no such agent has a
+  checksummed release to take.
+- **The review card** (`installer_review.dart`): the release and its files with their size, the program
+  and model folders, the graphics card, the build (llama.cpp, KoboldCpp: Vulkan, ROCm, CUDA, CPU) and,
+  for a local LLM with a user service, Start now and Start at login. Choosing another build looks its
+  release up again before anything is installed. The install runs as a task card with progress.
+- `installers.preview` now also returns the installer's `builds` (both the reference and the core).
+- One new UI text, translated into the seven other languages; the other texts reuse the GTK
+  installer page's translations. The manual has a new section "Installing in the Flutter preview" in
+  all eight languages; the PDFs are rebuilt.
+
+Check: two new widget tests (the guide names the tool or local LLM; the review keeps build and service
+choices and offers Change for another build). The installer parity test passes with the builds.

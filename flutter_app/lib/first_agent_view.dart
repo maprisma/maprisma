@@ -35,6 +35,10 @@ class FirstAgentView extends StatelessWidget {
       'existing': 'Find existing AI',
       'connections': 'Connections',
       'verify': 'Send the test question',
+      'install-agent': 'Install',
+      'install-tool': 'Install mise',
+      'install-node': 'Install Node.js',
+      'install-runtime': 'Install {0}…',
     };
     return Align(
       alignment: Alignment.topCenter,
@@ -138,13 +142,23 @@ class FirstAgentView extends StatelessWidget {
                           Align(
                             alignment: Alignment.centerRight,
                             child: TextButton(
+                              // A tool or a local LLM is named by its step's target.
                               onPressed: busy
                                   ? null
                                   : () => onAction(
-                                      selected['command'] as String,
+                                      const {
+                                            'install-tool',
+                                            'install-runtime',
+                                          }.contains(step['action'])
+                                          ? step['target'] as String
+                                          : selected['command'] as String,
                                       step['action'] as String,
                                     ),
-                              child: Text(tr(labels[step['action']]!)),
+                              child: Text(
+                                tr(
+                                  labels[step['action']]!,
+                                ).replaceAll('{0}', step['title'] as String),
+                              ),
                             ),
                           ),
                       ],

@@ -24,6 +24,7 @@ import 'map_groups.dart';
 import 'map_welcome.dart';
 import 'map_addons_focus.dart';
 import 'first_agent_view.dart';
+import 'installer_review.dart';
 import 'agent_action_dialog.dart';
 import 'providers_view.dart';
 import 'system_map_view.dart';
@@ -250,6 +251,7 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
     'existing.check',
     'system.move_preview',
     'system.tool_check',
+    'installers.preview',
   };
 
   Future<Map<String, dynamic>?> _runTask({
@@ -1125,6 +1127,8 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
               ? (method == 'system.refresh' ? 'System Map' : 'Find existing AI')
               : method == 'guide.snapshot'
               ? 'Your first agent'
+              : method.startsWith('installers.')
+              ? 'Install'
               : 'Add-ons',
         ),
       );
@@ -1528,6 +1532,20 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
       _agentAction(command, action);
       return;
     }
+    // The agent the app installs itself has no checksummed release to take
+    // here: its recipe (an installer step shows what to do).
+    if (action == 'install-agent') {
+      _agentAction(command, 'install');
+      return;
+    }
+    if (action == 'install-node') {
+      _agentAction('node', 'install', kind: 'tool');
+      return;
+    }
+    if (action == 'install-tool' || action == 'install-runtime') {
+      _installProgram(action == 'install-tool' ? 'tool' : 'runtime', command);
+      return;
+    }
     setState(() {
       _showGuide = false;
       _showProviders = action == 'providers';
@@ -1537,13 +1555,70 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
     _refresh();
   }
 
-  Future<void> _agentAction(String command, String action) async {
+  /// A program the app installs itself (mise, a local LLM): the release is
+  /// looked up, reviewed (build, service) and installed in the worker.
+  Future<void> _installProgram(String kind, String key) async {
+    if (_busy) return;
+    Map<String, dynamic> params = {'kind': kind, 'key': key};
+    while (true) {
+      final preview = await _addonOperation('installers.preview', params);
+      if (!mounted || preview == null) return;
+      final choice = InstallerChoice(preview['build'] as String? ?? '');
+      final title = tr('Install {0}').replaceAll('{0}', '${preview['name']}');
+      if (!await _cardReview(
+            title,
+            preview,
+            (yes, no) => InstallerReview(
+              preview: preview,
+              choice: choice,
+              tr: tr,
+              onConfirm: yes,
+              onCancel: no,
+            ),
+          ) ||
+          !mounted) {
+        if (mounted) setState(() => _card = null);
+        return;
+      }
+      if (choice.build != (preview['build'] ?? '')) {
+        params = {...params, 'build': choice.build};
+        continue; // another build: its release is looked up again
+      }
+      final result = await _addonOperation('installers.install', {
+        'installer': preview['installer'],
+        'start_now': choice.startNow,
+        'start_at_login': choice.startAtLogin,
+      });
+      if (!mounted || result == null) return;
+      setState(() => _card = null);
+      ScaffoldMessenger.of(_navigator.currentContext!).showSnackBar(
+        SnackBar(
+          content: Text(
+            tr('{0} is installed.').replaceAll('{0}', '${preview['name']}'),
+          ),
+        ),
+      );
+      if (_showGuide) {
+        await _openGuide();
+      } else {
+        await _refresh();
+      }
+      return;
+    }
+  }
+
+  Future<void> _agentAction(
+    String command,
+    String action, {
+    String? kind,
+  }) async {
     if (_busy) return;
     setState(() => _busy = true);
     try {
       var plan = await _backend!.call('agents.action_preview', {
         'command': command,
         'action': action,
+        'kind': ?kind,
       });
       if (!mounted) return;
       if (action == 'login' && (plan['logins'] as List).length > 1) {
@@ -2676,6 +2751,8 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
                                   data: _providers,
                                   busy: _busy,
                                   tr: tr,
+                                  onInstall: (key) =>
+                                      _installProgram('runtime', key),
                                   onOperation: _providerOperation,
                                   onConfirm: (title, runtime) => _cardReview(
                                     title,

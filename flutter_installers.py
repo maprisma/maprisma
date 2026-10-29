@@ -75,6 +75,7 @@ def prepare(selection: dict, settings_path: Path | None = None) -> dict:
               'has_service':inst.has_service,'uses_models':inst.uses_models,
               'spec':asdict(inst.spec) if hasattr(inst,'spec') else None}
     record = {'version':1,'settings_path':str(settings_path) if settings_path else None,'selection':{**selection,'build':build},'name':inst.name,
+              'builds':[list(b) for b in inst.builds],
               'release':checked.to_json(),'gpu':asdict(gpu),'folder':str(folder),
               'models':str(models) if models else None,'source':source}
     body = json.dumps(record,ensure_ascii=True,allow_nan=False).encode()
@@ -101,7 +102,8 @@ class Plans:
                 'name':record['name'],'version':release.version,'size':release.size,
                 'files':[{'name':name,'size':size} for name,_url,size in release.assets],
                 'folder':record['folder'],'models':record['models'],'gpu':record['gpu'],
-                'build':record['selection']['build'],'has_service':record['source']['has_service']}
+                'build':record['selection']['build'],'builds':record['builds'],
+                'has_service':record['source']['has_service']}
 
     def apply(self, params: dict, queue) -> dict:
         if (set(params) != {'installer','start_now','start_at_login'} or not isinstance(params['installer'],str)

@@ -3136,5 +3136,6 @@
  "{0} fps (default)": "{0} fps (standaard)",
  "{0} fps": "{0} fps",
  "System follows the desktop appearance.": "Systeem volgt het uiterlijk van het bureaublad.",
- "Maximum frame rate for map lights. Reduced motion and Lights off stop animation.": "Maximale beeldsnelheid van kaartlichten. Verminderde beweging en Lichten uit stoppen de animatie."
+ "Maximum frame rate for map lights. Reduced motion and Lights off stop animation.": "Maximale beeldsnelheid van kaartlichten. Verminderde beweging en Lichten uit stoppen de animatie.",
+ "The download is checked against the checksum its release lists; nothing of it runs while it is installed.": "De download wordt gecontroleerd met de checksum die de release vermeldt; tijdens het installeren wordt er niets van uitgevoerd."
 }

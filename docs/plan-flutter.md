@@ -87,7 +87,8 @@ a commit.
    Remaining: MCP/skill catalogs and checks, web skill installation, direct API-key
    entry, full settings/security/help/notification views, tuning, durable jobs,
    prerequisite/runtime installer UI and returning completed setup actions to the
-   guide. Installer service routes exist; their Flutter UI is not yet connected.
+   guide. Installer service routes and their Flutter UI are connected (6b-1, 2026-10-29): the
+   first-agent guide's mise/Node.js/local-LLM steps and Install under Providers and models.
    Signed agent/provider add-ons work; file import and Flutter feature/extension
    add-on contracts remain. Other adapter readers/collaboration views remain.
 4. **Product fit and migration validation:** finish keyboard/accessibility,

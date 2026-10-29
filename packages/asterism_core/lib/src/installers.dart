@@ -1568,6 +1568,9 @@ final class Installers {
       'settings_path': settingsPath.isEmpty ? null : settingsPath,
       'selection': {...selection, 'build': build},
       'name': inst.name,
+      'builds': [
+        for (final (key, label) in inst.builds) [key, label],
+      ],
       'release': checked.toJson(),
       'gpu': gpu.toJson(),
       'folder': folder,
@@ -1675,6 +1678,7 @@ final class InstallerPlans {
       'models': record['models'],
       'gpu': record['gpu'],
       'build': selection['build'],
+      'builds': record['builds'],
       'has_service': source['has_service'],
     };
   }

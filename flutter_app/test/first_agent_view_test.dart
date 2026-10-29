@@ -1,5 +1,6 @@
 import 'review_test_host.dart';
 import 'package:asterism/first_agent_view.dart';
+import 'package:asterism/installer_review.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -88,5 +89,121 @@ void main() {
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
     expect(accepted, isFalse);
+  });
+
+  testWidgets('install steps name their tool or local LLM, not the agent', (
+    tester,
+  ) async {
+    final actions = <List<String>>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: FirstAgentView(
+            data: {
+              'routes': [
+                {
+                  ...route,
+                  'steps': [
+                    {
+                      'title': 'mise',
+                      'done': false,
+                      'detail': '',
+                      'action': 'install-tool',
+                      'target': 'mise',
+                    },
+                    {
+                      'title': 'node',
+                      'done': false,
+                      'detail': '',
+                      'action': 'install-node',
+                      'target': 'node',
+                    },
+                    {
+                      'title': 'llama.cpp',
+                      'done': false,
+                      'detail': '',
+                      'action': 'install-runtime',
+                      'target': 'llamacpp',
+                    },
+                  ],
+                },
+              ],
+              'selected': 'fixture-online',
+            },
+            busy: false,
+            tr: (key) => key,
+            onChoose: (_) {},
+            onAction: (command, name) => actions.add([command, name]),
+            onBack: () {},
+            onRefresh: () {},
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Install mise'));
+    await tester.tap(find.text('Install Node.js'));
+    await tester.tap(find.text('Install llama.cpp…'));
+    expect(actions, [
+      ['mise', 'install-tool'],
+      ['fixture', 'install-node'],
+      ['llamacpp', 'install-runtime'],
+    ]);
+  });
+
+  testWidgets('installer review shows the release and keeps the choices', (
+    tester,
+  ) async {
+    final choice = InstallerChoice('vulkan');
+    var confirmed = false;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: InstallerReview(
+            preview: {
+              'name': 'llama.cpp',
+              'version': 'b9000-vulkan',
+              'files': [
+                {
+                  'name': 'llama-b9000-bin-ubuntu-vulkan-x64.tar.gz',
+                  'size': 52428800,
+                },
+              ],
+              'folder': '/home/u/.local/share/ai-agents-map/llamacpp',
+              'models': '/home/u/.local/share/ai-agents-map/llamacpp/models',
+              'gpu': {'vendor': 'amd', 'name': 'AMD · card1'},
+              'build': 'vulkan',
+              'builds': [
+                ['vulkan', 'Vulkan'],
+                ['cpu', 'CPU'],
+              ],
+              'has_service': true,
+            },
+            choice: choice,
+            tr: (key) => key,
+            onConfirm: () => confirmed = true,
+            onCancel: () {},
+          ),
+        ),
+      ),
+    );
+    expect(
+      find.textContaining('llama-b9000-bin-ubuntu-vulkan-x64.tar.gz · 50 MiB'),
+      findsOneWidget,
+    );
+    expect(find.text('Install'), findsOneWidget);
+    await tester.ensureVisible(find.text('Start at login'));
+    await tester.tap(find.text('Start at login'));
+    await tester.pump();
+    expect(choice.startAtLogin, isTrue);
+    await tester.ensureVisible(find.text('CPU'));
+    await tester.tap(find.text('CPU'));
+    await tester.pump();
+    expect(choice.build, 'cpu');
+    expect(
+      find.text('Change'),
+      findsOneWidget,
+    ); // another build is looked up first
+    await tester.tap(find.text('Change'));
+    expect(confirmed, isTrue);
   });
 }

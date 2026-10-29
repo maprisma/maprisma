@@ -28,6 +28,7 @@ class ProvidersView extends StatelessWidget {
     this.onDiscover,
     this.onBrowse,
     this.onConfirm,
+    this.onInstall,
   });
   final bool hosted;
   final Map<String, dynamic> data;
@@ -39,6 +40,7 @@ class ProvidersView extends StatelessWidget {
   final ValueChanged<Map<String, dynamic>>? onBrowse;
   final Future<bool> Function(String, Map<String, dynamic>)? onConfirm;
   final Future<void> Function(String, String)? onRemove;
+  final ValueChanged<String>? onInstall;
 
   Future<bool> _confirm(
     BuildContext context,
@@ -119,6 +121,14 @@ class ProvidersView extends StatelessWidget {
                       spacing: 8,
                       runSpacing: 8,
                       children: [
+                        if (rt['installable'] == true && onInstall != null)
+                          FilledButton.icon(
+                            onPressed: busy
+                                ? null
+                                : () => onInstall!(rt['key'] as String),
+                            icon: const Icon(Icons.download_for_offline),
+                            label: Text(tr('Install')),
+                          ),
                         if (rt['can_control'] == true)
                           OutlinedButton.icon(
                             onPressed: busy

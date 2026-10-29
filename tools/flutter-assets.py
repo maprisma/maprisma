@@ -5,6 +5,26 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 KEYS = (
+    # Program installers (installers.preview / installers.install).
+    "The download is checked against the checksum its release lists; nothing of it runs while it is installed.",
+    "Program folder",
+    "Where the program goes. Each version gets its own folder in it.",
+    "Model folder",
+    "Build",
+    "Vulkan: any AMD or NVIDIA card, nothing else needed.",
+    "ROCm: AMD, needs ROCm installed (/opt/rocm).",
+    "CUDA: NVIDIA.",
+    "CPU only: slow, for a test.",
+    "Start now",
+    "Start it as soon as it is installed.",
+    "Start at login",
+    "Start it with every login (its user service).",
+    "Change",
+    "Install {0}",
+    "{0} is installed.",
+    "Install mise",
+    "Install Node.js",
+    "Install {0}…",
     'Theme',
     'System',
     'Light',
