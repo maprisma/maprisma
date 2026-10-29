@@ -2117,3 +2117,38 @@ Check:
 Next, 6b-19b: today's cost where the battery would be for agents paid per token, and the once-a-day
 cost notification.
 
+### 6b-19b — Batteries and today's costs on the map, the cost notification
+
+New in the core (`agent_badges.dart`, the reference is `agent_details.battery`, `battery_tip`,
+`current_limits`, `_charge`, `plugin_costs.cost_colour`, and `ai_popup.refresh_map` /
+`update_costs` / `warn_red`):
+- **`map.badges {}`:** each installed agent's box gets one badge:
+  - **A battery** for an agent with plan limits: the tightest limit still counting (a past reset left
+    out), rounded to four places (a tenth left is red), green, yellow or red at Settings › Costs'
+    levels, with a tooltip line per limit and its reset in the local clock.
+  - **Today's cost** for an agent paid per token (`paysPerToken`): "$1.50 today", coloured against a
+    day's limit in the chosen currency, with the reference's tooltip.
+
+  It also returns `rate_due` for euros.
+- **`limits.notify`** also sends the red cost, once a day per agent ("About {0} today, {1} % of the
+  day's limit ({2})."). `RedLimits` got `once(key, title, body)`, shared by limits and costs, and
+  the same `red-notified.json` keeps both.
+- **`pyRound`** (Python's round, a tie to even) is now used for every shown percentage: battery,
+  card, red limits and costs.
+- **Flutter:** `AgentBadge` in the agent box's title is a small battery bar or the cost label, with
+  the tooltip. The app loads the badges after the first snapshot and every minute with the
+  notifications (the reference's COST_EVERY), and fetches the euro rate once when it is due.
+- The manual's costs section has a paragraph on it in all eight languages; PDFs rebuilt.
+
+Not yet: the GPU battery of running local LLMs (`gpu_battery`).
+
+Check:
+- `tests/test_dart_badges_parity.py`: batteries (none, two limits with resets in Europe/Berlin, a tenth
+  left, past reset, a tie, over 100 %) and cost labels (dollars, euros with and without a rate, at and
+  above the levels, custom levels) with the red notification text. Python and Dart give the same.
+- The red-limit tests still pass on top of `once`, and an AgentMap test covers the battery, the cost
+  label and their tooltips.
+- On this PC, read only: Codex shows "Weekly (7-day): 96 % left, resets Wed 09:48", green. Claude
+  Code, OpenCode, DeepSeek Harness and Pi have no badge, as in the reference (no limits in their usage
+  records, not paid per token).
+

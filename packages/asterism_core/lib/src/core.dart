@@ -10,6 +10,7 @@ import 'read_service.dart';
 import 'connect_apply.dart';
 import 'addon_store.dart';
 import 'addon_hints.dart';
+import 'agent_badges.dart';
 import 'costs.dart';
 import 'usage_readers.dart' show UsageReaders;
 import 'found_scan.dart';
@@ -148,6 +149,7 @@ const portedRoutes = {
   'found.unpack',
   'found.update_preview',
   'agents.costs',
+  'map.badges',
   'costs.rate',
   ...readOnlyRoutes,
 };
@@ -1964,6 +1966,68 @@ final class CoreService {
 
   /// ai_popup.warn_red for the agents' plan limits: a desktop notification
   /// once per limit and reset while Settings › Costs › notify is on.
+  /// refresh_map's batteries and update_costs' labels: per installed agent
+  /// box, a battery of its plan limits, or today's cost for one paid per
+  /// token; and whether euros need today's rate.
+  (Map<String, Map<String, dynamic>>, bool) agentBadges() {
+    final saved = settings.load();
+    final levels = warnLevels(
+      settings.value(saved, 'warn_yellow'),
+      settings.value(saved, 'warn_red'),
+    );
+    final currency = settings.value(saved, 'cost_currency') == 'eur'
+        ? 'eur'
+        : 'usd';
+    final limit = settings.value(saved, 'cost_limit');
+    final kept = keptRate(rateFile(identity.home));
+    final rate = kept.isEmpty ? null : (kept['usd_per_eur'] as num).toDouble();
+    final now = DateTime.now().toUtc();
+    final badges = <String, Map<String, dynamic>>{};
+    var rateDue = false;
+    for (final a in reads.catalog.scan().where((a) => a.installed)) {
+      final info = reads.details.read(a.adapter);
+      final level = battery(info.limits, levels, now);
+      if (level != null) {
+        badges['agent:${a.command}'] = {
+          'kind': 'battery',
+          'left': level.$1,
+          'colour': level.$2,
+          'tip': batteryTip(info.limits, now, i18n.text),
+        };
+        continue;
+      }
+      final paying = paysPerToken(
+        limits: info.limits,
+        plan: info.plan,
+        usageRecord: reads.details.usageRecord(a.command),
+        access: a.adapter.table('access'),
+        home: identity.home,
+        environment: identity.environment,
+      );
+      if (!paying) continue;
+      final spent = UsageReaders(reads.files).costs(a.adapter);
+      if (spent == null) continue;
+      badges['agent:${a.command}'] = {
+        ...costBadge(
+          (spent['today'] as num).toDouble(),
+          limit is num ? limit : 100,
+          currency,
+          rate,
+          levels,
+          i18n.text,
+        ),
+        'name': a.name,
+      };
+      if (currency == 'eur' &&
+          (kept.isEmpty ||
+              now.millisecondsSinceEpoch / 1000 - (kept['fetched'] as num) >=
+                  rateEvery)) {
+        rateDue = true;
+      }
+    }
+    return (badges, rateDue);
+  }
+
   List<Map<String, String>> redLimitsCheck() {
     final saved = settings.load();
     if (saved['warn_notify'] == false) return [];
@@ -1980,16 +2044,26 @@ final class CoreService {
     final state = (identity.environment['XDG_STATE_HOME'] ?? '').isNotEmpty
         ? identity.environment['XDG_STATE_HOME']!
         : p.join(identity.home, '.local/state');
-    return RedLimits(
+    final notes = RedLimits(
       p.join(state, identity.shortName, 'red-notified.json'),
       searchPath: identity.environment['PATH'],
-    ).check(
-      agents,
-      red,
-      DateTime.now().toUtc(),
-      i18n.text,
-      Posix().atomicWrite,
     );
+    final now = DateTime.now().toUtc();
+    final sent = notes.check(agents, red, now, i18n.text, Posix().atomicWrite);
+    // A cost in the red: once a day per agent paid per token.
+    for (final e in agentBadges().$1.entries) {
+      final body = e.value['red_body'];
+      if (body is! String) continue;
+      final note = notes.once(
+        'cost:${e.key.substring('agent:'.length)}:${RedLimits.day(now.toLocal())}',
+        i18n.text('{0} is in the red').replaceAll('{0}', '${e.value['name']}'),
+        body,
+        now,
+        Posix().atomicWrite,
+      );
+      if (note != null) sent.add(note);
+    }
+    return sent;
   }
 
   /// model_slots.plan for the map as it is now: what each local LLM must
@@ -2718,6 +2792,20 @@ final class CoreService {
     }
     if (method == 'health.report') return healthReportRoute(params);
     if (method.startsWith('found.')) return foundRoute(method, params);
+    if (method == 'map.badges') {
+      if (params.isNotEmpty) throw const FormatException('Invalid request');
+      final (badges, rateDue) = agentBadges();
+      return {
+        'badges': {
+          for (final e in badges.entries)
+            e.key: {
+              for (final f in e.value.entries)
+                if (f.key != 'red_body') f.key: f.value,
+            },
+        },
+        'rate_due': rateDue,
+      };
+    }
     if (method == 'agents.costs' || method == 'costs.rate') {
       return costsRoute(method, params);
     }

@@ -204,3 +204,11 @@ String pyFixedExact(double x, int places) {
       : '${digits.substring(0, digits.length - places)}.${digits.substring(digits.length - places)}';
   return negative && q != BigInt.zero ? '-$text' : text;
 }
+
+/// Python's round(x): the nearest integer, a tie to the even one.
+int pyRound(double x) {
+  final floor = x.floorToDouble();
+  final rest = x - floor;
+  if (rest > 0.5 || rest == 0.5 && floor % 2 != 0) return floor.toInt() + 1;
+  return floor.toInt();
+}

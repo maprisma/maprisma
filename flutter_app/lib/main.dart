@@ -828,7 +828,7 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
       ? {'nodes': <dynamic>[], 'edges': <dynamic>[]}
       : _graph == null
       ? {'nodes': <dynamic>[], 'edges': <dynamic>[]}
-      : withAgentLinks(_graph!);
+      : {...withAgentLinks(_graph!), 'agent_badges': _agentBadges};
 
   Map<int, int> get _groupAvailable => {
     for (final col in [1, 2])
@@ -1248,6 +1248,28 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
 
   /// Newer versions of agents and local LLMs (updates.check, cached 6 h).
   List<Map<String, dynamic>> _updates = [];
+
+  /// The batteries of plan limits and today's costs in the agents' boxes
+  /// (map.badges, every minute as the reference's COST_EVERY); in euros the
+  /// day's rate is fetched once (costs.rate).
+  Map<String, dynamic> _agentBadges = {};
+  bool _rateAsked = false;
+
+  Future<void> _loadBadges() async {
+    if (_backend?.isConnected != true) return;
+    try {
+      final found = await _backend!.call('map.badges');
+      if (!mounted) return;
+      setState(() => _agentBadges = found['badges'] as Map<String, dynamic>);
+      if (found['rate_due'] == true && !_rateAsked) {
+        _rateAsked = true;
+        await _quietTask('costs.rate', {});
+        await _loadBadges();
+      }
+    } catch (_) {
+      // Shown next time.
+    }
+  }
 
   /// check_new_apps: programs with an MCP server and skill sets from apps
   /// on this PC (found.scan, read only and cached), and the hint for the new
@@ -3101,11 +3123,13 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
         // Settings › Costs: a desktop notification when a plan limit turns red.
         _limitsTimer ??= Timer.periodic(const Duration(minutes: 1), (_) {
           if (_backend?.isConnected == true) {
+            unawaited(_loadBadges());
             unawaited(
               _backend!.call('limits.notify').then((_) {}, onError: (_) {}),
             );
           }
         });
+        unawaited(_loadBadges());
       }
       unawaited(_loadAddonHints());
       unawaited(_loadFoundHints());

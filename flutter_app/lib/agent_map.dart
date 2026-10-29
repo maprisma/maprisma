@@ -77,6 +77,8 @@ class AgentMap extends StatelessWidget {
             style: const TextStyle(fontWeight: FontWeight.w600),
           ),
         ),
+        if ((graph['agent_badges'] as Map?)?[node['id']] case final Map badge)
+          AgentBadge(badge: badge),
         if ((node['badges'] as int? ?? 0) > 0)
           Tooltip(
             message: tr('Findings'),
@@ -419,4 +421,64 @@ class _Connections extends CustomPainter {
       color != oldDelegate.color ||
       anchors != oldDelegate.anchors ||
       anchorColor != oldDelegate.anchorColor;
+}
+
+/// The badge in an agent's box (map.badges): what is left of its plan
+/// limits as a small battery, or today's cost for one paid per token; green,
+/// yellow or red at Settings › Costs' levels, the details in the tooltip.
+class AgentBadge extends StatelessWidget {
+  const AgentBadge({super.key, required this.badge});
+  final Map badge;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final colour = switch ('${badge['colour']}') {
+      'red' => scheme.error,
+      'yellow' => Colors.amber.shade700,
+      _ => Colors.green,
+    };
+    final Widget child;
+    if (badge['kind'] == 'battery') {
+      final left = (badge['left'] as num? ?? 0).toDouble().clamp(0.0, 1.0);
+      child = Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            key: const ValueKey('agent-battery'),
+            width: 22,
+            height: 10,
+            padding: const EdgeInsets.all(1),
+            decoration: BoxDecoration(
+              border: Border.all(color: colour, width: 1),
+              borderRadius: BorderRadius.circular(2),
+            ),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: FractionallySizedBox(
+                widthFactor: left,
+                heightFactor: 1,
+                child: ColoredBox(color: colour),
+              ),
+            ),
+          ),
+          Container(width: 2, height: 4, color: colour),
+        ],
+      );
+    } else {
+      child = Text(
+        '${badge['label']}',
+        key: const ValueKey('agent-cost'),
+        style: TextStyle(
+          fontSize: 11,
+          color: colour,
+          fontWeight: FontWeight.w600,
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Tooltip(message: '${badge['tip']}', child: child),
+    );
+  }
 }

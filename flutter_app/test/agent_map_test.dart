@@ -167,4 +167,53 @@ void main() {
     expect(find.text('Agents'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('a battery and a cost in the agents\' boxes, with tooltips', (
+    tester,
+  ) async {
+    Map<String, dynamic> node(String id, String label) => {
+      'id': id,
+      'column': 1,
+      'kind': 'agent',
+      'label': label,
+      'detail': '',
+      'status': '',
+    };
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AgentMap(
+            graph: {
+              'nodes': [
+                node('agent:claude', 'Claude Code'),
+                node('agent:dsh', 'DSH'),
+              ],
+              'edges': [],
+              'agent_badges': {
+                'agent:claude': {
+                  'kind': 'battery',
+                  'left': 0.2,
+                  'colour': 'yellow',
+                  'tip': '5 h: 20 % left',
+                },
+                'agent:dsh': {
+                  'kind': 'cost',
+                  'label': r'$1.50 today',
+                  'colour': 'green',
+                  'tip': 'Paid per token',
+                },
+              },
+            },
+            onAgent: (_) {},
+            tr: (key) => key,
+          ),
+        ),
+      ),
+    );
+    expect(find.byKey(const ValueKey('agent-battery')), findsOneWidget);
+    expect(find.text(r'$1.50 today'), findsOneWidget);
+    expect(find.byTooltip('5 h: 20 % left'), findsOneWidget);
+    expect(find.byTooltip('Paid per token'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }

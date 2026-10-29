@@ -14,6 +14,7 @@ import 'package:asterism_core/src/model_slots.dart' as slots;
 import 'package:asterism_core/src/found_scan.dart' as fs;
 import 'package:asterism_core/src/mcp_update.dart' as mu;
 import 'package:asterism_core/src/costs.dart' as cost;
+import 'package:asterism_core/src/agent_badges.dart' as badge;
 import 'package:asterism_core/src/installers.dart' as inst;
 import 'package:asterism_core/src/provider_scans.dart' show RuntimeRecord;
 import 'package:asterism_core/src/system_map.dart' show SystemMapReader;
@@ -301,6 +302,39 @@ Future<void> main() async {
           params['cache'] as String,
           search: params['search'] == true,
         );
+      } else if (request.method == 'dev.badges') {
+        // agent_details.battery / battery_tip and update_costs' label.
+        final now = DateTime.parse(params['now'] as String);
+        (double, double) levels(List l) =>
+            ((l[0] as num).toDouble(), (l[1] as num).toDouble());
+        result = {
+          'batteries': [
+            for (final c in params['batteries'] as List)
+              () {
+                final limits = (c['limits'] as List).cast<Map>();
+                final b = badge.battery(
+                  limits,
+                  levels(c['levels'] as List),
+                  now,
+                );
+                return [
+                  b == null ? null : [b.$1, b.$2],
+                  badge.batteryTip(limits, now, i18n.text),
+                ];
+              }(),
+          ],
+          'costs': [
+            for (final c in params['costs'] as List)
+              badge.costBadge(
+                (c[0] as num).toDouble(),
+                c[1] as num,
+                c[2] as String,
+                (c[3] as num?)?.toDouble(),
+                levels(c[4] as List),
+                i18n.text,
+              ),
+          ],
+        };
       } else if (request.method == 'dev.costs') {
         // plugin_costs.cost_text, short_number, parse_ecb, usd_per_eur and
         // agent_status.pays_per_token.

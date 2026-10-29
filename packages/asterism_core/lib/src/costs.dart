@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'first_agent.dart' show credentialsPresent;
 import 'posix_ffi.dart';
-import 'py_values.dart' show pyFixedExact;
+import 'py_values.dart' show pyFixedExact, pyRound;
 import 'adapter_assets.g.dart';
 
 /// plugin_costs (currency, text, the euro rate) and agent_status
@@ -214,7 +214,7 @@ Map<String, dynamic>? costCard({
         : 0.0;
     todayNote = tr(
       "{0} % of the day's limit",
-    ).replaceAll('{0}', '${(share * 100).round()}');
+    ).replaceAll('{0}', '${pyRound(share * 100)}');
   } else if (plan.isNotEmpty) {
     todayNote = tr('covered by your {0} plan').replaceAll('{0}', plan);
   }
