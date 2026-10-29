@@ -56,6 +56,8 @@ const portedRoutes = {
   'addons.remove_preview',
   'addons.remove_apply',
   'addons.remove_undo',
+  'addons.file_preview',
+  'addons.file_install',
   'installers.preview',
   'installers.install',
   'setup.detect',
@@ -1040,6 +1042,48 @@ final class CoreService {
     };
   }
 
+  late final addonFiles = AddonFileImports(
+    () => newHandle().substring(coreHandle.length),
+  );
+
+  /// addons.file_preview / addons.file_install: an add-on .zip chosen on
+  /// this PC, reviewed like a catalog entry, installed by the worker.
+  Map<String, dynamic> addonFileRoute(
+    String method,
+    Map<String, dynamic> params,
+  ) {
+    guardAddonChanges();
+    if (method == 'addons.file_preview') {
+      if (params.length != 1 || params['path'] is! String) {
+        throw const FormatException('Choose an add-on file');
+      }
+      final store = AddonStore(
+        Posix(),
+        addonUserDir,
+        identity.home,
+        AddonVerifier(Posix()),
+      );
+      try {
+        return {
+          ...addonFiles.preview(params['path'] as String, store, addons.dirs),
+          'focus': <String>[],
+        };
+      } on InstallError catch (error) {
+        throw FormatException(error.message);
+      }
+    }
+    if (params.length != 1 || !params.containsKey('preview')) {
+      throw const FormatException('Invalid add-on preview');
+    }
+    final List<int> body;
+    try {
+      body = addonFiles.apply(params['preview']);
+    } on InstallError catch (error) {
+      throw FormatException(error.message);
+    }
+    return tasks.startPrivate('addons.install_file', body, _finishInstall);
+  }
+
   Map<String, dynamic> addonStoreRoute(
     String method,
     Map<String, dynamic> params,
@@ -1283,6 +1327,9 @@ final class CoreService {
     }
     if (method == 'addons.list' || method == 'addons.set_enabled') {
       return addonRoute(method, params);
+    }
+    if (method == 'addons.file_preview' || method == 'addons.file_install') {
+      return addonFileRoute(method, params);
     }
     if (method.startsWith('addons.')) return addonStoreRoute(method, params);
     if (method.startsWith('installers.')) return installerRoute(method, params);

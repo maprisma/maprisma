@@ -448,6 +448,7 @@ Future<int> runWorker(List<String> args) async {
           'system.move_undo',
           'system.analyze',
           'agents.key',
+          'addons.install_file',
         }.contains(operation) ||
         (request['params'] as Map).isNotEmpty) {
       throw const FormatException('Invalid private operation');
@@ -543,6 +544,23 @@ Future<int> runWorker(List<String> args) async {
         return moves.execute(body, token, progress);
       });
       send({'type': 'result', 'result': result});
+      return 0;
+    }
+    if (operation == 'addons.install_file') {
+      if (body.length > 8192) {
+        throw const FormatException('Invalid add-on request');
+      }
+      final request = jsonDecode(utf8.decode(body));
+      if (request is! Map) {
+        throw const FormatException('Invalid add-on request');
+      }
+      final store = _addonStore();
+      send({
+        'type': 'result',
+        'result': await store.$1.locked(
+          () async => installAddonFile(request, store.$1),
+        ),
+      });
       return 0;
     }
     if (operation == 'agents.key') {

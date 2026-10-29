@@ -1,4 +1,7 @@
 {
+  "Install from file…": "Installa da file…",
+  "Add-on (.zip)": "Componente aggiuntivo (.zip)",
+  "{0} is installed; switch it on on its card.": "{0} è installato; attivalo dalla sua scheda.",
   "API key…": "Chiave API…",
   "API key for {0}": "Chiave API per {0}",
   "{0} stores it itself ({1}).": "{0} la salva da sé ({1}).",

@@ -26,6 +26,7 @@ class MapAddonsFocus extends StatefulWidget {
     required this.onModels,
     required this.onConnections,
     required this.onFolders,
+    this.onFile,
     this.welcome = false,
     this.detecting = false,
     this.detectionFailed = false,
@@ -43,7 +44,7 @@ class MapAddonsFocus extends StatefulWidget {
   final bool busy, running, online, welcome, detecting, detectionFailed;
   final String Function(String) tr;
   final VoidCallback onBack, onCatalog, onModels, onConnections, onFolders;
-  final VoidCallback? onDetect, onLater;
+  final VoidCallback? onDetect, onLater, onFile;
   final ValueChanged<bool> onOnline;
   final ValueChanged<String>? onLogin;
   final void Function(BuildContext, Map<String, dynamic>)? onNodeMenu;
@@ -338,11 +339,21 @@ class _MapAddonsFocusState extends State<MapAddonsFocus> {
             value: widget.online,
             onChanged: widget.busy ? null : widget.onOnline,
           ),
-          TextButton(
-            onPressed: widget.busy ? null : widget.onCatalog,
-            child: Text(
-              tr(widget.online ? 'Look for add-ons online' : 'Available'),
-            ),
+          Wrap(
+            spacing: 8,
+            children: [
+              TextButton(
+                onPressed: widget.busy ? null : widget.onCatalog,
+                child: Text(
+                  tr(widget.online ? 'Look for add-ons online' : 'Available'),
+                ),
+              ),
+              if (widget.onFile != null)
+                TextButton(
+                  onPressed: widget.busy ? null : widget.onFile,
+                  child: Text(tr('Install from file…')),
+                ),
+            ],
           ),
           if (widget.entries == null)
             Text(tr('The catalog loads only when you ask to look online.')),

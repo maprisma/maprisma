@@ -1,4 +1,7 @@
 {
+  "Install from file…": "Uit bestand installeren…",
+  "Add-on (.zip)": "Add-on (.zip)",
+  "{0} is installed; switch it on on its card.": "{0} is geïnstalleerd; schakel het in op zijn kaart.",
   "API key…": "API-sleutel…",
   "API key for {0}": "API-sleutel voor {0}",
   "{0} stores it itself ({1}).": "{0} slaat hem zelf op ({1}).",

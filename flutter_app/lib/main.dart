@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:async';
 
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show mapEquals;
 import 'package:flutter/services.dart';
@@ -906,6 +907,7 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
       onLater: () => _finishSetup(null),
       onBack: () => setState(() => _focusCategory = null),
       onToggle: _toggleAddon,
+      onFile: _installAddonFile,
       onCatalog: _loadAddonCatalog,
       onOnline: (on) => _updateSettings({'addons_online': on}),
       onInstall: _installAddon,
@@ -1467,6 +1469,59 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
         });
       }
     }
+  }
+
+  /// An add-on .zip chosen on this PC: its own signature decides; it is
+  /// reviewed like a catalog entry before the worker installs it.
+  Future<void> _installAddonFile() async {
+    if (_busy) return;
+    final file = await openFile(
+      acceptedTypeGroups: [
+        XTypeGroup(label: tr('Add-on (.zip)'), extensions: const ['zip']),
+      ],
+    );
+    if (file == null || !mounted) return;
+    Map<String, dynamic> preview;
+    try {
+      preview = await _backend!.call('addons.file_preview', {
+        'path': file.path,
+      });
+    } catch (_) {
+      _actionFailed();
+      return;
+    }
+    if (!mounted) return;
+    final confirmed = await _cardReview(
+      tr('Add-ons'),
+      preview,
+      (yes, no) => AddonInstallReview(
+        item: preview,
+        tr: tr,
+        onConfirm: yes,
+        onCancel: no,
+      ),
+    );
+    if (!mounted || !confirmed) {
+      if (mounted) setState(() => _card = null);
+      return;
+    }
+    final result = await _addonOperation('addons.file_install', {
+      'preview': preview['preview'],
+    });
+    if (!mounted || result == null) return;
+    setState(() {
+      _selected = null;
+      _agentInfo = null;
+    });
+    ScaffoldMessenger.of(_navigator.currentContext!).showSnackBar(
+      SnackBar(
+        content: Text(
+          tr(
+            '{0} is installed; switch it on on its card.',
+          ).replaceAll('{0}', '${preview['name']}'),
+        ),
+      ),
+    );
   }
 
   Future<void> _installAddon(Map<String, dynamic> entry) async {

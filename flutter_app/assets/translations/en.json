@@ -1,4 +1,7 @@
 {
+  "Install from file…": "Install from file…",
+  "Add-on (.zip)": "Add-on (.zip)",
+  "{0} is installed; switch it on on its card.": "{0} is installed; switch it on on its card.",
   "API key…": "API key…",
   "API key for {0}": "API key for {0}",
   "{0} stores it itself ({1}).": "{0} stores it itself ({1}).",

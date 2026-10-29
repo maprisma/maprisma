@@ -747,3 +747,102 @@ final class AddonActions {
     return {'ok': true};
   }
 }
+
+/// addon_store.install_file: a zip of this account's (never through a link,
+/// a regular file, at most 8 MiB), its bytes and their SHA-256.
+(List<int>, String) readAddonFile(String path, Posix posix) {
+  if (!p.isAbsolute(path) || !path.toLowerCase().endsWith('.zip')) {
+    throw InstallError('not an add-on .zip');
+  }
+  List<int> data;
+  try {
+    final fd = posix.openAt(-100, path, Posix.noFollow | Posix.nonBlock);
+    try {
+      if (posix.stat(fd).mode & 0xf000 != 0x8000) {
+        throw InstallError('not a file');
+      }
+      data = posix.readAt(fd, 0, maxZip + 1);
+    } finally {
+      posix.close(fd);
+    }
+  } on FileSystemException {
+    throw InstallError('cannot be read');
+  }
+  if (data.length > maxZip) throw InstallError('too large');
+  return (data, sha256.convert(data).toString());
+}
+
+/// An add-on installed from a file: its own signature decides, as for a
+/// catalog download; reviewed first like one (name, version, kind, what it
+/// reads and sends), then installed by the worker, which reads the file
+/// again and requires the same bytes.
+final class AddonFileImports {
+  AddonFileImports(this.newToken);
+  final String Function() newToken;
+  final _previews = <String, (DateTime, String, String, String)>{};
+
+  Map<String, dynamic> preview(
+    String path,
+    AddonStore store,
+    List<String> dirs,
+  ) {
+    final (data, digest) = readAddonFile(path, store.posix);
+    final staging = Directory.systemTemp.createTempSync('asterism-addon-file-');
+    Addon addon;
+    try {
+      final aid = store.unpack(data, staging.path);
+      addon = store.verifier.verify(p.join(staging.path, aid));
+    } finally {
+      staging.deleteSync(recursive: true);
+    }
+    if (addon.state != 'verified') throw InstallError(addon.reason);
+    if (!supportedKinds.contains(addon.kind)) {
+      throw InstallError('this kind of add-on cannot be used in this app yet');
+    }
+    final old = store.installed(dirs)[addon.id]?.version ?? '';
+    final now = DateTime.now();
+    _previews.removeWhere((_, v) => now.difference(v.$1).inSeconds >= 600);
+    while (_previews.length >= 8) {
+      _previews.remove(_previews.keys.first);
+    }
+    final token = newToken();
+    _previews[token] = (now, path, digest, addon.id);
+    return {
+      'preview': token,
+      'id': addon.id,
+      'name': addon.name.isEmpty ? addon.id : addon.name,
+      'version': addon.version,
+      'kind': addon.kind,
+      'summary': addon.summary,
+      'description': addon.description,
+      'reads': addon.reads,
+      'sends': addon.sends,
+      'capabilities': addon.capabilities,
+      'privacy': addon.privacy,
+      'installed_version': old,
+      'action': old.isEmpty ? 'install' : 'update',
+    };
+  }
+
+  /// The worker's request: the file, the reviewed bytes' digest and id.
+  List<int> apply(dynamic token) {
+    final kept = token is String ? _previews[token] : null;
+    if (kept == null || DateTime.now().difference(kept.$1).inSeconds >= 600) {
+      throw InstallError('Unknown or expired add-on preview');
+    }
+    _previews.remove(token);
+    return utf8.encode(
+      jsonEncode({'path': kept.$2, 'sha256': kept.$3, 'id': kept.$4}),
+    );
+  }
+}
+
+/// The worker's part: the same bytes again, then installBytes.
+Map<String, dynamic> installAddonFile(Map request, AddonStore store) {
+  final (data, digest) = readAddonFile('${request['path']}', store.posix);
+  if (digest != request['sha256']) {
+    throw InstallError('the file changed; review it again');
+  }
+  final item = store.installBytes(data, expect: '${request['id']}');
+  return {'ok': true, 'id': item.id, 'version': item.version};
+}

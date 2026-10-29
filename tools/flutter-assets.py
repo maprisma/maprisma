@@ -5,6 +5,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 KEYS = (
+    # Add-ons from a file (addons.file_preview / addons.file_install).
+    "Install from file…",
+    "Add-on (.zip)",
+    "{0} is installed; switch it on on its card.",
     # API keys (agents.key_preview / agents.key_apply).
     "API key…",
     "API key for {0}",

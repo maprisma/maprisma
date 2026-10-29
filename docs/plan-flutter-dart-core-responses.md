@@ -1376,3 +1376,22 @@ Check: an app-level widget test with the fake service: the guide, an install fro
 (review with its build and service switches, then installers.install with the chosen switches, the
 guide reloaded), Providers from the guide and Back (reloaded again), Providers from the menu and Back
 (no reload).
+
+### 6b-4 — add-ons from a file
+
+New in the core (Dart only; the GTK page's "Install from file…" is `addon_store.install_file`):
+- **`addons.file_preview {path}`**: the .zip read never through a link, a regular file of at most 8 MiB;
+  unpacked into a temporary folder outside the add-on folders and verified there (its own signature
+  decides, as for a catalog download); shown like a catalog entry (name, version, kind, what it reads
+  and sends, capabilities, privacy, the version it would replace). Only agent and provider add-ons,
+  the kinds the data-only core uses. Nothing is installed by the review.
+- **`addons.file_install {preview}`**: the add-on guard, then a private worker under the installers'
+  lock reads the file again, requires the reviewed SHA-256 and id, and installs it (`installBytes`:
+  verified again, the old copy to the trash). The result is finished like a catalog install.
+- **Flutter:** **Install from file…** beside the catalog button in the add-ons group; the review is the
+  catalog's `AddonInstallReview`. All texts were already translated; the manual's "Manage add-ons" says
+  so in all eight languages; PDFs rebuilt.
+
+Check: `test/addon_files_test.dart` with Uwe's signed `agent-goose-0.11.1.zip`: reviewed without
+installing, a preview used once, installed from the same bytes, reviewed again as an update; refused
+when the file changed after the review, a link, not a .zip, garbage, over 8 MiB.
