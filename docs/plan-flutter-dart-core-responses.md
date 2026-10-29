@@ -1628,3 +1628,42 @@ answers with:
 There are widget tests (ask, the chosen agent, a tip applied, a build hint, no agents, no section) and an
 app test (Providers → Performance → Ask → Apply → preview). A real agent was not asked, since it uses
 Uwe's tokens.
+
+### 6b-11 — durable jobs
+
+New in the core (`core_jobs.dart`, the reference is `jobs.Jobs`):
+- **Kept across restarts:** a model download (`models.download`) or Ollama pull (`models.pull`)
+  started through `providers.run` is recorded in `$XDG_STATE_HOME/asterism/jobs.json`
+  (`~/.local/state/asterism`). It is written 0600 and atomically. It holds only how to start the
+  operation again (its checked parameters, a title, the fraction) and never credentials. It is the
+  app's own file: GTK's `ai-agents-map/jobs.json` keeps its own spec shape. The entry goes when its
+  task ends; the progress is kept every ten seconds while it is polled.
+- **At the next start** the left-over entries are interrupted jobs. The file is not trusted: a link,
+  an oversized file, unknown operations and malformed ids are left out, and the fraction is clamped.
+  - **`jobs.list`** lists running and interrupted jobs.
+  - **`jobs.discard {id}`** forgets one.
+  - **`jobs.continue {id}`** checks the saved request again as a new one (`coreProviderRun`,
+    `ProviderOps.validate`) and starts it; the download goes on from its `.part` file.
+- **Retries, in the worker (`withRetries`):** a download whose connection broke off (curl failed, or
+  the file is incomplete: the reference's `DownloadError`), or a pull that lost its connection, is
+  tried again after 5, 15, 30, 60 and 120 s, with GTK's countdown text. A refusal or any other error is
+  not retried.
+- **One download per `.part` file:** `openStaging` takes `flock(LOCK_EX | LOCK_NB)` and refuses a
+  second download into the same file, for example an interrupted job continued while an orphaned
+  worker still runs.
+- **Flutter:** after the first snapshot, a banner lists interrupted downloads with where they stopped,
+  **Continue** (its task shown like any download) and **Discard**. All texts were already translated;
+  the manual's "Interrupted downloads in the Flutter preview" in all eight languages; PDFs rebuilt.
+
+Check: `test/core_jobs_test.dart` covers:
+- recorded, the restart (interrupted), continued (replacing it), ended (the file gone), 0600;
+- odd entries, links and discard;
+- the `.part` lock;
+- retries: three tries, the delays, a refusal and a non-durable operation not retried, a pull given up
+  after six.
+
+There are widget tests and an app test (an interrupted download listed at start and continued: its
+task polled). No file is written in the real state folder by the suites.
+
+Not durable (as before): installs (`installers.install` runs from a reviewed, expiring plan), which the
+GTK app also kept. They come with the Flutter installer jobs, if wanted.

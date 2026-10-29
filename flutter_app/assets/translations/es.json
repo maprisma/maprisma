@@ -1,4 +1,7 @@
 {
+  "Interrupted at {0} · Continue goes on where it stopped": "Interrumpido al {0} · Continuar sigue donde se quedó",
+  "Continue": "Continuar",
+  "Discard": "Descartar",
   "Tips from an agent": "Consejos de un agente",
   "Ask {0}": "Preguntar a {0}",
   "It sees the facts above (names and numbers only); you choose what to apply.": "Ve los datos de arriba (solo nombres y números); tú eliges qué aplicar.",
@@ -450,7 +453,6 @@
   "Load": "Cargar",
   "Unload": "Descargar de memoria",
   "Download": "Descargar",
-  "Continue": "Continuar",
   "This can interrupt agents using this provider.": "Esto puede interrumpir a los agentes que usan este proveedor.",
   "Close Asterism and stop its running agents and tasks?": "¿Cerrar Asterism y detener sus agentes y tareas en ejecución?",
   "Download by name": "Descargar por nombre",

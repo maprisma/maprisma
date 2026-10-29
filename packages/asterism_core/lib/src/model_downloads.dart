@@ -11,6 +11,15 @@ import 'posix_ffi.dart';
 import 'provider_ops.dart';
 import 'py_values.dart';
 
+/// install_ctl.DownloadError: the connection broke off; trying again
+/// resumes the download (jobs.retryable).
+final class DownloadError implements Exception {
+  DownloadError(this.message);
+  final String message;
+  @override
+  String toString() => message;
+}
+
 typedef Progress = void Function(double fraction, String text);
 
 /// llm_engine.layout: "flat", "publisher", "blobs" or "".
@@ -146,7 +155,10 @@ final class ModelFiles {
   int openStaging(String partial) {
     const flags = 0x2 | 0x400 | Posix.noFollow | Posix.cloexec;
     try {
-      return posix.openAt(-100, partial, flags | 0x40 | 0x80, 0x1a4);
+      return _locked(
+        posix.openAt(-100, partial, flags | 0x40 | 0x80, 0x1a4),
+        partial,
+      );
     } on FileSystemException {
       if (!_lexists(partial)) rethrow;
     }
@@ -165,6 +177,16 @@ final class ModelFiles {
         "${p.basename(partial)} in ${p.dirname(partial)} is not this account's own download; "
         'remove it and try again',
       );
+    }
+    return _locked(fd, partial);
+  }
+
+  /// One download per .part file: a second one (an interrupted job
+  /// continued while the first still runs) is refused.
+  int _locked(int fd, String partial) {
+    if (!posix.tryLockExclusive(fd)) {
+      posix.close(fd);
+      throw StateError('${p.basename(partial)} is being downloaded already');
     }
     return fd;
   }
@@ -250,11 +272,11 @@ final class ModelFiles {
           errors.take(400).toList(),
           allowMalformed: true,
         );
-        throw StateError('download failed: ${text.trim()}');
+        throw DownloadError('download failed: ${text.trim()}');
       }
       final st = posix.statFull(fd);
       if (size != 0 && st.size != size) {
-        throw StateError('download incomplete');
+        throw DownloadError('download incomplete');
       }
       if (sha256.isNotEmpty && digestOfFd(fd, sha256) != sha256) {
         posix.truncate(fd, 0);

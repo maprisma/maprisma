@@ -1,4 +1,7 @@
 {
+  "Interrupted at {0} · Continue goes on where it stopped": "Onderbroken bij {0} · Hervatten gaat verder waar het stopte",
+  "Continue": "Hervatten",
+  "Discard": "Weggooien",
   "Tips from an agent": "Tips van een agent",
   "Ask {0}": "{0} vragen",
   "It sees the facts above (names and numbers only); you choose what to apply.": "Het ziet de feiten hierboven (alleen namen en getallen); jij kiest wat je toepast.",
@@ -450,7 +453,6 @@
   "Load": "Laden",
   "Unload": "Uit geheugen laden",
   "Download": "Downloaden",
-  "Continue": "Hervatten",
   "This can interrupt agents using this provider.": "Dit kan agents onderbreken die deze provider gebruiken.",
   "Close Asterism and stop its running agents and tasks?": "Asterism sluiten en de actieve agents en taken stoppen?",
   "Download by name": "Downloaden op naam",

@@ -1,4 +1,7 @@
 {
+  "Interrupted at {0} · Continue goes on where it stopped": "Interrotto al {0} · Riprendi continua da lì",
+  "Continue": "Riprendi",
+  "Discard": "Scarta",
   "Tips from an agent": "Consigli da un agente",
   "Ask {0}": "Chiedi a {0}",
   "It sees the facts above (names and numbers only); you choose what to apply.": "Vede i dati sopra (solo nomi e numeri); scegli tu cosa applicare.",
@@ -450,7 +453,6 @@
   "Load": "Carica",
   "Unload": "Scarica dalla memoria",
   "Download": "Scarica",
-  "Continue": "Riprendi",
   "This can interrupt agents using this provider.": "Questa operazione può interrompere gli agenti che usano questo fornitore.",
   "Close Asterism and stop its running agents and tasks?": "Chiudere Asterism e arrestare i suoi agenti e le attività in esecuzione?",
   "Download by name": "Scarica per nome",

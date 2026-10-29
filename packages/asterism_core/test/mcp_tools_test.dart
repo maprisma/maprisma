@@ -61,38 +61,32 @@ void main() {
     expect((result['tools'] as List).single['name'], 'hello');
   });
 
-  test(
-    'the answer, or the failure, is kept under the server name',
-    () async {
-      final written = <String, List<int>>{};
-      final ok = await askAndKeep(
-        'fixture',
-        _entry(script),
-        home: home.path,
-        environment: Platform.environment,
-        write: (path, bytes) => written[path] = bytes,
-      );
-      expect(ok['status'], 'ok');
-      final path = '${home.path}/.cache/ai-agents-map/mcp-tools/fixture.json';
-      expect(jsonDecode(utf8.decode(written[path]!))['tools'], ok['tools']);
-      final failed = await askAndKeep(
-        'broken',
-        {..._entry(script), 'command': '${home.path}/missing'},
-        home: home.path,
-        environment: Platform.environment,
-        write: (path, bytes) => written[path] = bytes,
-      );
-      expect(failed['status'], 'failed');
-      expect(failed['error'], 'the server stopped');
-      expect(
-        () => toolsCacheFile(home.path, 'bad\nname'),
-        throwsFormatException,
-      );
-      File(path)
-        ..createSync(recursive: true)
-        ..writeAsBytesSync(written[path]!);
-      expect(cachedTools(home.path, 'fixture')!['status'], 'ok');
-      expect(cachedTools(home.path, 'missing'), isNull);
-    },
-  );
+  test('the answer, or the failure, is kept under the server name', () async {
+    final written = <String, List<int>>{};
+    final ok = await askAndKeep(
+      'fixture',
+      _entry(script),
+      home: home.path,
+      environment: Platform.environment,
+      write: (path, bytes) => written[path] = bytes,
+    );
+    expect(ok['status'], 'ok');
+    final path = '${home.path}/.cache/ai-agents-map/mcp-tools/fixture.json';
+    expect(jsonDecode(utf8.decode(written[path]!))['tools'], ok['tools']);
+    final failed = await askAndKeep(
+      'broken',
+      {..._entry(script), 'command': '${home.path}/missing'},
+      home: home.path,
+      environment: Platform.environment,
+      write: (path, bytes) => written[path] = bytes,
+    );
+    expect(failed['status'], 'failed');
+    expect(failed['error'], 'the server stopped');
+    expect(() => toolsCacheFile(home.path, 'bad\nname'), throwsFormatException);
+    File(path)
+      ..createSync(recursive: true)
+      ..writeAsBytesSync(written[path]!);
+    expect(cachedTools(home.path, 'fixture')!['status'], 'ok');
+    expect(cachedTools(home.path, 'missing'), isNull);
+  });
 }

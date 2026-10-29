@@ -29,6 +29,7 @@ import 'installer_review.dart';
 import 'agent_security_view.dart';
 import 'api_key_review.dart';
 import 'performance_view.dart';
+import 'interrupted_jobs.dart';
 import 'agent_action_dialog.dart';
 import 'providers_view.dart';
 import 'system_map_view.dart';
@@ -1226,6 +1227,95 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
       'setting': chosen.$2,
       'value': chosen.$3,
     }, method: 'models.tuning_preview');
+  }
+
+  /// Downloads a previous run left unfinished (jobs.list), shown in a
+  /// banner until each is continued or discarded.
+  List<Map<String, dynamic>> _interrupted = [];
+
+  Future<void> _loadJobs() async {
+    try {
+      final reply = await _backend!.call('jobs.list');
+      if (!mounted) return;
+      _interrupted = [
+        for (final job in (reply['jobs'] as List).cast<Map<String, dynamic>>())
+          if (job['state'] == 'interrupted') job,
+      ];
+      _showJobs();
+    } catch (_) {
+      // Nothing to continue.
+    }
+  }
+
+  void _showJobs() {
+    final messenger = ScaffoldMessenger.of(_navigator.currentContext!);
+    messenger.clearMaterialBanners();
+    if (_interrupted.isEmpty) return;
+    messenger.showMaterialBanner(
+      MaterialBanner(
+        key: const ValueKey('interrupted-jobs'),
+        leading: const Icon(Icons.download),
+        content: InterruptedJobs(
+          jobs: _interrupted,
+          busy: _busy,
+          tr: tr,
+          onContinue: _continueJob,
+          onDiscard: _discardJob,
+        ),
+        actions: [
+          TextButton(
+            onPressed: messenger.clearMaterialBanners,
+            child: Text(tr('Close')),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _discardJob(Map<String, dynamic> job) async {
+    try {
+      await _backend!.call('jobs.discard', {'id': job['id']});
+    } catch (_) {
+      _actionFailed();
+    }
+    _interrupted = [
+      for (final j in _interrupted)
+        if (j['id'] != job['id']) j,
+    ];
+    if (mounted) _showJobs();
+  }
+
+  Future<void> _continueJob(Map<String, dynamic> job) async {
+    if (_busy) return;
+    _interrupted = [
+      for (final j in _interrupted)
+        if (j['id'] != job['id']) j,
+    ];
+    _showJobs();
+    setState(() {
+      _taskActive = true;
+      _busy = true;
+    });
+    try {
+      final started = await _backend!.call('jobs.continue', {'id': job['id']});
+      if (!mounted) return;
+      await _runTask(
+        operation: job['kind'] == 'pull' ? 'models.pull' : 'models.download',
+        existingTask: started['task'] as String,
+        focus: (started['focus'] as List? ?? const []).cast<String>().toSet(),
+        title: '${job['title']}',
+      );
+      await _refresh();
+    } catch (_) {
+      _actionFailed();
+    } finally {
+      if (mounted) {
+        setState(() {
+          _taskActive = false;
+          _busy = false;
+        });
+      }
+    }
   }
 
   /// A service task started and waited for without a task card (the view
@@ -2606,7 +2696,10 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
         _busy = false;
         _failed = false;
       });
-      if (firstSnapshot) unawaited(_detectSetup());
+      if (firstSnapshot) {
+        unawaited(_detectSetup());
+        unawaited(_loadJobs());
+      }
     } catch (_) {
       if (mounted) {
         setState(() {

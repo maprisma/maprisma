@@ -660,6 +660,9 @@
   connection is retried and the download resumes. If the app was closed during a download, it is
   listed as interrupted, with <b>Continue</b> or <b>Discard</b>.</p>
 
+  <h2 id="jobs-flutter">Interrupted downloads in the Flutter preview</h2>
+  <p>In the Flutter preview, a model download or an Ollama pull whose connection breaks off is tried again after 5, 15, 30, 60 and 120 seconds and goes on where it stopped. If the app ends before it does, the next start shows a banner with each interrupted download, where it stopped, <b>Continue</b> (it goes on from the part already downloaded) and <b>Discard</b>. Only how to start it again is kept, in <code>~/.local/state/asterism/jobs.json</code>, readable only by you; a download that is still running elsewhere is not started twice.</p>
+
   <h2 id="ask-model">Ask an agent which model fits</h2>
   <p>Not sure which model to take? When an agent for AI checks is set up (Settings › <b>Agent for AI
   checks</b>), the <b>Ask an agent</b> card under the search takes a question in your own words — for

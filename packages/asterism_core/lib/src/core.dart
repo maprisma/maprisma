@@ -45,6 +45,7 @@ import 'provider_facts.dart';
 import 'mcp_catalog.dart';
 import 'skills_web.dart';
 import 'llm_tuning.dart';
+import 'core_jobs.dart';
 import 'mcp_tools.dart' show cachedTools;
 
 const portedRoutes = {
@@ -114,6 +115,9 @@ const portedRoutes = {
   'models.tuning',
   'models.tuning_preview',
   'models.tuning_ask',
+  'jobs.list',
+  'jobs.continue',
+  'jobs.discard',
   ...readOnlyRoutes,
 };
 // Phase 7 removes this blocker only after every route has differential coverage.
@@ -240,6 +244,18 @@ final class CoreService {
           'system.move_undo',
         }.contains(t.operation) &&
         t.state == 'running',
+  );
+
+  late final jobs = CoreJobs(
+    p.join(
+      (identity.environment['XDG_STATE_HOME'] ?? '').isNotEmpty
+          ? identity.environment['XDG_STATE_HOME']!
+          : p.join(identity.home, '.local/state'),
+      identity.shortName,
+      'jobs.json',
+    ),
+    tasks,
+    Posix(),
   );
 
   /// The last facts read per local LLM (models.tuning), for the tips.
@@ -1335,6 +1351,56 @@ final class CoreService {
     };
   }
 
+  /// jobs.list / jobs.continue / jobs.discard (jobs.Jobs and the GTK
+  /// main page's job strip).
+  Map<String, dynamic> jobRoute(String method, Map<String, dynamic> params) {
+    if (method == 'jobs.list') {
+      if (params.isNotEmpty) {
+        throw const FormatException('Unexpected parameters');
+      }
+      return {'jobs': jobs.list()};
+    }
+    if (params.length != 1 || params['id'] is! String) {
+      throw const FormatException('Invalid job');
+    }
+    if (method == 'jobs.discard') {
+      jobs.discard(params['id']);
+      return {'ok': true};
+    }
+    final entry = jobs.take(params['id']);
+    final operation = entry['operation'] as String;
+    final inner = Map<String, dynamic>.from(entry['params'] as Map);
+    // Checked again as a new request: the saved file is not trusted more.
+    if (!coreProviderRun({'operation': operation, 'params': inner})) {
+      throw const FormatException('This download cannot be continued');
+    }
+    ProviderOps.validate(operation, inner);
+    final started = tasks.start(operation, inner);
+    jobs.record(
+      started['task'] as String,
+      operation,
+      inner,
+      _jobTitle(operation, inner),
+      replaces: params['id'] as String,
+    );
+    return {...started, 'focus': taskFocus(reads.map, inner)};
+  }
+
+  /// What the job strip shows: "model.gguf · llama.cpp".
+  String _jobTitle(String operation, Map<String, dynamic> params) {
+    final key = '${params['key'] ?? ''}';
+    final runtime =
+        (visibleProviderFacts['local'] as List)
+            .cast<Map>()
+            .where((p) => p['key'] == key)
+            .firstOrNull?['name'] ??
+        key;
+    final what = operation == 'models.download'
+        ? '${params['file'] ?? ''}'.split('/').last
+        : '${params['name'] ?? ''}';
+    return '$what · $runtime';
+  }
+
   /// One MCP server asked at a time: asking starts its program.
   Map<String, dynamic> _askTools(Map<String, dynamic> body, String operation) {
     if (tasks.items.values.any(
@@ -1760,7 +1826,9 @@ final class CoreService {
       if (method.startsWith('sessions.')) {
         return starter.session(method, params);
       }
-      return dispatchHandle(method, params, connections, tasks);
+      final reply = dispatchHandle(method, params, connections, tasks);
+      if (method == 'tasks.status') jobs.sync();
+      return reply;
     }
     if (method == 'addons.list' || method == 'addons.set_enabled') {
       return addonRoute(method, params);
@@ -1821,6 +1889,7 @@ final class CoreService {
     }
     if (method.startsWith('mcp.')) return mcpCatalogRoute(method, params);
     if (method.startsWith('skills.web_')) return webSkillRoute(method, params);
+    if (method.startsWith('jobs.')) return jobRoute(method, params);
     if (method == 'models.tuning' ||
         method == 'models.tuning_preview' ||
         method == 'models.tuning_ask') {
@@ -1848,10 +1917,14 @@ final class CoreService {
       }
       final inner = Map<String, dynamic>.from(params['params'] as Map);
       ProviderOps.validate(params['operation'] as String, inner);
-      return {
-        ...tasks.start(params['operation'] as String, inner),
-        'focus': taskFocus(reads.map, inner),
-      };
+      final started = tasks.start(params['operation'] as String, inner);
+      jobs.record(
+        started['task'] as String,
+        params['operation'] as String,
+        inner,
+        _jobTitle(params['operation'] as String, inner),
+      );
+      return {...started, 'focus': taskFocus(reads.map, inner)};
     }
     if (method == 'connections.move_preview') return edits.movePreview(params);
     if (method == 'models.switch_preview' ||

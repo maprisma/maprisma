@@ -851,4 +851,7 @@ class Posix {
   void lockExclusive(int fd) {
     if (_flock(fd, 2) != 0) _fail();
   }
+
+  /// flock(fd, LOCK_EX | LOCK_NB): false when another holds it.
+  bool tryLockExclusive(int fd) => _flock(fd, 6) == 0;
 }

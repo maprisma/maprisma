@@ -5,6 +5,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 KEYS = (
+    # Downloads a previous run left unfinished (jobs.list).
+    "Interrupted at {0} · Continue goes on where it stopped",
+    "Continue",
+    "Discard",
     # Tips from an agent on a local LLM's performance (models.tuning_ask).
     "Tips from an agent",
     "Ask {0}",

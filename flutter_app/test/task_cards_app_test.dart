@@ -18,6 +18,7 @@ from pathlib import Path
 connected=False
 welcome=False
 install_fails=False
+interrupted=False
 installed=False
 installed_runtime=False
 catalog_loads=0
@@ -95,6 +96,9 @@ for line in sys.stdin:
  elif m=='models.tuning':tasks['tune']={'runtime':'Fixture provider','key':'fixture','gpu':'GPU','vram':8<<30,'stacks':[],'build':'','builds':[],'devices':'','settings':{'*':{}},'tuning':{'mode':['a|b','A mode']},'per_model':False,'models':[],'loaded':[],'vram_used':0,'helpers':[{'command':'test','name':'Test agent'}]};r={'task':'tune'}
  elif m=='models.tuning_ask':tasks['ask']={'summary':'One thing.','agent':p['command'],'suggestions':[{'kind':'setting','title':'Use b','why':'Faster.','model':'*','key':'mode','value':'b'}]};r={'task':'ask'}
  elif m=='models.tuning_preview':r={'plan':'opaque-tune','empty':False,'files':[{'path':'~/.config/x.ini','added':1,'removed':0}],'links_add':[],'links_remove':[],'item':'Fixture provider','notes':[],'focus':['runtime:fixture']}
+ elif m=='jobs.list':r={'jobs':[{'id':'aaaaaaaaaaaa','kind':'model','title':'m.gguf · Fixture provider','state':'interrupted','fraction':0.4}] if interrupted else []}
+ elif m=='jobs.discard':interrupted=False;r={'ok':True}
+ elif m=='jobs.continue':interrupted=False;tasks['cont']={'ok':True};r={'task':'cont','focus':['runtime:fixture']}
  elif m=='skills.web_search':tasks['sks']={'skills':[{'name':'pdf','skill_id':'pdf','repo':'a/skills','installs':3}]};r={'task':'sks'}
  elif m=='skills.web_fetch':tasks['skf']={'fetched':'f1','name':'pdf','repo':'a/skills','skill_id':'pdf','description':'Reads PDFs.','files':['SKILL.md'],'scripts':[],'targets':['~/.agents/skills'],'agents':[{'command':'test','name':'Test agent'}]};r={'task':'skf'}
  elif m=='skills.web_preview':r={'plan':'opaque-skill','empty':False,'files':[],'new_files':['~/.agents/skills/pdf/SKILL.md'],'links_add':[],'links_remove':[],'kind':'skills','agents':[],'focus':['agent:test']}
@@ -127,6 +131,7 @@ Future<Directory> mountApp(
   WidgetTester tester, {
   bool welcome = false,
   bool installFails = false,
+  bool interrupted = false,
   double? areaWidth,
 }) async {
   rootBundle.clear();
@@ -137,6 +142,10 @@ Future<Directory> mountApp(
         .replaceFirst(
           'install_fails=False',
           'install_fails=${installFails ? 'True' : 'False'}',
+        )
+        .replaceFirst(
+          'interrupted=False',
+          'interrupted=${interrupted ? 'True' : 'False'}',
         ),
   );
   final backend = await tester.runAsync(
@@ -645,6 +654,38 @@ void main() {
       ).lastWhere((q) => q['method'] == 'models.tuning_preview')['params'],
       {'key': 'fixture', 'section': '*', 'setting': 'mode', 'value': 'b'},
     );
+    expect(tester.takeException(), isNull);
+    await unmountApp(tester);
+  });
+
+  testWidgets('an interrupted download is listed at start and continued', (
+    tester,
+  ) async {
+    final dir = await mountApp(tester, interrupted: true);
+    await settleService(tester);
+    expect(find.text('m.gguf · Fixture provider'), findsOneWidget);
+    expect(
+      find.text(
+        'Interrupted at {0} · Continue goes on where it stopped'.replaceAll(
+          '{0}',
+          '40 %',
+        ),
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Continue'));
+    await settleService(tester);
+    expect(
+      requests(dir).lastWhere((q) => q['method'] == 'jobs.continue')['params'],
+      {'id': 'aaaaaaaaaaaa'},
+    );
+    expect(
+      requests(dir).where(
+        (q) => q['method'] == 'tasks.status' && q['params']['task'] == 'cont',
+      ),
+      isNotEmpty,
+    );
+    expect(find.byKey(const ValueKey('job-aaaaaaaaaaaa')), findsNothing);
     expect(tester.takeException(), isNull);
     await unmountApp(tester);
   });

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -27,6 +28,7 @@ import 'skills_web.dart' as skills_web;
 import 'llm_tuning.dart';
 import 'context.dart' show ContextReader;
 import 'model_hub.dart' show netFetch;
+import 'model_downloads.dart' show DownloadError;
 import 'provider_ops.dart';
 import 'provider_scans.dart';
 import 'scan_files.dart';
@@ -591,20 +593,37 @@ Future<int> runWorker(List<String> args) async {
       final files = ScanFiles(identity);
       final ops = ProviderOps(files, ProviderScans(files));
       final i18n = ServiceI18n(identity, SettingsStore(identity));
-      send({
-        'type': 'result',
-        'result': await ops.execute(
-          request['operation'] as String,
-          request['params'] as Map,
-          // flutter_worker's progress line: the fraction clamped, the text cut.
-          progress: (fraction, text) => send({
-            'type': 'progress',
-            'fraction': fraction.isFinite ? fraction.clamp(0.0, 1.0) : 0.0,
-            'text': text.length > 300 ? text.substring(0, 300) : text,
-          }),
-          translate: i18n.text,
+      final operation = request['operation'] as String;
+      var last = 0.0;
+      void progress(double fraction, String text) {
+        // flutter_worker's progress line: the fraction clamped, the text cut.
+        last = fraction.isFinite ? fraction.clamp(0.0, 1.0) : 0.0;
+        send({
+          'type': 'progress',
+          'fraction': last,
+          'text': text.length > 300 ? text.substring(0, 300) : text,
+        });
+      }
+
+      Future<dynamic> run() => ops.execute(
+        operation,
+        request['params'] as Map,
+        progress: progress,
+        translate: i18n.text,
+      );
+      final result = await withRetries(
+        operation,
+        run,
+        (left) => progress(
+          last,
+          i18n
+              .text(
+                'Connection lost · trying again in {0} s (it goes on where it stopped)',
+              )
+              .replaceAll('{0}', '$left'),
         ),
-      });
+      );
+      send({'type': 'result', 'result': result});
       return 0;
     }
     final operation = request['operation'];
@@ -1011,6 +1030,37 @@ Future<int> runWorker(List<String> args) async {
 }
 
 /// inventory.Runtime's fields (Runtime(**record) refuses any other).
+/// jobs.RETRY_DELAYS: seconds before each new try of a broken-off download.
+const retryDelays = [5, 15, 30, 60, 120];
+
+/// jobs.Jobs._run: a download or pull whose connection broke off is tried
+/// again after a pause (counted down through [waiting]) and goes on where it
+/// stopped (.part, Ollama's own pulls); a refusal or any other error is not.
+Future<T> withRetries<T>(
+  String operation,
+  Future<T> Function() run,
+  void Function(int secondsLeft) waiting, {
+  Future<void> Function(Duration)? sleep,
+}) async {
+  for (var attempt = 0; ; attempt++) {
+    try {
+      return await run();
+    } on Object catch (error) {
+      final retryable =
+          const {'models.download', 'models.pull'}.contains(operation) &&
+          (error is DownloadError ||
+              error is SocketException ||
+              error is TimeoutException ||
+              error is HttpException);
+      if (!retryable || attempt >= retryDelays.length) rethrow;
+      for (var left = retryDelays[attempt]; left > 0; left--) {
+        waiting(left);
+        await (sleep ?? Future<void>.delayed)(const Duration(seconds: 1));
+      }
+    }
+  }
+}
+
 final _runtimeFields = RuntimeRecord('', '').toJson().keys.toSet();
 
 /// context_ctl.ollama_set_context: num_ctx given to the model through
