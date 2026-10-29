@@ -72,7 +72,7 @@ void main() {
         );
         if (!develPythonFallback) {
           await expectLater(
-            router.call('system.help_apply', {}),
+            router.call('nothing.unported', {}),
             throwsA(
               isA<BackendError>().having(
                 (e) => e.code,

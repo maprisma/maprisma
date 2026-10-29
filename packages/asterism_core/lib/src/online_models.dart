@@ -52,7 +52,9 @@ final class OnlineModels {
     final reader = models['reader'];
     if (reader == 'claude' || reader == 'codex') return true;
     if (models['hook'] == true && _hooks.contains(adapter.command)) return true;
-    throw ServiceError('unported_route'); // an add-on's own switcher
+    // An add-on's own switcher was code; add-ons are data only now: no
+    // switching offered for it.
+    return false;
   }
 
   /// connect._json: "" is {}, anything but an object fails.

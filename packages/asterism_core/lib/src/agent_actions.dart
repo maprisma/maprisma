@@ -269,6 +269,10 @@ final class AgentActions {
   final _verifications = <String, (String, Directory, String)>{};
 
   /// The environment with the user's program folders (add_user_program_dirs).
+  /// The user's environment with mise's shims and ~/.local/bin on PATH
+  /// (ai_core.add_user_program_dirs).
+  Map<String, String> get userEnv => _env;
+
   Map<String, String> get _env {
     final env = Map<String, String>.from(identity.environment);
     var mise = env['MISE_DATA_DIR'] ?? '';

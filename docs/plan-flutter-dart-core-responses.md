@@ -1283,3 +1283,38 @@ Check:
   move and after Undo.
 - `tests/test_dart_system_map_parity.py` also checks the routes: a move before any refresh, a preview
   from the map onto `/mnt/Data` (never applied), refused targets and handles.
+
+### 6a-4 — the System Map's AI help
+
+`system.help_preview`, `system.fix_preview` and `system.help_apply` are served by the core
+(`system_help.dart`):
+- **The preview** shows the exact prompt before anything starts: the map's facts as untrusted JSON (no
+  settings values), the task (explain, simplify, check), or a Smart Check finding to verify and fix.
+  Only an installed agent that can do it is offered (`ai_helper.helpers` / `task_agents`), only for a map
+  refreshed in the last ten minutes.
+- **A task tab** (explain, simplify, fix): the agent closed in by its adapter's `[closed]` task options
+  (`agent_guard.task`: it asks before each change; its MCP servers off one by one where it needs that,
+  their names read from its own settings, a name it cannot spell refuses the run). Apply builds the argv
+  again and requires the reviewed one; the session runs without agent-session variables and without
+  the agent's providers. The run goes into the shared log (`plugin_ai`, owner-only, locked).
+- **The Smart Check** (worker, private): one web look-up closed in to the web alone
+  (`agent_guard.background`), the reviewed prompt on stdin, ten minutes, 512 KiB, SIGTERM stops it;
+  the agent's output parsed (`claude-json`, `codex-jsonl`, text), the first JSON with findings checked
+  (`smart_check.validate`: printable one-line texts, known levels, no repeated titles, at most 15),
+  each finding tied to a node of the map when the agent named one, saved in the map. The run, its
+  tokens and its result go into the shared log.
+- Inputs the reference refuses are refused here too (an unknown connection kind or provider operation),
+  instead of being handed to the reference; an add-on agent's own model switcher (code) is not offered.
+- With this, every route of the reference is served by the core. "Insights" is the add-on with code
+  that the data-only core refuses on purpose (5a), not a route.
+
+Check: `tests/test_dart_system_help_parity.py`, both services in a temporary HOME with a fake Claude Code
+(its look-up answers in Claude's JSON format with prose around the findings; its task tab prints how it
+was started):
+- previews: before a refresh, explain, check, an agent not installed, a bad topic;
+- the explain tab (its guard options in its argv), a used preview, the Smart Check (findings checked,
+  bad levels and a repeated title dropped, nodes tied), a fix preview from a finding and its tab;
+- the shared run log (setup-help, setup-analysis with tokens and cost, smart-fix).
+The same answers, argv, stdin and log on both sides.
+
+Codex reviewed this step (2026-10-29): CLEAN; its one Low (a malformed cached finding list) is fixed.

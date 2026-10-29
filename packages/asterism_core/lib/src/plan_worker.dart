@@ -13,6 +13,7 @@ import 'model_removals.dart';
 import 'existing_ai.dart' as existing_ai;
 import 'system_map.dart' show SystemMapReader;
 import 'system_actions.dart' show checkTool;
+import 'system_help.dart' show analyzeMap;
 import 'model_moves.dart' show SystemMoves, ScanFilesLike;
 import 'dart:math' show Random;
 import 'first_agent.dart';
@@ -444,6 +445,7 @@ Future<int> runWorker(List<String> args) async {
           'system.move_preview',
           'system.move_apply',
           'system.move_undo',
+          'system.analyze',
         }.contains(operation) ||
         (request['params'] as Map).isNotEmpty) {
       throw const FormatException('Invalid private operation');
@@ -539,6 +541,58 @@ Future<int> runWorker(List<String> args) async {
         return moves.execute(body, token, progress);
       });
       send({'type': 'result', 'result': result});
+      return 0;
+    }
+    if (operation == 'system.analyze') {
+      if (body.length > 128 * 1024) {
+        throw const FormatException('System analysis request too large');
+      }
+      final data = jsonDecode(utf8.decode(body));
+      if (data is! Map ||
+          data['command'] is! String ||
+          data['settings_path'] is! String) {
+        throw const FormatException('Invalid system analysis');
+      }
+      final identity = AppIdentity();
+      final files = ScanFiles(identity);
+      final registry = _reloadAddons(data['settings_path'] as String);
+      final settings = SettingsStore(identity);
+      final i18n = ServiceI18n(identity, settings);
+      final catalog = AgentCatalog(
+        files,
+        detectDesktop(identity, Posix()),
+        adapters: registry.adapters,
+      );
+      final installed = {
+        for (final a in catalog.scan())
+          if (a.installed) a.command,
+      };
+      final helpers = SystemMapReader(
+        files,
+        registry,
+        catalog,
+        i18n.text,
+        i18n.plural,
+        checksAgent: '${settings.load()['ai_checks_agent'] ?? ''}',
+      ).helpers(installed);
+      final command = data['command'] as String;
+      final adapter = registry.adapters
+          .where((a) => a.command == command)
+          .firstOrNull;
+      if (adapter == null ||
+          !helpers.any((h) => h['command'] == command && h['check'] == true)) {
+        throw const FormatException('AI checker unavailable');
+      }
+      send({
+        'type': 'result',
+        'result': await analyzeMap(
+          data,
+          adapter,
+          identity.environment,
+          identity.home,
+          identity.shortName,
+        ),
+      });
       return 0;
     }
     if (operation == 'system.tool_check') {
