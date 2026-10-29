@@ -117,7 +117,7 @@ class OpenProblemsView extends StatelessWidget {
                 leading: Icon(
                   h['kind'] == 'updates'
                       ? Icons.upgrade
-                      : h['kind'] == 'found'
+                      : h['kind'] == 'found' || h['kind'] == 'versions'
                       ? Icons.new_releases
                       : Icons.extension,
                 ),
@@ -130,7 +130,8 @@ class OpenProblemsView extends StatelessWidget {
                           for (final (action, label) in [
                             if (h['kind'] == 'updates')
                               ('update_all', 'Update all'),
-                            if (h['kind'] == 'found') ...[
+                            if (h['kind'] == 'found' ||
+                                h['kind'] == 'versions') ...[
                               if (h['mcp'] == true) ('mcp', 'Add MCP server…'),
                               if (h['skills'] == true)
                                 ('skills', 'Add skills…'),

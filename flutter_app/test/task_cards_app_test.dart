@@ -103,8 +103,9 @@ for line in sys.stdin:
  elif m=='updates.run':r={'started':True}
  elif m=='found.scan':tasks['found']={'mcp':[],'versions':[],'not_looked':[],'skills':[]};r={'task':'found'}
  elif m=='found.hints':r={'lines':[{'kind':'found','text':'New on this PC: wordcraft','mcp':True,'skills':False}]}
- elif m=='found.list':r=({'checked':True,'set_up':1,'not_looked':[],'items':[{'name':'wordcraft','where':'~/.local/bin/wordcraft-cli','command':['/h/.local/bin/wordcraft-cli','mcp','--headless'],'sure':True,'version':'','new':True,'ready':True},{'name':'vectorcraft','where':'vectorcraft.AppImage','command':['x'],'sure':True,'version':'1.2.0','new':False,'ready':False}]} if p['kind']=='mcp' else {'checked':True,'items':[]})
+ elif m=='found.list':r=({'checked':True,'set_up':1,'not_looked':[],'items':[{'name':'wordcraft','where':'~/.local/bin/wordcraft-cli','command':['/h/.local/bin/wordcraft-cli','mcp','--headless'],'sure':True,'version':'','new':True,'ready':True},{'name':'vectorcraft','where':'vectorcraft.AppImage','command':['/h/Applications/vectorcraft-1.2.0/usr/bin/vectorcraft-cli','mcp'],'sure':True,'version':'1.2.0','new':False,'ready':False,'program':'/h/Applications/vectorcraft-1.2.0/usr/bin/vectorcraft-cli','unpack_text':'Unpacks vectorcraft.AppImage into ~/Applications/vectorcraft-1.2.0 first (the server lives inside it).'}],'not_looked_text':'1 AppImage not looked into yet (wordcraft.AppImage).','looking_text':'Looking inside 1 AppImages…'} if p['kind']=='mcp' else {'checked':True,'items':[]})
  elif m=='found.seen':r={'ok':True}
+ elif m in ('found.look_inside','found.unpack'):tasks[m]={'ok':True};r={'task':m}
  elif m=='addons.hints':r={'lines':[{'kind':'new','text':'Goose is on this PC but not on the map','ids':['agent-goose'],'column':1},{'kind':'updates','text':'Add-on updates ready: Catalog adapter','updates':[{'id':'catalog-addon','name':'Catalog adapter','version':'2.1','current':'2.0','preview':'catalog-1'}]}]}
  elif m=='health.report':tasks['hr']={'warn':1,'hint':0,'level':'warn','summary':'1 thing to fix','open_text':'1 open problem','areas':[{'key':'agents','title':'Agents','icon':'','findings':[{'level':'warn','title':'Test agent: Not signed in','text':'','action':['details','test']}]}],'uses':[]};r={'task':'hr'}
  elif m=='agents.health':r={'state':'warn','summary':'Works, one thing to look at: No model chosen','checks':[{'state':'warn','title':'No model chosen','detail':'','step':'Select it on the map.','command':'','sign_in':''}]}
@@ -1008,10 +1009,7 @@ void main() {
     ); // read quietly at start, for the hints
     await tester.tap(find.byKey(const ValueKey('problems-open')));
     await settleService(tester);
-    expect(
-      find.text('Goose is on this PC but not on the map'),
-      findsOneWidget,
-    );
+    expect(find.text('Goose is on this PC but not on the map'), findsOneWidget);
     expect(find.text('Add-on updates ready: Catalog adapter'), findsOneWidget);
     await tester.tap(find.widgetWithText(OutlinedButton, 'Update all'));
     await settleService(tester);
@@ -1045,16 +1043,47 @@ void main() {
     await settleService(tester);
     expect(find.byKey(const ValueKey('found-panel')), findsOneWidget);
     expect(find.text('★ new · ~/.local/bin/wordcraft-cli'), findsOneWidget);
-    final inside = tester.widget<OutlinedButton>(
+    expect(
+      find.text('1 AppImage not looked into yet (wordcraft.AppImage).'),
+      findsOneWidget,
+    );
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Look inside…'));
+    await settleService(tester);
+    expect(
+      requests(dir).where((q) => q['method'] == 'found.look_inside'),
+      hasLength(1),
+    );
+    expect(find.byKey(const ValueKey('found-panel')), findsOneWidget);
+    // Inside an AppImage: unpacked first, after a yes.
+    await tester.tap(
       find.descendant(
         of: find.byKey(const ValueKey('found-mcp-vectorcraft 1.2.0')),
         matching: find.byType(OutlinedButton),
       ),
     );
-    expect(inside.onPressed, isNull); // inside an AppImage: not yet
+    await tester.pumpAndSettle();
+    expect(
+      find.textContaining('Unpacks vectorcraft.AppImage into'),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const ValueKey('found-unpack')));
+    await settleService(tester);
+    expect(
+      requests(dir).lastWhere((q) => q['method'] == 'found.unpack')['params'],
+      {'program': '/h/Applications/vectorcraft-1.2.0/usr/bin/vectorcraft-cli'},
+    );
+    expect(
+      find.widgetWithText(
+        TextFormField,
+        '/h/Applications/vectorcraft-1.2.0/usr/bin/vectorcraft-cli',
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const ValueKey('found-open')));
+    await settleService(tester);
     expect(
       requests(dir).where((q) => q['method'] == 'found.seen').length,
-      2,
+      greaterThanOrEqualTo(2),
     );
     await tester.tap(
       find.descendant(
@@ -1064,10 +1093,7 @@ void main() {
     );
     await settleService(tester);
     expect(find.byKey(const ValueKey('found-panel')), findsNothing);
-    expect(
-      find.widgetWithText(TextFormField, 'wordcraft'),
-      findsOneWidget,
-    );
+    expect(find.widgetWithText(TextFormField, 'wordcraft'), findsOneWidget);
     expect(
       find.widgetWithText(TextFormField, '/h/.local/bin/wordcraft-cli'),
       findsOneWidget,
@@ -1076,4 +1102,3 @@ void main() {
     await unmountApp(tester);
   });
 }
-

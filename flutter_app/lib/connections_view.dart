@@ -22,7 +22,11 @@ class ConnectionsView extends StatefulWidget {
     this.onCall,
     this.onSkillPreview,
     this.showFound = false,
+    this.onFoundChanged,
   });
+
+  /// After a look inside AppImages or an unpack: the hints follow.
+  final VoidCallback? onFoundChanged;
 
   /// Open with what was found on this PC (Open problems' "New on this PC").
   final bool showFound;
@@ -86,6 +90,73 @@ class _ConnectionsViewState extends State<ConnectionsView> {
     }
   }
 
+  /// What the found panel is busy with ("Looking inside 3 AppImages…").
+  String? _foundWork;
+
+  Future<void> _foundTask(String work, Future<void> Function() run) async {
+    setState(() => _foundWork = work);
+    try {
+      await run();
+      await widget.onCatalogTask!('found.scan', {});
+      widget.onFoundChanged?.call();
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(widget.tr('The action could not be completed.')),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _foundWork = null);
+    }
+  }
+
+  /// look_inside_appimages: each one's usr/bin unpacked (closed in by
+  /// bubblewrap) into a temporary folder, read, removed again.
+  Future<void> _lookInside(Map mcp) async {
+    await _foundTask(
+      '${mcp['looking_text']}',
+      () => widget.onCatalogTask!('found.look_inside', {}),
+    );
+    if (mounted) await _openFound();
+  }
+
+  /// A server inside an AppImage: the whole AppImage unpacked into
+  /// ~/Applications first (the user's yes), then the form.
+  Future<void> _unpackAndAdd(Map item) async {
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (dialog) => AlertDialog(
+        title: Text('${item['name']}'),
+        content: Text('${item['unpack_text']}'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialog, false),
+            child: Text(widget.tr('Cancel')),
+          ),
+          FilledButton(
+            key: const ValueKey('found-unpack'),
+            onPressed: () => Navigator.pop(dialog, true),
+            child: Text(widget.tr('Unpack')),
+          ),
+        ],
+      ),
+    );
+    if (yes != true || !mounted) return;
+    var done = false;
+    await _foundTask(
+      widget.tr('Unpacking {0}…').replaceAll('{0}', '${item['where']}'),
+      () async {
+        await widget.onCatalogTask!('found.unpack', {
+          'program': item['program'],
+        });
+        done = true;
+      },
+    );
+    if (done && mounted) _addFound('mcp', item);
+  }
+
   void _addFound(String kind, Map item) => setState(() {
     _found = null;
     _initial = Map<String, dynamic>.from(item);
@@ -105,8 +176,10 @@ class _ConnectionsViewState extends State<ConnectionsView> {
       title: Text(title),
       subtitle: Text(item['new'] == true ? '★ ${tr('new')} · $detail' : detail),
       trailing: OutlinedButton(
-        onPressed: widget.busy || item['ready'] == false
+        onPressed: widget.busy || _foundWork != null
             ? null
+            : item['ready'] == false
+            ? () => _unpackAndAdd(item)
             : () => _addFound(kind, item),
         child: Text(tr('Add…')),
       ),
@@ -133,6 +206,28 @@ class _ConnectionsViewState extends State<ConnectionsView> {
                 ),
               ],
             ),
+            if (_foundWork != null)
+              ListTile(
+                dense: true,
+                leading: const SizedBox.square(
+                  dimension: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                title: Text(_foundWork!),
+              )
+            else if ('${mcp['not_looked_text'] ?? ''}'.isNotEmpty)
+              ListTile(
+                key: const ValueKey('found-not-looked'),
+                dense: true,
+                leading: const Icon(Icons.inventory_2_outlined),
+                title: Text('${mcp['not_looked_text']}'),
+                trailing: OutlinedButton(
+                  onPressed: widget.busy || widget.onCatalogTask == null
+                      ? null
+                      : () => _lookInside(mcp),
+                  child: Text(tr('Look inside…')),
+                ),
+              ),
             if (programs.isEmpty && sets.isEmpty)
               Text(
                 tr(

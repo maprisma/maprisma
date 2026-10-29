@@ -141,6 +141,8 @@ const portedRoutes = {
   'found.hints',
   'found.list',
   'found.seen',
+  'found.look_inside',
+  'found.unpack',
   ...readOnlyRoutes,
 };
 // Phase 7 removes this blocker only after every route has differential coverage.
@@ -340,6 +342,36 @@ final class CoreService {
         },
       );
     }
+    if (method == 'found.look_inside') {
+      if (params.isNotEmpty) throw const FormatException('Invalid request');
+      final paths = FoundScan(
+        identity.home,
+        cacheFile: p.join(identity.cacheDir, 'mcp-scan-3.json'),
+        searchPath: identity.environment['PATH'],
+        mcpFolders: _savedList('mcp_folders'),
+      ).notLookedInto();
+      return tasks.start('found.look_inside', {
+        'paths': paths.take(100).toList(),
+        'mcp_folders': _savedList('mcp_folders'),
+      }, (result) => result);
+    }
+    if (method == 'found.unpack') {
+      final program = params['program'];
+      final candidate = [
+        for (final c in lastFound['mcp'] as List? ?? const [])
+          if (c is Map &&
+              c['program'] == program &&
+              '${c['appimage']}'.isNotEmpty)
+            c,
+      ].firstOrNull;
+      if (params.length != 1 || candidate == null) {
+        throw const FormatException('Unknown program');
+      }
+      return tasks.start('found.unpack', {
+        'appimage': candidate['appimage'],
+        'mcp_folders': _savedList('mcp_folders'),
+      }, (result) => result);
+    }
     final agents = reads.catalog.scan();
     final configured = configuredPrograms(agents);
     final mcpNames = {
@@ -371,23 +403,40 @@ final class CoreService {
         for (final s in skills)
           if (!seen['skills']!.contains(s['path'])) s,
       ];
-      if (newMcp.isEmpty && newSkills.isEmpty) return {'lines': []};
+      final versions = [
+        for (final x in lastFound['versions'] as List? ?? const [])
+          p.basename('$x'),
+      ]..sort();
       return {
         'lines': [
-          {
-            'kind': 'found',
-            'text': i18n
-                .text('New on this PC: {0}')
-                .replaceAll(
-                  '{0}',
-                  _listed([
-                    for (final c in newMcp) '${c['name']}',
-                    for (final s in newSkills) '${s['origin']}',
-                  ], 5),
-                ),
-            'mcp': newMcp.isNotEmpty,
-            'skills': newSkills.isNotEmpty,
-          },
+          if (newMcp.isNotEmpty || newSkills.isNotEmpty)
+            {
+              'kind': 'found',
+              'text': i18n
+                  .text('New on this PC: {0}')
+                  .replaceAll(
+                    '{0}',
+                    _listed([
+                      for (final c in newMcp) '${c['name']}',
+                      for (final s in newSkills) '${s['origin']}',
+                    ], 5),
+                  ),
+              'mcp': newMcp.isNotEmpty,
+              'skills': newSkills.isNotEmpty,
+            },
+          // Newer versions of apps looked into or unpacked before: only
+          // named, looking inside is the user's click.
+          if (versions.isNotEmpty)
+            {
+              'kind': 'versions',
+              'text': i18n
+                  .text(
+                    'New version found: {0} · Add MCP server › Look inside… to use it',
+                  )
+                  .replaceAll('{0}', _listed(versions, 3)),
+              'mcp': true,
+              'skills': false,
+            },
         ],
       };
     }
@@ -447,13 +496,31 @@ final class CoreService {
       );
       return s != 0 ? s : '${a['name']}'.compareTo('${b['name']}');
     });
+    final notLooked = [
+      for (final x in lastFound['not_looked'] as List? ?? const [])
+        p.basename('$x'),
+    ];
     return {
       'checked': lastFound.isNotEmpty,
       'set_up': found.length - fresh.length,
-      'not_looked': [
-        for (final x in lastFound['not_looked'] as List? ?? const [])
-          p.basename('$x'),
-      ],
+      'not_looked': notLooked,
+      'not_looked_text': notLooked.isEmpty
+          ? ''
+          : i18n
+                .plural(
+                  '1 AppImage not looked into yet ({1}).',
+                  '{0} AppImages not looked into yet ({1}).',
+                  notLooked.length,
+                )
+                .replaceAll('{0}', '${notLooked.length}')
+                .replaceAll(
+                  '{1}',
+                  notLooked.take(4).join(', ') +
+                      (notLooked.length > 4 ? '…' : ''),
+                ),
+      'looking_text': i18n
+          .text('Looking inside {0} AppImages…')
+          .replaceAll('{0}', '${notLooked.length}'),
       'items': [
         for (final c in fresh)
           {
@@ -465,8 +532,25 @@ final class CoreService {
             'sure': c['sure'],
             'version': c['version'],
             'new': isNew[c['program']],
-            // Inside an AppImage: it is unpacked first (not in the preview).
+            'program': c['program'],
+            // Inside an AppImage: unpacked first, on the user's click.
             'ready': '${c['appimage']}'.isEmpty,
+            if ('${c['appimage']}'.isNotEmpty)
+              'unpack_text': i18n
+                  .text(
+                    'Unpacks {0} into {1} first (the server lives inside it).',
+                  )
+                  .replaceAll('{0}', p.basename('${c['appimage']}'))
+                  .replaceAll(
+                    '{1}',
+                    tildeOf(
+                      p.join(
+                        identity.home,
+                        'Applications',
+                        FoundScan.appimageStem('${c['appimage']}'),
+                      ),
+                    ),
+                  ),
           },
       ],
     };

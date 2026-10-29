@@ -299,6 +299,30 @@ Future<void> main() async {
           params['cache'] as String,
           search: params['search'] == true,
         );
+      } else if (request.method == 'dev.foundlook') {
+        // mcp_scan.look_inside, scan, unpack and scan again.
+        final scan = fs.FoundScan(
+          identity.home,
+          cacheFile: params['cache'] as String,
+          tempDir: params['temp'] as String,
+          searchPath: identity.environment['PATH'],
+          opt: params['opt'] as String,
+        );
+        final image = params['image'] as String;
+        final looked = await scan.lookInside([image]);
+        final before = [for (final c in scan.scan({}, {})) c.toJson()];
+        final folder = await scan.unpack(image);
+        final after = [for (final c in scan.scan({}, {})) c.toJson()];
+        result = {
+          'looked': looked,
+          'before': before,
+          'folder': folder,
+          'after': after,
+          'not_looked': scan.notLookedInto(),
+          'temp_left': Directory(params['temp'] as String).existsSync()
+              ? Directory(params['temp'] as String).listSync().length
+              : 0,
+        };
       } else if (request.method == 'dev.foundscan') {
         // mcp_scan.scan (with fold_versions), new_versions_found,
         // not_looked_into and skills_scan.scan.

@@ -3567,6 +3567,7 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
                                         method: 'mcp.option_preview',
                                       ),
                                   showFound: _showFound,
+                                  onFoundChanged: _loadFoundHints,
                                   onBack: () {
                                     setState(() {
                                       _showConnections = false;

@@ -687,6 +687,52 @@ Future<int> runWorker(List<String> args) async {
       });
       return 0;
     }
+    // The user's "Look inside" (look_inside) and an AppImage unpacked for a
+    // server in it (unpack): only AppImages the scan itself lists.
+    if (args.isEmpty &&
+        const {
+          'found.look_inside',
+          'found.unpack',
+        }.contains(request['operation'])) {
+      final params = Map<String, dynamic>.from(request['params'] as Map);
+      final folders = params.remove('mcp_folders');
+      if (folders is! List ||
+          folders.length > 50 ||
+          !folders.every((x) => x is String)) {
+        throw const FormatException('Invalid worker request');
+      }
+      final identity = AppIdentity();
+      final scan = FoundScan(
+        identity.home,
+        cacheFile: p.join(identity.cacheDir, 'mcp-scan-3.json'),
+        tempDir: p.join(identity.cacheDir, 'tmp'),
+        searchPath: identity.environment['PATH'],
+        mcpFolders: folders.cast<String>(),
+      );
+      Map<String, dynamic> result;
+      if (request['operation'] == 'found.look_inside') {
+        final paths = params['paths'];
+        final allowed = scan.notLookedInto().toSet();
+        if (params.length != 1 ||
+            paths is! List ||
+            paths.length > 100 ||
+            !paths.every((x) => x is String && allowed.contains(x))) {
+          throw const FormatException('Invalid worker request');
+        }
+        final found = await scan.lookInside(paths.cast<String>());
+        result = {'looked': paths.length, 'found': found.length};
+      } else {
+        final image = params['appimage'];
+        if (params.length != 1 ||
+            image is! String ||
+            !scan.appimages().contains(image)) {
+          throw const FormatException('Invalid worker request');
+        }
+        result = {'folder': await scan.unpack(image)};
+      }
+      send({'type': 'result', 'result': result});
+      return 0;
+    }
     // health.pc_info: the card (lspci), the memory, the free space in the
     // model folders. Read only.
     if (args.isEmpty && request['operation'] == 'health.pc') {

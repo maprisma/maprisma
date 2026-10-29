@@ -1978,3 +1978,38 @@ form. It was also run once on this PC, read only, with both caches in a scratch 
 gave the same results: 2 programs (cua-driver, photocraft), 13 AppImages not looked into, and 2 skill
 sets. It took 16 s against the reference's 12 s; later looks come from the cache.
 
+### 6b-18a — Looking inside AppImages, unpacking one for its server
+
+New in the core (`found_scan.dart`, the reference is `mcp_scan.extract_argv`, `unpack_bin`,
+`look_inside`, `unpack`, and `ai_popup.overview_hints`' "New version found" line):
+- **The sandbox:** `--appimage-extract` runs the AppImage's own program, so it always runs in
+  bubblewrap. That means no network, no home folder, `/usr` read-only, the AppImage read-only, and only
+  the work folder writable. The argv is the reference's, and the installer's AppImage unpack uses the
+  same one. Without bwrap nothing is unpacked. Output size and time are capped
+  (`runWithDiskBudget`, shared with the installers; its whole group is ended).
+- **`found.look_inside {}` (worker task):** for the AppImages not looked into yet (the worker takes
+  only paths the scan itself lists). Each one's `usr/bin` goes into a private temporary folder under
+  `$XDG_CACHE_HOME/asterism/tmp`; its programs are read and the folder is removed again. What was
+  found is kept per file in the scan cache, and an AppImage that cannot be opened is kept as empty.
+- **`found.unpack {program}` (worker task):** a program the last scan found inside an AppImage. The
+  whole AppImage is unpacked into `~/Applications/<app>-<version>/` (into a hidden work folder, then
+  renamed; 10 GB and 10 minutes at most). It is not unpacked again when the folder is there.
+- **`found.hints`** adds "New version found: {0} · Add MCP server › Look inside… to use it". The newer
+  AppImage is only named: a newer name is no proof of an authentic update.
+- **`found.list`** carries the "{0} AppImages not looked into yet ({1})." text (plurals from the core)
+  and, for a program inside an AppImage, the "Unpacks {0} into {1} first" note.
+- **Flutter:** the found panel has a **Look inside…** row (progress while it runs, then a new scan).
+  **Add…** on a program inside an AppImage asks first with that note (**Unpack**), unpacks, scans
+  again, then opens the filled-in form; the hints follow. New string: "Unpack" in all eight
+  languages; the manual's found section rewritten for it; PDFs rebuilt.
+
+Check: `tests/test_dart_found_look_parity.py` uses real bubblewrap and a stand-in AppImage (a script
+that unpacks itself), in two HOMEs. Python and Dart agree on what is looked into, the offer from the
+cache (command into the folder it will be unpacked to), the unpack, and the program found in the
+unpacked folder afterwards. Nothing stays in the temporary folder. The app test goes Look inside… →
+the look and a new scan → Add… on an AppImage program → the note → Unpack → `found.unpack` → the
+filled-in form. Not run on this PC's real AppImages: that is the user's click.
+
+Next, 6b-18b: moving agents from an older app version to the newer one (`mcp_update`: entries, the
+list, links in `~/.local/bin`, old folders retired with Undo).
+

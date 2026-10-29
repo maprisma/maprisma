@@ -6,6 +6,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 KEYS = (
     # Found on this PC (found.list).
+    "Unpack",
+    "Unpacking {0}…",
+    "Look inside…",
     "Found on this PC",
     "Add…",
     "new",

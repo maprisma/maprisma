@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 import 'package:path/path.dart' as p;
+import 'desktop.dart' show whichIn;
+import 'installers.dart' show folderBytes, runWithDiskBudget;
 import 'posix_ffi.dart';
 
 /// mcp_scan and skills_scan: programs on this PC that offer an MCP server
@@ -220,6 +222,7 @@ final class FoundScan {
     required this.cacheFile,
     this.searchPath,
     this.opt = '/opt',
+    this.tempDir = '',
     this.mcpFolders = const [],
     this.skillFolders = const [],
     List<(String, int)>? skillRoots,
@@ -228,6 +231,9 @@ final class FoundScan {
        posix = posix ?? Posix();
 
   final String home, cacheFile, opt;
+
+  /// Where an AppImage's usr/bin is unpacked to look inside (removed after).
+  final String tempDir;
   final String? searchPath;
 
   /// Setup's added folders (extra_folders, ~-paths as stored).
@@ -601,6 +607,138 @@ final class FoundScan {
           ))
             image,
     ];
+  }
+
+  // --- looking inside AppImages (the user's click) ---------------------------
+
+  static const maxBinBytes = 2 * 1024 * 1024 * 1024;
+  static const maxAppBytes = 10 * 1024 * 1024 * 1024;
+
+  /// extract_argv: --appimage-extract runs the AppImage's own program, so it
+  /// runs closed in (bubblewrap): no network, no home folder, the system's
+  /// /usr read-only, the AppImage read-only and only the work folder
+  /// writable. Without bwrap nothing is unpacked.
+  List<String> extractArgv(
+    String appimage,
+    String work, [
+    List<String> pattern = const [],
+  ]) {
+    final bwrap = whichIn('bwrap', searchPath);
+    if (bwrap == null) {
+      throw StateError(
+        'unpacking an AppImage needs bubblewrap (bwrap), which keeps it from touching anything else; install bubblewrap',
+      );
+    }
+    return [
+      bwrap, '--unshare-all', '--die-with-parent', '--new-session', //
+      '--clearenv', '--ro-bind', '/usr', '/usr', '--symlink', 'usr/lib',
+      '/lib', '--symlink', 'usr/lib64', '/lib64', '--symlink', 'usr/bin',
+      '/bin', '--proc', '/proc', '--dev', '/dev', '--tmpfs', '/tmp',
+      '--ro-bind', appimage, '/in/app.AppImage', '--bind', work, '/out',
+      '--chdir', '/out', '--', '/in/app.AppImage', '--appimage-extract',
+      ...pattern,
+    ];
+  }
+
+  static void _rmtree(String path) {
+    try {
+      Directory(path).deleteSync(recursive: true);
+    } on FileSystemException {
+      // ignore_errors
+    }
+  }
+
+  /// unpack_bin: usr/bin of an AppImage in a new private temporary folder:
+  /// (that folder, its usr/bin). The caller removes the folder.
+  Future<(String, String)> unpackBin(String path) async {
+    Directory(tempDir).createSync(recursive: true);
+    posix.chmodPath(tempDir, 0x1c0);
+    final work = Directory(tempDir).createTempSync('appimage-').path;
+    try {
+      final ok = await runWithDiskBudget(
+        extractArgv(path, work, ['usr/bin/*']),
+        work,
+        maxBinBytes,
+        const Duration(seconds: 60),
+      );
+      final folder = p.join(work, 'squashfs-root/usr/bin');
+      if (!ok ||
+          !_isDir(folder) ||
+          folderBytes(work, maxBinBytes) > maxBinBytes) {
+        throw StateError('could not look inside ${p.basename(path)}');
+      }
+      return (work, folder);
+    } catch (_) {
+      _rmtree(work); // nothing of a failed look stays
+      rethrow;
+    }
+  }
+
+  /// look_inside: each AppImage's programs read once (unpacked to a
+  /// temporary folder that is removed right after), kept in the cache.
+  Future<Map<String, List<List<Object>>>> lookInside(List<String> paths) async {
+    final results = <String, List<List<Object>>>{};
+    for (final path in paths) {
+      final key = _imageKey(path);
+      if (key == null) continue;
+      final found = <List<Object>>[];
+      String work, folder;
+      try {
+        (work, folder) = await unpackBin(path);
+      } on StateError {
+        cache[key] = <Object>[];
+        continue;
+      } on FileSystemException {
+        cache[key] = <Object>[];
+        continue;
+      }
+      try {
+        for (final program in _executables(folder)) {
+          if (!_isLink(program) && _elfOrScript(program)) {
+            final (count, usage) = scanFile(program, keep: false);
+            found.add([p.basename(program), count, _decode(usage)]);
+          }
+        }
+      } finally {
+        _rmtree(work);
+      }
+      cache[key] = found;
+      results[path] = found;
+    }
+    saveCache();
+    return results;
+  }
+
+  /// unpack: a whole AppImage into `~/Applications/<app>-<version>/`, for a
+  /// server that lives in it. Returns that folder.
+  Future<String> unpack(String appimage) async {
+    final into = p.join(home, 'Applications', appimageStem(appimage));
+    if (FileSystemEntity.typeSync(into, followLinks: false) !=
+        FileSystemEntityType.notFound) {
+      return into;
+    }
+    final work = p.join(p.dirname(into), '.${p.basename(into)}.unpacking');
+    _rmtree(work);
+    Directory(work).createSync(recursive: true);
+    posix.chmodPath(work, 0x1c0);
+    try {
+      final ok = await runWithDiskBudget(
+        extractArgv(appimage, work),
+        work,
+        maxAppBytes,
+        const Duration(seconds: 600),
+      );
+      if (!ok || !_isDir(p.join(work, 'squashfs-root'))) {
+        throw StateError('could not unpack ${p.basename(appimage)}');
+      }
+      if (folderBytes(work, maxAppBytes) > maxAppBytes) {
+        throw StateError('${p.basename(appimage)} is too large to unpack');
+      }
+      Directory(p.join(work, 'squashfs-root')).renameSync(into);
+    } finally {
+      _rmtree(work);
+    }
+    return into;
   }
 
   // --- the start command -----------------------------------------------------
