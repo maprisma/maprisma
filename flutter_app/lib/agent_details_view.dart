@@ -80,6 +80,11 @@ class AgentDetailsView extends StatelessWidget {
                         : () => onAction!(command, action.key),
                     child: Text(tr(action.value)),
                   ),
+              if (agent['installed'] == true)
+                OutlinedButton(
+                  onPressed: busy ? null : () => onAction!(command, 'security'),
+                  child: Text(tr('Security settings')),
+                ),
               if (onConnections != null && agent['installed'] == true)
                 OutlinedButton(
                   onPressed: busy ? null : onConnections,

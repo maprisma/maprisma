@@ -2,6 +2,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:asterism_core/asterism_core.dart';
+import 'package:asterism_core/src/security_plans.dart' show securityPlan;
 import 'package:asterism_core/src/system_map.dart' show SystemMapReader;
 import 'package:asterism_core/src/agent_catalog.dart' show AgentCatalog;
 import 'package:asterism_core/src/scan_files.dart' show ScanFiles;
@@ -287,6 +288,31 @@ Future<void> main() async {
           params['cache'] as String,
           search: params['search'] == true,
         );
+      } else if (request.method == 'dev.securityplan') {
+        // agent_security.plan's new text for one setting and value.
+        final adapter = core.addons.adapters
+            .where((a) => a.command == params['command'])
+            .first;
+        final report = SecurityReports(
+          ScanFiles(identity),
+          i18n,
+        ).agent(adapter);
+        try {
+          final plan = securityPlan(
+            report,
+            params['command'] as String,
+            params['key'] as String,
+            params['value'],
+            core.config,
+          );
+          result = {
+            'changes': [
+              for (final c in plan.changes) [c.path, c.next],
+            ],
+          };
+        } on FormatException catch (e) {
+          result = {'error': e.message};
+        }
       } else if (request.method == 'dev.tarcheck') {
         // install_ctl.check_archive on a crafted archive.
         try {

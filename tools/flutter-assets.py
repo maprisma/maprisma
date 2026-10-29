@@ -5,6 +5,23 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 KEYS = (
+    # Security settings of an agent (agents.security).
+    "Security settings",
+    "What it may do on this PC without asking you",
+    "Risk management",
+    "Lower it…",
+    "In use",
+    "recommended",
+    "High risk",
+    "Medium risk",
+    "Low risk",
+    "It can do serious things on this PC without asking you. What lowers the risk is listed below.",
+    "Some things happen without asking you. What lowers the risk is listed below.",
+    "It asks before it does anything that matters, or cannot do it at all.",
+    "Not set: the agent's own default applies.",
+    "Open a setting to see every choice. A change is shown first, backed up and can be undone; it applies the next time {0} starts.",
+    "{0}: {1}",
+    "Settings file",
     # Settings: local LLMs with their agents, the agent for AI checks.
     "Local LLMs",
     "Start local LLMs with their agents",

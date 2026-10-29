@@ -36,7 +36,8 @@ tasks={}
 for line in sys.stdin:
  q=json.loads(line);m=q['method'];p=q.get('params',{})
  with open('requests.jsonl','a') as log:log.write(json.dumps(q)+'\n')
- if m=='app.snapshot':r={'agents':[],'projects':{},'settings':settings,'language':'en','setup_needed':welcome,'theme':{}}
+ if m=='app.snapshot':r={'agents':[{'command':'test','name':'Test agent','version':'1.0','installed':True}],
+  'projects':{'test':{'history':[],'default':'/home/u','pinned':''}},'settings':settings,'language':'en','setup_needed':welcome,'theme':{}}
  elif m=='settings.update':settings.update(p['values']);r=settings
  elif m=='app.theme':r={'theme':{}}
  elif m=='addons.list':r={'addons':[addon]+([new_addon] if installed else [])}
@@ -78,6 +79,12 @@ for line in sys.stdin:
    'gpu':{'vendor':'amd','name':'AMD · card1'},'build':p.get('build','vulkan'),'builds':[['vulkan','Vulkan'],['cpu','CPU']],'has_service':True}
   r={'task':'ipreview'}
  elif m=='installers.install':installed_runtime=True;tasks['iinstall']={'ok':True,'kind':'runtime','key':'llamacpp','version':'b9000'};r={'task':'iinstall'}
+ elif m=='agents.details':r={'model':'','plan':'','providers':[],'limits':[],'today_prompts':0,'today_sessions':0,'today_tokens':0,'actions':{}}
+ elif m=='agents.security':r={'agent':'test','name':'Test agent','known':True,'level':'high','rules':[],'files':[],'note':'',
+  'settings':[{'key':'ask','title':'Asks first','explain':'','editable':True,'current':'never','default':'always','recommended':'always',
+   'choices':[{'value':'always','label':'Always','explain':'','risk':1},{'value':'never','label':'Never','explain':'','risk':3}]}],
+  'risks':[{'level':'high','title':'It never asks','why':'','lower':'','fix_key':'ask','fix_value':'always'}]}
+ elif m=='agents.security_preview':r={'plan':'opaque-security','empty':False,'files':[],'links_add':[],'links_remove':[],'focus':['agent:test']}
  elif m=='tasks.status':r=({'state':'failed'} if p['task']=='install' and install_fails else {'state':'done','result':tasks[p['task']]})
  else:r={}
  print(json.dumps({'id':q['id'],'result':r}),flush=True)
@@ -557,6 +564,40 @@ void main() {
     expect(
       tester.widget<AgentMap>(find.byKey(const ValueKey('ai-map'))).lightFps,
       60,
+    );
+    expect(tester.takeException(), isNull);
+    await unmountApp(tester);
+  });
+
+  testWidgets('a security setting is lowered through the preview', (
+    tester,
+  ) async {
+    final dir = await mountApp(tester);
+    tester.widget<AgentMap>(find.byKey(const ValueKey('ai-map'))).onAgent!(
+      'test',
+    );
+    await settleService(tester);
+    await tester.tap(find.text('Security settings'));
+    await settleService(tester);
+    expect(find.text('High risk'), findsOneWidget);
+    await tester.ensureVisible(find.text('Lower it…'));
+    await tester.tap(find.text('Lower it…'));
+    await settleService(tester);
+    final preview = requests(
+      dir,
+    ).lastWhere((q) => q['method'] == 'agents.security_preview');
+    expect(preview['params'], {
+      'command': 'test',
+      'key': 'ask',
+      'value': 'always',
+    });
+    await tester.tap(find.widgetWithText(FilledButton, 'Apply'));
+    await settleService(tester);
+    expect(
+      requests(
+        dir,
+      ).lastWhere((q) => q['method'] == 'connections.apply')['params'],
+      {'plan': 'opaque-security'},
     );
     expect(tester.takeException(), isNull);
     await unmountApp(tester);

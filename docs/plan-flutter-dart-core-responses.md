@@ -1414,3 +1414,26 @@ Settings now also offers the two GTK settings whose features the Flutter app has
 
 Check: a widget test for both settings (the switch, the service name, the agent list, none installed);
 the scan-settings test scrolls to the last target it uses, since the longer list builds lazily.
+
+### 6b-6 — the security view
+
+New in the core (`security_plans.dart`, the reference is `agent_security.plan`):
+- **`agents.security {command}`**: the agent's security report (settings with every choice and its
+  risk, allow/deny rules, risks with what lowers them, settings files, note, level), with the agent's
+  MCP server count from the inventory as in GTK.
+- **`agents.security_preview {command, key, value}`**: one setting changed in the agent's own file —
+  JSON (OpenCode's single `permission` string becomes per tool), TOML and YAML edited as text, so
+  comments and everything else stay; the TOML and YAML results are read back and refused when the
+  value would not come out as chosen. Only editable settings and their own choices; anything else is
+  refused. The plan is a connection plan, so `connections.apply` backs up, writes and offers Undo.
+- **Flutter:** **Security settings** in an installed agent's details opens `AgentSecurityView`: the risk
+  badge, every setting with a choice list (risk dot, `recommended`, "Not set: the agent's own default
+  applies."), the rules, the settings file, Risk management with **Lower it…**. A change opens the
+  connection preview. All texts were already translated (GTK); the manual's new "Security in the
+  Flutter preview" in all eight languages; PDFs rebuilt.
+
+Check: `tests/test_dart_security_plans_parity.py` — every setting and every choice (plus a value that
+is not a choice) of the seven agents with security facts, in a HOME whose files hold comments and
+other keys: the same file text from Python and Dart, comments kept, the invalid value refused on both
+sides. Widget tests for the view (level, settings, rules, risks, choices and Lower it…, not editable,
+not set) and an app test with the fake service (details → security → Lower it… → preview → apply).

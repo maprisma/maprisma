@@ -26,6 +26,7 @@ import 'map_welcome.dart';
 import 'map_addons_focus.dart';
 import 'first_agent_view.dart';
 import 'installer_review.dart';
+import 'agent_security_view.dart';
 import 'api_key_review.dart';
 import 'agent_action_dialog.dart';
 import 'providers_view.dart';
@@ -1692,6 +1693,41 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
 
   /// An API key put where the agent reads it: reviewed, typed into a hidden
   /// field, handed to the worker; the field is cleared right away.
+  /// What an agent may do without asking (agents.security); a changed
+  /// setting is reviewed as a connection preview (backup, Undo).
+  Future<void> _security(String command) async {
+    if (_busy) return;
+    Map<String, dynamic> report;
+    try {
+      report = await _backend!.call('agents.security', {'command': command});
+    } catch (_) {
+      _actionFailed();
+      return;
+    }
+    if (!mounted) return;
+    (String, dynamic)? change;
+    await _cardReview(
+      tr('Security settings'),
+      report,
+      (yes, no) => AgentSecurityView(
+        report: report,
+        tr: tr,
+        onChange: (key, value) {
+          change = (key, value);
+          no();
+        },
+        onClose: no,
+      ),
+    );
+    final chosen = change;
+    if (!mounted || chosen == null) return;
+    await _connectionPreview({
+      'command': command,
+      'key': chosen.$1,
+      'value': chosen.$2,
+    }, method: 'agents.security_preview');
+  }
+
   Future<void> _apiKey(String command) async {
     if (_busy) return;
     Map<String, dynamic> preview;
@@ -1765,6 +1801,10 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
   }) async {
     if (action == 'key') {
       await _apiKey(command);
+      return;
+    }
+    if (action == 'security') {
+      await _security(command);
       return;
     }
     if (_busy) return;

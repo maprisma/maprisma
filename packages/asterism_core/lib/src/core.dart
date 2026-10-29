@@ -27,6 +27,8 @@ import 'system_actions.dart';
 import 'model_moves.dart' show MovePreviews;
 import 'system_help.dart';
 import 'agent_keys.dart';
+import 'security_plans.dart';
+import 'security_reports.dart';
 import 'adapters.dart' show Adapter;
 import 'system_map.dart' show SystemMapReader;
 import 'agent_catalog.dart' show AgentCatalog;
@@ -94,6 +96,8 @@ const portedRoutes = {
   'agents.halt_apply',
   'agents.key_preview',
   'agents.key_apply',
+  'agents.security',
+  'agents.security_preview',
   ...readOnlyRoutes,
 };
 // Phase 7 removes this blocker only after every route has differential coverage.
@@ -390,6 +394,57 @@ final class CoreService {
   late final helpPreviews = HelpPreviews(
     () => newHandle().substring(coreHandle.length),
   );
+
+  /// agents.security / agents.security_preview: an agent's security
+  /// settings and risks (agent_security.report_for), and one setting changed
+  /// in its own settings file as a reviewed connection preview.
+  Map<String, dynamic> securityRoute(
+    String method,
+    Map<String, dynamic> params,
+  ) {
+    final command = params['command'];
+    final fields = method == 'agents.security' ? 1 : 3;
+    if (command is! String ||
+        params.length != fields ||
+        (fields == 3 &&
+            (params['key'] is! String || !params.containsKey('value')))) {
+      throw const FormatException('Invalid security request');
+    }
+    final catalog = AgentCatalog(
+      reads.files,
+      desktop,
+      adapters: addons.adapters,
+    );
+    final agents = catalog.scan();
+    final agent = agents.where((a) => a.command == command).firstOrNull;
+    final adapter = catalog.adapter(command);
+    if (agent == null || !agent.installed || adapter == null) {
+      throw const FormatException('Agent unavailable');
+    }
+    final servers =
+        ((reads.inventory.snapshot(agents)['agent_mcp'] as Map?)?[command]
+                as List?)
+            ?.length ??
+        0;
+    final report = SecurityReports(
+      reads.files,
+      i18n,
+    ).agent(adapter, mcpServers: servers);
+    if (method == 'agents.security') {
+      return {...report, 'name': _nameOf(command)};
+    }
+    final plan = securityPlan(
+      report,
+      command,
+      params['key'] as String,
+      params['value'],
+      config,
+    );
+    return {
+      ...connections.keep(plan),
+      'focus': taskFocus(reads.map, {'command': command}),
+    };
+  }
 
   late final agentKeys = AgentKeys(
     () => newHandle().substring(coreHandle.length),
@@ -1381,6 +1436,9 @@ final class CoreService {
         throw const FormatException('Add-on installation in progress');
       }
       return actions.apply(params['preview'] as String);
+    }
+    if (method == 'agents.security' || method == 'agents.security_preview') {
+      return securityRoute(method, params);
     }
     if (method == 'agents.key_preview' || method == 'agents.key_apply') {
       return keyRoute(method, params);
