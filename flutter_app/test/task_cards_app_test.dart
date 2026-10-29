@@ -92,6 +92,8 @@ for line in sys.stdin:
     'publisher':{'kind':'','who':''},'options':[{'option':'opt-time','kind':'pypi','label':'pypi · mcp-server-time 1.0','runnable':True,'command':'uvx',
      'args':['mcp-server-time==1.0'],'env':[],'url':'','headers':[],'needs':[],'on_command_line':[]}]}}]}
   r={'task':'mcpcat'}
+ elif m=='mcp.tools_cached':r={'cached':None}
+ elif m=='mcp.tools':tasks['tools']={'status':'ok','checked':'2026-10-29T12:00:00','server':'known 1','tools':[{'name':'lookup','description':'Looks up'}],'prompts':[]};r={'task':'tools'}
  elif m=='mcp.option_preview':r={'plan':'opaque-catalog','empty':False,'files':[],'links_add':[],'links_remove':[],'kind':'mcp','agents':['Test agent'],'focus':['agent:test']}
  elif m=='tasks.status':r=({'state':'failed'} if p['task']=='install' and install_fails else {'state':'done','result':tasks[p['task']]})
  else:r={}
@@ -573,6 +575,27 @@ void main() {
       tester.widget<AgentMap>(find.byKey(const ValueKey('ai-map'))).lightFps,
       60,
     );
+    expect(tester.takeException(), isNull);
+    await unmountApp(tester);
+  });
+
+  testWidgets('a set-up MCP server is asked for its tools', (tester) async {
+    final dir = await mountApp(tester);
+    await tester.tap(find.byTooltip('Connections'));
+    await settleService(tester);
+    final card = find.text('Known server');
+    await tester.ensureVisible(card);
+    await tester.pumpAndSettle();
+    await tester.tap(card);
+    await settleService(tester);
+    expect(find.textContaining('Not asked yet.'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('mcp-ask-known-server')));
+    await settleService(tester);
+    expect(
+      requests(dir).lastWhere((q) => q['method'] == 'mcp.tools')['params'],
+      {'name': 'known-server'},
+    );
+    expect(find.text('lookup'), findsOneWidget);
     expect(tester.takeException(), isNull);
     await unmountApp(tester);
   });

@@ -22,6 +22,7 @@ import 'agent_catalog.dart';
 import 'desktop.dart' show detectDesktop;
 import 'model_guard.dart';
 import 'mcp_catalog.dart';
+import 'mcp_tools.dart';
 import 'model_hub.dart' show netFetch;
 import 'provider_ops.dart';
 import 'provider_scans.dart';
@@ -515,6 +516,8 @@ Future<int> runWorker(List<String> args) async {
           'system.analyze',
           'agents.key',
           'addons.install_file',
+          'mcp.tools',
+          'mcp.tools_test',
         }.contains(operation) ||
         (request['params'] as Map).isNotEmpty) {
       throw const FormatException('Invalid private operation');
@@ -627,6 +630,53 @@ Future<int> runWorker(List<String> args) async {
           () async => installAddonFile(request, store.$1),
         ),
       });
+      return 0;
+    }
+    // mcp_tools.ask (and ask_and_keep for a set-up server): its program
+    // started once in a session of its own, or its address asked.
+    if (operation == 'mcp.tools' || operation == 'mcp.tools_test') {
+      if (body.length > 1024 * 1024) {
+        throw const FormatException('Invalid MCP request');
+      }
+      final request = jsonDecode(utf8.decode(body));
+      final keep = operation == 'mcp.tools';
+      if (request is! Map ||
+          request.length != (keep ? 2 : 1) ||
+          request['entry'] is! Map ||
+          (keep && request['name'] is! String)) {
+        throw const FormatException('Invalid MCP request');
+      }
+      final identity = AppIdentity();
+      final entry = request['entry'] as Map;
+      final posix = Posix();
+      Map<String, dynamic> result;
+      if (keep) {
+        result = await askAndKeep(
+          request['name'] as String,
+          entry,
+          home: identity.home,
+          environment: identity.environment,
+          write: posix.atomicWrite,
+        );
+      } else {
+        try {
+          result = {
+            'status': 'ok',
+            ...await askTools(
+              entry,
+              home: identity.home,
+              environment: identity.environment,
+            ),
+          };
+        } on Object catch (error) {
+          final text = askErrorText(error);
+          result = {
+            'status': 'failed',
+            'error': text.length > 300 ? text.substring(0, 300) : text,
+          };
+        }
+      }
+      send({'type': 'result', 'result': result});
       return 0;
     }
     if (operation == 'agents.key') {

@@ -130,6 +130,16 @@ void main() {
               run: (method, params) async {
                 calls.add((method, params));
                 if (method == 'mcp.catalog') return _catalog;
+                if (method == 'mcp.option_test') {
+                  return {
+                    'status': 'ok',
+                    'server': 'fs 1',
+                    'tools': [
+                      {'name': 'read_file', 'description': 'Reads'},
+                    ],
+                    'prompts': [],
+                  };
+                }
                 return search!(params);
               },
               onPreview: (params) async => previews.add(params),
@@ -165,6 +175,16 @@ void main() {
     expect(find.text('No MCP'), findsNothing);
     await tester.tap(find.text('Codex'));
     await tester.pump();
+    final test = find.byKey(const ValueKey('mcp-catalog-test'));
+    await tester.tap(test);
+    await tester.pumpAndSettle();
+    expect(calls.last.$1, 'mcp.option_test');
+    expect(calls.last.$2, {
+      'option': 'h-fs',
+      'values': {'arg:0': '~/Documents'},
+    });
+    expect(find.text('1 Tools · fs 1'), findsOneWidget);
+    expect(find.text('read_file'), findsOneWidget);
     await tester.tap(preview);
     await tester.pump();
     expect(previews.single, {

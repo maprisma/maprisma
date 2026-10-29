@@ -1,6 +1,7 @@
 import 'task_card.dart';
 import 'connection_authoring.dart';
 import 'mcp_catalog_view.dart';
+import 'mcp_tools_view.dart';
 import 'package:flutter/material.dart';
 import 'provider_connections.dart';
 
@@ -17,7 +18,10 @@ class ConnectionsView extends StatefulWidget {
     this.onAuthorPreview,
     this.onCatalogTask,
     this.onCatalogPreview,
+    this.onCall,
   });
+  final Future<Map<String, dynamic>> Function(String, Map<String, dynamic>)?
+  onCall;
   final Future<Map<String, dynamic>> Function(String, Map<String, dynamic>)?
   onCatalogTask;
   final Future<void> Function(Map<String, dynamic>)? onCatalogPreview;
@@ -164,6 +168,16 @@ class _ConnectionsViewState extends State<ConnectionsView> {
                         ? Text(item['target'] as String)
                         : null,
                     children: [
+                      if (kind == 'mcp' &&
+                          widget.onCall != null &&
+                          widget.onCatalogTask != null)
+                        McpServerTools(
+                          name: item['id'] as String,
+                          busy: widget.busy,
+                          tr: widget.tr,
+                          call: widget.onCall!,
+                          run: widget.onCatalogTask!,
+                        ),
                       if (kind == 'skills')
                         Padding(
                           padding: const EdgeInsets.all(12),

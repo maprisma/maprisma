@@ -2964,6 +2964,8 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
                                   onAuthorPreview: (params) =>
                                       _connectionPreview(params, author: true),
                                   onCatalogTask: _quietTask,
+                                  onCall: (method, params) =>
+                                      _backend!.call(method, params),
                                   onCatalogPreview: (params) =>
                                       _connectionPreview(
                                         params,

@@ -43,6 +43,7 @@ import 'settings.dart';
 import 'service_i18n.dart';
 import 'provider_facts.dart';
 import 'mcp_catalog.dart';
+import 'mcp_tools.dart' show cachedTools;
 
 const portedRoutes = {
   'settings.get',
@@ -102,6 +103,9 @@ const portedRoutes = {
   'mcp.catalog',
   'mcp.search',
   'mcp.option_preview',
+  'mcp.option_test',
+  'mcp.tools',
+  'mcp.tools_cached',
   ...readOnlyRoutes,
 };
 // Phase 7 removes this blocker only after every route has differential coverage.
@@ -1052,6 +1056,39 @@ final class CoreService {
         },
       );
     }
+    if (method == 'mcp.tools_cached' || method == 'mcp.tools') {
+      final name = params['name'];
+      if (params.length != 1 ||
+          name is! String ||
+          !RegExp(r'^[A-Za-z0-9_.-]{1,64}$').hasMatch(name)) {
+        throw const FormatException('Invalid MCP server');
+      }
+      if (method == 'mcp.tools_cached') {
+        return {'cached': cachedTools(identity.home, name)};
+      }
+      // mcp_pages.ask_mcp_tools: the entry as the first agent that has it
+      // starts it; it may hold keys, so it reaches the worker privately.
+      Map<String, dynamic>? entry;
+      for (final agent in reads.catalog.scan()) {
+        if (!agent.installed || !mcp.supported(agent.command)) continue;
+        entry = normalEntry(mcp.rawEntries(agent.command)[name]);
+        if (entry != null) break;
+      }
+      if (entry == null) throw const FormatException('Server unavailable');
+      return _askTools({'name': name, 'entry': entry}, 'mcp.tools');
+    }
+    if (method == 'mcp.option_test') {
+      if (params.length != 2 ||
+          !const {'option', 'values'}.every(params.containsKey)) {
+        throw const FormatException('Invalid server choice');
+      }
+      final entry = mcpOptions.entryFor(
+        params['option'],
+        params['values'],
+        identity.home,
+      );
+      return _askTools({'entry': entry}, 'mcp.tools_test');
+    }
     if (method != 'mcp.option_preview') throw ServiceError('unported_route');
     if (params.length != 4 ||
         !const {
@@ -1073,6 +1110,22 @@ final class CoreService {
       'name': params['name'],
       'entry': entry,
     }, reads.catalog.scan());
+  }
+
+  /// One MCP server asked at a time: asking starts its program.
+  Map<String, dynamic> _askTools(Map<String, dynamic> body, String operation) {
+    if (tasks.items.values.any(
+      (t) =>
+          (t.operation == 'mcp.tools' || t.operation == 'mcp.tools_test') &&
+          t.state == 'running',
+    )) {
+      throw const FormatException('A server is already being asked');
+    }
+    final bytes = utf8.encode(pyJsonDumps(body));
+    if (bytes.length > 1024 * 1024) {
+      throw const FormatException('Server definition too large');
+    }
+    return tasks.startPrivate(operation, bytes);
   }
 
   /// installers.preview / installers.install (flutter_backend).

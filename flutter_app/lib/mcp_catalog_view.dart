@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'mcp_tools_view.dart';
 
 const _runKind = {
   'npm': 'Program · npm',
@@ -71,6 +72,8 @@ class _McpCatalogViewState extends State<McpCatalogView> {
   final _fields = <String, TextEditingController>{};
   final _name = TextEditingController();
   final _chosen = <String>{};
+  Map<String, dynamic>? _tested;
+  bool _testing = false;
 
   String tr(String key) => widget.tr(key);
 
@@ -157,6 +160,7 @@ class _McpCatalogViewState extends State<McpCatalogView> {
   }
 
   void _useOption(int index) {
+    _tested = null;
     for (final c in _fields.values) {
       c.dispose();
     }
@@ -174,8 +178,8 @@ class _McpCatalogViewState extends State<McpCatalogView> {
       : (_options(_server!)[_option]['needs'] as List)
             .cast<Map<String, dynamic>>();
 
-  /// Why Preview is off, or null.
-  String? get _problem {
+  /// Why the fields cannot be used yet, or null.
+  String? get _fieldProblem {
     final missing = [
       for (final n in _needs)
         if (n['required'] == true && _fields[n['name']]!.text.trim().isEmpty)
@@ -197,6 +201,13 @@ class _McpCatalogViewState extends State<McpCatalogView> {
         '{0} would be on the command line, where other users of this PC can read it.',
       ).replaceAll('{0}', leaked.join(', '));
     }
+    return null;
+  }
+
+  /// Why Preview is off, or null.
+  String? get _problem {
+    final field = _fieldProblem;
+    if (field != null) return field;
     if (!_nameRe.hasMatch(_name.text.trim())) {
       return tr('Letters, digits, - _ . (the agents know it by this name)');
     }
@@ -204,6 +215,27 @@ class _McpCatalogViewState extends State<McpCatalogView> {
       return tr('The agents that get it. More later: draw lines on the map.');
     }
     return null;
+  }
+
+  /// Test: the chosen way started once (or its address asked) for its tools.
+  Future<void> _test() async {
+    setState(() {
+      _testing = true;
+      _tested = null;
+    });
+    try {
+      final answer = await widget.run('mcp.option_test', {
+        'option': _options(_server!)[_option]['option'],
+        'values': {for (final e in _fields.entries) e.key: e.value.text},
+      });
+      if (mounted) setState(() => _tested = answer);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _tested = {'status': 'failed', 'error': ''});
+      }
+    } finally {
+      if (mounted) setState(() => _testing = false);
+    }
   }
 
   Future<void> _preview() async {
@@ -530,12 +562,27 @@ class _McpCatalogViewState extends State<McpCatalogView> {
             problem,
             style: TextStyle(color: Theme.of(context).colorScheme.error),
           ),
-        Align(
-          alignment: Alignment.centerRight,
-          child: FilledButton(
-            onPressed: widget.busy || problem != null ? null : _preview,
-            child: Text(tr('Preview')),
-          ),
+        if (_testing) Text(tr('Asking the server…')),
+        if (_tested != null) McpToolsResult(answer: _tested!, tr: tr),
+        Wrap(
+          alignment: WrapAlignment.end,
+          spacing: 8,
+          children: [
+            Tooltip(
+              message: tr('Start it once and ask for its tools'),
+              child: OutlinedButton(
+                key: const ValueKey('mcp-catalog-test'),
+                onPressed: widget.busy || _testing || _fieldProblem != null
+                    ? null
+                    : _test,
+                child: Text(tr('Test')),
+              ),
+            ),
+            FilledButton(
+              onPressed: widget.busy || problem != null ? null : _preview,
+              child: Text(tr('Preview')),
+            ),
+          ],
         ),
       ],
     );

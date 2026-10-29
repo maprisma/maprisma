@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:asterism_core/asterism_core.dart';
 import 'package:asterism_core/src/security_plans.dart' show securityPlan;
 import 'package:asterism_core/src/mcp_catalog.dart' as mcpc;
+import 'package:asterism_core/src/mcp_tools.dart' as mcpt;
 import 'package:asterism_core/src/system_map.dart' show SystemMapReader;
 import 'package:asterism_core/src/agent_catalog.dart' show AgentCatalog;
 import 'package:asterism_core/src/scan_files.dart' show ScanFiles;
@@ -289,6 +290,17 @@ Future<void> main() async {
           params['cache'] as String,
           search: params['search'] == true,
         );
+      } else if (request.method == 'dev.mcptools') {
+        // mcp_tools.ask against a fixture server.
+        try {
+          result = await mcpt.askTools(
+            params['entry'] as Map,
+            home: identity.home,
+            environment: Platform.environment,
+          );
+        } on Object catch (e) {
+          result = {'error': '$e'};
+        }
       } else if (request.method == 'dev.mcpparse') {
         // mcp_registry.parse and _kept for one registry answer.
         final path = Platform.environment['PATH'];

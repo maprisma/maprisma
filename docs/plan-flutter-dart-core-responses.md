@@ -1476,3 +1476,40 @@ Python and Dart give equal results in all of these. `test/mcp_options_test.dart`
 and the filled entry. There are widget tests for the view and an app test with the fake service
 (Connections → Find MCP servers… → a pick → preview → apply). The worker ops were also run once for
 real: a saved list searched, and the picks pinned against npm and PyPI.
+
+### 6b-8 — an MCP server's tools
+
+New in the core (`mcp_tools.dart`, the reference is `mcp_tools`):
+- **Asking, as an agent does:** `initialize`, `notifications/initialized`, `tools/list` page by page
+  (at most 20 pages; an odd or huge cursor ends the paging), `prompts/list` when the server offers
+  prompts; tool names, descriptions and parameter names cut as in the reference. Two transports:
+  - **stdio:** started through `setsid --` in a session of its own, with the agent's environment for
+    it and the home folder as working folder, one 90 s deadline for writes and answers, other output
+    on stdout skipped, 4 MiB at most; at the end TERM to the group, KILL after 5 s.
+  - **Streamable HTTP:** posts through curl (http or https, no redirects, `--include`), headers and
+    body on curl's stdin, the session id carried, plain JSON or event-stream answers.
+  - SSE servers are not asked.
+- **`mcp.tools {name}`**: the entry as the first installed agent that has it reads it. It may hold
+  keys, so it goes to a **private** worker; the answer or the failure is kept 0600 in
+  `~/.cache/ai-agents-map/mcp-tools/NAME.json`, the reference's file, so GTK reads the same. One
+  server is asked at a time.
+- **`mcp.tools_cached {name}`**: the kept answer.
+- **`mcp.option_test {option, values}`**: a catalog or registry choice, filled in as for its preview,
+  asked privately without being kept.
+- **Python fix, both sides:** parameter names and the cache file name must match in full (`re.match`'s
+  `$` let a trailing newline through).
+- **Flutter:**
+  - Every MCP card in Connections has **Tools**: the kept answer with its date, and **Ask the server** /
+    **Ask again**.
+  - The catalog's server page has **Test**, which shows the tools before anything is written.
+  - All texts were already translated. The manual's Flutter MCP section says so in all eight languages;
+    PDFs rebuilt.
+
+Check: `tests/test_dart_mcp_tools_parity.py` runs fixture servers.
+- **Over stdio:** noise on stdout, a wrong id, two pages, prompts, a prompts error, an initialize error,
+  a server that dies, a huge cursor, endless pages, its environment and folder.
+- **Over HTTP, locally:** a session id, an event-stream answer, a wrong key; and an SSE entry.
+- Python and Dart give equal answers, and no fixture process is left.
+
+`test/mcp_tools_test.dart` covers the private worker path and the kept answer. There are widget tests
+and an app test (Connections → a server's card → Ask the server).

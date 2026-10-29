@@ -40,7 +40,7 @@ def _params(schema) -> list:
         names = [a.get("name") for a in schema if isinstance(a, dict)]
     else:
         names = []
-    return [n[:64] for n in names if isinstance(n, str) and _NAME.match(n[:64])][:40]
+    return [n[:64] for n in names if isinstance(n, str) and _NAME.fullmatch(n[:64])][:40]
 
 
 MAX_CURSOR = 1024         # a page cursor longer than this ends the paging
@@ -230,7 +230,7 @@ def ask(entry: dict) -> dict:
 
 
 def cache_file(name: str) -> Path:
-    if not _NAME.match(name):
+    if not _NAME.fullmatch(name):          # all of it: match's $ lets a trailing newline through
         raise ValueError(name)
     return CACHE_DIR / f"{name}.json"
 

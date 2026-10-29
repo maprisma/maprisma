@@ -5,6 +5,17 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 KEYS = (
+    # An MCP server's tools (mcp.tools, mcp.option_test).
+    "Tools",
+    "Prompts",
+    "Asking the server…",
+    "Not asked yet. Asking starts the server once (like an agent does) and stops it again.",
+    "Asked on {0}: {1}",
+    "Ask again",
+    "Ask the server",
+    "Test",
+    "Start it once and ask for its tools",
+    "Does not answer: {0}",
     # MCP servers to add: recommended and the MCP registry (mcp.catalog, mcp.search).
     "Search failed: {0}",
     "Fill in: {0}",
