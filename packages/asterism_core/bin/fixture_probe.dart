@@ -7,6 +7,7 @@ import 'package:asterism_core/src/connect_apply.dart';
 import 'package:asterism_core/src/line_diff.dart';
 import 'package:asterism_core/src/model_hub.dart';
 import 'package:asterism_core/src/provider_watch.dart';
+import 'package:asterism_core/src/pty_sessions.dart';
 import 'package:asterism_core/src/context.dart';
 import 'package:asterism_core/src/py_values.dart';
 import 'package:asterism_core/src/py_yaml.dart';
@@ -182,6 +183,46 @@ Future<void> main() async {
         }
         dir.deleteSync(recursive: true);
         result = {'calls': calls, 'states': states};
+      } else if (request.method == 'dev.pty') {
+        // A scripted terminal session: start, read until a word, write, resize.
+        final sessions = PtySessions();
+        final ident = sessions.start(
+          'probe',
+          [for (final a in params['argv'] as List) a as String],
+          params['cwd'] as String,
+          {
+            for (final e in (params['env'] as Map).entries)
+              e.key as String: e.value as String,
+          },
+        );
+        final out = StringBuffer();
+        Map<String, dynamic> last = {};
+        for (final step in params['steps'] as List) {
+          if (step['write'] != null) {
+            sessions.write(ident, utf8.encode(step['write'] as String));
+          } else if (step['resize'] != null) {
+            final size = step['resize'] as List;
+            sessions.resize(ident, size[0], size[1]);
+          } else {
+            final until = DateTime.now().add(const Duration(seconds: 10));
+            while (DateTime.now().isBefore(until)) {
+              last = sessions.read(ident);
+              out.write(last['text']);
+              if (step['until'] == 'ended'
+                  ? last['ended'] == true
+                  : out.toString().contains(step['until'] as String)) {
+                break;
+              }
+              await Future<void>.delayed(const Duration(milliseconds: 50));
+            }
+          }
+        }
+        sessions.stop(ident);
+        result = {
+          'text': out.toString(),
+          'exit_code': last['exit_code'],
+          'ended': last['ended'],
+        };
       } else if (request.method == 'dev.watchconfig') {
         final agents = core.reads.catalog.scan();
         final inv = core.reads.inventory.collect(agents, remember: false);

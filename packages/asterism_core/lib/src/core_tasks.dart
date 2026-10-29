@@ -352,6 +352,10 @@ const handleRoutes = {
   'connections.undo': 'undo',
   'tasks.status': 'task',
   'tasks.cancel': 'task',
+  'sessions.read': 'session',
+  'sessions.write': 'session',
+  'sessions.resize': 'session',
+  'sessions.stop': 'session',
 };
 
 /// Dispatch of a handle route inside the core (the router checked the prefix).

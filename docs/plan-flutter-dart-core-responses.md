@@ -834,3 +834,44 @@ Checks:
   - Both services as real processes, with a fake `systemctl` and a fake agent process started, ended,
     started again, then SIGTERM: the same `systemctl` calls and the same saved state.
 - A Dart test checks that only a compiled release core manages the unit.
+
+### 4f part 1 — terminal sessions, agent start, project folders
+
+`sessions.start`, `sessions.read/write/resize/stop` (handle routes, `core-` handles) and
+`projects.pin/forget` are served by the core:
+- **`pty_sessions.dart`:** PTYs through FFI. Dart cannot fork, so an agent starts with `posix_spawn`:
+  - a new session, all signals back to their defaults and none blocked (the Dart VM ignores `SIGPIPE`);
+  - the slave opened as fd 0 (the session leader takes it as its controlling terminal), fd 1 and 2
+    copies of it, the project folder as working folder, every other descriptor closed;
+  - the size set on the master, non-blocking reads, input accepted only when the PTY is writable,
+    resize with the same bounds.
+- **A Dart-specific risk, handled:**
+  - Dart's process thread `wait()`s for any child while it has processes of its own, so it can reap an
+    agent. Each agent is held by a pidfd; its exit code comes from `waitid(P_PIDFD)` when we get it
+    first, else -1 (the app reads only `text` and `ended`).
+  - The group is never signalled by number (`killpg` after a foreign reap could hit a reused group).
+    The leader and the group members, known by their start time, are signalled through pidfds.
+  - The group is remembered while the leader runs (on `read`, at most once a second) and at its exit
+    while it is still our zombie. So a background child is stopped even when Dart reaped the leader.
+- **`agent_start.dart`:** `flutter_backend.start` (the agent's `start` arguments, no chat apps; the
+  environment without agent-session variables, with mise's shims and `~/.local/bin`; an outside
+  terminal through `env -u …`), `agent_projects` and the project routes. `Desktop.openTerminal` ports
+  `xdg-terminal-exec` (Omarchy) and the generic terminal list. `SettingsStore.saveOwn` writes the
+  service's own values (still checked).
+- The release check and the router test now use `installers.preview` as their example of a route the
+  core doesn't serve.
+
+Checks:
+- `tests/test_dart_pty_sessions_parity.py`: one scripted program through Python's `Sessions` and the
+  Dart sessions gives the same output and exit code: size after a resize, ignored and blocked signals
+  (`SIGPIPE` not ignored), session leader, controlling terminal, working folder, environment, echoed
+  input, UTF-8.
+- `tests/test_dart_agent_start_parity.py`: both services start a fake installed agent, read until it
+  ends, start again in another folder, pin, unpin, forget, and refuse an unknown agent and a missing
+  folder. Same answers, output and saved project settings.
+- A Dart test: stopping a session ends its group (the leader and its background child) and leaves a
+  process that moved into its own session alone; after the leader ended, its remaining background
+  child is still stopped.
+
+Still Python in phase 4: `agents.halt_preview/apply` (4f part 2). Agent actions (install, update,
+uninstall, login) belong to the installers, phase 5.

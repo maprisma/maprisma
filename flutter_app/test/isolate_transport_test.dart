@@ -72,7 +72,7 @@ void main() {
         );
         if (!develPythonFallback) {
           await expectLater(
-            router.call('sessions.start', {}),
+            router.call('installers.preview', {}),
             throwsA(
               isA<BackendError>().having(
                 (e) => e.code,

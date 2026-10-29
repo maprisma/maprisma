@@ -251,6 +251,17 @@ final class SettingsStore {
     return snapshot();
   }
 
+  /// ai_core.update_settings for the service's own values (project history
+  /// and pins), each still checked.
+  void saveOwn(Map<String, dynamic> values) {
+    for (final e in values.entries) {
+      if (e.value != null && !valid(e.key, e.value)) {
+        throw const FormatException('Invalid value');
+      }
+    }
+    _saveChanges(values);
+  }
+
   void migrate() {
     final saved = load();
     final changes = <String, dynamic>{};

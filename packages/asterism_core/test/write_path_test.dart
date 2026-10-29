@@ -6,6 +6,7 @@ import 'package:asterism_core/src/dsh_profile.dart';
 import 'package:asterism_core/src/model_downloads.dart';
 import 'package:asterism_core/src/model_guard.dart';
 import 'package:asterism_core/src/provider_watch.dart';
+import 'package:asterism_core/src/pty_sessions.dart';
 import 'package:asterism_core/src/scan_files.dart';
 import 'package:asterism_core/src/plan_worker.dart';
 import 'package:asterism_core/src/provider_ops.dart';
@@ -347,5 +348,73 @@ void main() {
         'ExecStart=$core provider-watch --config /home/u/.config/asterism/providers-with-agents.json\n',
       ),
     );
+  });
+
+  test('stopping a session ends its group, never another session', () async {
+    final dir = Directory.systemTemp.createTempSync('asterism-pty-');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final sessions = PtySessions();
+    bool alive(int pid) {
+      try {
+        final state = File('/proc/$pid/stat').readAsStringSync();
+        return !state.substring(state.lastIndexOf(')') + 2).startsWith('Z');
+      } on FileSystemException {
+        return false;
+      }
+    }
+
+    Future<String> readUntil(String ident, String word) async {
+      final out = StringBuffer();
+      for (var i = 0; i < 200 && !out.toString().contains(word); i++) {
+        out.write(sessions.read(ident)['text']);
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      }
+      return out.toString();
+    }
+
+    int pidAfter(String text, String word) =>
+        int.parse(RegExp('$word (\\d+)').firstMatch(text)![1]!);
+    final env = {'PATH': '/usr/bin:/bin'};
+    // Running: the leader, its background child; another session left alone.
+    var ident = sessions.start(
+      't',
+      [
+        '/bin/sh',
+        '-c',
+        'sleep 300 & echo CHILD \$!; setsid sleep 300 & echo OTHER \$!; echo END; exec sleep 300',
+      ],
+      dir.path,
+      env,
+    );
+    var text = await readUntil(ident, 'END');
+    final child = pidAfter(text, 'CHILD'), other = pidAfter(text, 'OTHER');
+    final leader = sessions.items[ident]!.pid;
+    expect([alive(leader), alive(child), alive(other)], [true, true, true]);
+    sessions.stop(ident);
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    expect([alive(leader), alive(child)], [false, false]);
+    expect(alive(other), isTrue);
+    Process.killPid(other, ProcessSignal.sigkill);
+    // Ended leader, a background child still in its group: stopped as well.
+    ident = sessions.start(
+      't',
+      // Ignoring SIGHUP, it outlives its leader (the kernel hangs up the group).
+      [
+        '/bin/sh',
+        '-c',
+        "(trap '' HUP; exec sleep 300) & echo CHILD \$!; echo END; sleep 1.5",
+      ],
+      dir.path,
+      env,
+    );
+    text = await readUntil(ident, 'END');
+    final orphan = pidAfter(text, 'CHILD');
+    for (var i = 0; i < 100 && sessions.read(ident)['exit_code'] == null; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    }
+    expect(alive(orphan), isTrue);
+    sessions.stop(ident);
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    expect(alive(orphan), isFalse);
   });
 }

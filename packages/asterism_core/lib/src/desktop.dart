@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:path/path.dart' as p;
@@ -9,7 +10,56 @@ abstract interface class Desktop {
   String get name;
   String? get themeDir;
   Map<String, String> themeColors();
+
+  /// A program in the user's terminal, a window of its own.
+  bool openTerminal(List<String> argv, String cwd);
 }
+
+/// shutil.which over a PATH.
+String? whichIn(String program, String? path) {
+  for (final folder in (path ?? '').split(':')) {
+    if (folder.isEmpty) continue;
+    final candidate = p.join(folder, program);
+    try {
+      final st = File(candidate).statSync();
+      if (st.type == FileSystemEntityType.file && st.mode & 0x49 != 0) {
+        return candidate;
+      }
+    } on FileSystemException {
+      continue;
+    }
+  }
+  return null;
+}
+
+/// Started in a session of its own; a launcher found on PATH that then fails
+/// to start is not waited for (the call stays synchronous).
+bool _detached(List<String> argv, String cwd) {
+  unawaited(
+    Process.start(
+      argv.first,
+      argv.skip(1).toList(),
+      workingDirectory: cwd,
+      mode: ProcessStartMode.detached,
+    ).then((_) {}, onError: (_) {}),
+  );
+  return true;
+}
+
+/// desktop_generic.TERMINALS: a terminal and what comes before the command.
+const terminals = [
+  ('xdg-terminal-exec', <String>[]),
+  ('kgx', ['--']),
+  ('ptyxis', ['--']),
+  ('gnome-terminal', ['--']),
+  ('konsole', ['-e']),
+  ('xfce4-terminal', ['-x']),
+  ('foot', <String>[]),
+  ('alacritty', ['-e']),
+  ('kitty', <String>[]),
+  ('wezterm', ['start', '--']),
+  ('xterm', ['-e']),
+];
 
 Desktop detectDesktop(AppIdentity identity, Posix posix) {
   final env = identity.environment;
@@ -22,12 +72,45 @@ Desktop detectDesktop(AppIdentity identity, Posix posix) {
                 ? env['OMARCHY_PATH']!
                 : '/usr/share/omarchy',
           ).existsSync();
-  return omarchy ? OmarchyDesktop(identity, posix) : GenericDesktop();
+  return omarchy
+      ? OmarchyDesktop(identity, posix)
+      : GenericDesktop(identity.environment);
 }
 
 final class GenericDesktop implements Desktop {
+  GenericDesktop([this.environment = const {}]);
+  final Map<String, String> environment;
   @override
   String get name => 'generic';
+
+  /// desktop_generic.terminal: $TERMINAL when it is a plain program name,
+  /// else the first known one installed.
+  List<String>? terminal() {
+    final own = environment['TERMINAL'] ?? '';
+    final path = environment['PATH'];
+    if (own.isNotEmpty && RegExp(r'^[A-Za-z0-9._+-]{1,64}$').hasMatch(own)) {
+      final found = whichIn(own, path);
+      if (found != null) {
+        final known = terminals.where((t) => t.$1 == own).firstOrNull;
+        return [
+          found,
+          ...known?.$2 ?? ['-e'],
+        ];
+      }
+    }
+    for (final (program, follow) in terminals) {
+      final found = whichIn(program, path);
+      if (found != null) return [found, ...follow];
+    }
+    return null;
+  }
+
+  @override
+  bool openTerminal(List<String> argv, String cwd) {
+    final launcher = terminal();
+    return launcher != null && _detached([...launcher, ...argv], cwd);
+  }
+
   @override
   String? get themeDir => null;
   // app.theme is deliberately empty on generic desktops, as in Python.
@@ -42,6 +125,14 @@ final class OmarchyDesktop implements Desktop {
   final Posix posix;
   @override
   String get name => 'omarchy';
+
+  /// desktop_omarchy.open_terminal: xdg-terminal-exec, a new window.
+  @override
+  bool openTerminal(List<String> argv, String cwd) {
+    final launcher = whichIn('xdg-terminal-exec', identity.environment['PATH']);
+    return launcher != null && _detached([launcher, ...argv], cwd);
+  }
+
   @override
   String get themeDir =>
       p.join(identity.home, '.local/state/omarchy/current/theme');

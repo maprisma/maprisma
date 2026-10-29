@@ -8,6 +8,7 @@ import 'provider_scans.dart' show ProviderScans;
 import 'provider_watch.dart';
 import 'read_service.dart';
 import 'connect_apply.dart';
+import 'agent_start.dart';
 import 'core_tasks.dart';
 import 'skill_plans.dart';
 import 'mcp_plans.dart';
@@ -27,6 +28,9 @@ const portedRoutes = {
   'app.identity',
   'desktop.snapshot',
   'i18n.lookup',
+  'sessions.start',
+  'projects.pin',
+  'projects.forget',
   ...readOnlyRoutes,
 };
 // Phase 7 removes this blocker only after every route has differential coverage.
@@ -65,6 +69,7 @@ final class CoreService {
     identity.home,
     ContextReader(reads.files, config),
   );
+  late final starter = AgentStart(identity, settings, reads.catalog, desktop);
   late final watch = WatchService(
     identity,
     settings,
@@ -210,7 +215,14 @@ final class CoreService {
       if (value is! String || !value.startsWith(coreHandle)) {
         throw ServiceError('unported_route');
       }
+      if (method.startsWith('sessions.')) {
+        return starter.session(method, params);
+      }
       return dispatchHandle(method, params, connections, tasks);
+    }
+    if (method == 'sessions.start') return starter.start(params);
+    if (method == 'projects.pin' || method == 'projects.forget') {
+      return starter.project(method, params);
     }
     if (method == 'providers.run') {
       if (!coreProviderRun(params)) throw ServiceError('unported_route');
