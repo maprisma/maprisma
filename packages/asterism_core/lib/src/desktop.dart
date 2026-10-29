@@ -13,7 +13,20 @@ abstract interface class Desktop {
 
   /// A program in the user's terminal, a window of its own.
   bool openTerminal(List<String> argv, String cwd);
+
+  /// Fixed commands one after the other while each succeeds, in one terminal
+  /// window that waits at the end (run_steps_in_terminal).
+  bool runStepsInTerminal(List<List<String>> steps, String prompt);
 }
+
+/// shlex.quote / shlex.join.
+String shellQuote(String word) {
+  if (word.isEmpty) return "''";
+  if (RegExp(r'^[A-Za-z0-9_@%+=:,./-]+$').hasMatch(word)) return word;
+  return "'${word.replaceAll("'", "'\"'\"'")}'";
+}
+
+String shellJoin(List<String> words) => words.map(shellQuote).join(' ');
 
 /// shutil.which over a PATH.
 String? whichIn(String program, String? path) {
@@ -106,6 +119,15 @@ final class GenericDesktop implements Desktop {
   }
 
   @override
+  bool runStepsInTerminal(List<List<String>> steps, String prompt) {
+    final real = steps.where((s) => s.isNotEmpty).toList();
+    if (real.isEmpty) return false;
+    final script =
+        '${real.map(shellJoin).join(' && ')}; echo; read -r -p ${shellQuote(prompt)} _';
+    return openTerminal(['bash', '-c', script], environment['HOME'] ?? '/');
+  }
+
+  @override
   bool openTerminal(List<String> argv, String cwd) {
     final launcher = terminal();
     return launcher != null && _detached([...launcher, ...argv], cwd);
@@ -125,6 +147,24 @@ final class OmarchyDesktop implements Desktop {
   final Posix posix;
   @override
   String get name => 'omarchy';
+
+  /// desktop_omarchy.run_steps_in_terminal: Omarchy's floating terminal (one
+  /// line through bash), else xdg-terminal-exec.
+  @override
+  bool runStepsInTerminal(List<List<String>> steps, String prompt) {
+    final real = steps.where((s) => s.isNotEmpty).toList();
+    if (real.isEmpty) return false;
+    final line = real.map(shellJoin).join(' && ');
+    final path = identity.environment['PATH'];
+    final floating = whichIn(
+      'omarchy-launch-floating-terminal-with-presentation',
+      path,
+    );
+    if (floating != null) return _detached([floating, line], identity.home);
+    final launcher = whichIn('xdg-terminal-exec', path);
+    return launcher != null &&
+        _detached([launcher, 'bash', '-c', line], identity.home);
+  }
 
   /// desktop_omarchy.open_terminal: xdg-terminal-exec, a new window.
   @override

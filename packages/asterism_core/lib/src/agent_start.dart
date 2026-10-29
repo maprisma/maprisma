@@ -44,6 +44,10 @@ final class AgentStart {
   final AgentProjects projects;
   final sessions = PtySessions();
 
+  /// The agent-action tests watch their sessions (observe / forget).
+  void Function(String ident, Map<String, dynamic> result)? onRead;
+  void Function(String ident)? onStop;
+
   /// ai_core.add_user_program_dirs: mise's shims and ~/.local/bin at the end
   /// of PATH (what is already on it still wins).
   Map<String, String> withUserPrograms(Map<String, String> env) {
@@ -169,9 +173,13 @@ final class AgentStart {
     }
     switch (method) {
       case 'sessions.read':
-        return sessions.read(ident);
+        final result = sessions.read(ident);
+        onRead?.call(ident, result);
+        return result;
       case 'sessions.stop':
-        return sessions.stop(ident);
+        final result = sessions.stop(ident);
+        onStop?.call(ident);
+        return result;
       case 'sessions.resize':
         return sessions.resize(ident, params['cols'], params['rows']);
     }

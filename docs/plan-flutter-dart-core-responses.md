@@ -999,3 +999,34 @@ Checks:
 - Live, read-only on the network: both services fetch the real catalog (25 entries) and install
   agent-goose 0.11.1 from its GitHub release. Then list, remove, list, Undo, list, a refused second
   Undo, and the catalog again ("installed", no action). Every step's answer is the same.
+
+### 5b-1 — agent actions
+
+`agents.action_preview` / `agents.action_apply` are served by the core (`agent_actions.dart`):
+- **`install_recipes`:** the agent's ways (mise, npm/pipx/uv, commands, system packages, manual,
+  the app's installer page) as the step for this PC. It picks the package manager, starts only plain
+  words, and updates and removes through the way the agent is installed now. When nothing works here,
+  every command is still offered to copy.
+- **`flutter_agent_actions.resolve`:**
+  - install, update and uninstall from the recipe (uninstall names the data folders that stay);
+  - sign-in (the adapter's `access.logins`, translated labels and notes) and sign-out;
+  - the first-agent test (the adapter's `ask` with the fixed prompt);
+  - Node.js through mise as a prerequisite.
+  No command, argv or URL comes from the app.
+- **Apply:** resolves again and requires the same plan, and refuses an update or removal while the
+  agent runs in the app. External steps run in one terminal window. Sign-in, sign-out and the test run
+  in a PTY session without agent-session variables and without the agent's providers
+  (`AI_AGENTS_MAP_NO_PROVIDERS=1`); the test runs in a temporary folder.
+- **The test's result:** the session's reads are watched (`observe`, the last 4 KiB without escape
+  codes), and an answer marks the agent as working in `first_agent.verified`.
+- `Desktop.runStepsInTerminal`: Omarchy's floating terminal or `xdg-terminal-exec`; generic: `bash -c`
+  with the "press Enter" prompt. `shellQuote` / `shellJoin` port `shlex`.
+
+Check: `tests/test_dart_agent_actions_parity.py` runs both services with a fake agent, a fake mise and
+a fake terminal that only logs:
+- previews for install, update, uninstall, both sign-ins, an invalid sign-in, sign-out and the test,
+  an unknown agent and Node.js;
+- install through the terminal, a reused preview, the test session (its answer saved) and a sign-in
+  session.
+
+The same answers, terminal commands, session output and `first_agent` on both sides.

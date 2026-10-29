@@ -13,6 +13,7 @@ import 'addons.dart';
 import 'py_values.dart';
 import 'package:path/path.dart' as p;
 import 'adapter_assets.g.dart';
+import 'agent_actions.dart';
 import 'agent_halt.dart';
 import 'agent_start.dart';
 import 'core_tasks.dart';
@@ -44,6 +45,8 @@ const portedRoutes = {
   'sessions.start',
   'projects.pin',
   'projects.forget',
+  'agents.action_preview',
+  'agents.action_apply',
   'agents.halt_preview',
   'agents.halt_apply',
   ...readOnlyRoutes,
@@ -326,6 +329,20 @@ final class CoreService {
   }
 
   late final starter = AgentStart(identity, settings, reads.catalog, desktop);
+  late final actions = () {
+    final made = AgentActions(
+      identity,
+      settings,
+      reads.catalog,
+      desktop,
+      starter.sessions,
+      i18n.text,
+    );
+    starter
+      ..onRead = made.observe
+      ..onStop = made.forget;
+    return made;
+  }();
   late final halt = AgentHalt(
     reads.catalog,
     ProviderScans(reads.files),
@@ -489,6 +506,21 @@ final class CoreService {
     }
     if (method.startsWith('addons.')) return addonStoreRoute(method, params);
     if (method == 'sessions.start') return starter.start(params);
+    if (method == 'agents.action_preview') {
+      return {
+        ...actions.preview(params),
+        'focus': taskFocus(reads.map, params),
+      };
+    }
+    if (method == 'agents.action_apply') {
+      if (params.length != 1 || params['preview'] is! String) {
+        throw const FormatException('Invalid agent action preview');
+      }
+      if (addonInstalling) {
+        throw const FormatException('Add-on installation in progress');
+      }
+      return actions.apply(params['preview'] as String);
+    }
     if (method == 'agents.halt_preview') return halt.preview(params);
     if (method == 'agents.halt_apply') return halt.apply(params);
     if (method == 'projects.pin' || method == 'projects.forget') {
