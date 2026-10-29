@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'adapter_assets.g.dart';
+import 'installers.dart' show InstallHost, KoboldCppInstaller;
 import 'model_downloads.dart';
 import 'model_hub.dart';
 import 'provider_scans.dart';
@@ -378,8 +379,7 @@ final class ProviderOps {
   }
 
   /// flutter_providers.execute for model.import, models.pull and
-  /// models.download. KoboldCPP's (a .kcpps per new file, written through
-  /// its installer) stay with the reference until phase 5.
+  /// models.download.
   Future<void> _addModel(
     String operation,
     Map params,
@@ -388,9 +388,19 @@ final class ProviderOps {
     Progress progress,
     String Function(String) translate,
   ) async {
-    if (rt.key == 'koboldcpp') {
-      throw StateError('KoboldCpp models are added by the reference for now');
+    // KoboldCpp's engine.refresh: a .kcpps per new model file, when the app
+    // installed it (install_ctl.KoboldCpp.sync).
+    Future<void> refresh() async {
+      if (rt.key != 'koboldcpp') return;
+      final kobold = KoboldCppInstaller(
+        InstallHost(files.identity.home, files.posix),
+      );
+      final folder = kobold.modelsFolder();
+      if (kobold.installedFolder() != null && folder.isNotEmpty) {
+        await kobold.sync(folder);
+      }
     }
+
     final download = '${(_engines[rt.key] as Map?)?['download'] ?? ''}';
     final models = ModelFiles(files.posix, hub: hub);
     Future<void> pull(String name) async {
@@ -425,6 +435,7 @@ final class ProviderOps {
         }
         models.addLocal(rt.key, files.expand(rt.modelsDir), path);
       }
+      await refresh();
     } else if (operation == 'models.pull') {
       if (download != 'pull') {
         throw const FormatException('Provider does not support pulls');
@@ -463,6 +474,7 @@ final class ProviderOps {
           entry,
           progress,
         );
+        await refresh();
       } else {
         throw const FormatException('Provider has no model destination');
       }

@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'package:crypto/crypto.dart' hide sha256;
+import 'package:crypto/crypto.dart' as hashes show sha256;
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
@@ -177,6 +179,7 @@ final class ModelFiles {
     Progress progress, {
     int doneBefore = 0,
     int total = 0,
+    String sha256 = '',
   }) async {
     Directory(p.dirname(target)).createSync(recursive: true);
     final partial = '$target.part';
@@ -253,6 +256,16 @@ final class ModelFiles {
       if (size != 0 && st.size != size) {
         throw StateError('download incomplete');
       }
+      if (sha256.isNotEmpty && digestOfFd(fd, sha256) != sha256) {
+        posix.truncate(fd, 0);
+        final now = posix.lstatOwn(partial);
+        if (now != null && now.identity.join(':') == st.identity.join(':')) {
+          File(partial).deleteSync();
+        }
+        throw StateError(
+          "${p.basename(target)} does not match the release's checksum; nothing was installed",
+        );
+      }
       posix.sync(fd);
       final now = posix.lstatOwn(partial);
       if (now == null || now.identity.join(':') != st.identity.join(':')) {
@@ -261,6 +274,35 @@ final class ModelFiles {
         );
       }
       File(partial).renameSync(target);
+    } finally {
+      posix.close(fd);
+    }
+  }
+
+  /// install_ctl._sha256_of_fd: SHA-512 for 128 hex digits, else SHA-256.
+  String digestOfFd(int fd, [String expected = '']) {
+    final chunks = <List<int>>[];
+    final sink = ChunkedConversionSink<Digest>.withCallback(
+      (d) => chunks.add(d.single.bytes),
+    );
+    final input = (expected.length == 128 ? sha512 : hashes.sha256)
+        .startChunkedConversion(sink);
+    var offset = 0;
+    while (true) {
+      final block = posix.readAt(fd, offset, 1024 * 1024);
+      if (block.isEmpty) break;
+      input.add(block);
+      offset += block.length;
+    }
+    input.close();
+    return chunks.single.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+  }
+
+  /// install_ctl.sha256_of: the digest of a file (by name).
+  String digestOf(String path, [String expected = '']) {
+    final fd = posix.openAt(-100, path, Posix.noFollow | Posix.cloexec);
+    try {
+      return digestOfFd(fd, expected);
     } finally {
       posix.close(fd);
     }

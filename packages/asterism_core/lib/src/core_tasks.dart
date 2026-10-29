@@ -53,7 +53,8 @@ final class CoreTasks {
   CoreTasks(this.workerCommand);
   final List<String> workerCommand;
   final items = <String, CoreTask>{};
-  static const maxFrame = 1024 * 1024, commits = {'connections.apply'};
+  static const maxFrame = 1024 * 1024,
+      commits = {'connections.apply', 'addons.install', 'installers.install'};
 
   /// A provider operation in its own worker (flutter_tasks.Tasks.start).
   Map<String, dynamic> start(
@@ -430,23 +431,18 @@ const coreFirstRoutes = {
   'models.attach_preview',
 };
 
-/// providers.run operations this core runs. Adding a KoboldCPP model writes
-/// its .kcpps through its installer: that stays with the reference (phase 5).
-bool coreProviderRun(Map<String, dynamic> params) {
-  final inner = params['params'];
-  final key = inner is Map ? inner['key'] : null;
-  return const {
-        'runtime.start',
-        'runtime.stop',
-        'model.load',
-        'model.unload',
-        'models.search',
-        'models.files',
-        'models.pull',
-      }.contains(params['operation']) ||
-      const {'models.download', 'model.import'}.contains(params['operation']) &&
-          key != 'koboldcpp';
-}
+/// providers.run operations this core runs.
+bool coreProviderRun(Map<String, dynamic> params) => const {
+  'runtime.start',
+  'runtime.stop',
+  'model.load',
+  'model.unload',
+  'models.search',
+  'models.files',
+  'models.pull',
+  'models.download',
+  'model.import',
+}.contains(params['operation']);
 
 /// The connection kinds whose previews this core builds (the others stay with
 /// the Python reference until their phase).

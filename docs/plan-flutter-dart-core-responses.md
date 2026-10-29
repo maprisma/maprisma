@@ -1030,3 +1030,49 @@ a fake terminal that only logs:
   session.
 
 The same answers, terminal commands, session output and `first_agent` on both sides.
+
+### 5b-2 — program installers
+
+`installers.preview` / `installers.install` are served by the core (`installers.dart`, `tar_check.dart`):
+- **Releases:** the newest GitHub release, every asset with the SHA-256 GitHub lists for it
+  (`github_release`), checked again as a kept release (`Release.from_json`). A preview without a
+  complete checksummed release is refused.
+- **What installs:** Ollama, llama.cpp, KoboldCpp and Jan (local LLMs shown on the map) and mise (the
+  first-agent guide's tool). They never install from here, in the reference too, and are refused:
+  - LM Studio and Bionic: no published checksum;
+  - vLLM and dsh: pip/npm, no release files;
+  - agy: its manifest names no size.
+  Adapters cannot declare a `download`, so the reference's `Declared` installer has no use here.
+- **The checks of `flutter_installers.installer`:**
+  - only a program that is missing;
+  - not installed another way (the provider scan, or the tool on PATH or in `~/.local/bin`);
+  - no existing `~/.local/bin` link, settings file or user unit is replaced.
+- **Install (worker, private plan):**
+  - under the add-on installers' lock, with the add-ons of the chosen settings;
+  - the preview prepared again and required to be the same;
+  - downloads checked against their checksum (`ModelFiles.download` gained `sha256`; SHA-512 for
+    128 hex digits);
+  - archives checked before unpacking (`checkArchive`, below), then `tar` without owners or modes;
+  - one top folder flattened; version folder, `current`, the marker and the `~/.local/bin` link;
+  - the settings file (0600), `configure` (llama.cpp's `models.ini`; KoboldCpp's `.kcpps`; Jan's data
+    folder, preset and desktop entry), the user unit and `systemctl --user`.
+  - Jan's AppImage unpacks itself closed in by bubblewrap, stopped when it grows past 20 GiB
+    (`runWithDiskBudget`).
+- **`checkArchive`** ports `install_ctl.check_archive` with its own tar reader (ustar prefix, GNU long
+  names, pax, base-256 sizes; zstd through `zstd -dc`, gzip by `dart:io`). It ends the archive where
+  `tarfile` does: an empty file, a bad first header or a short body is an error; a later bad header
+  ends the archive.
+- **KoboldCpp models:** `kobold_ctl.sync` is ported (`koboldSync`), so `models.download` and
+  `model.import` for KoboldCpp now run in the core too (`engine.refresh` after the file is added).
+- Installs count as commits (never cancelled) and as running installations for the add-on guard.
+
+Check: `tests/test_dart_installers_parity.py`:
+- 22 crafted archives through `check_archive` and `checkArchive`: good links, absolute and `..` names,
+  links out and through links, devices, size and entry limits, long names, zstd, truncated and garbage;
+- `kobold_ctl.sync` with split models, projectors and stale entries;
+- both services with a fake `curl` serving release lists and assets, and a fake `systemctl`:
+  - previews of all five, a wrong build, LM Studio, vLLM, an agent, an unknown key and bad shapes;
+  - installing mise, llama.cpp (start now and at login), KoboldCpp and Ollama (two zstd assets);
+  - a used preview and a preview of an installed program.
+
+The same answers, files (contents and modes) and service calls on both sides.

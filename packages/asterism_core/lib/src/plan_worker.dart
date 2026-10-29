@@ -8,6 +8,7 @@ import 'agent_halt.dart';
 import 'connect_apply.dart';
 import 'posix_ffi.dart';
 import 'identity.dart';
+import 'installers.dart';
 import 'model_guard.dart';
 import 'provider_ops.dart';
 import 'provider_scans.dart';
@@ -265,6 +266,27 @@ Future<int> runWorker(List<String> args) async {
       });
       return 0;
     }
+    // An installer preview: the release looked up with the add-ons switched
+    // on in the chosen settings (flutter_installers.prepare).
+    if (args.isEmpty && request['operation'] == 'installers.preview') {
+      final params = request['params'] as Map;
+      if (params.length != 2 ||
+          params['selection'] is! Map ||
+          (params['settings_path'] != null &&
+              params['settings_path'] is! String)) {
+        throw const FormatException('Invalid installer preview');
+      }
+      final chosen = params['settings_path'] as String?;
+      _reloadAddons(chosen);
+      send({
+        'type': 'result',
+        'result': await Installers(
+          ScanFiles(AppIdentity()),
+          settingsPath: chosen,
+        ).prepare(params['selection'] as Map),
+      });
+      return 0;
+    }
     // A provider operation: no private plan, its parameters checked again here.
     if (args.isEmpty && ProviderOps.shapes.containsKey(request['operation'])) {
       final identity = AppIdentity();
@@ -292,6 +314,7 @@ Future<int> runWorker(List<String> args) async {
           'connections.apply',
           'agents.halt',
           'addons.install',
+          'installers.install',
         }.contains(operation) ||
         (request['params'] as Map).isNotEmpty) {
       throw const FormatException('Invalid private operation');
@@ -344,6 +367,40 @@ Future<int> runWorker(List<String> args) async {
             store.$2,
           ),
         ),
+      });
+      return 0;
+    }
+    if (operation == 'installers.install') {
+      if (body.length > maxPlan) {
+        throw const FormatException('Installer plan too large');
+      }
+      final plan = jsonDecode(utf8.decode(body));
+      final record = plan is Map ? plan['record'] : null;
+      if (record is! Map ||
+          (record['settings_path'] != null &&
+              record['settings_path'] is! String)) {
+        throw const FormatException('Invalid private installer plan');
+      }
+      // The add-on installers' lock: one installation at a time, also across
+      // a worker left running by an earlier window.
+      final store = _addonStore();
+      final chosen = record['settings_path'] as String?;
+      send({
+        'type': 'result',
+        'result': await store.$1.locked(() {
+          _reloadAddons(chosen);
+          return Installers(
+            ScanFiles(AppIdentity()),
+            settingsPath: chosen,
+          ).execute(
+            body,
+            (fraction, text) => send({
+              'type': 'progress',
+              'fraction': fraction.isFinite ? fraction.clamp(0.0, 1.0) : 0.0,
+              'text': text.length > 300 ? text.substring(0, 300) : text,
+            }),
+          );
+        }),
       });
       return 0;
     }
@@ -411,6 +468,23 @@ Future<bool> setOllamaContext(Map<String, dynamic> c, int uid) async {
     AddonStore(posix, user, identity.home, AddonVerifier(posix)),
     [user, p.join(p.dirname(Platform.resolvedExecutable), 'addons')],
   );
+}
+
+/// AdapterRegistry.reload with the add-ons switched on in the chosen
+/// settings: the providers they hide and add (provider_facts).
+void _reloadAddons(String? settingsPath) {
+  final path = settingsPath != null && settingsPath.isNotEmpty
+      ? settingsPath
+      : p.join(AppIdentity().configDir, 'settings.json');
+  var enabled = <String>{};
+  try {
+    final data = jsonDecode(File(path).readAsStringSync());
+    final value = data is Map ? data['addons_enabled'] : null;
+    if (value is List) enabled = {...value.whereType<String>()};
+  } catch (_) {
+    /* the default: none */
+  }
+  AddonRegistry(AddonVerifier(Posix()), _addonStore().$2).reload(enabled);
 }
 
 /// settings_schema.value(..., 'addons_online') is True: on unless set off.

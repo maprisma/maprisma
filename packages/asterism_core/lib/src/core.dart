@@ -17,6 +17,7 @@ import 'agent_actions.dart';
 import 'agent_halt.dart';
 import 'agent_start.dart';
 import 'core_tasks.dart';
+import 'installers.dart' show InstallerPlans, maxPlan;
 import 'skill_plans.dart';
 import 'mcp_plans.dart';
 import 'llm_plans.dart';
@@ -42,6 +43,8 @@ const portedRoutes = {
   'addons.remove_preview',
   'addons.remove_apply',
   'addons.remove_undo',
+  'installers.preview',
+  'installers.install',
   'sessions.start',
   'projects.pin',
   'projects.forget',
@@ -164,9 +167,58 @@ final class CoreService {
   late final addonActions = AddonActions(Posix(), addonUserDir);
   final _catalogPreviews = <String, (DateTime, Map<String, dynamic>)>{};
 
+  /// installation_running (the reference's addon_installing too).
   bool get addonInstalling => tasks.items.values.any(
-    (t) => t.operation == 'addons.install' && t.state == 'running',
+    (t) =>
+        const {
+          'addons.install',
+          'installers.install',
+          'existing.apply',
+          'system.move_apply',
+          'system.move_undo',
+        }.contains(t.operation) &&
+        t.state == 'running',
   );
+
+  late final installerPlans = InstallerPlans(
+    () => newHandle().substring(coreHandle.length),
+  );
+
+  /// installers.preview / installers.install (flutter_backend).
+  Map<String, dynamic> installerRoute(
+    String method,
+    Map<String, dynamic> params,
+  ) {
+    if (method == 'installers.preview') {
+      if (addonInstalling) {
+        throw const FormatException('An installation is already running');
+      }
+      // Only the shape here; the release is looked up in the worker.
+      if (params.keys.any((k) => !const {'kind', 'key', 'build'}.contains(k)) ||
+          !params.containsKey('kind') ||
+          !params.containsKey('key') ||
+          params.values.any((v) => v is! String)) {
+        throw const FormatException('Invalid installer selection');
+      }
+      return tasks.start('installers.preview', {
+        'selection': params,
+        'settings_path': identity.settingsPath,
+      }, installerPlans.register);
+    }
+    if (addonInstalling ||
+        starter.sessions.items.values.any(starter.sessions.running)) {
+      throw const FormatException(
+        'Finish running operations before installing',
+      );
+    }
+    return installerPlans.apply(params, (plan) {
+      final body = utf8.encode(pyJsonDumps(plan));
+      if (body.length > maxPlan) {
+        throw const FormatException('Installer plan too large');
+      }
+      return tasks.startPrivate('installers.install', body);
+    });
+  }
 
   /// guard_addon_changes.
   void guardAddonChanges() {
@@ -505,6 +557,7 @@ final class CoreService {
       return addonRoute(method, params);
     }
     if (method.startsWith('addons.')) return addonStoreRoute(method, params);
+    if (method.startsWith('installers.')) return installerRoute(method, params);
     if (method == 'sessions.start') return starter.start(params);
     if (method == 'agents.action_preview') {
       return {

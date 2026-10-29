@@ -72,7 +72,7 @@ void main() {
         );
         if (!develPythonFallback) {
           await expectLater(
-            router.call('installers.preview', {}),
+            router.call('existing.scan', {}),
             throwsA(
               isA<BackendError>().having(
                 (e) => e.code,

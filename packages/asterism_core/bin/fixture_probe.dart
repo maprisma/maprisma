@@ -2,6 +2,8 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:asterism_core/asterism_core.dart';
+import 'package:asterism_core/src/tar_check.dart';
+import 'package:asterism_core/src/installers.dart' show koboldSync;
 import 'package:asterism_core/src/adapters.dart';
 import 'package:asterism_core/src/connect_apply.dart';
 import 'package:asterism_core/src/addon_store.dart';
@@ -265,6 +267,28 @@ Future<void> main() async {
             for (final a in agents)
               if (a.adapter.facts['self_served'] == true) a.command,
           }),
+        };
+      } else if (request.method == 'dev.tarcheck') {
+        // install_ctl.check_archive on a crafted archive.
+        try {
+          await checkArchive(
+            params['path'] as String,
+            limit: params['limit'] as int,
+            maxEntries: params['max_entries'] as int,
+          );
+          result = {'ok': true};
+        } on StateError catch (e) {
+          result = {'error': e.message};
+        }
+      } else if (request.method == 'dev.koboldsync') {
+        // kobold_ctl.sync with a fixed video memory size.
+        result = {
+          'written': await koboldSync(
+            params['models'] as String,
+            params['build'] as String,
+            () async => params['vram'] as int,
+            params['configs'] as String,
+          ),
         };
       } else if (request.method == 'dev.fit') {
         final path = params['path'] as String;
