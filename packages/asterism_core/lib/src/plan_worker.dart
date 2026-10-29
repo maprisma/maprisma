@@ -625,6 +625,7 @@ Future<int> runWorker(List<String> args) async {
           'addons.install_file',
           'mcp.tools',
           'mcp.tools_test',
+          'models.tuning_ask',
         }.contains(operation) ||
         (request['params'] as Map).isNotEmpty) {
       throw const FormatException('Invalid private operation');
@@ -810,6 +811,37 @@ Future<int> runWorker(List<String> args) async {
           catalog.adapter(request['command'] as String),
           identity.home,
           identity.environment,
+        ),
+      });
+      return 0;
+    }
+    if (operation == 'models.tuning_ask') {
+      if (body.length > 256 * 1024) {
+        throw const FormatException('Performance facts too large');
+      }
+      final data = jsonDecode(utf8.decode(body));
+      if (data is! Map ||
+          data['command'] is! String ||
+          data['facts'] is! Map ||
+          data['settings_path'] is! String) {
+        throw const FormatException('Invalid tuning request');
+      }
+      final identity = AppIdentity();
+      final registry = _reloadAddons(data['settings_path'] as String);
+      final adapter = registry.adapters
+          .where((a) => a.command == data['command'])
+          .firstOrNull;
+      if (adapter == null) {
+        throw const FormatException('AI checker unavailable');
+      }
+      send({
+        'type': 'result',
+        'result': await askTuning(
+          data,
+          adapter,
+          identity.environment,
+          identity.home,
+          identity.shortName,
         ),
       });
       return 0;

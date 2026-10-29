@@ -112,4 +112,76 @@ void main() {
       expect(changes, [('*', 'flash-attn', 'auto')]);
     },
   );
+
+  testWidgets('tips from an agent: asked, checked ones shown, applied', (
+    tester,
+  ) async {
+    final changes = <(String, String, String)>[];
+    final asked = <String>[];
+    await tester.binding.setSurfaceSize(const Size(1000, 2000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: PerformanceView(
+            facts: {
+              ..._facts('llamacpp'),
+              'helpers': [
+                {'command': 'codex', 'name': 'Codex'},
+                {'command': 'claude', 'name': 'Claude Code'},
+              ],
+            },
+            tr: (k) => k,
+            onChange: (s, k, v) => changes.add((s, k, v)),
+            onClose: () {},
+            onAsk: (command) async {
+              asked.add(command);
+              return {
+                'summary': 'Two things.',
+                'agent': command,
+                'suggestions': [
+                  {
+                    'kind': 'setting',
+                    'title': 'Quantize the cache',
+                    'why': 'Half the memory.',
+                    'model': 'room',
+                    'key': 'cache-type-k',
+                    'value': 'q8_0',
+                  },
+                  {
+                    'kind': 'build',
+                    'title': 'Try Vulkan',
+                    'why': '',
+                    'model': '*',
+                    'key': '',
+                    'value': 'vulkan',
+                  },
+                ],
+              };
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Codex'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Claude Code').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('tuning-ask')));
+    await tester.pumpAndSettle();
+    expect(asked, ['claude']);
+    expect(find.text('Two things.'), findsOneWidget);
+    expect(
+      find.text('cache-type-k = q8_0 · room\nHalf the memory.'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('then compare.'), findsOneWidget);
+    await tester.tap(find.widgetWithText(TextButton, 'Apply'));
+    expect(changes, [('room', 'cache-type-k', 'q8_0')]);
+  });
+
+  testWidgets('no agent for AI checks: no tips section', (tester) async {
+    await pump(tester, 'llamacpp');
+    expect(find.text('Tips from an agent'), findsNothing);
+  });
 }

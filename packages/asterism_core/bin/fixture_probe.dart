@@ -294,6 +294,21 @@ Future<void> main() async {
           params['cache'] as String,
           search: params['search'] == true,
         );
+      } else if (request.method == 'dev.tuningtips') {
+        // llm_tuning.facts_text, prompt and validate.
+        final facts = params['facts'] as Map;
+        dynamic validated;
+        try {
+          final (summary, found) = tun.validateTuning(params['answer'], facts);
+          validated = [summary, found];
+        } on FormatException catch (e) {
+          validated = {'error': e.message};
+        }
+        result = {
+          'text': tun.tuningFactsText(facts),
+          'prompt': tun.tuningPrompt(facts),
+          'validated': validated,
+        };
       } else if (request.method == 'dev.llmtuning') {
         // llm_tuning.collect and tuning_changes for one runtime.
         final r = params['rt'] as Map;

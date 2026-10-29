@@ -1592,3 +1592,39 @@ apply). It was also run once on this PC: the RX 7900 XTX, the ROCm build, models
 
 Next, 6b-10b: tips from an agent (`llm_tuning.prompt` / `validate` with the local helper or the agent for
 AI checks, as the System Map's help asks).
+
+### 6b-10b — tips from an agent on a local LLM's performance
+
+New in the core (`llm_tuning.dart`, the reference is `llm_tuning.facts_text` / `prompt` / `validate` /
+`ask`):
+- **`models.tuning`** keeps the facts it read (ten minutes) and names the agents for AI checks that can
+  look them over, the chosen one (`ai_checks_agent`) first.
+- **`models.tuning_ask {key, command}`**: a **private** worker runs one look-up by that agent:
+  - the reference's prompt built from the kept facts, its schema as `schema-llm-tuning.json`;
+  - its research command closed in to the web alone (`guardBackground`), bounded (`runLookUp`, made
+    public from `system_help.dart`; the System Map's analysis uses the same);
+  - recorded in the shared run log as task `llm-tuning`.
+- **The answer is checked against the facts.** A setting must be one of the engine's keys with an
+  allowed value that is not set already there, and per model only where the engine has that. A context
+  must be digits from 1024 up to what the card holds for that model. A build must be one it knows that
+  is not the one now. Notes carry no value. At most 8 are kept; anything else is dropped.
+- **`py_values.pyRepr`**: Python's `repr` of JSON values, for answers whose fields are not strings (a
+  list as a title), as `str()` makes them.
+- **Flutter:** `PerformanceView` adds **Tips from an agent**: the agent (chosen from the list when
+  there are several), **Ask …**, its progress, the summary and each tip. **Apply** is offered for a
+  setting and for llama.cpp's context, through the same preview; a build gets the reference's hint. The
+  last answer is kept per local LLM while the app runs. All texts were already translated; the manual's
+  Flutter performance section says so in all eight languages; PDFs rebuilt.
+
+Check: `tests/test_dart_tuning_tips_parity.py`. For llama.cpp and Ollama facts (per model and for every
+model only), Python and Dart give the same facts text, the same prompt and the same checked tips, for
+answers with:
+- settings set already, per model, out of range, unknown, with a newline;
+- contexts too big, too small, not digits, for a model with no fit or none;
+- builds known, current, unknown; empty titles; unknown models and kinds;
+- non-string fields (Python `repr`); more than eight;
+- not an object, suggestions not a list.
+
+There are widget tests (ask, the chosen agent, a tip applied, a build hint, no agents, no section) and an
+app test (Providers → Performance → Ask → Apply → preview). A real agent was not asked, since it uses
+Uwe's tokens.

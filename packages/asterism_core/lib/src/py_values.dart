@@ -139,3 +139,39 @@ String pyJsonDumps(dynamic value, {int? indent, bool ensureAscii = true}) {
   write(value, 0);
   return out.toString();
 }
+
+/// Python's repr() of a JSON value (str() of a list or dict uses it).
+String pyRepr(dynamic v) => switch (v) {
+  String s => _reprStr(s),
+  List l => '[${l.map(pyRepr).join(', ')}]',
+  Map m =>
+    '{${m.entries.map((e) => '${pyRepr(e.key)}: ${pyRepr(e.value)}').join(', ')}}',
+  double d => pyFloat(d),
+  _ => pyStr(v),
+};
+
+String _reprStr(String s) {
+  final quote = s.contains("'") && !s.contains('"') ? '"' : "'";
+  final out = StringBuffer(quote);
+  for (final r in s.runes) {
+    if (r == 0x5c) {
+      out.write(r'\\');
+    } else if (r == quote.codeUnitAt(0)) {
+      out.write('\\$quote');
+    } else if (r == 10) {
+      out.write(r'\n');
+    } else if (r == 13) {
+      out.write(r'\r');
+    } else if (r == 9) {
+      out.write(r'\t');
+    } else if (r < 0x20 || r == 0x7f) {
+      out.write('\\x${r.toRadixString(16).padLeft(2, '0')}');
+    } else if (r >= 0x80 && r < 0xa0) {
+      out.write('\\x${r.toRadixString(16).padLeft(2, '0')}');
+    } else {
+      out.writeCharCode(r);
+    }
+  }
+  out.write(quote);
+  return out.toString();
+}

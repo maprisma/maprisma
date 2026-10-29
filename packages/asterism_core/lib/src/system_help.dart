@@ -608,7 +608,7 @@ Future<Map<String, dynamic>> analyzeMap(
   Map<String, dynamic> analysis;
   Map raw = {};
   try {
-    final (out, done, cancelled) = await _run(argv, stdin, runEnv, work);
+    final (out, done, cancelled) = await runLookUp(argv, stdin, runEnv, work);
     if (cancelled) throw StateError('System analysis stopped');
     final text = utf8.decode(out, allowMalformed: true);
     final (answer, used) = parseOutput(output, text);
@@ -675,7 +675,7 @@ Future<Map<String, dynamic>> analyzeMap(
 
 /// The look-up: argv in its own session, the prompt on stdin, its output
 /// up to 512 KiB, ten minutes; SIGTERM ends it (cancelled).
-Future<(List<int>, bool, bool)> _run(
+Future<(List<int>, bool, bool)> runLookUp(
   List<String> argv,
   List<int>? stdin,
   Map<String, String> env,

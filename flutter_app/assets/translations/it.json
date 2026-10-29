@@ -1,4 +1,12 @@
 {
+  "Tips from an agent": "Consigli da un agente",
+  "Ask {0}": "Chiedi a {0}",
+  "It sees the facts above (names and numbers only); you choose what to apply.": "Vede i dati sopra (solo nomi e numeri); scegli tu cosa applicare.",
+  "No change suggested.": "Nessuna modifica suggerita.",
+  "context {0} · {1}": "contesto {0} · {1}",
+  "the {0} build": "la build {0}",
+  "Install it from the local LLM's menu on the map (Update…), then compare.": "Installala dal menu dell'LLM locale sulla mappa (Aggiorna…), poi confronta.",
+  "{0} looks at {1}'s settings": "{0} esamina le impostazioni di {1}",
   "Performance": "Prestazioni",
   "GPU stacks": "Stack GPU",
   "Video memory": "Memoria video",

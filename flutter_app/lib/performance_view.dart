@@ -27,18 +27,170 @@ List<String>? _choices(String regex) {
 /// build, the GPU stacks, the video memory, each model's context against what
 /// the card holds, and its settings for every model. A change goes through
 /// the connection preview: onChange(section, setting, value).
-class PerformanceView extends StatelessWidget {
+class PerformanceView extends StatefulWidget {
   const PerformanceView({
     super.key,
     required this.facts,
     required this.tr,
     required this.onChange,
     required this.onClose,
+    this.onAsk,
+    this.answer,
   });
   final Map<String, dynamic> facts;
   final String Function(String) tr;
   final void Function(String section, String setting, String value) onChange;
   final VoidCallback onClose;
+
+  /// Tips from an agent for AI checks (models.tuning_ask): its checked answer.
+  final Future<Map<String, dynamic>> Function(String command)? onAsk;
+
+  /// The last answer for this local LLM, kept while the app runs.
+  final Map<String, dynamic>? answer;
+
+  @override
+  State<PerformanceView> createState() => _PerformanceViewState();
+}
+
+class _PerformanceViewState extends State<PerformanceView> {
+  Map<String, dynamic>? _answer;
+  String? _asking, _helper;
+  bool _failed = false;
+
+  Map<String, dynamic> get facts => widget.facts;
+  String tr(String key) => widget.tr(key);
+  void onChange(String section, String setting, String value) =>
+      widget.onChange(section, setting, value);
+
+  @override
+  void initState() {
+    super.initState();
+    _answer = widget.answer;
+    final helpers = (facts['helpers'] as List? ?? const []).cast<Map>();
+    if (helpers.isNotEmpty) _helper = '${helpers.first['command']}';
+  }
+
+  Future<void> _ask(String command, String name) async {
+    setState(() {
+      _asking = name;
+      _failed = false;
+    });
+    try {
+      final answer = await widget.onAsk!(command);
+      if (mounted) setState(() => _answer = answer);
+    } catch (_) {
+      if (mounted) setState(() => _failed = true);
+    } finally {
+      if (mounted) setState(() => _asking = null);
+    }
+  }
+
+  List<Widget> _tips(BuildContext context) {
+    final helpers = (facts['helpers'] as List? ?? const []).cast<Map>();
+    if (widget.onAsk == null || helpers.isEmpty) return const [];
+    final text = Theme.of(context).textTheme;
+    final helper =
+        helpers.where((h) => h['command'] == _helper).firstOrNull ??
+        helpers.first;
+    final answer = _answer;
+    final suggestions = (answer?['suggestions'] as List? ?? const [])
+        .cast<Map>();
+    return [
+      const SizedBox(height: 12),
+      Text(tr('Tips from an agent'), style: text.titleMedium),
+      Wrap(
+        spacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          if (helpers.length > 1)
+            DropdownButton<String>(
+              value: '${helper['command']}',
+              items: [
+                for (final h in helpers)
+                  DropdownMenuItem(
+                    value: '${h['command']}',
+                    child: Text('${h['name']}'),
+                  ),
+              ],
+              onChanged: _asking != null
+                  ? null
+                  : (v) => setState(() => _helper = v),
+            ),
+          FilledButton(
+            key: const ValueKey('tuning-ask'),
+            onPressed: _asking != null
+                ? null
+                : () => _ask('${helper['command']}', '${helper['name']}'),
+            child: Text(tr('Ask {0}').replaceAll('{0}', '${helper['name']}')),
+          ),
+        ],
+      ),
+      Text(
+        tr(
+          'It sees the facts above (names and numbers only); you choose what to apply.',
+        ),
+      ),
+      if (_asking != null) ...[
+        Text(
+          tr("{0} looks at {1}'s settings")
+              .replaceAll('{0}', _asking!)
+              .replaceAll('{1}', '${facts['runtime']}'),
+        ),
+        const LinearProgressIndicator(),
+      ],
+      if (_failed)
+        Text(
+          tr('Search failed: {0}').replaceAll('{0}', '').trim(),
+          style: TextStyle(color: Theme.of(context).colorScheme.error),
+        ),
+      if (answer != null && _asking == null) ...[
+        if ('${answer['summary'] ?? ''}'.isNotEmpty)
+          Text('${answer['summary']}'),
+        if (suggestions.isEmpty) Text(tr('No change suggested.')),
+        for (final item in suggestions)
+          ListTile(
+            key: ValueKey(
+              'tip-${item['kind']}-${item['model']}-${item['key']}',
+            ),
+            title: Text('${item['title']}'),
+            subtitle: Text(
+              [
+                switch (item['kind']) {
+                  'setting' =>
+                    '${item['key']} = ${item['value']}${item['model'] == '*' ? '' : ' · ${item['model']}'}',
+                  'context' =>
+                    tr('context {0} · {1}')
+                        .replaceAll('{0}', '${item['value']}')
+                        .replaceAll('{1}', '${item['model']}'),
+                  'build' => tr('the {0} build').replaceAll(
+                    '{0}',
+                    _buildNames[item['value']] ?? '${item['value']}',
+                  ),
+                  _ => '',
+                },
+                '${item['why']}',
+                if (item['kind'] == 'build')
+                  tr(
+                    "Install it from the local LLM's menu on the map (Update…), then compare.",
+                  ),
+              ].where((l) => l.isNotEmpty).join('\n'),
+            ),
+            trailing:
+                (item['kind'] == 'setting' ||
+                    (item['kind'] == 'context' && facts['key'] == 'llamacpp'))
+                ? TextButton(
+                    onPressed: () => onChange(
+                      '${item['model']}',
+                      '${item['key']}',
+                      '${item['value']}',
+                    ),
+                    child: Text(tr('Apply')),
+                  )
+                : null,
+          ),
+      ],
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -180,9 +332,12 @@ class PerformanceView extends StatelessWidget {
                 );
               }(),
           ],
+          ..._tips(context),
         ],
       ),
-      actions: [TextButton(onPressed: onClose, child: Text(tr('Close')))],
+      actions: [
+        TextButton(onPressed: widget.onClose, child: Text(tr('Close'))),
+      ],
     );
   }
 }

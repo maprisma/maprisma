@@ -1176,6 +1176,9 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
     }
   }
 
+  /// The last tips per local LLM (llm_help_page.llm_tuning_answers).
+  final _tuningAnswers = <String, Map<String, dynamic>>{};
+
   /// A local LLM's performance (models.tuning); a setting or a model's
   /// context changed through the connection preview (backup, Undo).
   Future<void> _performance(Map<String, dynamic> runtime) async {
@@ -1199,6 +1202,15 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
       (yes, no) => PerformanceView(
         facts: facts,
         tr: tr,
+        answer: _tuningAnswers[key],
+        onAsk: (command) async {
+          final answer = await _quietTask('models.tuning_ask', {
+            'key': key,
+            'command': command,
+          });
+          _tuningAnswers[key] = answer;
+          return answer;
+        },
         onChange: (section, setting, value) {
           change = (section, setting, value);
           no();

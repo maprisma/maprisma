@@ -5,6 +5,15 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 KEYS = (
+    # Tips from an agent on a local LLM's performance (models.tuning_ask).
+    "Tips from an agent",
+    "Ask {0}",
+    "It sees the facts above (names and numbers only); you choose what to apply.",
+    "No change suggested.",
+    "context {0} · {1}",
+    "the {0} build",
+    "Install it from the local LLM's menu on the map (Update…), then compare.",
+    "{0} looks at {1}'s settings",
     # A local LLM's performance (models.tuning).
     "Performance",
     "GPU stacks",

@@ -1,4 +1,12 @@
 {
+  "Tips from an agent": "Tips van een agent",
+  "Ask {0}": "{0} vragen",
+  "It sees the facts above (names and numbers only); you choose what to apply.": "Het ziet de feiten hierboven (alleen namen en getallen); jij kiest wat je toepast.",
+  "No change suggested.": "Geen wijziging voorgesteld.",
+  "context {0} · {1}": "context {0} · {1}",
+  "the {0} build": "de {0}-build",
+  "Install it from the local LLM's menu on the map (Update…), then compare.": "Installeer hem via het menu van de lokale LLM op de kaart (Bijwerken…) en vergelijk dan.",
+  "{0} looks at {1}'s settings": "{0} bekijkt de instellingen van {1}",
   "Performance": "Prestaties",
   "GPU stacks": "GPU-stacks",
   "Video memory": "Videogeheugen",

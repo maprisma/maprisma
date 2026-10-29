@@ -113,6 +113,7 @@ const portedRoutes = {
   'skills.web_preview',
   'models.tuning',
   'models.tuning_preview',
+  'models.tuning_ask',
   ...readOnlyRoutes,
 };
 // Phase 7 removes this blocker only after every route has differential coverage.
@@ -240,6 +241,9 @@ final class CoreService {
         }.contains(t.operation) &&
         t.state == 'running',
   );
+
+  /// The last facts read per local LLM (models.tuning), for the tips.
+  final tuningFacts = <String, (DateTime, Map<String, dynamic>)>{};
 
   late final webSkills = WebSkills(
     () => newHandle().substring(coreHandle.length),
@@ -1247,9 +1251,47 @@ final class CoreService {
         throw const FormatException('Unexpected tuning parameters');
       }
       return {
-        ...tasks.start('models.tuning', {'key': rt.key}),
+        ...tasks.start('models.tuning', {'key': rt.key}, (facts) {
+          tuningFacts[rt.key] = (DateTime.now(), facts);
+          // The agents for AI checks that can look this over, the chosen one first.
+          final checkers = _aiHelpers().$1;
+          final chosen = '${settings.load()['ai_checks_agent'] ?? ''}';
+          return {
+            ...facts,
+            'helpers': [
+              for (final c in [
+                if (checkers.contains(chosen)) chosen,
+                ...checkers.where((c) => c != chosen),
+              ])
+                {'command': c, 'name': _nameOf(c)},
+            ],
+          };
+        }),
         'focus': taskFocus(reads.map, {'runtime': rt.key}),
       };
+    }
+    if (method == 'models.tuning_ask') {
+      final command = params['command'];
+      final kept = tuningFacts[rt.key];
+      if (params.length != 2 ||
+          command is! String ||
+          !_aiHelpers().$1.contains(command)) {
+        throw const FormatException('Choose an installed AI checker');
+      }
+      if (kept == null || DateTime.now().difference(kept.$1).inMinutes >= 10) {
+        throw const FormatException('Read its performance again');
+      }
+      final body = utf8.encode(
+        pyJsonDumps({
+          'command': command,
+          'facts': kept.$2,
+          'settings_path': identity.settingsPath,
+        }),
+      );
+      if (body.length > 256 * 1024) {
+        throw const FormatException('Performance facts too large');
+      }
+      return tasks.startPrivate('models.tuning_ask', body);
     }
     final section = params['section'], setting = params['setting'];
     final value = params['value'];
@@ -1779,7 +1821,9 @@ final class CoreService {
     }
     if (method.startsWith('mcp.')) return mcpCatalogRoute(method, params);
     if (method.startsWith('skills.web_')) return webSkillRoute(method, params);
-    if (method == 'models.tuning' || method == 'models.tuning_preview') {
+    if (method == 'models.tuning' ||
+        method == 'models.tuning_preview' ||
+        method == 'models.tuning_ask') {
       return tuningRoute(method, params);
     }
     if (method == 'agents.security' || method == 'agents.security_preview') {

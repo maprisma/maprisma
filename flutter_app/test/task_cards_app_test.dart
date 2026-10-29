@@ -92,7 +92,8 @@ for line in sys.stdin:
     'publisher':{'kind':'','who':''},'options':[{'option':'opt-time','kind':'pypi','label':'pypi · mcp-server-time 1.0','runnable':True,'command':'uvx',
      'args':['mcp-server-time==1.0'],'env':[],'url':'','headers':[],'needs':[],'on_command_line':[]}]}}]}
   r={'task':'mcpcat'}
- elif m=='models.tuning':tasks['tune']={'runtime':'Fixture provider','key':'fixture','gpu':'GPU','vram':8<<30,'stacks':[],'build':'','builds':[],'devices':'','settings':{'*':{}},'tuning':{'mode':['a|b','A mode']},'per_model':False,'models':[],'loaded':[],'vram_used':0};r={'task':'tune'}
+ elif m=='models.tuning':tasks['tune']={'runtime':'Fixture provider','key':'fixture','gpu':'GPU','vram':8<<30,'stacks':[],'build':'','builds':[],'devices':'','settings':{'*':{}},'tuning':{'mode':['a|b','A mode']},'per_model':False,'models':[],'loaded':[],'vram_used':0,'helpers':[{'command':'test','name':'Test agent'}]};r={'task':'tune'}
+ elif m=='models.tuning_ask':tasks['ask']={'summary':'One thing.','agent':p['command'],'suggestions':[{'kind':'setting','title':'Use b','why':'Faster.','model':'*','key':'mode','value':'b'}]};r={'task':'ask'}
  elif m=='models.tuning_preview':r={'plan':'opaque-tune','empty':False,'files':[{'path':'~/.config/x.ini','added':1,'removed':0}],'links_add':[],'links_remove':[],'item':'Fixture provider','notes':[],'focus':['runtime:fixture']}
  elif m=='skills.web_search':tasks['sks']={'skills':[{'name':'pdf','skill_id':'pdf','repo':'a/skills','installs':3}]};r={'task':'sks'}
  elif m=='skills.web_fetch':tasks['skf']={'fetched':'f1','name':'pdf','repo':'a/skills','skill_id':'pdf','description':'Reads PDFs.','files':['SKILL.md'],'scripts':[],'targets':['~/.agents/skills'],'agents':[{'command':'test','name':'Test agent'}]};r={'task':'skf'}
@@ -608,6 +609,41 @@ void main() {
         dir,
       ).lastWhere((q) => q['method'] == 'connections.apply')['params'],
       {'plan': 'opaque-tune'},
+    );
+    expect(tester.takeException(), isNull);
+    await unmountApp(tester);
+  });
+
+  testWidgets('tips from an agent are asked and one is applied', (
+    tester,
+  ) async {
+    final dir = await mountApp(tester);
+    await tester.tap(find.byTooltip('Providers and models'));
+    await settleService(tester);
+    await tester.tap(find.byKey(const ValueKey('performance-fixture')));
+    await settleService(tester);
+    final ask = find.byKey(const ValueKey('tuning-ask'));
+    await tester.ensureVisible(ask);
+    await tester.pumpAndSettle();
+    await tester.tap(ask);
+    await settleService(tester);
+    expect(
+      requests(
+        dir,
+      ).lastWhere((q) => q['method'] == 'models.tuning_ask')['params'],
+      {'key': 'fixture', 'command': 'test'},
+    );
+    expect(find.text('One thing.'), findsOneWidget);
+    final apply = find.widgetWithText(TextButton, 'Apply');
+    await tester.ensureVisible(apply);
+    await tester.pumpAndSettle();
+    await tester.tap(apply);
+    await settleService(tester);
+    expect(
+      requests(
+        dir,
+      ).lastWhere((q) => q['method'] == 'models.tuning_preview')['params'],
+      {'key': 'fixture', 'section': '*', 'setting': 'mode', 'value': 'b'},
     );
     expect(tester.takeException(), isNull);
     await unmountApp(tester);
