@@ -14,6 +14,7 @@ import 'existing_ai.dart' as existing_ai;
 import 'system_map.dart' show SystemMapReader;
 import 'system_actions.dart' show checkTool;
 import 'system_help.dart' show analyzeMap;
+import 'agent_keys.dart' show storeKey;
 import 'model_moves.dart' show SystemMoves, ScanFilesLike;
 import 'dart:math' show Random;
 import 'first_agent.dart';
@@ -446,6 +447,7 @@ Future<int> runWorker(List<String> args) async {
           'system.move_apply',
           'system.move_undo',
           'system.analyze',
+          'agents.key',
         }.contains(operation) ||
         (request['params'] as Map).isNotEmpty) {
       throw const FormatException('Invalid private operation');
@@ -541,6 +543,34 @@ Future<int> runWorker(List<String> args) async {
         return moves.execute(body, token, progress);
       });
       send({'type': 'result', 'result': result});
+      return 0;
+    }
+    if (operation == 'agents.key') {
+      if (body.length > 4096) {
+        throw const FormatException('Invalid API-key request');
+      }
+      final request = jsonDecode(utf8.decode(body));
+      if (request is! Map ||
+          request['command'] is! String ||
+          request['key'] is! String) {
+        throw const FormatException('Invalid API-key request');
+      }
+      final identity = AppIdentity();
+      final registry = _reloadAddons(identity.settingsPath);
+      final catalog = AgentCatalog(
+        ScanFiles(identity),
+        detectDesktop(identity, Posix()),
+        adapters: registry.adapters,
+      );
+      send({
+        'type': 'result',
+        'result': await storeKey(
+          request,
+          catalog.adapter(request['command'] as String),
+          identity.home,
+          identity.environment,
+        ),
+      });
       return 0;
     }
     if (operation == 'system.analyze') {

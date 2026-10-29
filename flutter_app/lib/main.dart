@@ -25,6 +25,7 @@ import 'map_welcome.dart';
 import 'map_addons_focus.dart';
 import 'first_agent_view.dart';
 import 'installer_review.dart';
+import 'api_key_review.dart';
 import 'agent_action_dialog.dart';
 import 'providers_view.dart';
 import 'system_map_view.dart';
@@ -1607,11 +1608,83 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
     }
   }
 
+  /// An API key put where the agent reads it: reviewed, typed into a hidden
+  /// field, handed to the worker; the field is cleared right away.
+  Future<void> _apiKey(String command) async {
+    if (_busy) return;
+    Map<String, dynamic> preview;
+    try {
+      preview = await _backend!.call('agents.key_preview', {
+        'command': command,
+      });
+    } catch (_) {
+      _actionFailed();
+      return;
+    }
+    if (!mounted) return;
+    final field = TextEditingController();
+    final name = '${preview['name']}';
+    final confirmed = await _cardReview(
+      tr('API key for {0}').replaceAll('{0}', name),
+      preview,
+      (yes, no) => ApiKeyReview(
+        preview: preview,
+        controller: field,
+        tr: tr,
+        onConfirm: yes,
+        onCancel: no,
+      ),
+    );
+    final key = field.text.trim();
+    field.clear();
+    // Freed once the card that used it is gone.
+    WidgetsBinding.instance.addPostFrameCallback((_) => field.dispose());
+    if (!mounted || !confirmed) {
+      if (mounted) setState(() => _card = null);
+      return;
+    }
+    Map<String, dynamic>? result;
+    try {
+      final started = await _backend!.call('agents.key_apply', {
+        'preview': preview['preview'],
+        'key': key,
+      });
+      if (!mounted) return;
+      result = await _runTask(
+        operation: 'agents.key',
+        existingTask: started['task'] as String,
+        title: tr('API key for {0}').replaceAll('{0}', name),
+      );
+    } catch (_) {
+      result = null;
+    }
+    if (!mounted) return;
+    setState(() => _card = null);
+    final ok = result?['ok'] == true;
+    final message = '${result?['message'] ?? ''}';
+    ScaffoldMessenger.of(_navigator.currentContext!).showSnackBar(
+      SnackBar(
+        content: Text(
+          ok
+              ? tr('{0}: the API key is set up.').replaceAll('{0}', name)
+              : tr('{0} did not take the key: {1}')
+                    .replaceAll('{0}', name)
+                    .replaceAll('{1}', message.isEmpty ? '?' : message),
+        ),
+      ),
+    );
+    await _refresh();
+  }
+
   Future<void> _agentAction(
     String command,
     String action, {
     String? kind,
   }) async {
+    if (action == 'key') {
+      await _apiKey(command);
+      return;
+    }
     if (_busy) return;
     setState(() => _busy = true);
     try {

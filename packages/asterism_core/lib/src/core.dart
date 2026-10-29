@@ -26,6 +26,7 @@ import 'system_map.dart' show forgetDisk, systemPublic;
 import 'system_actions.dart';
 import 'model_moves.dart' show MovePreviews;
 import 'system_help.dart';
+import 'agent_keys.dart';
 import 'adapters.dart' show Adapter;
 import 'system_map.dart' show SystemMapReader;
 import 'agent_catalog.dart' show AgentCatalog;
@@ -89,6 +90,8 @@ const portedRoutes = {
   'agents.action_apply',
   'agents.halt_preview',
   'agents.halt_apply',
+  'agents.key_preview',
+  'agents.key_apply',
   ...readOnlyRoutes,
 };
 // Phase 7 removes this blocker only after every route has differential coverage.
@@ -385,6 +388,37 @@ final class CoreService {
   late final helpPreviews = HelpPreviews(
     () => newHandle().substring(coreHandle.length),
   );
+
+  late final agentKeys = AgentKeys(
+    () => newHandle().substring(coreHandle.length),
+  );
+
+  /// agents.key_preview / agents.key_apply: an API key put where the agent
+  /// reads it, in the worker; the key reaches it on stdin only.
+  Map<String, dynamic> keyRoute(String method, Map<String, dynamic> params) {
+    final catalog = AgentCatalog(
+      reads.files,
+      desktop,
+      adapters: addons.adapters,
+    );
+    if (method == 'agents.key_preview') {
+      final command = params['command'];
+      final agent = command is String
+          ? catalog.scan().where((a) => a.command == command).firstOrNull
+          : null;
+      return agentKeys.preview(
+        params,
+        command is String ? catalog.adapter(command) : null,
+        agent?.installed ?? false,
+        agent == null ? '' : _nameOf(agent.command),
+      );
+    }
+    if (addonInstalling) {
+      throw const FormatException('Add-on installation in progress');
+    }
+    final body = agentKeys.apply(params, catalog.adapter);
+    return tasks.startPrivate('agents.key', body);
+  }
 
   /// The installed agents that can check (look up on the web) and take a
   /// task in a tab (ai_helper.helpers / task_agents).
@@ -1300,6 +1334,9 @@ final class CoreService {
         throw const FormatException('Add-on installation in progress');
       }
       return actions.apply(params['preview'] as String);
+    }
+    if (method == 'agents.key_preview' || method == 'agents.key_apply') {
+      return keyRoute(method, params);
     }
     if (method == 'agents.halt_preview') return halt.preview(params);
     if (method == 'agents.halt_apply') return halt.apply(params);

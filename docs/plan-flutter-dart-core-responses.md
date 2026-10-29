@@ -1338,3 +1338,27 @@ The Flutter app now uses the installer routes (5b-2):
 
 Check: two new widget tests (the guide names the tool or local LLM; the review keeps build and service
 choices and offers Change for another build). The installer parity test passes with the builds.
+
+### 6b-2 — API keys
+
+New in the core (Dart only; the reference's GTK dialog is `install_dialog.ask_key` with `signin.save_key`):
+- `agents.details` tells whether an agent takes an API key (`actions.key`: installed, and its adapter's
+  `access.key` names its own command that reads the key on stdin, or the `.env` file it reads); the
+  reference gets the same flag, so the differential cases stay equal.
+- **`agents.key_preview {command}`**: what happens to the key, before it is typed (the variable, where to
+  get one, the agent's own command or the file). A handle for ten minutes.
+- **`agents.key_apply {preview, key}`**: the key checked (one word of plain characters, 8–512), the step
+  required to be the reviewed one, then a private worker (`agents.key`, the key on its stdin):
+  - the agent's own command with the key on stdin, without agent-session variables, 30 seconds; its
+    last line returned with the key cut out;
+  - or `signin.write_env`: other lines kept, an earlier value replaced, a new owner-only file renamed
+    over the path (a link there is replaced, its target left alone), new folders 0700.
+  The key never goes into an argv, a file of the app, a log, a backup or a task result.
+- **Flutter:** **API key…** in the agent's details opens a card (`api_key_review.dart`) that says where
+  the key goes, hides the field and enables Save only for a key; the field is cleared right after.
+- One new text in eight languages; a manual section "API keys in the Flutter preview" in all eight
+  manuals (the bold labels match the app's translations; also corrected for 6b-1); PDFs rebuilt.
+
+Check: `test/agent_keys_test.dart` (the `.env` file, a link at its path, private new folders, the
+agent's own command on stdin without session variables and with the key hidden in its answer, refused
+keys and steps, a preview used once and checked again); a widget test for the card.

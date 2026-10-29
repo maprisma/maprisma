@@ -69,6 +69,7 @@ class AgentDetailsView extends StatelessWidget {
                 'update': 'Update',
                 'uninstall': 'Remove',
                 'login': 'Sign in…',
+                'key': 'API key…',
                 'verify': 'Send the test question',
               }.entries)
                 if ((info?['actions'] as Map?)?[action.key] == true &&

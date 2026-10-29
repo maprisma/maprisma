@@ -5,6 +5,16 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 KEYS = (
+    # API keys (agents.key_preview / agents.key_apply).
+    "API key…",
+    "API key for {0}",
+    "{0} stores it itself ({1}).",
+    "Written to {0} as {1}, readable only by you.",
+    "Get a key",
+    "Save",
+    "{0}: the API key is set up.",
+    "{0} did not take the key: {1}",
+    "The app does not keep it.",
     # Program installers (installers.preview / installers.install).
     "The download is checked against the checksum its release lists; nothing of it runs while it is installed.",
     "Program folder",

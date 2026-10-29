@@ -1,4 +1,13 @@
 {
+  "API key…": "API key…",
+  "API key for {0}": "API key for {0}",
+  "{0} stores it itself ({1}).": "{0} stores it itself ({1}).",
+  "Written to {0} as {1}, readable only by you.": "Written to {0} as {1}, readable only by you.",
+  "Get a key": "Get a key",
+  "Save": "Save",
+  "{0}: the API key is set up.": "{0}: the API key is set up.",
+  "{0} did not take the key: {1}": "{0} did not take the key: {1}",
+  "The app does not keep it.": "The app does not keep it.",
   "The download is checked against the checksum its release lists; nothing of it runs while it is installed.": "The download is checked against the checksum its release lists; nothing of it runs while it is installed.",
   "Program folder": "Program folder",
   "Where the program goes. Each version gets its own folder in it.": "Where the program goes. Each version gets its own folder in it.",

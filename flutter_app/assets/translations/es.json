@@ -1,4 +1,13 @@
 {
+  "API key…": "Clave API…",
+  "API key for {0}": "Clave API para {0}",
+  "{0} stores it itself ({1}).": "{0} la guarda por sí mismo ({1}).",
+  "Written to {0} as {1}, readable only by you.": "Se escribe en {0} como {1}, legible solo por ti.",
+  "Get a key": "Obtener una clave",
+  "Save": "Guardar",
+  "{0}: the API key is set up.": "{0}: la clave API está configurada.",
+  "{0} did not take the key: {1}": "{0} no aceptó la clave: {1}",
+  "The app does not keep it.": "La aplicación no la guarda.",
   "The download is checked against the checksum its release lists; nothing of it runs while it is installed.": "La descarga se comprueba con la suma de verificación que indica su versión; nada de ella se ejecuta durante la instalación.",
   "Program folder": "Carpeta del programa",
   "Where the program goes. Each version gets its own folder in it.": "Dónde va el programa. Cada versión tiene su propia carpeta dentro.",

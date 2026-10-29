@@ -704,7 +704,9 @@ class Service:
             choices[action] = bool(step and (step.commands or step.url) and
                                    (action == 'install' or agent.installed))
         return {**choices, 'managed_install':bool(not agent.installed and agent.command in __import__('install_ctl').AGENT_INSTALLERS), 'login':bool(agent.installed and access and access.logins),
-                'verify':bool(agent.installed and harness and harness.ask)}
+                'verify':bool(agent.installed and harness and harness.ask),
+                # An API key the agent reads: handed to its own command, or written to its .env file.
+                'key':bool(agent.installed and access and access.key and (access.key.stdin or access.key.env_file))}
 
     def installation_running(self) -> bool:
         return any(item.operation in ('addons.install','installers.install','existing.apply','system.move_apply','system.move_undo') and item.state == 'running'

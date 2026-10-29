@@ -3137,5 +3137,6 @@
  "{0} fps": "{0} ips",
  "System follows the desktop appearance.": "Système suit l’apparence du bureau.",
  "Maximum frame rate for map lights. Reduced motion and Lights off stop animation.": "Fréquence maximale des lumières de la carte. Le mouvement réduit et Lumières éteintes arrêtent l’animation.",
- "The download is checked against the checksum its release lists; nothing of it runs while it is installed.": "Le téléchargement est vérifié avec la somme de contrôle indiquée par sa version ; rien n’en est exécuté pendant l’installation."
+ "The download is checked against the checksum its release lists; nothing of it runs while it is installed.": "Le téléchargement est vérifié avec la somme de contrôle indiquée par sa version ; rien n’en est exécuté pendant l’installation.",
+ "The app does not keep it.": "L’application ne la conserve pas."
 }

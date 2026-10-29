@@ -1,4 +1,13 @@
 {
+  "API key…": "API-sleutel…",
+  "API key for {0}": "API-sleutel voor {0}",
+  "{0} stores it itself ({1}).": "{0} slaat hem zelf op ({1}).",
+  "Written to {0} as {1}, readable only by you.": "Wordt in {0} geschreven als {1}, alleen door jou leesbaar.",
+  "Get a key": "Sleutel aanvragen",
+  "Save": "Opslaan",
+  "{0}: the API key is set up.": "{0}: de API-sleutel is ingesteld.",
+  "{0} did not take the key: {1}": "{0} heeft de sleutel niet aangenomen: {1}",
+  "The app does not keep it.": "De app bewaart hem niet.",
   "The download is checked against the checksum its release lists; nothing of it runs while it is installed.": "De download wordt gecontroleerd met de checksum die de release vermeldt; tijdens het installeren wordt er niets van uitgevoerd.",
   "Program folder": "Programmamap",
   "Where the program goes. Each version gets its own folder in it.": "Waar het programma komt. Elke versie krijgt er een eigen map in.",

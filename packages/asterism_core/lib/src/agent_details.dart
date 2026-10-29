@@ -520,6 +520,28 @@ final class DetailReaders {
           (a.table('access')['logins'] as List? ?? []).isNotEmpty,
       'verify':
           agent.installed && (a.table('ask')['argv'] as List? ?? []).isNotEmpty,
+      // An API key the agent reads: handed to its own command, or written to
+      // its .env file.
+      'key': agent.installed && keyStepOf(a) != null,
     };
   }
+}
+
+/// An agent's API-key step (its adapter's access.key): the variable, where
+/// to get a key, and either its own command that reads it on stdin or the
+/// .env file it reads; null when it has none.
+({String variable, String url, List<String> stdin, String envFile})? keyStepOf(
+  Adapter a,
+) {
+  final key = a.table('access')['key'];
+  if (key is! Map) return null;
+  final stdin = [for (final x in (key['stdin'] as List? ?? const [])) '$x'];
+  final envFile = '${key['env_file'] ?? ''}';
+  if (stdin.isEmpty && envFile.isEmpty) return null;
+  return (
+    variable: '${key['var'] ?? ''}',
+    url: '${key['url'] ?? ''}',
+    stdin: stdin,
+    envFile: envFile,
+  );
 }

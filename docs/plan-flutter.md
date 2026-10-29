@@ -153,7 +153,7 @@ source define, so a successful build is not a self-contained distribution.
 
 | Area | Flutter state | Existing source to preserve |
 |---|---|---|
-| Agent catalog/search/details | Catalog/details and usage built; reviewed recipe install/update/remove, registered terminal sign-in and fixed-question testing added; direct API-key entry pending | `agents.py`, `agent_details.py`, `details_pages.py` |
+| Agent catalog/search/details | Catalog/details and usage built; reviewed recipe install/update/remove, registered terminal sign-in, fixed-question testing and direct API-key entry (6b-2) added | `agents.py`, `agent_details.py`, `details_pages.py` |
 | Projects/start | Submenu, history/pins/trash and both terminal modes implemented; host interaction checks pending | `agent_projects.py`, `agent_start_dialog.py`, `terminal_pane.py` |
 | Map | Expandable category groups, UI-only empty placeholders, focus controls, retained views, graph, selection, layer filters and live activity/subagent badges built; layout/editing and host interaction checks pending | `graph.py`, `map_view.py`, map helpers in `ai_popup.py` |
 | Settings/theme | Language, start folder, appearance, map layers and subagent history controls built; Omarchy theme refreshes while idle; remaining settings pending | `settings_schema.py`, `settings_pages.py`, `desktop*.py` |

@@ -486,6 +486,9 @@
   </div>
   <p>Afterwards the map shows the agent's online provider and its models.</p>
 
+  <h2 id="sign-in-flutter">API keys in the Flutter preview</h2>
+  <p>In the Flutter preview, an agent that reads an API key shows <b>API key…</b> in its details. The card says where the key goes before you type it: to the agent’s own command (Codex: <code>codex login --with-api-key</code>), or into the file the agent reads (Gemini: <code>~/.gemini/.env</code>, written as a new file readable only by you; other lines in it stay). The field hides what you type, and <b>Save</b> becomes available only for something shaped like a key. The key goes to a separate worker process on its standard input; it never goes into a command line, a log, a backup or the app’s settings, and the app does not keep it. When the agent’s own command answers, its last line is shown, with the key cut out.</p>
+
   <h2 id="agent-updates">Updating agents</h2>
   <p>When a newer version of an installed agent is out, its card on Setup gets a yellow <b>↑ version</b>,
   and <b>Updates and suggestions</b> (the header's <b>!</b>) names it. <b>Update</b> runs

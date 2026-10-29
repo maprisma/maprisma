@@ -3218,5 +3218,6 @@
  "{0} fps": "{0} kl./s",
  "System follows the desktop appearance.": "System korzysta z wyglądu pulpitu.",
  "Maximum frame rate for map lights. Reduced motion and Lights off stop animation.": "Maksymalna liczba klatek świateł mapy. Ograniczony ruch i wyłączone światła zatrzymują animację.",
- "The download is checked against the checksum its release lists; nothing of it runs while it is installed.": "Pobrany plik jest sprawdzany z sumą kontrolną podaną w jego wydaniu; podczas instalacji nic z niego nie jest uruchamiane."
+ "The download is checked against the checksum its release lists; nothing of it runs while it is installed.": "Pobrany plik jest sprawdzany z sumą kontrolną podaną w jego wydaniu; podczas instalacji nic z niego nie jest uruchamiane.",
+ "The app does not keep it.": "Aplikacja go nie przechowuje."
 }
