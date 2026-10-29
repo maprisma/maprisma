@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:asterism_core/asterism_core.dart';
 import 'package:asterism_core/src/adapters.dart';
 import 'package:asterism_core/src/connect_apply.dart';
+import 'package:asterism_core/src/addon_store.dart';
+import 'package:asterism_core/src/addons.dart';
 import 'package:asterism_core/src/line_diff.dart';
 import 'package:asterism_core/src/model_hub.dart';
 import 'package:asterism_core/src/provider_watch.dart';
@@ -223,6 +225,38 @@ Future<void> main() async {
           'exit_code': last['exit_code'],
           'ended': last['ended'],
         };
+      } else if (request.method == 'dev.addonstore') {
+        // addon_store.parse_catalog / install_bytes on given bytes.
+        if (params['op'] == 'parse') {
+          result = {
+            'entries': parseCatalog(
+              File(params['text'] as String).readAsBytesSync(),
+              File(params['sig'] as String).readAsBytesSync(),
+            ),
+          };
+        } else {
+          final posix = Posix();
+          final user = params['user_dir'] as String;
+          final store = AddonStore(
+            posix,
+            user,
+            '/nonexistent',
+            AddonVerifier(posix),
+          );
+          try {
+            final item = store.installBytes(
+              base64.decode(params['zip'] as String),
+              expect: params['expect'] as String?,
+            );
+            result = {
+              'id': item.id,
+              'version': item.version,
+              'state': item.state,
+            };
+          } catch (error) {
+            result = {'error': '$error'};
+          }
+        }
       } else if (request.method == 'dev.watchconfig') {
         final agents = core.reads.catalog.scan();
         final inv = core.reads.inventory.collect(agents, remember: false);

@@ -8,7 +8,9 @@ import 'provider_scans.dart' show ProviderScans;
 import 'provider_watch.dart';
 import 'read_service.dart';
 import 'connect_apply.dart';
+import 'addon_store.dart';
 import 'addons.dart';
+import 'py_values.dart';
 import 'package:path/path.dart' as p;
 import 'adapter_assets.g.dart';
 import 'agent_halt.dart';
@@ -34,6 +36,11 @@ const portedRoutes = {
   'i18n.lookup',
   'addons.list',
   'addons.set_enabled',
+  'addons.catalog',
+  'addons.install',
+  'addons.remove_preview',
+  'addons.remove_apply',
+  'addons.remove_undo',
   'sessions.start',
   'projects.pin',
   'projects.forget',
@@ -149,6 +156,173 @@ final class CoreService {
     }
     reads.catalog.adapters = addons.adapters;
     return addons.snapshot(enabled, addonSignIns, addonUserDir);
+  }
+
+  late final addonActions = AddonActions(Posix(), addonUserDir);
+  final _catalogPreviews = <String, (DateTime, Map<String, dynamic>)>{};
+
+  bool get addonInstalling => tasks.items.values.any(
+    (t) => t.operation == 'addons.install' && t.state == 'running',
+  );
+
+  /// guard_addon_changes.
+  void guardAddonChanges() {
+    if (addonInstalling) {
+      throw const FormatException('An installation is already running');
+    }
+    if (starter.sessions.items.values.any(starter.sessions.running)) {
+      throw const FormatException(
+        'Finish running agents before changing add-ons',
+      );
+    }
+  }
+
+  void _reloadAddons(Set<String> enabled) {
+    addons.reload(enabled);
+    reads.catalog.adapters = addons.adapters;
+  }
+
+  void _saveAddons(Set<String> enabled) =>
+      settings.saveOwn({'addons_enabled': enabled.toList()..sort()});
+
+  /// flutter_addon_catalog.Catalog.register + catalog_focus.
+  Map<String, dynamic> _registerCatalog(Map<String, dynamic> result) {
+    final records = result['records'];
+    if (records is! List ||
+        records.length > 200 ||
+        result['online'] is! bool ||
+        utf8.encode(jsonEncode(result)).length > 768 * 1024) {
+      throw const FormatException('Invalid catalog result');
+    }
+    _catalogPreviews.clear();
+    final public = <Map<String, dynamic>>[];
+    for (final record in records.cast<Map>()) {
+      final entry = Map<String, dynamic>.from(record['entry'] as Map);
+      final old = record['installed_version'];
+      if (old is! String) {
+        throw const FormatException('Invalid installed version');
+      }
+      final supported = supportedKinds.contains(entry['kind']);
+      final action = old.isEmpty
+          ? 'install'
+          : newerVersion(entry['version'], old)
+          ? 'update'
+          : '';
+      final token = newHandle().substring(coreHandle.length);
+      if (supported && action.isNotEmpty) {
+        _catalogPreviews[token] = (
+          DateTime.now(),
+          Map<String, dynamic>.from(record),
+        );
+      }
+      final row = <String, dynamic>{
+        for (final key in [
+          'id',
+          'name',
+          'version',
+          'kind',
+          'summary',
+          'description',
+          'reads',
+          'sends',
+          'capabilities',
+          'privacy',
+        ])
+          key: entry[key],
+        'supported': supported,
+        'installed_version': old,
+        'action': action,
+        'preview': _catalogPreviews.containsKey(token) ? token : null,
+      };
+      row['focus'] = taskFocus(reads.map, row);
+      public.add(row);
+    }
+    return {'entries': public, 'online': result['online']};
+  }
+
+  /// finish_addon_install.
+  Map<String, dynamic> _finishInstall(Map<String, dynamic> result) {
+    if (result.length != 3 ||
+        !const {'ok', 'id', 'version'}.every(result.containsKey) ||
+        result['ok'] != true) {
+      throw const FormatException('Invalid add-on installation result');
+    }
+    final enabled = enabledAddons();
+    _reloadAddons(enabled);
+    final item = addons.items.where((i) => i.id == result['id']).firstOrNull;
+    return {
+      ...result,
+      'enabled': enabled.contains(result['id']),
+      'loaded': item?.state == 'loaded',
+    };
+  }
+
+  Map<String, dynamic> addonStoreRoute(
+    String method,
+    Map<String, dynamic> params,
+  ) {
+    if (method == 'addons.catalog') {
+      if (params.isNotEmpty) {
+        throw const FormatException('Add-on service unavailable');
+      }
+      return tasks.start('addons.catalog', {
+        'settings_path': identity.settingsPath,
+      }, _registerCatalog);
+    }
+    guardAddonChanges();
+    if (method == 'addons.install') {
+      if (params.length != 1 || params['preview'] is! String) {
+        throw const FormatException('Invalid add-on preview');
+      }
+      if (settings.value(settings.load(), 'addons_online') != true) {
+        throw const FormatException('Online add-on access disabled');
+      }
+      final kept = _catalogPreviews[params['preview']];
+      if (kept == null) throw const FormatException('Unknown add-on preview');
+      if (DateTime.now().difference(kept.$1).inSeconds >= 600) {
+        throw const FormatException('Add-on preview expired');
+      }
+      final body = utf8.encode(
+        pyJsonDumps({
+          'record': kept.$2,
+          'settings_path': identity.settingsPath,
+        }),
+      );
+      if (body.length > 64 * 1024) {
+        throw const FormatException('Add-on plan too large');
+      }
+      final task = tasks.startPrivate('addons.install', body, _finishInstall);
+      _catalogPreviews.remove(params['preview']);
+      return task;
+    }
+    final field = method.endsWith('_preview')
+        ? 'id'
+        : method.endsWith('_apply')
+        ? 'preview'
+        : 'undo';
+    if (params.length != 1 || params[field] is! String) {
+      throw const FormatException('Invalid add-on removal');
+    }
+    final value = params[field] as String;
+    return switch (method) {
+      'addons.remove_preview' => {
+        ...addonActions.preview(addons.items, value),
+        'focus': taskFocus(reads.map, params),
+      },
+      'addons.remove_apply' => addonActions.apply(
+        value,
+        enabledAddons(),
+        _reloadAddons,
+        _saveAddons,
+      ),
+      'addons.remove_undo' => addonActions.undo(value, enabledAddons(), (
+        enabled,
+      ) {
+        _reloadAddons(enabled);
+        return addons.items;
+      }, _saveAddons),
+      _ => throw ServiceError('unported_route'),
+    };
   }
 
   late final starter = AgentStart(identity, settings, reads.catalog, desktop);
@@ -313,6 +487,7 @@ final class CoreService {
     if (method == 'addons.list' || method == 'addons.set_enabled') {
       return addonRoute(method, params);
     }
+    if (method.startsWith('addons.')) return addonStoreRoute(method, params);
     if (method == 'sessions.start') return starter.start(params);
     if (method == 'agents.halt_preview') return halt.preview(params);
     if (method == 'agents.halt_apply') return halt.apply(params);

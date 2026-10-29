@@ -689,4 +689,12 @@ class Posix {
       calloc.free(entry);
     }
   }
+
+  static final _flock = _lib
+      .lookupFunction<Int Function(Int, Int), int Function(int, int)>('flock');
+
+  /// fcntl.flock(fd, LOCK_EX): the same lock the reference takes.
+  void lockExclusive(int fd) {
+    if (_flock(fd, 2) != 0) _fail();
+  }
 }

@@ -56,8 +56,12 @@ final class CoreTasks {
   static const maxFrame = 1024 * 1024, commits = {'connections.apply'};
 
   /// A provider operation in its own worker (flutter_tasks.Tasks.start).
-  Map<String, dynamic> start(String operation, Map<String, dynamic> params) {
-    final ident = _slot(operation, null);
+  Map<String, dynamic> start(
+    String operation,
+    Map<String, dynamic> params, [
+    Map<String, dynamic> Function(Map<String, dynamic>)? finalize,
+  ]) {
+    final ident = _slot(operation, finalize);
     _run(
       items[ident]!,
       null,

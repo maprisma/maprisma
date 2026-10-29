@@ -963,3 +963,39 @@ Checks:
   visible agents and providers.
 - A Dart test for the signature check (good, changed message, other namespace, other key, changed
   signature byte, garbage).
+
+### 5a-2 — add-on catalog, install, update, removal
+
+**`addon_store.dart`** ports `addon_store` and `flutter_addon_catalog`:
+- **Catalog:** checked catalog entries (`entry_from`: IDs, versions, the download address on the
+  add-ons repo's releases, sizes, hashes, needs, detect hints). `parse_catalog` gives the newest
+  version this Asterism can load per add-on, and only when `catalog.sig` verifies with Uwe's key (the
+  native SSHSIG check). The catalog is fetched with `curl` as `netfetch` does, cached for 6 h in
+  `~/.cache/asterism/catalog.json`, and kept from the cache when looking online is off.
+- **Install:**
+  - the zip is downloaded, its size and SHA-256 compared with the signed catalog;
+  - it is unpacked with a small zip reader (stored and deflated entries; only `<id>/…` names, no
+    `..`, no links, one ID, file count and size caps; files created exclusively, folders 0755);
+  - the add-on's own signature and hashes are checked;
+  - only then does it replace the installed copy, whose old folder goes to the trash
+    (freedesktop layout, as Gio puts it).
+- **Worker steps:** `addons.catalog` (records with the installed versions, size-bounded) and the
+  private `addons.install`. Under the same `flock` as the reference, the worker resolves the signed
+  catalog again, requires the reviewed entry to match, the installed version unchanged and only a
+  newer one to replace it.
+- **Core routes:** `addons.catalog` (previews: only the ID, texts and a token reach the app),
+  `addons.install` (the guard: no running agent, no other install, looking online on;
+  `finish_addon_install` reloads the registry), and `addons.remove_preview/apply/undo`
+  (`flutter_addon_actions`: only user add-ons, the folder's identity checked again, moved into
+  `addon-backups` with Undo, backups older than 30 days pruned).
+- `Posix` gains `flock`. `CoreTasks.start` takes an optional result handler.
+
+Checks:
+- `tests/test_dart_addon_store_parity.py`:
+  - Uwe's signed `catalog.json` gives the same entries; a changed catalog is refused on both sides.
+  - Real signed zips from `dist/` and seven tampered ones (wrong ID, changed file, extra file, link,
+    `..` name, two IDs, garbage) give the same results and the same folder tree: first install,
+    update, and an add-on with built-in code.
+- Live, read-only on the network: both services fetch the real catalog (25 entries) and install
+  agent-goose 0.11.1 from its GitHub release. Then list, remove, list, Undo, list, a refused second
+  Undo, and the catalog again ("installed", no action). Every step's answer is the same.

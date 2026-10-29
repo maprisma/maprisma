@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:path/path.dart' as p;
+import 'addon_store.dart';
+import 'addons.dart';
 import 'agent_halt.dart';
 import 'connect_apply.dart';
 import 'posix_ffi.dart';
@@ -253,6 +255,16 @@ Future<int> runWorker(List<String> args) async {
         request['params'] is! Map) {
       throw const FormatException('Invalid worker request');
     }
+    // The add-on catalog: no private plan (flutter_addon_catalog.catalog_records).
+    if (args.isEmpty && request['operation'] == 'addons.catalog') {
+      final store = _addonStore();
+      final online = _addonsOnline((request['params'] as Map)['settings_path']);
+      send({
+        'type': 'result',
+        'result': await catalogRecords(store.$1, online, store.$2),
+      });
+      return 0;
+    }
     // A provider operation: no private plan, its parameters checked again here.
     if (args.isEmpty && ProviderOps.shapes.containsKey(request['operation'])) {
       final identity = AppIdentity();
@@ -276,7 +288,11 @@ Future<int> runWorker(List<String> args) async {
       return 0;
     }
     final operation = request['operation'];
-    if (!const {'connections.apply', 'agents.halt'}.contains(operation) ||
+    if (!const {
+          'connections.apply',
+          'agents.halt',
+          'addons.install',
+        }.contains(operation) ||
         (request['params'] as Map).isNotEmpty) {
       throw const FormatException('Invalid private operation');
     }
@@ -305,6 +321,31 @@ Future<int> runWorker(List<String> args) async {
       body = rest.sublist(space + 1);
     } else {
       throw const FormatException('Invalid worker arguments');
+    }
+    if (operation == 'addons.install') {
+      if (body.length > 64 * 1024) {
+        throw const FormatException('Add-on plan too large');
+      }
+      final plan = jsonDecode(utf8.decode(body));
+      if (plan is! Map ||
+          plan.length != 2 ||
+          !plan.containsKey('record') ||
+          !plan.containsKey('settings_path')) {
+        throw const FormatException('Invalid private add-on plan');
+      }
+      final store = _addonStore();
+      send({
+        'type': 'result',
+        'result': await store.$1.locked(
+          () => installReviewed(
+            store.$1,
+            plan,
+            _addonsOnline(plan['settings_path']),
+            store.$2,
+          ),
+        ),
+      });
+      return 0;
     }
     if (operation == 'agents.halt') {
       if (body.length > 4096) throw const FormatException('Invalid halt plan');
@@ -356,4 +397,32 @@ Future<bool> setOllamaContext(Map<String, dynamic> c, int uid) async {
     timeout: const Duration(seconds: 120),
   );
   return answer is Map && answer['error'] == null;
+}
+
+/// The add-on store and folders, as the core sees them.
+(AddonStore, List<String>) _addonStore() {
+  final identity = AppIdentity();
+  final posix = Posix();
+  final user = p.join(
+    identity.root('XDG_DATA_HOME', '.local/share'),
+    'asterism/addons',
+  );
+  return (
+    AddonStore(posix, user, identity.home, AddonVerifier(posix)),
+    [user, p.join(p.dirname(Platform.resolvedExecutable), 'addons')],
+  );
+}
+
+/// settings_schema.value(..., 'addons_online') is True: on unless set off.
+bool _addonsOnline(dynamic settingsPath) {
+  final path = settingsPath is String && settingsPath.isNotEmpty
+      ? settingsPath
+      : p.join(AppIdentity().configDir, 'settings.json');
+  try {
+    final data = jsonDecode(File(path).readAsStringSync());
+    final value = data is Map ? data['addons_online'] : null;
+    return value is bool ? value : true;
+  } catch (_) {
+    return true;
+  }
 }
