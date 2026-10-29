@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:path/path.dart' as p;
+import 'agent_halt.dart';
 import 'connect_apply.dart';
 import 'posix_ffi.dart';
 import 'identity.dart';
@@ -274,7 +275,8 @@ Future<int> runWorker(List<String> args) async {
       });
       return 0;
     }
-    if (request['operation'] != 'connections.apply' ||
+    final operation = request['operation'];
+    if (!const {'connections.apply', 'agents.halt'}.contains(operation) ||
         (request['params'] as Map).isNotEmpty) {
       throw const FormatException('Invalid private operation');
     }
@@ -303,6 +305,15 @@ Future<int> runWorker(List<String> args) async {
       body = rest.sublist(space + 1);
     } else {
       throw const FormatException('Invalid worker arguments');
+    }
+    if (operation == 'agents.halt') {
+      if (body.length > 4096) throw const FormatException('Invalid halt plan');
+      final files = ScanFiles(AppIdentity());
+      send({
+        'type': 'result',
+        'result': await haltInstance(body, ProviderScans(files)),
+      });
+      return 0;
     }
     send({
       'type': 'result',

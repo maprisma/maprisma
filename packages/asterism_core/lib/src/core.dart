@@ -8,6 +8,7 @@ import 'provider_scans.dart' show ProviderScans;
 import 'provider_watch.dart';
 import 'read_service.dart';
 import 'connect_apply.dart';
+import 'agent_halt.dart';
 import 'agent_start.dart';
 import 'core_tasks.dart';
 import 'skill_plans.dart';
@@ -31,6 +32,8 @@ const portedRoutes = {
   'sessions.start',
   'projects.pin',
   'projects.forget',
+  'agents.halt_preview',
+  'agents.halt_apply',
   ...readOnlyRoutes,
 };
 // Phase 7 removes this blocker only after every route has differential coverage.
@@ -70,6 +73,12 @@ final class CoreService {
     ContextReader(reads.files, config),
   );
   late final starter = AgentStart(identity, settings, reads.catalog, desktop);
+  late final halt = AgentHalt(
+    reads.catalog,
+    ProviderScans(reads.files),
+    starter.sessions,
+    tasks,
+  );
   late final watch = WatchService(
     identity,
     settings,
@@ -221,6 +230,8 @@ final class CoreService {
       return dispatchHandle(method, params, connections, tasks);
     }
     if (method == 'sessions.start') return starter.start(params);
+    if (method == 'agents.halt_preview') return halt.preview(params);
+    if (method == 'agents.halt_apply') return halt.apply(params);
     if (method == 'projects.pin' || method == 'projects.forget') {
       return starter.project(method, params);
     }

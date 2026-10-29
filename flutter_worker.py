@@ -149,7 +149,7 @@ def main():
                     for i, row in enumerate(params['owned'])}))
                 result = service.build_map()
             elif private:
-                if request.get('operation') not in ('connections.apply', 'models.remove', 'addons.install', 'installers.install', 'existing.apply', 'existing.check', 'system.analyze', 'system.tool_check', 'system.move_preview', 'system.move_apply', 'system.move_undo') or request['params'] != {}:
+                if request.get('operation') not in ('connections.apply', 'agents.halt', 'models.remove', 'addons.install', 'installers.install', 'existing.apply', 'existing.check', 'system.analyze', 'system.tool_check', 'system.move_preview', 'system.move_apply', 'system.move_undo') or request['params'] != {}:
                     raise ValueError('Invalid private operation')
                 import connect
                 import flutter_plan_wire

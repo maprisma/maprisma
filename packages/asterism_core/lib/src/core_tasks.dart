@@ -85,8 +85,16 @@ final class CoreTasks {
   Map<String, dynamic> startPlan(
     List<int> body,
     Map<String, dynamic> Function(Map<String, dynamic>) finalize,
-  ) {
-    final ident = _slot('connections.apply', finalize);
+  ) => startPrivate('connections.apply', body, finalize);
+
+  /// A private operation: its body on the worker's stdin, never in argv
+  /// (flutter_tasks._private).
+  Map<String, dynamic> startPrivate(
+    String operation,
+    List<int> body, [
+    Map<String, dynamic> Function(Map<String, dynamic>)? finalize,
+  ]) {
+    final ident = _slot(operation, finalize);
     _run(items[ident]!, body);
     return {'task': ident};
   }
@@ -105,7 +113,9 @@ final class CoreTasks {
       if (body != null) {
         process.stdin
           ..add(
-            utf8.encode('{"operation": "connections.apply", "params": {}}\n'),
+            utf8.encode(
+              '{"operation": ${jsonEncode(task.operation)}, "params": {}}\n',
+            ),
           )
           ..add(utf8.encode('${body.length}\n'))
           ..add(body);

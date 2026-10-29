@@ -875,3 +875,32 @@ Checks:
 
 Still Python in phase 4: `agents.halt_preview/apply` (4f part 2). Agent actions (install, update,
 uninstall, login) belong to the installers, phase 5.
+
+### 4f part 2 — halting agents
+
+`agents.halt_preview` and `agents.halt_apply` are served by the core (`agent_halt.dart`):
+- **Preview** (`flutter_map_instances.preview`, `agent_terminals.instances`): the agent's instances
+  that run outside this app's own terminals (the core's PTY sessions and their descendants are left
+  out), with a known start time, each with a token valid for 300 s.
+- **Apply:** the instance (command, pid, start time) goes to the worker as a private operation.
+  `CoreTasks.startPrivate` generalizes `startPlan`, and the worker accepts `agents.halt` by fd or stdin,
+  as the reference sends it.
+- **Halt** (`agent_terminals.stop`): still an instance of that agent, then SIGTERM and SIGKILL after
+  3 s. Only this account's process, only while its start time matches to the tick, every signal through
+  a pidfd held before that check.
+
+**Found and fixed in the reference:** `flutter_worker`'s list of allowed private operations didn't
+have `agents.halt`, although `execute_private` handles it. So every "stop this agent" from the Flutter
+app ended as a failed task.
+
+Checks: `tests/test_dart_agent_halt_parity.py` runs both services with a fake agent outside the app
+and the same agent in the app's own terminal:
+- only the outside one is listed;
+- it ends with SIGTERM (-15), and an agent that ignores SIGTERM ends with SIGKILL (-9);
+- a used preview and an unknown agent are refused.
+
+The same answers on both sides.
+
+Phase 4 is done. Still Python: phase 5 (installers, agent actions install/update/uninstall/login,
+add-ons, existing-AI import, system moves; data-only add-ons need Uwe's OK) and phase 6 (the remaining
+parity).
