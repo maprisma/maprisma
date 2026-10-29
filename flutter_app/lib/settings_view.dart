@@ -28,6 +28,93 @@ class SettingsView extends StatelessWidget {
   /// The provider watcher's user service, as the user sees it in systemctl.
   final String unitName;
 
+  static const _limits = [10, 25, 50, 100, 200, 500];
+  static const _yellows = [50, 60, 70, 75, 80, 85];
+  static const _reds = [80, 85, 90, 95, 100];
+
+  /// Settings › Costs: the currency, a day's limit for an agent paid per
+  /// token, and the yellow and red levels (red always above yellow: the
+  /// other one moves along, as the reference does).
+  List<Widget> _costRows() {
+    final yellow = settings['warn_yellow'] as int? ?? 75;
+    final red = settings['warn_red'] as int? ?? 90;
+    String used(int n, int standard) => tr(
+      n == standard ? '{0} % used (default)' : '{0} % used',
+    ).replaceAll('{0}', '$n');
+    Widget choice<T>(
+      String key,
+      String label,
+      String hint,
+      T value,
+      List<(T, String)> items,
+      ValueChanged<T> onChanged,
+    ) => Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: DropdownButtonFormField<T>(
+        key: ValueKey('$key-$value'),
+        initialValue: value,
+        decoration: InputDecoration(
+          labelText: tr(label),
+          helperText: tr(hint),
+          helperMaxLines: 3,
+        ),
+        items: [
+          for (final (v, text) in items)
+            DropdownMenuItem(value: v, child: Text(text)),
+        ],
+        onChanged: busy ? null : (v) => v == null ? null : onChanged(v),
+      ),
+    );
+    return [
+      choice<String>(
+        'cost-currency',
+        'Currency',
+        "What an agent paid per token cost is shown in. Euros use the European Central Bank's daily reference rate, fetched once a day from ecb.europa.eu.",
+        settings['cost_currency'] == 'eur' ? 'eur' : 'usd',
+        [('usd', tr(r'US dollar ($)')), ('eur', tr('Euro (€)'))],
+        (v) => onUpdate({'cost_currency': v}),
+      ),
+      choice<int>(
+        'cost-limit',
+        "A day's limit",
+        'For an agent paid per token: its cost label turns yellow and red at the levels below. In the currency above.',
+        settings['cost_limit'] as int? ?? 100,
+        [
+          for (final n in _limits)
+            (
+              n,
+              tr(
+                n == 100 ? '{0} a day (default)' : '{0} a day',
+              ).replaceAll('{0}', '$n'),
+            ),
+        ],
+        (v) => onUpdate({'cost_limit': v}),
+      ),
+      choice<int>(
+        'warn-yellow',
+        'Yellow from',
+        "An agent paid per token turns yellow from this share of a day's limit; an agent on a subscription from this share of its plan's limit used (its battery).",
+        yellow,
+        [for (final n in _yellows) (n, used(n, 75))],
+        (v) => onUpdate({
+          'warn_yellow': v,
+          'warn_red': red > v ? red : _reds.firstWhere((n) => n > v),
+        }),
+      ),
+      choice<int>(
+        'warn-red',
+        'Red from',
+        'Red from this share, for both kinds. Always above yellow.',
+        red,
+        [for (final n in _reds) (n, used(n, 90))],
+        (v) => onUpdate({
+          'warn_red': v,
+          'warn_yellow': yellow < v ? yellow : _yellows.lastWhere((n) => n < v),
+        }),
+      ),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     const languages = {
@@ -251,6 +338,10 @@ class SettingsView extends StatelessWidget {
                   ? null
                   : (value) => onUpdate({'providers_with_agents': value}),
             ),
+            const SizedBox(height: 24),
+            Text(tr('Costs'), style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 16),
+            ..._costRows(),
             SwitchListTile(
               key: const ValueKey('warn-notify'),
               title: Text(tr('Notify when red')),

@@ -55,6 +55,8 @@ void main() {
     watch.onChanged!(false);
     expect(updated, {'providers_with_agents': false});
     await tester.scrollUntilVisible(find.text('Agent for AI checks'), 250);
+    await tester.scrollUntilVisible(find.text('Codex'), 100);
+    await tester.pumpAndSettle();
     expect(find.text('Codex'), findsOneWidget); // the saved one is shown
     await tester.tap(find.text('Codex'));
     await tester.pumpAndSettle();

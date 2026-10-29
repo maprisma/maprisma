@@ -218,6 +218,12 @@ def tree(home):
             # Backup folders are named by the time of the apply: compare them by place.
             key = '/'.join('<backup>' if BACKUP.match(part) else part for part in path.relative_to(home).parts)
             result[key] = (mode, *data)
+    # The oracle reads Claude Code's sessions without a cache (collect_by_id(cache=None)); the Dart
+    # core keeps its own: left out, with folders that hold nothing else.
+    result.pop('.cache/asterism/claude-sessions.json', None)
+    for folder in ('.cache/asterism', '.cache'):
+        if folder in result and not any(k.startswith(folder + '/') for k in result):
+            result.pop(folder)
     return result
 
 

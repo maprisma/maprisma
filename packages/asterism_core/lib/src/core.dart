@@ -10,6 +10,8 @@ import 'read_service.dart';
 import 'connect_apply.dart';
 import 'addon_store.dart';
 import 'addon_hints.dart';
+import 'costs.dart';
+import 'usage_readers.dart' show UsageReaders;
 import 'found_scan.dart';
 import 'mcp_update.dart';
 import 'addons.dart';
@@ -145,6 +147,8 @@ const portedRoutes = {
   'found.look_inside',
   'found.unpack',
   'found.update_preview',
+  'agents.costs',
+  'costs.rate',
   ...readOnlyRoutes,
 };
 // Phase 7 removes this blocker only after every route has differential coverage.
@@ -258,6 +262,64 @@ final class CoreService {
   }
 
   late final addonActions = AddonActions(Posix(), addonUserDir);
+
+  /// The cost card (details_pages.fill_cost_card) and the euro rate for it.
+  Map<String, dynamic> costsRoute(String method, Map<String, dynamic> params) {
+    final saved = settings.load();
+    final currency = settings.value(saved, 'cost_currency') == 'eur'
+        ? 'eur'
+        : 'usd';
+    final rates = rateFile(identity.home);
+    if (method == 'costs.rate') {
+      if (params.isNotEmpty) throw const FormatException('Invalid request');
+      return tasks.start('costs.rate', {'path': rates}, (result) => result);
+    }
+    if (params.length != 1 || params['command'] is! String) {
+      throw const FormatException('Expected an agent');
+    }
+    final agent = reads.catalog
+        .scan()
+        .where((a) => a.command == params['command'])
+        .firstOrNull;
+    if (agent == null) throw const FormatException('Unknown agent');
+    final info = reads.details.read(agent.adapter);
+    final spent = UsageReaders(reads.files).costs(agent.adapter);
+    final kept = keptRate(rates);
+    final rate = kept.isEmpty ? null : (kept['usd_per_eur'] as num).toDouble();
+    final limit = settings.value(saved, 'cost_limit');
+    final card = costCard(
+      spent: spent,
+      name: agent.name,
+      installed: agent.installed,
+      hasSessions: agent.adapter.table('sessions').isNotEmpty,
+      paying: paysPerToken(
+        limits: info.limits,
+        plan: info.plan,
+        usageRecord: reads.details.usageRecord(agent.command),
+        access: agent.adapter.table('access'),
+        home: identity.home,
+        environment: identity.environment,
+      ),
+      plan: info.plan,
+      currency: currency,
+      limit: limit is num ? limit : 100,
+      usdPerEur: rate,
+      tr: i18n.text,
+    );
+    return {
+      'card': card,
+      // In euros: the rate is fetched once a day (costs.rate), then the
+      // card is asked again.
+      'rate_due':
+          card != null &&
+          spent != null &&
+          currency == 'eur' &&
+          (kept.isEmpty ||
+              DateTime.now().millisecondsSinceEpoch / 1000 -
+                      (kept['fetched'] as num) >=
+                  rateEvery),
+    };
+  }
 
   /// The last look for new programs and skill sets (found.scan): mcp,
   /// versions, not_looked, skills; empty until one was made.
@@ -2656,6 +2718,9 @@ final class CoreService {
     }
     if (method == 'health.report') return healthReportRoute(params);
     if (method.startsWith('found.')) return foundRoute(method, params);
+    if (method == 'agents.costs' || method == 'costs.rate') {
+      return costsRoute(method, params);
+    }
     if (method == 'addons.hints') {
       if (params.isNotEmpty) throw const FormatException('Invalid request');
       return {

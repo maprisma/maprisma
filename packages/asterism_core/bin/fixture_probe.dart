@@ -13,6 +13,7 @@ import 'package:asterism_core/src/agent_updates.dart' as upd;
 import 'package:asterism_core/src/model_slots.dart' as slots;
 import 'package:asterism_core/src/found_scan.dart' as fs;
 import 'package:asterism_core/src/mcp_update.dart' as mu;
+import 'package:asterism_core/src/costs.dart' as cost;
 import 'package:asterism_core/src/installers.dart' as inst;
 import 'package:asterism_core/src/provider_scans.dart' show RuntimeRecord;
 import 'package:asterism_core/src/system_map.dart' show SystemMapReader;
@@ -300,6 +301,60 @@ Future<void> main() async {
           params['cache'] as String,
           search: params['search'] == true,
         );
+      } else if (request.method == 'dev.costs') {
+        // plugin_costs.cost_text, short_number, parse_ecb, usd_per_eur and
+        // agent_status.pays_per_token.
+        final catalog = core.reads.catalog.scan();
+        final rates = <dynamic>[];
+        for (final r in params['rates'] as List) {
+          final found = await cost.usdPerEur(
+            r['fetch'] == null
+                ? null
+                : (url) async {
+                    if (r['fetch'] == 'fail') throw StateError('offline');
+                    return utf8.encode(r['fetch'] as String);
+                  },
+            r['path'] as String,
+            now: (r['now'] as num).toDouble(),
+          );
+          rates.add(found == null ? null : [found.$1, found.$2]);
+        }
+        result = {
+          'texts': [
+            for (final c in params['texts'] as List)
+              cost.costText(
+                (c[0] as num).toDouble(),
+                c[1] as String,
+                (c[2] as num?)?.toDouble(),
+              ),
+          ],
+          'numbers': [
+            for (final n in params['numbers'] as List)
+              cost.shortNumber(n as int),
+          ],
+          'ecb': [
+            for (final b in params['ecb'] as List)
+              if (cost.parseEcb(utf8.encode(b as String)) case final x?)
+                [x.$1, x.$2]
+              else
+                null,
+          ],
+          'rates': rates,
+          'pays': [
+            for (final c in params['pays'] as List)
+              cost.paysPerToken(
+                limits: c['limits'] as List,
+                plan: c['plan'] as String,
+                usageRecord: c['record'] as Map,
+                access: catalog
+                    .firstWhere((a) => a.command == c['command'])
+                    .adapter
+                    .table('access'),
+                home: identity.home,
+                environment: Map<String, String>.from(c['env'] as Map),
+              ),
+          ],
+        };
       } else if (request.method == 'dev.mcpupdate') {
         // mcp_update.plan_all for the given candidates.
         final update = mu.McpUpdate(

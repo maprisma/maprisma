@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'dart:convert';
 
 /// Python's str() of a JSON value, for fields the reference passes through str().
@@ -174,4 +175,32 @@ String _reprStr(String s) {
   }
   out.write(quote);
   return out.toString();
+}
+
+/// Python's f"{x:.Nf}" exactly: the double's exact value rounded to N
+/// places, a tie to the even digit (toStringAsFixed rounds ties away).
+String pyFixedExact(double x, int places) {
+  if (!x.isFinite) return x.toString();
+  final bits = (ByteData(8)..setFloat64(0, x)).getUint64(0);
+  final negative = bits >> 63 == 1;
+  final exponent = (bits >> 52) & 0x7ff;
+  final fraction = bits & 0xfffffffffffff;
+  var mantissa = BigInt.from(exponent == 0 ? fraction : fraction | (1 << 52));
+  var shift =
+      (exponent == 0 ? 1 : exponent) - 1075; // value = mantissa * 2^shift
+  var numerator = mantissa * BigInt.from(10).pow(places);
+  var denominator = BigInt.one;
+  if (shift >= 0) {
+    numerator <<= shift;
+  } else {
+    denominator <<= -shift;
+  }
+  var q = numerator ~/ denominator;
+  final twice = (numerator % denominator) * BigInt.two;
+  if (twice > denominator || twice == denominator && q.isOdd) q += BigInt.one;
+  var digits = q.toString().padLeft(places + 1, '0');
+  final text = places == 0
+      ? digits
+      : '${digits.substring(0, digits.length - places)}.${digits.substring(digits.length - places)}';
+  return negative && q != BigInt.zero ? '-$text' : text;
 }

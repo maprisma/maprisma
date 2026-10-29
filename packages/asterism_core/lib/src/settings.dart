@@ -24,6 +24,10 @@ const uiSettings = {
   'providers_with_agents',
   'ai_checks_agent',
   'warn_notify',
+  'cost_currency',
+  'cost_limit',
+  'warn_yellow',
+  'warn_red',
 };
 const languages = {'en', 'de', 'fr', 'es', 'it', 'pt', 'nl', 'pl'};
 const mapLayers = ['agents', 'online', 'local', 'models', 'mcp', 'skills'];

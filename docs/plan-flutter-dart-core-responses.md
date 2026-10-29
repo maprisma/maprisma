@@ -2055,3 +2055,65 @@ Check:
   folder outside `~/Applications`, `/etc`, a `..` path and a dot folder.
 - An app test: Update… → the preview with the retired folder and the note → Apply → a new look.
 
+### 6b-19a — The cost card, Settings › Costs, and Claude Code's sessions read whole
+
+"Richer details" (the last 6b item) is four gaps against the GTK details pages: costs (the card, today's
+cost on the map, the daily cost notification), projects of the last 30 days, a local LLM's details page,
+and MCP server and skill details pages. This part is the cost card.
+
+New in the core (`costs.dart`, the reference is `plugin_costs`, `agent_status.pays_per_token` and
+`details_pages.fill_cost_card`):
+- **Texts and numbers:**
+  - `costText` ($3.40, $123, <$0.01; 3.03 €, 110 €), `inCurrency`, `shortNumber`;
+  - `pyFixedExact` (in `py_values`): Python's exact rounding of the double, ties to even, since
+    `toStringAsFixed` rounds ties away and the existing `pyFixed` multiplies first.
+- **The euro rate:** `parseEcb` (only a plausible USD rate), and `keptRate` / `usdPerEur` with the rate
+  kept a day in the shared `~/.local/state/omarchy-plugin-ai/exchange-rate.json`. The fetch runs in the
+  worker (`costs.rate`, only that file, no redirects), and the last kept rate is used when offline.
+- **`paysPerToken`:** no limits and no sign-in that ran out; then a key in the environment, an
+  API-key-only agent signed in (its file only checked for existence), or a usage record without a
+  plan.
+- **`agents.costs {command}`:** the card with its texts in the interface language: title, summary,
+  the three tiles (with the share of the day's limit, or "covered by your … plan"), up to six models
+  by kind, the notes (reported costs, models without a price, the price dates). Also `rate_due` when
+  euros need today's rate. The price dates come into the adapter assets as `prices_as_of`.
+- **Settings:** `cost_currency`, `cost_limit`, `warn_yellow` and `warn_red` join the UI settings on both
+  sides. Flutter's Settings › Costs has Currency, A day's limit, Yellow from and Red from, and red
+  stays above yellow as in the reference. **Notify when red** moved into that section.
+- **Flutter:** `CostCard` in the agent details asks for the card, fetches the rate once when it is due,
+  and asks again.
+
+**Claude Code's session reader (`claude_sessions.dart`):** the real-data check showed the Dart reader
+diverging from the reference (`claude_sessions.collect_by_id`). It read whole files, skipped any over
+64 MiB (this session's own was 68 MB), and only read files changed in 30 days. It also kept sessions
+without replies and did not count older `agent-*.jsonl` runs. It is now a port of the reference:
+- files are read line by line, a line over 8 MiB is skipped, and a last line still being written is
+  read next time;
+- the budget is 2 GiB per run, with 5000 files and 500 folders at most, in the reference's order;
+- each file is read on from its offset (same inode, grown) and cached per file owner-only in
+  `$XDG_CACHE_HOME/asterism/claude-sessions.json` (version 2);
+- sessions need replies, and subagent runs (`<session>/subagents/`, depth 3, the type from the meta
+  file only, and the older ones next to the sessions) are counted for their parent.
+
+diff-core leaves this cache out of its file comparison, since the oracle reads deliberately without
+one.
+
+Check:
+- `tests/test_dart_costs_parity.py`: cost texts in both currencies at the edges (ties, thousands,
+  <0.01), short numbers, the ECB file and odd ones, the kept rate fresh/stale/offline/none/bad (the
+  written file compared too), and `pays_per_token` for seven agent states.
+- `tests/test_dart_claude_sessions_parity.py`: two runs with each side's cache. The fixture has a
+  66 MB file, a 9 MB line, a half-written last line finished between the runs, a session with only a
+  cost summary, a link, a subagent folder and an older `agent-*.jsonl`. Python and Dart agree on both
+  runs.
+- `test/cost_card_test.dart` (core): card texts paid per token in euros and on a plan, and unknown.
+- Flutter `cost_card_test.dart`: the rate asked once then the card in euros; Settings › Costs keeps red
+  above yellow.
+- On this PC, read only, with Dart's cache in a scratch folder: the Claude sessions agree with the
+  reference on the first run (123, budget-limited on both sides) and the second (173). The cost card
+  agrees with the reference after two runs ($753 today, $1,238 in 7 days, $6,244 in 30 days, Max 5x
+  plan: API value).
+
+Next, 6b-19b: today's cost where the battery would be for agents paid per token, and the once-a-day
+cost notification.
+

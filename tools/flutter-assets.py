@@ -5,6 +5,22 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 KEYS = (
+    # Settings › Costs.
+    "Costs",
+    "Currency",
+    "US dollar ($)",
+    "Euro (€)",
+    "A day's limit",
+    "{0} a day (default)",
+    "{0} a day",
+    "Yellow from",
+    "Red from",
+    "{0} % used (default)",
+    "{0} % used",
+    "What an agent paid per token cost is shown in. Euros use the European Central Bank's daily reference rate, fetched once a day from ecb.europa.eu.",
+    "For an agent paid per token: its cost label turns yellow and red at the levels below. In the currency above.",
+    "An agent paid per token turns yellow from this share of a day's limit; an agent on a subscription from this share of its plan's limit used (its battery).",
+    "Red from this share, for both kinds. Always above yellow.",
     # Found on this PC (found.list).
     "Unpack",
     "Unpacking {0}…",

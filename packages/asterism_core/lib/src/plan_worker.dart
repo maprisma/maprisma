@@ -33,6 +33,7 @@ import 'model_hub.dart' show netFetch;
 import 'model_downloads.dart' show DownloadError;
 import 'provider_ops.dart';
 import 'provider_scans.dart';
+import 'costs.dart';
 import 'found_scan.dart';
 import 'scan_files.dart';
 import 'service_i18n.dart';
@@ -709,6 +710,27 @@ Future<int> runWorker(List<String> args) async {
               {'path': s.path, 'skills': s.skills, 'origin': s.origin},
           ],
         },
+      });
+      return 0;
+    }
+    // plugin_costs.usd_per_eur: the ECB's daily euro rate, kept a day.
+    if (args.isEmpty && request['operation'] == 'costs.rate') {
+      final params = request['params'] as Map;
+      final path = params['path'];
+      if (params.length != 1 ||
+          path is! String ||
+          p.basename(path) != 'exchange-rate.json' ||
+          p.basename(p.dirname(path)) != 'omarchy-plugin-ai') {
+        throw const FormatException('Invalid worker request');
+      }
+      final found = await usdPerEur(
+        (url) =>
+            netFetch(url, maxBytes: rateMaxBytes, timeout: 10, redirects: 0),
+        path,
+      );
+      send({
+        'type': 'result',
+        'result': {'usd_per_eur': found?.$1, 'day': found?.$2},
       });
       return 0;
     }

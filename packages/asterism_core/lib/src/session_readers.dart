@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:ffi/ffi.dart';
 import 'package:path/path.dart' as p;
 import 'adapters.dart';
+import 'claude_sessions.dart';
 import 'agent_details.dart';
 import 'scan_files.dart';
 import 'sqlite_numbers.dart';
@@ -644,83 +645,17 @@ final class SessionReaders {
     return result;
   }
 
+  /// claude_sessions.collect_by_id: incremental, cached per file.
   Map<String, NumericSession> claudeSessions() {
-    final result = <String, NumericSession>{},
-        runs = <(String, String, NumericSession)>[];
-    final parents = matching('~/.claude/projects', '*/*.jsonl', limit: 5000);
-    final subs = matching(
-      '~/.claude/projects',
-      '*/*/subagents/**/*.jsonl',
-      limit: 5000,
+    final env = files.identity.environment['CLAUDE_CONFIG_DIR'] ?? '';
+    final root = p.join(
+      env.isNotEmpty ? env : files.expand('~/.claude'),
+      'projects',
     );
-    for (final path in [...parents, ...subs]) {
-      final data = files.bytes(path, limit: maxFileBytes);
-      if (data == null) continue;
-      final local = <String, NumericSession>{};
-      for (final e in entries(data, completeLines: true)) {
-        if (!['assistant', 'cost-state'].contains(e['type'])) continue;
-        final raw = e['sessionId'];
-        final sid =
-            raw is String && RegExp(r'^[A-Za-z0-9\-]{1,64}$').hasMatch(raw)
-            ? raw
-            : '?';
-        final s = local.putIfAbsent(sid, NumericSession.new);
-        if (e['type'] == 'cost-state') {
-          s.linesAdded = tokenNumber(e['totalLinesAdded']);
-          s.linesRemoved = tokenNumber(e['totalLinesRemoved']);
-          s.cost = safeMoney(e['totalCostUSD']);
-          s.apiMs = tokenNumber(e['totalAPIDuration']);
-          continue;
-        }
-        final message = mapOf(e['message']);
-        if (message['usage'] is! Map) continue;
-        final usage = message['usage'] as Map, model = message['model'];
-        s.add(
-          model is String &&
-                  RegExp(r'^[A-Za-z0-9._:/\-]{1,100}$').hasMatch(model)
-              ? model
-              : 'unknown',
-          [
-            for (final key in [
-              'input_tokens',
-              'output_tokens',
-              'cache_read_input_tokens',
-              'cache_creation_input_tokens',
-            ])
-              tokenNumber(usage[key]),
-          ],
-        );
-        if (s.cwd.isEmpty) s.cwd = projectFolder(e['cwd']);
-        s.replies++;
-        final when = epoch(e['timestamp']);
-        if (when == null) continue;
-        if (s.last != 0 && when - s.last > 0 && when - s.last <= 300) {
-          s.active += when - s.last;
-        }
-        s.seen(when);
-        final date = DateTime.fromMicrosecondsSinceEpoch((when * 1e6).round());
-        final slot = '${(date.weekday - 1) * 24 + date.hour}';
-        s.hours[slot] = (s.hours[slot] ?? 0) + 1;
-      }
-      if (path.contains('/subagents/')) {
-        final before = path.split('/subagents/').first,
-            parent = p.basename(before);
-        final meta = files.json(
-              path.replaceFirst(RegExp(r'\.jsonl$'), '.meta.json'),
-              limit: 64 * 1024,
-            ),
-            kind = boundedText(meta['agentType'], 64);
-        for (final s in local.values) {
-          runs.add((parent, kind.isEmpty ? '?' : kind, s));
-        }
-      } else {
-        result.addAll(local);
-      }
-    }
-    for (final (parent, kind, run) in runs) {
-      result[parent]?.run(kind, run);
-    }
-    return result;
+    return ClaudeSessions(
+      root,
+      p.join(files.identity.cacheDir, 'claude-sessions.json'),
+    ).collect();
   }
 
   Map<String, NumericSession> read(Adapter adapter) {
