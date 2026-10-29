@@ -2,6 +2,9 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:asterism_core/asterism_core.dart';
+import 'package:asterism_core/src/system_map.dart' show SystemMapReader;
+import 'package:asterism_core/src/agent_catalog.dart' show AgentCatalog;
+import 'package:asterism_core/src/scan_files.dart' show ScanFiles;
 import 'package:asterism_core/src/tar_check.dart';
 import 'package:asterism_core/src/installers.dart' show koboldSync;
 import 'package:asterism_core/src/adapters.dart';
@@ -268,6 +271,22 @@ Future<void> main() async {
               if (a.adapter.facts['self_served'] == true) a.command,
           }),
         };
+      } else if (request.method == 'dev.systemrefresh') {
+        // The System Map's refresh against a given cache file (read only).
+        final files = ScanFiles(identity);
+        final saved = settings.load();
+        final reader = SystemMapReader(
+          files,
+          core.addons,
+          AgentCatalog(files, core.desktop, adapters: core.addons.adapters),
+          i18n.text,
+          i18n.plural,
+          checksAgent: '${saved['ai_checks_agent'] ?? ''}',
+        );
+        result = reader.refresh(
+          params['cache'] as String,
+          search: params['search'] == true,
+        );
       } else if (request.method == 'dev.tarcheck') {
         // install_ctl.check_archive on a crafted archive.
         try {

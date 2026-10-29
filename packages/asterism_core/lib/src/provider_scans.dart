@@ -267,9 +267,11 @@ final class ProviderScans {
     return found;
   }
 
-  List<RuntimeRecord> scan() {
+  /// The local LLMs' detection: the visible ones, or the given facts (the
+  /// System Map also looks at built-in ones an add-on hides).
+  List<RuntimeRecord> scan({List? facts}) {
     final processesNow = processes(), result = <RuntimeRecord>[];
-    for (final fact in visibleProviderFacts['local'] as List) {
+    for (final fact in facts ?? visibleProviderFacts['local'] as List) {
       final key = fact['key'] as String,
           rt = RuntimeRecord(fact['key'], fact['name']);
       switch (key) {

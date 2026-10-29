@@ -1182,3 +1182,42 @@ data disk of this checkout (`/tmp` is not a data disk by design):
 The same answers, reconnect files (modes too) and backup manifests on both sides. The reference's
 production service keeps connection backups in `~/.local/state/ai-agents-map/backups`; the core keeps
 them in its config folder since phase 3, so the test compares their manifests, not their place.
+
+### 6a-2 — the System Map views
+
+`system.view`, `system.cached`, `system.refresh` and `system.forget_disk` are served by the core
+(`system_map.dart`):
+- **The snapshot** (`flutter_system_map.snapshot`), from files only:
+  - hardware (`system_tools.hardware`: `/proc/meminfo`, the DRM cards), the home folder and the
+    mounted data disks with free and total space (`statvfs`, new in `posix_ffi.dart`) and their fstab
+    hint;
+  - every built-in and added local LLM with its program, model folder and user service;
+  - every built-in and added agent the PC has, with its install source and configuration folder;
+  - supporting tools (`system_tools.detect`; versions from names and folders only, with the search);
+  - the GPU stack read only (`gpu_stack.look`: ROCm, Vulkan, CUDA, the PyTorch builds and what an AMD
+    card would want);
+  - the saved model folders, notes, the "ask AI" helpers (`ai_helper.helpers` / `task_agents`);
+  - the health rows: `health.check`'s "This PC" and local LLM areas, as the map calls it (no graph,
+    no runtime checks).
+- **Refresh** (worker): the saved map's disks searched again when asked (or a new disk after the first
+  search), offline disks and what depends on them kept as missing, cached discoveries as nodes, the
+  analysis and a move's Undo kept. With the search, sizes are space on disk, each file once, three
+  seconds in all (`disk_usage.measure`; `st_blocks` through `statx`).
+- **Never run during a refresh:** the reference runs it under an audit hook that blocks every process,
+  socket and credential file; the Dart refresh starts none and opens none, so its "blocked probes" note
+  cannot occur (on this PC the reference blocks none either).
+- `system.view` saves the zoom and the selected node; `system.forget_disk` drops one missing disk's
+  saved facts; the public map (`system_public`) hands cached discoveries out as fresh handles only.
+- `ProviderScans.scan(facts:)` also looks at built-in local LLMs an add-on hides, as the map does.
+
+Check:
+- `tests/test_dart_system_map_parity.py`, both services in a temporary HOME:
+  - the empty cache and a view on it;
+  - refresh, the saved map, a view and refused views;
+  - a missing disk (made by editing the saved map), refused and real forgetting;
+  - a disk scan merged into the saved map, and the size search.
+  The same answers on both sides.
+- On the real HOME (read only, both against the real saved map):
+  - without the search the maps are identical;
+  - with it, only sizes that hit the three-second deadline differ (the Dart walk gets further in the
+    same time).

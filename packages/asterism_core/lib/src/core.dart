@@ -22,6 +22,7 @@ import 'first_agent.dart' show loadRoutes;
 import 'model_removals.dart';
 import 'existing_ai.dart' as existing_ai;
 import 'system_map_cache.dart';
+import 'system_map.dart' show forgetDisk, systemPublic;
 import 'skill_plans.dart';
 import 'mcp_plans.dart';
 import 'llm_plans.dart';
@@ -61,6 +62,10 @@ const portedRoutes = {
   'existing.preview',
   'existing.check',
   'existing.apply',
+  'system.view',
+  'system.cached',
+  'system.refresh',
+  'system.forget_disk',
   'sessions.start',
   'projects.pin',
   'projects.forget',
@@ -262,6 +267,77 @@ final class CoreService {
       registerMap(systemMapPath, posix, saved, result['records'] as List);
     }
     return existing.register(result);
+  }
+
+  /// SystemMap.last: the map the move previews are checked against.
+  Map<String, dynamic>? systemMapLast;
+
+  Map<String, dynamic> _registerSystemMap(Map<String, dynamic> result) {
+    final registered = registerMap(systemMapPath, Posix(), result);
+    systemMapLast = jsonDecode(jsonEncode(registered)) as Map<String, dynamic>;
+    return systemPublic(registered, existing);
+  }
+
+  bool get _systemRefreshing => tasks.items.values.any(
+    (t) => t.operation == 'system.refresh' && t.state == 'running',
+  );
+
+  /// system.view / cached / refresh / forget_disk (flutter_backend).
+  Map<String, dynamic> systemRoute(String method, Map<String, dynamic> params) {
+    final posix = Posix();
+    if (method == 'system.view') {
+      if (params.length != 2 ||
+          !params.containsKey('selected') ||
+          !params.containsKey('transform') ||
+          !validView(params)) {
+        throw const FormatException('Invalid System Map view');
+      }
+      final saved = loadMapCache(systemMapPath, posix);
+      if (saved.isEmpty) return {'ok': false};
+      if (params['selected'] != null &&
+          !(saved['nodes'] as List).any((n) => n['id'] == params['selected'])) {
+        throw const FormatException('Unknown node');
+      }
+      updateMapCache(systemMapPath, posix, {
+        'view': {
+          'selected': params['selected'],
+          'transform': params['transform'],
+        },
+      });
+      return {'ok': true};
+    }
+    if (method == 'system.cached') {
+      if (params.isNotEmpty) {
+        throw const FormatException('Unexpected System Map parameters');
+      }
+      return systemPublic(loadMapCache(systemMapPath, posix), existing);
+    }
+    if (method == 'system.forget_disk') {
+      if (params.length != 1 || params['node'] is! String) {
+        throw const FormatException('Choose a missing disk');
+      }
+      if (addonInstalling || _systemRefreshing) {
+        throw const FormatException(
+          'Finish System Map work before forgetting a disk',
+        );
+      }
+      final result = forgetDisk(systemMapPath, posix, params['node'] as String);
+      systemMapLast = jsonDecode(jsonEncode(result)) as Map<String, dynamic>;
+      return {'ok': true, ...systemPublic(result, existing)};
+    }
+    // system.refresh
+    if (addonInstalling) {
+      throw const FormatException('Finish committed changes before refreshing');
+    }
+    if (params.keys.any((k) => k != 'search') ||
+        (params.containsKey('search') && params['search'] is! bool)) {
+      throw const FormatException('Invalid System Map refresh');
+    }
+    return tasks.start('system.refresh', {
+      'settings_path': identity.settingsPath,
+      'search': params['search'] == true,
+      'cache': systemMapPath,
+    }, _registerSystemMap);
   }
 
   /// existing.* (flutter_backend, flutter_existing).
@@ -779,6 +855,14 @@ final class CoreService {
     }
     if (method.startsWith('addons.')) return addonStoreRoute(method, params);
     if (method.startsWith('installers.')) return installerRoute(method, params);
+    if (const {
+      'system.view',
+      'system.cached',
+      'system.refresh',
+      'system.forget_disk',
+    }.contains(method)) {
+      return systemRoute(method, params);
+    }
     if (method.startsWith('existing.') && method != 'existing.mounts') {
       return existingRoute(method, params);
     }

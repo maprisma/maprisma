@@ -42,6 +42,11 @@ class Posix {
         Int Function(Int, Pointer<Utf8>, Int, Uint32, Pointer<Uint8>),
         int Function(int, Pointer<Utf8>, int, int, Pointer<Uint8>)
       >('statx');
+  static final _statvfs = _lib
+      .lookupFunction<
+        Int Function(Pointer<Utf8>, Pointer<Uint8>),
+        int Function(Pointer<Utf8>, Pointer<Uint8>)
+      >('statvfs');
   static final _rename = _lib
       .lookupFunction<
         Int Function(Int, Pointer<Utf8>, Int, Pointer<Utf8>),
@@ -262,6 +267,60 @@ class Posix {
   }
 
   List<int>? signature(String path) => lstatFull(path)?.signature;
+
+  /// os.stat / os.lstat as Python's DirEntry.stat gives them: st_dev (made
+  /// the glibc way), st_ino, st_mode, st_uid, st_size, st_blocks; null when
+  /// the path cannot be looked at.
+  ({int dev, int ino, int mode, int uid, int size, int blocks})? statBlocks(
+    String path, {
+    bool follow = false,
+  }) {
+    final buffer = calloc<Uint8>(256);
+    try {
+      var ok = false;
+      _path(
+        path,
+        (name) =>
+            ok = _statx(-100, name, follow ? 0 : 0x100, 0x7ff, buffer) == 0,
+      );
+      if (!ok) return null;
+      final b = ByteData.sublistView(buffer.asTypedList(256));
+      final major = b.getUint32(136, Endian.host),
+          minor = b.getUint32(140, Endian.host);
+      return (
+        dev:
+            ((major & 0xfffff000) << 32) |
+            ((major & 0xfff) << 8) |
+            ((minor & 0xffffff00) << 12) |
+            (minor & 0xff),
+        ino: b.getUint64(32, Endian.host),
+        mode: b.getUint16(28, Endian.host),
+        uid: b.getUint32(20, Endian.host),
+        size: b.getUint64(40, Endian.host),
+        blocks: b.getUint64(48, Endian.host),
+      );
+    } finally {
+      calloc.free(buffer);
+    }
+  }
+
+  /// os.statvfs: (f_blocks, f_frsize, f_bavail); null when it fails.
+  ({int blocks, int frsize, int bavail})? statvfs(String path) {
+    final buffer = calloc<Uint8>(128);
+    try {
+      var ok = false;
+      _path(path, (name) => ok = _statvfs(name, buffer) == 0);
+      if (!ok) return null;
+      final b = ByteData.sublistView(buffer.asTypedList(128));
+      return (
+        blocks: b.getUint64(16, Endian.host),
+        frsize: b.getUint64(8, Endian.host),
+        bavail: b.getUint64(32, Endian.host),
+      );
+    } finally {
+      calloc.free(buffer);
+    }
+  }
 
   /// Open [path] without following it, check it is this account's own regular
   /// file with the same device and inode as [expected] (when given), then read.

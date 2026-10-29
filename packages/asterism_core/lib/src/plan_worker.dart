@@ -11,6 +11,7 @@ import 'identity.dart';
 import 'installers.dart';
 import 'model_removals.dart';
 import 'existing_ai.dart' as existing_ai;
+import 'system_map.dart' show SystemMapReader;
 import 'first_agent.dart';
 import 'agent_catalog.dart';
 import 'desktop.dart' show detectDesktop;
@@ -317,6 +318,50 @@ Future<int> runWorker(List<String> args) async {
           AgentCatalog(files, desktop, adapters: registry.adapters),
           settings.value(settings.load(), 'first_agent') as Map,
           ServiceI18n(identity, settings).text,
+        ),
+      });
+      return 0;
+    }
+    // The System Map's refresh (flutter_system_map.refresh): files only, no
+    // program started, nothing sent, no credential file opened.
+    if (args.isEmpty && request['operation'] == 'system.refresh') {
+      final params = request['params'] as Map;
+      if (params.length != 3 ||
+          params['search'] is! bool ||
+          params['cache'] is! String ||
+          (params['settings_path'] != null &&
+              params['settings_path'] is! String)) {
+        throw const FormatException('Invalid worker request');
+      }
+      final identity = AppIdentity();
+      final files = ScanFiles(identity);
+      final chosen = params['settings_path'] as String?;
+      final registry = _reloadAddons(chosen);
+      final settings = SettingsStore(identity);
+      final i18n = ServiceI18n(identity, settings);
+      final reader = SystemMapReader(
+        files,
+        registry,
+        AgentCatalog(
+          files,
+          detectDesktop(identity, Posix()),
+          adapters: registry.adapters,
+        ),
+        i18n.text,
+        i18n.plural,
+        settingsPath: chosen,
+        checksAgent: '${settings.load()['ai_checks_agent'] ?? ''}',
+      );
+      send({
+        'type': 'result',
+        'result': reader.refresh(
+          params['cache'] as String,
+          search: params['search'] as bool,
+          progress: (fraction, text) => send({
+            'type': 'progress',
+            'fraction': fraction.isFinite ? fraction.clamp(0.0, 1.0) : 0.0,
+            'text': text.length > 300 ? text.substring(0, 300) : text,
+          }),
         ),
       });
       return 0;
