@@ -9,6 +9,7 @@ import 'provider_watch.dart';
 import 'read_service.dart';
 import 'connect_apply.dart';
 import 'addon_store.dart';
+import 'addon_hints.dart';
 import 'addons.dart';
 import 'py_values.dart';
 import 'package:path/path.dart' as p;
@@ -134,6 +135,7 @@ const portedRoutes = {
   'models.slots_preview',
   'models.slots_reload',
   'limits.notify',
+  'addons.hints',
   ...readOnlyRoutes,
 };
 // Phase 7 removes this blocker only after every route has differential coverage.
@@ -247,6 +249,10 @@ final class CoreService {
   }
 
   late final addonActions = AddonActions(Posix(), addonUserDir);
+
+  /// The last catalog read (addons.catalog), for addons.hints.
+  List<Map<String, dynamic>> catalogRows = const [];
+
   final _catalogPreviews = <String, (DateTime, Map<String, dynamic>)>{};
 
   /// installation_running (the reference's addon_installing too).
@@ -1880,8 +1886,14 @@ final class CoreService {
         'preview': _catalogPreviews.containsKey(token) ? token : null,
       };
       row['focus'] = taskFocus(reads.map, row);
+      row['present'] = addonPresent(
+        entry,
+        identity.home,
+        identity.environment['PATH'],
+      );
       public.add(row);
     }
+    catalogRows = public;
     return {'entries': public, 'online': result['online']};
   }
 
@@ -2251,6 +2263,17 @@ final class CoreService {
       return healthRoute(method, params);
     }
     if (method == 'health.report') return healthReportRoute(params);
+    if (method == 'addons.hints') {
+      if (params.isNotEmpty) throw const FormatException('Invalid request');
+      return {
+        'lines': addonHints(
+          catalogRows,
+          {for (final a in addons.items) a.id: a.state},
+          i18n.text,
+          i18n.plural,
+        ),
+      };
+    }
     if (method == 'limits.notify') {
       if (params.isNotEmpty) {
         throw const FormatException('Unexpected parameters');

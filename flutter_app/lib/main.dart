@@ -1240,12 +1240,107 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
   int get _healthCount =>
       (_healthReport?['warn'] as int? ?? 0) +
       (_healthReport?['hint'] as int? ?? 0) +
-      _updates.length;
+      _updates.length +
+      _addonHints.length;
 
   Timer? _limitsTimer;
 
   /// Newer versions of agents and local LLMs (updates.check, cached 6 h).
   List<Map<String, dynamic>> _updates = [];
+
+  /// ai_popup.look_for_addons: add-ons whose agent or local LLM is on this
+  /// PC but not on the map, and add-on updates ready (addons.hints).
+  List<Map<String, dynamic>> _addonHints = [];
+
+  Future<void> _loadAddonHints() async {
+    if (_backend?.isConnected != true) return;
+    try {
+      final found = await _backend!.call('addons.hints');
+      if (mounted) {
+        setState(
+          () => _addonHints = (found['lines'] as List? ?? const [])
+              .cast<Map<String, dynamic>>(),
+        );
+      }
+    } catch (_) {
+      // Shown next time.
+    }
+  }
+
+  /// The signed catalog in the background at start (cached; online only
+  /// when looking for add-ons online is on), for the add-on hints only: the
+  /// Add-ons list still waits for the user's own look. A catalog read makes
+  /// new install previews in the core, so the user's look waits for this one.
+  Future<void>? _quietCatalog;
+
+  Future<void> _quietAddonCatalog() async {
+    try {
+      await _quietTask('addons.catalog', {});
+    } catch (_) {
+      // No hints: the Add-ons focus reads the catalog itself.
+    }
+    await _loadAddonHints();
+  }
+
+  /// update_all_addons: every add-on with a newer version, one after the
+  /// other; one message says what happened.
+  Future<void> _updateAllAddons(Map<String, dynamic> line) async {
+    final updates = (line['updates'] as List? ?? const [])
+        .cast<Map<String, dynamic>>();
+    if (updates.isEmpty || _busy || _agentsRunning) return;
+    final yes = await _cardReview(
+      tr('Update all'),
+      line,
+      (yes, no) => TaskReview(
+        title: Text(
+          tr('Update all'),
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        content: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (final u in updates)
+              ListTile(
+                dense: true,
+                leading: const Icon(Icons.extension),
+                title: Text('${u['name']}'),
+                subtitle: Text('${u['current']} → ${u['version']}'),
+              ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: no, child: Text(tr('Cancel'))),
+          FilledButton(
+            key: const ValueKey('addons-update-all'),
+            onPressed: yes,
+            child: Text(tr('Update all')),
+          ),
+        ],
+      ),
+    );
+    if (!yes || !mounted) return;
+    setState(() => _card = null);
+    final done = <String>[], failed = <String>[];
+    for (final u in updates) {
+      final result = await _addonOperation('addons.install', {
+        'preview': u['preview'],
+      });
+      if (!mounted) return;
+      (result == null ? failed : done).add('${u['name']}');
+    }
+    if (_backend?.isConnected ?? false) await _reloadAddonCatalog();
+    await _refresh();
+    if (!mounted) return;
+    final message = [
+      if (done.isNotEmpty)
+        tr('Add-ons updated: {0}').replaceAll('{0}', done.join(', ')),
+      if (failed.isNotEmpty)
+        tr('Not updated: {0}').replaceAll('{0}', failed.join('; ')),
+    ].join(' · ');
+    ScaffoldMessenger.of(
+      _navigator.currentContext!,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
 
   Future<void> _checkUpdates() async {
     try {
@@ -1311,6 +1406,15 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
         onUpdate: (update) {
           _cancelReview?.call();
           _runUpdate(update);
+        },
+        addonHints: _addonHints,
+        onAddonHint: (line, all) {
+          _cancelReview?.call();
+          if (all) {
+            _updateAllAddons(line);
+          } else {
+            setState(() => _focusCategory = line['column'] as int? ?? 1);
+          }
         },
         onCheckAgain: () async {
           _cancelReview?.call();
@@ -1754,15 +1858,18 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
   }
 
   Future<void> _loadAddonCatalog() async {
+    await _quietCatalog;
     final result = await _addonOperation('addons.catalog', const {});
     if (!mounted || result == null) return;
     setState(
       () => _addonEntries = (result['entries'] as List)
           .cast<Map<String, dynamic>>(),
     );
+    unawaited(_loadAddonHints());
   }
 
   Future<void> _reloadAddonCatalog() async {
+    await _quietCatalog;
     // Refresh the already-consented catalog without replacing the install result.
     final prior = _card;
     setState(() {
@@ -2949,6 +3056,7 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
         unawaited(_loadJobs());
         unawaited(_checkHealth());
         unawaited(_checkUpdates());
+        if (!_welcome) _quietCatalog = _quietAddonCatalog();
         // Settings › Costs: a desktop notification when a plan limit turns red.
         _limitsTimer ??= Timer.periodic(const Duration(minutes: 1), (_) {
           if (_backend?.isConnected == true) {
@@ -2958,6 +3066,7 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
           }
         });
       }
+      unawaited(_loadAddonHints());
     } catch (_) {
       if (mounted) {
         setState(() {

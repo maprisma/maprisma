@@ -5,6 +5,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 KEYS = (
+    # Add-on suggestions and updates (addons.hints).
+    "Update all",
+    "Add-ons updated: {0}",
+    "Not updated: {0}",
+    "Get add-ons",
     # The red-limit notification (limits.notify).
     "Notify when red",
     "A desktop notification when an agent's plan limit turns red: once for each limit until it resets.",

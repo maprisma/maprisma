@@ -46,6 +46,12 @@ class FlutterAddonCatalogTest(unittest.TestCase):
             self.assertNotIn(private, serialized)
         self.assertIn(entry['preview'], self.catalog.previews)
 
+    def test_present_says_only_whether_the_program_is_on_this_pc(self):
+        for found in (False, True):
+            with mock.patch.object(addon_store.shutil, 'which', return_value='/x/program' if found else None):
+                item = self.catalog.register({'records':[self.record], 'online':True})['entries'][0]
+            self.assertIs(item['present'], found)
+
     def test_feature_addons_have_no_install_handle(self):
         self.record['entry']['kind'] = 'feature'
         item = self.catalog.register({'records':[self.record], 'online':True})['entries'][0]

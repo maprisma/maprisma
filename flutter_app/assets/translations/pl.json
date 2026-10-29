@@ -1,4 +1,8 @@
 {
+  "Update all": "Zaktualizuj wszystko",
+  "Add-ons updated: {0}": "Zaktualizowane dodatki: {0}",
+  "Not updated: {0}": "Nie zaktualizowano: {0}",
+  "Get add-ons": "Pobierz dodatki",
   "Notify when red": "Powiadom przy czerwonym",
   "A desktop notification when an agent's plan limit turns red: once for each limit until it resets.": "Powiadomienie na pulpicie, gdy limit planu agenta zrobi się czerwony: raz na limit, aż się zresetuje.",
   "{0} {1} is available (you have {2})": "{0} {1} jest dostępny (masz {2})",

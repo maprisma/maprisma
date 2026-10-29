@@ -25,6 +25,8 @@ class OpenProblemsView extends StatelessWidget {
     required this.onAction,
     this.updates = const [],
     this.onUpdate,
+    this.addonHints = const [],
+    this.onAddonHint,
     required this.onCheckAgain,
     required this.onClose,
   });
@@ -35,6 +37,13 @@ class OpenProblemsView extends StatelessWidget {
   /// agent_updates: newer versions of agents and local LLMs (updates.check).
   final List<Map<String, dynamic>> updates;
   final ValueChanged<Map<String, dynamic>>? onUpdate;
+
+  /// addons.hints: add-ons for what is on this PC, and add-on updates.
+  final List<Map<String, dynamic>> addonHints;
+
+  /// A hint's button: all true is "Update all", else the add-ons to get or
+  /// switch on.
+  final void Function(Map<String, dynamic> line, bool all)? onAddonHint;
   final VoidCallback onCheckAgain;
   final VoidCallback onClose;
 
@@ -98,9 +107,38 @@ class OpenProblemsView extends StatelessWidget {
             Text(tr('Each one opens where it is fixed.')),
             for (final f in problems) _finding(context, f),
           ],
-          if (updates.isNotEmpty) ...[
+          if (updates.isNotEmpty || addonHints.isNotEmpty) ...[
             const SizedBox(height: 16),
             Text(tr('Updates and suggestions'), style: text.titleMedium),
+            for (final h in addonHints)
+              ListTile(
+                key: ValueKey('addon-hint-${h['kind']}'),
+                dense: true,
+                leading: Icon(
+                  h['kind'] == 'updates' ? Icons.upgrade : Icons.extension,
+                ),
+                title: Text('${h['text']}'),
+                trailing: onAddonHint == null
+                    ? null
+                    : Wrap(
+                        spacing: 8,
+                        children: [
+                          if (h['kind'] == 'updates')
+                            OutlinedButton(
+                              onPressed: () => onAddonHint!(h, true),
+                              child: Text(tr('Update all')),
+                            ),
+                          OutlinedButton(
+                            onPressed: () => onAddonHint!(h, false),
+                            child: Text(
+                              tr(
+                                h['kind'] == 'new' ? 'Get add-ons' : 'Add-ons',
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+              ),
             for (final u in updates)
               ListTile(
                 key: ValueKey('update-${u['key']}'),

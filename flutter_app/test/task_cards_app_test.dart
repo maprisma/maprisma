@@ -101,6 +101,7 @@ for line in sys.stdin:
  elif m=='models.slots_reload':r={'ok':True}
  elif m=='updates.check':tasks['up']={'updates':[{'kind':'agent','key':'test','name':'Test agent','current':'1.0','available':'1.1','command':['mise','upgrade','test'],'page':False}]};r={'task':'up'}
  elif m=='updates.run':r={'started':True}
+ elif m=='addons.hints':r={'lines':[{'kind':'new','text':'Goose is on this PC but not on the map','ids':['agent-goose'],'column':1},{'kind':'updates','text':'Add-on updates ready: Catalog adapter','updates':[{'id':'catalog-addon','name':'Catalog adapter','version':'2.1','current':'2.0','preview':'catalog-1'}]}]}
  elif m=='health.report':tasks['hr']={'warn':1,'hint':0,'level':'warn','summary':'1 thing to fix','open_text':'1 open problem','areas':[{'key':'agents','title':'Agents','icon':'','findings':[{'level':'warn','title':'Test agent: Not signed in','text':'','action':['details','test']}]}],'uses':[]};r={'task':'hr'}
  elif m=='agents.health':r={'state':'warn','summary':'Works, one thing to look at: No model chosen','checks':[{'state':'warn','title':'No model chosen','detail':'','step':'Select it on the map.','command':'','sign_in':''}]}
  elif m=='help.snapshot':r={'manual':True}
@@ -991,4 +992,41 @@ void main() {
     expect(tester.takeException(), isNull);
     await unmountApp(tester);
   });
+
+  testWidgets('add-on suggestions and updates in Open problems', (
+    tester,
+  ) async {
+    final dir = await mountApp(tester);
+    await settleService(tester);
+    expect(
+      requests(dir).where((q) => q['method'] == 'addons.catalog'),
+      isNotEmpty,
+    ); // read quietly at start, for the hints
+    await tester.tap(find.byKey(const ValueKey('problems-open')));
+    await settleService(tester);
+    expect(
+      find.text('Goose is on this PC but not on the map'),
+      findsOneWidget,
+    );
+    expect(find.text('Add-on updates ready: Catalog adapter'), findsOneWidget);
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Update all'));
+    await settleService(tester);
+    expect(find.text('2.0 → 2.1'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('addons-update-all')));
+    await settleService(tester);
+    expect(
+      requests(dir).lastWhere((q) => q['method'] == 'addons.install')['params'],
+      {'preview': 'catalog-1'},
+    );
+    await settleService(tester);
+    expect(find.text('Add-ons updated: Catalog adapter'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('problems-open')));
+    await settleService(tester);
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Get add-ons'));
+    await settleService(tester);
+    expect(find.byType(MapAddonsFocus), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await unmountApp(tester);
+  });
 }
+

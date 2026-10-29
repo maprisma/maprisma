@@ -1908,3 +1908,27 @@ limit and reset, kept across a second check, pruning, nothing sent when the file
 a Flutter settings test for the switch. Not run for real on this PC: it would send a real desktop
 notification.
 
+### 6b-16 — Add-on suggestions and updates
+
+New in the core (`addon_hints.dart`, the reference is `ai_popup.look_for_addons`, its hint lines in
+`overview_hints`, `addon_store.present` and `addons_page.addon_update_items`):
+- **`present`:** each catalog row now says whether its detect hints find the program on PATH or its
+  folder in the home (read-only), on both sides (`flutter_addon_catalog.register` too). Only the
+  yes/no leaves the core, never the commands or paths.
+- **`addons.hints {}`:** from the last catalog read. Agents and local LLMs on this PC whose add-on is
+  off (installed, verified) or not installed yet, one line each ("{0} is on this PC but not on the
+  map", plurals from the core), and "Add-on updates ready: {0}" with the updates' catalog previews.
+- **Flutter:** after the first snapshot (not during the welcome, which asks first), the catalog is read
+  quietly: from the cache, online only when looking for add-ons online is on. It feeds only the hints;
+  the Add-ons list still waits for the user's own look, and that look waits for the quiet one, since a
+  catalog read makes new install previews. The lines are under **Updates and suggestions** in Open
+  problems and count for the header's "!". **Get add-ons** / **Add-ons** opens the add-ons focus;
+  **Update all** shows the updates with their versions, then installs them one after the other
+  through the reviewed catalog previews, with one message for what was and was not updated.
+- The manual's "Add-on suggestions in the Flutter preview" in all eight languages; PDFs rebuilt.
+
+Check: `test/addon_hints_test.dart` (PATH and home folders, off/new/updates, plurals, no preview no
+update) and a Python test for `present`. An app test goes Open problems → Update all → the review →
+`addons.install` with the preview → the message, then Get add-ons → the add-ons focus. Not run for real
+on this PC: it would read the catalog online.
+

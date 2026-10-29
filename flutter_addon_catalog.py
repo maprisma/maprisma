@@ -76,7 +76,8 @@ class Catalog:
                            'kind': entry.kind, 'summary': entry.summary, 'description': entry.description,
                            'reads': entry.reads, 'sends': entry.sends, 'capabilities': entry.capabilities, 'privacy': entry.privacy,
                            'supported': supported, 'installed_version': old, 'action': action,
-                           'preview': token if token in previews else None})
+                           'preview': token if token in previews else None,
+                           'present': addon_store.present(entry)})
         self.previews = previews
         return {'entries': public, 'online': result['online']}
 

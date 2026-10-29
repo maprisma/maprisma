@@ -1,4 +1,8 @@
 {
+  "Update all": "Update all",
+  "Add-ons updated: {0}": "Add-ons updated: {0}",
+  "Not updated: {0}": "Not updated: {0}",
+  "Get add-ons": "Get add-ons",
   "Notify when red": "Notify when red",
   "A desktop notification when an agent's plan limit turns red: once for each limit until it resets.": "A desktop notification when an agent's plan limit turns red: once for each limit until it resets.",
   "{0} {1} is available (you have {2})": "{0} {1} is available (you have {2})",
