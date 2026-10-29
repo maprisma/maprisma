@@ -901,8 +901,11 @@ String executeReconnect(List<int> body, String home, ConfigFiles config) {
 
 /// flutter_existing.check: the program's own --version in an empty home,
 /// five seconds at most, its whole group ended after.
-Future<Map<String, dynamic>> checkProgram(Map record) async {
-  validate(record);
+Future<Map<String, dynamic>> checkProgram(
+  Map record, {
+  void Function(Map)? validator,
+}) async {
+  (validator ?? validate)(record);
   if (record['kind'] != 'runtime') {
     throw const FormatException('Choose a program');
   }

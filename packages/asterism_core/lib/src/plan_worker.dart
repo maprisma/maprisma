@@ -12,6 +12,7 @@ import 'installers.dart';
 import 'model_removals.dart';
 import 'existing_ai.dart' as existing_ai;
 import 'system_map.dart' show SystemMapReader;
+import 'system_actions.dart' show checkTool;
 import 'first_agent.dart';
 import 'agent_catalog.dart';
 import 'desktop.dart' show detectDesktop;
@@ -437,6 +438,7 @@ Future<int> runWorker(List<String> args) async {
           'models.remove',
           'existing.check',
           'existing.apply',
+          'system.tool_check',
         }.contains(operation) ||
         (request['params'] as Map).isNotEmpty) {
       throw const FormatException('Invalid private operation');
@@ -488,6 +490,19 @@ Future<int> runWorker(List<String> args) async {
             _addonsOnline(plan['settings_path']),
             store.$2,
           ),
+        ),
+      });
+      return 0;
+    }
+    if (operation == 'system.tool_check') {
+      final identity = AppIdentity();
+      final files = ScanFiles(identity);
+      send({
+        'type': 'result',
+        'result': await checkTool(
+          body,
+          identity.environment,
+          AgentCatalog(files, detectDesktop(identity, Posix())),
         ),
       });
       return 0;

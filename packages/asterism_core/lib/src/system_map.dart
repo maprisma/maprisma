@@ -1132,7 +1132,10 @@ final class SystemMapReader {
     }
     for (final n in oldNodes) {
       if (offline.contains(n['id']) && !currentIds.contains(n['id'])) {
-        resultNodes.add(<String, dynamic>{...n.cast<String, dynamic>(), 'status': 'missing'});
+        resultNodes.add(<String, dynamic>{
+          ...n.cast<String, dynamic>(),
+          'status': 'missing',
+        });
         currentIds.add(n['id']);
       }
     }

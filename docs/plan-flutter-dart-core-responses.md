@@ -1221,3 +1221,28 @@ Check:
   - without the search the maps are identical;
   - with it, only sizes that hit the three-second deadline differ (the Dart walk gets further in the
     same time).
+
+### 6a-3a — tool checks, the GPU stack and connecting a found model folder
+
+Served by the core (`system_actions.dart`):
+- **`system.tool_check`:** a supporting tool of the map (`system_tools.check_record`: its real path and
+  stamp) checked in the worker: unchanged since the preview, then its own `--version` as the
+  existing-AI check runs programs (empty home, clean environment, five seconds, its group ended).
+  `existing_ai.checkProgram` takes the validator.
+- **`system.stack_preview` / `system.stack_apply`:** only a part the GPU stack misses on this PC
+  (`gpu_stack.wanted`), its way (`gpu_stack.ways`: the pacman package, else the vendor's page) chosen by
+  the agent recipes, shown with its commands; apply resolves again, requires the same step and runs it
+  in one terminal window the user watches.
+- **`system.folder_preview`:** a found GGUF folder or Ollama store given to a local LLM: its settings file
+  (`llm_engine.env_with`) and a wrapper the app connected (only one marked "Connected by Asterism",
+  only when its model path is still the old one), plus the folder in `model_folders`; reviewed as a
+  connection preview (backup, Undo). Ollama and llama.cpp, as in the reference.
+
+Check: `tests/test_dart_system_actions_parity.py`, both services in a temporary HOME with a llama.cpp
+wrapper connected earlier and a fake terminal that only logs:
+- tool checks (a real one, an unknown one, not a tool);
+- the GPU stack: preview, apply (in the fake terminal: `sudo pacman -S rocm-hip-runtime` is logged,
+  never run), a used preview, a part not wanted;
+- a found GGUF folder connected to llama.cpp (preview, refused for Ollama, bad shape, applied).
+
+The same answers, terminal log, settings and rewritten files on both sides.

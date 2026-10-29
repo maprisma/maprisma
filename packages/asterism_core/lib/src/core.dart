@@ -23,6 +23,8 @@ import 'model_removals.dart';
 import 'existing_ai.dart' as existing_ai;
 import 'system_map_cache.dart';
 import 'system_map.dart' show forgetDisk, systemPublic;
+import 'system_actions.dart';
+import 'agent_catalog.dart' show AgentCatalog;
 import 'skill_plans.dart';
 import 'mcp_plans.dart';
 import 'llm_plans.dart';
@@ -66,6 +68,10 @@ const portedRoutes = {
   'system.cached',
   'system.refresh',
   'system.forget_disk',
+  'system.tool_check',
+  'system.stack_preview',
+  'system.stack_apply',
+  'system.folder_preview',
   'sessions.start',
   'projects.pin',
   'projects.forget',
@@ -338,6 +344,102 @@ final class CoreService {
       'search': params['search'] == true,
       'cache': systemMapPath,
     }, _registerSystemMap);
+  }
+
+  late final stackActions = StackActions(
+    identity.environment,
+    identity.home,
+    desktop,
+    () => newHandle().substring(coreHandle.length),
+    i18n.text,
+  );
+
+  /// system.tool_check / stack_* / folder_preview (flutter_backend).
+  Map<String, dynamic> systemActionRoute(
+    String method,
+    Map<String, dynamic> params,
+  ) {
+    if (method == 'system.tool_check') {
+      if (params.length != 1 || !params.containsKey('node')) {
+        throw const FormatException('Invalid supporting tool selection');
+      }
+      final catalog = AgentCatalog(
+        reads.files,
+        desktop,
+        adapters: addons.adapters,
+      );
+      return tasks.startPrivate(
+        'system.tool_check',
+        utf8.encode(
+          jsonEncode(
+            toolCheckRecord(params['node'], identity.environment, catalog),
+          ),
+        ),
+      );
+    }
+    if (method == 'system.stack_preview' || method == 'system.stack_apply') {
+      final field = method.endsWith('_preview') ? 'part' : 'preview';
+      if (params.length != 1 || !params.containsKey(field)) {
+        throw const FormatException('Invalid GPU stack action');
+      }
+      if (field == 'part') return stackActions.preview(params['part']);
+      if (addonInstalling) {
+        throw const FormatException('An installation is already running');
+      }
+      return stackActions.apply(params['preview']);
+    }
+    // system.folder_preview: a discovered model folder for a local LLM.
+    if (params.length != 2 ||
+        !params.containsKey('found') ||
+        !params.containsKey('runtime')) {
+      throw const FormatException('Invalid folder connection');
+    }
+    final record = existing.get(params['found']);
+    if (!const {'models', 'store'}.contains(record['kind'])) {
+      throw const FormatException('Choose a model folder/store');
+    }
+    existing_ai.validate(record);
+    final runtime = params['runtime'];
+    if (runtime is! String) {
+      throw const FormatException('Unknown local provider');
+    }
+    final rt = ProviderScans(
+      reads.files,
+    ).scan().where((r) => r.key == runtime).firstOrNull;
+    if (rt == null) throw const FormatException('Unknown local provider');
+    final changes = modelFolderChanges(
+      rt,
+      record['path'] as String,
+      identity.home,
+      Posix(),
+      config,
+    );
+    if (changes.any((c) => FileSystemEntity.isLinkSync(c.path))) {
+      throw const FormatException('Configuration is a symbolic link');
+    }
+    final plan = Plan('system-map', '', '', changes: changes);
+    if (record['kind'] == 'models') {
+      plan.changes.addAll(
+        existing_ai
+            .buildPlan(
+              record,
+              null,
+              identity.settingsPath,
+              identity.home,
+              config,
+            )
+            .changes,
+      );
+    }
+    return {
+      ...connections.keep(plan),
+      'item': record['path'],
+      'command': rt.name,
+      'notes': [
+        'Changes apply when the runtime next starts. Running services are not restarted.',
+      ],
+      'focus': taskFocus(reads.map, params),
+    };
   }
 
   /// existing.* (flutter_backend, flutter_existing).
@@ -855,6 +957,14 @@ final class CoreService {
     }
     if (method.startsWith('addons.')) return addonStoreRoute(method, params);
     if (method.startsWith('installers.')) return installerRoute(method, params);
+    if (const {
+      'system.tool_check',
+      'system.stack_preview',
+      'system.stack_apply',
+      'system.folder_preview',
+    }.contains(method)) {
+      return systemActionRoute(method, params);
+    }
     if (const {
       'system.view',
       'system.cached',
