@@ -25,7 +25,11 @@ final class Plan {
     List<(String, String)>? linksRemove,
     List<Map<String, dynamic>>? contexts,
     List<Map<String, dynamic>>? modelActions,
+    List<(String, List<int>, bool)>? filesAdd,
+    List<String>? notes,
   }) : changes = changes ?? [],
+       filesAdd = filesAdd ?? [],
+       notes = notes ?? [],
        linksAdd = linksAdd ?? [],
        linksRemove = linksRemove ?? [],
        contexts = contexts ?? [],
@@ -34,8 +38,11 @@ final class Plan {
   final List<Change> changes;
   final List<(String, String)> linksAdd, linksRemove;
   final List<Map<String, dynamic>> contexts, modelActions;
+  final List<(String, List<int>, bool)> filesAdd; // path, bytes, executable
+  final List<String> notes;
   bool get empty =>
       changes.isEmpty &&
+      filesAdd.isEmpty &&
       linksAdd.isEmpty &&
       linksRemove.isEmpty &&
       modelActions.isEmpty;
@@ -113,8 +120,8 @@ final class ConfigFiles {
         '${(t.millisecond * 1000 + t.microsecond).toString().padLeft(6, '0')}';
   }
 
-  /// connect.apply (no commands, new files or retired folders: the app's
-  /// plans for connections have none). Returns the backup folder.
+  /// connect.apply (no commands or retired folders: the app's plans have
+  /// none). Returns the backup folder.
   String apply(Plan plan, String backupRoot, {DateTime? now}) {
     void unchanged() {
       for (final change in plan.changes) {
@@ -135,6 +142,11 @@ final class ConfigFiles {
       if (!_isLink(link) ||
           p.normalize(Link(link).targetSync()) != p.normalize(target)) {
         throw StateError('$link changed in the meantime');
+      }
+    }
+    for (final (path, _, _) in plan.filesAdd) {
+      if (_exists(path) || _isLink(path)) {
+        throw StateError('$path exists already');
       }
     }
     unchanged(); // again, just before writing
@@ -158,10 +170,13 @@ final class ConfigFiles {
       });
     }
     final created = <String>[];
-    for (final change in plan.changes) {
-      if (_exists(change.path)) continue;
+    for (final path in [
+      for (final (path, _, _) in plan.filesAdd) path,
+      for (final change in plan.changes)
+        if (!_exists(change.path)) change.path,
+    ]) {
       final parents = <String>[];
-      for (var d = p.dirname(change.path); ; d = p.dirname(d)) {
+      for (var d = p.dirname(path); ; d = p.dirname(d)) {
         parents.add(d);
         if (d == p.dirname(d)) break;
       }
@@ -180,7 +195,13 @@ final class ConfigFiles {
           for (final (l, t) in plan.linksRemove) [l, t],
         ],
       },
-      'created': {'added': <dynamic>[], 'dirs': created},
+      'created': {
+        'added': [
+          for (final (path, data, _) in plan.filesAdd)
+            [path, sha256.convert(data).toString()],
+        ],
+        'dirs': created,
+      },
       'retired': <dynamic>[],
     });
     File(p.join(folder, 'manifest.json')).writeAsStringSync(body);
@@ -194,6 +215,21 @@ final class ConfigFiles {
     for (final (link, target) in plan.linksAdd) {
       Directory(p.dirname(link)).createSync(recursive: true);
       Link(link).createSync(target);
+    }
+    for (final (path, data, executable) in plan.filesAdd) {
+      Directory(p.dirname(path)).createSync(recursive: true);
+      // O_WRONLY | O_CREAT | O_EXCL, never through a link; the umask applies.
+      final fd = posix.openAt(
+        -100,
+        path,
+        1 | 0x40 | 0x80 | Posix.noFollow | Posix.cloexec,
+        executable ? 0x1ed : 0x1a4,
+      );
+      try {
+        posix.write(fd, data);
+      } finally {
+        posix.close(fd);
+      }
     }
     return folder;
   }

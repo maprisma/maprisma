@@ -20,6 +20,8 @@ import 'core_tasks.dart';
 import 'installers.dart' show InstallerPlans, maxPlan;
 import 'first_agent.dart' show loadRoutes;
 import 'model_removals.dart';
+import 'existing_ai.dart' as existing_ai;
+import 'system_map_cache.dart';
 import 'skill_plans.dart';
 import 'mcp_plans.dart';
 import 'llm_plans.dart';
@@ -34,6 +36,7 @@ import 'provider_facts.dart';
 const portedRoutes = {
   'settings.get',
   'settings.update',
+  'app.settings_changed',
   'app.theme',
   'app.identity',
   'desktop.snapshot',
@@ -54,6 +57,10 @@ const portedRoutes = {
   'guide.choose',
   'models.remove_preview',
   'models.remove_apply',
+  'existing.scan',
+  'existing.preview',
+  'existing.check',
+  'existing.apply',
   'sessions.start',
   'projects.pin',
   'projects.forget',
@@ -217,6 +224,100 @@ final class CoreService {
         throw const FormatException('Removal preview too large');
       }
       return tasks.startPrivate('models.remove', body);
+    });
+  }
+
+  late final existing = existing_ai.ExistingRecords(
+    () => newHandle().substring(coreHandle.length),
+  );
+  String get systemMapPath => p.join(identity.cacheDir, 'system-map.json');
+
+  /// finish_system_search: a disk scan's records merged into the saved
+  /// System Map, then registered as discovery handles.
+  Map<String, dynamic> _finishSystemSearch(
+    String path,
+    Map<String, dynamic> result,
+  ) {
+    final posix = Posix();
+    final saved = loadMapCache(systemMapPath, posix);
+    if (saved.isNotEmpty) {
+      bool inside(dynamic x) => x == path || p.isWithin(path, '$x');
+      final merged = <String, dynamic>{};
+      for (final r in [
+        ...(saved['records'] as List).where((r) => !inside(r['path'])),
+        ...result['records'] as List,
+      ]) {
+        merged['${r['kind']}\x00${r['path']}'] = r;
+      }
+      saved['records'] = merged.values.take(128).toList();
+      saved['search_done'] = true;
+      saved['scan_limits'] = [
+        ...(saved['scan_limits'] as List).where((r) => r['path'] != path),
+        {
+          'path': path,
+          for (final k in ['limits', 'notices', 'foreign']) k: result[k] ?? [],
+          'depth': result['depth'] ?? 5,
+        },
+      ];
+      registerMap(systemMapPath, posix, saved, result['records'] as List);
+    }
+    return existing.register(result);
+  }
+
+  /// existing.* (flutter_backend, flutter_existing).
+  Map<String, dynamic> existingRoute(
+    String method,
+    Map<String, dynamic> params,
+  ) {
+    if (method == 'existing.scan') {
+      final path = params['path'];
+      if (params.length != 1 || path is! String) {
+        throw const FormatException('Choose a mounted folder');
+      }
+      existing_ai.rootFor(path, existing_ai.mounts());
+      if (tasks.items.values.any(
+        (t) => t.operation == 'existing.scan' && t.state == 'running',
+      )) {
+        throw const FormatException('A disk scan is already running');
+      }
+      return tasks.start('existing.scan', {
+        'path': path,
+      }, (result) => _finishSystemSearch(path, result));
+    }
+    if (method == 'existing.preview') {
+      return existing.preview(
+        params,
+        identity.settingsPath,
+        connections.backupRoot,
+        identity.home,
+        config,
+      );
+    }
+    if (method == 'existing.check') {
+      if (params.length != 1 || !params.containsKey('found')) {
+        throw const FormatException('Invalid program check');
+      }
+      return tasks.startPrivate(
+        'existing.check',
+        utf8.encode(jsonEncode(existing.get(params['found']))),
+      );
+    }
+    if (params.length != 1 || !params.containsKey('plan')) {
+      throw const FormatException('Invalid reconnect preview');
+    }
+    if (addonInstalling) {
+      throw const FormatException('An installation is already running');
+    }
+    return existing.apply(params['plan'], (body) {
+      final bytes = utf8.encode(pyJsonDumps(body));
+      if (bytes.length > existing_ai.existingMaxBytes) {
+        throw const FormatException('Reconnect plan too large');
+      }
+      return tasks.startPrivate(
+        'existing.apply',
+        bytes,
+        connections.registerBackup,
+      );
     });
   }
 
@@ -678,6 +779,9 @@ final class CoreService {
     }
     if (method.startsWith('addons.')) return addonStoreRoute(method, params);
     if (method.startsWith('installers.')) return installerRoute(method, params);
+    if (method.startsWith('existing.') && method != 'existing.mounts') {
+      return existingRoute(method, params);
+    }
     if (method.startsWith('models.remove_')) {
       return removalRoute(method, params);
     }
@@ -737,6 +841,14 @@ final class CoreService {
       return preview(params);
     }
     if (!portedRoutes.contains(method)) throw ServiceError('unported_route');
+    if (method == 'app.settings_changed') {
+      // The service's language is read from the settings on every lookup:
+      // nothing is cached here to drop.
+      if (params.isNotEmpty) {
+        throw const FormatException('Unexpected parameters');
+      }
+      return {};
+    }
     if (method == 'settings.update') {
       final result = settings.update(params);
       if ((params['values'] as Map).containsKey('providers_with_agents')) {

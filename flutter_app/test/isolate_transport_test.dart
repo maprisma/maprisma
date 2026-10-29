@@ -72,7 +72,7 @@ void main() {
         );
         if (!develPythonFallback) {
           await expectLater(
-            router.call('existing.scan', {}),
+            router.call('system.help_apply', {}),
             throwsA(
               isA<BackendError>().having(
                 (e) => e.code,

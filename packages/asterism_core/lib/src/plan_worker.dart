@@ -10,6 +10,7 @@ import 'posix_ffi.dart';
 import 'identity.dart';
 import 'installers.dart';
 import 'model_removals.dart';
+import 'existing_ai.dart' as existing_ai;
 import 'first_agent.dart';
 import 'agent_catalog.dart';
 import 'desktop.dart' show detectDesktop;
@@ -320,6 +321,25 @@ Future<int> runWorker(List<String> args) async {
       });
       return 0;
     }
+    // A disk scan for existing AI installs (existing_ai.scan): nothing found runs.
+    if (args.isEmpty && request['operation'] == 'existing.scan') {
+      final params = request['params'] as Map;
+      if (params.length != 1 || params['path'] is! String) {
+        throw const FormatException('Invalid worker request');
+      }
+      send({
+        'type': 'result',
+        'result': existing_ai.scan(
+          params['path'] as String,
+          (fraction, text) => send({
+            'type': 'progress',
+            'fraction': fraction.isFinite ? fraction.clamp(0.0, 1.0) : 0.0,
+            'text': text.length > 300 ? text.substring(0, 300) : text,
+          }),
+        ),
+      });
+      return 0;
+    }
     // An installer preview: the release looked up with the add-ons switched
     // on in the chosen settings (flutter_installers.prepare).
     if (args.isEmpty && request['operation'] == 'installers.preview') {
@@ -370,6 +390,8 @@ Future<int> runWorker(List<String> args) async {
           'addons.install',
           'installers.install',
           'models.remove',
+          'existing.check',
+          'existing.apply',
         }.contains(operation) ||
         (request['params'] as Map).isNotEmpty) {
       throw const FormatException('Invalid private operation');
@@ -421,6 +443,33 @@ Future<int> runWorker(List<String> args) async {
             _addonsOnline(plan['settings_path']),
             store.$2,
           ),
+        ),
+      });
+      return 0;
+    }
+    if (operation == 'existing.check') {
+      final record = jsonDecode(utf8.decode(body));
+      if (record is! Map) throw const FormatException('Invalid program check');
+      send({
+        'type': 'result',
+        'result': await existing_ai.checkProgram(record),
+      });
+      return 0;
+    }
+    if (operation == 'existing.apply') {
+      // The installers' lock also keeps a detached install from these writes.
+      final store = _addonStore();
+      final home = Platform.environment['HOME'] ?? '';
+      send({
+        'type': 'result',
+        'result': await store.$1.locked(
+          () async => {
+            'backup': existing_ai.executeReconnect(
+              body,
+              home,
+              ConfigFiles(posix, home),
+            ),
+          },
         ),
       });
       return 0;

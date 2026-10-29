@@ -1137,3 +1137,48 @@ linking to one of its models, and a fake Ollama server:
 The same answers, files and trash on both sides.
 
 Phase 5 is done. Still Python: phase 6 (`system.*`, `existing.*`, `app.settings_changed`, Insights).
+
+## Phase 6 — remaining parity (Claude, from 2026-10-29)
+
+Two parts:
+- **6a:** the routes the Python service still serves, so the core is complete:
+  - 6a-1 `app.settings_changed` and the existing-AI import (`existing.*`);
+  - 6a-2 the System Map views; 6a-3 folder moves, tool checks and the GPU stack; 6a-4 AI help and fixes;
+  - Insights.
+- **6b:** the new features of `plan-flutter.md` step 3 (catalogs, API-key entry, settings views, …),
+  written in Dart directly.
+
+### 6a-1 — `app.settings_changed` and existing AI
+
+- `app.settings_changed`: the core reads the language from the settings on every lookup, so it only
+  checks the shape.
+- **Existing AI** (`existing_ai.dart`, `system_map_cache.dart`), on a mounted data disk the user chose:
+  - `existing.scan` (worker): the bounded breadth-first walk of `existing_ai.scan` (12 000 entries,
+    depth 5, 128 results, five seconds), GGUF folders, and Ollama's and llama.cpp's own installs
+    (`discover_existing`: programs reached through links that stay on the disk and are this account's,
+    native ELF only; Ollama's model store; a portable ROCm tree beside llama.cpp). Each record carries
+    its mount and stamps (`st_dev` made as glibc does).
+  - When it ends, the records are merged into the saved System Map (`system_map_cache`: load with all
+    its checks, locked `transact`, `save`, `update`; `register`, `bounded`, `discovery_node`), then
+    become discovery handles.
+  - `existing.preview`: every record validated again (mount, program, links, environment, stamps), then
+    the plan:
+    - a GGUF folder goes into `model_folders`;
+    - a runtime gets new connecting files only (a wrapper script, a user unit with
+      `RequiresMountsFor`, its settings). Nothing is enabled or started.
+  - `existing.check` (worker, private): the program's own `--version` in an empty home with a clean
+    environment, five seconds, its whole group ended after.
+  - `existing.apply` (worker, private, under the installers' lock): the plan built twice more and
+    required to be the same, then `connect.apply` with a backup; the backup is registered for Undo.
+- `connect_apply.dart` gained the reference's `files_add`: new files created exclusively (never through
+  a link), listed in the manifest with their SHA-256 so Undo removes only them.
+
+Check: `tests/test_dart_existing_ai_parity.py` builds an "other distro" in a temporary folder on the
+data disk of this checkout (`/tmp` is not a data disk by design):
+- an Ollama install with a `current` link and its model store, a llama.cpp program and a GGUF folder;
+- scans (`/tmp` and a missing folder refused), six previews, the program check, two reconnects, a used
+  plan and a store changed after the scan.
+
+The same answers, reconnect files (modes too) and backup manifests on both sides. The reference's
+production service keeps connection backups in `~/.local/state/ai-agents-map/backups`; the core keeps
+them in its config folder since phase 3, so the test compares their manifests, not their place.
