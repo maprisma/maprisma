@@ -54,7 +54,12 @@ final class CoreTasks {
   final List<String> workerCommand;
   final items = <String, CoreTask>{};
   static const maxFrame = 1024 * 1024,
-      commits = {'connections.apply', 'addons.install', 'installers.install'};
+      commits = {
+        'connections.apply',
+        'models.remove',
+        'addons.install',
+        'installers.install',
+      };
 
   /// A provider operation in its own worker (flutter_tasks.Tasks.start).
   Map<String, dynamic> start(

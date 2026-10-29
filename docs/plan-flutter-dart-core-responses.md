@@ -1107,3 +1107,33 @@ HOME with a fake Claude (signed in, already tested) and a fake llama.cpp:
 
 The same answers and saved settings on both sides. (The reference needs `initialize()` and `ssh-keygen`
 on PATH for its add-on registry; the Dart core verifies natively.)
+
+### 5d — removing models
+
+`models.remove_preview` / `models.remove_apply` are served by the core (`model_removals.dart`):
+- **The record** (`flutter_removals._record`):
+  - the runtime, its model and its engine's `removable` (`file` or `api`);
+  - the model folder's identity;
+  - for `file`, `models_ctl.removal`: llama.cpp and KoboldCpp the `.gguf` (all parts of a split one, or
+    only the link); LM Studio the model's files with the vision projector when nothing else is left.
+    Only this account's own entries inside the folder count.
+  - other local LLMs that read a file that goes through a link (`links_into`, four levels) are named;
+  - each file's lstat identity, so a change after the preview is caught.
+- **Preview:** an opaque handle for five minutes, eight at most, with the task focus.
+- **Apply** (worker, private, a commit):
+  - the record built again and required to be the same;
+  - files go to the desktop's trash through `gio trash` (the same `g_file_trash` the reference calls,
+    so they can be restored); Ollama's models through its own `DELETE /api/delete`, only to this
+    account's listener;
+  - then KoboldCpp's `.kcpps` follow the files.
+
+Check: `tests/test_dart_model_removals_parity.py`, both services with a llama.cpp model folder, LM Studio
+linking to one of its models, and a fake Ollama server:
+- previews: a shared model, a split part, a link, an Ollama model, a missing model, an unknown
+  provider, a bad shape;
+- apply: the shared model (then its handle again), a split part, a part changed after its preview
+  (refused), the link (the target stays), Ollama's delete; unknown and bad handles.
+
+The same answers, files and trash on both sides.
+
+Phase 5 is done. Still Python: phase 6 (`system.*`, `existing.*`, `app.settings_changed`, Insights).

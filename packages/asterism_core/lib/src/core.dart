@@ -19,6 +19,7 @@ import 'agent_start.dart';
 import 'core_tasks.dart';
 import 'installers.dart' show InstallerPlans, maxPlan;
 import 'first_agent.dart' show loadRoutes;
+import 'model_removals.dart';
 import 'skill_plans.dart';
 import 'mcp_plans.dart';
 import 'llm_plans.dart';
@@ -51,6 +52,8 @@ const portedRoutes = {
   'setup.later',
   'guide.snapshot',
   'guide.choose',
+  'models.remove_preview',
+  'models.remove_apply',
   'sessions.start',
   'projects.pin',
   'projects.forget',
@@ -189,6 +192,33 @@ final class CoreService {
   late final installerPlans = InstallerPlans(
     () => newHandle().substring(coreHandle.length),
   );
+
+  late final removalPreviews = RemovalPreviews(
+    () => newHandle().substring(coreHandle.length),
+  );
+
+  /// models.remove_preview / models.remove_apply (flutter_removals).
+  Map<String, dynamic> removalRoute(
+    String method,
+    Map<String, dynamic> params,
+  ) {
+    if (method == 'models.remove_preview') {
+      return {
+        ...removalPreviews.preview(params, ModelRemovals(reads.files)),
+        'focus': taskFocus(reads.map, params),
+      };
+    }
+    if (params.length != 1 || params['removal'] is! String) {
+      throw const FormatException('Invalid removal handle');
+    }
+    return removalPreviews.apply(params['removal'] as String, (record) {
+      final body = utf8.encode(pyJsonDumps(record, ensureAscii: false));
+      if (body.length > maxRemovalBytes) {
+        throw const FormatException('Removal preview too large');
+      }
+      return tasks.startPrivate('models.remove', body);
+    });
+  }
 
   /// setup.* and guide.* (flutter_backend, flutter_setup, flutter_first_agent).
   Map<String, dynamic> setupRoute(String method, Map<String, dynamic> params) {
@@ -648,6 +678,9 @@ final class CoreService {
     }
     if (method.startsWith('addons.')) return addonStoreRoute(method, params);
     if (method.startsWith('installers.')) return installerRoute(method, params);
+    if (method.startsWith('models.remove_')) {
+      return removalRoute(method, params);
+    }
     if (method.startsWith('setup.') || method.startsWith('guide.')) {
       return setupRoute(method, params);
     }

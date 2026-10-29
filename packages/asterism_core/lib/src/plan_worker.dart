@@ -9,6 +9,7 @@ import 'connect_apply.dart';
 import 'posix_ffi.dart';
 import 'identity.dart';
 import 'installers.dart';
+import 'model_removals.dart';
 import 'first_agent.dart';
 import 'agent_catalog.dart';
 import 'desktop.dart' show detectDesktop;
@@ -368,6 +369,7 @@ Future<int> runWorker(List<String> args) async {
           'agents.halt',
           'addons.install',
           'installers.install',
+          'models.remove',
         }.contains(operation) ||
         (request['params'] as Map).isNotEmpty) {
       throw const FormatException('Invalid private operation');
@@ -420,6 +422,20 @@ Future<int> runWorker(List<String> args) async {
             store.$2,
           ),
         ),
+      });
+      return 0;
+    }
+    if (operation == 'models.remove') {
+      if (body.length > maxRemovalBytes) {
+        throw const FormatException('Removal preview too large');
+      }
+      final record = jsonDecode(utf8.decode(body));
+      if (record is! Map) {
+        throw const FormatException('Invalid private removal');
+      }
+      send({
+        'type': 'result',
+        'result': await ModelRemovals(ScanFiles(AppIdentity())).execute(record),
       });
       return 0;
     }
