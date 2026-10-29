@@ -21,7 +21,11 @@ class ConnectionsView extends StatefulWidget {
     this.onCatalogPreview,
     this.onCall,
     this.onSkillPreview,
+    this.showFound = false,
   });
+
+  /// Open with what was found on this PC (Open problems' "New on this PC").
+  final bool showFound;
   final Future<void> Function(Map<String, dynamic>)? onSkillPreview;
   final Future<Map<String, dynamic>> Function(String, Map<String, dynamic>)?
   onCall;
@@ -46,6 +50,117 @@ class _ConnectionsViewState extends State<ConnectionsView> {
   bool _catalog = false;
   bool _skillsWeb = false;
   final _searchController = TextEditingController();
+  Map<String, dynamic> _initial = const {};
+
+  /// found.list for mcp and skills; null while closed.
+  Map<String, Map<String, dynamic>>? _found;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.showFound) _openFound();
+  }
+
+  @override
+  void didUpdateWidget(ConnectionsView old) {
+    super.didUpdateWidget(old);
+    if (widget.showFound && !old.showFound) _openFound();
+  }
+
+  Future<void> _openFound() async {
+    final call = widget.onCall;
+    if (call == null) return;
+    try {
+      final found = {
+        for (final kind in ['mcp', 'skills'])
+          kind: await call('found.list', {'kind': kind}),
+      };
+      if (!mounted) return;
+      setState(() => _found = found);
+      // Shown: what is new now is no longer new (mark_seen).
+      for (final kind in ['mcp', 'skills']) {
+        await call('found.seen', {'kind': kind});
+      }
+    } catch (_) {
+      if (mounted) setState(() => _found = {});
+    }
+  }
+
+  void _addFound(String kind, Map item) => setState(() {
+    _found = null;
+    _initial = Map<String, dynamic>.from(item);
+    _authorKind = kind;
+  });
+
+  Widget _foundPanel(BuildContext context) {
+    final found = _found!;
+    final mcp = found['mcp'] ?? const {}, skills = found['skills'] ?? const {};
+    final programs = (mcp['items'] as List? ?? const []).cast<Map>();
+    final sets = (skills['items'] as List? ?? const []).cast<Map>();
+    String tr(String key) => widget.tr(key);
+    Widget row(String kind, Map item, String title, String detail) => ListTile(
+      key: ValueKey('found-$kind-$title'),
+      dense: true,
+      leading: Icon(kind == 'mcp' ? Icons.apps : Icons.auto_awesome),
+      title: Text(title),
+      subtitle: Text(item['new'] == true ? '★ ${tr('new')} · $detail' : detail),
+      trailing: OutlinedButton(
+        onPressed: widget.busy || item['ready'] == false
+            ? null
+            : () => _addFound(kind, item),
+        child: Text(tr('Add…')),
+      ),
+    );
+    return Card(
+      key: const ValueKey('found-panel'),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    tr('Found on this PC'),
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+                IconButton(
+                  tooltip: tr('Close'),
+                  onPressed: () => setState(() => _found = null),
+                  icon: const Icon(Icons.close),
+                ),
+              ],
+            ),
+            if (programs.isEmpty && sets.isEmpty)
+              Text(
+                tr(
+                  (mcp['set_up'] as int? ?? 0) > 0
+                      ? 'Every program found here is set up already.'
+                      : 'Nothing found.',
+                ),
+              ),
+            for (final c in programs)
+              row(
+                'mcp',
+                c,
+                '${c['name']}${'${c['version']}'.isEmpty ? '' : ' ${c['version']}'}',
+                '${c['where']}',
+              ),
+            for (final s in sets)
+              row(
+                'skills',
+                s,
+                '${s['origin']}',
+                '${s['path']} · ${(s['skills'] as List).take(4).join(', ')}',
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _searchController.dispose();
@@ -108,11 +223,21 @@ class _ConnectionsViewState extends State<ConnectionsView> {
                     icon: const Icon(Icons.travel_explore),
                     label: Text(widget.tr('Find skills on the web…')),
                   ),
+                if (widget.onCall != null)
+                  OutlinedButton.icon(
+                    key: const ValueKey('found-open'),
+                    onPressed: widget.busy ? null : _openFound,
+                    icon: const Icon(Icons.search),
+                    label: Text(widget.tr('Found on this PC')),
+                  ),
                 for (final kind in ['mcp', 'skills'])
                   OutlinedButton.icon(
                     onPressed: widget.busy
                         ? null
-                        : () => setState(() => _authorKind = kind),
+                        : () => setState(() {
+                            _initial = const {};
+                            _authorKind = kind;
+                          }),
                     icon: const Icon(Icons.add),
                     label: Text(
                       widget.tr(
@@ -122,6 +247,7 @@ class _ConnectionsViewState extends State<ConnectionsView> {
                   ),
               ],
             ),
+            if (_found != null) _foundPanel(context),
             if (_catalog)
               McpCatalogView(
                 agents: (widget.data['agents'] as List? ?? [])
@@ -142,8 +268,11 @@ class _ConnectionsViewState extends State<ConnectionsView> {
               ),
             if (_authorKind != null)
               ConnectionAuthoring(
-                key: ValueKey(_authorKind),
+                key: ValueKey(
+                  '$_authorKind-${_initial['name'] ?? _initial['path'] ?? ''}',
+                ),
                 kind: _authorKind!,
+                initial: _initial,
                 agents: (widget.data['agents'] as List? ?? [])
                     .cast<Map<String, dynamic>>(),
                 busy: widget.busy,

@@ -11,6 +11,7 @@ import 'package:asterism_core/src/setup_checks.dart' as chk;
 import 'package:asterism_core/src/health_report.dart' as hr;
 import 'package:asterism_core/src/agent_updates.dart' as upd;
 import 'package:asterism_core/src/model_slots.dart' as slots;
+import 'package:asterism_core/src/found_scan.dart' as fs;
 import 'package:asterism_core/src/installers.dart' as inst;
 import 'package:asterism_core/src/provider_scans.dart' show RuntimeRecord;
 import 'package:asterism_core/src/system_map.dart' show SystemMapReader;
@@ -298,6 +299,42 @@ Future<void> main() async {
           params['cache'] as String,
           search: params['search'] == true,
         );
+      } else if (request.method == 'dev.foundscan') {
+        // mcp_scan.scan (with fold_versions), new_versions_found,
+        // not_looked_into and skills_scan.scan.
+        final scan = fs.FoundScan(
+          identity.home,
+          cacheFile: params['cache'] as String,
+          searchPath: identity.environment['PATH'],
+          opt: params['opt'] as String,
+          mcpFolders: (params['mcp_folders'] as List).cast<String>(),
+          skillFolders: (params['skill_folders'] as List).cast<String>(),
+          skillRoots: [
+            for (final r in params['skill_roots'] as List)
+              ('${r[0]}', r[1] as int),
+          ],
+        );
+        final configured = {
+          for (final e in (params['configured'] as Map).entries)
+            '${e.key}': (e.value as List).cast<String>(),
+        };
+        result = {
+          'mcp': [
+            for (final c in scan.scan(
+              configured,
+              (params['skip'] as List).cast<String>().toSet(),
+            ))
+              c.toJson(),
+          ],
+          'versions': scan.newVersionsFound(),
+          'not_looked': scan.notLookedInto(),
+          'skills': [
+            for (final s in scan.skillSets(
+              (params['known'] as List).cast<String>(),
+            ))
+              {'path': s.path, 'skills': s.skills, 'origin': s.origin},
+          ],
+        };
       } else if (request.method == 'dev.modelslots') {
         // model_slots.models_in_use, plan, hints and the engines' slot changes.
         final engines = slots.EngineSlots(

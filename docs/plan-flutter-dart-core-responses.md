@@ -1932,3 +1932,49 @@ update) and a Python test for `present`. An app test goes Open problems → Upda
 `addons.install` with the preview → the message, then Get add-ons → the add-ons focus. Not run for real
 on this PC: it would read the catalog online.
 
+### 6b-17 — Found on this PC (new MCP servers and skill sets)
+
+New in the core (`found_scan.dart`, the reference is `mcp_scan` with `fold_versions`, `skills_scan`,
+`mcp_pages.configured_programs` / `installed_mcp`, and `ai_popup.new_found` / `mark_seen`):
+- **The scan (worker op `found.scan`, read only):**
+  - The user's programs (`~/.local/bin`, `~/bin`, `~/Applications/<app>/usr/bin`, `/opt/*/bin`,
+    Setup's added folders), anything on PATH named for MCP, and AppImages from what an earlier look
+    inside them kept.
+  - A program counts when its bytes hold two of the protocol's own words, or one with an `mcp` usage
+    text or name. The start command comes from that usage (`--headless`, read/write roots get a folder
+    that fits the app). Clients (agents, local LLMs, runtimes like node or uvx) are left out.
+  - Files are read in 8 MiB chunks with an overlap, never mapped; results are cached per file (size,
+    time) in `$XDG_CACHE_HOME/asterism/mcp-scan-3.json`. The usage block is found by its literal
+    part, since a regular expression over megabytes made the Dart side four times slower than the
+    reference.
+  - `fold_versions` keeps the newest version of an app's program, with the version it updates and the
+    agents that start an older one. Plus AppImages not looked into and newer versions of known apps.
+  - Skill sets that apps brought along (a few levels under `/usr/share`, `/opt`, `~/Applications`,
+    `~/.local/share`, npm, Claude plugins, Setup's folders), without the agents' own skill folders.
+- **`found.hints {}`:** "New on this PC: {0}" for programs not set up (or an update of one that is
+  used) and skill sets that the add pages have not shown yet (`seen_found`).
+- **`found.list {kind}`** lists them for the add pages: the new ones first with a mark, what is set up
+  counted, a program inside an AppImage marked as not ready. **`found.seen {kind}`** remembers what
+  was shown (500 at most, as the reference).
+- **Flutter:** at start the scan runs quietly. Open problems shows the line with **Add MCP server…** /
+  **Add skills…**; they and **Found on this PC** in Connections open the list (and mark it seen).
+  **Add…** opens the existing form filled in with the name and the start command, or the folder; it
+  still goes through the preview.
+- The manual's "Found on this PC in the Flutter preview" in all eight languages; PDFs rebuilt.
+
+Not yet (6b-18): looking inside AppImages and unpacking one for a server in it (bubblewrap), the
+"New version found" line, and moving agents from an older app version to the newer one
+(`mcp_update`).
+
+Check: `tests/test_dart_found_scan_parity.py` runs one HOME.
+- **MCP finds:** a usage text with roots and `--headless`, a marker across the 8 MiB seam, a program
+  only named for MCP, a client left out, two unpacked versions with the older one used, an AppImage
+  from the cache and a newer one not looked into, PATH, `/opt` and an added folder.
+- **Skill sets:** known, skipped, nested and added ones.
+
+Python and Dart give the same results, and the same again from the cache. An app test goes Open
+problems → Add MCP server… → the list (an AppImage one disabled, seen marked) → Add… → the filled-in
+form. It was also run once on this PC, read only, with both caches in a scratch folder. Python and Dart
+gave the same results: 2 programs (cua-driver, photocraft), 13 AppImages not looked into, and 2 skill
+sets. It took 16 s against the reference's 12 s; later looks come from the cache.
+

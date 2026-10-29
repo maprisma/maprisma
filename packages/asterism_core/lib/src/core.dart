@@ -10,6 +10,7 @@ import 'read_service.dart';
 import 'connect_apply.dart';
 import 'addon_store.dart';
 import 'addon_hints.dart';
+import 'found_scan.dart';
 import 'addons.dart';
 import 'py_values.dart';
 import 'package:path/path.dart' as p;
@@ -136,6 +137,10 @@ const portedRoutes = {
   'models.slots_reload',
   'limits.notify',
   'addons.hints',
+  'found.scan',
+  'found.hints',
+  'found.list',
+  'found.seen',
   ...readOnlyRoutes,
 };
 // Phase 7 removes this blocker only after every route has differential coverage.
@@ -249,6 +254,223 @@ final class CoreService {
   }
 
   late final addonActions = AddonActions(Posix(), addonUserDir);
+
+  /// The last look for new programs and skill sets (found.scan): mcp,
+  /// versions, not_looked, skills; empty until one was made.
+  Map<String, dynamic> lastFound = const {};
+
+  /// mcp_pages.configured_programs: real program path → the agents (and
+  /// "list" for the list of MCP servers) whose stdio server starts it.
+  Map<String, List<String>> configuredPrograms(List<AgentRecord> agents) {
+    final found = <String, List<String>>{};
+    void add(dynamic entry, String who) {
+      if (entry is! Map || entry['transport'] != 'stdio') return;
+      final command = '${entry['command']}';
+      final program = whichIn(command, identity.environment['PATH']) ?? command;
+      found.putIfAbsent(FoundScan.resolve(program), () => []).add(who);
+    }
+
+    for (final a in agents) {
+      if (!a.installed || !mcp.supported(a.command)) continue;
+      for (final raw in mcp.rawEntries(a.command).values) {
+        add(normalEntry(raw), a.command);
+      }
+    }
+    for (final entry in mcp.library().values) {
+      add(entry, 'list');
+    }
+    return found;
+  }
+
+  List<String> _savedList(String key) {
+    final value = settings.value(settings.load(), key);
+    return value is List
+        ? [
+            for (final x in value)
+              if (x is String) x,
+          ]
+        : [];
+  }
+
+  Map<String, List<String>> _seenFound() {
+    final seen = settings.value(settings.load(), 'seen_found');
+    return {
+      for (final kind in ['mcp', 'skills'])
+        kind: seen is Map && seen[kind] is List
+            ? [
+                for (final x in seen[kind] as List)
+                  if (x is String) x,
+              ]
+            : <String>[],
+    };
+  }
+
+  static String _listed(List<String> names, int most) =>
+      names.take(most).join(', ') + (names.length > most ? '…' : '');
+
+  /// check_new_apps / new_found / mark_seen: new programs with an MCP server
+  /// and new skill sets from apps, found without running anything.
+  Map<String, dynamic> foundRoute(String method, Map<String, dynamic> params) {
+    if (method == 'found.scan') {
+      if (params.isNotEmpty) throw const FormatException('Invalid request');
+      final agents = reads.catalog.scan();
+      final inventory = reads.inventory.collect(agents, remember: false);
+      final skip = <String>{
+        ...mcpClients,
+        for (final a in agents) a.command,
+        for (final rt in inventory.runtimes) rt.key,
+        for (final names in llmPrograms.values) ...names,
+      };
+      return tasks.start(
+        'found.scan',
+        {
+          'configured': configuredPrograms(agents),
+          'skip': skip.toList()..sort(),
+          'known': [
+            for (final s in inventory.skillSets) '${s['path']}',
+            for (final a in agents)
+              if (a.installed) ...reads.inventory.skillDirs(a.adapter),
+          ],
+          'mcp_folders': _savedList('mcp_folders'),
+          'skill_folders': _savedList('skill_folders'),
+        },
+        (result) {
+          lastFound = result;
+          return result;
+        },
+      );
+    }
+    final agents = reads.catalog.scan();
+    final configured = configuredPrograms(agents);
+    final mcpNames = {
+      for (final s in reads.inventory.collect(agents, remember: false).mcp)
+        '${s['name']}',
+    };
+    final found = [
+      for (final c in lastFound['mcp'] as List? ?? const []) c as Map,
+    ];
+    final skills = [
+      for (final s in lastFound['skills'] as List? ?? const []) s as Map,
+    ];
+    bool installed(Map c) =>
+        configured.containsKey(FoundScan.resolve('${c['program']}')) ||
+        mcpNames.contains(c['name']);
+    bool update(Map c) =>
+        '${c['update_from']}'.isNotEmpty &&
+        (c['users'] as List? ?? const []).isNotEmpty;
+    final seen = _seenFound();
+    if (method == 'found.hints') {
+      if (params.isNotEmpty) throw const FormatException('Invalid request');
+      final newMcp = [
+        for (final c in found)
+          if ((!installed(c) || update(c)) &&
+              !seen['mcp']!.contains(c['program']))
+            c,
+      ];
+      final newSkills = [
+        for (final s in skills)
+          if (!seen['skills']!.contains(s['path'])) s,
+      ];
+      if (newMcp.isEmpty && newSkills.isEmpty) return {'lines': []};
+      return {
+        'lines': [
+          {
+            'kind': 'found',
+            'text': i18n
+                .text('New on this PC: {0}')
+                .replaceAll(
+                  '{0}',
+                  _listed([
+                    for (final c in newMcp) '${c['name']}',
+                    for (final s in newSkills) '${s['origin']}',
+                  ], 5),
+                ),
+            'mcp': newMcp.isNotEmpty,
+            'skills': newSkills.isNotEmpty,
+          },
+        ],
+      };
+    }
+    if (params.length != 1 ||
+        !const {'mcp', 'skills'}.contains(params['kind'])) {
+      throw const FormatException('Invalid request');
+    }
+    final kind = params['kind'] as String;
+    if (method == 'found.seen') {
+      final current = kind == 'mcp'
+          ? [for (final c in found) '${c['program']}']
+          : [for (final s in skills) '${s['path']}'];
+      final merged = ({...seen[kind]!, ...current}.toList()..sort());
+      final kept = merged.length > 500
+          ? merged.sublist(merged.length - 500)
+          : merged;
+      final before = [...seen[kind]!]..sort();
+      if (jsonEncode(kept) != jsonEncode(before)) {
+        settings.saveOwn({
+          'seen_found': {...seen, kind: kept},
+        });
+      }
+      return {'ok': true};
+    }
+    if (method != 'found.list') throw const FormatException('Unknown method');
+    String tildeOf(String path) =>
+        path == identity.home || p.isWithin(identity.home, path)
+        ? '~${path.substring(identity.home.length)}'
+        : path;
+    if (kind == 'skills') {
+      return {
+        'checked': lastFound.isNotEmpty,
+        'items': [
+          for (final s in skills)
+            {
+              'path': s['path'],
+              'folder': '${s['path']}'.startsWith('~/')
+                  ? p.join(identity.home, '${s['path']}'.substring(2))
+                  : s['path'],
+              'origin': s['origin'],
+              'skills': s['skills'],
+              'new': !seen['skills']!.contains(s['path']),
+            },
+        ],
+      };
+    }
+    final fresh = [
+      for (final c in found)
+        if (!installed(c)) c,
+    ];
+    final isNew = {
+      for (final c in fresh) c['program']: !seen['mcp']!.contains(c['program']),
+    };
+    fresh.sort((a, b) {
+      final s = (isNew[a['program']]! ? 0 : 1).compareTo(
+        isNew[b['program']]! ? 0 : 1,
+      );
+      return s != 0 ? s : '${a['name']}'.compareTo('${b['name']}');
+    });
+    return {
+      'checked': lastFound.isNotEmpty,
+      'set_up': found.length - fresh.length,
+      'not_looked': [
+        for (final x in lastFound['not_looked'] as List? ?? const [])
+          p.basename('$x'),
+      ],
+      'items': [
+        for (final c in fresh)
+          {
+            'name': c['name'],
+            'where': '${c['appimage']}'.isNotEmpty
+                ? p.basename('${c['appimage']}')
+                : tildeOf('${c['program']}'),
+            'command': c['command'],
+            'sure': c['sure'],
+            'version': c['version'],
+            'new': isNew[c['program']],
+            // Inside an AppImage: it is unpacked first (not in the preview).
+            'ready': '${c['appimage']}'.isEmpty,
+          },
+      ],
+    };
+  }
 
   /// The last catalog read (addons.catalog), for addons.hints.
   List<Map<String, dynamic>> catalogRows = const [];
@@ -2263,6 +2485,7 @@ final class CoreService {
       return healthRoute(method, params);
     }
     if (method == 'health.report') return healthReportRoute(params);
+    if (method.startsWith('found.')) return foundRoute(method, params);
     if (method == 'addons.hints') {
       if (params.isNotEmpty) throw const FormatException('Invalid request');
       return {

@@ -1241,12 +1241,43 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
       (_healthReport?['warn'] as int? ?? 0) +
       (_healthReport?['hint'] as int? ?? 0) +
       _updates.length +
-      _addonHints.length;
+      _addonHints.length +
+      _foundHints.length;
 
   Timer? _limitsTimer;
 
   /// Newer versions of agents and local LLMs (updates.check, cached 6 h).
   List<Map<String, dynamic>> _updates = [];
+
+  /// check_new_apps: programs with an MCP server and skill sets from apps
+  /// on this PC (found.scan, read only and cached), and the hint for the new
+  /// ones (found.hints).
+  List<Map<String, dynamic>> _foundHints = [];
+  bool _showFound = false;
+
+  Future<void> _lookForNewApps() async {
+    try {
+      await _quietTask('found.scan', {});
+    } catch (_) {
+      return; // Looked for again at the next start.
+    }
+    await _loadFoundHints();
+  }
+
+  Future<void> _loadFoundHints() async {
+    if (_backend?.isConnected != true) return;
+    try {
+      final found = await _backend!.call('found.hints');
+      if (mounted) {
+        setState(
+          () => _foundHints = (found['lines'] as List? ?? const [])
+              .cast<Map<String, dynamic>>(),
+        );
+      }
+    } catch (_) {
+      // Shown next time.
+    }
+  }
 
   /// ai_popup.look_for_addons: add-ons whose agent or local LLM is on this
   /// PC but not on the map, and add-on updates ready (addons.hints).
@@ -1407,13 +1438,21 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
           _cancelReview?.call();
           _runUpdate(update);
         },
-        addonHints: _addonHints,
-        onAddonHint: (line, all) {
+        addonHints: [..._foundHints, ..._addonHints],
+        onAddonHint: (line, action) {
           _cancelReview?.call();
-          if (all) {
-            _updateAllAddons(line);
-          } else {
-            setState(() => _focusCategory = line['column'] as int? ?? 1);
+          switch (action) {
+            case 'update_all':
+              _updateAllAddons(line);
+            case 'mcp' || 'skills':
+              setState(() {
+                _showConnections = true;
+                _showFound = true;
+                _showProviders = false;
+                _showSystemMap = false;
+              });
+            default:
+              setState(() => _focusCategory = line['column'] as int? ?? 1);
           }
         },
         onCheckAgain: () async {
@@ -1444,6 +1483,7 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
       case 'addmcp' || 'addskills':
         setState(() {
           _showConnections = true;
+          _showFound = true;
           _showProviders = false;
           _showSystemMap = false;
         });
@@ -3057,6 +3097,7 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
         unawaited(_checkHealth());
         unawaited(_checkUpdates());
         if (!_welcome) _quietCatalog = _quietAddonCatalog();
+        unawaited(_lookForNewApps());
         // Settings › Costs: a desktop notification when a plan limit turns red.
         _limitsTimer ??= Timer.periodic(const Duration(minutes: 1), (_) {
           if (_backend?.isConnected == true) {
@@ -3067,6 +3108,7 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
         });
       }
       unawaited(_loadAddonHints());
+      unawaited(_loadFoundHints());
     } catch (_) {
       if (mounted) {
         setState(() {
@@ -3524,8 +3566,12 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
                                         params,
                                         method: 'mcp.option_preview',
                                       ),
+                                  showFound: _showFound,
                                   onBack: () {
-                                    setState(() => _showConnections = false);
+                                    setState(() {
+                                      _showConnections = false;
+                                      _showFound = false;
+                                    });
                                     _backToGuideIfFromIt();
                                   },
                                   onUndo: _connectionUndo == null
@@ -3533,7 +3579,10 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
                                       : _undoConnection,
                                 ),
                                 () {
-                                  setState(() => _showConnections = false);
+                                  setState(() {
+                                    _showConnections = false;
+                                    _showFound = false;
+                                  });
                                   _backToGuideIfFromIt();
                                 },
                                 width: TaskCardWidth.half,

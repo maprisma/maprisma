@@ -5,6 +5,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 KEYS = (
+    # Found on this PC (found.list).
+    "Found on this PC",
+    "Add…",
+    "new",
+    "Every program found here is set up already.",
+    "Nothing found.",
+    "Add MCP server…",
+    "Add skills…",
     # Add-on suggestions and updates (addons.hints).
     "Update all",
     "Add-ons updated: {0}",

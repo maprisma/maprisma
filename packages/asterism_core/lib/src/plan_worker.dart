@@ -33,6 +33,7 @@ import 'model_hub.dart' show netFetch;
 import 'model_downloads.dart' show DownloadError;
 import 'provider_ops.dart';
 import 'provider_scans.dart';
+import 'found_scan.dart';
 import 'scan_files.dart';
 import 'service_i18n.dart';
 import 'settings.dart';
@@ -637,6 +638,51 @@ Future<int> runWorker(List<String> args) async {
             now: DateTime.now().millisecondsSinceEpoch / 1000,
             gpu: detectGpu,
           ),
+        },
+      });
+      return 0;
+    }
+    // mcp_scan and skills_scan: programs with an MCP server and skill sets
+    // on this PC, read only (big programs read once, kept in the cache).
+    if (args.isEmpty && request['operation'] == 'found.scan') {
+      final params = request['params'] as Map;
+      bool strings(dynamic v) =>
+          v is List && v.length <= 2000 && v.every((x) => x is String);
+      final configured = params['configured'];
+      if (params.length != 5 ||
+          configured is! Map ||
+          configured.length > 2000 ||
+          !configured.values.every(strings) ||
+          !strings(params['skip']) ||
+          !strings(params['known']) ||
+          !strings(params['mcp_folders']) ||
+          !strings(params['skill_folders'])) {
+        throw const FormatException('Invalid worker request');
+      }
+      final identity = AppIdentity();
+      final scan = FoundScan(
+        identity.home,
+        cacheFile: p.join(identity.cacheDir, 'mcp-scan-3.json'),
+        searchPath: identity.environment['PATH'],
+        mcpFolders: (params['mcp_folders'] as List).cast<String>(),
+        skillFolders: (params['skill_folders'] as List).cast<String>(),
+      );
+      final mcp = scan.scan({
+        for (final e in configured.entries)
+          '${e.key}': (e.value as List).cast<String>(),
+      }, (params['skip'] as List).cast<String>().toSet());
+      send({
+        'type': 'result',
+        'result': {
+          'mcp': [for (final c in mcp) c.toJson()],
+          'versions': scan.newVersionsFound(),
+          'not_looked': scan.notLookedInto(),
+          'skills': [
+            for (final s in scan.skillSets(
+              (params['known'] as List).cast<String>(),
+            ))
+              {'path': s.path, 'skills': s.skills, 'origin': s.origin},
+          ],
         },
       });
       return 0;

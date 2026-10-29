@@ -101,6 +101,10 @@ for line in sys.stdin:
  elif m=='models.slots_reload':r={'ok':True}
  elif m=='updates.check':tasks['up']={'updates':[{'kind':'agent','key':'test','name':'Test agent','current':'1.0','available':'1.1','command':['mise','upgrade','test'],'page':False}]};r={'task':'up'}
  elif m=='updates.run':r={'started':True}
+ elif m=='found.scan':tasks['found']={'mcp':[],'versions':[],'not_looked':[],'skills':[]};r={'task':'found'}
+ elif m=='found.hints':r={'lines':[{'kind':'found','text':'New on this PC: wordcraft','mcp':True,'skills':False}]}
+ elif m=='found.list':r=({'checked':True,'set_up':1,'not_looked':[],'items':[{'name':'wordcraft','where':'~/.local/bin/wordcraft-cli','command':['/h/.local/bin/wordcraft-cli','mcp','--headless'],'sure':True,'version':'','new':True,'ready':True},{'name':'vectorcraft','where':'vectorcraft.AppImage','command':['x'],'sure':True,'version':'1.2.0','new':False,'ready':False}]} if p['kind']=='mcp' else {'checked':True,'items':[]})
+ elif m=='found.seen':r={'ok':True}
  elif m=='addons.hints':r={'lines':[{'kind':'new','text':'Goose is on this PC but not on the map','ids':['agent-goose'],'column':1},{'kind':'updates','text':'Add-on updates ready: Catalog adapter','updates':[{'id':'catalog-addon','name':'Catalog adapter','version':'2.1','current':'2.0','preview':'catalog-1'}]}]}
  elif m=='health.report':tasks['hr']={'warn':1,'hint':0,'level':'warn','summary':'1 thing to fix','open_text':'1 open problem','areas':[{'key':'agents','title':'Agents','icon':'','findings':[{'level':'warn','title':'Test agent: Not signed in','text':'','action':['details','test']}]}],'uses':[]};r={'task':'hr'}
  elif m=='agents.health':r={'state':'warn','summary':'Works, one thing to look at: No model chosen','checks':[{'state':'warn','title':'No model chosen','detail':'','step':'Select it on the map.','command':'','sign_in':''}]}
@@ -1025,6 +1029,49 @@ void main() {
     await tester.tap(find.widgetWithText(OutlinedButton, 'Get add-ons'));
     await settleService(tester);
     expect(find.byType(MapAddonsFocus), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await unmountApp(tester);
+  });
+
+  testWidgets('a program found on this PC is added through the form', (
+    tester,
+  ) async {
+    final dir = await mountApp(tester);
+    await settleService(tester);
+    await tester.tap(find.byKey(const ValueKey('problems-open')));
+    await settleService(tester);
+    expect(find.text('New on this PC: wordcraft'), findsOneWidget);
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Add MCP server…'));
+    await settleService(tester);
+    expect(find.byKey(const ValueKey('found-panel')), findsOneWidget);
+    expect(find.text('★ new · ~/.local/bin/wordcraft-cli'), findsOneWidget);
+    final inside = tester.widget<OutlinedButton>(
+      find.descendant(
+        of: find.byKey(const ValueKey('found-mcp-vectorcraft 1.2.0')),
+        matching: find.byType(OutlinedButton),
+      ),
+    );
+    expect(inside.onPressed, isNull); // inside an AppImage: not yet
+    expect(
+      requests(dir).where((q) => q['method'] == 'found.seen').length,
+      2,
+    );
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(const ValueKey('found-mcp-wordcraft')),
+        matching: find.byType(OutlinedButton),
+      ),
+    );
+    await settleService(tester);
+    expect(find.byKey(const ValueKey('found-panel')), findsNothing);
+    expect(
+      find.widgetWithText(TextFormField, 'wordcraft'),
+      findsOneWidget,
+    );
+    expect(
+      find.widgetWithText(TextFormField, '/h/.local/bin/wordcraft-cli'),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
     await unmountApp(tester);
   });

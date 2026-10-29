@@ -41,9 +41,9 @@ class OpenProblemsView extends StatelessWidget {
   /// addons.hints: add-ons for what is on this PC, and add-on updates.
   final List<Map<String, dynamic>> addonHints;
 
-  /// A hint's button: all true is "Update all", else the add-ons to get or
-  /// switch on.
-  final void Function(Map<String, dynamic> line, bool all)? onAddonHint;
+  /// A hint's button: update_all, addons (to get or switch on), mcp or
+  /// skills (what was found on this PC).
+  final void Function(Map<String, dynamic> line, String action)? onAddonHint;
   final VoidCallback onCheckAgain;
   final VoidCallback onClose;
 
@@ -115,7 +115,11 @@ class OpenProblemsView extends StatelessWidget {
                 key: ValueKey('addon-hint-${h['kind']}'),
                 dense: true,
                 leading: Icon(
-                  h['kind'] == 'updates' ? Icons.upgrade : Icons.extension,
+                  h['kind'] == 'updates'
+                      ? Icons.upgrade
+                      : h['kind'] == 'found'
+                      ? Icons.new_releases
+                      : Icons.extension,
                 ),
                 title: Text('${h['text']}'),
                 trailing: onAddonHint == null
@@ -123,19 +127,23 @@ class OpenProblemsView extends StatelessWidget {
                     : Wrap(
                         spacing: 8,
                         children: [
-                          if (h['kind'] == 'updates')
-                            OutlinedButton(
-                              onPressed: () => onAddonHint!(h, true),
-                              child: Text(tr('Update all')),
-                            ),
-                          OutlinedButton(
-                            onPressed: () => onAddonHint!(h, false),
-                            child: Text(
-                              tr(
+                          for (final (action, label) in [
+                            if (h['kind'] == 'updates')
+                              ('update_all', 'Update all'),
+                            if (h['kind'] == 'found') ...[
+                              if (h['mcp'] == true) ('mcp', 'Add MCP server…'),
+                              if (h['skills'] == true)
+                                ('skills', 'Add skills…'),
+                            ] else
+                              (
+                                'addons',
                                 h['kind'] == 'new' ? 'Get add-ons' : 'Add-ons',
                               ),
+                          ])
+                            OutlinedButton(
+                              onPressed: () => onAddonHint!(h, action),
+                              child: Text(tr(label)),
                             ),
-                          ),
                         ],
                       ),
               ),

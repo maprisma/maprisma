@@ -11,6 +11,7 @@ class ConnectionAuthoring extends StatefulWidget {
     required this.onPreview,
     required this.onClose,
     this.chooseFolder,
+    this.initial = const {},
   });
   final String kind;
   final List<Map<String, dynamic>> agents;
@@ -19,6 +20,10 @@ class ConnectionAuthoring extends StatefulWidget {
   final Future<void> Function(Map<String, dynamic>) onPreview;
   final VoidCallback onClose;
   final Future<String?> Function()? chooseFolder;
+
+  /// Found on this PC: name, command (program + args) or folder to start
+  /// from; everything stays editable.
+  final Map<String, dynamic> initial;
   @override
   State<ConnectionAuthoring> createState() => _ConnectionAuthoringState();
 }
@@ -47,6 +52,20 @@ class _ConnectionAuthoringState extends State<ConnectionAuthoring> {
   bool get _busy => widget.busy || _working;
   bool get _mcp => widget.kind == 'mcp';
   String tr(String key) => widget.tr(key);
+  @override
+  void initState() {
+    super.initState();
+    final command = [
+      for (final x in widget.initial['command'] as List? ?? const []) '$x',
+    ];
+    _name.text = '${widget.initial['name'] ?? ''}';
+    if (command.isNotEmpty) {
+      _command.text = command.first;
+      _args.text = command.skip(1).join('\n');
+    }
+    _folder.text = '${widget.initial['folder'] ?? ''}';
+  }
+
   @override
   void dispose() {
     for (final controller in [_name, _command, _args, _url, _folder]) {
