@@ -49,7 +49,7 @@ final class AgentCatalog {
     : adapters = adapters ?? builtinAdapters();
   final ScanFiles files;
   final Desktop desktop;
-  final List<Adapter> adapters;
+  List<Adapter> adapters;
   Adapter? adapter(String command) {
     for (final a in [
       ...adapters.where((a) => (a.facts['offered'] ?? true) == true),

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:asterism_core/asterism_core.dart';
 import 'package:asterism_core/src/connect_apply.dart';
@@ -7,6 +8,7 @@ import 'package:asterism_core/src/model_downloads.dart';
 import 'package:asterism_core/src/model_guard.dart';
 import 'package:asterism_core/src/provider_watch.dart';
 import 'package:asterism_core/src/pty_sessions.dart';
+import 'package:asterism_core/src/sshsig.dart';
 import 'package:asterism_core/src/scan_files.dart';
 import 'package:asterism_core/src/plan_worker.dart';
 import 'package:asterism_core/src/provider_ops.dart';
@@ -416,5 +418,48 @@ void main() {
     sessions.stop(ident);
     await Future<void>.delayed(const Duration(milliseconds: 300));
     expect(alive(orphan), isFalse);
+  });
+
+  test('add-on signatures are checked as ssh-keygen -Y verify does', () {
+    // agent-goose's real MANIFEST.sha256 and SIGNATURE (asterism-addons).
+    const signature =
+        '-----BEGIN SSH SIGNATURE-----\nU1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgQg9md88iTLL4hfUnSN8HmD9TxT\nmOMlNqk6iDOUqvGWgAAAAOYXN0ZXJpc20tYWRkb24AAAAAAAAABnNoYTUxMgAAAFMAAAAL\nc3NoLWVkMjU1MTkAAABAhy0rQkm79ETRzf1aQS9PpEPb1zYziAnKE8MGAv4zzKPCf+RNz/\nh8smZ7CTiLRa0eXvw7zckgsFzGIwmoEIy9DQ==\n-----END SSH SIGNATURE-----\n';
+    final manifest = base64.decode(
+      'ZGYwNWU2ZTViODYwNzM5ODc0NTFiMDIwMzkzZDZmZjY0ZTg3MWUyNmEzMjgzYzRlMzU0MzA0N2ZkZDI2ZjRjOSAgYWRkb24uanNvbgoyMTMyOWQ4MjMzZDc1N2RhZmYwMWZmOWM0ZjQ1NGJhMTM1YWQyODM0ZWZhOTU2ZWNiYjkzZTAyY2Q0OThlZTdiICBhZ2VudC50b21sCg==',
+    );
+    const key =
+        'AAAAC3NzaC1lZDI1NTE5AAAAIEIPZnfPIkyy+IX1J0jfB5g/U8U5jjJTapOogzlKrxlo';
+    final good = utf8.encode(signature);
+    expect(sshSignatureOk(manifest, good, 'asterism-addon', key), isTrue);
+    expect(
+      sshSignatureOk([...manifest, 10], good, 'asterism-addon', key),
+      isFalse,
+    );
+    expect(sshSignatureOk(manifest, good, 'other-namespace', key), isFalse);
+    expect(
+      sshSignatureOk(
+        manifest,
+        good,
+        'asterism-addon',
+        key.replaceFirst('E', 'F'),
+      ),
+      isFalse,
+    );
+    // A byte of the signature itself changed (inside the base64 armor).
+    final lines = signature.split('\n');
+    final body = lines[3];
+    final flipped = [
+      ...lines.take(3),
+      body.replaceRange(10, 11, body[10] == 'A' ? 'B' : 'A'),
+      ...lines.skip(4),
+    ].join('\n');
+    expect(
+      sshSignatureOk(manifest, utf8.encode(flipped), 'asterism-addon', key),
+      isFalse,
+    );
+    expect(
+      sshSignatureOk(manifest, utf8.encode('garbage'), 'asterism-addon', key),
+      isFalse,
+    );
   });
 }

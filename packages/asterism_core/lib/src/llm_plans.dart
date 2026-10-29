@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'package:path/path.dart' as p;
-import 'adapter_assets.g.dart';
 import 'agent_catalog.dart';
 import 'connect_apply.dart';
 import 'context.dart';
@@ -9,6 +8,7 @@ import 'inventory.dart' show chatModels;
 import 'local_llm.dart';
 import 'provider_scans.dart' show RuntimeRecord;
 import 'py_values.dart';
+import 'provider_facts.dart';
 
 /// Python connect.plan for a local LLM and the agents' local_llm_transform
 /// hooks (Hermes, Oh My Pi, Pi, OpenCode, OpenClaw, DeepSeek Harness): the
@@ -490,8 +490,10 @@ final class LlmPlans {
     bool remove,
     Map context,
   ) {
-    final provider = (providerFacts['connect_keys'] as Map)[rt.key] as String;
-    final label = (providerFacts['connect_labels'] as Map)[rt.key] as String;
+    final provider =
+        (visibleProviderFacts['connect_keys'] as Map)[rt.key] as String;
+    final label =
+        (visibleProviderFacts['connect_labels'] as Map)[rt.key] as String;
     final url = baseUrl(rt.address);
     final chat = chatModels(rt.models);
     final models = chat.isNotEmpty
@@ -585,7 +587,7 @@ final class LlmPlans {
     final result = Plan(
       agent,
       rt.key,
-      (providerFacts['connect_keys'] as Map)[rt.key] as String,
+      (visibleProviderFacts['connect_keys'] as Map)[rt.key] as String,
     );
     var context = const <String, int>{};
     final extra = <Change>[];

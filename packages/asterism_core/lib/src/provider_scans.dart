@@ -1,8 +1,8 @@
 import 'dart:io';
 import 'package:path/path.dart' as p;
-import 'adapter_assets.g.dart';
 import 'agent_details.dart';
 import 'scan_files.dart';
+import 'provider_facts.dart';
 
 String cleanName(dynamic value) {
   if (value is! String) return '';
@@ -269,7 +269,7 @@ final class ProviderScans {
 
   List<RuntimeRecord> scan() {
     final processesNow = processes(), result = <RuntimeRecord>[];
-    for (final fact in providerFacts['local'] as List) {
+    for (final fact in visibleProviderFacts['local'] as List) {
       final key = fact['key'] as String,
           rt = RuntimeRecord(fact['key'], fact['name']);
       switch (key) {

@@ -2,13 +2,13 @@ import 'package:yaml/yaml.dart';
 import 'dsh_profile.dart';
 import 'py_time.dart';
 import 'adapters.dart';
-import 'adapter_assets.g.dart';
 import 'session_readers.dart';
 import 'provider_scans.dart';
 import 'agent_catalog.dart';
 import 'desktop.dart';
 import 'scan_files.dart';
 import 'service_i18n.dart';
+import 'provider_facts.dart';
 
 String boundedText(dynamic value, [int limit = 80]) =>
     value is String ? String.fromCharCodes(value.trim().runes.take(limit)) : '';
@@ -83,7 +83,7 @@ final class DetailReaders {
         uri != null &&
         ['127.0.0.1', 'localhost', '::1', '0.0.0.0'].contains(uri.host);
     final ports = <int, String>{};
-    for (final p in providerFacts['local'] as List) {
+    for (final p in visibleProviderFacts['local'] as List) {
       for (final port in p['ports'] as List) {
         ports.putIfAbsent(port as int, () => p['name'] as String);
       }

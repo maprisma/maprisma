@@ -904,3 +904,62 @@ The same answers on both sides.
 Phase 4 is done. Still Python: phase 5 (installers, agent actions install/update/uninstall/login,
 add-ons, existing-AI import, system moves; data-only add-ons need Uwe's OK) and phase 6 (the remaining
 parity).
+
+## Phase 5 — installers and add-ons (Claude, from 2026-10-29)
+
+Uwe, 2026-10-29: add-ons become **data only**. Steps:
+- **5a** add-ons: 5a-1 verification, list, switching on and off; 5a-2 catalog, install, update, remove.
+- **5b** installers (`install_ctl`): `installers.preview/install`, agent actions (install, update,
+  uninstall, login).
+- **5c** setup and the first-agent guide.
+- **5d** `models.remove`, the phase 4 leftover.
+
+Not in phase 5 (phase 6): `system.*`, `existing.*`, `app.settings_changed`.
+
+### 5a-1 — add-ons as data: verification, list, switching
+
+**`addons.dart`** ports `addons.verify` and `find`, and `flutter_addons.AdapterRegistry`:
+- the same checks: folder and files trusted, no links, file count and size limits, only the allowed
+  files, the manifest's hashes, the `addon.json` rules (id, version, API, privacy, kind, needs,
+  detect, provides, extends, capabilities, a shapes-only `icon.svg`);
+- the user folder (`$XDG_DATA_HOME/asterism/addons`) wins over the system folder, an `addons/`
+  folder next to the app executable, which packaging fills in phase 7.
+
+**Data only:** nothing of an add-on runs.
+- An agent add-on's `agent.toml` is read from its verified bytes. Facts newer than its API come from
+  the app's own adapter (`harnesses._with_newer_facts`, including the research rule).
+- The code the app's own signed add-ons carry is built into this core, which uses its own: the
+  `llm-*` providers, `providers-online`, and the `hooks.py` of the six built-in agents (dsh, hermes,
+  omp, openclaw, opencode, pi).
+- Any other code is refused with "needs an update": an `addon.py` / `hooks.py` the core doesn't have,
+  and a feature add-on with code (Insights). Python's backend listed Insights as verified-unsupported,
+  but it never ran there either.
+
+**Signatures:** `sshsig.dart` verifies OpenSSH's SSHSIG format natively (ed25519 per RFC 8032,
+SHA-512/256, namespace `asterism-addon`, only Uwe's key). It replaces `ssh-keygen -Y verify`, because
+the synchronous service can't hand the manifest to it on stdin, and it removes the OpenSSH dependency
+for macOS. All 25 signed add-ons verify in about 3 ms each; tampered manifests, other namespaces,
+other keys and changed signature bytes are refused.
+
+**Hidden and shown, as the reference does:**
+- A built-in agent or provider that comes as a verified add-on is shown only while that add-on is on.
+- `provider_facts.dart`: `visibleProviderFacts` gives the local list, connect keys and labels, the
+  online list, cloud boxes and provider names without the hidden providers. Loaded ones come after the
+  visible built-ins (local LLMs in `LOCAL_ORDER`, online ones in the order they were added), as
+  `providers.local` / `online` order them.
+- Every reader of those facts uses it. The generated provider facts now carry each online provider's
+  agents and IDs.
+
+**Routes:** `addons.list` (including sign-ins for provider add-ons) and `addons.set_enabled`
+(reload, rollback when a switched-on add-on doesn't load, `addons_enabled` saved). The registry loads
+when the core starts, as `initialize` does.
+
+Checks:
+- All 69 differential cases still pass (no add-on folders there, so nothing hidden).
+- `tests/test_dart_addons_parity.py`, with Uwe's real signed add-ons and tampered copies (a changed
+  `agent.toml`, an extra file): same listing, states, switching results, visible agents, local and
+  online providers, and saved setting. The one intended difference is Insights.
+- Real HOME (add-on folder and enabled list as they are, settings copied): same listing and same
+  visible agents and providers.
+- A Dart test for the signature check (good, changed message, other namespace, other key, changed
+  signature byte, garbage).

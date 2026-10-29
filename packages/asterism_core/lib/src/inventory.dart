@@ -4,11 +4,11 @@ import 'adapters.dart';
 import 'dsh_profile.dart';
 import 'local_llm.dart';
 import 'skill_plans.dart' show hermesSkillDirs;
-import 'adapter_assets.g.dart';
 import 'agent_catalog.dart';
 import 'agent_details.dart';
 import 'provider_scans.dart';
 import 'scan_files.dart';
+import 'provider_facts.dart';
 
 final class InventorySnapshot {
   final runtimes = <RuntimeRecord>[],
@@ -393,7 +393,7 @@ final class InventoryReader {
         for (final rt in inv.runtimes.where(
           (r) =>
               r.installed &&
-              (providerFacts['connect_keys'] as Map).containsKey(r.key),
+              (visibleProviderFacts['connect_keys'] as Map).containsKey(r.key),
         ))
           {
             'id': rt.key,

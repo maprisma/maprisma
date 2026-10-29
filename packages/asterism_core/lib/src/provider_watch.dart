@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:path/path.dart' as p;
-import 'adapter_assets.g.dart';
 import 'identity.dart';
 import 'model_guard.dart' show agentInstances;
 import 'posix_ffi.dart';
@@ -13,6 +12,7 @@ import 'settings.dart';
 import 'provider_scans.dart';
 import 'py_values.dart';
 import 'scan_files.dart';
+import 'provider_facts.dart';
 
 /// provider_watch: start an agent's local LLMs when the agent starts, stop
 /// them when it closes. The service (`asterism-core provider-watch --config
@@ -150,7 +150,7 @@ String watchConfigText(List<RuntimeRecord> runtimes, Set<String> selfServed) {
       if (control.isNotEmpty && rt.service.isEmpty) 'control': control,
     };
     final facts =
-        (providerFacts['local'] as List).firstWhere(
+        (visibleProviderFacts['local'] as List).firstWhere(
               (f) => (f as Map)['key'] == rt.key,
               orElse: () => const {},
             )

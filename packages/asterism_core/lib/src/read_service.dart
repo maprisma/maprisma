@@ -15,6 +15,7 @@ import 'settings.dart';
 import 'adapter_assets.g.dart';
 import 'core_tasks.dart' show taskFocus;
 import 'system_reads.dart';
+import 'provider_facts.dart';
 
 // Each route here has passed its differential fixtures (normal and hostile) and
 // a read-only comparison with the Python reference on a real HOME.
@@ -244,7 +245,7 @@ final class ReadService {
             {'path': f, 'available': FileSystemEntity.isDirectorySync(f)},
       ],
       'local': local,
-      'online': providerFacts['online'],
+      'online': visibleProviderFacts['online'],
     };
   }
 

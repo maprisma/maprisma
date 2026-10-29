@@ -3,13 +3,13 @@ import 'package:collection/collection.dart';
 import 'package:path/path.dart' as p;
 import 'adapters.dart';
 import 'dsh_profile.dart';
-import 'adapter_assets.g.dart';
 import 'agent_catalog.dart';
 import 'agent_details.dart';
 import 'inventory.dart';
 import 'provider_scans.dart';
 import 'scan_files.dart';
 import 'service_i18n.dart';
+import 'provider_facts.dart';
 
 (String, String) splitModel(String model) {
   model = model.trim();
@@ -93,7 +93,8 @@ final class MapGraph {
   }
 
   String providerName(String raw) =>
-      mapOf(providerFacts['names'])[raw.trim().toLowerCase()] as String? ??
+      mapOf(visibleProviderFacts['names'])[raw.trim().toLowerCase()]
+          as String? ??
       raw.trim();
 
   /// The app's own program folder of an agent (install_ctl installed_folder):
@@ -250,8 +251,8 @@ final class MapGraph {
     nodes.clear();
     edges.clear();
     final live = <String, List<String>>{},
-        clouds = mapOf(providerFacts['cloud']),
-        names = mapOf(providerFacts['connect_keys']);
+        clouds = mapOf(visibleProviderFacts['cloud']),
+        names = mapOf(visibleProviderFacts['connect_keys']);
     final runtimes = {for (final rt in inv.runtimes) rt.name: rt};
     String status(RuntimeRecord rt) => rt.running
         ? rt.serverOff

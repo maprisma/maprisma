@@ -8,6 +8,9 @@ import 'provider_scans.dart' show ProviderScans;
 import 'provider_watch.dart';
 import 'read_service.dart';
 import 'connect_apply.dart';
+import 'addons.dart';
+import 'package:path/path.dart' as p;
+import 'adapter_assets.g.dart';
 import 'agent_halt.dart';
 import 'agent_start.dart';
 import 'core_tasks.dart';
@@ -18,9 +21,9 @@ import 'context.dart';
 import 'map_edits.dart';
 import 'provider_ops.dart';
 import 'inventory.dart' show chatModels;
-import 'adapter_assets.g.dart';
 import 'settings.dart';
 import 'service_i18n.dart';
+import 'provider_facts.dart';
 
 const portedRoutes = {
   'settings.get',
@@ -29,6 +32,8 @@ const portedRoutes = {
   'app.identity',
   'desktop.snapshot',
   'i18n.lookup',
+  'addons.list',
+  'addons.set_enabled',
   'sessions.start',
   'projects.pin',
   'projects.forget',
@@ -46,6 +51,10 @@ final class CoreService {
     settings.migrate();
     desktop = detectDesktop(identity, Posix());
     i18n = ServiceI18n(identity, settings);
+    // The add-ons first (initialize): their agents and providers replace the
+    // built-in ones the way the reference does.
+    addons.reload(enabledAddons());
+    reads.catalog.adapters = addons.adapters;
     // Inventory scans remember the MCP servers in use, as the reference does.
     reads.inventory.knownServers = mcp.knownServers;
     // After each scan the provider watcher's config, and its service on or off.
@@ -72,6 +81,76 @@ final class CoreService {
     identity.home,
     ContextReader(reads.files, config),
   );
+  late final addons = AddonRegistry(AddonVerifier(Posix()), [
+    addonUserDir,
+    p.join(p.dirname(Platform.resolvedExecutable), 'addons'),
+  ]);
+  String get addonUserDir =>
+      p.join(identity.root('XDG_DATA_HOME', '.local/share'), 'asterism/addons');
+  Set<String> enabledAddons() => {
+    for (final x in settings.value(settings.load(), 'addons_enabled') as List)
+      x as String,
+  };
+
+  /// flutter_addons.snapshot's sign-ins: installed agents of a provider
+  /// add-on's online providers that can sign in.
+  List<Map<String, dynamic>> addonSignIns(Addon item) {
+    if (item.kind != 'provider') return [];
+    final commands = {
+      for (final x in (providerFacts['online_providers'] as List).cast<Map>())
+        if (item.provides.contains(x['key'])) ...(x['agents'] as List),
+    };
+    return [
+      for (final a in reads.catalog.scan())
+        if (a.installed &&
+            commands.contains(a.command) &&
+            a.adapter.table('access').isNotEmpty)
+          {'command': a.command, 'name': a.name},
+    ];
+  }
+
+  Map<String, dynamic> addonRoute(String method, Map<String, dynamic> params) {
+    if (method == 'addons.list') {
+      if (params.isNotEmpty) {
+        throw const FormatException('Add-on service unavailable');
+      }
+      return addons.snapshot(enabledAddons(), addonSignIns, addonUserDir);
+    }
+    if (starter.sessions.items.values.any(starter.sessions.running)) {
+      throw const FormatException(
+        'Finish running agents before changing add-ons',
+      );
+    }
+    if (params.length != 2 ||
+        params['id'] is! String ||
+        params['enabled'] is! bool) {
+      throw const FormatException('Invalid add-on request');
+    }
+    final on = params['enabled'] as bool;
+    final item = addons.items.where((a) => a.id == params['id']).firstOrNull;
+    if (item == null ||
+        !supportedKinds.contains(item.kind) ||
+        on && !const {'verified', 'loaded'}.contains(item.state)) {
+      throw const FormatException('Add-on unavailable');
+    }
+    final before = enabledAddons(), enabled = {...before};
+    on ? enabled.add(item.id) : enabled.remove(item.id);
+    try {
+      addons.reload(enabled);
+      if (on &&
+          !addons.items.any((a) => a.id == item.id && a.state == 'loaded')) {
+        throw const FormatException('An adapter could not be loaded');
+      }
+      settings.saveOwn({'addons_enabled': enabled.toList()..sort()});
+    } catch (_) {
+      addons.reload(before);
+      reads.catalog.adapters = addons.adapters;
+      rethrow;
+    }
+    reads.catalog.adapters = addons.adapters;
+    return addons.snapshot(enabled, addonSignIns, addonUserDir);
+  }
+
   late final starter = AgentStart(identity, settings, reads.catalog, desktop);
   late final halt = AgentHalt(
     reads.catalog,
@@ -133,7 +212,9 @@ final class CoreService {
             (r) =>
                 r.key == params['item'] &&
                 r.installed &&
-                (providerFacts['connect_keys'] as Map).containsKey(r.key),
+                (visibleProviderFacts['connect_keys'] as Map).containsKey(
+                  r.key,
+                ),
           )
           .firstOrNull;
       if (rt == null) throw const FormatException('Provider unavailable');
@@ -228,6 +309,9 @@ final class CoreService {
         return starter.session(method, params);
       }
       return dispatchHandle(method, params, connections, tasks);
+    }
+    if (method == 'addons.list' || method == 'addons.set_enabled') {
+      return addonRoute(method, params);
     }
     if (method == 'sessions.start') return starter.start(params);
     if (method == 'agents.halt_preview') return halt.preview(params);

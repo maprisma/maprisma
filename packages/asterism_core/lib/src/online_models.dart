@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'package:path/path.dart' as p;
-import 'adapter_assets.g.dart';
 import 'adapters.dart';
 import 'connect_apply.dart';
 import 'dsh_profile.dart';
@@ -9,6 +8,7 @@ import 'local_llm.dart';
 import 'protocol.dart';
 import 'py_values.dart';
 import 'scan_files.dart';
+import 'provider_facts.dart';
 
 /// online_models: the online models an agent can be switched to on the map,
 /// and the switch as a plan (backup, Undo). Only the switchers of the
@@ -42,7 +42,8 @@ final class OnlineModels {
 
   /// graph.provider_name.
   static String providerName(String raw) =>
-      (providerFacts['names'] as Map?)?[raw.trim().toLowerCase()] as String? ??
+      (visibleProviderFacts['names'] as Map?)?[raw.trim().toLowerCase()]
+          as String? ??
       raw.trim();
 
   bool supported(Adapter adapter) {

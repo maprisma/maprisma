@@ -1,9 +1,9 @@
 import 'dart:convert';
-import 'adapter_assets.g.dart';
 import 'adapters.dart';
 import 'dsh_profile.dart';
 import 'py_values.dart';
 import 'scan_files.dart';
+import 'provider_facts.dart';
 
 /// Python connect.is_connected / is_active: whether an agent's own settings
 /// name a local LLM's provider, by the built-in reader of each adapter's
@@ -71,7 +71,7 @@ final class LocalLlm {
   ];
 
   String provider(String runtime) =>
-      (providerFacts['connect_keys'] as Map)[runtime] as String? ?? '';
+      (visibleProviderFacts['connect_keys'] as Map)[runtime] as String? ?? '';
 
   bool connected(Adapter adapter, String runtime) {
     if (adapter.table('local_llm').isEmpty) return false;

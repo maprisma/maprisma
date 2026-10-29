@@ -13,6 +13,7 @@ import 'online_models.dart';
 import 'py_values.dart';
 import 'read_service.dart';
 import 'skill_plans.dart';
+import 'provider_facts.dart';
 
 /// connect.chain and connect.merge: several plans, one preview, one backup,
 /// one Undo; each builder reads what the ones before it planned.
@@ -178,7 +179,7 @@ final class MapEdits {
     final runtimes = {
       for (final r in inv.runtimes)
         if (r.installed &&
-            (providerFacts['connect_keys'] as Map).containsKey(r.key))
+            (visibleProviderFacts['connect_keys'] as Map).containsKey(r.key))
           'runtime:${r.key}': r,
     };
     Map node(String ident, Set<String> kinds) {
@@ -242,7 +243,7 @@ final class MapEdits {
       );
       final key = old.contains(':') ? old.substring(old.indexOf(':') + 1) : '';
       if (configured != dangling ||
-          provider != (providerFacts['connect_keys'] as Map)[key]) {
+          provider != (visibleProviderFacts['connect_keys'] as Map)[key]) {
         throw const FormatException('Model changed; refresh');
       }
     }
@@ -342,7 +343,7 @@ final class MapEdits {
     final runtimes = {
       for (final r in inv.runtimes)
         if (r.installed &&
-            (providerFacts['connect_keys'] as Map).containsKey(r.key))
+            (visibleProviderFacts['connect_keys'] as Map).containsKey(r.key))
           'runtime:${r.key}': r,
     };
     Map node(String? ident, Set<String> kinds) {
