@@ -6,6 +6,7 @@ import 'installers.dart' show detectGpu;
 import 'posix_ffi.dart';
 import 'provider_facts.dart' show visibleProviderFacts;
 import 'py_values.dart' show pyCompare;
+import 'model_slots.dart' show needCount, slotHints;
 
 /// health: how well the AI setup on this PC works, and what would make it
 /// better. Reads only what was collected (agents and their checks, the
@@ -218,6 +219,7 @@ final class HealthReport {
     required Map? graph,
     required Map pc,
     required Map failedLinks,
+    List<Map> slotNeeds = const [],
   }) {
     final installed = agents.where((a) => a['installed'] == true).toList();
     final names = {for (final a in agents) '${a['command']}': '${a['name']}'};
@@ -465,6 +467,23 @@ final class HealthReport {
               'It may hold video memory. With “Start local LLMs with their agents” on, it starts and stops with them.',
             ),
             ['runtime', key],
+          ),
+        );
+      }
+    }
+    // Agents on different models of one local LLM: it must keep them all
+    // loaded, and they must fit (model_slots).
+    for (final need in slotNeeds) {
+      for (final hint in slotHints(need, vram, tr)) {
+        localArea.add(
+          finding(
+            'warn',
+            f('{0}: its agents use {1} different models', [
+              need['name'],
+              needCount(need),
+            ]),
+            '${hint['text']}',
+            ['runtime', '${need['key']}'],
           ),
         );
       }

@@ -1843,3 +1843,40 @@ Check: Dart `agents_using_agents_test.dart` (a shell between them, an agent insi
 limit) and Flutter `agent_links_test.dart` (edges from activity, lit, unknown agents dropped; the bend,
 not pickable, not movable). The Python activity tests and the 69 differential cases pass with the new
 field.
+
+### 6b-14 — Models at once (slots)
+
+New in the core (`model_slots.dart`, the reference is `model_slots` and the engines' `slots_kind`,
+`slots`, `slots_fixed_by`, `slot_changes`):
+- **The need:** `modelsInUse(graph)` maps runtime → {model: agents} from the map's `serves`, `default` and
+  `uses` lines. `slotPlan` reads each engine:
+  - **llama.cpp:** the running router's `--models-max`, else the start lines (the app's unit and a
+    user script it starts), else `LLAMA_ARG_MODELS_MAX`, else 4. A number in the user's own script
+    fixes it; the app's own unit does not.
+  - **Ollama:** `OLLAMA_MAX_LOADED_MODELS` in the app's env file, else 3. Without that file it is not
+    the app's to change.
+  - **LM Studio:** `developer.unloadPreviousJITModelOnLoad`, one or many.
+  - Each model's size: `LlmTuning.modelSize`, now public and with LM Studio's model index.
+  - Plus `needChange`, `needSwaps` and `slotHints`: the swapping and too-big-together warnings.
+- **`models.slots_preview {}`** builds one connection preview for every local LLM whose number should
+  change. For llama.cpp the env file is written, and an older `--models-max` is taken out of the app's
+  own unit. It returns the notes in the interface language (plurals from the core), the warnings,
+  `reload` when a unit changes, and empty when nothing changes. **`models.slots_reload`** runs the
+  fixed `systemctl --user daemon-reload`.
+- **`health.report`** now adds the slot warnings to Local LLMs and models, as the reference does
+  ("X: its agents use N different models").
+- **Flutter:** after an applied provider connection, a model switch or attach, a moved line or a
+  repaired one, the app asks `models.slots_preview`. A change gets a second preview with its notes and
+  warnings, then the apply and, if needed, the reload. Warnings without a change come as messages. The
+  manual's "Models at once in the Flutter preview" in all eight languages; PDFs rebuilt.
+
+Check: `tests/test_dart_model_slots_parity.py` runs two HOMEs.
+- **The app's own llama.cpp service:** an older flag in the unit, an env file, Ollama with its env
+  file, LM Studio settings and model index.
+- **The user's own start script fixing the number:** no Ollama env file.
+
+Python and Dart give the same uses, needs, flags and hints, and the same changes, byte for byte. An app
+test covers the provider change → the second preview → apply → reload. It was also run once on this
+PC, read only: llama.cpp's number is fixed by the user's wrapper `~/.local/bin/llama-server` (left
+alone). Ollama already keeps 2 for Hermes and OpenCode; its two models need about 37 GB together for
+a 24 GB card, which is now said as a warning.

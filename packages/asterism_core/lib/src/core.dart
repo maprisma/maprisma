@@ -50,6 +50,7 @@ import 'core_jobs.dart';
 import 'setup_checks.dart';
 import 'health_report.dart';
 import 'agent_updates.dart';
+import 'model_slots.dart';
 import 'mcp_tools.dart' show cachedTools;
 
 const portedRoutes = {
@@ -129,6 +130,8 @@ const portedRoutes = {
   'health.report',
   'updates.check',
   'updates.run',
+  'models.slots_preview',
+  'models.slots_reload',
   ...readOnlyRoutes,
 };
 // Phase 7 removes this blocker only after every route has differential coverage.
@@ -1480,6 +1483,7 @@ final class CoreService {
             graph: reads.map,
             pc: pc,
             failedLinks: h.hints,
+            slotNeeds: slotNeeds(),
           );
       // The page's heading, counted in the interface language.
       final open = [
@@ -1494,6 +1498,122 @@ final class CoreService {
             .replaceAll('{0}', '$open'),
       };
     });
+  }
+
+  /// model_slots.plan for the map as it is now: what each local LLM must
+  /// keep loaded for its agents, with what its engine says.
+  List<Map<String, dynamic>> slotNeeds() {
+    final agents = reads.catalog.scan();
+    final inventory = reads.inventory.collect(agents, remember: false);
+    final tuning = LlmTuning(ContextReader(reads.files, config), identity.home);
+    return slotPlan(
+      [
+        for (final rt in inventory.runtimes)
+          if (rt.installed) rt.toJson(),
+      ],
+      modelsInUse(reads.map),
+      _engineSlots(),
+      (rt, model) =>
+          tuning.modelSize('${rt['key']}', '${rt['models_dir']}', model),
+    );
+  }
+
+  EngineSlots _engineSlots() {
+    final scans = ProviderScans(reads.files);
+    return EngineSlots(
+      home: identity.home,
+      processes: () => [
+        for (final x in scans.processes()) (x.pid, x.comm, x.argv),
+      ],
+      parentOf: (pid) {
+        final stat = reads.files.text('${scans.proc}/$pid/stat', limit: 1024);
+        if (stat == null || !stat.contains(')')) return 0;
+        final fields = stat
+            .substring(stat.lastIndexOf(')') + 1)
+            .trim()
+            .split(RegExp(r'\s+'));
+        return fields.length > 1 ? int.tryParse(fields[1]) ?? 0 : 0;
+      },
+    );
+  }
+
+  /// models.slots_preview / models.slots_reload (connect_page.sync_model_slots):
+  /// after a connection or a model change, each local LLM keeps as many
+  /// models loaded as its agents use, where it lets the app set that; one
+  /// preview for all of them (backup, Undo), with the swapping and GPU
+  /// memory warnings.
+  Map<String, dynamic> slotsRoute(String method, Map<String, dynamic> params) {
+    if (params.isNotEmpty) {
+      throw const FormatException('Unexpected parameters');
+    }
+    if (method == 'models.slots_reload') {
+      // A local LLM's service file was among the changes: systemd reads it again.
+      final run = Process.runSync('systemctl', ['--user', 'daemon-reload']);
+      return {'ok': run.exitCode == 0};
+    }
+    final needs = slotNeeds();
+    final vram = ContextReader(reads.files, config).vramTotal();
+    final engines = _engineSlots();
+    final agents = reads.catalog.scan();
+    final runtimes = {
+      for (final rt
+          in reads.inventory.collect(agents, remember: false).runtimes)
+        rt.key: rt.toJson(),
+    };
+    final changes = <Change>[];
+    final notes = <String>[], warnings = <String>[], keys = <String>[];
+    for (final need in needs) {
+      final rt = runtimes[need['key']];
+      if (rt == null) continue;
+      final count = needCount(need);
+      if (needChange(need)) {
+        final found = engines.slotChanges(rt, count);
+        if (found.isNotEmpty) {
+          changes.addAll(found);
+          keys.add('${need['key']}');
+          if (need['kind'] == 'switch') {
+            notes.add(
+              i18n
+                  .text(
+                    count == 1
+                        ? '{0} keeps one model loaded at a time'
+                        : '{0} keeps every model its agents use loaded',
+                  )
+                  .replaceAll('{0}', '${need['name']}'),
+            );
+          } else {
+            notes.add(
+              i18n
+                  .plural(
+                    '{0} keeps 1 model loaded at a time',
+                    '{0} keeps {1} models loaded at once',
+                    count,
+                  )
+                  .replaceAll('{0}', '${need['name']}')
+                  .replaceAll('{1}', '$count'),
+            );
+          }
+          need['slots'] = need['kind'] != 'switch' || count == 1 ? count : 0;
+        }
+      }
+      warnings.addAll([
+        for (final h in slotHints(need, vram, i18n.text)) '${h['text']}',
+      ]);
+    }
+    if (changes.isEmpty) {
+      return {'empty': true, 'notes': notes, 'warnings': warnings};
+    }
+    return {
+      ...connections.keep(Plan('', '', '', changes: changes)),
+      'notes': [
+        ...notes,
+        'Changes apply when the runtime next starts. Running services are not restarted.',
+      ],
+      'warnings': warnings,
+      'reload': changes.any((c) => c.path.endsWith('.service')),
+      'runtimes': keys,
+      'focus': [for (final k in keys) 'runtime:$k'],
+    };
   }
 
   /// The updates the last check found (updates.check), for updates.run.
@@ -2099,6 +2219,9 @@ final class CoreService {
       return healthRoute(method, params);
     }
     if (method == 'health.report') return healthReportRoute(params);
+    if (method == 'models.slots_preview' || method == 'models.slots_reload') {
+      return slotsRoute(method, params);
+    }
     if (method == 'updates.check' || method == 'updates.run') {
       return updatesRoute(method, params);
     }

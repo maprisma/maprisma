@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:asterism/python_transport.dart';
 import 'dart:convert';
 import 'dart:io';
@@ -96,6 +97,8 @@ for line in sys.stdin:
  elif m=='models.tuning':tasks['tune']={'runtime':'Fixture provider','key':'fixture','gpu':'GPU','vram':8<<30,'stacks':[],'build':'','builds':[],'devices':'','settings':{'*':{}},'tuning':{'mode':['a|b','A mode']},'per_model':False,'models':[],'loaded':[],'vram_used':0,'helpers':[{'command':'test','name':'Test agent'}]};r={'task':'tune'}
  elif m=='models.tuning_ask':tasks['ask']={'summary':'One thing.','agent':p['command'],'suggestions':[{'kind':'setting','title':'Use b','why':'Faster.','model':'*','key':'mode','value':'b'}]};r={'task':'ask'}
  elif m=='models.tuning_preview':r={'plan':'opaque-tune','empty':False,'files':[{'path':'~/.config/x.ini','added':1,'removed':0}],'links_add':[],'links_remove':[],'item':'Fixture provider','notes':[],'focus':['runtime:fixture']}
+ elif m=='models.slots_preview':r={'plan':'opaque-slots','empty':False,'files':[{'path':'~/.config/llama.cpp/server.env','added':1,'removed':0}],'links_add':[],'links_remove':[],'notes':['Fixture provider keeps 2 models loaded at once'],'warnings':['Too big together.'],'reload':True,'focus':['runtime:fixture']}
+ elif m=='models.slots_reload':r={'ok':True}
  elif m=='updates.check':tasks['up']={'updates':[{'kind':'agent','key':'test','name':'Test agent','current':'1.0','available':'1.1','command':['mise','upgrade','test'],'page':False}]};r={'task':'up'}
  elif m=='updates.run':r={'started':True}
  elif m=='health.report':tasks['hr']={'warn':1,'hint':0,'level':'warn','summary':'1 thing to fix','open_text':'1 open problem','areas':[{'key':'agents','title':'Agents','icon':'','findings':[{'level':'warn','title':'Test agent: Not signed in','text':'','action':['details','test']}]}],'uses':[]};r={'task':'hr'}
@@ -862,6 +865,49 @@ void main() {
         dir,
       ).lastWhere((q) => q['method'] == 'connections.apply')['params'],
       {'plan': 'opaque-catalog'},
+    );
+    expect(tester.takeException(), isNull);
+    await unmountApp(tester);
+  });
+
+  testWidgets('after a provider change the models kept loaded follow', (
+    tester,
+  ) async {
+    final dir = await mountApp(tester);
+    await tester.tap(find.byTooltip('Connections'));
+    await settleService(tester);
+    unawaited(
+      tester.widget<ConnectionsView>(find.byType(ConnectionsView)).onPreview({
+        'kind': 'provider',
+        'command': 'test',
+        'item': 'fixture',
+        'remove': false,
+      }),
+    );
+    await settleService(tester);
+    await tester.tap(find.widgetWithText(FilledButton, 'Apply'));
+    await settleService(tester);
+    // The second preview: the models kept loaded, with its warning.
+    expect(
+      requests(dir).where((q) => q['method'] == 'models.slots_preview'),
+      isNotEmpty,
+    );
+    expect(
+      find.text('Fixture provider keeps 2 models loaded at once'),
+      findsOneWidget,
+    );
+    expect(find.text('Too big together.'), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, 'Apply'));
+    await settleService(tester);
+    expect(
+      requests(
+        dir,
+      ).lastWhere((q) => q['method'] == 'connections.apply')['params'],
+      {'plan': 'opaque-slots'},
+    );
+    expect(
+      requests(dir).where((q) => q['method'] == 'models.slots_reload'),
+      hasLength(1),
     );
     expect(tester.takeException(), isNull);
     await unmountApp(tester);

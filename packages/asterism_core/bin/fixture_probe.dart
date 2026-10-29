@@ -10,6 +10,7 @@ import 'package:asterism_core/src/llm_tuning.dart' as tun;
 import 'package:asterism_core/src/setup_checks.dart' as chk;
 import 'package:asterism_core/src/health_report.dart' as hr;
 import 'package:asterism_core/src/agent_updates.dart' as upd;
+import 'package:asterism_core/src/model_slots.dart' as slots;
 import 'package:asterism_core/src/installers.dart' as inst;
 import 'package:asterism_core/src/provider_scans.dart' show RuntimeRecord;
 import 'package:asterism_core/src/system_map.dart' show SystemMapReader;
@@ -297,6 +298,45 @@ Future<void> main() async {
           params['cache'] as String,
           search: params['search'] == true,
         );
+      } else if (request.method == 'dev.modelslots') {
+        // model_slots.models_in_use, plan, hints and the engines' slot changes.
+        final engines = slots.EngineSlots(
+          home: identity.home,
+          processes: () => const [],
+          parentOf: (_) => 0,
+        );
+        final tuning = tun.LlmTuning(
+          ContextReader(ScanFiles(identity), core.config),
+          identity.home,
+        );
+        final inUse = slots.modelsInUse(params['graph'] as Map?);
+        final needs = slots.slotPlan(
+          (params['runtimes'] as List).cast<Map>(),
+          inUse,
+          engines,
+          (rt, m) => tuning.modelSize('${rt['key']}', '${rt['models_dir']}', m),
+        );
+        result = {
+          'in_use': inUse,
+          'needs': [
+            for (final n in needs)
+              {
+                ...n,
+                'change': slots.needChange(n),
+                'swaps': slots.needSwaps(n),
+                'hints': slots.slotHints(n, params['vram'] as int, i18n.text),
+                'changes': [
+                  for (final c in engines.slotChanges(
+                    (params['runtimes'] as List).cast<Map>().firstWhere(
+                      (r) => r['key'] == n['key'],
+                    ),
+                    slots.needCount(n),
+                  ))
+                    [c.path, c.next],
+                ],
+              },
+          ],
+        };
       } else if (request.method == 'dev.agentupdates') {
         // agent_updates.check with the web and mise given.
         final installers = inst.Installers(ScanFiles(identity));

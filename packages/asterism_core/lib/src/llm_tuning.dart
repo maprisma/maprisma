@@ -239,11 +239,26 @@ final class LlmTuning {
     }
   }
 
-  int _modelSize(RuntimeRecord rt, String name) {
-    if (rt.modelsDir.isEmpty) return 0;
-    final folder = _expand(rt.modelsDir);
+  int _modelSize(RuntimeRecord rt, String name) =>
+      modelSize(rt.key, rt.modelsDir, name);
+
+  /// engine.model_size: the model file's size in bytes (0: not known).
+  int modelSize(String key, String modelsDir, String name) {
+    if (key == 'lmstudio') {
+      final point = context.lmstudioEntry(name)['entryPoint'];
+      final path = point is Map ? point['absPath'] : null;
+      try {
+        if (path is! String) return 0;
+        final st = File(path).statSync();
+        return st.type == FileSystemEntityType.notFound ? 0 : st.size;
+      } on Object {
+        return 0;
+      }
+    }
+    if (modelsDir.isEmpty) return 0;
+    final folder = _expand(modelsDir);
     try {
-      if (rt.key == 'llamacpp') {
+      if (key == 'llamacpp') {
         // The file named after it, else one whose name differs only in case.
         for (final candidate in ['$folder/$name.gguf', ..._list(folder)]) {
           if (candidate.endsWith('.gguf') &&
@@ -255,7 +270,7 @@ final class LlmTuning {
         }
         return 0;
       }
-      if (rt.key == 'ollama') {
+      if (key == 'ollama') {
         final blob = context.ollamaModelFile(folder, name);
         return blob == null ? 0 : File(blob).lengthSync();
       }

@@ -2577,6 +2577,7 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
     String? method,
   }) async {
     setState(() => _busy = true);
+    var applied = false;
     try {
       final plan = await _backend!.call(
         method ??
@@ -2613,6 +2614,7 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
           );
           _taskResult(tr('Apply'), result, _focusOf(plan));
         }
+        applied = true;
         if ((result['context_failures'] as num? ?? 0) > 0 && mounted) {
           ScaffoldMessenger.of(_navigator.currentContext!).showSnackBar(
             SnackBar(
@@ -2634,6 +2636,73 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
           _taskActive = false;
         });
       }
+    }
+    // connect_page.sync_model_slots: after a provider, model or line change,
+    // each local LLM keeps as many models loaded as its agents use.
+    if (applied &&
+        mounted &&
+        (const {
+              'models.switch_preview',
+              'models.attach_preview',
+              'connections.move_preview',
+              'connections.repair_preview',
+            }.contains(method) ||
+            method == null && !author && params['kind'] == 'provider')) {
+      await _syncSlots();
+    }
+  }
+
+  Future<void> _syncSlots() async {
+    Map<String, dynamic> plan;
+    try {
+      plan = await _backend!.call('models.slots_preview');
+    } catch (_) {
+      return;
+    }
+    if (!mounted) return;
+    final warnings = (plan['warnings'] as List? ?? const []).cast<String>();
+    if (plan['empty'] == true || plan['plan'] is! String) {
+      for (final text in warnings) {
+        ScaffoldMessenger.of(_navigator.currentContext!).showSnackBar(
+          SnackBar(content: Text(text), duration: const Duration(seconds: 12)),
+        );
+      }
+      return;
+    }
+    final shown = {
+      ...plan,
+      'notes': [...(plan['notes'] as List? ?? const []), ...warnings],
+    };
+    final apply = await _cardReview(
+      tr('Preview'),
+      shown,
+      (yes, no) =>
+          ConnectionReview(plan: shown, tr: tr, onConfirm: yes, onCancel: no),
+    );
+    if (!apply || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      var result = await _backend!.call('connections.apply', {
+        'plan': plan['plan'],
+      });
+      if (result['task'] != null && mounted) {
+        result =
+            await _runTask(
+              operation: 'connections.apply',
+              params: const {},
+              existingTask: result['task'] as String,
+              title: tr('Apply'),
+            ) ??
+            const {};
+      } else {
+        _connectionUndo = result['undo'] as String?;
+      }
+      if (plan['reload'] == true) await _backend!.call('models.slots_reload');
+      await _refresh();
+    } catch (_) {
+      _actionFailed();
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 

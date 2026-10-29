@@ -618,6 +618,9 @@
   same: if loading its model needs more GPU memory than is free, you are asked first, with what holds
   the memory now — <b>Free GPU memory, then start</b>, <b>Start anyway</b> or <b>Cancel</b>.</p>
 
+  <h2 id="slots-flutter">Models at once in the Flutter preview</h2>
+  <p>In the Flutter preview, after a change of an agent’s local LLM or model is applied, the app looks at how many different models each local LLM’s agents now use. Where it may set the number — llama.cpp’s and Ollama’s settings files of the app’s own installs, LM Studio’s one-or-many setting — a second <b>Preview</b> shows the change, with what it means and any warning; <b>Apply</b> writes it with a backup, and <b>Undo</b> takes it back. A number fixed in your own start script is left as it is. When the models are too many for what is kept loaded, or too big together for the graphics card, Open problems says so as well.</p>
+
   <h2 id="outside-use">Used by other apps</h2>
   <p>Local LLMs are not only used by agents. A plugin such as Video Trans, a chat app or your own
   script can send requests to them too. The app notices this and shows it:</p>
