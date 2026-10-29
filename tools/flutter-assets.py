@@ -5,6 +5,22 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 KEYS = (
+    # A local LLM's performance (models.tuning).
+    "Performance",
+    "GPU stacks",
+    "Video memory",
+    "not known",
+    "none found",
+    "Context per model",
+    "now {0}",
+    "its default",
+    "fits {0}",
+    "trained for {0}",
+    "More than the card holds: it would not load, or spill into RAM",
+    "The card holds more",
+    "Set to {0}",
+    "{0} KB of video memory per token of context",
+    "Settings for every model",
     # Skills from the web (skills.web_search, skills.web_fetch).
     "Find skills on the web…",
     "No skill found.",

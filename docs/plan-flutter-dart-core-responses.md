@@ -1555,3 +1555,40 @@ Check: `tests/test_dart_skills_web_parity.py`. It compares Python and Dart on:
 folder and bad `files_staged` entries are refused. There are widget tests and an app test. It was also
 run once for real: skills.sh's search for "pdf" and anthropics/skills' pdf skill (12 files, 5 scripts
 named) fetched into staging, then removed.
+
+### 6b-10a — a local LLM's performance
+
+New in the core (`llm_tuning.dart`, the reference is `llm_tuning.collect` and the engines' `tuning_now`
+/ `tuning_changes` / `build_now` / `devices` / `context_now` / `model_size`):
+- **The engines' tuning facts** (keys with their allowed values and what they do, per model or for
+  every model, when a change counts, builds, context effect) are exported from the reference into
+  `adapter_assets.g.dart` by `tools/adapter-assets.py`. llama.cpp and Ollama have them.
+- **`models.tuning {key}`**, in the worker. It collects:
+  - the graphics card and its memory, and the GPU stacks this PC has (files only);
+  - the build, from the app's install, else from `llama-server --list-devices` (bounded, 20 s);
+  - the settings now: models.ini sections, or Ollama's env file when it is the app's;
+  - for each of up to 40 models: its size, its context now, and the context the card holds, its
+    trained context and the KV bytes per token from its GGUF header. Models without a KV cache are
+    left out.
+- **`models.tuning_preview {key, section, setting, value}`**: one setting (an allowed value, per model
+  only where the engine has that), or a model's context (`ctx-size`, llama.cpp's models.ini), as a
+  connection preview (backup, Undo; it counts after a restart).
+- **`providers.snapshot`** gains `tunable` on both sides; the differential cases stay equal.
+- **Python fix, both sides:** `provider_llamacpp.model_size` returned 0 when `<name>.gguf` was missing,
+  before ever looking for the file whose name differs only in case.
+- **Flutter:** **Performance** on a tunable local LLM in Providers and models opens `PerformanceView`:
+  - tiles for the build, the GPU stacks and the video memory;
+  - **Context per model**, with too-much / room-for-more marks and llama.cpp's **Set to …**;
+  - **Settings for every model**, where values from a list are chosen.
+  - A change goes through the connection preview. One new text in eight languages; the manual's
+    "Performance in the Flutter preview" in all eight; PDFs rebuilt.
+
+Check: `tests/test_dart_llm_tuning_parity.py`. In a HOME with GGUF headers (a 4 GiB sparse model whose
+file differs in case, a model that fits, one without a KV cache, a broken one, a missing one), a
+models.ini, a fake `llama-server` listing devices, and Ollama with and without its env file, Python and
+Dart give the same facts. They also make the same changes: accepted, refused, and unchanged (no change
+at all). There are widget tests and an app test (Providers → Performance → a setting → preview →
+apply). It was also run once on this PC: the RX 7900 XTX, the ROCm build, models.ini and the contexts.
+
+Next, 6b-10b: tips from an agent (`llm_tuning.prompt` / `validate` with the local helper or the agent for
+AI checks, as the System Map's help asks).

@@ -210,7 +210,8 @@ class Engine(llm_engine.LlamaRouter):
             return 0
         folder = Path(os.path.expanduser(rt.models_dir))
         for candidate in (folder / f"{name}.gguf", *folder.glob("*.gguf")):
-            if candidate.stem.lower() == name.lower():
+            # The named file may be missing: then one whose name differs only in case.
+            if candidate.stem.lower() == name.lower() and candidate.is_file():
                 try:
                     return candidate.stat().st_size
                 except OSError:

@@ -25,7 +25,7 @@ settings={'map_scan_interval':6,'map_light_fps':20,'flutter_theme_mode':'system'
 addon={'id':'fixture-addon','name':'Fixture adapter','version':'1.0','summary':'Summary',
  'kind':'agent','state':'verified','enabled':False,'supported':True,'verified':True,'provides':['test']}
 new_addon={**addon,'id':'catalog-addon','name':'Catalog adapter','version':'2.0','provides':['new']}
-runtime={'key':'fixture','name':'Fixture provider','installed':True,'running':True,
+runtime={'key':'fixture','name':'Fixture provider','installed':True,'running':True,'tunable':True,
  'address':'','models_dir':'','models':['example-model'],'can_load':True,
  'can_control':False,'can_import':False,'download':'file','focus':['runtime:fixture']}
 nodes=[{'id':ident,'kind':kind,'column':column,'label':label,'detail':''}
@@ -92,6 +92,8 @@ for line in sys.stdin:
     'publisher':{'kind':'','who':''},'options':[{'option':'opt-time','kind':'pypi','label':'pypi · mcp-server-time 1.0','runnable':True,'command':'uvx',
      'args':['mcp-server-time==1.0'],'env':[],'url':'','headers':[],'needs':[],'on_command_line':[]}]}}]}
   r={'task':'mcpcat'}
+ elif m=='models.tuning':tasks['tune']={'runtime':'Fixture provider','key':'fixture','gpu':'GPU','vram':8<<30,'stacks':[],'build':'','builds':[],'devices':'','settings':{'*':{}},'tuning':{'mode':['a|b','A mode']},'per_model':False,'models':[],'loaded':[],'vram_used':0};r={'task':'tune'}
+ elif m=='models.tuning_preview':r={'plan':'opaque-tune','empty':False,'files':[{'path':'~/.config/x.ini','added':1,'removed':0}],'links_add':[],'links_remove':[],'item':'Fixture provider','notes':[],'focus':['runtime:fixture']}
  elif m=='skills.web_search':tasks['sks']={'skills':[{'name':'pdf','skill_id':'pdf','repo':'a/skills','installs':3}]};r={'task':'sks'}
  elif m=='skills.web_fetch':tasks['skf']={'fetched':'f1','name':'pdf','repo':'a/skills','skill_id':'pdf','description':'Reads PDFs.','files':['SKILL.md'],'scripts':[],'targets':['~/.agents/skills'],'agents':[{'command':'test','name':'Test agent'}]};r={'task':'skf'}
  elif m=='skills.web_preview':r={'plan':'opaque-skill','empty':False,'files':[],'new_files':['~/.agents/skills/pdf/SKILL.md'],'links_add':[],'links_remove':[],'kind':'skills','agents':[],'focus':['agent:test']}
@@ -577,6 +579,35 @@ void main() {
     expect(
       tester.widget<AgentMap>(find.byKey(const ValueKey('ai-map'))).lightFps,
       60,
+    );
+    expect(tester.takeException(), isNull);
+    await unmountApp(tester);
+  });
+
+  testWidgets('a tuning setting goes through the preview', (tester) async {
+    final dir = await mountApp(tester);
+    await tester.tap(find.byTooltip('Providers and models'));
+    await settleService(tester);
+    await tester.tap(find.byKey(const ValueKey('performance-fixture')));
+    await settleService(tester);
+    expect(find.text('A mode'), findsOneWidget);
+    await tester.tap(find.text('—'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('b').last);
+    await settleService(tester);
+    expect(
+      requests(
+        dir,
+      ).lastWhere((q) => q['method'] == 'models.tuning_preview')['params'],
+      {'key': 'fixture', 'section': '*', 'setting': 'mode', 'value': 'b'},
+    );
+    await tester.tap(find.widgetWithText(FilledButton, 'Apply'));
+    await settleService(tester);
+    expect(
+      requests(
+        dir,
+      ).lastWhere((q) => q['method'] == 'connections.apply')['params'],
+      {'plan': 'opaque-tune'},
     );
     expect(tester.takeException(), isNull);
     await unmountApp(tester);

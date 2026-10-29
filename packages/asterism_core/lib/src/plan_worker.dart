@@ -24,6 +24,8 @@ import 'model_guard.dart';
 import 'mcp_catalog.dart';
 import 'mcp_tools.dart';
 import 'skills_web.dart' as skills_web;
+import 'llm_tuning.dart';
+import 'context.dart' show ContextReader;
 import 'model_hub.dart' show netFetch;
 import 'provider_ops.dart';
 import 'provider_scans.dart';
@@ -553,6 +555,34 @@ Future<int> runWorker(List<String> args) async {
         );
       }
       send({'type': 'result', 'result': result});
+      return 0;
+    }
+    // llm_tuning.collect: a local LLM's performance facts (its devices are
+    // asked of llama-server, bounded; GGUF headers read).
+    if (args.isEmpty && request['operation'] == 'models.tuning') {
+      final params = request['params'] as Map;
+      if (params.length != 1 || params['key'] is! String) {
+        throw const FormatException('Invalid worker request');
+      }
+      final identity = AppIdentity();
+      final files = ScanFiles(identity);
+      final rt = ProviderScans(
+        files,
+      ).scan().where((r) => r.key == params['key'] && r.installed).firstOrNull;
+      if (rt == null) throw const FormatException('Unknown local provider');
+      final posix = Posix();
+      final installer = LlamaCppInstaller(InstallHost(identity.home, posix));
+      final facts =
+          await LlmTuning(
+            ContextReader(files, ConfigFiles(posix, identity.home)),
+            identity.home,
+            path: identity.environment['PATH'],
+          ).collect(
+            rt,
+            await detectGpu(),
+            llamaVersion: () async => installer.currentVersion(),
+          );
+      send({'type': 'result', 'result': facts});
       return 0;
     }
     // A provider operation: no private plan, its parameters checked again here.

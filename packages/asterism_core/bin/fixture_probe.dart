@@ -6,6 +6,9 @@ import 'package:asterism_core/src/security_plans.dart' show securityPlan;
 import 'package:asterism_core/src/mcp_catalog.dart' as mcpc;
 import 'package:asterism_core/src/mcp_tools.dart' as mcpt;
 import 'package:asterism_core/src/skills_web.dart' as skw;
+import 'package:asterism_core/src/llm_tuning.dart' as tun;
+import 'package:asterism_core/src/installers.dart' as inst;
+import 'package:asterism_core/src/provider_scans.dart' show RuntimeRecord;
 import 'package:asterism_core/src/system_map.dart' show SystemMapReader;
 import 'package:asterism_core/src/agent_catalog.dart' show AgentCatalog;
 import 'package:asterism_core/src/scan_files.dart' show ScanFiles;
@@ -291,6 +294,48 @@ Future<void> main() async {
           params['cache'] as String,
           search: params['search'] == true,
         );
+      } else if (request.method == 'dev.llmtuning') {
+        // llm_tuning.collect and tuning_changes for one runtime.
+        final r = params['rt'] as Map;
+        final rt = RuntimeRecord(r['key'] as String, r['name'] as String)
+          ..installed = true
+          ..modelsDir = r['models_dir'] as String
+          ..models = (r['models'] as List).cast<String>();
+        final g = params['gpu'] as Map;
+        final tuning = tun.LlmTuning(
+          ContextReader(ScanFiles(identity), core.config),
+          identity.home,
+          path: Platform.environment['PATH'],
+        );
+        final installer = inst.LlamaCppInstaller(
+          inst.InstallHost(identity.home, Posix()),
+        );
+        final facts = await tuning.collect(
+          rt,
+          inst.Gpu(
+            vendor: g['vendor'] as String,
+            name: g['name'] as String,
+            vram: g['vram'] as int,
+          ),
+          llamaVersion: () async => installer.currentVersion(),
+        );
+        final changes = [];
+        for (final c in params['changes'] as List) {
+          try {
+            changes.add([
+              for (final x in tuning.tuningChanges(
+                rt.key,
+                c[0] as String,
+                c[1] as String,
+                c[2] as String,
+              ))
+                [x.path, x.next],
+            ]);
+          } on FormatException {
+            changes.add('refused');
+          }
+        }
+        result = {'facts': facts, 'changes': changes};
       } else if (request.method == 'dev.skillsweb') {
         // skills_web.parse_search, files_of and the SKILL.md description.
         dynamic files;

@@ -29,7 +29,9 @@ class ProvidersView extends StatelessWidget {
     this.onBrowse,
     this.onConfirm,
     this.onInstall,
+    this.onPerformance,
   });
+  final ValueChanged<Map<String, dynamic>>? onPerformance;
   final bool hosted;
   final Map<String, dynamic> data;
   final bool busy;
@@ -157,6 +159,17 @@ class ProvidersView extends StatelessWidget {
                             label: Text(
                               tr(rt['running'] == true ? 'Stop' : 'Start'),
                             ),
+                          ),
+                        if (rt['tunable'] == true && onPerformance != null)
+                          OutlinedButton.icon(
+                            key: ValueKey('performance-${rt['key']}'),
+                            onPressed: busy
+                                ? null
+                                : () => onPerformance!(
+                                    rt as Map<String, dynamic>,
+                                  ),
+                            icon: const Icon(Icons.speed),
+                            label: Text(tr('Performance')),
                           ),
                         if (rt['can_import'] == true)
                           OutlinedButton.icon(

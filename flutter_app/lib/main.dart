@@ -28,6 +28,7 @@ import 'first_agent_view.dart';
 import 'installer_review.dart';
 import 'agent_security_view.dart';
 import 'api_key_review.dart';
+import 'performance_view.dart';
 import 'agent_action_dialog.dart';
 import 'providers_view.dart';
 import 'system_map_view.dart';
@@ -1173,6 +1174,46 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
         _moveUndo = data['move_undo'] as String?;
       });
     }
+  }
+
+  /// A local LLM's performance (models.tuning); a setting or a model's
+  /// context changed through the connection preview (backup, Undo).
+  Future<void> _performance(Map<String, dynamic> runtime) async {
+    if (_busy) return;
+    final key = runtime['key'] as String;
+    Map<String, dynamic> facts;
+    setState(() => _busy = true);
+    try {
+      facts = await _quietTask('models.tuning', {'key': key});
+    } catch (_) {
+      _actionFailed();
+      return;
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+    if (!mounted) return;
+    (String, String, String)? change;
+    await _cardReview(
+      '${tr('Performance')} · ${runtime['name']}',
+      {'focus': runtime['focus'] ?? const []},
+      (yes, no) => PerformanceView(
+        facts: facts,
+        tr: tr,
+        onChange: (section, setting, value) {
+          change = (section, setting, value);
+          no();
+        },
+        onClose: no,
+      ),
+    );
+    final chosen = change;
+    if (!mounted || chosen == null) return;
+    await _connectionPreview({
+      'key': key,
+      'section': chosen.$1,
+      'setting': chosen.$2,
+      'value': chosen.$3,
+    }, method: 'models.tuning_preview');
   }
 
   /// A service task started and waited for without a task card (the view
@@ -3024,6 +3065,7 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
                                     ),
                                   ),
                                   onRemove: _removeModel,
+                                  onPerformance: _performance,
                                   onBrowse: (runtime) =>
                                       setState(() => _browser = runtime),
                                   onDiscover: _openExisting,

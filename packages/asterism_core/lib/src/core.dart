@@ -44,6 +44,7 @@ import 'service_i18n.dart';
 import 'provider_facts.dart';
 import 'mcp_catalog.dart';
 import 'skills_web.dart';
+import 'llm_tuning.dart';
 import 'mcp_tools.dart' show cachedTools;
 
 const portedRoutes = {
@@ -110,6 +111,8 @@ const portedRoutes = {
   'skills.web_search',
   'skills.web_fetch',
   'skills.web_preview',
+  'models.tuning',
+  'models.tuning_preview',
   ...readOnlyRoutes,
 };
 // Phase 7 removes this blocker only after every route has differential coverage.
@@ -1226,6 +1229,70 @@ final class CoreService {
     };
   }
 
+  /// models.tuning / models.tuning_preview (llm_tuning and the GTK
+  /// Performance card): a local LLM's facts, read in the worker; one tuning
+  /// setting, or a model's context, changed with a backup and Undo.
+  Map<String, dynamic> tuningRoute(String method, Map<String, dynamic> params) {
+    final key = params['key'];
+    final rt = key is String
+        ? ProviderScans(
+            reads.files,
+          ).scan().where((r) => r.key == key && r.installed).firstOrNull
+        : null;
+    if (rt == null || tuningKeys(rt.key).isEmpty) {
+      throw const FormatException('Unknown local provider');
+    }
+    if (method == 'models.tuning') {
+      if (params.length != 1) {
+        throw const FormatException('Unexpected tuning parameters');
+      }
+      return {
+        ...tasks.start('models.tuning', {'key': rt.key}),
+        'focus': taskFocus(reads.map, {'runtime': rt.key}),
+      };
+    }
+    final section = params['section'], setting = params['setting'];
+    final value = params['value'];
+    if (params.length != 4 ||
+        section is! String ||
+        setting is! String ||
+        value is! String ||
+        value.length > 40 ||
+        (section != '*' && !rt.models.contains(section)) ||
+        (section != '*' && engineFacts(rt.key)['tuning_per_model'] == false)) {
+      throw const FormatException('Invalid tuning setting');
+    }
+    final tuning = LlmTuning(
+      ContextReader(reads.files, config),
+      identity.home,
+      path: identity.environment['PATH'],
+    );
+    final List<Change> changes;
+    if (setting == 'ctx-size') {
+      final ctx = int.tryParse(value);
+      if (section == '*' ||
+          ctx == null ||
+          ctx < 1024 ||
+          !RegExp(r'^\d+$').hasMatch(value)) {
+        throw const FormatException('Invalid context');
+      }
+      changes = tuning.contextChanges(rt.key, section, ctx);
+    } else {
+      changes = tuning.tuningChanges(rt.key, section, setting, value);
+    }
+    if (changes.any((c) => FileSystemEntity.isLinkSync(c.path))) {
+      throw const FormatException('Configuration is a symbolic link');
+    }
+    return {
+      ...connections.keep(Plan(rt.name, rt.key, '', changes: changes)),
+      'item': rt.name,
+      'notes': [
+        'Changes apply when the runtime next starts. Running services are not restarted.',
+      ],
+      'focus': taskFocus(reads.map, {'runtime': rt.key}),
+    };
+  }
+
   /// One MCP server asked at a time: asking starts its program.
   Map<String, dynamic> _askTools(Map<String, dynamic> body, String operation) {
     if (tasks.items.values.any(
@@ -1712,6 +1779,9 @@ final class CoreService {
     }
     if (method.startsWith('mcp.')) return mcpCatalogRoute(method, params);
     if (method.startsWith('skills.web_')) return webSkillRoute(method, params);
+    if (method == 'models.tuning' || method == 'models.tuning_preview') {
+      return tuningRoute(method, params);
+    }
     if (method == 'agents.security' || method == 'agents.security_preview') {
       return securityRoute(method, params);
     }
