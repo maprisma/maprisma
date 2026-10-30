@@ -13,7 +13,8 @@ routes.json, per route: area, kind (read · preview · change · handle), handle
 the handle), params ({name: type}), result (its shape, or null while not described), source
 (observed · manual · null) and note. "other" lists the core's dotted names that are not routes
 (worker operations, file names): every name the core holds is one or the other, so a new route
-cannot go unnoticed. Hand-written params, result and note are kept by update.
+cannot go unnoticed. Parameters come from routes.json (and recordings); hand-written params,
+result and note are kept by update.
 """
 from __future__ import annotations
 
@@ -55,6 +56,17 @@ OPTIONAL = {
     'settings.get': {'extra'},
     'settings.update': {'extra', 'flutter_map_layout'},
     'updates.run': {'running_ok'},
+}
+# Dotted names in flutter_app/lib whose area is a route area, but that name worker task
+# operations passed to providers.run / TaskProgress rather than RPC routes (in "other").
+GUI_NON_ROUTES = {
+    'agents.halt',
+    'agents.key',
+    'models.download',
+    'models.files',
+    'models.pull',
+    'models.remove',
+    'models.search',
 }
 
 
@@ -106,6 +118,11 @@ def probe(names: list[str]) -> list[str]:
     if done.returncode != 0:
         sys.exit(f'route probe failed: {done.stderr[-500:]}')
     return json.loads(done.stdout.strip().splitlines()[-1])
+
+
+def gui_names() -> set[str]:
+    """Every quoted dotted name in flutter_app/lib (core_client.g.dart excluded)."""
+    return _names(f for f in sorted((ROOT / 'flutter_app/lib').glob('*.dart')) if f != CLIENT)
 
 
 def gui_calls() -> dict[str, dict[str, str]]:
@@ -181,13 +198,10 @@ def update(record: Path | None) -> None:
             seen['params'] = merge(seen['params'], shape(entry['params']))
             if 'result' in entry:
                 seen['result'] = merge(seen['result'], shape(entry['result']))
-    calls = gui_calls()
     routes = {}
     for method in sorted(served):
         old = data['routes'].get(method, {})
         params = dict(old.get('params') or {})
-        for key in calls.get(method, {}):
-            params.setdefault(key, '?')
         seen = observed.get(method, {})
         for key, value in (seen.get('params') or {}).items():
             if key != '__contract_probe__' and params.get(key, '?') == '?':
@@ -357,6 +371,7 @@ def check() -> list[str]:
     """What breaks the contract (static, fast)."""
     data = load()
     routes, other = set(data['routes']), set(data['other'])
+    areas = {r['area'] for r in data['routes'].values()}
     problems = []
     unknown = core_names() - routes - other
     if unknown:
@@ -365,14 +380,10 @@ def check() -> list[str]:
     gone = routes - dispatch_names()
     if gone:
         problems.append(f'routes no longer in the core: {sorted(gone)}')
-    calls = gui_calls()
-    called = set(calls) - routes
+    called = {n for n in gui_names() if n.split('.')[0] in areas} - routes - GUI_NON_ROUTES
     if called:
         problems.append(f'the GUI calls routes the contract does not have: {sorted(called)}')
-    for method, r in data['routes'].items():
-        missing = set(calls.get(method, {})) - set(r['params'])
-        if missing:
-            problems.append(f'{method}: the GUI sends parameters the contract does not list: {sorted(missing)}')
+    calls = gui_calls()
     if calls:
         problems.append(f'the GUI calls routes directly instead of CoreClient: {sorted(calls)}')
     if not DOC.exists() or DOC.read_text() != doc_text(data) + '\n':

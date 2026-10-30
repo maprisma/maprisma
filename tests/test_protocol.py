@@ -20,13 +20,29 @@ class ContractTest(unittest.TestCase):
 
     def test_a_route_outside_the_contract_is_caught(self):
         from unittest import mock
-        calls = {**protocol.gui_calls(), 'agents.brand_new': {}}
+        gui = protocol.gui_names() | {'agents.brand_new'}
         names = protocol.core_names() | {'agents.brand_new'}
-        with mock.patch.object(protocol, 'gui_calls', return_value=calls), \
+        with mock.patch.object(protocol, 'gui_names', return_value=gui), \
                 mock.patch.object(protocol, 'core_names', return_value=names):
             problems = protocol.check()
         self.assertTrue(any('agents.brand_new' in p and 'neither route nor other' in p for p in problems))
         self.assertTrue(any('agents.brand_new' in p and 'GUI calls' in p for p in problems))
+
+    def test_a_renamed_route_left_in_the_gui_is_caught(self):
+        from unittest import mock
+        data = protocol.load()
+        data['routes']['found.rescan'] = data['routes'].pop('found.scan')
+        core = (protocol.core_names() - {'found.scan'}) | {'found.rescan'}
+        dispatch = (protocol.dispatch_names() - {'found.scan'}) | {'found.rescan'}
+        doc = protocol.DOC.read_text()[:-1]
+        client = protocol.CLIENT.read_text()[:-1]
+        with mock.patch.object(protocol, 'load', return_value=data), \
+                mock.patch.object(protocol, 'core_names', return_value=core), \
+                mock.patch.object(protocol, 'dispatch_names', return_value=dispatch), \
+                mock.patch.object(protocol, 'doc_text', return_value=doc), \
+                mock.patch.object(protocol, 'client_text', return_value=client):
+            problems = protocol.check()
+        self.assertEqual(problems, ["the GUI calls routes the contract does not have: ['found.scan']"])
 
     def test_a_literal_gui_call_or_stale_client_is_caught(self):
         from unittest import mock
