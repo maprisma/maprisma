@@ -1,5 +1,7 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
+
 import 'backend.dart';
 
 class TaskProgress extends StatefulWidget {
@@ -41,14 +43,15 @@ class _TaskProgressState extends State<TaskProgress> {
   }
 
   Future<void> _run() async {
+    final client = CoreClient(widget.backend);
     try {
       if (widget.existingTask != null) {
         _task = widget.existingTask;
       } else {
-        final started = await widget.backend.call('providers.run', {
-          'operation': widget.operation,
-          'params': widget.params,
-        });
+        final started = await client.providersRun(
+          operation: widget.operation,
+          params: widget.params,
+        );
         _task = started['task'] as String;
         if (!mounted) return;
         widget.onFocus?.call(
@@ -58,7 +61,7 @@ class _TaskProgressState extends State<TaskProgress> {
       while (mounted && !_cancelling) {
         Map<String, dynamic> status;
         try {
-          status = await widget.backend.call('tasks.status', {'task': _task});
+          status = await client.tasksStatus(task: _task!);
         } catch (error) {
           if (!widget.backend.isConnected ||
               (error is BackendError && error.code == 'invalid_request')) {
@@ -91,7 +94,7 @@ class _TaskProgressState extends State<TaskProgress> {
     if (_task == null) return;
     setState(() => _cancelling = true);
     try {
-      final reply = await widget.backend.call('tasks.cancel', {'task': _task});
+      final reply = await CoreClient(widget.backend).tasksCancel(task: _task!);
       if (mounted) {
         widget.onComplete(
           reply['state'] == 'done'

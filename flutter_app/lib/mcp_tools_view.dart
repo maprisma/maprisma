@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'core_client.g.dart';
+
 String _when(dynamic checked) => '${checked ?? ''}'
     .replaceFirst('T', ' ')
     .padRight(16)
@@ -94,9 +96,9 @@ class _McpServerToolsState extends State<McpServerTools> {
 
   Future<void> _loadKept() async {
     try {
-      final reply = await widget.call('mcp.tools_cached', {
-        'name': widget.name,
-      });
+      final reply = await CoreClient.fromCall(
+        widget.call,
+      ).mcpToolsCached(name: widget.name);
       if (mounted) {
         setState(() => _known = reply['cached'] as Map<String, dynamic>?);
       }

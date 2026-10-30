@@ -1,7 +1,10 @@
 import 'dart:io';
+
 import 'package:maprisma_core/maprisma_core.dart';
+
 import 'service_transport.dart';
 import 'isolate_transport.dart';
+export 'core_client.g.dart';
 export 'service_transport.dart';
 
 typedef BackendError = ServiceError;
