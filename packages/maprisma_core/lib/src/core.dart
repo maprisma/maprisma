@@ -2836,6 +2836,7 @@ final class CoreService {
           'command': helper?.agent ?? command,
           'request': request.trim(),
           'answer': ?answer,
+          'language': i18n.language,
           'settings_path': identity.settingsPath,
           'runtimes': [
             for (final rt in reads.inventory.collect(agents).runtimes)
