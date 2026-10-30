@@ -1120,4 +1120,167 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets(
+    'collapsing or pressing Esc during a run keeps the download going; collapsing during working returns to a usable prompt',
+    (tester) async {
+      tester.view.physicalSize = const Size(1200, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final calls = <String>[];
+      var askDone = false;
+      var runDone = false;
+      final client = CoreClient(
+        _FakeSmartTransport((method, params) async {
+          calls.add(method);
+          switch (method) {
+            case 'map.smart_ask':
+              return {'task': 'ask-1'};
+            case 'map.smart_review':
+              return {
+                'title': 'Qwen 2.5 Coder 7B',
+                'subtitle': 'Q4_K_M',
+                'size': 4683073920,
+                'fit': 'ok',
+                'runtime': 'Ollama',
+              };
+            case 'map.smart_run':
+              return {'task': 'run-1'};
+            case 'tasks.cancel':
+              return {'state': 'cancelled'};
+            case 'tasks.status':
+              if (params['task'] == 'ask-1') {
+                if (!askDone) {
+                  return {'state': 'running'};
+                }
+                return {
+                  'state': 'done',
+                  'result': {
+                    'helper': 'Local helper',
+                    'local': true,
+                    'status': 'proposal',
+                    'proposal': 'prop-1',
+                    'summary': 'Found 1 model.',
+                    'limits': {
+                      'vram': 8589934592,
+                      'ram': 17179869184,
+                      'free_disk': 53687091200,
+                    },
+                    'candidates': [
+                      {
+                        'id': 'c1',
+                        'title': 'Qwen 2.5 Coder 7B',
+                        'subtitle': 'Q4_K_M',
+                        'reason': 'Fast.',
+                        'fit': 'ok',
+                        'size': 4683073920,
+                      },
+                    ],
+                  },
+                };
+              }
+              if (params['task'] == 'run-1') {
+                if (!runDone) {
+                  return {
+                    'state': 'running',
+                    'fraction': 0.5,
+                    'text': 'Downloading 50%…',
+                  };
+                }
+                return {
+                  'state': 'done',
+                  'result': {'ok': true},
+                };
+              }
+              throw StateError('Unknown task ${params['task']}');
+            default:
+              throw StateError('Unexpected $method');
+          }
+        }),
+      );
+
+      var isOpen = false;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: StatefulBuilder(
+              builder: (context, update) => MapSmartCard(
+                column: 'models',
+                title: 'Models',
+                open: isOpen,
+                onToggle: () => update(() => isOpen = !isOpen),
+                tr: (k) => k,
+                helpers: const [
+                  {
+                    'command': 'local-helper',
+                    'name': 'Local helper',
+                    'local': true,
+                  },
+                ],
+                client: client,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      // 1. Collapse during working cancels the ask and leaves a usable prompt with text kept.
+      await tester.tap(find.text('Ask AI…'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), 'qwen coder');
+      await tester.tap(find.text('Ask'));
+      await tester.pump();
+      expect(find.text('Local helper is checking Models…'), findsOneWidget);
+      await tester.tap(find.byTooltip('Collapse'));
+      await tester.pump();
+      expect(isOpen, isFalse);
+      expect(calls, contains('tasks.cancel'));
+
+      // Reopen: prompt is back in idle state with 'qwen coder' preserved and Ask usable.
+      calls.clear();
+      await tester.tap(find.text('Ask AI…'));
+      await tester.pumpAndSettle();
+      expect(find.widgetWithText(TextField, 'qwen coder'), findsOneWidget);
+      expect(find.text('Ask'), findsOneWidget);
+
+      // 2. Start ask -> proposal -> review -> running download.
+      askDone = true;
+      await tester.tap(find.text('Ask'));
+      await tester.pumpAndSettle();
+      expect(find.text('Found 1 model.'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('smart-review-c1')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Download'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 60));
+      expect(find.text('Downloading 50%…'), findsOneWidget);
+
+      // Collapse via button while download is running -> no tasks.cancel sent.
+      calls.clear();
+      await tester.tap(find.byTooltip('Collapse'));
+      await tester.pump();
+      expect(isOpen, isFalse);
+      expect(calls, isNot(contains('tasks.cancel')));
+
+      // Reopen while still running -> still shows progress, then press Esc -> no tasks.cancel sent.
+      await tester.tap(find.text('Ask AI…'));
+      await tester.pump();
+      expect(isOpen, isTrue);
+      expect(find.text('Downloading 50%…'), findsOneWidget);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pump();
+      expect(isOpen, isFalse);
+      expect(calls, isNot(contains('tasks.cancel')));
+
+      // Finish download in background while collapsed, then reopen -> shows done.
+      runDone = true;
+      await tester.pump(const Duration(milliseconds: 250));
+      await tester.tap(find.text('Ask AI…'));
+      await tester.pumpAndSettle();
+      expect(find.text('Qwen 2.5 Coder 7B is ready.'), findsOneWidget);
+      expect(calls, isNot(contains('tasks.cancel')));
+    },
+  );
 }

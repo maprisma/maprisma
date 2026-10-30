@@ -135,6 +135,7 @@ class MapSmartCard extends StatefulWidget {
 class _MapSmartCardState extends State<MapSmartCard> {
   final _prompt = TextEditingController();
   final _barFocus = FocusNode();
+  final _cardFocus = FocusNode();
   final _fieldFocus = FocusNode();
   String? _selectedCommand;
   _SmartStep _step = _SmartStep.idle;
@@ -159,6 +160,17 @@ class _MapSmartCardState extends State<MapSmartCard> {
     return widget.helpers.first;
   }
 
+  void _focusOpenCard() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !widget.open) return;
+      if (_step == _SmartStep.idle) {
+        _fieldFocus.requestFocus();
+      } else if (!_cardFocus.hasFocus) {
+        _cardFocus.requestFocus();
+      }
+    });
+  }
+
   @override
   void initState() {
     super.initState();
@@ -166,11 +178,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
       _prompt.text = widget.initialPrompt!;
     }
     if (widget.open) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && widget.open && _step == _SmartStep.idle) {
-          _fieldFocus.requestFocus();
-        }
-      });
+      _focusOpenCard();
     }
   }
 
@@ -184,22 +192,39 @@ class _MapSmartCardState extends State<MapSmartCard> {
       _step = _SmartStep.idle;
     }
     if (!oldWidget.open && widget.open) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && widget.open && _step == _SmartStep.idle) {
-          _fieldFocus.requestFocus();
-        }
-      });
+      _focusOpenCard();
+    } else if (oldWidget.open && !widget.open && _step == _SmartStep.working) {
+      _abortWorking();
     }
   }
 
-  void _close() {
+  void _abortWorking() {
     _runToken++;
     final taskId = _activeTask;
     _activeTask = null;
+    _step = _SmartStep.idle;
+    _errorText = '';
     if (taskId != null && widget.client != null) {
       unawaited(
         widget.client!.tasksCancel(task: taskId).then((_) {}, onError: (_) {}),
       );
+    }
+  }
+
+  void _close() {
+    if (_step == _SmartStep.working) {
+      setState(_abortWorking);
+    } else if (_step != _SmartStep.running) {
+      _runToken++;
+      final taskId = _activeTask;
+      _activeTask = null;
+      if (taskId != null && widget.client != null) {
+        unawaited(
+          widget.client!
+              .tasksCancel(task: taskId)
+              .then((_) {}, onError: (_) {}),
+        );
+      }
     }
     widget.onToggle();
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -246,6 +271,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
       _activeTask = null;
       _errorText = '';
     });
+    _focusOpenCard();
     try {
       final started = await client.mapSmartAsk(
         column: widget.column,
@@ -353,6 +379,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
       _runFraction = null;
       _runText = '${candidate['title'] ?? ''}';
     });
+    _focusOpenCard();
     try {
       final started = await client.mapSmartRun(
         proposal: proposal,
@@ -492,6 +519,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
     _runToken++;
     _prompt.dispose();
     _barFocus.dispose();
+    _cardFocus.dispose();
     _fieldFocus.dispose();
     super.dispose();
   }
@@ -1017,6 +1045,8 @@ class _MapSmartCardState extends State<MapSmartCard> {
       );
     }
     return Focus(
+      focusNode: _cardFocus,
+      autofocus: true,
       onKeyEvent: (_, event) {
         if (event is KeyDownEvent &&
             event.logicalKey == LogicalKeyboardKey.escape) {
