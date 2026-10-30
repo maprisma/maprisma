@@ -187,6 +187,11 @@ A parameter written `name?` may be left out.
 | Route | Kind | Params | Result |
 |---|---|---|---|
 | `map.badges` | read | — | `badges`, `rate_due` |
+| `map.smart_ask` | read | `answer?`: string, `column`: string, `command`: string, `request`: string | `task` column: mcp, agents, providers, models. Spends the user's tokens: only on their click. tasks.status result: status proposal, clarify, redirect or error; helper, local, summary, question, choices, instead {hint, column, request}, limits {gpu_name, vram, ram, free_disk}, proposal, candidates [{id, title, subtitle, reason, fit (ok, tight, too_large), size}]. |
+| `map.smart_connect` | read | `agent`: string, `candidate`: string, `proposal`: string | ? As connections.preview: a plan for connections.apply. |
+| `map.smart_helpers` | read | — | `helpers` Who can answer a smart card now; nothing is sent. |
+| `map.smart_review` | read | `candidate`: string, `proposal`: string | `fit`, `runtime`, `size`, `subtitle`, `title` The facts for the review of one candidate. |
+| `map.smart_run` | change | `candidate`: string, `proposal`: string | `task` After the user's OK: starts it. A candidate that is too large is refused. |
 | `map.snapshot` | read | `force?`: ?, `poll?`: ? | ? |
 | `map.usage` | read | `commands`: ? | ? |
 

@@ -903,6 +903,82 @@
    },
    "source": "observed"
   },
+  "map.smart_ask": {
+   "area": "map",
+   "kind": "read",
+   "note": "column: mcp, agents, providers, models. Spends the user's tokens: only on their click. tasks.status result: status proposal, clarify, redirect or error; helper, local, summary, question, choices, instead {hint, column, request}, limits {gpu_name, vram, ram, free_disk}, proposal, candidates [{id, title, subtitle, reason, fit (ok, tight, too_large), size}].",
+   "optional": [
+    "answer"
+   ],
+   "params": {
+    "answer": "string",
+    "column": "string",
+    "command": "string",
+    "request": "string"
+   },
+   "result": {
+    "task": "string"
+   },
+   "source": "manual"
+  },
+  "map.smart_connect": {
+   "area": "map",
+   "kind": "read",
+   "note": "As connections.preview: a plan for connections.apply.",
+   "params": {
+    "agent": "string",
+    "candidate": "string",
+    "proposal": "string"
+   },
+   "result": null,
+   "source": null
+  },
+  "map.smart_helpers": {
+   "area": "map",
+   "kind": "read",
+   "note": "Who can answer a smart card now; nothing is sent.",
+   "params": {},
+   "result": {
+    "helpers": [
+     {
+      "command": "string",
+      "local": "bool",
+      "name": "string"
+     }
+    ]
+   },
+   "source": "manual"
+  },
+  "map.smart_review": {
+   "area": "map",
+   "kind": "read",
+   "note": "The facts for the review of one candidate.",
+   "params": {
+    "candidate": "string",
+    "proposal": "string"
+   },
+   "result": {
+    "fit": "string",
+    "runtime": "string",
+    "size": "int",
+    "subtitle": "string",
+    "title": "string"
+   },
+   "source": "manual"
+  },
+  "map.smart_run": {
+   "area": "map",
+   "kind": "change",
+   "note": "After the user's OK: starts it. A candidate that is too large is refused.",
+   "params": {
+    "candidate": "string",
+    "proposal": "string"
+   },
+   "result": {
+    "task": "string"
+   },
+   "source": "manual"
+  },
   "map.snapshot": {
    "area": "map",
    "kind": "read",

@@ -338,6 +338,48 @@ class CoreClient {
     Map<String, dynamic> params = const {},
   ]) => transport.call('map.badges', params);
 
+  Future<Map<String, dynamic>> mapSmartAsk({
+    String? answer,
+    required String column,
+    required String command,
+    required String request,
+  }) => transport.call('map.smart_ask', {
+    'answer': ?answer,
+    'column': column,
+    'command': command,
+    'request': request,
+  });
+
+  Future<Map<String, dynamic>> mapSmartConnect({
+    required String agent,
+    required String candidate,
+    required String proposal,
+  }) => transport.call('map.smart_connect', {
+    'agent': agent,
+    'candidate': candidate,
+    'proposal': proposal,
+  });
+
+  Future<Map<String, dynamic>> mapSmartHelpers([
+    Map<String, dynamic> params = const {},
+  ]) => transport.call('map.smart_helpers', params);
+
+  Future<Map<String, dynamic>> mapSmartReview({
+    required String candidate,
+    required String proposal,
+  }) => transport.call('map.smart_review', {
+    'candidate': candidate,
+    'proposal': proposal,
+  });
+
+  Future<Map<String, dynamic>> mapSmartRun({
+    required String candidate,
+    required String proposal,
+  }) => transport.call('map.smart_run', {
+    'candidate': candidate,
+    'proposal': proposal,
+  });
+
   Future<Map<String, dynamic>> mapSnapshot({Object? force, Object? poll}) =>
       transport.call('map.snapshot', {'force': ?force, 'poll': ?poll});
 
