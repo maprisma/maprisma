@@ -9,7 +9,7 @@ import settings_schema
 
 
 def main():
-    target = ROOT / 'packages/asterism_core/lib/src/core_assets.g.dart'
+    target = ROOT / 'packages/maprisma_core/lib/src/core_assets.g.dart'
     tables = {code: json.loads((ROOT / f'translations/{code}.json').read_text())
               for code in ('de', 'es', 'fr', 'it', 'nl', 'pl', 'pt')}
     defaults = {key: setting.default for key, setting in settings_schema.SCHEMA.items()}

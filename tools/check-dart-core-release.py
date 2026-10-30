@@ -19,11 +19,11 @@ def main():
         dart = resolve_dart(args.dart)
     except (OSError, ValueError, RuntimeError) as error:
         parser.error(str(error))
-    with tempfile.TemporaryDirectory(prefix='asterism-core-release-') as temp:
+    with tempfile.TemporaryDirectory(prefix='maprisma-core-release-') as temp:
         folder = Path(temp)
         source = folder / 'probe.dart'
         source.write_text("""import 'dart:io';
-import 'package:asterism/backend.dart';
+import 'package:maprisma/backend.dart';
 Future<void> main() async {
   final backend = await Backend.start();
   try {
@@ -36,17 +36,17 @@ Future<void> main() async {
 }
 """)
         binary = folder / 'probe'
-        subprocess.run([dart, 'compile', 'exe', '-DASTERISM_DEVEL=false',
+        subprocess.run([dart, 'compile', 'exe', '-DMAPRISMA_DEVEL=false',
                         f'--packages={ROOT / "flutter_app/.dart_tool/package_config.json"}',
                         str(source), '-o', str(binary)], check=True)
         data = binary.read_bytes()
-        for marker in (b'/usr/bin/python3', b'flutter_backend.py', b'Asterism service was not found'):
+        for marker in (b'/usr/bin/python3', b'flutter_backend.py', b'Maprisma service was not found'):
             if marker in data:
                 raise SystemExit('Python fallback marker survived AOT tree shaking')
         home = folder / 'home'
         home.mkdir()
         env = {**os.environ, 'HOME': str(home), 'XDG_CONFIG_HOME': str(home / '.config'),
-               'XDG_CACHE_HOME': str(home / '.cache'), 'ASTERISM_DESKTOP': 'generic'}
+               'XDG_CACHE_HOME': str(home / '.cache'), 'MAPRISMA_DESKTOP': 'generic'}
         subprocess.run([str(binary)], env=env, check=True, timeout=15)
         print('AOT release transport check passed: no Python fallback code markers')
 

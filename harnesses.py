@@ -6,7 +6,7 @@ Each module defines HARNESS = Harness(...). Its capabilities are optional (None:
 - sessions: the harness's sessions as claude_sessions.Session objects (numbers only: folder, times,
   working time, tokens per model, lines changed, cost, subagent runs), so the details page shows the
   same "Projects, last 30 days" for every harness. Session titles and summaries are not here: they
-  come from add-ons (Insights), which only Asterism loads (see edition.py).
+  come from add-ons (Insights), which only Maprisma loads (see edition.py).
 
 The database readers open the harness's own store read-only and take only the numeric and folder
 columns they name, never message text.
@@ -310,7 +310,7 @@ _BUILT_IN: list = []
 
 
 def hide_built_in(commands) -> None:
-    """Asterism: these agents come as add-ons (installed, signed), so only the add-on, when it is
+    """Maprisma: these agents come as add-ons (installed, signed), so only the add-on, when it is
     switched on, shows them; the Maprisma plugin never hides any."""
     _HIDDEN.clear()
     _HIDDEN.update(commands)

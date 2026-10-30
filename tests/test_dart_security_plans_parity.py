@@ -59,7 +59,7 @@ class DartSecurityPlansParityTest(unittest.TestCase):
                 (home / rel).write_text(text)
             env = {**os.environ, 'HOME': str(home), 'XDG_CONFIG_HOME': str(home / '.config'),
                    'XDG_DATA_HOME': str(home / '.local/share'), 'XDG_CACHE_HOME': str(home / '.cache'),
-                   'ASTERISM_DESKTOP': 'generic', 'LANG': 'C.UTF-8'}
+                   'MAPRISMA_DESKTOP': 'generic', 'LANG': 'C.UTF-8'}
             python = json.loads(subprocess.run([sys.executable, '-c', PYTHON, str(ROOT), json.dumps(COMMANDS)],
                                                capture_output=True, check=True, env=env, timeout=120).stdout)
             lines = [json.dumps({'id': i, 'protocol': 1, 'method': 'dev.securityplan',
@@ -67,7 +67,7 @@ class DartSecurityPlansParityTest(unittest.TestCase):
                      for i, (c, k, v, _r) in enumerate(python, 1)]
             out = subprocess.run([DART, '--disable-dart-dev', '--packages=.dart_tool/package_config.json',
                                   'bin/fixture_probe.dart'], input=('\n'.join(lines) + '\n').encode(),
-                                 capture_output=True, cwd=ROOT / 'packages/asterism_core', timeout=300, env=env)
+                                 capture_output=True, cwd=ROOT / 'packages/maprisma_core', timeout=300, env=env)
             replies = [json.loads(line)['result'] for line in out.stdout.splitlines() if line.startswith(b'{')]
         dart = [[c, k, v, 'refused' if 'error' in r else r['changes']] for (c, k, v, _p), r in zip(python, replies)]
         self.maxDiff = None

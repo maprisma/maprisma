@@ -205,7 +205,7 @@ def ensure_service(on: bool, script: Path | None = None) -> bool:
     remove it (off). Rewrites the unit when the plugin folder moved. Blocking."""
     # Flutter's temporary Python reference must never manage the retired unit.
     # Workers inherit this process marker; both install and removal are blocked.
-    if os.environ.get('ASTERISM_FLUTTER_DEVEL') == '1':
+    if os.environ.get('MAPRISMA_FLUTTER_DEVEL') == '1':
         return False
     script = (script or Path(__file__)).resolve()
     if not on:

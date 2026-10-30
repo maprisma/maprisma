@@ -1,4 +1,4 @@
-"""Asterism fork: settings I/O uses ai_core to preserve bounded project history.
+"""Maprisma fork: settings I/O uses ai_core to preserve bounded project history.
 Do not overwrite from omarchy-plugin-i18n without preserving this integration.
 
 Interface translations (built in; nothing is downloaded or generated).

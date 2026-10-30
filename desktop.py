@@ -6,8 +6,8 @@ actions (focus, maximize, make room for the map), terminals, the agents the
 desktop offers and their usage records.
 
 Two implementations: desktop_omarchy (Omarchy, Hyprland) and desktop_generic
-(any other desktop: GNOME, KDE, …; Asterism). current() picks one at start:
-ASTERISM_DESKTOP=omarchy|generic decides when set (for testing), else Omarchy
+(any other desktop: GNOME, KDE, …; Maprisma). current() picks one at start:
+MAPRISMA_DESKTOP=omarchy|generic decides when set (for testing), else Omarchy
 when its files are there (/usr/share/omarchy or $OMARCHY_PATH), else generic.
 
 App name, app id and configuration paths come from identity.py. The facade also
@@ -73,7 +73,7 @@ def launcher_entry() -> bool:
 def detect(environ=None) -> str:
     """"omarchy" or "generic"."""
     environ = os.environ if environ is None else environ
-    wanted = environ.get("ASTERISM_DESKTOP", "")
+    wanted = environ.get("MAPRISMA_DESKTOP", "")
     if wanted in ("omarchy", "generic"):
         return wanted
     # Omarchy's own folder is enough: the watcher service (systemd --user) may not see Hyprland's variables.

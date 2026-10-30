@@ -1,5 +1,5 @@
-import 'package:asterism/map_editor.dart';
-import 'package:asterism/map_lights.dart';
+import 'package:maprisma/map_editor.dart';
+import 'package:maprisma/map_lights.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';

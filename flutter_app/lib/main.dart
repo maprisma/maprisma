@@ -55,20 +55,20 @@ void main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
   await windowManager.ensureInitialized();
   await windowManager.setPreventClose(true);
-  runApp(const AsterismApp());
+  runApp(const MaprismaApp());
 }
 
-class AsterismApp extends StatefulWidget {
-  const AsterismApp({super.key, this.connectBackend});
+class MaprismaApp extends StatefulWidget {
+  const MaprismaApp({super.key, this.connectBackend});
 
   /// Allows isolated service fixtures; production always starts its bundled service.
   final Future<Backend> Function()? connectBackend;
 
   @override
-  State<AsterismApp> createState() => _AsterismAppState();
+  State<MaprismaApp> createState() => _MaprismaAppState();
 }
 
-class _AsterismAppState extends State<AsterismApp> with WindowListener {
+class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   final _navigator = GlobalKey<NavigatorState>();
   final _terminals = <AgentTerminal>[];
   final _startMenu = ProjectStartMenuController();

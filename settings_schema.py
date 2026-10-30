@@ -120,7 +120,7 @@ SCHEMA: dict[str, Setting] = {
     "map_layout_pinned": Setting(False, _bool, "the pin right of the map's zoom: keep map_layout after Refresh and a "
                                  "restart (unpinned, the default: the map's default layout)"),
     # Pages
-    "setup_done": Setting(False, _bool, "Asterism's welcome page was finished once"),
+    "setup_done": Setting(False, _bool, "Maprisma's welcome page was finished once"),
     "first_connection_done": Setting(False, _bool, "the card above the map that shows the first connection: done or closed"),
     "setup_collapsed": Setting([], _texts, "Setup: sections folded (closed-by-default ones as \"<key>:open\")"),
     "details_open": Setting([], _texts, "details pages: group cards opened (open-by-default ones as \"<key>:closed\")"),
@@ -146,7 +146,7 @@ SCHEMA: dict[str, Setting] = {
     "first_agent": Setting({}, _mapping, "the first-agent guide: {\"later\": true when put off, \"verified\": [agents whose test answered]} (first_agent.py)"),
     "ai_local_helper": Setting({}, _mapping, "Settings › Local helper: {agent, provider, model} confirmed by the user; {}: none (local_helper.py)"),
     "mcp_list": Setting(True, _bool, "Settings › Keep the MCP server list (mcp_registry.refresh_list on start)"),
-    # Add-ons (Asterism)
+    # Add-ons (Maprisma)
     "addons_enabled": Setting([], _texts, "the add-ons switched on"),
     "addons_online": Setting(True, _bool, "Settings › Look for add-ons online"),
     "installs_in_window": Setting(True, _bool, "add-on page: installs run in a terminal inside the window"),

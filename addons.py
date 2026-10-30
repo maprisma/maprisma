@@ -1,15 +1,15 @@
-"""Add-ons for Asterism (not in the Maprisma plugin): found, verified, loaded.
+"""Add-ons for Maprisma (not in the Maprisma plugin): found, verified, loaded.
 
 Only add-ons signed by Uwe Bruckhaus load. An add-on is a folder <id>/ with:
     addon.json        id, name, version, api, privacy, kind (feature | agent | provider), needs
-                      ("asterism >= x.y.z"), detect ({commands, paths}: is its program here),
+                      ("maprisma >= x.y.z"), detect ({commands, paths}: is its program here),
                       capabilities, harnesses, reads, sends
     addon.py          register(api) (see addon_api.py); at import time only definitions (an agent or
                       provider adapter: its Harness / Provider objects, the same code the AI Agents
                       Map plugin has built in)
     translations/<language>.json   optional, the add-on's own strings
     MANIFEST.sha256   "<sha256>  <path>" for every other file
-    SIGNATURE         `ssh-keygen -Y sign -n asterism-addon` of MANIFEST.sha256 with Uwe's key
+    SIGNATURE         `ssh-keygen -Y sign -n maprisma-addon` of MANIFEST.sha256 with Uwe's key
 
 Before anything of it runs: the folder and every file must be the user's (or root's), regular, not
 writable by others, no links, within size limits, only the files above; SIGNATURE must verify
@@ -37,17 +37,17 @@ import harnesses
 import providers
 
 # Uwe Bruckhaus's add-on signing key (fingerprint SHA256:e5cC634Ke3Our5LAeSc88qs22NKZEHTncBW5Ig3amWQ).
-ALLOWED_SIGNERS = ('addons@asterism namespaces="asterism-addon" '
-                   'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEIPZnfPIkyy+IX1J0jfB5g/U8U5jjJTapOogzlKrxlo')
-PRINCIPAL = "addons@asterism"
-NAMESPACE = "asterism-addon"
+ALLOWED_SIGNERS = ('addons@maprisma namespaces="maprisma-addon" '
+                   'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFfDZiRAvEhdsjhLIlYc6SfP80I533WGiSw6/tzqQtYA')
+PRINCIPAL = "addons@maprisma"
+NAMESPACE = "maprisma-addon"
 
 USER_DIR = Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local/share") / "maprisma/addons"
-# The add-ons that come with the app (signed like any other), next to its own files: /usr/lib/asterism/
+# The add-ons that come with the app (signed like any other), next to its own files: /usr/lib/maprisma/
 # addons from the package, inside the AppImage; a newer copy in USER_DIR (from the catalog) wins.
 SYSTEM_DIR = Path(__file__).resolve().parent / "addons"
 
-ASTERISM_VERSION = "0.11.1"       # an add-on whose "needs" names a newer Asterism is refused
+MAPRISMA_VERSION = "0.11.1"       # an add-on whose "needs" names a newer Maprisma is refused
 KINDS = ("feature", "agent", "provider", "extension")
 MAX_FILES = 64
 MAX_FILE = 1024 * 1024
@@ -63,7 +63,7 @@ _TEXT_LIMIT = 300
 _HOMEPAGE = re.compile(r"https://[A-Za-z0-9.-]{1,100}(/[A-Za-z0-9._~%/+@-]*)?")
 _ICON = re.compile(r"[a-z0-9-]{1,60}")
 _COMMAND = re.compile(r"[A-Za-z0-9][A-Za-z0-9._+-]{0,63}")
-_NEEDS = re.compile(r"(?:asterism\s*>=\s*)?(\d{1,4}\.\d{1,4}\.\d{1,4})")
+_NEEDS = re.compile(r"(?:maprisma\s*>=\s*)?(\d{1,4}\.\d{1,4}\.\d{1,4})")
 
 
 @dataclass
@@ -84,7 +84,7 @@ class Addon:
     summary: str = ""
     description: str = ""
     homepage: str = ""               # https web page of what it brings
-    needs: str = ""                  # the oldest Asterism it works with
+    needs: str = ""                  # the oldest Maprisma it works with
     provides: list = field(default_factory=list)        # agent commands / provider keys it brings
     commands: list = field(default_factory=list)        # detect hints: programs on PATH
     paths: list = field(default_factory=list)           # detect hints: "~/…" folders or files
@@ -182,7 +182,7 @@ def signature_ok(manifest: bytes, signature: bytes, signers: str = ALLOWED_SIGNE
     keygen = shutil.which("ssh-keygen")
     if keygen is None:
         return False
-    with tempfile.TemporaryDirectory(prefix="asterism-addon-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="maprisma-addon-") as tmp:
         signers_file, signature_file = Path(tmp) / "allowed_signers", Path(tmp) / "SIGNATURE"
         signers_file.write_text(signers + "\n")
         signature_file.write_bytes(signature)
@@ -266,9 +266,9 @@ def verify(folder: Path, signers: str = ALLOWED_SIGNERS, uid: int | None = None)
         return _refuse(addon, "unknown kind")
     m = _NEEDS.fullmatch(needs.strip()) if isinstance(needs, str) and needs else None
     if needs and m is None:
-        return _refuse(addon, "needs is not \"asterism >= x.y.z\"")
-    if m is not None and version_tuple(m.group(1)) > version_tuple(ASTERISM_VERSION):
-        return _refuse(addon, f"made for Maprisma {m.group(1)} or newer, this is {ASTERISM_VERSION}")
+        return _refuse(addon, "needs is not \"maprisma >= x.y.z\"")
+    if m is not None and version_tuple(m.group(1)) > version_tuple(MAPRISMA_VERSION):
+        return _refuse(addon, f"made for Maprisma {m.group(1)} or newer, this is {MAPRISMA_VERSION}")
     addon.kind, addon.needs = kind, m.group(1) if m else ""
     icon = meta.get("icon")
     addon.icon = icon if isinstance(icon, str) and _ICON.fullmatch(icon) else ""
@@ -317,7 +317,7 @@ def load(addon: Addon, hooks: addon_api.Hooks = addon_api.HOOKS) -> Addon:
     """Run a verified add-on's register(api) from its verified bytes."""
     if addon.state != "verified":
         return addon
-    module = types.ModuleType(f"asterism_addon_{addon.id.replace('-', '_')}")
+    module = types.ModuleType(f"maprisma_addon_{addon.id.replace('-', '_')}")
     module.__file__ = str(addon.folder / "addon.py")
     api = addon_api.AddonAPI(addon.id, addon.privacy, strings(addon), hooks, addon.capabilities, addon.kind,
                              addon.extends, icon=addon.icon if addon.icon.startswith("am-addon-") else "")

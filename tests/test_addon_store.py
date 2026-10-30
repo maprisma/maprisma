@@ -106,18 +106,18 @@ class StoreTest(unittest.TestCase):
         entries = store.parse_catalog(text, sig, self.signers)
         self.assertEqual([(e.id, e.commands, e.paths) for e in entries], [("other", [], [])])
 
-    def test_newest_version_this_asterism_can_load(self):
-        """Older versions stay in the catalog for older Asterism releases (which take an add-on's first
+    def test_newest_version_this_maprisma_can_load(self):
+        """Older versions stay in the catalog for older Maprisma releases (which take an add-on's first
         entry); this one takes the newest whose needs it meets."""
         def version(v, needs):
             return self.entry(version=v, needs=needs, url=f"{store.DOWNLOADS}demo-{v}/demo-{v}.zip")
-        with mock.patch.object(store.addons, "ASTERISM_VERSION", "0.8.0"):
-            text, sig = self.catalog_bytes([version("1.0.1", "asterism >= 0.7.0"), version("9.0.0", "asterism >= 9.0.0"),
-                                            version("1.1.0", "asterism >= 0.8.0"), self.entry(id="other", url=
+        with mock.patch.object(store.addons, "MAPRISMA_VERSION", "0.8.0"):
+            text, sig = self.catalog_bytes([version("1.0.1", "maprisma >= 0.7.0"), version("9.0.0", "maprisma >= 9.0.0"),
+                                            version("1.1.0", "maprisma >= 0.8.0"), self.entry(id="other", url=
                                             f"{store.DOWNLOADS}other-1.0.0/other-1.0.0.zip")])
             self.assertEqual([(e.id, e.version, e.needs) for e in store.parse_catalog(text, sig, self.signers)],
                              [("demo", "1.1.0", "0.8.0"), ("other", "1.0.0", "")])
-        with mock.patch.object(store.addons, "ASTERISM_VERSION", "0.7.2"):
+        with mock.patch.object(store.addons, "MAPRISMA_VERSION", "0.7.2"):
             self.assertEqual([e.version for e in store.parse_catalog(text, sig, self.signers)], ["1.0.1", "1.0.0"])
         text, sig = self.catalog_bytes([self.entry(needs="soon")])
         self.assertEqual(store.parse_catalog(text, sig, self.signers), [])     # an unreadable needs: left out

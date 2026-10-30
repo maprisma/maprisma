@@ -23,7 +23,7 @@ step.
   - PyPI, npm, crates.io: taken, which matters only for a library under that name.
 - **Domains:**
   - `asterism.app`, `.com`, `.dev`, `.ai` and `.org` are taken.
-  - `asterismai.app`, `asterism-ai.app`, `asterismai.dev` and `asterism-ai.dev` are free; registering one is
+  - `asterismai.app`, `maprisma-ai.app`, `asterismai.dev` and `maprisma-ai.dev` are free; registering one is
     Uwe's choice.
 - **Trademarks (TMview, 46 entries):** no EU (EUIPO) and no German (DPMA) "Asterism" mark. In the software
   classes:
@@ -36,7 +36,7 @@ step.
 
 | Before | Now | What |
 |---|---|---|
-| `/mnt/Data/Projects/asterism-flutter` | `/mnt/Data/Projects/asterism` | Asterism (Flutter), this repo |
+| `/mnt/Data/Projects/maprisma-flutter` | `/mnt/Data/Projects/asterism` | Asterism (Flutter), this repo |
 | `/mnt/Data/Projects/asterism` | `/mnt/Data/Projects/ai-agents-map` | AI Agents Map (GTK), frozen |
 | (none) | `~/Projects/ai-agents-map` → `/mnt/Data/Projects/ai-agents-map` | New link |
 | `~/Projects/asterism` → `/mnt/Data/Projects/asterism` | unchanged | Now points to the Flutter app |
@@ -171,10 +171,10 @@ the final name. Nothing is published.
 |---|---|---|
 | App ID | `io.github.ubruckhaus.Asterism` (Devel: `….Devel`) | `com.maprisma.Maprisma` (Devel: `….Devel`): the reverse of Uwe's domain, as Flathub wants |
 | Name in the interface | Asterism | Maprisma |
-| Program, core | `asterism`, `lib/asterism-core` | `maprisma`, `lib/maprisma-core` |
+| Program, core | `asterism`, `lib/maprisma-core` | `maprisma`, `lib/maprisma-core` |
 | Toggle | `asterism --toggle` | `maprisma --toggle` |
 | Folders | `~/.config/asterism`, `~/.local/share/asterism`, `~/.local/state/asterism`, `~/.cache/asterism` | the same with `maprisma` |
-| User unit | `asterism-providers.service` | `maprisma-providers.service` (follows the short name) |
+| User unit | `maprisma-providers.service` | `maprisma-providers.service` (follows the short name) |
 | Desktop file, metainfo | `data/io.github.ubruckhaus.Asterism.*` | `data/com.maprisma.Maprisma.*` |
 
 **Existing data moves over once, nothing is deleted.** At the first start of Maprisma, while

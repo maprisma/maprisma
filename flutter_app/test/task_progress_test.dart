@@ -1,8 +1,8 @@
 import 'support/python_transport.dart';
 import 'dart:io';
-import 'package:asterism/backend.dart';
-import 'package:asterism/provider_task_dialog.dart';
-import 'package:asterism/task_card.dart';
+import 'package:maprisma/backend.dart';
+import 'package:maprisma/provider_task_dialog.dart';
+import 'package:maprisma/task_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -11,7 +11,7 @@ void main() {
     'focus arrival and responsive reparenting do not start a task twice',
     (tester) async {
       final dir = Directory.systemTemp.createTempSync(
-        'asterism-card-progress-',
+        'maprisma-card-progress-',
       );
       addTearDown(() => dir.deleteSync(recursive: true));
       File('${dir.path}/flutter_backend.py').writeAsStringSync(r'''

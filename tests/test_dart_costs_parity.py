@@ -93,7 +93,7 @@ class DartCostsParityTest(unittest.TestCase):
                  'env': {'ANTHROPIC_API_KEY': 'x'}},
             ]
             env = {k: v for k, v in os.environ.items() if not k.startswith('XDG_') and not k.endswith('_API_KEY')}
-            env.update(HOME=str(home), LANG='C.UTF-8', ASTERISM_DESKTOP='generic')
+            env.update(HOME=str(home), LANG='C.UTF-8', MAPRISMA_DESKTOP='generic')
             common = {'texts': texts, 'numbers': numbers, 'ecb': ecb, 'pays': pays}
             python = json.loads(subprocess.run([sys.executable, '-c', PYTHON, str(ROOT)],
                                                input=json.dumps({**common, 'rates': rates[0]}), capture_output=True,
@@ -101,7 +101,7 @@ class DartCostsParityTest(unittest.TestCase):
             line = json.dumps({'id': 1, 'protocol': 1, 'method': 'dev.costs', 'params': {**common, 'rates': rates[1]}})
             out = subprocess.run([DART, '--disable-dart-dev', '--packages=.dart_tool/package_config.json',
                                   'bin/fixture_probe.dart'], input=(line + '\n').encode(), capture_output=True,
-                                 cwd=ROOT / 'packages/asterism_core', timeout=300, env=env)
+                                 cwd=ROOT / 'packages/maprisma_core', timeout=300, env=env)
             dart = [json.loads(x) for x in out.stdout.splitlines() if x.startswith(b'{')]
             self.assertEqual(len(dart), 1, out.stderr.decode()[-2000:])
             self.assertIn('result', dart[0], dart[0])

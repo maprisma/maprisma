@@ -70,7 +70,7 @@ class DartClaudeSessionsParityTest(unittest.TestCase):
             outside.write_text(reply('linked', '2026-10-28T08:00:00Z') + '\n')
             (project / 'linked.jsonl').symlink_to(outside)
             env = {k: v for k, v in os.environ.items() if not k.startswith('XDG_') and k != 'CLAUDE_CONFIG_DIR'}
-            env.update(HOME=str(home), LANG='C.UTF-8', ASTERISM_DESKTOP='generic', TZ='Europe/Berlin',
+            env.update(HOME=str(home), LANG='C.UTF-8', MAPRISMA_DESKTOP='generic', TZ='Europe/Berlin',
                        XDG_CACHE_HOME=str(home / 'dart-cache'))
             line = json.dumps({'id': 1, 'protocol': 1, 'method': 'scan.sessions', 'params': {'command': 'claude'}})
             results = []
@@ -80,7 +80,7 @@ class DartClaudeSessionsParityTest(unittest.TestCase):
                     capture_output=True, check=True, text=True, env=env, timeout=120).stdout)
                 out = subprocess.run([DART, '--disable-dart-dev', '--packages=.dart_tool/package_config.json',
                                       'bin/fixture_probe.dart'], input=(line + '\n').encode(), capture_output=True,
-                                     cwd=ROOT / 'packages/asterism_core', timeout=300, env=env)
+                                     cwd=ROOT / 'packages/maprisma_core', timeout=300, env=env)
                 dart = [json.loads(x) for x in out.stdout.splitlines() if x.startswith(b'{')]
                 self.assertEqual(len(dart), 1, out.stderr.decode()[-2000:])
                 self.assertIn('result', dart[0], dart[0])

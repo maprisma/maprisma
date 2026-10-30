@@ -1,7 +1,7 @@
 """Development parity: first-run setup (setup.detect / apply / later) and the first-agent guide
 (guide.snapshot / choose) through the Python backend and the Dart core, with Uwe's signed add-ons from
-asterism-addons installed in a temporary HOME, a fake agent and a fake local LLM. Skipped without a
-native Dart SDK or the asterism-addons checkout."""
+maprisma-addons installed in a temporary HOME, a fake agent and a fake local LLM. Skipped without a
+native Dart SDK or the maprisma-addons checkout."""
 import json
 import os
 import shutil
@@ -13,7 +13,7 @@ import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-ADDONS = ROOT.parent / 'asterism-addons'
+ADDONS = ROOT.parent / 'maprisma-addons'
 sys.path.insert(0, str(ROOT / 'tools'))
 sys.path.insert(0, str(ROOT / 'tests'))
 try:
@@ -58,7 +58,7 @@ def seed(home: Path):
     return f'{bin_dir}:{tools}'
 
 
-@unittest.skipIf(DART is None or not ADDONS.is_dir(), 'native Dart SDK or asterism-addons not available')
+@unittest.skipIf(DART is None or not ADDONS.is_dir(), 'native Dart SDK or maprisma-addons not available')
 class DartSetupGuideParityTest(unittest.TestCase):
     def test_same_setup_and_guide(self):
         sides = {}
@@ -69,11 +69,11 @@ class DartSetupGuideParityTest(unittest.TestCase):
                 path = seed(home)
                 env = {'HOME': str(home), 'PATH': path, 'LANG': 'C.UTF-8',
                        'XDG_CONFIG_HOME': str(home / '.config'), 'XDG_CACHE_HOME': str(home / '.cache'),
-                       'XDG_DATA_HOME': str(home / '.local/share'), 'ASTERISM_DESKTOP': 'generic',
-                       'ASTERISM_FLUTTER_DEVEL': '1'}
+                       'XDG_DATA_HOME': str(home / '.local/share'), 'MAPRISMA_DESKTOP': 'generic',
+                       'MAPRISMA_FLUTTER_DEVEL': '1'}
                 runner = (Side([sys.executable, '-c', SERVICE, str(ROOT)], ROOT, env) if side == 'python' else
                           Side([DART, '--disable-dart-dev', '--packages=.dart_tool/package_config.json',
-                                'bin/asterism-core.dart'], ROOT / 'packages/asterism_core', env))
+                                'bin/maprisma-core.dart'], ROOT / 'packages/maprisma_core', env))
                 answers = []
 
                 def wait(reply):

@@ -41,7 +41,7 @@ def interactive(command, case, home, env):
     """Requests one at a time: "refs" take a parameter from an earlier reply ({"plan": [3,
     "result", "plan"]}), "until_done" repeats a tasks.status until it no longer runs."""
     process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                               env=env, cwd=ROOT / 'packages/asterism_core')
+                               env=env, cwd=ROOT / 'packages/maprisma_core')
     replies = []
     try:
         for i, request in enumerate(case['requests']):
@@ -89,7 +89,7 @@ def assert_no_mounts(home):
 
 @contextmanager
 def fixture_root():
-    root = Path(tempfile.mkdtemp(prefix='asterism-diff-'))
+    root = Path(tempfile.mkdtemp(prefix='maprisma-diff-'))
     try:
         yield root
     finally:
@@ -104,7 +104,7 @@ def oracle():
     import flutter_backend
     import i18n
     import ai_core
-    if os.environ.get('ASTERISM_DIFF_COMPONENT') == 'scans':
+    if os.environ.get('MAPRISMA_DIFF_COMPONENT') == 'scans':
         import core_scan_oracle
         service=core_scan_oracle.service()
         for line in sys.stdin:
@@ -117,7 +117,7 @@ def oracle():
             print(json.dumps(response,default=str),flush=True)
         return
     ai_core.migrate_settings()
-    if os.environ.get('ASTERISM_DIFF_COMPONENT') == 'adapters':
+    if os.environ.get('MAPRISMA_DIFF_COMPONENT') == 'adapters':
         import adapter_data
         import tomllib
         for line in sys.stdin:
@@ -228,7 +228,7 @@ def tree(home):
 
 def run_side(command, case, home):
     seed(home, case.get('files', []))
-    timestamp=case.get('environment', {}).get('ASTERISM_SCAN_NOW')
+    timestamp=case.get('environment', {}).get('MAPRISMA_SCAN_NOW')
     if timestamp is not None:
         timestamp=float(timestamp)
         for folder, dirs, files in os.walk(home, topdown=False, followlinks=False):
@@ -242,7 +242,7 @@ def run_side(command, case, home):
                 os.utime(home / item['path'], (older, older), follow_symlinks=False)
     env = {**os.environ, 'HOME': str(home), 'XDG_CONFIG_HOME': str(home / '.config'),
            'XDG_CACHE_HOME': str(home / '.cache'), 'XDG_STATE_HOME': str(home / '.local/state'),
-           'XDG_DATA_HOME': str(home / '.local/share'), 'ASTERISM_DESKTOP': 'generic',
+           'XDG_DATA_HOME': str(home / '.local/share'), 'MAPRISMA_DESKTOP': 'generic',
            'LANG': 'en_US.UTF-8', 'LC_ALL': '', 'LC_MESSAGES': '', 'PYTHONDONTWRITEBYTECODE': '1'}
     env.update(expand(case.get('environment', {}), home))
     script = []
@@ -264,7 +264,7 @@ def run_side(command, case, home):
     try:
         output = subprocess.run(command, input=('\n'.join(script)+'\n').encode(),
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env,
-                                cwd=ROOT / 'packages/asterism_core', timeout=30, check=True)
+                                cwd=ROOT / 'packages/maprisma_core', timeout=30, check=True)
     finally:
         assert_no_mounts(home)
     responses = [json.loads(line.replace(os.fsencode(home), b'$HOME')) for line in output.stdout.splitlines()]
@@ -296,7 +296,7 @@ def main():
                 for home in homes:
                     home.mkdir(mode=0o700)
                 expected = run_side([sys.executable, str(Path(__file__).resolve()), '--oracle'], case, homes[0])
-                entry = 'bin/fixture_probe.dart' if case.get('environment', {}).get('ASTERISM_DIFF_COMPONENT') in ('adapters','scans') else 'bin/asterism-core.dart'
+                entry = 'bin/fixture_probe.dart' if case.get('environment', {}).get('MAPRISMA_DIFF_COMPONENT') in ('adapters','scans') else 'bin/maprisma-core.dart'
                 actual = run_side([args.dart, '--disable-dart-dev', '--packages=.dart_tool/package_config.json', entry], case, homes[1])
                 if expected != actual:
                     label = 'responses' if expected[0] != actual[0] else 'file bytes/modes'

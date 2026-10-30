@@ -1,6 +1,6 @@
-import 'package:asterism/item_details_view.dart';
-import 'package:asterism/projects_card.dart';
-import 'package:asterism/runtime_details_card.dart';
+import 'package:maprisma/item_details_view.dart';
+import 'package:maprisma/projects_card.dart';
+import 'package:maprisma/runtime_details_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

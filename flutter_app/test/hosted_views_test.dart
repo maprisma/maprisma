@@ -1,8 +1,8 @@
-import 'package:asterism/connections_view.dart';
-import 'package:asterism/first_agent_view.dart';
-import 'package:asterism/map_addons_focus.dart';
-import 'package:asterism/providers_view.dart';
-import 'package:asterism/task_card.dart';
+import 'package:maprisma/connections_view.dart';
+import 'package:maprisma/first_agent_view.dart';
+import 'package:maprisma/map_addons_focus.dart';
+import 'package:maprisma/providers_view.dart';
+import 'package:maprisma/task_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

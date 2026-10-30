@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:asterism/task_card.dart';
-import 'package:asterism/addon_details.dart';
-import 'package:asterism/connections_view.dart';
-import 'package:asterism/agent_action_dialog.dart';
-import 'package:asterism/model_removal_dialog.dart';
+import 'package:maprisma/task_card.dart';
+import 'package:maprisma/addon_details.dart';
+import 'package:maprisma/connections_view.dart';
+import 'package:maprisma/agent_action_dialog.dart';
+import 'package:maprisma/model_removal_dialog.dart';
 
 Future<bool> _present(
   BuildContext context,

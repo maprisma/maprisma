@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """39-box Devel canvas CPU on a private X display, with no backend or desktop input.
 
-Usage: tools/profile-flutter-editor.py --binary <Devel bundle/asterism> --xvfb <Xvfb>
+Usage: tools/profile-flutter-editor.py --binary <Devel bundle/maprisma> --xvfb <Xvfb>
 Explicit GTK scale and software GL make this reproducible; this is not hardware GPU performance.
 Use --lights circles|sprites for the comparison; default uses the app's selected renderer.
 --scale 2 reproduces the original inherited high-DPI environment, rather than the scale-1 GTK reference.
@@ -40,7 +40,7 @@ def main():
     args=parser.parse_args()
     if not .3<=args.zoom<=2:parser.error('zoom must be between .3 and 2')
     if not 5<=args.seconds<=600:parser.error('seconds must be between 5 and 600')
-    with tempfile.TemporaryDirectory(prefix='asterism-editor-profile-') as folder:
+    with tempfile.TemporaryDirectory(prefix='maprisma-editor-profile-') as folder:
         root=Path(folder)
         read_fd,write_fd=os.pipe()
         with (root/'xvfb.log').open('wb') as log:

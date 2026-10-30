@@ -96,7 +96,7 @@ print(json.dumps(out))
                              'params': {'facts': f, 'answer': a}}) for i, (f, a) in enumerate(cases, 1)]
         out = subprocess.run([DART, '--disable-dart-dev', '--packages=.dart_tool/package_config.json',
                               'bin/fixture_probe.dart'], input=('\n'.join(lines) + '\n').encode(),
-                             capture_output=True, cwd=ROOT / 'packages/asterism_core', timeout=300, env=env)
+                             capture_output=True, cwd=ROOT / 'packages/maprisma_core', timeout=300, env=env)
         dart = [json.loads(line)['result'] for line in out.stdout.splitlines() if line.startswith(b'{')]
         self.maxDiff = None
         self.assertEqual(len(dart), len(cases), out.stderr.decode()[-2000:])

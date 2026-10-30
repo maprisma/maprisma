@@ -118,7 +118,7 @@ class DartProviderWatchParityTest(unittest.TestCase):
                  for i, r in enumerate(requests, 1)]
         out = subprocess.run([DART, '--disable-dart-dev', '--packages=.dart_tool/package_config.json',
                               'bin/fixture_probe.dart'], input=('\n'.join(lines) + '\n').encode(),
-                             capture_output=True, cwd=ROOT / 'packages/asterism_core', timeout=300, check=True)
+                             capture_output=True, cwd=ROOT / 'packages/maprisma_core', timeout=300, check=True)
         replies = [json.loads(line)['result'] for line in out.stdout.splitlines() if line.startswith(b'{')]
         self.assertEqual(len(replies), len(SCENARIOS))
         for index, (scenario, reply) in enumerate(zip(SCENARIOS, replies)):
@@ -153,8 +153,8 @@ class DartProviderWatchParityTest(unittest.TestCase):
                 command = ([sys.executable, '-I', str(ROOT / 'provider_watch.py'), '--config', str(config)]
                            if side == 'python' else
                            [DART, '--disable-dart-dev', '--packages=.dart_tool/package_config.json',
-                            'bin/asterism-core.dart', 'provider-watch', '--config', str(config)])
-                watcher = subprocess.Popen(command, env=env, cwd=ROOT / 'packages/asterism_core',
+                            'bin/maprisma-core.dart', 'provider-watch', '--config', str(config)])
+                watcher = subprocess.Popen(command, env=env, cwd=ROOT / 'packages/maprisma_core',
                                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 log = home / 'systemctl.log'
                 def wait_for(count, seconds=20):

@@ -3,16 +3,16 @@ set -u
 echo "== A system"
 uname -r
 pacman -Q omarchy hyprland gtk3 2>&1 | head -4
-echo omarchy | sudo -S mkdir -p /mnt/asterism 2>/dev/null
-echo omarchy | sudo -S mount -t 9p -o trans=virtio,version=9p2000.L,ro asterism /mnt/asterism 2>&1 | tail -1
-B=/mnt/asterism
+echo omarchy | sudo -S mkdir -p /mnt/maprisma 2>/dev/null
+echo omarchy | sudo -S mount -t 9p -o trans=virtio,version=9p2000.L,ro maprisma /mnt/maprisma 2>&1 | tail -1
+B=/mnt/maprisma
 ls "$B" "$B/lib" | tr '\n' ' '; echo
 echo "== A libraries missing"
 for f in "$B/maprisma" "$B"/lib/*.so; do ldd "$f" | grep "not found" | sed "s|^|$(basename "$f"): |"; done
 echo "(end)"
 
 echo "== B core on a fresh home"
-export ASTERISM_FLUTTER_DEVEL=1
+export MAPRISMA_FLUTTER_DEVEL=1
 coproc CORE { "$B/lib/maprisma-core" 2>/tmp/core.err; }
 n=0
 ask() {  # method [params-json] -> prints the answer line

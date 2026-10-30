@@ -3,10 +3,10 @@
     {
       "name": "model previews: switch, detach, attach, refusals",
       "environment": {
-        "ASTERISM_DIFF_COMPONENT": "scans",
-        "ASTERISM_SCAN_NOW": "1793188800",
-        "ASTERISM_SCAN_PROC": "$HOME/proc",
-        "ASTERISM_SCAN_SYSTEM_ROOT": "$HOME/system",
+        "MAPRISMA_DIFF_COMPONENT": "scans",
+        "MAPRISMA_SCAN_NOW": "1793188800",
+        "MAPRISMA_SCAN_PROC": "$HOME/proc",
+        "MAPRISMA_SCAN_SYSTEM_ROOT": "$HOME/system",
         "PATH": "$HOME/.local/bin"
       },
       "files": [

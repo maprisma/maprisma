@@ -2,13 +2,13 @@ import 'dart:async';
 import 'support/python_transport.dart';
 import 'dart:convert';
 import 'dart:io';
-import 'package:asterism/backend.dart';
-import 'package:asterism/agent_map.dart';
-import 'package:asterism/settings_view.dart';
-import 'package:asterism/main.dart';
-import 'package:asterism/connections_view.dart';
-import 'package:asterism/task_card.dart';
-import 'package:asterism/map_addons_focus.dart';
+import 'package:maprisma/backend.dart';
+import 'package:maprisma/agent_map.dart';
+import 'package:maprisma/settings_view.dart';
+import 'package:maprisma/main.dart';
+import 'package:maprisma/connections_view.dart';
+import 'package:maprisma/task_card.dart';
+import 'package:maprisma/map_addons_focus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -176,7 +176,7 @@ Future<Directory> mountApp(
   void Function(Directory dir)? beforeStart,
 }) async {
   rootBundle.clear();
-  final dir = Directory.systemTemp.createTempSync('asterism-review-cards-');
+  final dir = Directory.systemTemp.createTempSync('maprisma-review-cards-');
   beforeStart?.call(dir);
   File('${dir.path}/flutter_backend.py').writeAsStringSync(
     service
@@ -198,7 +198,7 @@ Future<Directory> mountApp(
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
   addTearDown(() => dir.deleteSync(recursive: true));
-  final app = AsterismApp(
+  final app = MaprismaApp(
     key: UniqueKey(),
     connectBackend: () async => backend!,
   );

@@ -122,7 +122,7 @@ def check(record: dict, *, validator=None) -> dict:
     (validator or existing_ai.validate)(record)
     if record['kind'] != 'runtime':
         raise ValueError('Choose a program')
-    with tempfile.TemporaryDirectory(prefix='asterism-check-') as folder:
+    with tempfile.TemporaryDirectory(prefix='maprisma-check-') as folder:
         env = {'PATH': '/usr/bin:/bin', 'HOME': folder, 'TMPDIR': folder, 'LANG': 'C',
                **record['environment']}
         previous = signal.getsignal(signal.SIGTERM)

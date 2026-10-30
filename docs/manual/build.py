@@ -66,7 +66,7 @@ W = WORDS["en"]                  # the language being built (main sets it)
 PLUGIN_MANIFEST = Path.home() / ".config/omarchy/plugins/ubruckhaus.ai-agents-map/manifest.json"
 
 
-def asterism_version() -> str:
+def maprisma_version() -> str:
     """The app's own version (addons.ASTERISM_VERSION), the one About and the packages name."""
     text = (REPO / "addons.py").read_text()
     return re.search(r'^ASTERISM_VERSION = "([^"]+)"', text, re.M).group(1)
@@ -268,7 +268,7 @@ def build(lang: str, plugin_version_given: str | None, out_given: Path | None, c
                   f"{', '.join(new) or '–'}; markup: {'; '.join(problems) or 'ok'} (docs/manual/translations.py)",
                   file=sys.stderr)
     suffix = "" if lang == "en" else f".{lang}"
-    av, pv = asterism_version(), plugin_version(plugin_version_given)
+    av, pv = maprisma_version(), plugin_version(plugin_version_given)
     today = datetime.date.today()
     values = {"ASTERISM_VERSION": av, "PLUGIN_VERSION": pv,
               "DATE": f"{W['months'].split()[today.month - 1]} {today.year}"}

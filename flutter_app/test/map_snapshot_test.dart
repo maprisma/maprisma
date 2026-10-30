@@ -1,9 +1,9 @@
 import 'dart:convert';
-import 'package:asterism/map_benchmark.dart';
-import 'package:asterism/map_editor.dart';
-import 'package:asterism/map_layout.dart';
-import 'package:asterism/map_lights.dart';
-import 'package:asterism/map_snapshot.dart';
+import 'package:maprisma/map_benchmark.dart';
+import 'package:maprisma/map_editor.dart';
+import 'package:maprisma/map_layout.dart';
+import 'package:maprisma/map_lights.dart';
+import 'package:maprisma/map_snapshot.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'map_layout_test.dart' show fixtureGraph;

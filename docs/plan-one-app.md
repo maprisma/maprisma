@@ -140,7 +140,7 @@ or focuses the installed Asterism and offers to install it when it is missing.
 
 ## Prepared implementation in the writable checkout (2026-10-27)
 
-Steps 1–2 are implemented in `/mnt/Data/Projects/asterism-flutter`; the original
+Steps 1–2 are implemented in `/mnt/Data/Projects/maprisma-flutter`; the original
 `/mnt/Data/Projects/asterism` is still read-only to this Codex session. Nothing has been
 committed, installed, synced to the live plugin, pushed or published.
 
@@ -161,13 +161,13 @@ committed, installed, synced to the live plugin, pushed or published.
   session's display/socket restrictions. Run the complete suite and rebuild manuals on the host
   before any commit or release.
 
-The cumulative review patch is `/home/uwe/Work/asterism-one-app.patch` (includes the earlier
+The cumulative review patch is `/home/uwe/Work/maprisma-one-app.patch` (includes the earlier
 project-folder feature). The earlier folder-only patch remains available separately. Apply only
 the cumulative patch to a clean original checkout, not both patches.
 
 Next is the marketplace question already drafted above; it has not been posted. The new thin
 launcher, AUR publication, add-on signing and releases remain outstanding. Codex subagent
-detection research/unfinished work is separate in `/home/uwe/Work/asterism-subagents`.
+detection research/unfinished work is separate in `/home/uwe/Work/maprisma-subagents`.
 
 
 ## Continued preparation and Claude review attempt (2026-10-27)
@@ -175,14 +175,14 @@ detection research/unfinished work is separate in `/home/uwe/Work/asterism-subag
 Uwe instructed continuation, then a Claude recheck, with no automatic marketplace publication.
 The private preparation now also contains:
 
-- `/home/uwe/Work/omarchy-asterism-launcher`: new `ubruckhaus.asterism` QML/JS/Bash launcher.
+- `/home/uwe/Work/omarchy-maprisma-launcher`: new `ubruckhaus.asterism` QML/JS/Bash launcher.
   Fixed app discovery/focus, explicitly confirmed AUR or bounded SHA-256 AppImage installation,
   eight languages, no Python runtime.
 - `/home/uwe/Work/omarchy-ai-agents-map-handoff`: final legacy thin snapshot, version 0.27.0,
   with the moved notice and same installation path. The LOCAL ONLY block is not included.
   Finish all old embedded agents/jobs and end the legacy process before switching snapshots;
   the new launcher does not terminate them. The original live checkout was not touched.
-- `/home/uwe/Work/aur-asterism-staging`: PKGBUILD and generated .SRCINFO for staging; the new
+- `/home/uwe/Work/aur-maprisma-staging`: PKGBUILD and generated .SRCINFO for staging; the new
   application version, archive digests and a clean VM install must precede any AUR upload.
 - AppImage builder emits versioned + stable `Asterism-x86_64.AppImage` assets and SHA256SUMS.
   Missing/unmatched checksum assets fail closed in the launcher. All release uploads remain pending.
@@ -198,9 +198,9 @@ GUI/VM checks, actual network installer runs, real screenshots and manual PDF re
 
 Claude was invoked read-only after preparation, with no Bash/edit/MCP tools. It returned no report
 within 180 seconds: NOT REVIEWED, no CLEAN verdict. The saved prompt, output/status and host runner
-are in `/home/uwe/Work/asterism-review`. Run `review-with-claude.sh` from a normal host terminal,
+are in `/home/uwe/Work/maprisma-review`. Run `review-with-claude.sh` from a normal host terminal,
 inspect and resolve its findings, then recheck before treating this as release-ready.
 
-The final cumulative app patch is `/home/uwe/Work/asterism-one-app.patch`. Nothing was committed,
+The final cumulative app patch is `/home/uwe/Work/maprisma-one-app.patch`. Nothing was committed,
 installed into the original `/mnt/Data` tree, synced to the live desktop, pushed, released, uploaded
 to AUR or posted to the marketplace. The original tree remains read-only to this session.

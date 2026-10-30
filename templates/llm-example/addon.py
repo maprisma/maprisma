@@ -1,6 +1,6 @@
 """Example LLM: a template for a local LLM add-on (docs/addons.md).
 
-Everything Asterism knows about a local LLM is in this one file: how it is found (detect), what it
+Everything Maprisma knows about a local LLM is in this one file: how it is found (detect), what it
 is called in agent settings (connect_key), and its engine: how it starts and stops, what its API
 answers, how it keeps its models, and what the app's pages may do with them. The core asks the
 engine and never names a local LLM, so nothing else changes when this add-on is switched on.

@@ -19,25 +19,25 @@ python3 "$root/tools/core-assets.py"
 if [[ ! -d "$frontend/linux" ]]; then
     staging=$(mktemp -d)
     trap 'rm -rf -- "$staging"' EXIT
-    flutter --suppress-analytics --no-version-check create --offline --no-pub --platforms=linux --project-name=asterism \
-        --org=com.maprisma "$staging/asterism"
+    flutter --suppress-analytics --no-version-check create --offline --no-pub --platforms=linux --project-name=maprisma \
+        --org=com.maprisma "$staging/maprisma"
     # Use the SDK's current Linux runner, retaining the production application id.
-    python3 - "$staging/asterism/linux/CMakeLists.txt" <<'PY'
+    python3 - "$staging/maprisma/linux/CMakeLists.txt" <<'PY'
 from pathlib import Path
 import sys
 path = Path(sys.argv[1])
 text = path.read_text()
-old = 'set(APPLICATION_ID "com.maprisma.asterism")'
+old = 'set(APPLICATION_ID "com.maprisma.maprisma")'
 if old not in text:
     raise SystemExit('Unexpected Flutter runner template; inspect application id before continuing')
 path.write_text(text.replace(old, 'set(APPLICATION_ID "com.maprisma.Maprisma")')
-                .replace('set(BINARY_NAME "asterism")', 'set(BINARY_NAME "maprisma")'))
+                )
 PY
-    cp -R -- "$staging/asterism/linux" "$frontend/linux"
-    cp -- "$staging/asterism/.metadata" "$frontend/.metadata"
+    cp -R -- "$staging/maprisma/linux" "$frontend/linux"
+    cp -- "$staging/maprisma/.metadata" "$frontend/.metadata"
 fi
 cd -- "$frontend"
-if [[ ${ASTERISM_PUB_OFFLINE:-0} == 1 ]]; then
+if [[ ${MAPRISMA_PUB_OFFLINE:-0} == 1 ]]; then
     flutter --suppress-analytics --no-version-check pub get --offline
 else
     flutter --suppress-analytics --no-version-check pub get
@@ -46,7 +46,7 @@ case "$action" in
     prepare) ;;
     check)
         (
-            cd "$root/packages/asterism_core"
+            cd "$root/packages/maprisma_core"
             "$dart_binary" pub get --offline
             "$dart_binary" format --output=none --set-exit-if-changed lib bin test
             "$dart_binary" analyze --fatal-infos

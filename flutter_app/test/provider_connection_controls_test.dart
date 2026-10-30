@@ -1,5 +1,5 @@
 import 'review_test_host.dart';
-import 'package:asterism/provider_connections.dart';
+import 'package:maprisma/provider_connections.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

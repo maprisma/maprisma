@@ -49,7 +49,7 @@ class SubAgent:
     key: str                # unique: "<agent>:<session>:<subagent>"
     kind: str               # its type ("general-purpose", "Explore", "build")
     task: str               # the task's description ("" when it has none)
-    folder: str             # the session's working folder ("~/Projects/asterism"; "" when not known)
+    folder: str             # the session's working folder ("~/Projects/maprisma"; "" when not known)
     running: bool
     age: float              # seconds since it last worked
 

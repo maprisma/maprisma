@@ -69,7 +69,7 @@ class DartProviderOpsParityTest(unittest.TestCase):
             (home / '.cache/llama.cpp/fixture-chat-Q4_K_M.gguf').write_text('GGUF')
             env = {'HOME': str(home), 'PATH': f'{bin_dir}:/usr/bin:/bin', 'LANG': 'C.UTF-8',
                    'XDG_CONFIG_HOME': str(home / '.config'), 'XDG_CACHE_HOME': str(home / '.cache'),
-                   'XDG_DATA_HOME': str(home / '.local/share'), 'ASTERISM_DESKTOP': 'generic'}
+                   'XDG_DATA_HOME': str(home / '.local/share'), 'MAPRISMA_DESKTOP': 'generic'}
             server = subprocess.Popen([str(bin_dir / 'llama-server'), '--port', str(port)], env=env)
             try:
                 for _ in range(100):
@@ -91,7 +91,7 @@ class DartProviderOpsParityTest(unittest.TestCase):
                 for side, command, cwd in (
                         ('python', [sys.executable, '-u', str(ROOT / 'flutter_worker.py')], ROOT),
                         ('dart', [DART, '--disable-dart-dev', '--packages=.dart_tool/package_config.json',
-                                  'bin/asterism-core.dart', 'worker'], ROOT / 'packages/asterism_core')):
+                                  'bin/maprisma-core.dart', 'worker'], ROOT / 'packages/maprisma_core')):
                     results = []
                     for operation, params in operations:
                         out = subprocess.run(command, input=json.dumps({'operation': operation, 'params': params}).encode() + b'\n',
@@ -134,7 +134,7 @@ class DartProviderOpsParityTest(unittest.TestCase):
                 (home / f'.cache/llama.cpp/{name}.gguf').write_text('GGUF')
             env = {'HOME': str(home), 'PATH': f'{bin_dir}:/usr/bin:/bin', 'LANG': 'C.UTF-8',
                    'XDG_CONFIG_HOME': str(home / '.config'), 'XDG_CACHE_HOME': str(home / '.cache'),
-                   'XDG_DATA_HOME': str(home / '.local/share'), 'ASTERISM_DESKTOP': 'generic'}
+                   'XDG_DATA_HOME': str(home / '.local/share'), 'MAPRISMA_DESKTOP': 'generic'}
             server = subprocess.Popen([str(bin_dir / 'llama-server'), '--port', str(port)], env=env)
             try:
                 for _ in range(100):
@@ -146,7 +146,7 @@ class DartProviderOpsParityTest(unittest.TestCase):
                 for side, command, cwd in (
                         ('python', [sys.executable, '-u', str(ROOT / 'flutter_worker.py')], ROOT),
                         ('dart', [DART, '--disable-dart-dev', '--packages=.dart_tool/package_config.json',
-                                  'bin/asterism-core.dart', 'worker'], ROOT / 'packages/asterism_core')):
+                                  'bin/maprisma-core.dart', 'worker'], ROOT / 'packages/maprisma_core')):
                     target = home / f'{side}/settings.json'
                     plan = connect.Plan('pi', 'llamacpp', 'llama-local', changes=[
                         connect.Change(target, '', '{"model": "next"}\n')])
@@ -199,7 +199,7 @@ class DartProviderOpsParityTest(unittest.TestCase):
             port = free_port()
             env = {'HOME': str(home), 'PATH': f'{bin_dir}:/usr/bin:/bin', 'LANG': 'C.UTF-8',
                    'XDG_CONFIG_HOME': str(home / '.config'), 'XDG_CACHE_HOME': str(home / '.cache'),
-                   'XDG_DATA_HOME': str(home / '.local/share'), 'ASTERISM_DESKTOP': 'generic'}
+                   'XDG_DATA_HOME': str(home / '.local/share'), 'MAPRISMA_DESKTOP': 'generic'}
             server = subprocess.Popen([str(bin_dir / 'ollama'), '--port', str(port)], env=env)
             try:
                 for _ in range(100):
@@ -213,7 +213,7 @@ class DartProviderOpsParityTest(unittest.TestCase):
                 for side, command, cwd in (
                         ('python', [sys.executable, '-u', str(ROOT / 'flutter_worker.py')], ROOT),
                         ('dart', [DART, '--disable-dart-dev', '--packages=.dart_tool/package_config.json',
-                                  'bin/asterism-core.dart', 'worker'], ROOT / 'packages/asterism_core')):
+                                  'bin/maprisma-core.dart', 'worker'], ROOT / 'packages/maprisma_core')):
                     target = home / f'{side}/settings.json'
                     plan = connect.Plan('pi', 'ollama', 'ollama-local', changes=[
                         connect.Change(target, '', '{"model": "m"}\n')],

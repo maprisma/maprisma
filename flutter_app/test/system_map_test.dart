@@ -1,6 +1,6 @@
-import 'package:asterism/backend.dart';
-import 'package:asterism/system_map_view.dart';
-import 'package:asterism/map_welcome.dart';
+import 'package:maprisma/backend.dart';
+import 'package:maprisma/system_map_view.dart';
+import 'package:maprisma/map_welcome.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

@@ -14,7 +14,7 @@ bundle=$(ls -dt "$root"/.flutter-previews/preview-*/flutter_app/build/linux/x64/
 image=${1:-$(ls -t ~/VMs/omarchy-edge/omarchy-edge-*.qcow2 | head -1)}
 out=$(mktemp)
 trap 'rm -f -- "$out"' EXIT
-QEMU_EXTRA="-virtfs local,path=$bundle,mount_tag=asterism,security_model=none,readonly=on" \
+QEMU_EXTRA="-virtfs local,path=$bundle,mount_tag=maprisma,security_model=none,readonly=on" \
   bash "$(dirname -- "$image")/vm-boot" "$image" bash -s < "$root/tools/vm-scenarios.sh" > "$out" 2>&1
 sed -n '/== SHOT/,/== END/!p' "$out"
 sed -n '/== SHOT/{n;p}' "$out" | base64 -d > vm-scenarios.png 2>/dev/null && echo "Screenshot: vm-scenarios.png"

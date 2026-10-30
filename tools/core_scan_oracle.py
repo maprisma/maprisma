@@ -15,8 +15,8 @@ def service():
     import flutter_backend
     import time
     home = Path.home()
-    proc = os.environ['ASTERISM_SCAN_PROC']
-    system = Path(os.environ['ASTERISM_SCAN_SYSTEM_ROOT'])
+    proc = os.environ['MAPRISMA_SCAN_PROC']
+    system = Path(os.environ['MAPRISMA_SCAN_SYSTEM_ROOT'])
     real_list = agents.list_agents
     agents.list_agents = lambda **kw: real_list(db=system / 'var/lib/pacman/local', **kw)
     def own_processes():
@@ -42,13 +42,13 @@ def service():
         agent,pids,now,root,proc,recent)
     original_working=agent_activity.Activity.working
     agent_activity.Activity.working=lambda self,pids,**kw: original_working(self,pids,proc=proc,**kw)
-    if os.environ.get('ASTERISM_SCAN_NOW'):
-        now=float(os.environ['ASTERISM_SCAN_NOW'])
+    if os.environ.get('MAPRISMA_SCAN_NOW'):
+        now=float(os.environ['MAPRISMA_SCAN_NOW'])
         time.time=lambda:now
         import smart_check
         real_categories=smart_check.categories
         smart_check.categories=lambda runs,days=30,now=None:real_categories(
-            runs,days,now or __import__('datetime').datetime.fromtimestamp(float(os.environ['ASTERISM_SCAN_NOW'])))
+            runs,days,now or __import__('datetime').datetime.fromtimestamp(float(os.environ['MAPRISMA_SCAN_NOW'])))
     import ai_core
     result=flutter_backend.Service(ai_core.settings_file())
     result.adapters=SimpleNamespace(items=[])
@@ -82,7 +82,7 @@ def dispatch(current,method,params):
         if method=='scan.security':
             report=agent_security.report_for(h.command)
             return json.loads(json.dumps(asdict(report),default=str)) | {'level':report.level()}
-        now=float(os.environ['ASTERISM_SCAN_NOW'])
+        now=float(os.environ['MAPRISMA_SCAN_NOW'])
         today=dt.datetime.fromtimestamp(now).date()
         # Claude's generic API writes a rebuildable on-disk cache. Disable it in
         # this read-only fixture via an explicit, supported memory-only option.

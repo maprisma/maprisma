@@ -1311,7 +1311,7 @@
         }
       ],
       "environment": {
-        "ASTERISM_DESKTOP": "omarchy"
+        "MAPRISMA_DESKTOP": "omarchy"
       }
     },
     {
@@ -1345,7 +1345,7 @@
         }
       ],
       "environment": {
-        "ASTERISM_DESKTOP": "omarchy"
+        "MAPRISMA_DESKTOP": "omarchy"
       }
     },
     {
@@ -1382,7 +1382,7 @@
         }
       ],
       "environment": {
-        "ASTERISM_DESKTOP": "omarchy"
+        "MAPRISMA_DESKTOP": "omarchy"
       }
     },
     {
@@ -1416,7 +1416,7 @@
     {
       "name": "theme FIFO is nonblocking",
       "environment": {
-        "ASTERISM_DESKTOP": "omarchy"
+        "MAPRISMA_DESKTOP": "omarchy"
       },
       "files": [
         {

@@ -1,4 +1,4 @@
-import 'package:asterism/skills_web_view.dart';
+import 'package:maprisma/skills_web_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

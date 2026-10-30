@@ -2,7 +2,7 @@
 """The app's glyph icons as SVG files, so cards and the map never depend on an installed Nerd Font
 or Omarchy's icon font: every glyph the code uses (the Nerd Font escapes in *.py, the agent
 adapters' icons, the desktop's agent menu) drawn once by Pango into an outline and written as a
-symbolic icon into icons/Asterism/symbolic/actions/ (icons.name_for() finds it by its code point).
+symbolic icon into icons/Maprisma/symbolic/actions/ (icons.name_for() finds it by its code point).
 
     tools/make-glyph-icons.py            run again when a new glyph is used, then commit the SVGs
 

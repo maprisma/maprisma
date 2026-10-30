@@ -22,7 +22,7 @@ try:
 except (OSError, ValueError, RuntimeError):
     DART = None
 
-CORE = ROOT / 'packages/asterism_core'
+CORE = ROOT / 'packages/maprisma_core'
 STAMP = re.compile(r'^\d{8}-\d{6}-\d{6}$')
 
 
@@ -81,7 +81,7 @@ class DartWorkerParityTest(unittest.TestCase):
             results = []
             for home, command in zip(homes, ([sys.executable, '-u', str(ROOT / 'flutter_worker.py')],
                                              [DART, '--disable-dart-dev', '--packages=.dart_tool/package_config.json',
-                                              'bin/asterism-core.dart', 'worker'])):
+                                              'bin/maprisma-core.dart', 'worker'])):
                 home.mkdir()
                 seed(home)
                 body = flutter_plan_wire.encode(plan_for(home), home / '.backups')
@@ -114,7 +114,7 @@ class DartWorkerParityTest(unittest.TestCase):
             body = flutter_plan_wire.encode(plan_for(home), home / '.backups')
             (home / '.codex/config.toml').write_text('model = "edited meanwhile"\n')
             result = run_worker([DART, '--disable-dart-dev', '--packages=.dart_tool/package_config.json',
-                                 'bin/asterism-core.dart', 'worker'], home, body)
+                                 'bin/maprisma-core.dart', 'worker'], home, body)
             self.assertEqual(result, {'type': 'error', 'code': 'operation_failed'})
             self.assertFalse((home / '.backups').exists())
             self.assertFalse((home / '.claude/skills/set-a').exists())

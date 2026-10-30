@@ -65,7 +65,7 @@ class DartPtySessionsParityTest(unittest.TestCase):
                        'params': {'argv': argv, 'cwd': cwd, 'env': env, 'steps': STEPS}}
             out = subprocess.run([DART, '--disable-dart-dev', '--packages=.dart_tool/package_config.json',
                                   'bin/fixture_probe.dart'], input=(json.dumps(request) + '\n').encode(),
-                                 capture_output=True, cwd=ROOT / 'packages/asterism_core', timeout=120, check=True)
+                                 capture_output=True, cwd=ROOT / 'packages/maprisma_core', timeout=120, check=True)
             actual = json.loads(out.stdout.splitlines()[-1])['result']
         self.assertEqual(expected, actual)
         text = actual['text']

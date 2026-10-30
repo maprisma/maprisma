@@ -1,4 +1,4 @@
-import 'package:asterism/connection_authoring.dart';
+import 'package:maprisma/connection_authoring.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

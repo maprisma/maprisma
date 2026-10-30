@@ -1,5 +1,5 @@
-import 'package:asterism/settings_view.dart';
-import 'package:asterism/terminal_tabs.dart';
+import 'package:maprisma/settings_view.dart';
+import 'package:maprisma/terminal_tabs.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

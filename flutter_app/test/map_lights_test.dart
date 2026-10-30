@@ -1,6 +1,6 @@
-import 'package:asterism/map_lights.dart';
-import 'package:asterism/map_layout.dart';
-import 'package:asterism/map_static_cache.dart';
+import 'package:maprisma/map_lights.dart';
+import 'package:maprisma/map_layout.dart';
+import 'package:maprisma/map_static_cache.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/scheduler.dart';

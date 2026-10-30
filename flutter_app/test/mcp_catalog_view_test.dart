@@ -1,4 +1,4 @@
-import 'package:asterism/mcp_catalog_view.dart';
+import 'package:maprisma/mcp_catalog_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

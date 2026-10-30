@@ -1,6 +1,6 @@
-"""Unpack adapters-<version>.zip (asterism-addons tools/zip_bundle.py) into the app's addons folder
+"""Unpack adapters-<version>.zip (maprisma-addons tools/zip_bundle.py) into the app's addons folder
 for the AppImage and the AUR package: only <add-on id>/<file> entries, no links, files 0644 and
-folders 0755. Asterism checks every add-on's signature again when it starts.
+folders 0755. Maprisma checks every add-on's signature again when it starts.
     unpack-adapters.py <adapters.zip> <target folder>"""
 import re
 import sys

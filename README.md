@@ -92,7 +92,7 @@ app's Insights) are not possible in the Flutter app.
   Python reference (`tools/diff-core.py`), the release transport check, the Flutter analyzer and tests.
 - `python3 -m unittest discover -s tests` and `tools/typecheck.sh`: the Python reference and the
   Python ↔ Dart parity tests. Every `*.py` here is the reference implementation only; nothing of it runs
-  in the app (see AGENTS.md). `ASTERISM_DESKTOP=omarchy|generic` picks the desktop integration.
+  in the app (see AGENTS.md). `MAPRISMA_DESKTOP=omarchy|generic` picks the desktop integration.
 
 The AI Agents Map plugin is its own GTK source since 2026-10-28; nothing is synced into it from here
 (`tools/sync-plugin.py` is retired).

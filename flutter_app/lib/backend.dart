@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'package:asterism_core/asterism_core.dart';
+import 'package:maprisma_core/maprisma_core.dart';
 import 'service_transport.dart';
 import 'isolate_transport.dart';
 export 'service_transport.dart';
@@ -7,15 +7,15 @@ export 'service_transport.dart';
 typedef BackendError = ServiceError;
 
 /// A Devel build (the preview bundle): its core must never manage the user
-/// service of an installed Asterism.
-const develBuild = bool.fromEnvironment('ASTERISM_DEVEL', defaultValue: false);
+/// service of an installed Maprisma.
+const develBuild = bool.fromEnvironment('MAPRISMA_DEVEL', defaultValue: false);
 
 /// The core's environment: this process's, marked in a Devel build.
 Map<String, String>? coreEnvironment({
   bool devel = develBuild,
   Map<String, String>? environment,
 }) => devel
-    ? {...(environment ?? Platform.environment), 'ASTERISM_FLUTTER_DEVEL': '1'}
+    ? {...(environment ?? Platform.environment), 'MAPRISMA_FLUTTER_DEVEL': '1'}
     : environment;
 
 /// The app's service: the Dart core in a background isolate. Every route is

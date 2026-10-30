@@ -1,4 +1,4 @@
-import 'package:asterism/window_popup.dart';
+import 'package:maprisma/window_popup.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// window_mode: auto is a popup on Omarchy only; popup and window force it.

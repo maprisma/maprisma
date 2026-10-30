@@ -136,9 +136,9 @@ class DartSetupChecksParityTest(unittest.TestCase):
                 if creds:
                     (home / '.creds/key.json').write_text('{}')
                 env = {k: v for k, v in os.environ.items() if not k.startswith('XDG_')}
-                env.update(HOME=str(home), PATH=f'{tools}:/usr/bin:/bin', LANG='C.UTF-8', ASTERISM_DESKTOP=desktop,
+                env.update(HOME=str(home), PATH=f'{tools}:/usr/bin:/bin', LANG='C.UTF-8', MAPRISMA_DESKTOP=desktop,
                            FAKE_KEY='' if not creds else 'x')
-                # The core names the app Asterism in its texts (ServiceI18n), as the reference renamed.
+                # The core names the app Maprisma in its texts (ServiceI18n), as the reference renamed.
                 python = json.loads(subprocess.run([sys.executable, '-c', PYTHON, str(ROOT)], input=json.dumps(cases),
                                                    capture_output=True, check=True, text=True, env=env,
                                                    timeout=300).stdout)
@@ -150,7 +150,7 @@ class DartSetupChecksParityTest(unittest.TestCase):
                     lines.append(json.dumps({'id': i, 'protocol': 1, 'method': 'dev.setupchecks', 'params': params}))
                 out = subprocess.run([DART, '--disable-dart-dev', '--packages=.dart_tool/package_config.json',
                                       'bin/fixture_probe.dart'], input=('\n'.join(lines) + '\n').encode(),
-                                     capture_output=True, cwd=ROOT / 'packages/asterism_core', timeout=300, env=env)
+                                     capture_output=True, cwd=ROOT / 'packages/maprisma_core', timeout=300, env=env)
                 dart = [json.loads(line)['result'] for line in out.stdout.splitlines() if line.startswith(b'{')]
                 self.assertEqual(len(dart), len(cases), out.stderr.decode()[-2000:])
                 results[desktop] = (python, dart)

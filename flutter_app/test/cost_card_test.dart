@@ -1,5 +1,5 @@
-import 'package:asterism/cost_card.dart';
-import 'package:asterism/settings_view.dart';
+import 'package:maprisma/cost_card.dart';
+import 'package:maprisma/settings_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

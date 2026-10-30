@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'package:asterism/service_transport.dart';
-import 'package:asterism_core/asterism_core.dart';
+import 'package:maprisma/service_transport.dart';
+import 'package:maprisma_core/maprisma_core.dart';
 
 /// Test support only: drives a fake service script (python3) over the same
 /// line protocol, for widget tests of the app. The app itself has no Python
@@ -30,14 +30,14 @@ class PythonTransport implements ServiceTransport {
 
   static Future<PythonTransport> start(String root) async {
     if (!File('$root/flutter_backend.py').existsSync()) {
-      throw StateError('Asterism service was not found');
+      throw StateError('Maprisma service was not found');
     }
     return PythonTransport._(
       await Process.start(
         '/usr/bin/python3',
         ['-u', '$root/flutter_backend.py'],
         workingDirectory: root,
-        environment: const {'ASTERISM_FLUTTER_DEVEL': '1'},
+        environment: const {'MAPRISMA_FLUTTER_DEVEL': '1'},
       ),
     );
   }

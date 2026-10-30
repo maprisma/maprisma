@@ -81,7 +81,7 @@ class AdapterAddonsTest(unittest.TestCase):
         self.assertEqual(len(found), len(self.expect_agents) + len(self.expect_local) + 1)
         self.assertEqual([a.id for a in found if a.state != "verified"], [])
         claude = next(a for a in found if a.id == "agent-claude")
-        self.assertEqual((claude.kind, claude.needs, claude.commands), ("agent", addons.ASTERISM_VERSION, ["claude"]))
+        self.assertEqual((claude.kind, claude.needs, claude.commands), ("agent", addons.MAPRISMA_VERSION, ["claude"]))
         self.assertIn("updater", claude.capabilities)
 
     def test_empty_until_switched_on(self):
@@ -113,17 +113,17 @@ class AdapterAddonsTest(unittest.TestCase):
         with self.assertRaises(addon_api.AddonError):
             api.add_harness(claude)
 
-    def test_needs_a_newer_asterism(self):
+    def test_needs_a_newer_maprisma(self):
         import json
         folder = Path(self.tmp.name) / "newer" / "agent-x"
         folder.mkdir(parents=True)
         (folder / "addon.json").write_text(json.dumps({"id": "agent-x", "version": "1.0.0", "api": 1,
-                                                       "privacy": "numbers", "needs": "asterism >= 99.0.0"}))
+                                                       "privacy": "numbers", "needs": "maprisma >= 99.0.0"}))
         (folder / "addon.py").write_text("def register(api):\n    pass\n")
         self.sign(folder)
         addon = addons.verify(folder, self.signers)
         self.assertEqual((addon.state, addon.reason),
-                         ("refused", f"made for Maprisma 99.0.0 or newer, this is {addons.ASTERISM_VERSION}"))
+                         ("refused", f"made for Maprisma 99.0.0 or newer, this is {addons.MAPRISMA_VERSION}"))
 
 
 if __name__ == "__main__":

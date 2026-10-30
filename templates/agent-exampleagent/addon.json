@@ -1,7 +1,7 @@
 {
   "api": 1,
   "privacy": "numbers",
-  "needs": "asterism >= 0.9.0",
+  "needs": "maprisma >= 0.9.0",
   "id": "agent-exampleagent",
   "name": "Example Agent",
   "version": "1.0.0",

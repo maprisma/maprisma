@@ -27,14 +27,14 @@ def main():
     command = ['flutter', '--suppress-analytics', '--no-version-check']
     subprocess.run([*command, 'pub', 'get', '--offline'], cwd=stage, check=True)
     subprocess.run([*command, 'build', 'linux', '--no-pub',
-                    '--dart-define=ASTERISM_DEVEL=true'], cwd=stage, check=True)
+                    '--dart-define=MAPRISMA_DEVEL=true'], cwd=stage, check=True)
     # The core's plan worker sits next to the app (CoreTasks looks in bundle/lib).
     import sys
     sys.path.insert(0, str(root / 'tools'))
     from dart_sdk import resolve_dart
-    core = stage.parent / 'packages/asterism_core'
+    core = stage.parent / 'packages/maprisma_core'
     subprocess.run([resolve_dart(), 'pub', 'get', '--offline'], cwd=core, check=True)
-    subprocess.run([resolve_dart(), 'compile', 'exe', 'bin/asterism-core.dart', '-o',
+    subprocess.run([resolve_dart(), 'compile', 'exe', 'bin/maprisma-core.dart', '-o',
                     str(stage / 'build/linux/x64/release/bundle/lib/maprisma-core')], cwd=core, check=True)
     # The user manuals beside the app (Help opens the one in the interface language).
     data = stage / 'build/linux/x64/release/bundle/data'

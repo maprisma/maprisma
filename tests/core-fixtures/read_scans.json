@@ -3,10 +3,10 @@
   {
    "name": "empty installed-agent catalog and details",
    "environment": {
-    "ASTERISM_DIFF_COMPONENT": "scans",
-    "ASTERISM_SCAN_NOW": "1793188800",
-    "ASTERISM_SCAN_PROC": "$HOME/proc",
-    "ASTERISM_SCAN_SYSTEM_ROOT": "$HOME/system",
+    "MAPRISMA_DIFF_COMPONENT": "scans",
+    "MAPRISMA_SCAN_NOW": "1793188800",
+    "MAPRISMA_SCAN_PROC": "$HOME/proc",
+    "MAPRISMA_SCAN_SYSTEM_ROOT": "$HOME/system",
     "PATH": "$HOME/.local/bin"
    },
    "files": [
@@ -245,10 +245,10 @@
   {
    "name": "installed catalog configured providers MCP skills",
    "environment": {
-    "ASTERISM_DIFF_COMPONENT": "scans",
-    "ASTERISM_SCAN_NOW": "1793188800",
-    "ASTERISM_SCAN_PROC": "$HOME/proc",
-    "ASTERISM_SCAN_SYSTEM_ROOT": "$HOME/system",
+    "MAPRISMA_DIFF_COMPONENT": "scans",
+    "MAPRISMA_SCAN_NOW": "1793188800",
+    "MAPRISMA_SCAN_PROC": "$HOME/proc",
+    "MAPRISMA_SCAN_SYSTEM_ROOT": "$HOME/system",
     "PATH": "$HOME/.local/bin"
    },
    "files": [
@@ -608,10 +608,10 @@
   {
    "name": "agent configuration malformed",
    "environment": {
-    "ASTERISM_DIFF_COMPONENT": "scans",
-    "ASTERISM_SCAN_NOW": "1793188800",
-    "ASTERISM_SCAN_PROC": "$HOME/proc",
-    "ASTERISM_SCAN_SYSTEM_ROOT": "$HOME/system",
+    "MAPRISMA_DIFF_COMPONENT": "scans",
+    "MAPRISMA_SCAN_NOW": "1793188800",
+    "MAPRISMA_SCAN_PROC": "$HOME/proc",
+    "MAPRISMA_SCAN_SYSTEM_ROOT": "$HOME/system",
     "PATH": "$HOME/.local/bin"
    },
    "files": [
@@ -656,10 +656,10 @@
   {
    "name": "agent configuration fifo",
    "environment": {
-    "ASTERISM_DIFF_COMPONENT": "scans",
-    "ASTERISM_SCAN_NOW": "1793188800",
-    "ASTERISM_SCAN_PROC": "$HOME/proc",
-    "ASTERISM_SCAN_SYSTEM_ROOT": "$HOME/system",
+    "MAPRISMA_DIFF_COMPONENT": "scans",
+    "MAPRISMA_SCAN_NOW": "1793188800",
+    "MAPRISMA_SCAN_PROC": "$HOME/proc",
+    "MAPRISMA_SCAN_SYSTEM_ROOT": "$HOME/system",
     "PATH": "$HOME/.local/bin"
    },
    "files": [
@@ -704,10 +704,10 @@
   {
    "name": "agent configuration symlink",
    "environment": {
-    "ASTERISM_DIFF_COMPONENT": "scans",
-    "ASTERISM_SCAN_NOW": "1793188800",
-    "ASTERISM_SCAN_PROC": "$HOME/proc",
-    "ASTERISM_SCAN_SYSTEM_ROOT": "$HOME/system",
+    "MAPRISMA_DIFF_COMPONENT": "scans",
+    "MAPRISMA_SCAN_NOW": "1793188800",
+    "MAPRISMA_SCAN_PROC": "$HOME/proc",
+    "MAPRISMA_SCAN_SYSTEM_ROOT": "$HOME/system",
     "PATH": "$HOME/.local/bin"
    },
    "files": [
@@ -753,10 +753,10 @@
   {
    "name": "agent configuration oversized",
    "environment": {
-    "ASTERISM_DIFF_COMPONENT": "scans",
-    "ASTERISM_SCAN_NOW": "1793188800",
-    "ASTERISM_SCAN_PROC": "$HOME/proc",
-    "ASTERISM_SCAN_SYSTEM_ROOT": "$HOME/system",
+    "MAPRISMA_DIFF_COMPONENT": "scans",
+    "MAPRISMA_SCAN_NOW": "1793188800",
+    "MAPRISMA_SCAN_PROC": "$HOME/proc",
+    "MAPRISMA_SCAN_SYSTEM_ROOT": "$HOME/system",
     "PATH": "$HOME/.local/bin"
    },
    "files": [
@@ -804,10 +804,10 @@
   {
    "name": "map snapshot with dsh profile and failed-line hints",
    "environment": {
-    "ASTERISM_DIFF_COMPONENT": "scans",
-    "ASTERISM_SCAN_NOW": "1793188800",
-    "ASTERISM_SCAN_PROC": "$HOME/proc",
-    "ASTERISM_SCAN_SYSTEM_ROOT": "$HOME/system",
+    "MAPRISMA_DIFF_COMPONENT": "scans",
+    "MAPRISMA_SCAN_NOW": "1793188800",
+    "MAPRISMA_SCAN_PROC": "$HOME/proc",
+    "MAPRISMA_SCAN_SYSTEM_ROOT": "$HOME/system",
     "PATH": "$HOME/.local/bin"
    },
    "files": [
@@ -1001,10 +1001,10 @@
   {
    "name": "map snapshot with malformed dsh profile and linked failed-lines file",
    "environment": {
-    "ASTERISM_DIFF_COMPONENT": "scans",
-    "ASTERISM_SCAN_NOW": "1793188800",
-    "ASTERISM_SCAN_PROC": "$HOME/proc",
-    "ASTERISM_SCAN_SYSTEM_ROOT": "$HOME/system",
+    "MAPRISMA_DIFF_COMPONENT": "scans",
+    "MAPRISMA_SCAN_NOW": "1793188800",
+    "MAPRISMA_SCAN_PROC": "$HOME/proc",
+    "MAPRISMA_SCAN_SYSTEM_ROOT": "$HOME/system",
     "PATH": "$HOME/.local/bin"
    },
    "files": [
@@ -1189,10 +1189,10 @@
   {
    "name": "usage log, mounts and mount signature",
    "environment": {
-    "ASTERISM_DIFF_COMPONENT": "scans",
-    "ASTERISM_SCAN_NOW": "1793188800",
-    "ASTERISM_SCAN_PROC": "$HOME/proc",
-    "ASTERISM_SCAN_SYSTEM_ROOT": "$HOME/system",
+    "MAPRISMA_DIFF_COMPONENT": "scans",
+    "MAPRISMA_SCAN_NOW": "1793188800",
+    "MAPRISMA_SCAN_PROC": "$HOME/proc",
+    "MAPRISMA_SCAN_SYSTEM_ROOT": "$HOME/system",
     "PATH": "$HOME/.local/bin"
    },
    "files": [
@@ -1235,10 +1235,10 @@
   {
    "name": "usage log symlink",
    "environment": {
-    "ASTERISM_DIFF_COMPONENT": "scans",
-    "ASTERISM_SCAN_NOW": "1793188800",
-    "ASTERISM_SCAN_PROC": "$HOME/proc",
-    "ASTERISM_SCAN_SYSTEM_ROOT": "$HOME/system",
+    "MAPRISMA_DIFF_COMPONENT": "scans",
+    "MAPRISMA_SCAN_NOW": "1793188800",
+    "MAPRISMA_SCAN_PROC": "$HOME/proc",
+    "MAPRISMA_SCAN_SYSTEM_ROOT": "$HOME/system",
     "PATH": "$HOME/.local/bin"
    },
    "files": [
@@ -1266,10 +1266,10 @@
   {
    "name": "usage log malformed",
    "environment": {
-    "ASTERISM_DIFF_COMPONENT": "scans",
-    "ASTERISM_SCAN_NOW": "1793188800",
-    "ASTERISM_SCAN_PROC": "$HOME/proc",
-    "ASTERISM_SCAN_SYSTEM_ROOT": "$HOME/system",
+    "MAPRISMA_DIFF_COMPONENT": "scans",
+    "MAPRISMA_SCAN_NOW": "1793188800",
+    "MAPRISMA_SCAN_PROC": "$HOME/proc",
+    "MAPRISMA_SCAN_SYSTEM_ROOT": "$HOME/system",
     "PATH": "$HOME/.local/bin"
    },
    "files": [
@@ -1292,10 +1292,10 @@
   {
    "name": "usage log not a list",
    "environment": {
-    "ASTERISM_DIFF_COMPONENT": "scans",
-    "ASTERISM_SCAN_NOW": "1793188800",
-    "ASTERISM_SCAN_PROC": "$HOME/proc",
-    "ASTERISM_SCAN_SYSTEM_ROOT": "$HOME/system",
+    "MAPRISMA_DIFF_COMPONENT": "scans",
+    "MAPRISMA_SCAN_NOW": "1793188800",
+    "MAPRISMA_SCAN_PROC": "$HOME/proc",
+    "MAPRISMA_SCAN_SYSTEM_ROOT": "$HOME/system",
     "PATH": "$HOME/.local/bin"
    },
    "files": [
@@ -1318,10 +1318,10 @@
   {
    "name": "usage log fifo",
    "environment": {
-    "ASTERISM_DIFF_COMPONENT": "scans",
-    "ASTERISM_SCAN_NOW": "1793188800",
-    "ASTERISM_SCAN_PROC": "$HOME/proc",
-    "ASTERISM_SCAN_SYSTEM_ROOT": "$HOME/system",
+    "MAPRISMA_DIFF_COMPONENT": "scans",
+    "MAPRISMA_SCAN_NOW": "1793188800",
+    "MAPRISMA_SCAN_PROC": "$HOME/proc",
+    "MAPRISMA_SCAN_SYSTEM_ROOT": "$HOME/system",
     "PATH": "$HOME/.local/bin"
    },
    "files": [
@@ -1344,10 +1344,10 @@
   {
    "name": "usage log oversized",
    "environment": {
-    "ASTERISM_DIFF_COMPONENT": "scans",
-    "ASTERISM_SCAN_NOW": "1793188800",
-    "ASTERISM_SCAN_PROC": "$HOME/proc",
-    "ASTERISM_SCAN_SYSTEM_ROOT": "$HOME/system",
+    "MAPRISMA_DIFF_COMPONENT": "scans",
+    "MAPRISMA_SCAN_NOW": "1793188800",
+    "MAPRISMA_SCAN_PROC": "$HOME/proc",
+    "MAPRISMA_SCAN_SYSTEM_ROOT": "$HOME/system",
     "PATH": "$HOME/.local/bin"
    },
    "files": [
@@ -1370,10 +1370,10 @@
   {
    "name": "subagents of Claude projects, Codex rollouts and Copilot events",
    "environment": {
-    "ASTERISM_DIFF_COMPONENT": "scans",
-    "ASTERISM_SCAN_NOW": "1793188800",
-    "ASTERISM_SCAN_PROC": "$HOME/proc",
-    "ASTERISM_SCAN_SYSTEM_ROOT": "$HOME/system",
+    "MAPRISMA_DIFF_COMPONENT": "scans",
+    "MAPRISMA_SCAN_NOW": "1793188800",
+    "MAPRISMA_SCAN_PROC": "$HOME/proc",
+    "MAPRISMA_SCAN_SYSTEM_ROOT": "$HOME/system",
     "PATH": "$HOME/.local/bin"
    },
    "files": [
@@ -1640,10 +1640,10 @@
   {
    "name": "skill sets: links for Claude, Hermes list, Pi removal, Undo, refusals",
    "environment": {
-    "ASTERISM_DIFF_COMPONENT": "scans",
-    "ASTERISM_SCAN_NOW": "1793188800",
-    "ASTERISM_SCAN_PROC": "$HOME/proc",
-    "ASTERISM_SCAN_SYSTEM_ROOT": "$HOME/system",
+    "MAPRISMA_DIFF_COMPONENT": "scans",
+    "MAPRISMA_SCAN_NOW": "1793188800",
+    "MAPRISMA_SCAN_PROC": "$HOME/proc",
+    "MAPRISMA_SCAN_SYSTEM_ROOT": "$HOME/system",
     "PATH": "$HOME/.local/bin"
    },
    "files": [
@@ -1989,10 +1989,10 @@
   {
    "name": "MCP servers: JSON, TOML, YAML, Goose, Muse defaults, OpenClaw, library, Undo, refusals",
    "environment": {
-    "ASTERISM_DIFF_COMPONENT": "scans",
-    "ASTERISM_SCAN_NOW": "1793188800",
-    "ASTERISM_SCAN_PROC": "$HOME/proc",
-    "ASTERISM_SCAN_SYSTEM_ROOT": "$HOME/system",
+    "MAPRISMA_DIFF_COMPONENT": "scans",
+    "MAPRISMA_SCAN_NOW": "1793188800",
+    "MAPRISMA_SCAN_PROC": "$HOME/proc",
+    "MAPRISMA_SCAN_SYSTEM_ROOT": "$HOME/system",
     "PATH": "$HOME/.local/bin"
    },
    "files": [
@@ -2495,10 +2495,10 @@
   {
    "name": "DeepSeek Harness MCP inserts: PyYAML-identical add, remove, Undo",
    "environment": {
-    "ASTERISM_DIFF_COMPONENT": "scans",
-    "ASTERISM_SCAN_NOW": "1793188800",
-    "ASTERISM_SCAN_PROC": "$HOME/proc",
-    "ASTERISM_SCAN_SYSTEM_ROOT": "$HOME/system",
+    "MAPRISMA_DIFF_COMPONENT": "scans",
+    "MAPRISMA_SCAN_NOW": "1793188800",
+    "MAPRISMA_SCAN_PROC": "$HOME/proc",
+    "MAPRISMA_SCAN_SYSTEM_ROOT": "$HOME/system",
     "PATH": "$HOME/.local/bin"
    },
    "files": [
@@ -2766,10 +2766,10 @@
   {
    "name": "local LLM connections: six agents, removal rules, connect without a model, Undo, refusals",
    "environment": {
-    "ASTERISM_DIFF_COMPONENT": "scans",
-    "ASTERISM_SCAN_NOW": "1793188800",
-    "ASTERISM_SCAN_PROC": "$HOME/proc",
-    "ASTERISM_SCAN_SYSTEM_ROOT": "$HOME/system",
+    "MAPRISMA_DIFF_COMPONENT": "scans",
+    "MAPRISMA_SCAN_NOW": "1793188800",
+    "MAPRISMA_SCAN_PROC": "$HOME/proc",
+    "MAPRISMA_SCAN_SYSTEM_ROOT": "$HOME/system",
     "PATH": "$HOME/.local/bin"
    },
    "files": [
@@ -3427,10 +3427,10 @@
   {
    "name": "map edits: provider move, line removals, unapplied failure, repair, authoring, refusals",
    "environment": {
-    "ASTERISM_DIFF_COMPONENT": "scans",
-    "ASTERISM_SCAN_NOW": "1793188800",
-    "ASTERISM_SCAN_PROC": "$HOME/proc",
-    "ASTERISM_SCAN_SYSTEM_ROOT": "$HOME/system",
+    "MAPRISMA_DIFF_COMPONENT": "scans",
+    "MAPRISMA_SCAN_NOW": "1793188800",
+    "MAPRISMA_SCAN_PROC": "$HOME/proc",
+    "MAPRISMA_SCAN_SYSTEM_ROOT": "$HOME/system",
     "PATH": "$HOME/.local/bin"
    },
    "files": [

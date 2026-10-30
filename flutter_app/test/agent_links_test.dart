@@ -1,4 +1,4 @@
-import 'package:asterism/map_layout.dart';
+import 'package:maprisma/map_layout.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 Map<String, dynamic> _graph({bool working = false}) => {

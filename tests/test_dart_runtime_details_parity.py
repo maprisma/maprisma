@@ -68,14 +68,14 @@ class DartRuntimeDetailsParityTest(unittest.TestCase):
                 'risks': [[True, '127.0.0.1:8080'], [True, '0.0.0.0:11434'], [True, ''], [False, '127.0.0.1:1']],
                 'gpu': [[20 * GIB, 24 * GIB, 0], [2 * GIB, 24 * GIB, 13 * GIB], [0, 0, 0], [-5, 24 * GIB, 0]]}
         env = {k: v for k, v in os.environ.items() if not k.startswith('XDG_')}
-        env.update(LANG='C.UTF-8', TZ='Europe/Berlin', ASTERISM_DESKTOP='generic')
+        env.update(LANG='C.UTF-8', TZ='Europe/Berlin', MAPRISMA_DESKTOP='generic')
         python = json.loads(subprocess.run([sys.executable, '-c', PYTHON, str(ROOT)], input=json.dumps(case),
                                            capture_output=True, check=True, text=True, env=env, timeout=60)
                             .stdout)
         line = json.dumps({'id': 1, 'protocol': 1, 'method': 'dev.runtime', 'params': case})
         out = subprocess.run([DART, '--disable-dart-dev', '--packages=.dart_tool/package_config.json',
                               'bin/fixture_probe.dart'], input=(line + '\n').encode(), capture_output=True,
-                             cwd=ROOT / 'packages/asterism_core', timeout=300, env=env)
+                             cwd=ROOT / 'packages/maprisma_core', timeout=300, env=env)
         dart = [json.loads(x) for x in out.stdout.splitlines() if x.startswith(b'{')]
         self.assertEqual(len(dart), 1, out.stderr.decode()[-2000:])
         self.assertIn('result', dart[0], dart[0])

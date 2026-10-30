@@ -68,13 +68,13 @@ class DartBadgesParityTest(unittest.TestCase):
                  [130, 100, 'eur', 1.08, levels], [0.004, 10, 'eur', None, levels], [9.25, 10, 'usd', None, [0.5, 0.925]]]
         case = {'now': now, 'batteries': batteries, 'costs': costs}
         env = {k: v for k, v in os.environ.items() if not k.startswith('XDG_')}
-        env.update(LANG='C.UTF-8', LC_ALL='C.UTF-8', TZ='Europe/Berlin', ASTERISM_DESKTOP='generic')
+        env.update(LANG='C.UTF-8', LC_ALL='C.UTF-8', TZ='Europe/Berlin', MAPRISMA_DESKTOP='generic')
         python = json.loads(subprocess.run([sys.executable, '-c', PYTHON, str(ROOT)], input=json.dumps(case),
                                            capture_output=True, check=True, text=True, env=env, timeout=60).stdout)
         line = json.dumps({'id': 1, 'protocol': 1, 'method': 'dev.badges', 'params': case})
         out = subprocess.run([DART, '--disable-dart-dev', '--packages=.dart_tool/package_config.json',
                               'bin/fixture_probe.dart'], input=(line + '\n').encode(), capture_output=True,
-                             cwd=ROOT / 'packages/asterism_core', timeout=300, env=env)
+                             cwd=ROOT / 'packages/maprisma_core', timeout=300, env=env)
         dart = [json.loads(x) for x in out.stdout.splitlines() if x.startswith(b'{')]
         self.assertEqual(len(dart), 1, out.stderr.decode()[-2000:])
         self.assertIn('result', dart[0], dart[0])

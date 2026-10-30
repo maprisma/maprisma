@@ -1,6 +1,6 @@
 import 'review_test_host.dart';
-import 'package:asterism/first_agent_view.dart';
-import 'package:asterism/installer_review.dart';
+import 'package:maprisma/first_agent_view.dart';
+import 'package:maprisma/installer_review.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

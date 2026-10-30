@@ -11,7 +11,7 @@
   ported to Dart (`docs/plan-flutter-dart-core.md`), Python stays as the reference and test oracle.
 - **Python is reference only (phase 7, 2026-10-30):** every `*.py` here (and `adapters/*.py`) is the
   reference implementation for the differential and parity tests; nothing of it runs in the app. The app's
-  service is the Dart core (`packages/asterism_core`); a route it does not know is refused. The GTK UI was
+  service is the Dart core (`packages/maprisma_core`); a route it does not know is refused. The GTK UI was
   removed from this tree; its frozen copy is `/mnt/Data/Projects/omarchy-ai-agents-map`. New features are
   Dart only; change a Python module only to keep a reference in step with a port.
 - **Release gate:** `tools/check-bundle.py` (run by `tools/flutter-dev build`): no `.py`, no Python

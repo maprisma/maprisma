@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Release gate (phase 7): the shipped Asterism has no Python in it.
+"""Release gate (phase 7): the shipped Maprisma has no Python in it.
 
 Checks a built Linux bundle (default: the newest development preview) and the app's Dart sources:
 - no .py/.pyc file, no python executable and no Python environment folder in the bundle;
@@ -17,8 +17,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-MARKERS = (b'/usr/bin/python3', b'flutter_backend', b'PythonTransport', b'ASTERISM_SOURCE')
-SOURCES = (ROOT / 'flutter_app/lib', ROOT / 'packages/asterism_core/lib', ROOT / 'packages/asterism_core/bin')
+MARKERS = (b'/usr/bin/python3', b'flutter_backend', b'PythonTransport', b'MAPRISMA_SOURCE')
+SOURCES = (ROOT / 'flutter_app/lib', ROOT / 'packages/maprisma_core/lib', ROOT / 'packages/maprisma_core/bin')
 
 
 def newest_bundle() -> Path | None:

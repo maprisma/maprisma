@@ -34,7 +34,7 @@ def seed(home: Path):
     bin_dir = home / '.local/bin'
     bin_dir.mkdir(parents=True)
     (home / 'models').mkdir()
-    # A llama.cpp connected by Asterism earlier: its wrapper names the model folder.
+    # A llama.cpp connected by Asterism earlier (the old marker): its wrapper names the model folder.
     (bin_dir / 'llama-server').write_text(
         f'#!/bin/sh\n# Connected by Asterism\nset -eu\nexec /bin/true --models-dir {home}/models --port 8080\n')
     (bin_dir / 'xdg-terminal-exec').write_text(TERMINAL)
@@ -54,7 +54,7 @@ def seed(home: Path):
 class DartSystemActionsParityTest(unittest.TestCase):
     def test_same_actions(self):
         sides = {}
-        with tempfile.TemporaryDirectory(prefix='.asterism-parity-', dir=ROOT.parent) as disk_name, \
+        with tempfile.TemporaryDirectory(prefix='.maprisma-parity-', dir=ROOT.parent) as disk_name, \
                 tempfile.TemporaryDirectory() as temp:
             disk = Path(disk_name)
             (disk / 'gguf').mkdir()
@@ -64,11 +64,11 @@ class DartSystemActionsParityTest(unittest.TestCase):
                 seed(home)
                 env = {'HOME': str(home), 'PATH': f'{home}/.local/bin:/usr/bin:/bin', 'LANG': 'C.UTF-8',
                        'XDG_CONFIG_HOME': str(home / '.config'), 'XDG_CACHE_HOME': str(home / '.cache'),
-                       'XDG_DATA_HOME': str(home / '.local/share'), 'ASTERISM_DESKTOP': 'generic',
-                       'ASTERISM_FLUTTER_DEVEL': '1'}
+                       'XDG_DATA_HOME': str(home / '.local/share'), 'MAPRISMA_DESKTOP': 'generic',
+                       'MAPRISMA_FLUTTER_DEVEL': '1'}
                 runner = (Side([sys.executable, '-c', SERVICE, str(ROOT)], ROOT, env) if side == 'python' else
                           Side([DART, '--disable-dart-dev', '--packages=.dart_tool/package_config.json',
-                                'bin/asterism-core.dart'], ROOT / 'packages/asterism_core', env))
+                                'bin/maprisma-core.dart'], ROOT / 'packages/maprisma_core', env))
                 answers = []
 
                 def wait(reply):

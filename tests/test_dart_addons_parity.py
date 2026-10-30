@@ -1,9 +1,9 @@
 """Development parity: add-ons (verification, addons.list, addons.set_enabled and what they hide and
 show) through the Python backend and the Dart core, with Uwe's real signed add-ons from
-asterism-addons plus tampered copies. The Dart core takes add-ons as data only: code the app has
+maprisma-addons plus tampered copies. The Dart core takes add-ons as data only: code the app has
 built in (its providers, the online providers, the built-in agents' hooks) is its own, other code is
-refused; the one intended difference is a feature add-on with code (Insights). Skipped without a
-native Dart SDK or the asterism-addons checkout."""
+refused (test/data_only_addons_test.dart; Maprisma's add-ons are data only). Skipped without a native
+Dart SDK or the maprisma-addons checkout."""
 import json
 import os
 import shutil
@@ -14,7 +14,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-ADDONS = ROOT.parent / 'asterism-addons'
+ADDONS = ROOT.parent / 'maprisma-addons'
 sys.path.insert(0, str(ROOT / 'tools'))
 sys.path.insert(0, str(ROOT / 'tests'))
 try:
@@ -45,7 +45,7 @@ for line in sys.stdin:
     print(json.dumps(reply), flush=True)
 '''
 
-REAL = ['agent-claude', 'agent-hermes', 'agent-goose', 'llm-jan', 'providers-online', 'insights']
+REAL = ['agent-claude', 'agent-hermes', 'agent-goose', 'llm-jan', 'providers-online']
 
 
 def seed(home: Path):
@@ -80,7 +80,7 @@ def visible(runner):
             [p['key'] for p in providers.get('local', [])], [p['key'] for p in providers.get('online', [])]]
 
 
-@unittest.skipIf(DART is None or not ADDONS.is_dir(), 'native Dart SDK or asterism-addons not available')
+@unittest.skipIf(DART is None or not ADDONS.is_dir(), 'native Dart SDK or maprisma-addons not available')
 class DartAddonsParityTest(unittest.TestCase):
     def test_same_add_ons(self):
         sides = {}
@@ -91,16 +91,16 @@ class DartAddonsParityTest(unittest.TestCase):
                 seed(home)
                 env = {'HOME': str(home), 'PATH': '/usr/bin:/bin', 'LANG': 'C.UTF-8',
                        'XDG_CONFIG_HOME': str(home / '.config'), 'XDG_CACHE_HOME': str(home / '.cache'),
-                       'XDG_DATA_HOME': str(home / '.local/share'), 'ASTERISM_DESKTOP': 'generic',
-                       'ASTERISM_FLUTTER_DEVEL': '1'}
+                       'XDG_DATA_HOME': str(home / '.local/share'), 'MAPRISMA_DESKTOP': 'generic',
+                       'MAPRISMA_FLUTTER_DEVEL': '1'}
                 runner = (Side([sys.executable, '-c', PYTHON_SERVICE, str(ROOT)], ROOT, env) if side == 'python' else
                           Side([DART, '--disable-dart-dev', '--packages=.dart_tool/package_config.json',
-                                'bin/asterism-core.dart'], ROOT / 'packages/asterism_core', env))
+                                'bin/maprisma-core.dart'], ROOT / 'packages/maprisma_core', env))
                 answers = []
                 try:
                     answers.append(summary(runner.call('addons.list', {})))
                     answers.append(visible(runner))
-                    for ident, on in (('agent-goose', True), ('llm-jan', True), ('insights', True),
+                    for ident, on in (('agent-goose', True), ('llm-jan', True),
                                       ('agent-grok', True), ('providers-online', False), ('agent-hermes', False)):
                         answers.append(summary(runner.call('addons.set_enabled', {'id': ident, 'enabled': on})))
                         answers.append(visible(runner))
@@ -109,15 +109,6 @@ class DartAddonsParityTest(unittest.TestCase):
                 settings = json.loads((home / '.config/maprisma/settings.json').read_text())
                 sides[side] = json.loads(json.dumps([answers, settings.get('addons_enabled')]).replace(str(home), '$HOME'))
         python, dart = sides['python'], sides['dart']
-        # The intended difference: Insights brings code; the Dart core takes it as data only.
-        def insights(listing):
-            return next(a for a in listing if a['id'] == 'insights')
-        self.assertEqual(insights(python[0][0])['state'], 'verified')
-        self.assertEqual(insights(dart[0][0])['state'], 'refused')
-        for listing in (python[0], dart[0]):
-            for index, answer in enumerate(listing):
-                if isinstance(answer, list) and answer and isinstance(answer[0], dict):
-                    listing[index] = [a for a in answer if a['id'] != 'insights']
         self.assertEqual(python, dart)
         listing = {a['id']: a for a in dart[0][0]}
         self.assertEqual(listing['agent-grok']['state'], 'refused')

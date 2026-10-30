@@ -6,9 +6,9 @@ An agent add-on is its adapter as data: adapters/<command>.toml as agent.toml, p
 adapters/<command>.py as hooks.py for the few agents facts cannot describe. A local LLM's or the
 online providers' addon.py is the provider module itself (provider_<key>.py, provider_online.py),
 unchanged, plus a register(api) that adds it. So the adapters keep one source: the Maprisma
-plugin has the same files built in, Asterism gets them as signed add-ons.
+plugin has the same files built in, Maprisma gets them as signed add-ons.
 
-    tools/build-adapter-addons.py <folder>      e.g. ../asterism-addons (then tools/release-adapters.sh)
+    tools/build-adapter-addons.py <folder>      e.g. ../maprisma-addons (then tools/release-adapters.sh)
 
 Folders of earlier runs are replaced (their MANIFEST.sha256 and SIGNATURE go too: sign again).
 """
@@ -30,7 +30,7 @@ import providers  # noqa: E402
 # Programs that tell a local LLM is here (its detect() needs the add-on loaded; these are hints).
 LLM_COMMANDS = {"llamacpp": ["llama-server"], "ollama": ["ollama"], "lmstudio": ["lms"], "vllm": ["vllm"],
                 "jan": ["jan", "Jan"], "koboldcpp": ["koboldcpp"]}
-NEEDS = f"asterism >= {addons.ASTERISM_VERSION}"
+NEEDS = f"maprisma >= {addons.MAPRISMA_VERSION}"
 
 
 def write(out: Path, meta: dict, source: str, register: str) -> None:
@@ -65,7 +65,7 @@ def agent(out: Path, module: str, version: str) -> None:
     meta = {"id": f"agent-{h.command}", "name": name, "version": version, "kind": "agent",
             "icon": "system-users-symbolic",
             "summary": f"{name} on the map: its models, MCP servers, skills, settings and sessions",
-            "description": f"Teaches Asterism {name}: where it keeps its settings, which models, MCP servers "
+            "description": f"Teaches Maprisma {name}: where it keeps its settings, which models, MCP servers "
                            "and skills it uses, its session numbers, and how to install or remove it.",
             "capabilities": caps, "harnesses": [h.command], "provides": [h.command],
             "reads": [f"{name}'s own settings and session files ({', '.join(h.data) or 'its folders'})"],
@@ -78,7 +78,7 @@ def llm(out: Path, p, version: str) -> None:
     write(out, {"id": f"llm-{p.key}", "name": p.name, "version": version, "kind": "provider",
                 "icon": "network-server-symbolic",
                 "summary": f"{p.name} on the map: found, installed, started and stopped here, its models",
-                "description": f"Teaches Asterism the local LLM {p.name}: how to find it and its models, start "
+                "description": f"Teaches Maprisma the local LLM {p.name}: how to find it and its models, start "
                                "and stop it, connect agents to it, and install or remove it.",
                 "capabilities": caps, "provides": [p.key],
                 "reads": [f"{p.name}'s model folders and its own settings"],
@@ -103,7 +103,7 @@ def main(argv: list) -> int:
         print(__doc__.strip().splitlines()[-3], file=sys.stderr)
         return 2
     out = Path(argv[1])
-    version = addons.ASTERISM_VERSION
+    version = addons.MAPRISMA_VERSION
     for module in harnesses._MODULES:
         agent(out, module, version)
     for p in providers.built_in_local():

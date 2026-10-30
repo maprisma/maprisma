@@ -1,5 +1,5 @@
-import 'package:asterism/agent_details_view.dart';
-import 'package:asterism/project_start_menu.dart';
+import 'package:maprisma/agent_details_view.dart';
+import 'package:maprisma/project_start_menu.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

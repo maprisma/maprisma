@@ -1,7 +1,7 @@
 import 'support/python_transport.dart';
 import 'dart:io';
-import 'package:asterism/backend.dart';
-import 'package:asterism/provider_task_dialog.dart';
+import 'package:maprisma/backend.dart';
+import 'package:maprisma/provider_task_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -10,7 +10,7 @@ void main() {
     'expired task handle shows a closable failure instead of retrying forever',
     (tester) async {
       final directory = Directory.systemTemp.createTempSync(
-        'asterism-task-error-',
+        'maprisma-task-error-',
       );
       addTearDown(() => directory.deleteSync(recursive: true));
       File('${directory.path}/flutter_backend.py').writeAsStringSync(r'''

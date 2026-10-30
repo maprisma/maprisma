@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:isolate';
-import 'package:asterism_core/asterism_core.dart';
+import 'package:maprisma_core/maprisma_core.dart';
 import 'service_transport.dart';
 
 void _serveIsolate((SendPort, Map<String, String>?) args) {

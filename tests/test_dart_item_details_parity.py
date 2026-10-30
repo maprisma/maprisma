@@ -73,7 +73,7 @@ class DartItemDetailsParityTest(unittest.TestCase):
             for name in ('pdf', 'xlsx', 'bare'):
                 (home / '.claude/skills' / name).symlink_to(skills / name)
             env = {k: v for k, v in os.environ.items() if not k.startswith('XDG_')}
-            env.update(HOME=str(home), PATH=f'{tools}:/usr/bin:/bin', LANG='C.UTF-8', ASTERISM_DESKTOP='generic')
+            env.update(HOME=str(home), PATH=f'{tools}:/usr/bin:/bin', LANG='C.UTF-8', MAPRISMA_DESKTOP='generic')
             case = {'mcp': {'notes': ['claude', 'codex'], 'remote': ['claude']},
                     'skills': {'path': str(skills), 'agents': ['claude']}}
             python = json.loads(subprocess.run([sys.executable, '-c', PYTHON, str(ROOT)], input=json.dumps(case),
@@ -85,7 +85,7 @@ class DartItemDetailsParityTest(unittest.TestCase):
                                  'params': {'path': '~/shared/skills'}})]
             out = subprocess.run([DART, '--disable-dart-dev', '--packages=.dart_tool/package_config.json',
                                   'bin/fixture_probe.dart'], input=('\n'.join(lines) + '\n').encode(),
-                                 capture_output=True, cwd=ROOT / 'packages/asterism_core', timeout=300, env=env)
+                                 capture_output=True, cwd=ROOT / 'packages/maprisma_core', timeout=300, env=env)
             dart = [json.loads(x) for x in out.stdout.replace(os.fsencode(home), b'~').splitlines()
                     if x.startswith(b'{')]
         self.assertEqual(len(dart), 3, out.stderr.decode()[-2000:])

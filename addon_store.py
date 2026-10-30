@@ -1,6 +1,6 @@
-"""Add-ons from the catalog (Asterism only): find, install, update, switch on/off, remove.
+"""Add-ons from the catalog (Maprisma only): find, install, update, switch on/off, remove.
 
-- The catalog is catalog.json in github.com/uBruckhaus/asterism-addons, with catalog.sig beside it.
+- The catalog is catalog.json in github.com/maprisma/maprisma-addons, with catalog.sig beside it.
   It is fetched only when Settings › Look for add-ons online is on, at most every CHECK_EVERY, and
   used only when catalog.sig verifies it with the author's built-in key (addons.signature_ok). Each
   entry is checked again here (ids, versions, download address on that repository's releases,
@@ -32,9 +32,9 @@ import addon_api
 import addons
 import ai_core
 
-REPO = "https://github.com/uBruckhaus/asterism-addons"
-CATALOG_URL = "https://raw.githubusercontent.com/uBruckhaus/asterism-addons/main/catalog.json"
-SIGNATURE_URL = "https://raw.githubusercontent.com/uBruckhaus/asterism-addons/main/catalog.sig"
+REPO = "https://github.com/maprisma/maprisma-addons"
+CATALOG_URL = "https://raw.githubusercontent.com/maprisma/maprisma-addons/main/catalog.json"
+SIGNATURE_URL = "https://raw.githubusercontent.com/maprisma/maprisma-addons/main/catalog.sig"
 DOWNLOADS = REPO + "/releases/download/"
 CACHE = Path.home() / ".cache/maprisma/catalog.json"
 CHECK_EVERY = 6 * 3600
@@ -68,7 +68,7 @@ class Entry:
     url: str = ""
     size: int = 0
     sha256: str = ""
-    needs: str = ""                  # the oldest Asterism it works with ("" = any)
+    needs: str = ""                  # the oldest Maprisma it works with ("" = any)
 
 
 def _text(value, limit: int) -> str:
@@ -112,7 +112,7 @@ def entry_from(data) -> Entry | None:
 
 def parse_catalog(text: bytes, signature: bytes, signers: str = addons.ALLOWED_SIGNERS) -> list | None:
     """The catalog's entries when its signature verifies; None when it does not. Per add-on the newest
-    version this Asterism can load: the catalog keeps older versions for older Asterism releases (which
+    version this Maprisma can load: the catalog keeps older versions for older Maprisma releases (which
     take the first entry of an add-on, so those come first)."""
     if len(text) > MAX_CATALOG or not addons.signature_ok(text, signature, signers):
         return None
@@ -123,7 +123,7 @@ def parse_catalog(text: bytes, signature: bytes, signers: str = addons.ALLOWED_S
     if not isinstance(data, dict) or data.get("catalog") != 1 or not isinstance(data.get("addons"), list):
         return None
     found = {}
-    this = addons.version_tuple(addons.ASTERISM_VERSION)
+    this = addons.version_tuple(addons.MAPRISMA_VERSION)
     for raw in data["addons"][:MAX_ENTRIES]:
         entry = entry_from(raw)
         if entry is None or (entry.needs and addons.version_tuple(entry.needs) > this):

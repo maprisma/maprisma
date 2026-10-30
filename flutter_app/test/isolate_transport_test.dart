@@ -1,16 +1,16 @@
-import 'package:asterism_core/asterism_core.dart' show Posix;
+import 'package:maprisma_core/maprisma_core.dart' show Posix;
 import 'dart:io';
-import 'package:asterism/backend.dart';
-import 'package:asterism/isolate_transport.dart';
+import 'package:maprisma/backend.dart';
+import 'package:maprisma/isolate_transport.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test(
     'isolate runs persisted settings and bounded protocol outside UI',
     () async {
-      final home = Directory.systemTemp.createTempSync('asterism-isolate-');
+      final home = Directory.systemTemp.createTempSync('maprisma-isolate-');
       final transport = await IsolateTransport.start(
-        environment: {'HOME': home.path, 'ASTERISM_DESKTOP': 'generic'},
+        environment: {'HOME': home.path, 'MAPRISMA_DESKTOP': 'generic'},
       );
       try {
         expect((await transport.call('settings.get'))['map_light_fps'], 20);
@@ -51,7 +51,7 @@ void main() {
   test(
     'the core answers every route itself; an unknown one is refused',
     () async {
-      final home = Directory.systemTemp.createTempSync('asterism-backend-');
+      final home = Directory.systemTemp.createTempSync('maprisma-backend-');
       final backend = Backend.fromTransport(
         await IsolateTransport.start(environment: {'HOME': home.path}),
       );
@@ -99,7 +99,7 @@ void main() {
       });
       expect(coreEnvironment(devel: true, environment: {'HOME': '/h'}), {
         'HOME': '/h',
-        'ASTERISM_FLUTTER_DEVEL': '1',
+        'MAPRISMA_FLUTTER_DEVEL': '1',
       });
     },
   );
@@ -107,10 +107,10 @@ void main() {
     'isolate initialization failure is reported without a hanging handshake',
     () async {
       final home = Directory.systemTemp.createTempSync(
-        'asterism-isolate-failure-',
+        'maprisma-isolate-failure-',
       );
       try {
-        final outside = Directory('${home.path}/outside/asterism')
+        final outside = Directory('${home.path}/outside/maprisma')
           ..createSync(recursive: true);
         File(
           '${outside.path}/settings.json',

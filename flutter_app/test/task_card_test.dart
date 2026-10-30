@@ -1,5 +1,5 @@
-import 'package:asterism/agent_map.dart';
-import 'package:asterism/task_card.dart';
+import 'package:maprisma/agent_map.dart';
+import 'package:maprisma/task_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';

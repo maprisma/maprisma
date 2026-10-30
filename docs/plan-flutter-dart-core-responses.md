@@ -251,7 +251,7 @@ Validation: all **36 differential cases pass** with explicit
 passes with clean analyzers, **18 Dart tests, 36 differential cases, 93 Flutter
 tests**, and the AOT check. All **1,432 Python tests pass**, including the seven
 new tooling regressions; typecheck reports **0 errors, 0 warnings, 0 informations**.
-`git diff --check` passes. No mounts remain under `/tmp/asterism-diff-*`.
+`git diff --check` passes. No mounts remain under `/tmp/maprisma-diff-*`.
 No app build or launch was needed for this tooling-only correction.
 
 Phase 2 is not started;
@@ -261,7 +261,7 @@ Nothing committed, pushed or synced.
 ### Phase 1 follow-up — retired Python provider watcher (2026-10-28)
 
 Uwe removed the GTK app/plugin, its launchers and shortcut, old binaries, and the
-Python `asterism-providers.service`. The retained settings/add-ons/agent data and
+Python `maprisma-providers.service`. The retained settings/add-ons/agent data and
 source repository are not an instruction to restore that unit.
 
 Code trace: the only application callers of `provider_watch.ensure_service` and
@@ -449,7 +449,7 @@ empty graph. `current_map()` builds one when needed (reused 5 s); task focus sti
   folders recorded) and `undo` (only what was not changed again; links, created files, retired folders,
   created folders deepest first).
 - `plan_worker.dart`: `decodePlan` with the checks of `flutter_plan_wire.decode` (v1–3), and
-  `asterism-core worker`: `--plan-fd N` as the Python backend passes it (private regular own file, mode
+  `maprisma-core worker`: `--plan-fd N` as the Python backend passes it (private regular own file, mode
   without group/other bits) or `--plan-stdin` (length-prefixed; Dart's `Process.start` cannot pass an
   extra descriptor). Plans with context sizes or model load/unload are refused before writing: they need
   the provider engines (phase 4).
@@ -474,7 +474,7 @@ Not yet: connections routes and the task runner in Dart (3a part 2), plan builde
   and `tasks.cancel` with such a handle are served by the core; the Flutter router sends any other handle
   to the Python reference in Devel and refuses it in release.
 - The worker the core starts: `ASTERISM_CORE_WORKER`, the AOT executable itself, the Dart VM with
-  `bin/asterism-core.dart`, or `bundle/lib/asterism-core`. `tools/build-flutter-preview.py` now compiles
+  `bin/maprisma-core.dart`, or `bundle/lib/maprisma-core`. `tools/build-flutter-preview.py` now compiles
   it into the bundle; the compiled worker leaves the same tree as the Python worker for the parity plan.
 - Tests: preview → apply through a real worker → status → Undo; a file changed after the preview fails the
   task and writes nothing; empty plans; unknown handles; router handle routing.
@@ -591,7 +591,7 @@ model (`connect_extra`/`context_ctl`, Ollama's API), `models.switch_preview`/`mo
 
 Steps: 4a provider overview; 4b provider operations (start/stop, load/unload) through the worker; 4c
 context sizes for the card (`context_ctl`, `gpu_usage`), connections with a model and the model previews;
-4d model search, downloads, pulls and imports; 4e `asterism-core provider-watch`; 4f terminals, agent start
+4d model search, downloads, pulls and imports; 4e `maprisma-core provider-watch`; 4f terminals, agent start
 and the stop guard.
 
 ### 4a — provider overview
@@ -606,7 +606,7 @@ each Dart request in its own process).
 ### 4b — runtime and model operations
 
 `providers.run` for `runtime.start`, `runtime.stop`, `model.load` and `model.unload` runs in the core's
-worker (`asterism-core worker` without a plan, as `flutter_worker.py` does), with Python's checks and focus.
+worker (`maprisma-core worker` without a plan, as `flutter_worker.py` does), with Python's checks and focus.
 `provider_ops.dart`: `loopback_listeners` (`/proc/net/tcp{,6}`, loopback-reachable addresses only) and the
 own-UID check before any request, `http_json` (127.0.0.1 only, 1 MiB replies, one body with its length),
 the engines' actions (systemd user units or `lms` for start/stop; llama.cpp and Jan's router API; Ollama's
@@ -676,7 +676,7 @@ New pieces:
   - `agent_instances`, `_guard_model` and `validate_actions`.
 - The worker validates the model actions before writing. After the files and the contexts it runs each
   action, checking it again first; a failure is counted in `context_failures`, as `flutter_worker` does.
-- **The guard in a synchronous service:** the preview asks the worker (`asterism-core worker --guard
+- **The guard in a synchronous service:** the preview asks the worker (`maprisma-core worker --guard
   JSON`, answered before stdin is read). The worker reads the GPU and asks the runtime with the
   reference's time limits. A synchronous socket has no timeouts, which is why it isn't used.
 - Repair with a model: `use_now` follows the model, as in the reference. Jan and KoboldCPP contexts go to
@@ -795,7 +795,7 @@ Phase 4d is done.
 
 The Flutter app had no "Start local LLMs with their agents" yet: the Python backend never wrote the
 watcher's config, and Devel blocks its unit. Now:
-- **The service loop:** `asterism-core provider-watch --config FILE` (`provider_watch.dart`) ports the
+- **The service loop:** `maprisma-core provider-watch --config FILE` (`provider_watch.dart`) ports the
   watcher:
   - checked config entries (units, ports, the `lms` controller, the stays-up unload request) and the
     `Watcher` loop: start on the first agent, stop after the 5 s grace time, not while another program
@@ -807,7 +807,7 @@ watcher's config, and Devel blocks its unit. Now:
     (engines with SIGTERM, then the program and helpers with SIGKILL, the AppImage last);
   - exit 75 when the binary was updated.
 - **The app side:** `WatchService` writes `providers-with-agents.json` after each inventory scan
-  (`ReadService.onInventory`). It turns the user unit `asterism-providers.service` on or off when the
+  (`ReadService.onInventory`). It turns the user unit `maprisma-providers.service` on or off when the
   file or the setting changes, the way `sync_provider_watch` / `ensure_service` did. A unit pointing at
   the old Python script is rewritten, which is the unit migration.
   - Only a compiled release core manages the unit: never a Devel build (`ASTERISM_FLUTTER_DEVEL`,
@@ -2211,11 +2211,11 @@ The final test on this PC:
 - **`tools/flutter-dev check`:** `dart analyze --fatal-infos` clean, 74 Dart tests, 69 differential
   cases, the AOT release transport check (no Python fallback code), Flutter analyze clean and 148
   Flutter tests.
-- **`tools/flutter-dev build`:** a release bundle with the AOT `asterism-core`.
+- **`tools/flutter-dev build`:** a release bundle with the AOT `maprisma-core`.
 - **`python3 -m unittest discover -s tests`:** 1482 tests, among them every Python ↔ Dart parity test
   of phase 6.
 - **`tools/typecheck.sh`:** 0 errors.
-- **End to end, read only, on the bundle's compiled `asterism-core` against this PC's real data**
+- **End to end, read only, on the bundle's compiled `maprisma-core` against this PC's real data**
   (caches in a scratch folder): `map.badges`, `agents.costs`, `agents.projects`, `providers.details`,
   `details.mcp`, `details.skills`, `found.hints` and `addons.hints` all answer.
 
@@ -2253,10 +2253,10 @@ Next: phase 7, Python out of the app.
 
   The bundle built before part 1 failed it (its UI still had the transport); every bundle since
   passes.
-- **Safety fix: a Devel build must never install the real asterism-providers.service.**
+- **Safety fix: a Devel build must never install the real maprisma-providers.service.**
   - **What happened:** the core installed the user service for whatever compiled core it ran as. A
     scratch copy run against the real home had written and enabled
-    `~/.config/systemd/user/asterism-providers.service` on 2026-10-29. It is removed.
+    `~/.config/systemd/user/maprisma-providers.service` on 2026-10-29. It is removed.
   - **Layer 1:** the core now never manages the unit for a binary in `/tmp`, `/var/tmp`, `$TMPDIR`,
     a `.flutter-previews` bundle or `build/linux` output (tests in `write_path_test.dart`).
   - **Layer 2:** a Devel build of the app marks its core `ASTERISM_FLUTTER_DEVEL=1`, as the Python
@@ -2289,7 +2289,7 @@ synced last on 2026-10-28; git history keeps everything).
 Check: `tools/flutter-dev check`, with 74 Dart tests, 69 differential cases, the release probe and 148
 Flutter tests. `tools/flutter-dev build` passes the gate. 1324 Python tests run (1482 before: 158 GTK
 tests went with their modules), and `tools/typecheck.sh` reports 0 errors. Read only against this PC's
-real data, the bundle's AOT `asterism-core` answered the routes I tried, and no user unit appeared.
+real data, the bundle's AOT `maprisma-core` answered the routes I tried, and no user unit appeared.
 
 Phase 7 is done. Next: `plan-flutter.md` steps 4–8 (product fit, Omarchy integration, packaging without
 Python, the `ubruckhaus.asterism` launcher plugin, final review) and the rename to Maprisma. The GTK
@@ -2529,7 +2529,7 @@ over ssh.
 Results on 2026-10-30, all as they should be:
 - **Libraries:** the app needs nothing the clean system lacks (the plugins find
   `libflutter_linux_gtk.so` through the app's own search path).
-- **The core on a fresh home** (the bundle's `asterism-core`, no agents, no add-ons):
+- **The core on a fresh home** (the bundle's `maprisma-core`, no agents, no add-ons):
   `app.snapshot` with every default; `settings.update` to German makes `settings.json` and
   `settings.json.lock` (0600, folder 0700) and every later answer German; Recent changes, the
   local helper and the MCP checks empty and worded so ("tägliche Prüfungen aus"); Open problems

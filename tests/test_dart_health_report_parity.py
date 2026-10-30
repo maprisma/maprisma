@@ -124,7 +124,7 @@ class DartHealthReportParityTest(unittest.TestCase):
             results = []
             for desktop in ('generic', 'omarchy'):
                 env = {k: v for k, v in os.environ.items() if not k.startswith('XDG_')}
-                env.update(HOME=str(home), PATH=f'{tools}:/usr/bin:/bin', LANG='C.UTF-8', ASTERISM_DESKTOP=desktop)
+                env.update(HOME=str(home), PATH=f'{tools}:/usr/bin:/bin', LANG='C.UTF-8', MAPRISMA_DESKTOP=desktop)
                 python = json.loads(subprocess.run([sys.executable, '-c', PYTHON, str(ROOT)], input=json.dumps(all_cases),
                                                    capture_output=True, check=True, text=True, env=env,
                                                    timeout=300).stdout)
@@ -132,7 +132,7 @@ class DartHealthReportParityTest(unittest.TestCase):
                                      'params': {**c, 'desktop': desktop}}) for i, c in enumerate(all_cases, 1)]
                 out = subprocess.run([DART, '--disable-dart-dev', '--packages=.dart_tool/package_config.json',
                                       'bin/fixture_probe.dart'], input=('\n'.join(lines) + '\n').encode(),
-                                     capture_output=True, cwd=ROOT / 'packages/asterism_core', timeout=300, env=env)
+                                     capture_output=True, cwd=ROOT / 'packages/maprisma_core', timeout=300, env=env)
                 dart = [json.loads(line)['result'] for line in out.stdout.splitlines() if line.startswith(b'{')]
                 self.assertEqual(len(dart), len(all_cases), out.stderr.decode()[-2000:])
                 results.append((python, dart))

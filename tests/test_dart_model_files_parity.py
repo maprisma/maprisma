@@ -119,13 +119,13 @@ class DartModelFilesParityTest(unittest.TestCase):
                 for side, command, cwd in (
                         ('python', [sys.executable, '-u', str(ROOT / 'flutter_worker.py')], ROOT),
                         ('dart', [DART, '--disable-dart-dev', '--packages=.dart_tool/package_config.json',
-                                  'bin/asterism-core.dart', 'worker'], ROOT / 'packages/asterism_core')):
+                                  'bin/maprisma-core.dart', 'worker'], ROOT / 'packages/maprisma_core')):
                     home = Path(temp) / side
                     home.mkdir()
                     seed(home, port)
                     env = {'HOME': str(home), 'PATH': f'{home}/.local/bin:/usr/bin:/bin', 'LANG': 'C.UTF-8',
                            'XDG_CONFIG_HOME': str(home / '.config'), 'XDG_CACHE_HOME': str(home / '.cache'),
-                           'XDG_DATA_HOME': str(home / '.local/share'), 'ASTERISM_DESKTOP': 'generic'}
+                           'XDG_DATA_HOME': str(home / '.local/share'), 'MAPRISMA_DESKTOP': 'generic'}
                     src = home / 'src'
                     operations = [
                         ('model.import', {'key': 'llamacpp', 'path': str(src / 'a.gguf')}),

@@ -1,4 +1,4 @@
-"""The add-on API (Asterism only; the Maprisma plugin has no add-ons).
+"""The add-on API (Maprisma only; the Maprisma plugin has no add-ons).
 
 An add-on's addon.py defines register(api); `api` is an AddonAPI. Everything an add-on may do goes
 through it, so the app's internals can change without breaking add-ons. API_VERSION changes only on

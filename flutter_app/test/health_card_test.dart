@@ -1,4 +1,4 @@
-import 'package:asterism/health_card.dart';
+import 'package:maprisma/health_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

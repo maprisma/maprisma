@@ -1,21 +1,21 @@
 import 'support/python_transport.dart';
 import 'dart:io';
 
-import 'package:asterism/backend.dart';
+import 'package:maprisma/backend.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test('Python reference propagates watcher protection to workers', () async {
     final directory = Directory.systemTemp.createTempSync(
-      'asterism-reference-env-',
+      'maprisma-reference-env-',
     );
     try {
       File('${directory.path}/flutter_backend.py').writeAsStringSync(
         r'''import json,os,subprocess,sys
 for line in sys.stdin:
  q=json.loads(line)
- child=subprocess.check_output([sys.executable,'-c','import os; print(os.environ.get("ASTERISM_FLUTTER_DEVEL", ""))'],text=True).strip()
- print(json.dumps({'id':q['id'],'result':{'guard':os.environ.get('ASTERISM_FLUTTER_DEVEL'),'worker_guard':child}}),flush=True)
+ child=subprocess.check_output([sys.executable,'-c','import os; print(os.environ.get("MAPRISMA_FLUTTER_DEVEL", ""))'],text=True).strip()
+ print(json.dumps({'id':q['id'],'result':{'guard':os.environ.get('MAPRISMA_FLUTTER_DEVEL'),'worker_guard':child}}),flush=True)
 ''',
       );
       final backend = await PythonTransport.start(directory.path);
@@ -36,7 +36,7 @@ for line in sys.stdin:
     'Disconnected service fails waiting requests instead of hanging',
     () async {
       final directory = await Directory.systemTemp.createTemp(
-        'asterism-disconnect-',
+        'maprisma-disconnect-',
       );
       addTearDown(() => directory.delete(recursive: true));
       await File(

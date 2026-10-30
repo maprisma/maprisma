@@ -44,7 +44,7 @@ def analyze(body: bytes) -> dict:
         return text
     # Reuse existing validation/logging, but keep this UI's analysis separate from GTK's cache.
     try:
-        with ai_helper.watched(cancel), tempfile.TemporaryDirectory(prefix='asterism-analysis-') as tmp:
+        with ai_helper.watched(cancel), tempfile.TemporaryDirectory(prefix='maprisma-analysis-') as tmp:
             result = asdict(smart_check.analyze(command, '', look_up=lookup, cache=Path(tmp)/'analysis.json'))
     finally:
         signal.signal(signal.SIGTERM,previous)

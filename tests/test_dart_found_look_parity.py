@@ -71,7 +71,7 @@ class DartFoundLookParityTest(unittest.TestCase):
     def run_side(self, home: Path, dart: bool) -> dict:
         case = fixture(home)
         env = {k: v for k, v in os.environ.items() if not k.startswith('XDG_')}
-        env.update(HOME=str(home), PATH='/usr/bin:/bin', LANG='C.UTF-8', ASTERISM_DESKTOP='generic')
+        env.update(HOME=str(home), PATH='/usr/bin:/bin', LANG='C.UTF-8', MAPRISMA_DESKTOP='generic')
         if not dart:
             out = subprocess.run([sys.executable, '-c', PYTHON, str(ROOT)], input=json.dumps(case),
                                  capture_output=True, text=True, env=env, timeout=180)
@@ -81,7 +81,7 @@ class DartFoundLookParityTest(unittest.TestCase):
             line = json.dumps({'id': 1, 'protocol': 1, 'method': 'dev.foundlook', 'params': case})
             out = subprocess.run([DART, '--disable-dart-dev', '--packages=.dart_tool/package_config.json',
                                   'bin/fixture_probe.dart'], input=(line + '\n').encode(), capture_output=True,
-                                 cwd=ROOT / 'packages/asterism_core', timeout=300, env=env)
+                                 cwd=ROOT / 'packages/maprisma_core', timeout=300, env=env)
             results = [json.loads(x)['result'] for x in out.stdout.splitlines() if x.startswith(b'{')]
             self.assertEqual(len(results), 1, out.stderr.decode()[-2000:])
             text = json.dumps(results[0])

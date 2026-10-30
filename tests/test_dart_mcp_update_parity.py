@@ -80,7 +80,7 @@ class DartMcpUpdateParityTest(unittest.TestCase):
                 (tools / name).chmod(0o755)
             env = {k: v for k, v in os.environ.items() if not k.startswith('XDG_')}
             env.update(HOME=str(home), PATH=f'{home}/.local/bin:{tools}:/usr/bin:/bin', LANG='C.UTF-8',
-                       ASTERISM_DESKTOP='generic')
+                       MAPRISMA_DESKTOP='generic')
             out = subprocess.run([sys.executable, '-c', PYTHON, str(ROOT)], input=json.dumps(case),
                                  capture_output=True, text=True, env=env, timeout=120)
             self.assertEqual(out.returncode, 0, out.stderr[-3000:])
@@ -89,7 +89,7 @@ class DartMcpUpdateParityTest(unittest.TestCase):
                                'params': {'candidates': python['candidates'], 'agents': case['agents']}})
             run = subprocess.run([DART, '--disable-dart-dev', '--packages=.dart_tool/package_config.json',
                                   'bin/fixture_probe.dart'], input=(line + '\n').encode(), capture_output=True,
-                                 cwd=ROOT / 'packages/asterism_core', timeout=300, env=env)
+                                 cwd=ROOT / 'packages/maprisma_core', timeout=300, env=env)
             dart = [json.loads(x) for x in run.stdout.splitlines() if x.startswith(b'{')]
             self.assertEqual(len(dart), 1, run.stderr.decode()[-3000:])
             self.assertIn('result', dart[0], dart[0])

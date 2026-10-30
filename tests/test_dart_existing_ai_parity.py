@@ -73,7 +73,7 @@ def home_files(home: Path) -> dict:
 class DartExistingAiParityTest(unittest.TestCase):
     def test_same_discovery_and_reconnect(self):
         sides = {}
-        with tempfile.TemporaryDirectory(prefix='.asterism-parity-', dir=ROOT.parent) as disk_name, \
+        with tempfile.TemporaryDirectory(prefix='.maprisma-parity-', dir=ROOT.parent) as disk_name, \
                 tempfile.TemporaryDirectory() as temp:
             disk = Path(disk_name)
             seed_disk(disk)
@@ -83,11 +83,11 @@ class DartExistingAiParityTest(unittest.TestCase):
                 (home / '.config/maprisma/settings.json').write_text(json.dumps({'setup_done': True}))
                 env = {'HOME': str(home), 'PATH': '/usr/bin:/bin', 'LANG': 'C.UTF-8',
                        'XDG_CONFIG_HOME': str(home / '.config'), 'XDG_CACHE_HOME': str(home / '.cache'),
-                       'XDG_DATA_HOME': str(home / '.local/share'), 'ASTERISM_DESKTOP': 'generic',
-                       'ASTERISM_FLUTTER_DEVEL': '1'}
+                       'XDG_DATA_HOME': str(home / '.local/share'), 'MAPRISMA_DESKTOP': 'generic',
+                       'MAPRISMA_FLUTTER_DEVEL': '1'}
                 runner = (Side([sys.executable, '-c', SERVICE, str(ROOT)], ROOT, env) if side == 'python' else
                           Side([DART, '--disable-dart-dev', '--packages=.dart_tool/package_config.json',
-                                'bin/asterism-core.dart'], ROOT / 'packages/asterism_core', env))
+                                'bin/maprisma-core.dart'], ROOT / 'packages/maprisma_core', env))
                 answers = []
 
                 def wait(reply):

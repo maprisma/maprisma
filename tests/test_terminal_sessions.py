@@ -32,7 +32,7 @@ class TerminalSessionsTest(unittest.TestCase):
         self.fail(f'Fixture timed out: {text!r}')
 
     def test_real_tty_controlling_group_cwd_unicode_and_exit(self):
-        with tempfile.TemporaryDirectory(prefix='asterism project ') as directory:
+        with tempfile.TemporaryDirectory(prefix='maprisma project ') as directory:
             ident = self.start("import os; print(os.getcwd()); print(os.isatty(0)); "
                                "print(os.tcgetpgrp(0) == os.getpgrp()); print('Grüße 世界')", directory)
             text, result = self.collect(ident)
@@ -66,7 +66,7 @@ class TerminalSessionsTest(unittest.TestCase):
 
     def test_failed_spawn_does_not_register_session(self):
         with self.assertRaises(OSError):
-            self.sessions.start('fixture', ['/nonexistent/asterism-fixture'], str(Path.home()), {})
+            self.sessions.start('fixture', ['/nonexistent/maprisma-fixture'], str(Path.home()), {})
         self.assertEqual(self.sessions.items, {})
 
     def test_closing_finished_tab_never_signals_a_potentially_reused_pid(self):

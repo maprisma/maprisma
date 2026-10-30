@@ -48,7 +48,7 @@ feature parity, migration and packaging have been validated.
 
 ## Working copy
 
-Work on `main` in `/mnt/Data/Projects/asterism` (was `asterism-flutter` until 2026-10-28). The original GTK repository
+Work on `main` in `/mnt/Data/Projects/asterism` (was `maprisma-flutter` until 2026-10-28). The original GTK repository
 at `/mnt/Data/Projects/ai-agents-map` (was `asterism`) is separate and must not be overwritten or synced
 from this migration. Its local remote is named `gtk`; never push Flutter main
 there. The baseline migration, documentation archive and reviewed connection-authoring
@@ -204,7 +204,7 @@ as the completed migration. The requested final Claude review remains pending.
   (the existing five PyYAML warnings remain). Flutter widget execution, real
   downloads/runtime actions, GUI/VM scenarios and final Claude review are pending.
 - Latest isolated build:
-  `/mnt/Data/Projects/asterism-flutter/.flutter-previews/preview-fv2djdob/flutter_app/build/linux/x64/release/bundle/asterism`.
+  `/mnt/Data/Projects/maprisma-flutter/.flutter-previews/preview-fv2djdob/flutter_app/build/linux/x64/release/bundle/asterism`.
   Builds do not replace an existing preview bundle or the live production app.
 
 
@@ -261,7 +261,7 @@ It was not launched against live settings.
 
 ## Welcome, subagent settings and live appearance (2026-10-27)
 
-Work now continues in `/mnt/Data/Projects/asterism-flutter`. The original
+Work now continues in `/mnt/Data/Projects/maprisma-flutter`. The original
 `/mnt/Data/Projects/asterism` remains untouched. Existing development binaries
 built before the move retain their old source define; use the new preview below.
 

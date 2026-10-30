@@ -3,7 +3,7 @@
     {
       "name": "adapter files and field validation",
       "environment": {
-        "ASTERISM_DIFF_COMPONENT": "adapters"
+        "MAPRISMA_DIFF_COMPONENT": "adapters"
       },
       "files": [
         {
@@ -881,7 +881,7 @@
     {
       "name": "adapter symlink",
       "environment": {
-        "ASTERISM_DIFF_COMPONENT": "adapters"
+        "MAPRISMA_DIFF_COMPONENT": "adapters"
       },
       "files": [
         {
@@ -906,7 +906,7 @@
     {
       "name": "adapter fifo",
       "environment": {
-        "ASTERISM_DIFF_COMPONENT": "adapters"
+        "MAPRISMA_DIFF_COMPONENT": "adapters"
       },
       "files": [
         {
@@ -930,7 +930,7 @@
     {
       "name": "adapter oversized",
       "environment": {
-        "ASTERISM_DIFF_COMPONENT": "adapters"
+        "MAPRISMA_DIFF_COMPONENT": "adapters"
       },
       "files": [
         {
@@ -957,7 +957,7 @@
     {
       "name": "adapter malformed",
       "environment": {
-        "ASTERISM_DIFF_COMPONENT": "adapters"
+        "MAPRISMA_DIFF_COMPONENT": "adapters"
       },
       "files": [
         {

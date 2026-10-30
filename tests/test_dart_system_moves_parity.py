@@ -14,7 +14,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-CORE = ROOT / 'packages/asterism_core'
+CORE = ROOT / 'packages/maprisma_core'
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / 'tools'))
 try:
@@ -97,14 +97,14 @@ class DartSystemMovesParityTest(unittest.TestCase):
         sides = {}
         for side, command in (('python', [sys.executable, '-u', str(ROOT / 'flutter_worker.py')]),
                               ('dart', [DART, '--disable-dart-dev', '--packages=.dart_tool/package_config.json',
-                                        'bin/asterism-core.dart', 'worker'])):
+                                        'bin/maprisma-core.dart', 'worker'])):
             home, source, disk = disk_root / side / 'home', source_root / side / 'models', disk_root / side / 'dest'
             seed(home, source)
             disk.mkdir(parents=True)
             env = {**os.environ, 'HOME': str(home), 'PATH': f'{home}/.local/bin:/usr/bin:/bin',
                    'XDG_CONFIG_HOME': str(home / '.config'), 'XDG_CACHE_HOME': str(home / '.cache'),
-                   'XDG_DATA_HOME': str(home / '.local/share'), 'ASTERISM_DESKTOP': 'generic',
-                   'ASTERISM_FLUTTER_DEVEL': '1'}
+                   'XDG_DATA_HOME': str(home / '.local/share'), 'MAPRISMA_DESKTOP': 'generic',
+                   'MAPRISMA_FLUTTER_DEVEL': '1'}
             settings = str(home / '.config/maprisma/settings.json')
             selection = {'source': str(source), 'disk': str(disk),
                          'mount': existing_ai.root_for(str(disk), existing_ai.mounts()), 'settings_path': settings}
@@ -131,7 +131,7 @@ class DartSystemMovesParityTest(unittest.TestCase):
         return sides['dart']
 
     def test_same_moves(self):
-        with tempfile.TemporaryDirectory(prefix='.asterism-parity-', dir=ROOT.parent) as on_disk, \
+        with tempfile.TemporaryDirectory(prefix='.maprisma-parity-', dir=ROOT.parent) as on_disk, \
                 tempfile.TemporaryDirectory() as in_tmp:
             answers, moved, back = self.check(Path(on_disk) / 'same', Path(on_disk) / 'same')
             self.assertFalse(answers[0]['copy'])

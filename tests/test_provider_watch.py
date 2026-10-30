@@ -337,7 +337,7 @@ class InstanceModelTest(unittest.TestCase):
 class FlutterDevelUnitGuardTest(unittest.TestCase):
     def test_devel_reference_never_touches_unit_or_systemctl(self):
         from unittest import mock
-        with mock.patch.dict(os.environ, {'ASTERISM_FLUTTER_DEVEL': '1'}), \
+        with mock.patch.dict(os.environ, {'MAPRISMA_FLUTTER_DEVEL': '1'}), \
              mock.patch.object(pw, '_systemctl') as systemctl, \
              mock.patch.object(pw, 'unit_text') as text, \
              mock.patch.object(pw, 'UNIT_FILE') as unit:

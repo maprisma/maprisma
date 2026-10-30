@@ -138,7 +138,7 @@ class DartInstallersParityTest(unittest.TestCase):
                  for i, (method, params) in enumerate(requests, 1)]
         out = subprocess.run([DART, '--disable-dart-dev', '--packages=.dart_tool/package_config.json',
                               'bin/fixture_probe.dart'], input=('\n'.join(lines) + '\n').encode(),
-                             capture_output=True, cwd=ROOT / 'packages/asterism_core', timeout=300, check=True)
+                             capture_output=True, cwd=ROOT / 'packages/maprisma_core', timeout=300, check=True)
         return [json.loads(line)['result'] for line in out.stdout.splitlines() if line.startswith(b'{')]
 
     def test_same_archive_checks(self):
@@ -237,11 +237,11 @@ class DartInstallersParityTest(unittest.TestCase):
                 fake_web(home / 'web')
                 env = {'HOME': str(home), 'PATH': f'{bin_dir}:{tools}', 'LANG': 'C.UTF-8',
                        'XDG_CONFIG_HOME': str(home / '.config'), 'XDG_CACHE_HOME': str(home / '.cache'),
-                       'XDG_DATA_HOME': str(home / '.local/share'), 'ASTERISM_DESKTOP': 'generic',
-                       'ASTERISM_FLUTTER_DEVEL': '1', 'FAKE_WEB': str(home / 'web')}
+                       'XDG_DATA_HOME': str(home / '.local/share'), 'MAPRISMA_DESKTOP': 'generic',
+                       'MAPRISMA_FLUTTER_DEVEL': '1', 'FAKE_WEB': str(home / 'web')}
                 runner = (Side([sys.executable, '-c', PYTHON_SERVICE, str(ROOT)], ROOT, env) if side == 'python' else
                           Side([DART, '--disable-dart-dev', '--packages=.dart_tool/package_config.json',
-                                'bin/asterism-core.dart'], ROOT / 'packages/asterism_core', env))
+                                'bin/maprisma-core.dart'], ROOT / 'packages/maprisma_core', env))
                 answers = []
 
                 def wait(task):

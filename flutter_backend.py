@@ -838,7 +838,7 @@ def serve(service: Service, source, output: TextIO) -> None:
 
 def main() -> None:
     # Also protect direct reference-service launches, before initialization.
-    os.environ["ASTERISM_FLUTTER_DEVEL"] = "1"
+    os.environ["MAPRISMA_FLUTTER_DEVEL"] = "1"
     def interrupted(_signum, _frame):
         raise SystemExit(0)
 

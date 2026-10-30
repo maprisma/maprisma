@@ -13,12 +13,12 @@ import desktop_omarchy  # noqa: E402
 
 class DetectTest(unittest.TestCase):
     def test_override_and_omarchy_folder(self):
-        self.assertEqual(desktop.detect({"ASTERISM_DESKTOP": "generic"}), "generic")
-        self.assertEqual(desktop.detect({"ASTERISM_DESKTOP": "omarchy", "OMARCHY_PATH": "/nowhere"}), "omarchy")
+        self.assertEqual(desktop.detect({"MAPRISMA_DESKTOP": "generic"}), "generic")
+        self.assertEqual(desktop.detect({"MAPRISMA_DESKTOP": "omarchy", "OMARCHY_PATH": "/nowhere"}), "omarchy")
         with tempfile.TemporaryDirectory() as tmp:
             self.assertEqual(desktop.detect({"OMARCHY_PATH": tmp}), "omarchy")
         self.assertEqual(desktop.detect({"OMARCHY_PATH": "/nowhere/omarchy"}), "generic")
-        self.assertEqual(desktop.detect({"ASTERISM_DESKTOP": "kde", "OMARCHY_PATH": "/nowhere"}), "generic")
+        self.assertEqual(desktop.detect({"MAPRISMA_DESKTOP": "kde", "OMARCHY_PATH": "/nowhere"}), "generic")
 
     def test_both_implement_the_whole_interface(self):
         names = [line.split()[0].split("(")[0] for line in desktop.__doc__.split("The interface")[1].splitlines()

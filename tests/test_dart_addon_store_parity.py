@@ -1,7 +1,7 @@
 """Development parity: the signed add-on catalog (addon_store.parse_catalog) and installing add-on
 zips (install_bytes: unpack, the add-on's own signature, replacing an installed copy) in Python and
-in the Dart core, with Uwe's real signed catalog and zips from asterism-addons and tampered zips.
-Skipped without a native Dart SDK or the asterism-addons checkout."""
+in the Dart core, with Uwe's real signed catalog and zips from maprisma-addons and tampered zips.
+Skipped without a native Dart SDK or the maprisma-addons checkout."""
 import base64
 import io
 import json
@@ -15,7 +15,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-ADDONS = ROOT.parent / 'asterism-addons'
+ADDONS = ROOT.parent / 'maprisma-addons'
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / 'tools'))
 
@@ -52,14 +52,14 @@ def tree(root: Path) -> dict:
     return found
 
 
-@unittest.skipIf(DART is None or not ADDONS.is_dir(), 'native Dart SDK or asterism-addons not available')
+@unittest.skipIf(DART is None or not ADDONS.is_dir(), 'native Dart SDK or maprisma-addons not available')
 class DartAddonStoreParityTest(unittest.TestCase):
     def probe(self, requests):
         lines = [json.dumps({'id': i, 'protocol': 1, 'method': 'dev.addonstore', 'params': r})
                  for i, r in enumerate(requests, 1)]
         out = subprocess.run([DART, '--disable-dart-dev', '--packages=.dart_tool/package_config.json',
                               'bin/fixture_probe.dart'], input=('\n'.join(lines) + '\n').encode(),
-                             capture_output=True, cwd=ROOT / 'packages/asterism_core', timeout=300, check=True)
+                             capture_output=True, cwd=ROOT / 'packages/maprisma_core', timeout=300, check=True)
         return [json.loads(line)['result'] for line in out.stdout.splitlines() if line.startswith(b'{')]
 
     def test_same_catalog(self):
@@ -81,11 +81,12 @@ class DartAddonStoreParityTest(unittest.TestCase):
 
     def test_same_installs(self):
         dist = ADDONS / 'dist'
-        goose_old, goose = (dist / 'agent-goose-0.11.0.zip').read_bytes(), (dist / 'agent-goose-0.11.1.zip').read_bytes()
+        # One signed version so far: a first install, then the same version again.
+        goose = (dist / 'agent-goose-0.11.1.zip').read_bytes()
         jan = (dist / 'llm-jan-0.11.1.zip').read_bytes()
         cases = [
-            ('first', goose_old, 'agent-goose'),
-            ('update', goose, 'agent-goose'),
+            ('first', goose, 'agent-goose'),
+            ('again', goose, 'agent-goose'),
             ('code', jan, 'llm-jan'),
             ('wrong id', goose, 'agent-other'),
             ('changed file', rezip(goose, lambda n, d: [(n, d + b'\n' if n.endswith('agent.toml') else d, 0o644)]), None),
@@ -118,7 +119,7 @@ class DartAddonStoreParityTest(unittest.TestCase):
                 sides[side] = (results, tree(user))
         self.assertEqual(sides['python'], sides['dart'])
         results, files = sides['dart']
-        self.assertEqual(results[0]['version'], '0.11.0')
+        self.assertEqual(results[0]['version'], '0.11.1')
         self.assertEqual(results[1]['version'], '0.11.1')
         self.assertEqual(results[2]['id'], 'llm-jan')
         self.assertEqual(results[3:], ['refused'] * 7)

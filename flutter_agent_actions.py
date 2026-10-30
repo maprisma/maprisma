@@ -142,7 +142,7 @@ class Actions:
             env.update(TERM='xterm-256color', COLORTERM='truecolor', MAPRISMA_NO_PROVIDERS='1')
             env.pop('MAPRISMA_PAGE', None)
             env.pop('MAPRISMA_VIEW', None)
-            temporary = tempfile.TemporaryDirectory(prefix='asterism-agent-test-') if params['action'] == 'verify' else None
+            temporary = tempfile.TemporaryDirectory(prefix='maprisma-agent-test-') if params['action'] == 'verify' else None
             cwd = temporary.name if temporary else str(Path.home())
             try:
                 ident = sessions.start(params['command'], plan.argv, cwd, env)

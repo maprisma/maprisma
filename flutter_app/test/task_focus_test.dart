@@ -1,4 +1,4 @@
-import 'package:asterism/task_focus.dart';
+import 'package:maprisma/task_focus.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

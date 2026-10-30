@@ -76,11 +76,11 @@ class DartAgentStartParityTest(unittest.TestCase):
                 seed(home)
                 env = {'HOME': str(home), 'PATH': f'{home}/.local/bin:/usr/bin:/bin', 'LANG': 'C.UTF-8',
                        'XDG_CONFIG_HOME': str(home / '.config'), 'XDG_CACHE_HOME': str(home / '.cache'),
-                       'XDG_DATA_HOME': str(home / '.local/share'), 'ASTERISM_DESKTOP': 'generic',
-                       'CLAUDECODE': '1', 'ASTERISM_FLUTTER_DEVEL': '1'}
+                       'XDG_DATA_HOME': str(home / '.local/share'), 'MAPRISMA_DESKTOP': 'generic',
+                       'CLAUDECODE': '1', 'MAPRISMA_FLUTTER_DEVEL': '1'}
                 runner = (Side([sys.executable, '-c', PYTHON_SERVICE, str(ROOT)], ROOT, env) if side == 'python' else
                           Side([DART, '--disable-dart-dev', '--packages=.dart_tool/package_config.json',
-                                'bin/asterism-core.dart'], ROOT / 'packages/asterism_core', env))
+                                'bin/maprisma-core.dart'], ROOT / 'packages/maprisma_core', env))
                 answers = []
                 try:
                     answers.append(runner.call('projects.pin', {'command': 'opencode', 'path': str(home / 'link-to-work')}))

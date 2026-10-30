@@ -92,7 +92,7 @@ class UsageTest(unittest.TestCase):
 
 
 class ClaudeUsageTest(unittest.TestCase):
-    """Claude Code's own session files when Omarchy keeps no record (Asterism on any desktop)."""
+    """Claude Code's own session files when Omarchy keeps no record (Maprisma on any desktop)."""
 
     def test_days_models_and_sessions(self):
         from claude_sessions import Session

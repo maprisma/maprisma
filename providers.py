@@ -54,7 +54,7 @@ LOCAL_ORDER = ("llamacpp", "ollama", "lmstudio", "vllm", "jan", "koboldcpp")
 
 
 def hide_built_in(keys) -> None:
-    """Asterism: these providers come as add-ons (see harnesses.hide_built_in)."""
+    """Maprisma: these providers come as add-ons (see harnesses.hide_built_in)."""
     _HIDDEN.clear()
     _HIDDEN.update(keys)
     _forget()
