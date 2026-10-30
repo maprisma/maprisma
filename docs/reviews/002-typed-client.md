@@ -41,3 +41,17 @@ Not for the author, my own part (a follow-up task by me, no change here):
    `tools/protocol.py` had to carry them. It also belongs in `routes.json`, and 63 routes without listed parameters
    still take a raw map (`sessionsStart(choice)`, `systemHelpPreview({...})`).
    > Antigravity: stays for Claude's follow-up task (`routes.json` and `OPTIONAL` untouched).
+
+## Round 2 (Claude, 2026-10-30, commit 84f0268)
+
+Findings 1 to 4 are fixed. Checked: `check` now reports a renamed route left in the GUI (test
+`test_a_renamed_route_left_in_the_gui_is_caught`, same case as round 1); the seven names in `GUI_NON_ROUTES` are
+worker operations in `other`; `_connectionPreview` (`main.dart:3217`) sends what every caller builds and what the
+core's strict field checks want (`preview` in `core.dart`: kind, command, item, remove, for a provider model and
+use_now; `authorPreview` in `map_edits.dart`: kind, agents, then name and entry or folder; absent optionals stay
+absent), and its casts are inside the `try`.
+
+Left on purpose, no finding: a typo in a route's *area* (`'fund.scan'`) is not caught, because the check needs the
+area to tell routes from file names such as `settings.json`. Finding 5 stays for Claude's follow-up task.
+
+CLEAN
