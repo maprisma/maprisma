@@ -4,6 +4,7 @@ session leader, controlling terminal, working folder, environment, echoed input)
 stopping a session ends its whole process group. Skipped without a native Dart SDK."""
 import json
 import os
+import signal
 import subprocess
 import sys
 import tempfile
@@ -24,7 +25,7 @@ except (OSError, ValueError, RuntimeError):
     DART = None
 
 SCRIPT = r'''echo WAIT; read a; stty size
-grep -E '^(SigIgn|SigBlk)' /proc/$$/status
+grep -E '^(SigIgn|SigBlk)' /proc/self/status
 [ "$(cut -d' ' -f6 /proc/$$/stat)" = "$$" ] && echo LEADER
 (echo CTTY > /dev/tty) 2>/dev/null || echo NOCTTY
 pwd; echo "VAR=$PROBE_VAR"; echo READY; read b; echo "got $b"; printf 'ü\n'; exit 3
@@ -56,6 +57,11 @@ def python_side(argv, cwd, env):
 
 @unittest.skipIf(DART is None, 'native Dart SDK not available')
 class DartPtySessionsParityTest(unittest.TestCase):
+    def setUp(self):
+        # A run under nohup or in the background ignores these, and the reference's child inherits that.
+        for number, handler in ((signal.SIGHUP, signal.SIG_DFL), (signal.SIGINT, signal.default_int_handler)):
+            self.addCleanup(signal.signal, number, signal.signal(number, handler))
+
     def test_same_terminal_behaviour(self):
         with tempfile.TemporaryDirectory() as cwd:
             argv = ['/bin/sh', '-c', SCRIPT]
