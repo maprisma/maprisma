@@ -323,14 +323,8 @@ class _SystemMapViewState extends State<SystemMapView> {
     setState(() => _working = true);
     try {
       final plan = finding == null
-          ? await _client.systemHelpPreview({
-              'command': _helper,
-              'topic': topic,
-            })
-          : await _client.systemFixPreview({
-              'command': _helper,
-              'finding': finding,
-            });
+          ? await _client.systemHelpPreview(command: _helper!, topic: topic)
+          : await _client.systemFixPreview(command: _helper!, finding: finding);
       if (!mounted) return;
       final yes = await showDialog<bool>(
         context: context,

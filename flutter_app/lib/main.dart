@@ -605,7 +605,11 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     final command = choice['command'] as String;
     setState(() => _busy = true);
     try {
-      final result = await _client.sessionsStart(choice);
+      final result = await _client.sessionsStart(
+        command: command,
+        outside: choice['outside'] as bool,
+        path: choice['path'],
+      );
       if (!mounted) return;
       if (result['session'] != null) {
         final terminal = AgentTerminal(
@@ -3229,7 +3233,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
               item: params['item'] as String,
               kind: params['kind'] as String,
               model: params['model'] as String?,
-              remove: params['remove'],
+              remove: params['remove'] as bool,
               useNow: params['use_now'] as bool?,
             );
       if (!mounted) return;
