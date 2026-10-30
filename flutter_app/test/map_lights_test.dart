@@ -79,12 +79,10 @@ void main() {
     () {
       final graph = fixtureGraph(active: true);
       (graph['edges'] as List).first['activity'] = 'runtime';
-      final layout = MapLayout(graph, {
-        'cards': {
-          '1:agent:': [0, 0],
-          '2:runtime:': [29900, 29900],
-        },
-      });
+      final layout = MapLayout(graph, {});
+      layout.curves.add(
+        MapCurve({'active': true}, Offset.zero, const Offset(29900, 29900)),
+      );
       final all = MapLightTiles(layout, 'all'),
           agents = MapLightTiles(layout, 'agents');
       expect(all.tiles.length, lessThanOrEqualTo(MapLightTiles.maxTiles));

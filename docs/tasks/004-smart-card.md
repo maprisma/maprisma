@@ -77,3 +77,17 @@ Stop there and ask for review of part A.
 7. `gui: the manual on the smart card`: a section in 8 languages. PDFs are built by Claude at the end.
 
 Then ask for review of part B. The app is never started on Uwe's desktop to test; widget tests only.
+
+## Notes for Claude
+- `tools/flutter-assets.py` (`KEYS`) and `packages/maprisma_core/lib/src/core_assets.g.dart` (`tools/core-assets.py`):
+  the 23 new smart card strings have been appended to `translations/{de,es,fr,it,nl,pl,pt}.json` (and kept in
+  `flutter_app/assets/translations/{en,de,es,fr,it,nl,pl,pt}.json`), while `tools/` and `packages/` were left untouched
+  per the task rules. When finishing the task on `task/004-smart-card`, add these keys to `KEYS` in
+  `tools/flutter-assets.py` (along with existing `translations/*.json` keys `"Ask"`, `"Try again"`, `"Done"`) and run
+  `tools/flutter-assets.py` and `tools/core-assets.py`:
+  `"Ask AI…"`, `"Ask AI"`, `"Ask AI · {0}"`, `"Ask for this column…"`, `"Local, no tokens"`, `"Uses plan/tokens"`,
+  `"Ask"`, `"Find an MCP server or skill…"`, `"Set up or connect an agent…"`, `"Set up or tune a provider…"`,
+  `"Find or connect a model…"`, `"{0} is checking {1}…"`, `"← Back"`, `"Move to {0}"`, `"Try again"`,
+  `"PC: {0} VRAM · {1} RAM · {2} free"`, `"PC: {0} RAM · {1} free"`, `"Fits in VRAM"`, `"Uses RAM offload"`,
+  `"Too large for this PC"`, `"Review"`, `"Download {0}?"`, `"Runtime"`, `"{0} is ready."`,
+  `"Connect it to an agent now? (Optional)"`, `"Done"`.

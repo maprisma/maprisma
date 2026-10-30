@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'core_client.g.dart';
 import 'map_groups.dart';
 import 'map_layout.dart';
 import 'map_lights.dart';
+import 'map_smart_card.dart';
 import 'map_static_cache.dart';
 import 'app_theme.dart' show corners;
 import 'map_snapshot.dart';
@@ -29,9 +31,17 @@ class MapEditor extends StatefulWidget {
     this.controls,
     this.staticState,
     this.lightStyle = defaultMapLightStyle,
+    this.smartCards = false,
+    this.smartHelpers = const [],
+    this.client,
+    this.onSmartApplied,
   });
   final Object? staticState;
   final MapLightStyle lightStyle;
+  final bool smartCards;
+  final List<Map<String, dynamic>> smartHelpers;
+  final CoreClient? client;
+  final ValueChanged<Map<String, dynamic>>? onSmartApplied;
   final Set<String>? selection;
   final ValueChanged<String>? onSubagents;
   final Widget Function(Map<String, dynamic>)? controls;
@@ -53,7 +63,7 @@ class MapEditor extends StatefulWidget {
 
 class _MapEditorState extends State<MapEditor>
     with SingleTickerProviderStateMixin {
-  final _board = GlobalKey();
+  final _board = GlobalKey(), _viewport = GlobalKey();
   final _ownTransform = TransformationController();
   TransformationController get _transform => widget.controller ?? _ownTransform;
   late final MapLightClock _phase;
@@ -61,10 +71,13 @@ class _MapEditorState extends State<MapEditor>
   Set<String> get _selected => widget.selection ?? _localSelection;
   late Map<String, dynamic> _saved;
   MapLayout? _layout;
-  String? _source, _hover;
+  String? _source, _hover, _draggingCard;
   bool _pointerDrawing = false;
   Map<String, dynamic>? _moving;
   Offset? _cursor;
+  double? _draggingCardY;
+  int? _openSmartColumn;
+  final _smartPrompts = <String, String>{};
   double _reorderDistance = 0;
   int _staticRevision = 0;
   @override
@@ -79,9 +92,11 @@ class _MapEditorState extends State<MapEditor>
     super.didUpdateWidget(old);
     final savedChanged = !sameMapJson(old.saved, widget.saved);
     final graphChanged = !sameMapJson(old.graph, widget.graph);
-    if (savedChanged) {
+    final smartChanged = old.smartCards != widget.smartCards;
+    if (savedChanged || smartChanged) {
       _saved = widget.saved;
       _layout = null;
+      if (!widget.smartCards) _openSmartColumn = null;
     }
     if (graphChanged &&
         _layout != null &&
@@ -89,6 +104,7 @@ class _MapEditorState extends State<MapEditor>
       _layout = null;
     }
     if (savedChanged ||
+        smartChanged ||
         old.staticState != widget.staticState ||
         !sameMapJson(mapAppearance(old.graph), mapAppearance(widget.graph)) ||
         old.controls != widget.controls ||
@@ -207,6 +223,37 @@ class _MapEditorState extends State<MapEditor>
     final folded = {...(_saved['collapsed'] as List? ?? []).cast<String>()};
     if (!folded.add(id)) folded.remove(id);
     _save({..._saved, 'collapsed': folded.toList()});
+  }
+
+  void _toggleSmartCard(int col) {
+    setState(() {
+      if (_openSmartColumn == col) {
+        _openSmartColumn = null;
+        return;
+      }
+      _openSmartColumn = col;
+      final box = _viewport.currentContext?.findRenderObject() as RenderBox?;
+      if (box == null || !box.hasSize) return;
+      final visible = Rect.fromPoints(
+        _transform.toScene(Offset.zero),
+        _transform.toScene(Offset(box.size.width, box.size.height)),
+      );
+      final card = Rect.fromLTWH(16.0 + col * 302, 106, 266, 320);
+      final dx = card.right > visible.right
+          ? visible.right - 16 - card.right
+          : card.left < visible.left
+          ? visible.left + 16 - card.left
+          : 0.0;
+      final dy = card.bottom > visible.bottom
+          ? visible.bottom - 16 - card.bottom
+          : card.top < visible.top
+          ? visible.top + 16 - card.top
+          : 0.0;
+      if (dx != 0 || dy != 0) {
+        _transform.value = _transform.value.clone()
+          ..translateByDouble(dx, dy, 0, 1);
+      }
+    });
   }
 
   Widget _node(String id, MapLayout layout, Set<String> lit) {
@@ -422,7 +469,11 @@ class _MapEditorState extends State<MapEditor>
 
   @override
   Widget build(BuildContext context) {
-    final layout = _layout ??= MapLayout(widget.graph, _saved);
+    final layout = _layout ??= MapLayout(
+      widget.graph,
+      _saved,
+      smartCards: widget.smartCards,
+    );
     final colors = Theme.of(context).colorScheme;
     final active =
         widget.animate != 'off' &&
@@ -502,6 +553,7 @@ class _MapEditorState extends State<MapEditor>
           ),
           Expanded(
             child: InteractiveViewer(
+              key: _viewport,
               transformationController: _transform,
               constrained: false,
               minScale: .3,
@@ -571,14 +623,36 @@ class _MapEditorState extends State<MapEditor>
                                 width: card.rect.width,
                                 height: 36,
                                 child: GestureDetector(
-                                  onPanUpdate: (d) => _save(
-                                    moveMapCard(
-                                      _saved,
-                                      layout,
-                                      card.id,
-                                      card.rect.topLeft + d.delta,
-                                    ),
+                                  behavior: HitTestBehavior.opaque,
+                                  onVerticalDragStart: (d) => _renderChange(() {
+                                    _draggingCard = card.id;
+                                    _draggingCardY = _local(
+                                      d.globalPosition,
+                                    ).dy;
+                                  }),
+                                  onVerticalDragUpdate: (d) => _renderChange(
+                                    () => _draggingCardY = _local(
+                                      d.globalPosition,
+                                    ).dy,
                                   ),
+                                  onVerticalDragEnd: (_) {
+                                    final y = _draggingCardY;
+                                    _draggingCard = null;
+                                    _draggingCardY = null;
+                                    if (y == null) return;
+                                    _save(
+                                      reorderMapCard(
+                                        _saved,
+                                        layout,
+                                        card.id,
+                                        layout.cardDrop(card.id, y).$1,
+                                      ),
+                                    );
+                                  },
+                                  onVerticalDragCancel: () => _renderChange(() {
+                                    _draggingCard = null;
+                                    _draggingCardY = null;
+                                  }),
                                   child: Row(
                                     children: [
                                       IconButton(
@@ -603,81 +677,54 @@ class _MapEditorState extends State<MapEditor>
                                       PopupMenuButton<String>(
                                         tooltip: widget.tr('Move card'),
                                         onSelected: (direction) {
-                                          if (direction == 'before' ||
-                                              direction == 'after') {
-                                            final order = layout.cards.keys
-                                                .toList();
-                                            final index = order.indexOf(
-                                              card.id,
-                                            );
-                                            order.remove(card.id);
-                                            order.insert(
-                                              (index +
-                                                      (direction == 'before'
-                                                          ? -1
-                                                          : 1))
-                                                  .clamp(0, order.length),
-                                              card.id,
-                                            );
-                                            final positions = {
-                                              ...?_saved['cards'] as Map?,
-                                            };
-                                            for (final c
-                                                in layout.cards.values.where(
-                                                  (c) =>
-                                                      c.column == card.column,
-                                                )) {
-                                              positions.remove(c.id);
-                                            }
-                                            _save({
-                                              ..._saved,
-                                              'card_order': order,
-                                              'cards': positions,
-                                            });
-                                            return;
-                                          }
-                                          final delta = {
-                                            'left': const Offset(-30, 0),
-                                            'right': const Offset(30, 0),
-                                            'up': const Offset(0, -30),
-                                            'down': const Offset(0, 30),
-                                          }[direction]!;
+                                          final colCards = [
+                                            for (final c in layout.cards.values)
+                                              if (c.column == card.column) c.id,
+                                          ];
+                                          final index = colCards.indexOf(
+                                            card.id,
+                                          );
                                           _save(
-                                            moveMapCard(
+                                            reorderMapCard(
                                               _saved,
                                               layout,
                                               card.id,
-                                              card.rect.topLeft + delta,
+                                              index +
+                                                  (direction == 'before'
+                                                      ? -1
+                                                      : 1),
                                             ),
                                           );
                                         },
                                         itemBuilder: (_) => [
-                                          for (final d in [
-                                            'left',
-                                            'right',
-                                            'up',
-                                            'down',
-                                            'before',
-                                            'after',
-                                          ])
+                                          for (final d in ['before', 'after'])
                                             PopupMenuItem(
                                               value: d,
                                               child: Text(
                                                 widget.tr(
-                                                  {
-                                                    'before': 'Earlier card',
-                                                    'after': 'Later card',
-                                                    'left': 'Move left',
-                                                    'right': 'Move right',
-                                                    'up': 'Move up',
-                                                    'down': 'Move down',
-                                                  }[d]!,
+                                                  d == 'before'
+                                                      ? 'Earlier card'
+                                                      : 'Later card',
                                                 ),
                                               ),
                                             ),
                                         ],
                                       ),
                                     ],
+                                  ),
+                                ),
+                              ),
+                            if (_draggingCard != null &&
+                                _draggingCardY != null &&
+                                layout.cards.containsKey(_draggingCard))
+                              Positioned.fromRect(
+                                rect: layout
+                                    .cardDrop(_draggingCard!, _draggingCardY!)
+                                    .$2,
+                                child: IgnorePointer(
+                                  child: ColoredBox(
+                                    key: const ValueKey('card-drop-line'),
+                                    color: colors.primary,
                                   ),
                                 ),
                               ),
@@ -741,6 +788,43 @@ class _MapEditorState extends State<MapEditor>
                           ),
                         ),
                       ),
+                    if (widget.smartCards)
+                      for (final col in [
+                        for (var i = 0; i < mapSmartColumns.length; i++)
+                          if (i != _openSmartColumn) i,
+                        ?_openSmartColumn,
+                      ])
+                        Positioned(
+                          key: ValueKey(
+                            'smart-card-slot-${mapSmartColumns[col].$1}',
+                          ),
+                          left: 16.0 + col * 302,
+                          top: 106,
+                          width: 266,
+                          child: MapSmartCard(
+                            key: ValueKey(
+                              'smart-card-${mapSmartColumns[col].$1}',
+                            ),
+                            column: mapSmartColumns[col].$1,
+                            title: mapSmartColumns[col].$2,
+                            open: _openSmartColumn == col,
+                            onToggle: () => _toggleSmartCard(col),
+                            tr: widget.tr,
+                            helpers: widget.smartHelpers,
+                            client: widget.client,
+                            initialPrompt:
+                                _smartPrompts[mapSmartColumns[col].$1],
+                            onMoveToColumn: (targetCol, request) {
+                              final index = mapSmartColumns.indexWhere(
+                                (c) => c.$1 == targetCol,
+                              );
+                              if (index < 0) return;
+                              _smartPrompts[targetCol] = request;
+                              _toggleSmartCard(index);
+                            },
+                            onApplied: widget.onSmartApplied,
+                          ),
+                        ),
                   ],
                 ),
               ),

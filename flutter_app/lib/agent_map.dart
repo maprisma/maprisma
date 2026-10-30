@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'core_client.g.dart';
 import 'map_groups.dart';
 import 'app_theme.dart' show corners;
 import 'map_editor.dart';
@@ -31,6 +32,10 @@ class AgentMap extends StatelessWidget {
     this.groups,
     this.onExpandGroup,
     this.onNodeMenu,
+    this.smartCards = false,
+    this.smartHelpers = const [],
+    this.client,
+    this.onSmartApplied,
     this.columns = const [
       'MCP servers and skills',
       'Agents',
@@ -40,6 +45,10 @@ class AgentMap extends StatelessWidget {
   });
 
   final Object? staticState;
+  final bool smartCards;
+  final List<Map<String, dynamic>> smartHelpers;
+  final CoreClient? client;
+  final ValueChanged<Map<String, dynamic>>? onSmartApplied;
   final Set<String>? selection;
   final Widget Function(Map<String, dynamic>)? controls;
   final Future<void> Function(Map<String, dynamic>)? onEdit;
@@ -199,6 +208,10 @@ class AgentMap extends StatelessWidget {
         animate: animate,
         lightFps: lightFps,
         onAnimationChanged: onAnimationChanged,
+        smartCards: smartCards,
+        smartHelpers: smartHelpers,
+        client: client,
+        onSmartApplied: onSmartApplied,
       );
     }
     final groups = readOnly ? null : this.groups;

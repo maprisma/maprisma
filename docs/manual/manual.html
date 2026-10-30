@@ -298,13 +298,13 @@
       plays the animation from Help. It goes for good after the first connection, or with ×.</li>
     <li>Zoom with <b>− 100&nbsp;% +</b>, <kbd>Ctrl</kbd>+scroll or <kbd>Ctrl</kbd>+<kbd>+</kbd> / <kbd>−</kbd> / <kbd>0</kbd>.</li>
     <li>The boxes sit in one card per category (agents, online providers, local LLMs, a card per
-      model folder, MCP servers, skills). Drag a card by its header to put it anywhere on the map, and
+      model folder, MCP servers, skills). Drag a card by its header to change the order in its column, and
       a box inside its card to change the order.</li>
     <li><b>Click a card's header</b> to fold the card to its header (<b>▸</b> at the header's right) and
       again to open it (<b>▾</b>). The lines of a folded card's boxes end at its header, so you still see
-      what is joined to it (the arrows between agents hide while the agents' card is folded). Opening a card moves the cards you put around it out of its way.</li>
-    <li>The <b>pin</b> right of the zoom keeps the map's layout — where you put the cards, the order of
-      the boxes and which cards are folded — after <b>Refresh</b> (<kbd>F5</kbd>) and a restart. Unpinned,
+      what is joined to it (the arrows between agents hide while the agents' card is folded). Opening a card moves the cards below it in its column down.</li>
+    <li>The <b>pin</b> right of the zoom keeps the map's layout — the order of the cards and
+      boxes and which cards are folded — after <b>Refresh</b> (<kbd>F5</kbd>) and a restart. Unpinned,
       as it starts, the map comes back in its default layout on every refresh and start; your changes
       last until then. <b>Default layout</b> puts everything back at once.</li>
     <li><b>Faded boxes</b> in the MCP servers and skills cards are on this computer but used by no
@@ -342,6 +342,9 @@
 
   <h2 id="addons-flutter">Add-on suggestions in the Flutter preview</h2>
   <p>In the Flutter preview, the app reads the signed add-on catalog in the background at start: from its cache, and online only when <b>Look for add-ons online</b> is on. Open problems then lists under <b>Updates and suggestions</b>: agents and local LLMs on this PC whose add-on is switched off or not installed yet (<b>Get add-ons</b> or <b>Add-ons</b> opens the add-ons to switch on or get), and installed add-ons with a newer version in the catalog. <b>Update all</b> shows them with their versions and, once confirmed, updates them one after the other, each checked against the catalog; one message says what was updated and what was not.</p>
+
+  <h2 id="smart-card">Smart cards on the map</h2>
+  <p>In the Flutter preview, when at least one guarded helper agent is ready, a collapsed <b>Ask AI…</b> bar sits at the top of each map column. Clicking it opens a card over that column without moving the map. Before anything is sent, the card shows which helper answers (with a menu when more than one is ready) and whether it runs locally (<b>Local, no tokens</b>) or <b>Uses plan/tokens</b>; only clicking <b>Ask</b> sends your one-line request. The helper either asks one clarifying question, offers to move the request to the right column, or proposes checked candidates from real search results. In the <b>Models</b> column, the card shows this PC’s VRAM, RAM and free disk space and marks each candidate as <b>Fits in VRAM</b>, <b>Uses RAM offload</b> or <b>Too large for this PC</b>. <b>Review</b> opens the download preview before anything is downloaded or changed, and once a model is ready you can optionally connect it to an agent through the connection preview with <b>Undo</b>.</p>
 </section>
 
 <!-- ============================== 4 Agents ============================== -->
