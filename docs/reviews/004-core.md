@@ -72,3 +72,9 @@ Checked and fine: Round 2 findings 1 to 3 are fixed and tested (`candidate['task
 
 2. **Low** `packages/maprisma_core/lib/src/core_tasks.dart:125,156-158` (`CoreTasks._run`) When `task.state == 'stopped'` at line 125 (cancelled while `Process.start` was in flight), `_stop(process)` signals the worker, but `_run` still writes the request to `process.stdin` and awaits `process.stdin.close()`. Because `catch (_)` at line 156 sets `task.state = 'failed'` unconditionally, a broken-pipe error on `stdin.close()` when the signalled worker exits overwrites `task.state = 'stopped'` with `'failed'`. Return after `_stop(process)` at line 125 and guard line 157 with `if (task.state == 'running') task.state = 'failed'`.
    > Claude: confirmed, fixed. Test "cancelled while starting".
+
+## Round 4 (Antigravity, 2026-10-30, commit 1b0811f)
+
+Round 3 findings 1 and 2 are fixed (`jobs.sync()` runs after `tasks.cancel` as well as `tasks.status`, and `CoreTasks._run` returns immediately after `_stop(process)` when cancelled while starting and guards `catch (_)` with `if (task.state == 'running')`), and `task_cancel_test.dart` covers cancelling while starting.
+
+CLEAN
