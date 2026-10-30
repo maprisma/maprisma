@@ -923,15 +923,17 @@
   },
   "map.smart_connect": {
    "area": "map",
-   "kind": "read",
-   "note": "As connections.preview: a plan for connections.apply.",
+   "kind": "preview",
+   "note": "As connections.preview: a plan for ConnectionReview and connections.apply, with its other fields. Refused until the model is on this PC.",
    "params": {
     "agent": "string",
     "candidate": "string",
     "proposal": "string"
    },
-   "result": null,
-   "source": null
+   "result": {
+    "plan": "string"
+   },
+   "source": "manual"
   },
   "map.smart_helpers": {
    "area": "map",
@@ -969,12 +971,15 @@
   "map.smart_run": {
    "area": "map",
    "kind": "change",
-   "note": "After the user's OK: starts it. A candidate that is too large is refused.",
+   "note": "After the user's OK: starts it, once. A candidate that is too large is refused.",
    "params": {
     "candidate": "string",
     "proposal": "string"
    },
    "result": {
+    "focus": [
+     "string"
+    ],
     "task": "string"
    },
    "source": "manual"
