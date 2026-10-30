@@ -5,7 +5,7 @@ Layout, the same for every runtime this module installs:
 
     <program folder>/v0.40.4/…        one folder per version
     <program folder>/current -> v0.40.4
-    <program folder>/.ai-agents-map   marker: installed here, may be updated/removed
+    <program folder>/.maprisma   marker: installed here, may be updated/removed
     ~/.local/bin/<command> -> <program folder>/current/bin/<command>
     ~/.config/<runtime>/server.env    address, model folder, GPU choice
     ~/.config/systemd/user/<runtime>.service
@@ -37,7 +37,8 @@ import providers
 HOME = Path.home()
 BIN_DIR = HOME / ".local/bin"
 UNIT_DIR = HOME / ".config/systemd/user"
-MARKER = ".ai-agents-map"
+MARKER = ".maprisma"
+LEGACY_MARKER = ".ai-agents-map"   # the GTK app's installs: still recognised, never written
 API_TIMEOUT = 20
 MAX_DOWNLOAD = 8 * 1024 ** 3      # when a release does not name its size
 MAX_UNPACKED = 20 * 1024 ** 3     # an unpacked release (Ollama with ROCm is a few GB)
@@ -514,7 +515,7 @@ class Installer:
 
     @property
     def default_folder(self) -> Path:
-        return HOME / ".local/share/ai-agents-map" / self.key
+        return HOME / ".local/share/maprisma" / self.key
 
     def default_build(self, gpu: Gpu) -> str:
         return self.builds[0][0] if self.builds else ""
@@ -553,7 +554,7 @@ class Installer:
         for parent in target.parents:
             if parent.name == "current":
                 folder = parent.parent
-                return folder if (folder / MARKER).exists() else None
+                return folder if (folder / MARKER).exists() or (folder / LEGACY_MARKER).exists() else None
         return None
 
     def current_version(self) -> str:
@@ -565,14 +566,17 @@ class Installer:
 
     def marker(self, folder: Path) -> dict | None:
         """The program folder's marker when it is this runtime's, else None."""
-        try:
-            path = folder / MARKER
-            if path.is_symlink() or not path.is_file() or path.stat().st_size > 64 * 1024:
-                return None
-            data = json.loads(path.read_text())
-        except (OSError, ValueError):
-            return None
-        return data if isinstance(data, dict) and data.get("runtime") == self.key else None
+        for name in (MARKER, LEGACY_MARKER):
+            try:
+                path = folder / name
+                if path.is_symlink() or not path.is_file() or path.stat().st_size > 64 * 1024:
+                    continue
+                data = json.loads(path.read_text())
+            except (OSError, ValueError):
+                continue
+            if isinstance(data, dict) and data.get("runtime") == self.key:
+                return data
+        return None
 
     def claim(self, folder: Path, models: Path | None = None):
         """Make `folder` this runtime's program folder: a new or empty folder (the model folder may be
@@ -582,7 +586,7 @@ class Installer:
             raise RuntimeError(f"{folder} is not a folder of its own; nothing was installed")
         mark = self.marker(folder)
         if mark is None:
-            if (folder / MARKER).exists() or (folder / MARKER).is_symlink():
+            if any((folder / name).exists() or (folder / name).is_symlink() for name in (MARKER, LEGACY_MARKER)):
                 raise RuntimeError(f"{folder} belongs to another install; choose an empty folder")
             if any(not holds(child, models) for child in folder.iterdir()):
                 raise RuntimeError(f"{folder} is not empty; choose an empty folder of its own for {self.name}")
@@ -628,7 +632,7 @@ class Installer:
         ours = name == "downloads" or (name.startswith(".") and name.endswith(".partial")) \
             or name in self.versions(folder)
         if path.parent != folder or not ours:
-            raise RuntimeError(f"{path} was not put there by AI Agents Map; nothing was replaced")
+            raise RuntimeError(f"{path} was not put there by Maprisma; nothing was replaced")
         shutil.rmtree(path)
 
     def versions(self, folder: Path) -> list[str]:
@@ -759,7 +763,7 @@ class Installer:
         """Program, link, service and its settings; never the models."""
         folder = self.installed_folder()
         if folder is None:
-            raise RuntimeError("not installed by AI Agents Map; remove it the way it was installed")
+            raise RuntimeError("not installed by Maprisma; remove it the way it was installed")
         if self.has_service:
             _systemctl("stop", f"{self.service}.service")
             _systemctl("disable", f"{self.service}.service")
@@ -789,6 +793,7 @@ class Installer:
             if path.is_dir() and not path.is_symlink() and not holds(path, models):
                 shutil.rmtree(path)
         (folder / MARKER).unlink(missing_ok=True)
+        (folder / LEGACY_MARKER).unlink(missing_ok=True)
         try:
             folder.rmdir()                       # only when nothing else is left
         except OSError:
@@ -845,7 +850,7 @@ class Ollama(Installer):
         set_env_value(self.env_file, "OLLAMA_MODELS", str(models))
 
     def env_text(self, models: Path | None, gpu: Gpu) -> str:
-        lines = ["# Written by AI Agents Map. Change the model folder there (right-click Ollama).",
+        lines = ["# Written by Maprisma. Change the model folder there (right-click Ollama).",
                  f"OLLAMA_HOST={self.address}", f"OLLAMA_MODELS={models}",
                  # One model at a time; the app raises it when agents use different models.
                  "OLLAMA_MAX_LOADED_MODELS=1"]
@@ -858,7 +863,7 @@ class Ollama(Installer):
 
     def unit_text(self, models: Path | None = None) -> str:
         return f"""[Unit]
-Description=Ollama (installed by AI Agents Map)
+Description=Ollama (installed by Maprisma)
 After=network.target
 
 [Service]
@@ -921,7 +926,7 @@ class LlamaCpp(Installer):
 
     def env_text(self, models: Path | None, gpu: Gpu) -> str:
         host, _sep, port = self.address.rpartition(":")
-        lines = ["# Written by AI Agents Map. Change the model folder there (right-click llama.cpp).",
+        lines = ["# Written by Maprisma. Change the model folder there (right-click llama.cpp).",
                  f"LLAMA_ARG_MODELS_DIR={models}", f"LLAMA_ARG_HOST={host}", f"LLAMA_ARG_PORT={port}",
                  "LLAMA_ARG_MODELS_MAX=1"]
         if gpu.vendor == "amd" and gpu.index is not None:
@@ -933,7 +938,7 @@ class LlamaCpp(Installer):
     def unit_text(self, models: Path | None = None) -> str:
         preset = HOME / ".config/llama.cpp/models.ini"
         return f"""[Unit]
-Description=llama.cpp model router (installed by AI Agents Map)
+Description=llama.cpp model router (installed by Maprisma)
 After=network.target
 
 [Service]
@@ -967,7 +972,7 @@ class LmStudio(Installer):
     can_install = False
     site = "https://lmstudio.ai/download"
     settings = HOME / ".lmstudio/settings.json"
-    desktop = HOME / ".local/share/applications/lm-studio-ai-agents-map.desktop"
+    desktop = HOME / ".local/share/applications/lm-studio-maprisma.desktop"
 
     def models_folder(self) -> str:
         try:
@@ -995,7 +1000,7 @@ class LmStudio(Installer):
         _write(self.desktop, f"""[Desktop Entry]
 Type=Application
 Name=LM Studio
-Comment=Run local LLMs (installed by AI Agents Map)
+Comment=Run local LLMs (installed by Maprisma)
 Exec={BIN_DIR / self.command} %U
 Icon={icon or "lm-studio"}
 Categories=Development;
@@ -1060,7 +1065,7 @@ class Vllm(Installer):
     def unit_text(self, models: Path | None = None) -> str:
         host, _sep, port = self.address.rpartition(":")
         return f"""[Unit]
-Description=vLLM (installed by AI Agents Map)
+Description=vLLM (installed by Maprisma)
 After=network.target
 
 [Service]
@@ -1125,7 +1130,7 @@ class KoboldCpp(Installer):
         build = self.default_build(gpu)
         version = self.current_version()
         build = version.rsplit("-", 1)[-1] if version.rsplit("-", 1)[-1] in self.ASSETS else build
-        lines = ["# Written by AI Agents Map. Change the model folder there (right-click KoboldCpp).",
+        lines = ["# Written by Maprisma. Change the model folder there (right-click KoboldCpp).",
                  f"KOBOLDCPP_MODELS={models}", f"KOBOLDCPP_BUILD={build}"]
         if gpu.vendor == "nvidia" and gpu.index is not None:
             lines.append(f"CUDA_VISIBLE_DEVICES={gpu.index}")
@@ -1137,7 +1142,7 @@ class KoboldCpp(Installer):
         build = self.build_of()
         gpu_flag = {"cuda": "--usecuda", "vulkan": "--usevulkan", "cpu": "--usecpu"}[build]
         return f"""[Unit]
-Description=KoboldCpp model router (installed by AI Agents Map)
+Description=KoboldCpp model router (installed by Maprisma)
 After=network.target
 
 [Service]
@@ -1164,7 +1169,7 @@ WantedBy=default.target
         self.sync(models)
 
     def unconfigure(self):
-        """The .kcpps files AI Agents Map made (the user's own stay)."""
+        """The .kcpps files Maprisma made (the user's own stay)."""
         import inventory
         import kobold_ctl
         for path in inventory.KOBOLD_CONFIGS.glob("*.kcpps"):
@@ -1186,7 +1191,7 @@ class Jan(Installer):
     key, name, command, service = "jan", "Jan", "jan-desktop", "jan"
     bin_rel = "squashfs-root/AppRun"
     worker_rel = "squashfs-root/usr/lib/Jan/resources/bin"
-    desktop = HOME / ".local/share/applications/jan-ai-agents-map.desktop"
+    desktop = HOME / ".local/share/applications/jan-maprisma.desktop"
 
     def latest(self, gpu: Gpu, build: str = "") -> Release:
         data = _curl_json("https://api.github.com/repos/janhq/jan/releases/latest")
@@ -1233,7 +1238,7 @@ class Jan(Installer):
         worker, preset_arg = unit_path(bin_dir / "jan-llama-worker"), unit_path(preset)
         library = unit_path(f"LD_LIBRARY_PATH={bin_dir}")
         return f"""[Unit]
-Description=Jan's engine for agents (installed by AI Agents Map)
+Description=Jan's engine for agents (installed by Maprisma)
 After=network.target
 
 [Service]
@@ -1261,7 +1266,7 @@ WantedBy=default.target
         _write(self.desktop, f"""[Desktop Entry]
 Type=Application
 Name=Jan
-Comment=Chat with local LLMs (installed by AI Agents Map)
+Comment=Chat with local LLMs (installed by Maprisma)
 Exec={BIN_DIR / self.command} %U
 Icon={icon or "jan"}
 Categories=Development;
@@ -1282,7 +1287,7 @@ class Bionic(Installer):
     uses_models = False
     can_install = False
     site = "https://lmstudio.ai"
-    desktop = HOME / ".local/share/applications/bionic-ai-agents-map.desktop"
+    desktop = HOME / ".local/share/applications/bionic-maprisma.desktop"
 
     def configure(self, models: Path | None):
         folder = self.installed_folder() or self.default_folder
@@ -1290,7 +1295,7 @@ class Bionic(Installer):
         _write(self.desktop, f"""[Desktop Entry]
 Type=Application
 Name=LM Studio Bionic
-Comment=Agent for open models (installed by AI Agents Map)
+Comment=Agent for open models (installed by Maprisma)
 Exec={BIN_DIR / self.command} %U
 Icon={icon or "bionic"}
 Categories=Development;
@@ -1455,14 +1460,14 @@ class Declared(Installer):
         check_download(spec)
         self.spec = spec
         self.key, self.name, self.command = key, name, spec.command
-        self.service = f"{key}-ai-agents-map" if spec.service else ""
+        self.service = f"{key}-maprisma" if spec.service else ""
         self.has_service = bool(spec.service)
         self.uses_models = uses_models
         self.bin_rel = spec.binary
         self.address = spec.address
         self.builds = tuple(spec.builds) or tuple((b, b or name) for b, _p in spec.assets)
         self.login_default = spec.login_default
-        self.env_file = HOME / ".config/ai-agents-map/services" / f"{key}.env" if spec.service else HOME
+        self.env_file = HOME / ".config/maprisma/services" / f"{key}.env" if spec.service else HOME
         self.site = f"https://github.com/{spec.repo}"
 
     def default_build(self, gpu: Gpu) -> str:
@@ -1512,7 +1517,7 @@ class Declared(Installer):
         if not self.spec.env:
             return ""
         values = self._values(models)
-        lines = [f"# Written by AI Agents Map for {self.name}."]
+        lines = [f"# Written by Maprisma for {self.name}."]
         lines += [f"{name}={self._fill(value, values)}" for name, value in self.spec.env]
         return "\n".join(lines) + "\n"
 
@@ -1522,7 +1527,7 @@ class Declared(Installer):
         argv = [self._fill(word, values) for word in self.spec.service]
         env = f"EnvironmentFile={self.env_file}\n" if self.spec.env else ""
         return f"""[Unit]
-Description={self.name} (installed by AI Agents Map)
+Description={self.name} (installed by Maprisma)
 After=network.target
 
 [Service]
@@ -1597,7 +1602,7 @@ def folder_suggestions(key: str, runtimes) -> list[Path]:
             if base not in (HOME, Path("/")) and not str(base).startswith(str(HOME) + "/."):
                 found.append(base / key)
     inst = installer(key)
-    found.append(inst.default_folder if inst else HOME / ".local/share/ai-agents-map" / key)
+    found.append(inst.default_folder if inst else HOME / ".local/share/maprisma" / key)
     return list(dict.fromkeys(found))
 
 

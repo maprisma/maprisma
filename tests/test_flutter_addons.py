@@ -39,19 +39,16 @@ class FlutterAddonsTest(unittest.TestCase):
         snapshot = registry.snapshot(enabled)
         self.assertFalse(next(a for a in snapshot['addons'] if a['id'] == 'ui-feature')['supported'])
 
-    def test_startup_migrates_before_loading_adapters(self):
-        import config_migration
+    def test_startup_migrates_settings_before_loading_adapters(self):
         with tempfile.TemporaryDirectory() as directory:
             service = flutter_backend.Service(Path(directory) / 'settings.json')
             events = []
             registry = mock.Mock()
             registry.reload.side_effect = lambda _: events.append('reload')
-            with mock.patch.object(config_migration, 'migrate', side_effect=lambda **_: events.append('migration')), \
-                    mock.patch.object(ai_core, 'migrate_settings', side_effect=lambda _: events.append('settings')), \
-                    mock.patch.object(flutter_addons, 'AdapterRegistry', return_value=registry), \
-                    mock.patch.object(service, 'finish_plugin_migration', side_effect=lambda: events.append('activation')):
+            with mock.patch.object(ai_core, 'migrate_settings', side_effect=lambda _: events.append('settings')), \
+                    mock.patch.object(flutter_addons, 'AdapterRegistry', return_value=registry):
                 service.initialize()
-            self.assertEqual(events, ['migration', 'settings', 'reload', 'activation'])
+            self.assertEqual(events, ['settings', 'reload'])
 
     def test_detection_restores_enabled_adapters_even_when_a_reader_fails(self):
         import agents
@@ -80,28 +77,3 @@ class FlutterAddonsTest(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     service.dispatch('addons.set_enabled', {'id': aid, 'enabled': True})
             self.assertFalse(service.settings_path.exists())
-
-    def test_pending_legacy_activation_unions_enabled_choices_and_marks_only_after_detection(self):
-        with tempfile.TemporaryDirectory() as directory:
-            service = flutter_backend.Service(Path(directory) / 'settings.json')
-            ai_core.update_settings(service.settings_path, addons_enabled=['old-ui-feature'],
-                                    plugin_migration={'addons_pending': True, 'backup': 'existing-backup'})
-            service.adapters = mock.Mock(items=[addons.Addon(Path('/fixture'), id='one-agent',
-                                                            kind='agent', state='verified')])
-            service.adapters.installed.return_value = {'one-agent'}
-            service.finish_plugin_migration()
-            saved = ai_core.load_settings(service.settings_path)
-            self.assertEqual(saved['addons_enabled'], ['old-ui-feature', 'one-agent'])
-            self.assertFalse(saved['plugin_migration']['addons_pending'])
-            self.assertEqual(saved['plugin_migration']['backup'], 'existing-backup')
-
-    def test_failed_detection_keeps_migration_pending_without_settings_changes(self):
-        with tempfile.TemporaryDirectory() as directory:
-            service = flutter_backend.Service(Path(directory) / 'settings.json')
-            ai_core.update_settings(service.settings_path, plugin_migration={'addons_pending': True})
-            before = service.settings_path.read_bytes()
-            service.adapters = mock.Mock(items=[addons.Addon(Path('/fixture'), id='one-agent',
-                                                            kind='agent', state='verified')])
-            service.adapters.installed.side_effect = OSError('fixture failure')
-            service.finish_plugin_migration()
-            self.assertEqual(service.settings_path.read_bytes(), before)

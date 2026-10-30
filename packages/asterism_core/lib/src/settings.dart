@@ -210,7 +210,6 @@ final class SettingsStore {
     }
     if (fallback is List) return texts(v);
     if (fallback is Map) return v is Map;
-    if (key == 'launcher_entry') return v is bool;
     return false;
   }
 

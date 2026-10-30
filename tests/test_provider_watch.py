@@ -289,7 +289,7 @@ class ProcessTest(unittest.TestCase):
                 (folder / "environ").write_bytes(env)
             proc(10, "opencode.exe", ["/x/opencode.exe", "--auto"])
             proc(11, "python3", ["python3", "/home/u/.local/bin/hermes"])
-            proc(12, "claude", ["claude", "-p"], b"AI_AGENTS_MAP_NO_PROVIDERS=1\0")
+            proc(12, "claude", ["claude", "-p"], b"MAPRISMA_NO_PROVIDERS=1\0")
             proc(13, "bash", ["bash"])
             proc(14, "opencode.exe", ["/x/opencode.exe", "serve", "--service"])
             found, background = pw.running_agents({"opencode", "hermes", "claude", "pi"}, proc=root)

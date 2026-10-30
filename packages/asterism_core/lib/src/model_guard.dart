@@ -378,8 +378,8 @@ Map<String, int> agentInstances(ProviderScans scans, Set<String> names) {
       continue;
     }
     if (scans.processEnv(process.pid, {
-          'AI_AGENTS_MAP_NO_PROVIDERS',
-        })['AI_AGENTS_MAP_NO_PROVIDERS'] ==
+          'MAPRISMA_NO_PROVIDERS',
+        })['MAPRISMA_NO_PROVIDERS'] ==
         '1') {
       continue;
     }

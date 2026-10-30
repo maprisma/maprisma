@@ -49,7 +49,7 @@ class AgentFacts:
     task: tuple = ()         # argv: started with "{prompt}" as its first message
 
 
-# The agents every plugin knows; AI Agents Map passes its own adapters' facts instead (facts=).
+# The agents every plugin knows; Maprisma passes its own adapters' facts instead (facts=).
 AGENTS = {
     "claude": AgentFacts(
         "Claude Code",

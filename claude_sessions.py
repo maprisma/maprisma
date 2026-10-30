@@ -25,7 +25,7 @@ from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude") / "projects"
-CACHE = Path.home() / ".cache/ai-agents-map/claude-sessions.json"
+CACHE = Path.home() / ".cache/maprisma/claude-sessions.json"
 MAX_LINE = 8 * 1024 * 1024
 MAX_FILES = 5000
 MAX_DIRS = 500

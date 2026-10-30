@@ -8,7 +8,7 @@ in Settings, with a preview first): every GGUF the local LLMs know goes to
                                               installed here read this flat folder)
 
 and each local LLM is pointed there ("back reflection"): LM Studio's
-downloadsFolder, and the model folder of the ones AI Agents Map installed.
+downloadsFolder, and the model folder of the ones Maprisma installed.
 A local LLM installed by hand keeps its folder: its links are pointed at the
 new places, and a file moved out of its folder leaves a link behind.
 
@@ -29,7 +29,7 @@ from pathlib import Path
 import ai_core
 
 HOME = Path.home()
-JOURNAL = HOME / ".local/state/ai-agents-map/reorganize.json"
+JOURNAL = HOME / ".local/state/maprisma/reorganize.json"
 FLAT = "llama.cpp"
 LOCAL = "local"
 MAX_DEPTH = 5
@@ -48,7 +48,7 @@ class Provider:
     key: str
     name: str
     folder: Path | None      # its model folder now
-    ours: bool               # installed by AI Agents Map: its folder setting can be changed
+    ours: bool               # installed by Maprisma: its folder setting can be changed
     running: bool = False
     layout: str = ""
     store: tuple = ()

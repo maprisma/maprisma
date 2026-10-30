@@ -139,9 +139,9 @@ class Actions:
             env = dict(os.environ)
             ai_core.drop_agent_session_vars(env)
             ai_core.add_user_program_dirs(env)
-            env.update(TERM='xterm-256color', COLORTERM='truecolor', AI_AGENTS_MAP_NO_PROVIDERS='1')
-            env.pop('AI_AGENTS_MAP_PAGE', None)
-            env.pop('AI_AGENTS_MAP_VIEW', None)
+            env.update(TERM='xterm-256color', COLORTERM='truecolor', MAPRISMA_NO_PROVIDERS='1')
+            env.pop('MAPRISMA_PAGE', None)
+            env.pop('MAPRISMA_VIEW', None)
             temporary = tempfile.TemporaryDirectory(prefix='asterism-agent-test-') if params['action'] == 'verify' else None
             cwd = temporary.name if temporary else str(Path.home())
             try:

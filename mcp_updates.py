@@ -32,7 +32,7 @@ from agent_updates import newer
 
 HOME = Path.home()
 APPS = HOME / "Applications"
-CACHE = HOME / ".cache/ai-agents-map/mcp-updates.json"
+CACHE = HOME / ".cache/maprisma/mcp-updates.json"
 CHECK_EVERY = 24 * 3600
 RETRY_FAILED = 6 * 3600
 MAX_SERVERS = 40

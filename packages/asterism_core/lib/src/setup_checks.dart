@@ -336,7 +336,7 @@ final class SetupChecks {
         check(
           'info',
           tr('Sign-in unknown'),
-          tr('AI Agents Map does not know how this agent signs in.'),
+          tr('Maprisma does not know how this agent signs in.'),
         ),
       );
     }

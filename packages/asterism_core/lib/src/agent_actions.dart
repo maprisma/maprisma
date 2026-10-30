@@ -508,9 +508,9 @@ final class AgentActions {
       env
         ..['TERM'] = 'xterm-256color'
         ..['COLORTERM'] = 'truecolor'
-        ..['AI_AGENTS_MAP_NO_PROVIDERS'] = '1'
-        ..remove('AI_AGENTS_MAP_PAGE')
-        ..remove('AI_AGENTS_MAP_VIEW');
+        ..['MAPRISMA_NO_PROVIDERS'] = '1'
+        ..remove('MAPRISMA_PAGE')
+        ..remove('MAPRISMA_VIEW');
       final temporary = params['action'] == 'verify'
           ? Directory.systemTemp.createTempSync('asterism-agent-test-')
           : null;

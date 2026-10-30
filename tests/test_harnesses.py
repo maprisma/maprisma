@@ -238,7 +238,7 @@ class EditionTest(unittest.TestCase):
         try:
             import addon_api
         except ImportError:
-            self.skipTest("the AI Agents Map plugin has no add-ons")
+            self.skipTest("the Maprisma plugin has no add-ons")
         with mock.patch.object(addon_api, "loaded_privacy", return_value=edition.SUMMARY):
             self.assertTrue(edition.allows(edition.SUMMARY))
         with mock.patch.object(addon_api, "loaded_privacy", return_value=0):

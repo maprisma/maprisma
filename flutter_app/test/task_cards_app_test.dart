@@ -87,7 +87,7 @@ for line in sys.stdin:
   r={'task':'guide'}
  elif m=='installers.preview':
   tasks['ipreview']={'installer':'inst-1','kind':p['kind'],'key':p['key'],'name':'llama.cpp','version':'b9000-'+p.get('build','vulkan'),'size':10,
-   'files':[{'name':'llama.tar.gz','size':10}],'folder':'/home/u/.local/share/ai-agents-map/llamacpp','models':'/home/u/.local/share/ai-agents-map/llamacpp/models',
+   'files':[{'name':'llama.tar.gz','size':10}],'folder':'/home/u/.local/share/maprisma/llamacpp','models':'/home/u/.local/share/maprisma/llamacpp/models',
    'gpu':{'vendor':'amd','name':'AMD · card1'},'build':p.get('build','vulkan'),'builds':[['vulkan','Vulkan'],['cpu','CPU']],'has_service':True}
   r={'task':'ipreview'}
  elif m=='installers.install':installed_runtime=True;tasks['iinstall']={'ok':True,'kind':'runtime','key':'llamacpp','version':'b9000'};r={'task':'iinstall'}

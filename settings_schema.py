@@ -82,11 +82,9 @@ SCHEMA: dict[str, Setting] = {
     "window_size": Setting(None, _size, "the window's size when it was last closed: [width, height]"),
     "last_view": Setting("main", _text, "the view open when the window was last closed"),
     "terminal_tabs": Setting(True, _bool, "Settings › Terminal tabs above the map"),
-    "launcher_entry": Setting(None, _bool, "Settings › In the app launcher (None: not asked yet)"),
     "agent_folder": Setting(None, _text, "Settings › Agents start in: the folder agents start in"),
     "agent_projects": Setting({}, _text_mapping, "Start: the optional project folder pinned as each agent's default"),
     "agent_project_history": Setting({}, _history_mapping, "Project folders used to start each agent, newest first"),
-    "plugin_migration": Setting({}, _mapping, "One-time legacy plugin import: backup and pending add-on activation"),
     # The map
     "flutter_map_layout": Setting({}, lambda v: __import__("flutter_map_editor").valid_layout(v),
                                   "Flutter map card positions/order/folds and node pins (bounded schema)"),
@@ -159,7 +157,8 @@ RENAMED: dict[str, tuple[str, Callable[[Any], Any]]] = {
     "animate_lines": ("map_animations", lambda v: "off" if v is False else "all"),   # "Animate active lines"
 }
 # Keys nothing reads any more (Hide, the column lists, the overview's Show list, Setup · + Available).
-RETIRED = ("widen",                         # "Maximize for more room" in the header (removed)
+RETIRED = ("plugin_migration", "launcher_entry",   # the AI Agents Map plugin's import and launcher
+           "widen",                         # "Maximize for more room" in the header (removed)
            "hidden_items", "hidden_nodes", "hidden_providers", "card_hidden", "start_scope", "show_more_hint",
            "setup_mode",                          # Setup's All/Installed switch
            "sidebar", "sidebar_width",            # the list beside the map

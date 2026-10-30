@@ -8,7 +8,7 @@ it starts the server's program or talks to its address.
   an event-stream answer).
 Legacy SSE servers are not asked.
 
-Answers are kept in ~/.cache/ai-agents-map/mcp-tools/<name>.json.
+Answers are kept in ~/.cache/maprisma/mcp-tools/<name>.json.
 """
 
 import datetime as dt
@@ -22,12 +22,12 @@ import time
 from pathlib import Path
 
 HOME = Path.home()
-CACHE_DIR = HOME / ".cache/ai-agents-map/mcp-tools"
+CACHE_DIR = HOME / ".cache/maprisma/mcp-tools"
 TIMEOUT = 90                 # npx/uvx may download the server first
 MAX_LINE = 4 * 1024 * 1024
 MAX_TOOLS = 300
 PROTOCOL = "2025-06-18"
-CLIENT = {"name": "ai-agents-map", "version": "1"}
+CLIENT = {"name": "maprisma", "version": "1"}
 _NAME = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
 
 

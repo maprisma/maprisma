@@ -103,7 +103,6 @@ def oracle():
     sys.path.insert(0, str(ROOT))
     import flutter_backend
     import i18n
-    i18n.set_name('AI Agents Map', 'Maprisma')
     import ai_core
     if os.environ.get('ASTERISM_DIFF_COMPONENT') == 'scans':
         import core_scan_oracle

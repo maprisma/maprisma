@@ -1,8 +1,6 @@
-"""Application identity is independent of the desktop integration.
+"""The application's identity: Maprisma (called Asterism until 2026-10-30).
 
-Maprisma (until 2026-10-30 called Asterism) packages include the add-on loader; the legacy plugin build omits it
-(tools/sync-plugin.py). This build fact, rather than the current desktop, selects
-the identity. Both editions may use either desktop backend.
+Maprisma knows nothing of the GTK app AI Agents Map (docs/plan-naming.md, step 7).
 """
 
 import os
@@ -12,25 +10,19 @@ ROOT = Path(__file__).resolve().parent
 HOME = Path.home()
 
 
-def is_plugin() -> bool:
-    return not (ROOT / "addons.py").is_file()
-
-
 def name() -> str:
-    return "AI Agents Map" if is_plugin() else "Maprisma"
+    return "Maprisma"
 
 
 def app_id() -> str:
-    return "org.omarchy.aiagentsmap" if is_plugin() else "com.maprisma.Maprisma"
+    return "com.maprisma.Maprisma"
 
 
 def short_name() -> str:
-    return "ai-agents-map" if is_plugin() else "maprisma"
+    return "maprisma"
 
 
 def config_dir() -> Path:
-    if is_plugin():
-        return HOME / ".config/omarchy/ai-agents-map"
     configured = os.environ.get("XDG_CONFIG_HOME", "")
     root = Path(configured) if configured and Path(configured).is_absolute() else HOME / ".config"
     return root / short_name()

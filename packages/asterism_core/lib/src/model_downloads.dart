@@ -504,7 +504,7 @@ final class ModelFiles {
     requireOwnListener(port, posix.uid);
     final binary = _which('ollama');
     if (binary == null) throw StateError('ollama is not installed');
-    final tmp = Directory.systemTemp.createTempSync('ai-agents-map-');
+    final tmp = Directory.systemTemp.createTempSync('maprisma-');
     try {
       final modelfile = p.join(tmp.path, 'Modelfile');
       File(modelfile).writeAsStringSync('FROM ${pyJsonDumps(file)}\n');

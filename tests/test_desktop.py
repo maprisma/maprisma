@@ -32,9 +32,7 @@ class DetectTest(unittest.TestCase):
 
 class GenericTest(unittest.TestCase):
     def test_config_folder_is_maprisma(self):
-        import identity
-        with mock.patch.object(identity, "is_plugin", return_value=False):
-            self.assertEqual(desktop.config_dir().name, "maprisma")
+        self.assertEqual(desktop.config_dir().name, "maprisma")
 
     def test_theme_from_the_style_manager(self):
         with mock.patch.object(g, "_adw_style", return_value=(True, "#9141ac")):

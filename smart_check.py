@@ -5,7 +5,7 @@ shown while an agent that can do look-ups is installed: ai_helper.helpers).
   versions, models, counts and the setup check's findings; never keys, settings values, env or
   headers) and answers with a short summary and findings (problems, tips, what is good). It may use
   the web (is a version current?) and nothing else; the answer is checked (validate()) and kept in
-  ~/.cache/ai-agents-map/smart-check.json. "Fix it with …" gives a finding to the agent in a
+  ~/.cache/maprisma/smart-check.json. "Fix it with …" gives a finding to the agent in a
   terminal tab, with our own prompt (fix_prompt()), never the answer's words as a command.
 - categories(): every AI run in the shared log (plugin_ai: this app's and the other plugins'),
   grouped by plugin and task, with starts, results and tokens.
@@ -24,14 +24,14 @@ import plugin_ai
 from i18n import N_
 
 HOME = Path.home()
-CACHE = HOME / ".cache/ai-agents-map/smart-check.json"
+CACHE = HOME / ".cache/maprisma/smart-check.json"
 MAX_SNAPSHOT = 12000
 MAX_FINDINGS = 15
 MAX_CATEGORIES = 30          # task cards on the page (the log holds at most 500 runs)
 LEVELS = ("problem", "tip", "good")
 
 PROMPT = """You are checking the AI setup of a Linux PC (Omarchy / Arch Linux). Here is what is installed
-and how it is connected, as the app AI Agents Map sees it:
+and how it is connected, as the app Maprisma sees it:
 
 {snapshot}
 

@@ -3971,7 +3971,7 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
                     children: [
                       Text(
                         tr(
-                          'Your AI Agents Map settings could not be imported. Maprisma will use its current or default settings.',
+                          'Your Asterism settings could not be copied. Maprisma starts with its default settings.',
                         ),
                       ),
                       const SizedBox(height: 8),

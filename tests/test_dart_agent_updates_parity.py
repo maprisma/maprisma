@@ -51,11 +51,11 @@ class DartAgentUpdatesParityTest(unittest.TestCase):
                 (tools / name).write_text('#!/bin/sh\n')
                 (tools / name).chmod(0o755)
             # The app's own llama.cpp: ~/.local/bin link into <folder>/current, the folder marked.
-            folder = home / '.local/share/ai-agents-map/llamacpp'
+            folder = home / '.local/share/maprisma/llamacpp'
             (folder / 'b9000-vulkan').mkdir(parents=True)
             (folder / 'b9000-vulkan/llama-server').write_text('')
             (folder / 'current').symlink_to('b9000-vulkan')
-            (folder / '.ai-agents-map').write_text('{}')
+            (folder / '.maprisma').write_text('{}')
             (home / '.local/bin').mkdir(parents=True)
             (home / '.local/bin/llama-server').symlink_to(folder / 'current/llama-server')
             (home / '.claude').mkdir()

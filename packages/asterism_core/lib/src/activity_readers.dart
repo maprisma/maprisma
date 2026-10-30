@@ -108,8 +108,8 @@ final class ActivityReaders {
         continue;
       }
       if (provider.processEnv(process.pid, {
-            'AI_AGENTS_MAP_NO_PROVIDERS',
-          })['AI_AGENTS_MAP_NO_PROVIDERS'] ==
+            'MAPRISMA_NO_PROVIDERS',
+          })['MAPRISMA_NO_PROVIDERS'] ==
           '1') {
         continue;
       }

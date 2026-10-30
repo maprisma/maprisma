@@ -150,7 +150,7 @@ class DartModelFilesParityTest(unittest.TestCase):
                     requests = log.read_text().splitlines() if log.exists() else []
                     log.unlink(missing_ok=True)
                     cli = (home / 'ollama.log').read_text().replace(str(home), '$HOME') if (home / 'ollama.log').exists() else ''
-                    cli = re.sub(r'ai-agents-map-[^/]+/', 'ai-agents-map-<tmp>/', cli)
+                    cli = re.sub(r'maprisma-[^/]+/', 'maprisma-<tmp>/', cli)
                     sides[side] = (json.loads(json.dumps(answers).replace(str(home), '$HOME')), tree(home), requests, cli)
                 self.assertEqual(sides['python'][0], sides['dart'][0])
                 self.assertEqual(sides['python'][1], sides['dart'][1])

@@ -32,7 +32,7 @@ import desktop
 
 HOME = Path.home()
 PROFILE_DIR = desktop.config_dir() / "agents"
-WORK_DIR = HOME / ".cache/ai-agents-map/research"
+WORK_DIR = HOME / ".cache/maprisma/research"
 RETRY_AFTER = dt.timedelta(days=7)
 TIMEOUT = 600
 MAX_ANSWER = 64 * 1024
@@ -222,7 +222,7 @@ def _bounded(argv, **kwargs):
     import ai_core
     # Our own look-up run: the provider watcher does not start the agent's local LLMs for it.
     import ai_helper
-    kwargs.setdefault("env", {**os.environ, "AI_AGENTS_MAP_NO_PROVIDERS": "1"})
+    kwargs.setdefault("env", {**os.environ, "MAPRISMA_NO_PROVIDERS": "1"})
     kwargs.setdefault("cancel", getattr(ai_helper._watch, "cancel", None))    # the progress box's Cancel
     return ai_core.read_bounded_output(argv, **kwargs)
 

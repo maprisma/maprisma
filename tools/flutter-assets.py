@@ -505,7 +505,7 @@ KEYS = (
     'Send the test question', 'Remove', 'Copy command', 'What stays: {0}',
     'This runs in a separate terminal; passwords are entered there. Refresh when it finishes.',
     'Automatic map scans', 'Manual only', 'Every {0} seconds', 'Pause scans while unfocused', 'Automatic scan targets', 'Activity and subagents', 'Agent details', 'Models, MCP servers and skills', 'Startup and Refresh scan all targets.', 'Updates apply only while the map is visible.',
-    'Your AI Agents Map settings could not be imported. Maprisma will use its current or default settings.',
+    'Your Asterism settings could not be copied. Maprisma starts with its default settings.',
     'New add-ons stay switched off until you enable them.', 'Finish running agents before changing add-ons.',
     'Installed add-ons', 'Available', 'Get add-on', 'Look for add-ons online', 'Nothing matches.',
     'Only add-ons signed by Uwe Bruckhaus are offered and loaded.', 'Install', 'Update', 'Install {0}?', 'Update {0}?',

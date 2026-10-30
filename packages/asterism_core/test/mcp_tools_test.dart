@@ -71,7 +71,7 @@ void main() {
       write: (path, bytes) => written[path] = bytes,
     );
     expect(ok['status'], 'ok');
-    final path = '${home.path}/.cache/ai-agents-map/mcp-tools/fixture.json';
+    final path = '${home.path}/.cache/maprisma/mcp-tools/fixture.json';
     expect(jsonDecode(utf8.decode(written[path]!))['tools'], ok['tools']);
     final failed = await askAndKeep(
       'broken',

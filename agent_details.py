@@ -30,7 +30,7 @@ import desktop
 from i18n import _
 
 HOME = Path.home()
-USAGE_DIR = desktop.usage_dir() or HOME / ".local/state/ai-agents-map/no-usage"   # the desktop's usage records
+USAGE_DIR = desktop.usage_dir() or HOME / ".local/state/maprisma/no-usage"   # the desktop's usage records
 MAX_FILE_BYTES = 512 * 1024
 MAX_SCAN = 3000              # directory entries looked at for "last used"
 DATE_DEPTH = 2               # levels below those followed into the last-named subfolder (YYYY/MM/DD trees)

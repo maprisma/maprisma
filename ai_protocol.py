@@ -1,7 +1,7 @@
 """The AI help protocol: what each AI help run was asked, what came back and what it led to, so a user
 who knows the setup can look over what was done (Smart Check › Protocol).
 
-One entry per run, a JSON file of its own in ~/.local/state/ai-agents-map/ai-help/ (the folder only
+One entry per run, a JSON file of its own in ~/.local/state/maprisma/ai-help/ (the folder only
 the user can open, each file only the user can read): when, the title, the agent and its model, the
 options that closed it in, each look-up's prompt and answer (our words and the agent's, as sent and
 received), the steps and what each came to, the result (ok, failed, cancelled), the time and the
@@ -20,7 +20,7 @@ import re
 import tempfile
 from pathlib import Path
 
-FOLDER = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local/state") / "ai-agents-map/ai-help"
+FOLDER = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local/state") / "maprisma/ai-help"
 MAX_ENTRIES = 200
 MAX_TEXT = 64 * 1024             # a prompt or an answer
 MAX_TRANSCRIPT = 256 * 1024      # a task tab's terminal text

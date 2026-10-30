@@ -295,10 +295,10 @@ class DartInstallersParityTest(unittest.TestCase):
         answers, files, log = sides['dart']
         self.assertEqual(answers[0][1][0], 'done')
         self.assertEqual(answers[0][1][1]['version'], 'v2026.10.3')
-        self.assertEqual(files['.local/bin/mise'], ['link', '$HOME/.local/share/ai-agents-map/mise/current/bin/mise'])
+        self.assertEqual(files['.local/bin/mise'], ['link', '$HOME/.local/share/maprisma/mise/current/bin/mise'])
         self.assertEqual([a[1][0] for a in answers[14:18]], ['done'] * 4)      # mise, llama.cpp, KoboldCpp, Ollama
         self.assertEqual(answers[18], {'error': 'refused'})                      # a preview is used once
-        self.assertIn('.local/share/ai-agents-map/llamacpp/b9000-cpu/llama-server', files)
+        self.assertIn('.local/share/maprisma/llamacpp/b9000-cpu/llama-server', files)
         self.assertIn('--user enable llama-server.service', log)
         self.assertIn('--user restart llama-server.service', log)
 

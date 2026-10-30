@@ -750,7 +750,7 @@ Future<int> runProviderWatch(List<String> args) async {
     sockets: system.socketInodes,
     unload: system.unload,
     lmsBinary: system.lmsBinary,
-    state: p.join(home, '.local/state/ai-agents-map/provider-watch.json'),
+    state: p.join(home, '.local/state/maprisma/provider-watch.json'),
   );
   String stamp() {
     try {

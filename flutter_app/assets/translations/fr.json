@@ -463,7 +463,7 @@
   "Models, MCP servers and skills": "Modèles, serveurs MCP et compétences",
   "Startup and Refresh scan all targets.": "Le démarrage et Actualiser analysent toutes les cibles.",
   "Updates apply only while the map is visible.": "Les mises à jour ont lieu uniquement lorsque la carte est visible.",
-  "Your AI Agents Map settings could not be imported. Maprisma will use its current or default settings.": "Les paramètres d’AI Agents Map n’ont pas pu être importés. Maprisma utilisera ses paramètres actuels ou ceux par défaut.",
+  "Your Asterism settings could not be copied. Maprisma starts with its default settings.": "Vos réglages d’Asterism n’ont pas pu être copiés. Maprisma démarre avec ses réglages par défaut.",
   "New add-ons stay switched off until you enable them.": "Les nouveaux modules restent désactivés jusqu’à leur activation.",
   "Finish running agents before changing add-ons.": "Terminez les agents en cours avant de modifier les modules.",
   "Installed add-ons": "Modules installés",

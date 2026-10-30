@@ -93,7 +93,7 @@ class DartModelSlotsParityTest(unittest.TestCase):
             (units / 'llama-server.service').write_text(f'[Service]\nExecStart={script} --port 8080\n')
         else:
             (units / 'llama-server.service').write_text(
-                '# installed by AI Agents Map\n[Service]\nExecStart=%h/.local/bin/llama-server --port 8080 --models-max 2\n')
+                '# installed by Maprisma\n[Service]\nExecStart=%h/.local/bin/llama-server --port 8080 --models-max 2\n')
         (home / '.config/llama.cpp').mkdir(parents=True)
         (home / '.config/llama.cpp/server.env').write_text('LLAMA_ARG_HOST=127.0.0.1\n')
         if not own_script:

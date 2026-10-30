@@ -26,17 +26,16 @@ final class ServiceI18n {
         : systemLanguage();
   }
 
-  String _named(String text) => text.replaceAll('AI Agents Map', identity.name);
   String text(String key) {
     final value = (serviceTables[language] as Map?)?[key];
-    return _named(value is String ? value : key);
+    return value is String ? value : key;
   }
 
   String plural(String one, String other, int n) {
     final lang = language;
     final forms = (serviceTables[lang] as Map?)?['\x04$one'];
     if (forms is! List || forms.isEmpty || !forms.every((f) => f is String)) {
-      return _named(n == 1 ? one : other);
+      return n == 1 ? one : other;
     }
     var index = n == 1 ? 0 : forms.length - 1;
     if (lang == 'pl' && forms.length == 3) {
@@ -48,6 +47,6 @@ final class ServiceI18n {
     } else if (lang == 'fr' || lang == 'pt') {
       index = n <= 1 ? 0 : forms.length - 1;
     }
-    return _named(forms[index] as String);
+    return forms[index] as String;
   }
 }

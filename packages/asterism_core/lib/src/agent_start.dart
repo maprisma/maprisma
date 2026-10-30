@@ -12,7 +12,7 @@ const agentSessionExact = {
   'CLAUDECODE',
   'CLAUDE_PID',
   'CLAUDE_EFFORT',
-  'AI_AGENTS_MAP_NO_PROVIDERS',
+  'MAPRISMA_NO_PROVIDERS',
   'AI_AGENT',
   'CODEX_THREAD_ID',
   'CODEX_SANDBOX',
@@ -103,8 +103,8 @@ final class AgentStart {
     withUserPrograms(env);
     env['TERM'] = 'xterm-256color';
     env['COLORTERM'] = 'truecolor';
-    env.remove('AI_AGENTS_MAP_PAGE');
-    env.remove('AI_AGENTS_MAP_VIEW');
+    env.remove('MAPRISMA_PAGE');
+    env.remove('MAPRISMA_VIEW');
     final program = whichIn(command, env['PATH']);
     if (program == null) throw const FormatException('Program unavailable');
     final argv = [
@@ -117,8 +117,8 @@ final class AgentStart {
       final unset = [
         for (final name in identity.environment.keys)
           if (isAgentSessionVar(name) ||
-              name == 'AI_AGENTS_MAP_PAGE' ||
-              name == 'AI_AGENTS_MAP_VIEW') ...[
+              name == 'MAPRISMA_PAGE' ||
+              name == 'MAPRISMA_VIEW') ...[
             '-u',
             name,
           ],

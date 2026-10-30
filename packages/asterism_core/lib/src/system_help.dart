@@ -42,7 +42,7 @@ const _maxConfig = 4 * 1024 * 1024;
 ) {
   if (adapter == null || !adapter.facts.containsKey('closed')) {
     throw Refused(
-      "AI Agents Map does not know how to keep $command from changing things; nothing was started",
+      "Maprisma does not know how to keep $command from changing things; nothing was started",
     );
   }
   final c = adapter.table('closed');
@@ -152,7 +152,7 @@ List<String> guardTask(
   final (_, options, off, homeEnv) = _closed(adapter, command);
   if (options.isEmpty) {
     throw Refused(
-      'AI Agents Map does not know how to make $command ask before each change; nothing was started',
+      'Maprisma does not know how to make $command ask before each change; nothing was started',
     );
   }
   return _insert(argv, [
@@ -402,7 +402,7 @@ const levels = ['problem', 'tip', 'good'];
 
 const smartPrompt =
     '''You are checking the AI setup of a Linux PC (Omarchy / Arch Linux). Here is what is installed
-and how it is connected, as the app AI Agents Map sees it:
+and how it is connected, as the app Maprisma sees it:
 
 {snapshot}
 
@@ -580,7 +580,7 @@ Future<Map<String, dynamic>> analyzeMap(
       '$x',
   ];
   final output = '${adapter.table('research')['output'] ?? 'text'}';
-  final work = '$home/.cache/ai-agents-map/research';
+  final work = '$home/.cache/maprisma/research';
   if (!Directory(work).existsSync()) {
     Directory(work).createSync(recursive: true);
     Posix().chmodPath(work, 0x1c0);
@@ -601,7 +601,7 @@ Future<Map<String, dynamic>> analyzeMap(
     env,
     home,
   );
-  final runEnv = {...env, 'AI_AGENTS_MAP_NO_PROVIDERS': '1'};
+  final runEnv = {...env, 'MAPRISMA_NO_PROVIDERS': '1'};
   final logPath = runLogPath(env, home);
   ({int input, int cached, int output, double? cost})? usage;
   var ok = false, result = '';

@@ -168,8 +168,8 @@ void main() {
                   'size': 52428800,
                 },
               ],
-              'folder': '/home/u/.local/share/ai-agents-map/llamacpp',
-              'models': '/home/u/.local/share/ai-agents-map/llamacpp/models',
+              'folder': '/home/u/.local/share/maprisma/llamacpp',
+              'models': '/home/u/.local/share/maprisma/llamacpp/models',
               'gpu': {'vendor': 'amd', 'name': 'AMD · card1'},
               'build': 'vulkan',
               'builds': [

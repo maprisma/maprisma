@@ -32,7 +32,7 @@ import desktop
 
 HOME = Path.home()
 STATE_FILE = desktop.config_dir() / "skill-updates.json"
-WORK_DIR = HOME / ".cache/ai-agents-map/skill-update"
+WORK_DIR = HOME / ".cache/maprisma/skill-update"
 MAX_SKILL = 256 * 1024
 TIMEOUT = 600
 _NAME = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
@@ -208,7 +208,7 @@ def _read_answer(path: Path) -> str:
 
 def _bounded(argv, **kwargs):
     import ai_core
-    kwargs.setdefault("env", {**os.environ, "AI_AGENTS_MAP_NO_PROVIDERS": "1"})
+    kwargs.setdefault("env", {**os.environ, "MAPRISMA_NO_PROVIDERS": "1"})
     return ai_core.read_bounded_output(argv, **kwargs)
 
 

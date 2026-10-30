@@ -88,7 +88,7 @@ def sign_in_expired(record: dict, access=None, root: Path | None = None, environ
 
 # --- problems the last Start ran into (kept until a start works) ------------------------------
 
-ISSUES = HOME / ".local/state/ai-agents-map/start-issues.json"
+ISSUES = HOME / ".local/state/maprisma/start-issues.json"
 # kind -> (what happened, what to do, the command that fixes it)
 ISSUE_KINDS = ("vte4", "terminal")
 
@@ -626,7 +626,7 @@ def agent_checks(agent, info, record: dict, inventory, hints: dict, logged_in: b
                               "itself (OpenClaw: openclaw onboard).")))
     else:
         checks.append(Check("info", _("Sign-in unknown"),
-                            _("AI Agents Map does not know how this agent signs in.")))
+                            _("Maprisma does not know how this agent signs in.")))
     if record and str(record.get("usageStatusText") or "") == LIMITS_PAUSED and not uses_local:
         checks.append(Check("info", _("Limits paused"),
                             _("{0} renews its sign-in itself the next time it runs; then its limits come back. "

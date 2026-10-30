@@ -1604,9 +1604,9 @@ final class CoreService {
     sessionEnv
       ..['TERM'] = 'xterm-256color'
       ..['COLORTERM'] = 'truecolor'
-      ..['AI_AGENTS_MAP_NO_PROVIDERS'] = '1'
-      ..remove('AI_AGENTS_MAP_PAGE')
-      ..remove('AI_AGENTS_MAP_VIEW');
+      ..['MAPRISMA_NO_PROVIDERS'] = '1'
+      ..remove('MAPRISMA_PAGE')
+      ..remove('MAPRISMA_VIEW');
     final session = starter.sessions.start(command, argv, home, sessionEnv);
     try {
       recordRun(
@@ -2722,7 +2722,7 @@ final class CoreService {
   /// agent_status.load_issues: the problem the last Start ran into.
   Map? _startIssue(String command) {
     final data = reads.files.json(
-      '~/.local/state/ai-agents-map/start-issues.json',
+      '~/.local/state/maprisma/start-issues.json',
       limit: 64 * 1024,
     );
     final issue =

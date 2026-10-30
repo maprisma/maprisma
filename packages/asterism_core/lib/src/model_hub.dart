@@ -147,7 +147,7 @@ Future<List<int>> netFetch(
     '--max-filesize',
     '$maxBytes',
     '--user-agent',
-    'ai-agents-map',
+    'maprisma',
     if (redirects > 0) ...[
       '--location',
       '--max-redirs',

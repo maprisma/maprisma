@@ -5,7 +5,7 @@ one per local LLM (llm-<key>) and one for the online providers (providers-online
 An agent add-on is its adapter as data: adapters/<command>.toml as agent.toml, plus
 adapters/<command>.py as hooks.py for the few agents facts cannot describe. A local LLM's or the
 online providers' addon.py is the provider module itself (provider_<key>.py, provider_online.py),
-unchanged, plus a register(api) that adds it. So the adapters keep one source: the AI Agents Map
+unchanged, plus a register(api) that adds it. So the adapters keep one source: the Maprisma
 plugin has the same files built in, Asterism gets them as signed add-ons.
 
     tools/build-adapter-addons.py <folder>      e.g. ../asterism-addons (then tools/release-adapters.sh)

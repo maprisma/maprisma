@@ -293,7 +293,7 @@ def _built_in() -> tuple:
 
 
 def built_in_adapters() -> tuple:
-    """The app's own adapters (the AI Agents Map plugin always uses these): adapters/<command>.toml
+    """The app's own adapters (the Maprisma plugin always uses these): adapters/<command>.toml
     where an agent is described as data (adapter_data), else its harness_<name>.py module."""
     if not _BUILT_IN:                      # read once, as an imported module would be
         import importlib
@@ -311,7 +311,7 @@ _BUILT_IN: list = []
 
 def hide_built_in(commands) -> None:
     """Asterism: these agents come as add-ons (installed, signed), so only the add-on, when it is
-    switched on, shows them; the AI Agents Map plugin never hides any."""
+    switched on, shows them; the Maprisma plugin never hides any."""
     _HIDDEN.clear()
     _HIDDEN.update(commands)
     _forget()

@@ -170,7 +170,7 @@ final class SecurityReports {
       return {
         'value': value,
         'label': tr('Custom: {0}').replaceAll('{0}', boundedText(label, 80)),
-        'explain': tr('Set by hand; AI Agents Map leaves it as it is.'),
+        'explain': tr('Set by hand; Maprisma leaves it as it is.'),
         'risk': 1,
       };
     }
@@ -354,7 +354,7 @@ final class SecurityReports {
     final note = known
         ? tr(spec['note'])
         : tr(
-            'AI Agents Map does not know this agent\'s security settings yet. Look in its own settings or documentation for “permissions”, “approval” and “sandbox”.',
+            'Maprisma does not know this agent\'s security settings yet. Look in its own settings or documentation for “permissions”, “approval” and “sandbox”.',
           );
     return {
       'agent': adapter.command,

@@ -220,8 +220,8 @@ class DeclaredInstallTest(unittest.TestCase):
         inst = ic.Declared("acme", "Acme LLM", self.spec(), True)
         unit = inst.unit_text(Path("/mnt/ai/Models"))
         self.assertIn("--host 127.0.0.1 --port 8090 --models /mnt/ai/Models", unit)
-        self.assertIn("Description=Acme LLM (installed by AI Agents Map)", unit)
-        self.assertEqual(inst.service, "acme-ai-agents-map")
+        self.assertIn("Description=Acme LLM (installed by Maprisma)", unit)
+        self.assertEqual(inst.service, "acme-maprisma")
         self.assertIn("LLM_MODELS=/mnt/ai/Models", inst.env_text(Path("/mnt/ai/Models"), None))
 
 

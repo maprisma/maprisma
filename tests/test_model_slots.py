@@ -150,7 +150,7 @@ class LlamaCppSlotsTest(unittest.TestCase):
         self.engine = provider_llamacpp.Engine()
 
     def test_the_apps_own_service_gets_the_number_in_its_env_file(self):
-        self.unit.write_text("[Unit]\nDescription=llama.cpp model router (installed by AI Agents Map)\n[Service]\n"
+        self.unit.write_text("[Unit]\nDescription=llama.cpp model router (installed by Maprisma)\n[Service]\n"
                              "ExecStart=\"/x/llama-server\" --models-preset \"/p\" --models-max 1 --gpu-layers all\n")
         self.assertEqual((self.engine.slots(self.rt), self.engine.slots_fixed_by(self.rt)), (1, ""))
         changes = {c.path: c.new for c in self.engine.slot_changes(self.rt, 2)}

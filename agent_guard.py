@@ -28,7 +28,7 @@ def _closed(command: str) -> tuple:
     harness = harnesses.get(command)
     closed = harness.closed if harness is not None else ()
     if not closed:
-        raise Refused(f"AI Agents Map does not know how to keep {command} from changing things; "
+        raise Refused(f"Maprisma does not know how to keep {command} from changing things; "
                       f"nothing was started")
     return closed
 
@@ -101,6 +101,6 @@ def task(command: str, argv: list[str], names=None) -> list[str]:
     Refused, also when its adapter gives no task options)."""
     _own, options, off, home_env = _closed(command)
     if not options:
-        raise Refused(f"AI Agents Map does not know how to make {command} ask before each change; "
+        raise Refused(f"Maprisma does not know how to make {command} ask before each change; "
                       f"nothing was started")
     return _insert(argv, list(options) + mcp_off(command, off, home_env, names))

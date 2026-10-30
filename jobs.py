@@ -10,7 +10,7 @@ Interruptions:
   (curl -C - continues the .part file, Ollama resumes its own pulls, an install
   skips parts it has already downloaded and checked);
 - a job with a `spec` (plain JSON: what to download or install, never credentials)
-  is kept in STATE_FILE while it runs. If AI Agents Map ends before the job does
+  is kept in STATE_FILE while it runs. If Maprisma ends before the job does
   (closed, crashed, logged out), the next start lists it as interrupted, to Continue
   or Discard. A checksum mismatch or any other error is not retried.
 """
@@ -24,7 +24,7 @@ import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 
-STATE_FILE = Path.home() / ".local/state/ai-agents-map/jobs.json"
+STATE_FILE = Path.home() / ".local/state/maprisma/jobs.json"
 RETRY_DELAYS = (5, 15, 30, 60, 120)
 MAX_JOBS = 32
 KINDS = ("model", "pull", "install")

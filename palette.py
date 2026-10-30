@@ -1,4 +1,4 @@
-"""AI Agents Map - Theme colors from the desktop, or Adwaita (Settings › Look; ai_core.look_colors())."""
+"""Maprisma - Theme colors from the desktop, or Adwaita (Settings › Look; ai_core.look_colors())."""
 
 
 DEFAULT_COLORS = {
@@ -54,7 +54,7 @@ def collab_color(colors: dict) -> str:
 
 
 class ThemePalette:
-    """Expose the desktop theme's colors to the AI Agents Map."""
+    """Expose the desktop theme's colors to the Maprisma."""
 
     def __init__(self):
         self.colors = {**DEFAULT_COLORS, "outside": outside_color(DEFAULT_COLORS)}

@@ -33,7 +33,7 @@ import harnesses
 import providers
 
 HOME = Path.home()
-BACKUP_ROOT = HOME / ".local/state/ai-agents-map/backups"
+BACKUP_ROOT = HOME / ".local/state/maprisma/backups"
 
 
 def _rebuild():

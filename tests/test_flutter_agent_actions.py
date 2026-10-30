@@ -117,7 +117,7 @@ class AgentActionsTest(unittest.TestCase):
         self.assertEqual(argv[-1],first_agent.TEST_PROMPT)
         self.assertNotEqual(cwd,str(Path.home()))
         self.assertTrue(Path(cwd).is_dir())
-        self.assertEqual(env['AI_AGENTS_MAP_NO_PROVIDERS'],'1')
+        self.assertEqual(env['MAPRISMA_NO_PROVIDERS'],'1')
         self.actions.observe('owned',{'text':'Ready to help.','exit_code':None,'ended':False})
         self.assertFalse(self.path.exists())
         self.actions.observe('owned',{'text':'','exit_code':0,'ended':True})

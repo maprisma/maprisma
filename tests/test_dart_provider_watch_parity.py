@@ -177,7 +177,7 @@ class DartProviderWatchParityTest(unittest.TestCase):
                     watcher.wait(timeout=30)
                     agent.kill()
                     agent.wait()
-                state = json.loads((home / '.local/state/ai-agents-map/provider-watch.json').read_text())
+                state = json.loads((home / '.local/state/maprisma/provider-watch.json').read_text())
                 logs[side] = (log.read_text().splitlines(), state)
         self.assertEqual(logs['python'], logs['dart'])
         self.assertEqual(logs['dart'][0], ['--user start llama-server.service', '--user stop llama-server.service',

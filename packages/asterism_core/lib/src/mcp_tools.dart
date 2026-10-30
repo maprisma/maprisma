@@ -15,14 +15,14 @@ import 'py_values.dart';
 /// - streamable HTTP: JSON-RPC posts with the entry's headers (plain JSON or
 ///   an event-stream answer), through curl with the headers on its stdin.
 /// Legacy SSE servers are not asked. Answers are kept in
-/// ~/.cache/ai-agents-map/mcp-tools/NAME.json, as the reference keeps them.
+/// ~/.cache/maprisma/mcp-tools/NAME.json, as the reference keeps them.
 
 const toolsTimeout = Duration(seconds: 90); // npx/uvx may download it first
 const maxLine = 4 * 1024 * 1024;
 const maxTools = 300;
 const maxCursor = 1024;
 const mcpProtocol = '2025-06-18';
-const _client = {'name': 'ai-agents-map', 'version': '1'};
+const _client = {'name': 'maprisma', 'version': '1'};
 final _nameRe = RegExp(r'^[A-Za-z0-9_.-]{1,64}$');
 final _space = RegExp(
   '[\\t\\n\\x0b\\x0c\\r\\x1c-\\x1f \\x85\\xa0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000]+',
@@ -256,7 +256,7 @@ Future<List<int>> postUserUrl(
       '--max-filesize',
       '$maxBytes',
       '--user-agent',
-      'ai-agents-map',
+      'maprisma',
       '--max-redirs',
       '0',
       '--include',
@@ -432,7 +432,7 @@ Future<Map<String, dynamic>> askTools(
 
 String toolsCacheFile(String home, String name) {
   if (!_nameRe.hasMatch(name)) throw FormatException(name);
-  return '$home/.cache/ai-agents-map/mcp-tools/$name.json';
+  return '$home/.cache/maprisma/mcp-tools/$name.json';
 }
 
 /// mcp_tools.cached.

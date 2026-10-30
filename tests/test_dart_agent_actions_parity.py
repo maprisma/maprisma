@@ -22,7 +22,7 @@ except (OSError, ValueError, RuntimeError):
 from test_dart_agent_start_parity import PYTHON_SERVICE, Side  # noqa: E402
 
 CLAUDE = '#!/bin/sh\nif [ "$1" = --version ]; then echo "2.1.0 (Claude Code)"; exit 0; fi\n' \
-         'echo "claude $* in $(pwd) providers=$AI_AGENTS_MAP_NO_PROVIDERS"\n'
+         'echo "claude $* in $(pwd) providers=$MAPRISMA_NO_PROVIDERS"\n'
 TERMINAL = '#!/bin/sh\nfor a in "$@"; do printf "[%s]" "$a" >> "$HOME/term.log"; done\necho >> "$HOME/term.log"\n'
 
 

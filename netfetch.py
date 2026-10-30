@@ -1,4 +1,4 @@
-"""Every web request of AI Agents Map goes through here: curl, run through
+"""Every web request of Maprisma goes through here: curl, run through
 ai_core.read_bounded_output, so each answer is capped in size and in time
 (one deadline for connect, headers and body).
 
@@ -62,7 +62,7 @@ def fetch(url: str, max_bytes: int = 2 * 1024 * 1024, timeout: float = 20, redir
     argv = ["curl", "--config", "-", "--silent", "--show-error"] + ([] if errors else ["--fail"]) + [
             "--proto", "=https" if not (local or user_url) else "=http,https",
             "--max-time", str(int(timeout)), "--max-filesize", str(max_bytes),
-            "--user-agent", "ai-agents-map"]
+            "--user-agent", "maprisma"]
     if local or user_url:
         argv += ["--max-redirs", "0"] + (["--noproxy", "*"] if local else [])
     elif redirects > 0:

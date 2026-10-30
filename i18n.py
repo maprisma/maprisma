@@ -71,21 +71,8 @@ def language_name(code):
     return dict(LANGUAGES).get(code, code)
 
 
-_RENAME = None   # (old name, new name): the same app under another name (set_name)
-
-
-def set_name(old, new):
-    """The same app under another name (AI Agents Map → Asterism): every text says the new one."""
-    global _RENAME
-    _RENAME = (old, new) if old and new and old != new else None
-
-
-def _named(text):
-    return text.replace(*_RENAME) if _RENAME else text
-
-
 def _(text):
-    return _named(STRINGS.get(current(), {}).get(text, text))
+    return STRINGS.get(current(), {}).get(text, text)
 
 
 def N_(text):
@@ -101,7 +88,7 @@ def ngettext(one, other, n):
     """Plural: tables store a list of forms under PLURAL_PREFIX + the English
     `one` text ([one, other], or [one, few, many] for Polish)."""
     lang = current()
-    return _named(pick_plural(lang, STRINGS.get(lang, {}).get(PLURAL_PREFIX + one), n, one, other))
+    return pick_plural(lang, STRINGS.get(lang, {}).get(PLURAL_PREFIX + one), n, one, other)
 
 
 def pick_plural(lang: str, forms, n: int, one: str, other: str) -> str:

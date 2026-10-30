@@ -60,7 +60,7 @@ class PCTest(unittest.TestCase):
         args = sessions.start.call_args.args
         self.assertEqual(args[1][1], '--ask-before-change')
         self.assertEqual(args[1][-1], preview['prompt'])
-        self.assertEqual(args[3]['AI_AGENTS_MAP_NO_PROVIDERS'], '1')
+        self.assertEqual(args[3]['MAPRISMA_NO_PROVIDERS'], '1')
         with self.assertRaises(ValueError):
             self.system_map.apply(preview['preview'], sessions)
 

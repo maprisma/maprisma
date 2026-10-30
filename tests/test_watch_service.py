@@ -38,13 +38,7 @@ class WatchServiceTest(unittest.TestCase):
 
 
     def test_maprisma_has_its_own_unit(self):
-        """The plugin and a standalone Maprisma on one machine never share the watcher unit."""
-        from unittest import mock
-        import identity
-        with mock.patch.object(identity, "is_plugin", return_value=True):
-            self.assertEqual(provider_watch._unit_name(), "ai-agents-map-providers.service")
-        with mock.patch.object(identity, "is_plugin", return_value=False):
-            self.assertEqual(provider_watch._unit_name(), "maprisma-providers.service")
+        self.assertEqual(provider_watch._unit_name(), "maprisma-providers.service")
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-"""AI Agents Map - settings and small helpers shared by the popup.
+"""Maprisma - settings and small helpers shared by the popup.
 
 Settings live in desktop.config_dir()/settings.json (identity.py selects the edition's folder; private, written
 atomically, read with a size cap). Nothing here starts a network request.
@@ -27,12 +27,12 @@ VIEWS = ("main", "setup")    # the cards with the map beside them, and Setup; th
 
 
 # Variables an agent session sets for what runs inside it (Claude Code: CLAUDECODE, CLAUDE_CODE_*
-# such as CLAUDE_CODE_CHILD_SESSION, CLAUDE_PID, CLAUDE_EFFORT). When AI Agents Map was started from
+# such as CLAUDE_CODE_CHILD_SESSION, CLAUDE_PID, CLAUDE_EFFORT). When Maprisma was started from
 # inside such a session (a restart from an agent's terminal), agents started here would inherit them
 # and believe they run inside that session: Claude Code then stops saving its transcripts. AI_AGENT
 # (vendor-neutral) and the other agents' markers make tools such as mise think an agent runs them:
 # an install tab then gets a new progress line every few seconds instead of one that redraws.
-AGENT_SESSION_EXACT = {"CLAUDECODE", "CLAUDE_PID", "CLAUDE_EFFORT", "AI_AGENTS_MAP_NO_PROVIDERS", "AI_AGENT",
+AGENT_SESSION_EXACT = {"CLAUDECODE", "CLAUDE_PID", "CLAUDE_EFFORT", "MAPRISMA_NO_PROVIDERS", "AI_AGENT",
                        "CODEX_THREAD_ID", "CODEX_SANDBOX", "CODEX_CI", "OPENCODE", "OPENCODE_PID",
                        "OPENCODE_CLIENT", "OPENCODE_SERVER", "PI_CODING_AGENT", "GEMINI_CLI", "QWEN_CODE",
                        "CRUSH", "GOOSE_TERMINAL", "AMP_CURRENT_THREAD_ID", "COPILOT_CLI", "CURSOR_AGENT"}

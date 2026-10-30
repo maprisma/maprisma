@@ -136,7 +136,7 @@ List<Map<String, String>> runtimeRisks(
         'Any program you run, and other users of this PC, can use it while it runs.',
       ),
       'step': tr(
-        'Stop it when no agent needs it (AI Agents Map does that for connected agents).',
+        'Stop it when no agent needs it (Maprisma does that for connected agents).',
       ),
     },
     {

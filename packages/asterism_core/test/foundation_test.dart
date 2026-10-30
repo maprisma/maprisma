@@ -318,7 +318,7 @@ void main() {
   test('i18n uses environment precedence and refreshes saved language', () {
     expect(core.i18n.language, 'de');
     expect(core.i18n.text('Unknown text'), 'Unknown text');
-    expect(core.i18n.text('AI Agents Map'), 'Maprisma');
+    expect(core.i18n.text('Maprisma'), 'Maprisma');
     expect(core.i18n.plural('one', 'many', 2), 'many');
     core.settings.update({
       'values': {'language': 'fr'},

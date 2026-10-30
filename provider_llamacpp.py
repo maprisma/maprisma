@@ -155,7 +155,7 @@ class Engine(llm_engine.LlamaRouter):
     def _ours(self, rt) -> bool:
         unit = self._unit(rt)
         try:
-            return unit is not None and "installed by AI Agents Map" in ai_core.read_head(unit, 4000).decode("utf-8", "replace")
+            return unit is not None and any(mark in ai_core.read_head(unit, 4000).decode("utf-8", "replace") for mark in ("installed by Maprisma", "installed by AI Agents Map"))
         except OSError:
             return False
 

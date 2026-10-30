@@ -8,7 +8,7 @@ Each is checked the way it was installed, so Update installs what was found:
   ~/.claude/settings.json, "latest" or "stable") from npm's dist-tags, as its own
   "Update available!" message; Update runs `claude update` (its own installer)
   or `mise upgrade claude`.
-- installed by AI Agents Map (install_ctl: local LLMs, DeepSeek Harness): the
+- installed by Maprisma (install_ctl: local LLMs, DeepSeek Harness): the
   installer's latest release; Update opens the Update page (SHA-256 checked there).
 - system packages are left to the system's own updates.
 
@@ -30,7 +30,7 @@ import harnesses
 import netfetch
 
 TAGS_URL = "https://registry.npmjs.org/-/package/@anthropic-ai/claude-code/dist-tags"
-CACHE = Path.home() / ".cache/ai-agents-map/updates.json"
+CACHE = Path.home() / ".cache/maprisma/updates.json"
 CLAUDE_SETTINGS = Path.home() / ".claude/settings.json"
 CHECK_EVERY = 6 * 3600
 CHANNELS = ("latest", "stable")
@@ -48,7 +48,7 @@ class Update:
     current: str
     available: str
     command: list = field(default_factory=list)   # run in a terminal (mise, claude update)
-    page: bool = False         # True: AI Agents Map's own Update page
+    page: bool = False         # True: Maprisma's own Update page
 
 
 def parse(version: str) -> tuple | None:
@@ -150,7 +150,7 @@ def check(agent_list, runtimes, now: float | None = None, cache: Path = CACHE, s
             latest = (sources.get(h.command) or h.latest)(channel())
             if latest and newer(latest, agent.version):
                 found.append(Update("agent", h.command, agent.name, agent.version, latest, command=command))
-    # ours: local LLMs and agents AI Agents Map installed
+    # ours: local LLMs and agents Maprisma installed
     ours = [(k, a.name, "agent") for k, a in installed.items() if k in install_ctl.AGENT_INSTALLERS] + \
            [(rt.key, rt.name, "runtime") for rt in runtimes if rt.installed]
     gpu = None

@@ -228,12 +228,6 @@ class FlutterBackendTest(unittest.TestCase):
         self.assertFalse(self.settings.exists())
 
 
-    def test_initialization_survives_failed_settings_import(self):
-        with mock.patch('config_migration.migrate', side_effect=ValueError('fixture import failed')), \
-             mock.patch('flutter_addons.AdapterRegistry'):
-            self.service.initialize()
-        self.assertEqual(self.service.snapshot()['migration_error'], 'fixture import failed')
-
     def test_slow_map_scan_returns_cached_result_without_blocking_service(self):
         self.service.tasks.items['scan'] = mock.Mock(state='done')
         with mock.patch.object(self.service.tasks, 'start_snapshot', return_value={'task': 'scan'}), \

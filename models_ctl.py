@@ -634,7 +634,7 @@ def ollama_create(file: Path, address: str) -> str:
     binary = shutil.which("ollama")
     if binary is None:
         raise RuntimeError("ollama is not installed")
-    with tempfile.TemporaryDirectory(prefix="ai-agents-map-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="maprisma-") as tmp:
         modelfile = Path(tmp) / "Modelfile"
         modelfile.write_text(f"FROM {json.dumps(str(file))}\n", encoding="utf-8")
         out, ok = ai_core.read_bounded_output([binary, "create", name, "-f", str(modelfile)], max_bytes=64 * 1024,

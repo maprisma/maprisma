@@ -110,7 +110,10 @@ final class MapGraph {
     while (parent != p.dirname(parent) && parent != '.') {
       if (p.basename(parent) == 'current') {
         final root = p.dirname(parent);
-        return files.exists('$root/.ai-agents-map') ? root : null;
+        return files.exists('$root/.maprisma') ||
+                files.exists('$root/.ai-agents-map')
+            ? root
+            : null;
       }
       parent = p.dirname(parent);
     }

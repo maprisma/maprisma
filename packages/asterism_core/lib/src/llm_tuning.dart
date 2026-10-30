@@ -621,7 +621,7 @@ Future<Map<String, dynamic>> askTuning(
   }
   final output =
       advised?.$2 ?? '${adapter.table('research')['output'] ?? 'text'}';
-  final work = '$home/.cache/ai-agents-map/research';
+  final work = '$home/.cache/maprisma/research';
   if (!Directory(work).existsSync()) {
     Directory(work).createSync(recursive: true);
     Posix().chmodPath(work, 0x1c0);
@@ -648,7 +648,7 @@ Future<Map<String, dynamic>> askTuning(
   try {
     final (out, done, cancelled) = await runLookUp(argv, stdin, {
       ...env,
-      'AI_AGENTS_MAP_NO_PROVIDERS': '1',
+      'MAPRISMA_NO_PROVIDERS': '1',
     }, work);
     if (cancelled) throw StateError('Stopped');
     final text = utf8.decode(out, allowMalformed: true);

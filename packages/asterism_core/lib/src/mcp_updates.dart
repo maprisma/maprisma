@@ -402,7 +402,7 @@ Future<List<McpFound>> checkNow(
     ];
     if (research.isEmpty) throw StateError('no look-up');
     final output = '${adapter.table('research')['output'] ?? 'text'}';
-    final work = '$home/.cache/ai-agents-map/research';
+    final work = '$home/.cache/maprisma/research';
     if (!Directory(work).existsSync()) {
       Directory(work).createSync(recursive: true);
       posix.chmodPath(work, 0x1c0);
@@ -420,7 +420,7 @@ Future<List<McpFound>> checkNow(
       env,
       home,
     );
-    final runEnv = {...env, 'AI_AGENTS_MAP_NO_PROVIDERS': '1'};
+    final runEnv = {...env, 'MAPRISMA_NO_PROVIDERS': '1'};
     ({int input, int cached, int output, double? cost})? usage;
     var ok = false, result = '';
     List<McpFound> found;

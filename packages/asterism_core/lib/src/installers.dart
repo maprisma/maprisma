@@ -16,11 +16,15 @@ import 'tar_check.dart';
 /// install_ctl: first installs of local LLMs and tools into a folder of their
 /// own, from registered releases whose checksums the release lists. Layout:
 /// `<folder>/<version>/…`, `<folder>/current -> <version>`, the marker
-/// `.ai-agents-map`, `~/.local/bin/<command>`, a settings file and a user
+/// `.maprisma`, `~/.local/bin/<command>`, a settings file and a user
 /// service. Nothing of a release runs while it is installed (Jan's AppImage
 /// unpacks itself closed in by bubblewrap).
 
-const marker = '.ai-agents-map';
+const marker = '.maprisma';
+
+/// The marker the GTK app (AI Agents Map) wrote: its installs are still
+/// recognised and updated, the marker is never written again.
+const legacyMarker = '.ai-agents-map';
 const maxUnpacked = 20 * 1024 * 1024 * 1024;
 final nameRe = RegExp(r'^[A-Za-z0-9._-]{1,128}$');
 final _hex = RegExp(r'^([0-9a-f]{64}|[0-9a-f]{128})$');
@@ -415,7 +419,7 @@ abstract class Installer {
   List<(String, String)> get builds => const [];
 
   String get home => host.home;
-  String get defaultFolder => '$home/.local/share/ai-agents-map/$key';
+  String get defaultFolder => '$home/.local/share/maprisma/$key';
   String defaultBuild(Gpu gpu) => builds.isEmpty ? '' : builds.first.$1;
   Future<Release> latest(Gpu gpu, String build);
   Future<void> unpack(String archive, String folder) =>
@@ -435,7 +439,9 @@ abstract class Installer {
       target = parent;
       if (p.basename(target) == 'current') {
         final folder = p.dirname(target);
-        return _exists('$folder/$marker') ? folder : null;
+        return _exists('$folder/$marker') || _exists('$folder/$legacyMarker')
+            ? folder
+            : null;
       }
     }
   }
@@ -453,8 +459,10 @@ abstract class Installer {
     }
   }
 
-  Map? readMarker(String folder) {
-    final path = '$folder/$marker';
+  Map? readMarker(String folder) =>
+      _readMarker('$folder/$marker') ?? _readMarker('$folder/$legacyMarker');
+
+  Map? _readMarker(String path) {
     try {
       if (_isLink(path) ||
           !FileSystemEntity.isFileSync(path) ||
@@ -480,7 +488,7 @@ abstract class Installer {
     }
     var mark = readMarker(folder);
     if (mark == null) {
-      if (_lexists('$folder/$marker')) {
+      if (_lexists('$folder/$marker') || _lexists('$folder/$legacyMarker')) {
         throw StateError(
           '$folder belongs to another install; choose an empty folder',
         );
@@ -553,7 +561,7 @@ abstract class Installer {
         versions(folder).contains(base);
     if (p.dirname(path) != folder || !ours) {
       throw StateError(
-        '$path was not put there by AI Agents Map; nothing was replaced',
+        '$path was not put there by Maprisma; nothing was replaced',
       );
     }
     Directory(path).deleteSync(recursive: true);
@@ -759,7 +767,7 @@ final class OllamaInstaller extends Installer {
 
   @override
   String envText(String? models, Gpu gpu) => [
-    '# Written by AI Agents Map. Change the model folder there (right-click Ollama).',
+    '# Written by Maprisma. Change the model folder there (right-click Ollama).',
     'OLLAMA_HOST=$address',
     'OLLAMA_MODELS=${models ?? 'None'}',
     'OLLAMA_MAX_LOADED_MODELS=1',
@@ -776,7 +784,7 @@ final class OllamaInstaller extends Installer {
   @override
   String unitText(String? models) =>
       '''[Unit]
-Description=Ollama (installed by AI Agents Map)
+Description=Ollama (installed by Maprisma)
 After=network.target
 
 [Service]
@@ -874,7 +882,7 @@ final class LlamaCppInstaller extends Installer {
   String envText(String? models, Gpu gpu) {
     final at = address.lastIndexOf(':');
     return [
-      '# Written by AI Agents Map. Change the model folder there (right-click llama.cpp).',
+      '# Written by Maprisma. Change the model folder there (right-click llama.cpp).',
       'LLAMA_ARG_MODELS_DIR=${models ?? 'None'}',
       'LLAMA_ARG_HOST=${address.substring(0, at)}',
       'LLAMA_ARG_PORT=${address.substring(at + 1)}',
@@ -892,7 +900,7 @@ final class LlamaCppInstaller extends Installer {
   @override
   String unitText(String? models) =>
       '''[Unit]
-Description=llama.cpp model router (installed by AI Agents Map)
+Description=llama.cpp model router (installed by Maprisma)
 After=network.target
 
 [Service]
@@ -994,7 +1002,7 @@ final class KoboldCppInstaller extends Installer {
     final tail = currentVersion().split('-').last;
     if (assetNames.containsKey(tail)) build = tail;
     return [
-      '# Written by AI Agents Map. Change the model folder there (right-click KoboldCpp).',
+      '# Written by Maprisma. Change the model folder there (right-click KoboldCpp).',
       'KOBOLDCPP_MODELS=${models ?? 'None'}',
       'KOBOLDCPP_BUILD=$build',
       if (gpu.vendor == 'nvidia' && gpu.index != null)
@@ -1012,7 +1020,7 @@ final class KoboldCppInstaller extends Installer {
       'cpu': '--usecpu',
     }[buildOf()];
     return '''[Unit]
-Description=KoboldCpp model router (installed by AI Agents Map)
+Description=KoboldCpp model router (installed by Maprisma)
 After=network.target
 
 [Service]
@@ -1178,7 +1186,7 @@ final class JanInstaller extends Installer {
   String get typeName => 'install_ctl.Jan';
   static const workerRel = 'squashfs-root/usr/lib/Jan/resources/bin';
   String get desktopFile =>
-      '$home/.local/share/applications/jan-ai-agents-map.desktop';
+      '$home/.local/share/applications/jan-maprisma.desktop';
   String get janRoot => '$home/.local/share/Jan';
 
   /// inventory.jan_data_folder.
@@ -1323,7 +1331,7 @@ final class JanInstaller extends Installer {
     final bin = '${installedFolder() ?? defaultFolder}/current/$workerRel';
     final preset = '${dataFolder()}/llamacpp/router.preset.ini';
     return '''[Unit]
-Description=Jan's engine for agents (installed by AI Agents Map)
+Description=Jan's engine for agents (installed by Maprisma)
 After=network.target
 
 [Service]
@@ -1361,7 +1369,7 @@ WantedBy=default.target
     host.write(desktopFile, '''[Desktop Entry]
 Type=Application
 Name=Jan
-Comment=Chat with local LLMs (installed by AI Agents Map)
+Comment=Chat with local LLMs (installed by Maprisma)
 Exec=${host.binDir}/$command %U
 Icon=${icons.firstOrNull ?? 'jan'}
 Categories=Development;

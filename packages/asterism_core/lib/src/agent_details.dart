@@ -474,7 +474,7 @@ final class DetailReaders {
     if (!RegExp(r'^[a-z0-9-]{1,64}$').hasMatch(command)) return {};
     final path = desktop.name == 'omarchy'
         ? '${files.identity.root('XDG_STATE_HOME', '.local/state')}/omarchy/agents/usage/$command.json'
-        : '~/.local/state/ai-agents-map/no-usage/$command.json';
+        : '~/.local/state/maprisma/no-usage/$command.json';
     return Map<String, dynamic>.from(files.json(path));
   }
 

@@ -69,7 +69,7 @@ class Setting:
         if found is None and self.current is None:
             found = next((c for c in self.choices if c.value is None), None)
         return found or Choice(value, _("Custom: {0}").format(_short(value)),
-                               _("Set by hand; AI Agents Map leaves it as it is."), 1)
+                               _("Set by hand; Maprisma leaves it as it is."), 1)
 
 
 @dataclass
@@ -237,7 +237,7 @@ def report_for(agent: str, mcp_servers: int = 0) -> Report:
     if reader is not None:
         reader(report)
     else:
-        report.note = _("AI Agents Map does not know this agent's security settings yet. Look in its own "
+        report.note = _("Maprisma does not know this agent's security settings yet. Look in its own "
                         "settings or documentation for “permissions”, “approval” and "
                         "“sandbox”.")
     report.risks = risks(report, mcp_servers)
@@ -326,7 +326,7 @@ def runtime_report(rt) -> Report:
                                  ""))
     report.risks.append(Risk("low", _("No password on the local API"), _(
         "Any program you run, and other users of this PC, can use it while it runs."), _(
-        "Stop it when no agent needs it (AI Agents Map does that for connected agents).")))
+        "Stop it when no agent needs it (Maprisma does that for connected agents).")))
     report.risks.append(Risk("low", _("Models come from the web"), _(
         "A model file is data, but a crafted one can attack the program that loads it."), _(
         "Get GGUF models from known publishers and keep the local LLM up to date.")))

@@ -17,7 +17,7 @@ class ReadyAgentTest(unittest.TestCase):
 
 class PromptTest(unittest.TestCase):
     def make(self, **kw):
-        args = dict(kind="mcp", action="install", name="github", details="", app="AI Agents Map",
+        args = dict(kind="mcp", action="install", name="github", details="", app="Maprisma",
                     agents=["Claude Code"], runtimes=["Ollama"], mcp=["figcraft"])
         args.update(kw)
         return ash.prompt(**args)

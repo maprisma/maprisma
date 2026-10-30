@@ -27,8 +27,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 HOME = Path.home()
-CACHE = HOME / ".cache/ai-agents-map/appimages"     # old versions unpacked here; removed (cleanup_old_cache)
-TEMP = HOME / ".cache/ai-agents-map/tmp"
+CACHE = HOME / ".cache/maprisma/appimages"     # old versions unpacked here; removed (cleanup_old_cache)
+TEMP = HOME / ".cache/maprisma/tmp"
 MAX_BIN_BYTES = 2 * 1024 ** 3      # usr/bin of one AppImage, unpacked to look inside
 MAX_APP_BYTES = 10 * 1024 ** 3     # a whole AppImage unpacked for a server in it
 OPT = Path("/opt")

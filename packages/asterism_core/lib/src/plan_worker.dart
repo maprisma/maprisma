@@ -503,8 +503,7 @@ Future<int> runWorker(List<String> args) async {
       final params = request['params'] as Map;
       final identity = AppIdentity();
       final path = identity.environment['PATH'];
-      final listPath =
-          '${identity.home}/.cache/ai-agents-map/mcp-registry.json';
+      final listPath = '${identity.home}/.cache/maprisma/mcp-registry.json';
       final dynamic result;
       switch (request['operation']) {
         case 'mcp.catalog':

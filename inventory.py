@@ -145,7 +145,7 @@ def unit_files() -> list[Path]:
 
 
 def unit_named(name: str) -> tuple[str, dict]:
-    """A user service AI Agents Map's installer wrote under its own name (jan,
+    """A user service Maprisma's installer wrote under its own name (jan,
     koboldcpp: their ExecStart is a shell line or a program named otherwise),
     and the variables its EnvironmentFile= sets."""
     unit = HOME / ".config/systemd/user" / f"{name}.service"
@@ -411,7 +411,7 @@ def lmstudio_identifiers(root: Path) -> list[str]:
 
 def vllm(processes) -> Runtime:
     rt = Runtime("vllm", "vLLM", installed=bool(shutil.which("vllm")), address="127.0.0.1:8000")
-    # The user service AI Agents Map's installer writes (vllm.service: `vllm serve ${VLLM_MODEL}`).
+    # The user service Maprisma's installer writes (vllm.service: `vllm serve ${VLLM_MODEL}`).
     rt.service, env = unit_for("vllm")
     rt.installed = rt.installed or bool(rt.service)
     if env.get("VLLM_MODEL") and NAME_RE.fullmatch(env["VLLM_MODEL"]):
@@ -678,7 +678,7 @@ def collect(agent_list, *, remember: bool = True) -> Inventory:
             server = servers.setdefault(name, McpServer(name, kind, target))
             if key not in server.agents:
                 server.agents.append(key)
-    # The servers AI Agents Map knows: remember what is in use, list the rest too (no agents).
+    # The servers Maprisma knows: remember what is in use, list the rest too (no agents).
     import mcp_library
     used = {}
     for name, server in servers.items():

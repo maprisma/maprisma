@@ -1,6 +1,6 @@
 """The app's own icons, so nothing depends on the desktop's icon theme or an installed icon font.
 
-- icons/Asterism/ next to this module is a small icon theme ("Asterism", inheriting Adwaita): every
+- icons/Maprisma/ next to this module is a small icon theme ("Maprisma", inheriting Adwaita): every
   icon name the app uses, and every glyph of its cards and map as an SVG (tools/make-glyph-icons.py).
   setup() selects it for this app only (Gtk.Settings of this process); the desktop keeps its own.
 - An add-on may bring icon.svg: checked (shapes only: no scripts, links, images or styles that load
@@ -14,10 +14,10 @@ import re
 from pathlib import Path
 
 DIR = Path(__file__).resolve().parent / "icons"
-THEME = "Asterism"
+THEME = "Maprisma"
 THEME_DIR = DIR / THEME
 ACTIONS = THEME_DIR / "symbolic/actions"
-ADDON_DIR = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "ai-agents-map/addon-icons"
+ADDON_DIR = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "maprisma/addon-icons"
 MAX_SVG = 64 * 1024
 
 _KNOWN: set = set()

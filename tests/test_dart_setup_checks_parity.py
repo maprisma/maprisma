@@ -141,7 +141,7 @@ class DartSetupChecksParityTest(unittest.TestCase):
                 # The core names the app Asterism in its texts (ServiceI18n), as the reference renamed.
                 python = json.loads(subprocess.run([sys.executable, '-c', PYTHON, str(ROOT)], input=json.dumps(cases),
                                                    capture_output=True, check=True, text=True, env=env,
-                                                   timeout=300).stdout.replace('AI Agents Map', 'Maprisma'))
+                                                   timeout=300).stdout)
                 lines = []
                 for i, c in enumerate(cases, 1):
                     params = {**c, 'desktop': desktop}

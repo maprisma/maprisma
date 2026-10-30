@@ -125,38 +125,10 @@ class Service:
         return set(settings_schema.value(ai_core.load_settings(self.settings_path), "addons_enabled"))
 
     def initialize(self) -> None:
-        import config_migration
         from flutter_addons import AdapterRegistry
-        # Migration precedes all writes and uses the same backup/rollback policy.
-        try:
-            config_migration.migrate(target=self.settings_path.parent if self.settings_path else None)
-        except (OSError, ValueError) as error:
-            self.migration_error = str(error)
-            print(f"Asterism settings import failed: {error}", file=sys.stderr)
         ai_core.migrate_settings(self.settings_path)
         self.adapters = AdapterRegistry()
         self.adapters.reload(self.enabled_addons())
-        self.finish_plugin_migration()
-
-    def finish_plugin_migration(self) -> None:
-        if self.adapters is None:
-            return
-        state = settings_schema.value(ai_core.load_settings(self.settings_path), "plugin_migration")
-        if not isinstance(state, dict):
-            return
-        supported = [item for item in self.adapters.items if item.kind in ("agent", "provider")
-                     and item.state in ("verified", "loaded")]
-        if not state.get("addons_pending") or not supported:
-            return
-        enabled = self.enabled_addons()
-        try:
-            found = self.adapters.installed(enabled)
-        except Exception:
-            return  # retain the migration marker and retry next start
-        enabled |= found
-        ai_core.update_settings(self.settings_path, addons_enabled=sorted(enabled), setup_done=True,
-                                plugin_migration={**state, "addons_pending": False})
-        self.adapters.reload(enabled)
 
     def snapshot(self) -> dict:
         settings = ai_core.load_settings(self.settings_path)
@@ -754,8 +726,8 @@ class Service:
         ai_core.drop_agent_session_vars(env)
         ai_core.add_user_program_dirs(env)
         env.update(TERM="xterm-256color", COLORTERM="truecolor")
-        env.pop("AI_AGENTS_MAP_PAGE", None)
-        env.pop("AI_AGENTS_MAP_VIEW", None)
+        env.pop("MAPRISMA_PAGE", None)
+        env.pop("MAPRISMA_VIEW", None)
         program = shutil.which(command, path=env.get("PATH"))
         if program is None:
             raise ValueError("Program unavailable")
@@ -765,7 +737,7 @@ class Service:
             import desktop
             # env removes inherited session markers without interpolating a shell command.
             unset = [part for name in os.environ if ai_core.is_agent_session_var(name)
-                     or name in ("AI_AGENTS_MAP_PAGE", "AI_AGENTS_MAP_VIEW") for part in ("-u", name)]
+                     or name in ("MAPRISMA_PAGE", "MAPRISMA_VIEW") for part in ("-u", name)]
             launcher = shutil.which("env")
             if launcher is None or not desktop.open_terminal(
                     [launcher, *unset, f"PATH={env['PATH']}", "TERM=xterm-256color", "COLORTERM=truecolor", *argv], folder):

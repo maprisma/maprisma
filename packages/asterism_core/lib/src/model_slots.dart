@@ -243,7 +243,8 @@ final class EngineSlots {
   bool _ours(Map rt) {
     final unit = _unit(rt);
     return unit != null &&
-        _head(unit, 4000).contains('installed by AI Agents Map');
+        (_head(unit, 4000).contains('installed by Maprisma') ||
+            _head(unit, 4000).contains('installed by AI Agents Map'));
   }
 
   Map<String, String> _env(String path) => {

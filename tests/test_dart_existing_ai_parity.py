@@ -62,8 +62,8 @@ def home_files(home: Path) -> dict:
     settings = home / '.config/maprisma/settings.json'
     found['model_folders'] = json.loads(settings.read_text()).get('model_folders') if settings.exists() else None
     # The backups' manifests by content: the reference's production service keeps them in
-    # ~/.local/state/ai-agents-map/backups, the core in its config folder (phase 3).
-    roots = [home / '.local/state/ai-agents-map/backups', home / '.config/maprisma/connection-backups']
+    # ~/.local/state/maprisma/backups, the core in its config folder (phase 3).
+    roots = [home / '.local/state/maprisma/backups', home / '.config/maprisma/connection-backups']
     found['backups'] = [(folder / 'manifest.json').read_text() for root in roots if root.is_dir()
                         for folder in sorted(root.iterdir())]
     return found

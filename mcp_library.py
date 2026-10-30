@@ -1,10 +1,10 @@
-"""The MCP servers AI Agents Map knows, used by an agent or not.
+"""The MCP servers Maprisma knows, used by an agent or not.
 
 A server stays listed (on the map and in the cards) after its last agent
 lost it: drawing a line to it again sets it up from here. Removing it for
 good (the card's Remove) takes it from every agent and from this list.
 
-mcp-servers.json in desktop.config_dir() (~/.config/omarchy/ai-agents-map on Omarchy), readable only by you:
+mcp-servers.json in desktop.config_dir() (~/.config/maprisma), readable only by you:
 the entries are copies of the agents' own (env and headers may hold keys).
 Changes go through connect.Change, so Undo covers them.
 """

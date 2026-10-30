@@ -254,7 +254,7 @@ final class AgentCatalog {
   }
 
   /// The app's own version-folder install (install_ctl): `current` of
-  /// `~/.local/bin/<command>`'s folder chain, marked `.ai-agents-map`.
+  /// `~/.local/bin/<command>`'s folder chain, marked `.maprisma`.
   String? installedVersion(String command) {
     final String target;
     try {
@@ -266,7 +266,10 @@ final class AgentCatalog {
     while (parent != p.dirname(parent) && parent != '.') {
       if (p.basename(parent) == 'current') {
         final root = p.dirname(parent);
-        if (!files.exists('$root/.ai-agents-map')) return null;
+        if (!files.exists('$root/.maprisma') &&
+            !files.exists('$root/.ai-agents-map')) {
+          return null;
+        }
         try {
           return Link(
             '$root/current',

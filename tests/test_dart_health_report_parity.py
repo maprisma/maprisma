@@ -127,7 +127,7 @@ class DartHealthReportParityTest(unittest.TestCase):
                 env.update(HOME=str(home), PATH=f'{tools}:/usr/bin:/bin', LANG='C.UTF-8', ASTERISM_DESKTOP=desktop)
                 python = json.loads(subprocess.run([sys.executable, '-c', PYTHON, str(ROOT)], input=json.dumps(all_cases),
                                                    capture_output=True, check=True, text=True, env=env,
-                                                   timeout=300).stdout.replace('AI Agents Map', 'Maprisma'))
+                                                   timeout=300).stdout)
                 lines = [json.dumps({'id': i, 'protocol': 1, 'method': 'dev.healthreport',
                                      'params': {**c, 'desktop': desktop}}) for i, c in enumerate(all_cases, 1)]
                 out = subprocess.run([DART, '--disable-dart-dev', '--packages=.dart_tool/package_config.json',

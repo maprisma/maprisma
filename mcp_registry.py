@@ -265,7 +265,7 @@ def parse(data: dict) -> list[Server]:
 PAGE = 20                    # results shown at a time; "Next 20" / "Previous 20" page through them
 
 # The saved list: {"fetched": ISO time the last download started, "checked": epoch, "servers": {name: item}}.
-LIST_FILE = Path.home() / ".cache/ai-agents-map/mcp-registry.json"
+LIST_FILE = Path.home() / ".cache/maprisma/mcp-registry.json"
 LIST_MAX_AGE = 12 * 3600
 LIST_MAX_PAGES = 1000         # 100 servers a page, per start (the registry had 30,000+ in 2026-10)
 SAVE_EVERY = 10               # pages between saves (a download cut short goes on from there)

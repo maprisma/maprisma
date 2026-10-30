@@ -12,7 +12,7 @@ never over an existing name; Undo moves them back), then fixes what pointed at t
 
 - links in a local LLM's model folder that led to a moved file now lead to its new place;
 - paths in llama.cpp's models.ini (mmproj = …) name the new place (a copy is kept first);
-- a local LLM whose model folder this was, and whose folder setting AI Agents Map keeps
+- a local LLM whose model folder this was, and whose folder setting Maprisma keeps
   (installed here), is pointed at the new folder (and restarted when it runs).
 
 What nothing points at afterwards (LM Studio reading only below its own folder) is said in the
@@ -45,7 +45,7 @@ MAX_FILES = 20_000
 SPLIT = re.compile(r"-\d{5}-of-\d{5}$")
 HOME = Path.home()
 MODELS_INI = HOME / ".config/llama.cpp/models.ini"
-BACKUPS = HOME / ".local/state/ai-agents-map/backups"
+BACKUPS = HOME / ".local/state/maprisma/backups"
 
 
 @dataclass

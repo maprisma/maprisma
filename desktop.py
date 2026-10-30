@@ -1,6 +1,6 @@
 """Everything that depends on the desktop, behind one small interface.
 
-The rest of AI Agents Map asks this module, never Omarchy or Hyprland directly:
+The rest of Maprisma asks this module, never Omarchy or Hyprland directly:
 where its own files live, the theme's colours and window rounding, window
 actions (focus, maximize, make room for the map), terminals, the agents the
 desktop offers and their usage records.
@@ -66,8 +66,8 @@ def config_dir() -> Path:
 
 
 def launcher_entry() -> bool:
-    # Asterism's package supplies its launcher; only the old plugin offers to create one.
-    return identity.is_plugin() and current().NAME == "omarchy"
+    """Maprisma's package supplies its launcher entry: the app never writes one."""
+    return False
 
 
 def detect(environ=None) -> str:

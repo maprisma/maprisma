@@ -30,7 +30,7 @@ def main():
         sys.exit(__doc__)
     config = Path(sys.argv[1]).resolve()
     seconds = int(sys.argv[2]) if len(sys.argv) == 3 else 60
-    real = {(Path.home() / ".config" / name).resolve() for name in ("asterism", "omarchy/ai-agents-map")}
+    real = {(Path.home() / ".config" / name).resolve() for name in ("maprisma",)}
     if config in real:
         sys.exit("Use a copy of settings.json in another folder, not the real config")
     if not (config / "settings.json").is_file():

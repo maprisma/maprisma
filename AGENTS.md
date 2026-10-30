@@ -23,11 +23,12 @@
   `docs/review-<reviewer>-<date>-<topic>.md` with its `-responses.md`. Finished plans, reviews and ideas move to
   `docs/history/` (links among them stay relative). Active: `plan-flutter.md`, `plan-one-app.md`, `plan-flutter-dart-core.md`, `plan-macos.md` (later).
 - **Flutter checks:** `tools/flutter-dev check` (format, analyzer, tests), `tools/flutter-dev build` (isolated
-  Devel build in `.flutter-previews/`, not launched). The remote `gtk` is the GTK repo
-  `/mnt/Data/Projects/ai-agents-map` (the folder was `asterism` until 2026-10-28; this one was
-  `asterism-flutter`): never push this tree's `main` there. Naming: `docs/plan-naming.md`.
-- **No plugin sync:** this repo shares no code with the AI Agents Map plugin any more; the plugin repo
-  `/mnt/Data/Projects/omarchy-ai-agents-map` is its own GTK source (2026-10-28, `docs/plan-naming.md`).
+  Devel build in `.flutter-previews/`, not launched). Naming: `docs/plan-naming.md`.
+- **A clean cut (Uwe, 2026-10-30):** Maprisma knows nothing of the GTK app AI Agents Map: no shared code,
+  names, folders, settings import, remote or sync. The plugin repo `/mnt/Data/Projects/omarchy-ai-agents-map`
+  is its own GTK source. Maprisma only still recognises what the GTK app left on a user's PC (its install
+  marker `.ai-agents-map`, units "installed by AI Agents Map", `# Connected by Asterism`) and copies the
+  Asterism folders once (`legacy_move.dart`).
 - **Before a commit:** `python3 -m unittest discover -s tests -q` and `tools/typecheck.sh` (0 errors).
 - The core names no agent and no local LLM: their facts live in `adapters/` and `provider_*.py`.
 - New UI texts in all 8 languages (`translations/*.json`); feature changes also in the manual (`docs/manual/`).

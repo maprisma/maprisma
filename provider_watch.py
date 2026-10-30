@@ -40,20 +40,16 @@ def _default_config() -> Path:
     try:
         import identity
     except ImportError:
-        return HOME / ".config/omarchy/ai-agents-map/providers-with-agents.json"
+        return HOME / ".config/maprisma/providers-with-agents.json"
     return identity.config_dir() / "providers-with-agents.json"
 
 
 CONFIG = _default_config()
 _UNIT_SAFE = re.compile(r"[A-Za-z0-9/._+-]{1,1024}")       # a path systemd takes as one word, unquoted
-STATE = HOME / ".local/state/ai-agents-map/provider-watch.json"   # what we still have to stop (survives restarts)
+STATE = HOME / ".local/state/maprisma/provider-watch.json"   # what we still have to stop (survives restarts)
 def _unit_name() -> str:
-    """The plugin's watcher, or Asterism's: two installs on one machine never share a unit."""
-    try:
-        import identity
-    except ImportError:
-        return "ai-agents-map-providers.service"      # the service itself (python3 -I) never needs it
-    return identity.short_name() + "-providers.service"
+    """Maprisma's watcher unit."""
+    return "maprisma-providers.service"
 
 
 UNIT_NAME = _unit_name()
@@ -67,7 +63,7 @@ NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.+-]{0,63}$")
 UNIT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9@_.-]{0,99}$")
 INTERPRETERS = ("node", "bun", "deno", "python", "python3")
 BACKGROUND_ARGS = {"serve", "server", "daemon", "--service", "--daemon"}
-NO_PROVIDERS_ENV = b"AI_AGENTS_MAP_NO_PROVIDERS=1"   # the popup's own agent runs (looking up agents)
+NO_PROVIDERS_ENV = b"MAPRISMA_NO_PROVIDERS=1"   # the popup's own agent runs (looking up agents)
 INTERVAL = 1.0
 GRACE = 5.0            # an agent restarted at once keeps its LLM
 RETRY = 30.0           # a start that failed is tried again after this
@@ -180,7 +176,7 @@ def write_config(inventory, path: Path = CONFIG) -> bool:
 
 def unit_text(script: Path, config: Path | None = None) -> str:
     config = config or CONFIG
-    APP = "AI Agents Map" if UNIT_NAME.startswith("ai-agents-map") else "Asterism"   # noqa: N806
+    APP = "Maprisma"   # noqa: N806
     exec_start = f"/usr/bin/python3 -I {script}" + (f" --config {config}" if _UNIT_SAFE.fullmatch(str(config)) else "")
     return f"""[Unit]
 Description={APP}: start local LLMs with their agents, stop them when the agents close

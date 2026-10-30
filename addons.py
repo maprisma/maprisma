@@ -1,4 +1,4 @@
-"""Add-ons for Asterism (not in the AI Agents Map plugin): found, verified, loaded.
+"""Add-ons for Asterism (not in the Maprisma plugin): found, verified, loaded.
 
 Only add-ons signed by Uwe Bruckhaus load. An add-on is a folder <id>/ with:
     addon.json        id, name, version, api, privacy, kind (feature | agent | provider), needs
