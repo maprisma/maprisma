@@ -100,7 +100,6 @@ void main() {
                   confirmed = await confirmAddonRemoval(context, {
                     'name': 'Fixture',
                     'notes': [
-                      'This also removes it from Asterism (GTK).',
                       'After a removal, backups older than 30 days may be deleted. Active Undo backups are kept.',
                     ],
                   }, (k) => k);
@@ -114,10 +113,6 @@ void main() {
       await tester.tap(find.text('review removal'));
       await tester.pumpAndSettle();
       expect(confirmed, isNull);
-      expect(
-        find.text('This also removes it from Asterism (GTK).'),
-        findsOneWidget,
-      );
       expect(find.textContaining('30 days'), findsOneWidget);
       expect(find.byType(LinearProgressIndicator), findsNothing);
       await tester.tap(find.text('Cancel'));

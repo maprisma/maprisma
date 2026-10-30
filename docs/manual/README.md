@@ -7,14 +7,14 @@ The user manual for Asterism and the AI Agents Map Omarchy plugin, as one PDF.
 | `manual.html` | The text. Edit this. |
 | `manual.css` | The print layout (A4, cover, contents, callouts, tables). |
 | `images/` | Screenshots and the icon used in the manual. |
-| `build.py` | Builds `build/Asterism-User-Manual.pdf`. |
+| `build.py` | Builds `build/Maprisma-User-Manual.pdf`. |
 
 ## Build
 
 ```sh
 python3 docs/manual/build.py                          # AI Agents Map version from the installed plugin
 python3 docs/manual/build.py --plugin-version 0.10.1  # or given
-python3 docs/manual/build.py --out ~/Documents/Asterism-User-Manual.pdf
+python3 docs/manual/build.py --out ~/Documents/Maprisma-User-Manual.pdf
 ```
 
 Needs `chromium` (or `google-chrome-stable`), `pdftotext` (poppler) and `pdfcraft-cli`

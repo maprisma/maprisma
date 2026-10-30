@@ -77,9 +77,9 @@ class MapAddonsTests(unittest.TestCase):
             with self.assertRaises(ValueError):service.dispatch('addons.set_enabled',{'id':'fixture','enabled':False})
         self.assertEqual(ai_core.load_settings(self.settings)['addons_enabled'],['fixture','unrelated'])
 
-    def test_removal_preview_discloses_shared_gtk_folder_and_retention(self):
+    def test_removal_preview_discloses_retention(self):
         plan=self.actions.preview(self.registry,'fixture')
-        self.assertIn('This also removes it from Asterism (GTK).',plan['notes'])
+        self.assertFalse(any('GTK' in note for note in plan['notes']))   # Maprisma has its own add-on folder
         self.assertTrue(any('30 days' in note for note in plan['notes']))
         self.assertTrue(self.folder.exists())
 

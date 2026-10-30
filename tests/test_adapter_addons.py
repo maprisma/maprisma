@@ -123,7 +123,7 @@ class AdapterAddonsTest(unittest.TestCase):
         self.sign(folder)
         addon = addons.verify(folder, self.signers)
         self.assertEqual((addon.state, addon.reason),
-                         ("refused", f"made for Asterism 99.0.0 or newer, this is {addons.ASTERISM_VERSION}"))
+                         ("refused", f"made for Maprisma 99.0.0 or newer, this is {addons.ASTERISM_VERSION}"))
 
 
 if __name__ == "__main__":

@@ -457,7 +457,7 @@ class DiscoveryTests(unittest.TestCase):
     def test_named_home_relative_units_and_new_preset(self):
         plan = self.runtime_preview()
         unit = next(f['text'] for f in plan['files'] if f['path'].endswith('.service'))
-        self.assertIn('Description=Asterism connected local AI: llama.cpp', unit)
+        self.assertIn('Description=Maprisma connected local AI: llama.cpp', unit)
         self.assertIn('ExecStart="%h/.local/bin/llama-server"', unit)
         self.assertNotIn(str(self.home), unit)
         preset = next(f['text'] for f in plan['files'] if f['path'].endswith('models.ini'))

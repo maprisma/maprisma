@@ -256,7 +256,7 @@ def verify(folder: Path, signers: str = ALLOWED_SIGNERS, uid: int | None = None)
     if not isinstance(version, str) or not _VERSION.fullmatch(version):
         return _refuse(addon, "the version is not x.y.z")
     if api != addon_api.API_VERSION:
-        return _refuse(addon, f"made for add-on API {api}, this Asterism has {addon_api.API_VERSION}")
+        return _refuse(addon, f"made for add-on API {api}, this Maprisma has {addon_api.API_VERSION}")
     if privacy not in addon_api.PRIVACY:
         return _refuse(addon, "unknown privacy level")
     addon.name = " ".join(str(meta.get("name") or folder.name).split())[:80]
@@ -268,7 +268,7 @@ def verify(folder: Path, signers: str = ALLOWED_SIGNERS, uid: int | None = None)
     if needs and m is None:
         return _refuse(addon, "needs is not \"asterism >= x.y.z\"")
     if m is not None and version_tuple(m.group(1)) > version_tuple(ASTERISM_VERSION):
-        return _refuse(addon, f"made for Asterism {m.group(1)} or newer, this is {ASTERISM_VERSION}")
+        return _refuse(addon, f"made for Maprisma {m.group(1)} or newer, this is {ASTERISM_VERSION}")
     addon.kind, addon.needs = kind, m.group(1) if m else ""
     icon = meta.get("icon")
     addon.icon = icon if isinstance(icon, str) and _ICON.fullmatch(icon) else ""

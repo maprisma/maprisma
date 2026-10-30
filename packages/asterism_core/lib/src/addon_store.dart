@@ -599,7 +599,6 @@ final class AddonActions {
   final Posix posix;
   final String userDir;
   static const notes = [
-    'This also removes it from Asterism (GTK).',
     'After a removal, backups older than 30 days may be deleted. Active Undo backups are kept.',
   ];
   final _previews = <String, (DateTime, String, String, String)>{};

@@ -183,13 +183,26 @@ backups), the installed add-ons and the state folder (jobs, notices) are copied 
 modes kept, links not followed. The cache is not copied (it is rebuilt). The Asterism folders stay as they
 were. A failed copy shows as `migration_error`, and the app starts with defaults.
 
-**Kept on purpose** (invisible, or changing them would break something):
-- the add-on signature namespace `asterism-addon` (every add-on signed so far would fail its check);
-- the Dart package `asterism_core`, the `ASTERISM_*` environment variables of the tools and tests, the
-  repository folder `/mnt/Data/Projects/asterism` and the add-on repository `asterism-addons` (renamed at the
-  GitHub switch, with Uwe);
-- the marker `# Connected by Asterism` in files the app wrote: still recognised; new files get
-  `# Connected by Maprisma`.
+**A clean cut** (Uwe, 2026-10-30: "there must be a clean cut between AI Agents Map and Maprisma
+Flutter"): nothing of the Flutter world keeps the name Asterism, and Maprisma knows nothing of the GTK
+plugin.
+- **Code:** the Dart package `maprisma_core`, the Flutter package `maprisma`, `MaprismaApp`,
+  `bin/maprisma-core.dart`, the tools' and tests' variables `MAPRISMA_*`.
+- **Add-ons:** signature namespace `maprisma-addon`, principal `addons@maprisma`, manifests
+  `needs = "maprisma >= x.y.z"`, signed with a **new key** `~/.ssh/maprisma-addons` that Uwe creates
+  (his passphrase; a copy on the SanDisk as with the old key) and with which he re-signs every add-on
+  and the catalog. The app embeds only the new public key.
+- **No plugin in Maprisma** (Uwe: no import of AI Agents Map settings): the Python reference loses its
+  plugin edition (`identity.is_plugin`, the name AI Agents Map, `org.omarchy.aiagentsmap`), the import
+  (`config_migration.py`), `tools/sync-plugin.py`, `tools/vendor-into-plugin.sh` and the Git remote `gtk`.
+  The GTK plugin keeps its own repository and does not change.
+- **Local folders:** `/mnt/Data/Projects/maprisma`, `maprisma-addons`, `aur-maprisma`; the link
+  `~/Projects/maprisma`. Last, since every other step uses the paths.
+- **Stays:** the one-time copy of the Asterism folders (`~/.config/asterism` and so on) at Maprisma's
+  first start: that is the user's data, not code. GitHub (repositories, URLs) only at the switch with
+  Uwe (step 4).
 
 Parts: **R1** identity, folders and the move of existing data (with the tools that build the bundle);
-**R2** the name in the texts: interface, eight translations, manual, README, metainfo; **R3** tools and docs.
+**R2** the name in the texts: interface, eight translations, manual, README, metainfo; **C1** the plugin
+out of Maprisma; **C2** the code names; **C3** the add-ons (new namespace and key; Uwe signs); **C4** the
+local folders.

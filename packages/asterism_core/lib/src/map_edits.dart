@@ -682,7 +682,7 @@ final class MapEdits {
           mcp.plan(c, name, const [], remove: false, entry: clean),
       ];
       notes.add(
-        'Asterism saves configuration only. Agents may start this server when they read it.',
+        'Maprisma saves configuration only. Agents may start this server when they read it.',
       );
       item = name;
     } else {

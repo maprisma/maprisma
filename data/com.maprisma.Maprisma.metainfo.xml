@@ -9,7 +9,7 @@
     <name>Uwe Bruckhaus</name>
   </developer>
   <description>
-    <p>Asterism shows the AI setup on your computer as cards and a map: coding agents with their
+    <p>Maprisma shows the AI setup on your computer as cards and a map: coding agents with their
     plan, limits and usage, local LLMs and their models, MCP servers and skills. Connect them by
     drawing a line, with a preview and Undo.</p>
     <ul>

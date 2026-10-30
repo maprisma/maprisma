@@ -3,7 +3,7 @@
 - **Flutter target (user decision, 2026-10-27):** `docs/plan-flutter.md` is the active
   UI migration plan. The final app must be Flutter, its service the Dart core (Python only as the
   reference, see below). The one-app/thin-launcher plan below still governs identity and delivery.
-- **Current plan:** `docs/plan-one-app.md`: Asterism as the one app for every distribution, the Omarchy plugin
+- **Current plan:** `docs/plan-one-app.md`: Maprisma (called Asterism until 2026-10-30) as the one app for every distribution, the Omarchy plugin
   as a thin launcher. It has Uwe's decisions, the facts with file paths, the next steps and the state of the repos.
 - **GTK app frozen (Uwe, 2026-10-28):** Flutter replaces it on Linux too. The GTK repo gets fixes only, no
   new features; new work happens here (plan: `docs/plan-flutter-dart-core.md`).

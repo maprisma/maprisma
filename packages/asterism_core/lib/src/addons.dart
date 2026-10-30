@@ -336,7 +336,7 @@ final class AddonVerifier {
     if (api != apiVersion) {
       return _refuse(
         addon,
-        'made for add-on API $api, this Asterism has $apiVersion',
+        'made for add-on API $api, this Maprisma has $apiVersion',
       );
     }
     if (!privacyLevels.containsKey(privacy)) {
@@ -363,7 +363,7 @@ final class AddonVerifier {
     if (m != null && _newer(_version3(m[1]!), _version3(asterismVersion))) {
       return _refuse(
         addon,
-        'made for Asterism ${m[1]} or newer, this is $asterismVersion',
+        'made for Maprisma ${m[1]} or newer, this is $asterismVersion',
       );
     }
     addon
@@ -555,7 +555,7 @@ final class AddonRegistry {
         addon.provides.every(builtInHooks.contains)) {
       return null;
     }
-    return 'brings code; this Asterism takes add-ons as data only: needs an update';
+    return 'brings code; this Maprisma takes add-ons as data only: needs an update';
   }
 
   void reload(Set<String> enabled) {

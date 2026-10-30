@@ -601,7 +601,7 @@ List<(String, List<int>, bool)> serviceFiles(
   List<(String, String)> extra,
 ) {
   final unit =
-      '[Unit]\nDescription=Asterism connected local AI: ${record['name']}\nRequiresMountsFor='
+      '[Unit]\nDescription=Maprisma connected local AI: ${record['name']}\nRequiresMountsFor='
       '${mountPaths.toSet().map(unitArg).join(' ')}\n\n[Service]\nType=simple\nExecStart='
       '${unitArg('.local/bin/$command', executable: true, home: true)}\nEnvironmentFile=%h/${extra.first.$1}\n'
       'Restart=on-failure\nRestartSec=5\n\n[Install]\nWantedBy=default.target\n';

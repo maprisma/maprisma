@@ -555,8 +555,8 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
           content: Text(
             tr(
               _taskActive
-                  ? 'Close Asterism? Running agents will stop; committed changes will finish.'
-                  : 'Close Asterism and stop its running agents?',
+                  ? 'Close Maprisma? Running agents will stop; committed changes will finish.'
+                  : 'Close Maprisma and stop its running agents?',
             ),
           ),
           actions: [
@@ -3971,7 +3971,7 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
                     children: [
                       Text(
                         tr(
-                          'Your AI Agents Map settings could not be imported. Asterism will use its current or default settings.',
+                          'Your AI Agents Map settings could not be imported. Maprisma will use its current or default settings.',
                         ),
                       ),
                       const SizedBox(height: 8),

@@ -38,28 +38,28 @@ LANGUAGES = ("en", "de", "es", "fr", "it", "nl", "pl", "pt")
 # The words the build adds itself, per language.
 WORDS = {
     "en": dict(chapter="Chapter", appendix="Appendix", contents="Contents", about="About this manual",
-               manual="User Manual", subject="User manual for Asterism and the AI Agents Map Omarchy plugin",
+               manual="User Manual", subject="User manual for Maprisma and the AI Agents Map Omarchy plugin",
                months="January February March April May June July August September October November December"),
     "de": dict(chapter="Kapitel", appendix="Anhang", contents="Inhalt", about="Über dieses Handbuch",
-               manual="Benutzerhandbuch", subject="Benutzerhandbuch für Asterism und das Omarchy-Plugin AI Agents Map",
+               manual="Benutzerhandbuch", subject="Benutzerhandbuch für Maprisma und das Omarchy-Plugin AI Agents Map",
                months="Januar Februar März April Mai Juni Juli August September Oktober November Dezember"),
     "es": dict(chapter="Capítulo", appendix="Apéndice", contents="Contenido", about="Sobre este manual",
-               manual="Manual de usuario", subject="Manual de usuario de Asterism y del plugin AI Agents Map para Omarchy",
+               manual="Manual de usuario", subject="Manual de usuario de Maprisma y del plugin AI Agents Map para Omarchy",
                months="enero febrero marzo abril mayo junio julio agosto septiembre octubre noviembre diciembre"),
     "fr": dict(chapter="Chapitre", appendix="Annexe", contents="Sommaire", about="À propos de ce manuel",
-               manual="Manuel d'utilisation", subject="Manuel d'utilisation d'Asterism et du plugin AI Agents Map pour Omarchy",
+               manual="Manuel d'utilisation", subject="Manuel d'utilisation d'Maprisma et du plugin AI Agents Map pour Omarchy",
                months="janvier février mars avril mai juin juillet août septembre octobre novembre décembre"),
     "it": dict(chapter="Capitolo", appendix="Appendice", contents="Indice", about="Informazioni su questo manuale",
-               manual="Manuale utente", subject="Manuale utente di Asterism e del plugin AI Agents Map per Omarchy",
+               manual="Manuale utente", subject="Manuale utente di Maprisma e del plugin AI Agents Map per Omarchy",
                months="gennaio febbraio marzo aprile maggio giugno luglio agosto settembre ottobre novembre dicembre"),
     "nl": dict(chapter="Hoofdstuk", appendix="Bijlage", contents="Inhoud", about="Over deze handleiding",
-               manual="Gebruikershandleiding", subject="Gebruikershandleiding voor Asterism en de Omarchy-plugin AI Agents Map",
+               manual="Gebruikershandleiding", subject="Gebruikershandleiding voor Maprisma en de Omarchy-plugin AI Agents Map",
                months="januari februari maart april mei juni juli augustus september oktober november december"),
     "pl": dict(chapter="Rozdział", appendix="Dodatek", contents="Spis treści", about="O tej instrukcji",
-               manual="Instrukcja obsługi", subject="Instrukcja obsługi Asterism i wtyczki AI Agents Map dla Omarchy",
+               manual="Instrukcja obsługi", subject="Instrukcja obsługi Maprisma i wtyczki AI Agents Map dla Omarchy",
                months="styczeń luty marzec kwiecień maj czerwiec lipiec sierpień wrzesień październik listopad grudzień"),
     "pt": dict(chapter="Capítulo", appendix="Apêndice", contents="Índice", about="Sobre este manual",
-               manual="Manual do utilizador", subject="Manual do utilizador do Asterism e do plugin AI Agents Map para Omarchy",
+               manual="Manual do utilizador", subject="Manual do utilizador do Maprisma e do plugin AI Agents Map para Omarchy",
                months="janeiro fevereiro março abril maio junho julho agosto setembro outubro novembro dezembro"),
 }
 W = WORDS["en"]                  # the language being built (main sets it)
@@ -145,7 +145,7 @@ def margin_boxes(chapters: list, versions: str) -> str:
         name = "am-ch-" + re.sub(r"[^a-z0-9-]", "-", ch["id"])
         rules.append(f'#{ch["id"]} {{ page: {name}; }}')
         rules.append(f"@page {name} {{"
-                     f' @top-left {{ content: "Asterism & AI Agents Map"; {style} }}'
+                     f' @top-left {{ content: "Maprisma & AI Agents Map"; {style} }}'
                      f' @top-right {{ content: {css(chapter_label(ch) + " · " + ch["title"])}; {style} }}'
                      f' @bottom-left {{ content: {css(W["manual"] + " · " + versions)}; {style} }}'
                      f" @bottom-right {{ content: counter(page); {style} }} }}")
@@ -216,10 +216,10 @@ def locate(pdf: Path, chapters: list) -> tuple[int, int, dict]:
 def finish(pdfcraft: str, raw: Path, out: Path, chapters: list, count: int, body: int, physical: dict,
            versions: str, headers: bool = True):
     steps = [{"tool": "doc_open", "args": {"path": str(raw)}}]
-    for key, value in (("Title", f"Asterism & AI Agents Map — {W['manual']}"), ("Author", AUTHOR),
+    for key, value in (("Title", f"Maprisma & AI Agents Map — {W['manual']}"), ("Author", AUTHOR),
                        ("Subject", W["subject"]),
-                       ("Keywords", "Asterism, AI Agents Map, Omarchy, coding agents, local LLM, MCP, skills"),
-                       ("Creator", "Asterism docs/manual/build.py (Chromium, pdfcraft)")):
+                       ("Keywords", "Maprisma, AI Agents Map, Omarchy, coding agents, local LLM, MCP, skills"),
+                       ("Creator", "Maprisma docs/manual/build.py (Chromium, pdfcraft)")):
         steps.append({"tool": "doc_set_info", "args": {"doc": 1, "key": key, "value": value}})
     steps.append({"tool": "page_number", "args": {"doc": 1, "from": 1, "to": body - 1, "style": "lower-roman"}})
     steps.append({"tool": "page_number", "args": {"doc": 1, "from": body, "to": count, "style": "decimal"}})
@@ -228,7 +228,7 @@ def finish(pdfcraft: str, raw: Path, out: Path, chapters: list, count: int, body
         label = chapter_label(ch)
         steps.append({"tool": "doc_header_footer", "args": {
             "doc": 1, "pages": list(range(first, nxt)), "start_number": first - body + 1,
-            "header_left": "Asterism & AI Agents Map", "header_right": f"{label} · {ch['title']}",
+            "header_left": "Maprisma & AI Agents Map", "header_right": f"{label} · {ch['title']}",
             "footer_left": f"{W['manual']} · {versions}", "footer_right": "<<1>>",
             "font_size": 7.5, "color": "#667085", "margins": [34, 30, 57, 57]}})
     steps.append({"tool": "bookmark_add", "args": {"doc": 1, "title": W["about"], "page": 2}})
@@ -275,7 +275,7 @@ def build(lang: str, plugin_version_given: str | None, out_given: Path | None, c
     source = source_file.read_text()
     chapters = outline(source)
     page, raw = BUILD / f"manual{suffix}.html", BUILD / f"manual-raw{suffix}.pdf"
-    versions = f"Asterism {av} · AI Agents Map {pv}"
+    versions = f"Maprisma {av} · AI Agents Map {pv}"
     # Headers and footers come from pdfcraft, or from Chromium when pdfcraft can't draw the text (pl).
     by_pdfcraft = pdfcraft_can_draw(W["manual"], versions,
                                     *(chapter_label(ch) + ch["title"] for ch in chapters))
@@ -294,7 +294,7 @@ def build(lang: str, plugin_version_given: str | None, out_given: Path | None, c
         sys.exit("Page numbers did not settle")
 
     # pdfcraft works inside build/ only (its --root); the result is copied to --out from there.
-    built = BUILD / f"Asterism-User-Manual{suffix}.pdf"
+    built = BUILD / f"Maprisma-User-Manual{suffix}.pdf"
     finish(pdfcraft, raw, built, chapters, count, body, physical, versions, by_pdfcraft)
     if out_given is not None and out_given.resolve() != built.resolve():
         out_given.parent.mkdir(parents=True, exist_ok=True)

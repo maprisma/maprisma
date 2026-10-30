@@ -1,10 +1,12 @@
-# Asterism
+# Maprisma
 
 Your AI agents, models and tools on one map: a Flutter app with its service written in Dart.
 
+Maprisma was called Asterism until 2026-10-30; its settings move over by themselves at the first start.
+
 ![An agent is connected to a local LLM, a model, an MCP server and a skill folder by drawing lines; then its pin and right-click menu](docs/drawing-demo.gif)
 
-Asterism shows the AI setup on your computer as cards and a map:
+Maprisma shows the AI setup on your computer as cards and a map:
 
 - **coding agents** (Claude Code, Codex, Copilot, Cursor CLI, Gemini, OpenCode, Pi, …) with their
   plan, limits, usage and what each still needs, with the command that fixes it;
@@ -35,8 +37,8 @@ another models folder to move it.
 The user manual (a PDF in eight languages, also under **?** in the app, in its language) explains
 everything step by step: [docs/manual](docs/manual).
 
-Asterism also runs on [Omarchy](https://omarchy.org), automatically using its theme and Hyprland
-window integration while keeping the Asterism name and `~/.config/asterism` settings. On its first
+Maprisma also runs on [Omarchy](https://omarchy.org), automatically using its theme and Hyprland
+window integration while keeping the Maprisma name and `~/.config/maprisma` settings. On its first
 start, if it has no settings yet, it copies the legacy **AI Agents Map** plugin's configuration
 with a private backup, leaving the originals untouched. Verified add-ons for installed agents and
 local LLMs are enabled automatically. The legacy plugin remains supported during the transition.
@@ -53,11 +55,11 @@ the AI Agents Map plugin repository.
 Agent icons need a Nerd Font (Symbols Nerd Font). Optional: `bubblewrap` (`bwrap`) for unpacking
 AppImages (MCP server apps, Jan): they are unpacked closed in, and without it not at all.
 
-Settings live in `~/.config/asterism/`. Light or dark and the accent colour follow your system.
+Settings live in `~/.config/maprisma/`. Light or dark and the accent colour follow your system.
 
 ## Privacy
 
-Asterism never asks for root. It reads your agents' settings (never their credential files) and
+Maprisma never asks for root. It reads your agents' settings (never their credential files) and
 your own processes, and contacts the web only for what you ask (searching models, MCP servers or
 skills, installing) plus an update check every few hours (npm, the release pages of what it
 installed, `mise outdated`). Every program runs without a shell, every answer with a size and
@@ -75,7 +77,7 @@ incrementally. No message text, title or prompt is read.
 ## Add-ons
 
 Agents and LLM providers beyond the built-in ones come as add-ons, from the author only. An add-on is a
-folder in `~/.local/share/asterism/addons/` (or `/usr/lib/asterism/addons/`), loads only when it is
+folder in `~/.local/share/maprisma/addons/` (or `/usr/lib/maprisma/addons/`), loads only when it is
 switched on, and only when it is **signed with the author's key** (the SSHSIG signature, checked by the
 Dart core; fingerprint `SHA256:e5cC634Ke3Our5LAeSc88qs22NKZEHTncBW5Ig3amWQ`). Every file must match the
 signed list and nothing may be added. Add-ons are **data only**: an agent is described in `agent.toml`

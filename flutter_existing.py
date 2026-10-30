@@ -44,7 +44,7 @@ def unit_arg(value: str, *, executable=False, home=False) -> str:
 
 
 def service_files(record: dict, command: str, text: str, mounts: list[str], extra: list) -> list:
-    unit = ('[Unit]\nDescription=Asterism connected local AI: ' + record['name'] + '\nRequiresMountsFor=' +
+    unit = ('[Unit]\nDescription=Maprisma connected local AI: ' + record['name'] + '\nRequiresMountsFor=' +
             ' '.join(unit_arg(m) for m in dict.fromkeys(mounts)) + '\n\n[Service]\nType=simple\nExecStart=' +
             unit_arg('.local/bin/' + command, executable=True, home=True) + '\nEnvironmentFile=' +
             '%h/' + str(extra[0][0]) + '\nRestart=on-failure\nRestartSec=5\n\n'

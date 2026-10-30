@@ -14,7 +14,6 @@ import ai_core
 
 BACKUP_RETENTION = 30 * 24 * 60 * 60
 REMOVAL_NOTES = [
-    'This also removes it from Asterism (GTK).',
     'After a removal, backups older than 30 days may be deleted. Active Undo backups are kept.',
 ]
 

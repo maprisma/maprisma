@@ -209,7 +209,7 @@ class _ConnectionAuthoringState extends State<ConnectionAuthoring> {
             if (_mcp) ...[
               Text(
                 tr(
-                  'Asterism saves configuration only. Agents may start this server when they read it.',
+                  'Maprisma saves configuration only. Agents may start this server when they read it.',
                 ),
               ),
               TextFormField(

@@ -175,7 +175,7 @@ String watchUnitText(String binary, String config) {
   final exec =
       '$binary provider-watch${unitSafe.hasMatch(config) ? ' --config $config' : ''}';
   return '[Unit]\n'
-      'Description=Asterism: start local LLMs with their agents, stop them when the agents close\n'
+      'Description=Maprisma: start local LLMs with their agents, stop them when the agents close\n'
       '\n'
       '[Service]\n'
       'Type=simple\n'

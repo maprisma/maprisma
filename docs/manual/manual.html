@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Asterism &amp; AI Agents Map — User Manual</title>
+<title>Maprisma &amp; AI Agents Map — User Manual</title>
 <link rel="stylesheet" href="manual.css">
 </head>
 <body>
@@ -17,12 +17,12 @@
 
 <!-- ============================== Cover ============================== -->
 <section class="cover">
-  <img class="cover-icon" src="images/icon.svg" alt="Asterism app icon">
+  <img class="cover-icon" src="images/icon.svg" alt="Maprisma app icon">
   <p class="cover-kicker">User Manual</p>
-  <h1 class="cover-title">Asterism<br><span>&amp; AI Agents Map</span></h1>
+  <h1 class="cover-title">Maprisma<br><span>&amp; AI Agents Map</span></h1>
   <p class="cover-sub">Your AI agents, local models, MCP servers and skills on one map</p>
   <div class="cover-meta">
-    <p>Asterism {{ASTERISM_VERSION}} · AI Agents Map {{PLUGIN_VERSION}}</p>
+    <p>Maprisma {{ASTERISM_VERSION}} · AI Agents Map {{PLUGIN_VERSION}}</p>
     <p>{{DATE}}</p>
   </div>
 </section>
@@ -32,19 +32,19 @@
   <h2 class="front-title">About this manual</h2>
   <p>This manual describes one application that comes in two editions:</p>
   <table class="editions">
-    <thead><tr><th scope="col">Edition</th><th>Asterism</th><th>AI Agents Map</th></tr></thead>
+    <thead><tr><th scope="col">Edition</th><th>Maprisma</th><th>AI Agents Map</th></tr></thead>
     <tbody>
       <tr><th>What it is</th><td>A stand-alone GTK&nbsp;4 / libadwaita app for any Linux desktop</td>
           <td>A plugin for the Omarchy desktop, opened from a button in the bar</td></tr>
       <tr><th>Install from</th><td>AUR, AppImage or source</td><td>The Omarchy Plugin Marketplace</td></tr>
       <tr><th>Look</th><td>Follows the system's light/dark mode and accent colour</td>
           <td>Omarchy theme colours, or GNOME's Adwaita look</td></tr>
-      <tr><th>Settings folder</th><td><code>~/.config/asterism/</code></td><td><code>~/.config/omarchy/ai-agents-map/</code></td></tr>
+      <tr><th>Settings folder</th><td><code>~/.config/maprisma/</code></td><td><code>~/.config/omarchy/ai-agents-map/</code></td></tr>
     </tbody>
   </table>
   <p>Everything else — Setup, the map, connecting by drawing, local LLMs, models, MCP servers
   and skills — is the same in both. Where something applies to only one edition, it is marked
-  <span class="badge">Asterism</span> or <span class="badge omarchy">Omarchy</span>.</p>
+  <span class="badge">Maprisma</span> or <span class="badge omarchy">Omarchy</span>.</p>
 
   <h3>Conventions</h3>
   <table class="conventions">
@@ -69,7 +69,7 @@
 <!-- ============================== 1 Introduction ============================== -->
 <section class="chapter" id="introduction">
   <h1>Introduction</h1>
-  <p class="lead">Asterism shows the AI setup on your computer as cards and as a map: which coding
+  <p class="lead">Maprisma shows the AI setup on your computer as cards and as a map: which coding
   agents are installed, which language models they use — cloud services and local runtimes — the
   models those serve, and which MCP servers and skills each agent has. And it lets you change that
   setup by drawing lines.</p>
@@ -116,12 +116,12 @@
 <section class="chapter" id="installation">
   <h1>Installation</h1>
 
-  <h2 id="install-asterism">Asterism <span class="badge">Asterism</span></h2>
-  <p>Asterism also runs on Omarchy. It automatically uses the desktop integration while keeping its own name, application identity and <code>~/.config/asterism</code> settings folder. An absolute <code>XDG_CONFIG_HOME</code> moves that folder to <code>$XDG_CONFIG_HOME/asterism</code>.</p>
+  <h2 id="install-asterism">Maprisma <span class="badge">Maprisma</span></h2>
+  <p>Maprisma also runs on Omarchy. It automatically uses the desktop integration while keeping its own name, application identity and <code>~/.config/maprisma</code> settings folder. An absolute <code>XDG_CONFIG_HOME</code> moves that folder to <code>$XDG_CONFIG_HOME/maprisma</code>.</p>
   <p>Choose one of these ways:</p>
   <ul>
-    <li><b>Arch Linux (AUR):</b> install the package <code>asterism</code> with your AUR helper.</li>
-    <li><b>AppImage:</b> download <code>Asterism-&lt;version&gt;-x86_64.AppImage</code> from the
+    <li><b>Arch Linux (AUR):</b> install the package <code>maprisma</code> with your AUR helper.</li>
+    <li><b>AppImage:</b> download <code>Maprisma-&lt;version&gt;-x86_64.AppImage</code> from the
       releases page at <code>github.com/uBruckhaus/Asterism</code>, make it executable and run it.
       The AppImage uses your distribution's Python 3 with PyGObject, GTK&nbsp;4 and libadwaita:
       <table class="compact">
@@ -143,13 +143,13 @@
   install. To run agents inside the window, install VTE: <code>sudo pacman -S vte4</code>.</p>
 
   <h2 id="first-start">First start</h2>
-  <p>Asterism’s package provides its app-launcher entry. Only the legacy AI Agents Map plugin asks whether to create its own launcher entry.</p>
-  <p>On Asterism’s first start, if it has no settings yet but the legacy plugin has them, it copies the settings, MCP server list, failed-link records, local-LLM launch settings and agent profiles. A private <code>plugin-backup-…</code> folder inside Asterism’s settings folder keeps the original bytes. The plugin’s originals remain untouched, and existing Asterism files are preserved. Verified add-ons for installed agents and local LLMs, plus the online-provider group, are enabled automatically. If Asterism already has settings, no import takes place.</p>
+  <p>Maprisma’s package provides its app-launcher entry. Only the legacy AI Agents Map plugin asks whether to create its own launcher entry.</p>
+  <p>On Maprisma’s first start, if it has no settings yet but the legacy plugin has them, it copies the settings, MCP server list, failed-link records, local-LLM launch settings and agent profiles. A private <code>plugin-backup-…</code> folder inside Maprisma’s settings folder keeps the original bytes. The plugin’s originals remain untouched, and existing Maprisma files are preserved. Verified add-ons for installed agents and local LLMs, plus the online-provider group, are enabled automatically. If Maprisma already has settings, no import takes place.</p>
   <p>The window is a normal app window: it can be tiled, floated, moved to another workspace and
-  reached with <kbd>Alt</kbd>+<kbd>Tab</kbd>. <span class="badge">Asterism</span> A fresh Asterism opens on
+  reached with <kbd>Alt</kbd>+<kbd>Tab</kbd>. <span class="badge">Maprisma</span> A fresh Maprisma opens on
   its <b>welcome page</b>: the agents and local LLMs installed on this computer are cards that are
   already ticked, and <b>Switch on</b> puts them on the map (see <a href="#addons-setup">Setting up
-  Asterism</a>).
+  Maprisma</a>).
   <span class="badge omarchy">Omarchy</span> The bar
   button opens the window, brings it to the front, or hides it when it is already in front.
   Closing the window hides it; the program keeps running in the background so it opens again at
@@ -165,13 +165,13 @@
 
   <h2 id="remove">Removing the app</h2>
   <p><span class="badge omarchy">Omarchy</span> <code>omarchy plugin remove ubruckhaus.ai-agents-map</code>.
-  <span class="badge">Asterism</span> Remove the package or delete the AppImage.</p>
+  <span class="badge">Maprisma</span> Remove the package or delete the AppImage.</p>
   <p>Before removing, switch off Settings › <b>Start local LLMs with their agents</b> so the
   background watcher is removed too, and Settings › <b>In the app launcher</b> to delete the
   launcher entry. Changes you made with the app stay: agents' settings, MCP servers, skills and
   installed local LLMs. Uninstall a local LLM first (right-click › <b>Uninstall…</b>) if you want it
   gone. To delete the app's own state as well:</p>
-  <pre>rm -rf ~/.config/omarchy/ai-agents-map ~/.config/asterism \
+  <pre>rm -rf ~/.config/omarchy/ai-agents-map ~/.config/maprisma \
        ~/.local/state/ai-agents-map ~/.cache/ai-agents-map</pre>
 </section>
 
@@ -200,7 +200,7 @@
       colour: only updates and suggestions; not there when there is nothing), <b>ⓘ</b> the legend (what every dot, line and mark on the map
       means), <b>⇅</b> the network traffic of the running agents (see <a href="#network">Network
       traffic</a>), the two sparkles for <b>Smart Check</b> (only while Claude Code or Codex is installed,
-      see <a href="#smart-check">Smart Check</a>), the add-ons <span class="badge">Asterism</span>, the filled <b>i</b> for Information
+      see <a href="#smart-check">Smart Check</a>), the add-ons <span class="badge">Maprisma</span>, the filled <b>i</b> for Information
       (see <a href="#help">Help</a>), <b>?</b> Help (<kbd>F1</kbd>) and the gear for Settings
       (<kbd>Ctrl</kbd>+<kbd>,</kbd>). Hold the left mouse button on a symbol and drag it sideways to put
       it elsewhere: a bar shows where it lands, and the order is kept.</li>
@@ -229,9 +229,9 @@
     <li><b>AI agents, Local LLMs</b> — every one the app knows. A card with a blue frame is installed on
       this PC; a grey one is not, and has <b>Install</b> where installed ones have <b>Uninstall</b>.
       <span class="badge omarchy">Omarchy</span> A click on an installed card opens its details.
-      <span class="badge">Asterism</span> A click ticks or unticks the card (✓), then <b>Apply</b>
+      <span class="badge">Maprisma</span> A click ticks or unticks the card (✓), then <b>Apply</b>
       switches its add-on on or off. Switching off takes it off the map; nothing is deleted.</li>
-    <li><b>Online providers</b> <span class="badge">Asterism</span> — the online providers' add-on; its
+    <li><b>Online providers</b> <span class="badge">Maprisma</span> — the online providers' add-on; its
       menu has <b>Sign in to …</b> for each installed agent that uses them.</li>
     <li><b>MCP servers, Skills, Models</b> — a card for each one that is installed. A click opens its
       details (a model: its menu). The card with a <b>+</b> at the end of a section adds one:
@@ -372,7 +372,7 @@
 
   <h2 id="agent-cards">Agent details</h2>
   <p>Every coding agent has a card on Setup, installed ones with their version. Click an installed
-  agent's card (<span class="badge">Asterism</span> or <b>⋯</b> › <b>Details</b>), or right-click its box on
+  agent's card (<span class="badge">Maprisma</span> or <b>⋯</b> › <b>Details</b>), or right-click its box on
   the map › <b>Details</b>. At the top, one line says whether the agent is ready (and if not, why) and
   whether it is running now or when it was last used. Below it, every category is a card that folds:
   click its heading to open or close it. They start folded, each with a one-line summary and badges; a
@@ -404,7 +404,7 @@
   cost Crush itself reports. For an agent that keeps no token counts on the PC (Cursor CLI, Antigravity,
   Muse) the card says the cost is not known; its provider's account page has it. Amounts are shown in
   US dollars, or in euros at the European Central Bank's daily rate (Settings › <b>Costs</b>).</p>
-  <p><span class="badge">Asterism</span> With the <b>Insights</b> add-on (see <a href="#addons">Add-ons</a>) the <b>Topics</b> card shows first
+  <p><span class="badge">Maprisma</span> With the <b>Insights</b> add-on (see <a href="#addons">Add-ons</a>) the <b>Topics</b> card shows first
   which topics took the most tokens in the last 30 days (<b>Most tokens</b>: sessions with the same title are one
   topic, each with its share of all tokens), then the titles the agent gave its sessions itself, per project
   (<b>By project</b>), and offers <b>Summarize with Claude…</b> (when Claude Code is installed). Its tokens come
@@ -566,7 +566,7 @@
   and settings but never the models. Local LLMs you installed yourself are shown, but never changed.</p>
 
   <h2 id="install-runtime-flutter">Installing in the Flutter preview</h2>
-  <p>In the Flutter preview, a local LLM that is not installed yet shows <b>Install</b> under Providers and models, and the first-agent guide offers <b>Install mise</b>, <b>Install Node.js</b> and <b>Install</b> for the local LLM its route needs. Asterism first looks up the latest release and shows it on a card: its files and their size, the program folder (<code>~/.local/share/ai-agents-map/&lt;name&gt;</code>, one folder per version), the model folder inside it and your graphics card. For llama.cpp and KoboldCpp, choose the build there (Vulkan, ROCm, CUDA or CPU); another build is looked up again before anything is installed. A local LLM with a user service also offers <b>Start now</b> and <b>Start at login</b>.</p>
+  <p>In the Flutter preview, a local LLM that is not installed yet shows <b>Install</b> under Providers and models, and the first-agent guide offers <b>Install mise</b>, <b>Install Node.js</b> and <b>Install</b> for the local LLM its route needs. Maprisma first looks up the latest release and shows it on a card: its files and their size, the program folder (<code>~/.local/share/ai-agents-map/&lt;name&gt;</code>, one folder per version), the model folder inside it and your graphics card. For llama.cpp and KoboldCpp, choose the build there (Vulkan, ROCm, CUDA or CPU); another build is looked up again before anything is installed. A local LLM with a user service also offers <b>Start now</b> and <b>Start at login</b>.</p>
   <p><b>Install</b> downloads the files, checks each one against the checksum its release lists, and unpacks them; nothing of the download runs while it is installed (Jan’s AppImage unpacks itself in a closed-in sandbox). A program that is already installed some other way, or a settings file or service that already exists, is never replaced: the card refuses it. Ollama, llama.cpp, KoboldCpp, Jan and mise install this way; LM Studio and vLLM do not, because no checksummed release can be taken for them.</p>
   <p>Every step you start from the first-agent guide — installing, signing in, the test question, Providers and models, Connections — brings you back to the guide with <b>Back</b>, refreshed, so the step just done shows as done.</p>
 
@@ -686,7 +686,7 @@
   listed as interrupted, with <b>Continue</b> or <b>Discard</b>.</p>
 
   <h2 id="jobs-flutter">Interrupted downloads in the Flutter preview</h2>
-  <p>In the Flutter preview, a model download or an Ollama pull whose connection breaks off is tried again after 5, 15, 30, 60 and 120 seconds and goes on where it stopped. If the app ends before it does, the next start shows a banner with each interrupted download, where it stopped, <b>Continue</b> (it goes on from the part already downloaded) and <b>Discard</b>. Only how to start it again is kept, in <code>~/.local/state/asterism/jobs.json</code>, readable only by you; a download that is still running elsewhere is not started twice.</p>
+  <p>In the Flutter preview, a model download or an Ollama pull whose connection breaks off is tried again after 5, 15, 30, 60 and 120 seconds and goes on where it stopped. If the app ends before it does, the next start shows a banner with each interrupted download, where it stopped, <b>Continue</b> (it goes on from the part already downloaded) and <b>Discard</b>. Only how to start it again is kept, in <code>~/.local/state/maprisma/jobs.json</code>, readable only by you; a download that is still running elsewhere is not started twice.</p>
 
   <h2 id="ask-model">Ask an agent which model fits</h2>
   <p>Not sure which model to take? When an agent for AI checks is set up (Settings › <b>Agent for AI
@@ -784,7 +784,7 @@
   computer, add the same folders there, and everything in them is on its map too.</p></div>
 
   <h2 id="connect-local-flutter">Local connections in the Flutter preview</h2>
-  <p>Open Connections, then Add MCP server. Enter a name, choose stdio, HTTP or SSE, and select the installed agents that should receive it. For stdio, enter the executable separately and put one argument on each line; spaces within a line stay in that argument. Add environment variables or HTTP headers as name/value pairs. Values are obscured. Preview lists recipients and file-change counts, without returning configuration values. Existing definitions with the same name are disclosed before replacement. Apply saves through the existing backup and Undo flow. Asterism does not start or test the server here; agents may start it when they read the saved configuration.</p>
+  <p>Open Connections, then Add MCP server. Enter a name, choose stdio, HTTP or SSE, and select the installed agents that should receive it. For stdio, enter the executable separately and put one argument on each line; spaces within a line stay in that argument. Add environment variables or HTTP headers as name/value pairs. Values are obscured. Preview lists recipients and file-change counts, without returning configuration values. Existing definitions with the same name are disclosed before replacement. Apply saves through the existing backup and Undo flow. Maprisma does not start or test the server here; agents may start it when they read the saved configuration.</p>
   <p>Add skills selects an existing folder containing skill folders, each with SKILL.md. Choose the parent skill-set folder, then the agents. Preview shows links or adapter settings before Apply. Original files stay in place; links follow later edits, and skills can include scripts agents may run. Native folders already read automatically need no new link. Discovery checks at most 200 entries per directory, one category level deep, with 1,000 entries in total; choose a smaller folder if needed. A preview supports up to 32 agents and 200 links. Undo removes added links or restores settings while preserving later changes. Online catalogs, downloading skills and MCP tool checks are not part of these local forms.</p>
 
   <h2 id="found-flutter">Found on this PC in the Flutter preview</h2>
@@ -897,7 +897,7 @@
 <p>Settings also offers <b>Start local LLMs with their agents</b>: when an agent connected to a local LLM starts, its LLM starts too, and when the last such agent closes, the LLM stops and its GPU memory is free again (a user service does this, also with the window closed). <b>Agent for AI checks</b> chooses which installed agent is offered first for AI help and the Smart Check on the System Map; its tokens are used for them. It lists the agents the System Map found able to do that.</p>
 
 <h2 id="popup-flutter">The popup under the bar on Omarchy</h2>
-<p>On Omarchy the Flutter app opens as a popup: a floating window at the top right under the bar, without a title bar, like the plugins' popups. <kbd>Esc</kbd> on the main page or a click elsewhere closes it; starting the app again (or the bar icon, which runs <code>asterism --toggle</code>) brings it back where it was, with everything as you left it. A file chooser the app opens does not close it. Settings › <b>Window</b> chooses <b>Automatic: a popup under the bar on Omarchy</b> (the default), <b>A popup under the bar</b> or <b>A normal window</b>; a change applies the next time the window opens. On other desktops the app is a normal window.</p>
+<p>On Omarchy the Flutter app opens as a popup: a floating window at the top right under the bar, without a title bar, like the plugins' popups. <kbd>Esc</kbd> on the main page or a click elsewhere closes it; starting the app again (or the bar icon, which runs <code>maprisma --toggle</code>) brings it back where it was, with everything as you left it. A file chooser the app opens does not close it. Settings › <b>Window</b> chooses <b>Automatic: a popup under the bar on Omarchy</b> (the default), <b>A popup under the bar</b> or <b>A normal window</b>; a change applies the next time the window opens. On other desktops the app is a normal window.</p>
 
 <h2 id="omarchy-data-flutter">Usage figures and corners from Omarchy in the Flutter preview</h2>
 <p>When an agent's details open in the Flutter preview and Omarchy collects that agent's usage (plan, limits and when they reset), the app asks Omarchy for fresh figures in the background if the last ones are older than ten minutes or older than the agent's last sign-in, then shows them; at most once every ten minutes per agent. Settings › <b>Corners</b> sets the corners of the window's cards, dialogs and the map's boxes: <b>Like windows</b> follows Hyprland's window rounding (with the number of pixels shown), <b>Rounded</b> or <b>Square</b>.</p>
@@ -923,12 +923,12 @@
       <tr><td><b>AI features</b>: <b>Agent for AI checks</b></td><td>Claude Code or Codex: does the AI checks and look-ups and takes the <b>Do it with …</b> and <b>Fix it with …</b> tasks.</td></tr>
       <tr><td><b>AI features</b>: <b>Local helper</b></td><td>An agent with a model of your local LLM for the AI help that needs no web (off until you choose one). See <a href="#local-helper">The local helper</a>.</td></tr>
       <tr><td><b>Models folder</b></td><td>One folder for all models, with <b>Reorganize models…</b>.</td></tr>
-      <tr><td><b>Add-ons</b> <span class="badge">Asterism</span></td><td><b>Look for add-ons online</b>, the Add-ons page, and <b>Setup</b>.</td></tr>
+      <tr><td><b>Add-ons</b> <span class="badge">Maprisma</span></td><td><b>Look for add-ons online</b>, the Add-ons page, and <b>Setup</b>.</td></tr>
       <tr><td><b>About</b></td><td>The version, the author and the license; <b>Website</b> opens the project on GitHub and <b>Report an Issue</b> its issue list.</td></tr>
     </tbody>
   </table>
   <div class="figure narrow">
-    <img src="images/about.jpg" alt="The About dialog: the Asterism icon, name, Uwe Bruckhaus, version 0.7.1, and the rows Website, Report an Issue and Legal">
+    <img src="images/about.jpg" alt="The About dialog: the Maprisma icon, name, Uwe Bruckhaus, version 0.7.1, and the rows Website, Report an Issue and Legal">
     <p class="caption">Settings › About.</p>
   </div>
 
@@ -1096,7 +1096,7 @@
 <p>In the Flutter preview, every AI Map column has one group card. A dashed card means nothing is set up; its found count reports local detection. These placeholders are display elements, never connected nodes or AI input. Click Expand, double-click the card or press Enter while it has focus. The group appears alone in the centre. Back, Esc, Backspace or the surrounding background restores the map’s zoom and selection. The System Map uses the same controls for hardware, disks, programs, tools and folders.</p>
 <h2 id="map-groups-addons">Manage add-ons</h2>
 <p>Focus groups show On, Off, Found on this PC and Not installed as applicable. Use the overflow menu or right-click for switching, Add-on details, a newer signed version or provider sign-in through an installed agent. Details disclose reads, sends and capabilities. Switches apply immediately with one Undo snackbar. Changes are blocked while this app owns running agent sessions or an installation is active. Agents in other terminals do not block add-on management. Look for add-ons online explicitly loads the signed catalog; merely expanding never requests it. Review Install or Update before execution. New add-ons stay off. Removing a user add-on makes a backup and preserves programs and data; Undo is available until the app closes. Bundled add-ons stay with their package.</p>
-<p>The Flutter preview shares its user add-on folder with Asterism (GTK). Removing an add-on also removes it from GTK; catalog installs and updates affect both applications. These effects are disclosed before confirmation. After a confirmed removal, old backups become eligible for cleanup after 30 days. Backups with an active Undo are kept; links, unrelated folders and foreign-owned folders are skipped. Undo lasts until this app closes. During first use, Welcome’s Agents button reopens the same Agents focus with its fixed Switch on / Later footer; it does not finish welcome or open a plain group view.</p>
+<p>After a confirmed removal, old backups become eligible for cleanup after 30 days. Backups with an active Undo are kept; links, unrelated folders and foreign-owned folders are skipped. Undo lasts until this app closes. During first use, Welcome’s Agents button reopens the same Agents focus with its fixed Switch on / Later footer; it does not finish welcome or open a plain group view.</p>
 <p><b>Install from file…</b> takes an add-on .zip you downloaded yourself. Its own signature decides, as for a catalog download: the file is checked first and shown like a catalog entry (name, version, kind, what it reads and sends, and whether it replaces an installed version), and nothing is installed until you confirm. The file is read again then and must still be the one you reviewed. Only agent and provider add-ons can be used in the Flutter preview so far.</p>
 <h2 id="map-groups-welcome">First use and existing flows</h2>
 <p>Welcome appears above the map, with local Look at this PC / Skip and a System Map link. Mount existing data disks before searching. The Agents group opens with detected agents marked. Its fixed Switch on / Later footer stays visible while the list scrolls. Switch on is one batch with one Undo; Later preserves choices. Other enabled add-on kinds are preserved. Later starts do not auto-expand. Models links to existing download/import controls and model-folder reuse; MCP servers and skills links to Connections. New MCP definitions and new skill-folder installation remain unported. The rocket button retains the first-agent guide. Setup and Add-ons pages have been replaced by these groups.</p>
@@ -1250,15 +1250,15 @@
 <!-- ============================== Add-ons ============================== -->
 <section class="chapter" id="addons">
   <h1>Add-ons</h1>
-  <p>Everything Asterism understands about an agent or an LLM provider is an <b>adapter</b>: how it
-  is found and installed, its sessions, security settings, MCP servers and skills. In Asterism every
+  <p>Everything Maprisma understands about an agent or an LLM provider is an <b>adapter</b>: how it
+  is found and installed, its sessions, security settings, MCP servers and skills. In Maprisma every
   adapter is an <b>add-on</b>: the packages bring all of them, signed and switched off, and you switch
   on the ones you use. Add-ons also bring new agents, new providers, and features beyond the numbers,
   such as <b>Insights</b> (session topics and a summary by Claude). The AI Agents Map plugin has the
   adapters built in and no add-ons.</p>
 
-  <h2 id="addons-setup">Setting up Asterism</h2>
-  <p>A new Asterism opens on its <b>welcome page</b>. Every agent and local LLM Asterism knows is a
+  <h2 id="addons-setup">Setting up Maprisma</h2>
+  <p>A new Maprisma opens on its <b>welcome page</b>. Every agent and local LLM Maprisma knows is a
   card with its own icon, in three groups: <b>AI agents</b>, <b>Local LLMs</b> and <b>Online
   providers</b> (the names of Anthropic, OpenAI and the others on the map). Each card says whether the
   program is here:</p>
@@ -1268,13 +1268,13 @@
     <li><b>Not installed</b> — tick it to install it afterwards from its card.</li>
   </ul>
   <div class="figure wide">
-    <img src="images/setup-welcome.jpg" alt="The welcome page: the Asterism icon and Welcome to Asterism, then AI agents as cards with their icons; ten installed ones are ticked with a blue frame and a check mark, the ones used before or not installed are grey; Later and Switch on 14 at the bottom">
+    <img src="images/setup-welcome.jpg" alt="The welcome page: the Maprisma icon and Welcome to Maprisma, then AI agents as cards with their icons; ten installed ones are ticked with a blue frame and a check mark, the ones used before or not installed are grey; Later and Switch on 14 at the bottom">
     <p class="caption">The welcome page: found programs come first and are ticked.</p>
   </div>
   <p>Click a card (or press <kbd>Space</kbd> on it) to tick or untick it; a ticked card has a blue frame
   and a check mark. <b>Switch on</b> (with the number of ticked cards) loads them and shows the map; when
   you ticked programs that are not installed, <b>Setup</b> opens: <b>⋯</b> on their cards ›
-  <b>Install…</b>. <b>Later</b> starts with an empty map. As long as nothing is switched on, Asterism opens
+  <b>Install…</b>. <b>Later</b> starts with an empty map. As long as nothing is switched on, Maprisma opens
   on the welcome page again at every start. Afterwards the same cards are on <b>Setup</b> (the header
   button), where agents and providers are switched on and off at any time.</p>
 
@@ -1286,8 +1286,8 @@
       shown yet;</li>
     <li><b>Installed add-ons</b> — on, off, or <i>not loaded</i> with the reason (for example a changed file);</li>
     <li><b>Available</b> — the other add-ons of the catalog;</li>
-    <li><b>Built into Asterism</b> — agents and providers that no installed add-on brings (when you
-      run Asterism from its source folder without add-ons).</li>
+    <li><b>Built into Maprisma</b> — agents and providers that no installed add-on brings (when you
+      run Maprisma from its source folder without add-ons).</li>
   </ul>
   <div class="figure wide">
     <img src="images/addons-page.jpg" alt="The Add-ons page: search field, filter chips All, Agents, Providers, Features, Installed, Updates, and the Installed add-ons as cards; Claude Code, Codex, OpenCode, Pi, llama.cpp, LM Studio and Ollama are On with Install greyed out and Uninstall, the others Off with Switch on">
@@ -1309,7 +1309,7 @@
   you downloaded yourself; the same checks apply.</p>
   <p>When the catalog has newer versions of installed add-ons, <b>Setup</b>'s cards say <i>Add-on update</i>, the open problems page (the red <b>!</b> in the header) lists <b>Add-on updates ready</b> with <b>Update all</b> and <b>Add-ons</b>, and the Add-ons page shows a bar with <b>Update all</b>. The card's ⋯ menu (or a right-click on it) also has <b>Update add-on to</b> <i>version</i>, for that one add-on. Update all updates every one of them in turn, with the same checks, and says in one message which were updated. One install or update runs at a time; another one started meanwhile asks you to try again in a moment.</p>
 
-  <div class="tip"><p><b>Only from the author.</b> Asterism loads only add-ons signed by Uwe
+  <div class="tip"><p><b>Only from the author.</b> Maprisma loads only add-ons signed by Uwe
   Bruckhaus (key fingerprint <code>SHA256:e5cC634Ke3Our5LAeSc88qs22NKZEHTncBW5Ig3amWQ</code>). Before
   anything of an add-on runs, the signature is checked with OpenSSH's <code>ssh-keygen</code>, every
   file is compared with its SHA-256, and no file may have been added. A download must also match the
@@ -1319,7 +1319,7 @@
   <table class="first-nowrap">
     <thead><tr><th>Level</th><th>What the add-on may read or send</th></tr></thead>
     <tbody>
-      <tr><td><b>Numbers only</b></td><td>Counts, times, tokens, lines changed, cost — what Asterism shows without add-ons.</td></tr>
+      <tr><td><b>Numbers only</b></td><td>Counts, times, tokens, lines changed, cost — what Maprisma shows without add-ons.</td></tr>
       <tr><td><b>Session titles</b></td><td>The titles an agent gave its sessions itself (never the conversations).</td></tr>
       <tr><td><b>Titles and a summary by Claude</b></td><td>Those titles and numbers, sent to your own Claude Code — only on a click, after a preview of exactly what is sent.</td></tr>
     </tbody>
@@ -1331,8 +1331,8 @@
   <table class="first-nowrap">
     <thead><tr><th>Kind</th><th>What it brings</th></tr></thead>
     <tbody>
-      <tr><td><b>Agent</b></td><td>One coding agent: where it keeps its settings, sessions, MCP servers and skills, how it is installed and how it signs in. Asterism builds everything else from that — the card on Setup, its box on the map, Usage and tokens, Projects, Health and Security.</td></tr>
-      <tr><td><b>Provider</b></td><td>A local LLM program, or the online providers: how it is found and installed, and how agents reach it. Asterism builds its card, its box on the map and its details page — including <b>Usage and tokens</b>: what your agents sent through it, taken from their own session numbers.</td></tr>
+      <tr><td><b>Agent</b></td><td>One coding agent: where it keeps its settings, sessions, MCP servers and skills, how it is installed and how it signs in. Maprisma builds everything else from that — the card on Setup, its box on the map, Usage and tokens, Projects, Health and Security.</td></tr>
+      <tr><td><b>Provider</b></td><td>A local LLM program, or the online providers: how it is found and installed, and how agents reach it. Maprisma builds its card, its box on the map and its details page — including <b>Usage and tokens</b>: what your agents sent through it, taken from their own session numbers.</td></tr>
       <tr><td><b>Extension</b></td><td>More facts for an agent or a provider another add-on brings, without replacing it — for example its plan and limits, or a card on its details page. It only fills what the agent's add-on leaves empty; the add-on's page says what it adds to and anything it adds that is not used.</td></tr>
       <tr><td><b>Feature</b></td><td>Something across agents, such as Insights (the Topics card).</td></tr>
     </tbody>
@@ -1345,16 +1345,16 @@
   cannot say</i>.</p>
 
   <h2 id="addons-new-harness">A new agent on your computer</h2>
-  <p>When you install an agent Asterism does not know yet, it looks in the catalog (Settings ›
+  <p>When you install an agent Maprisma does not know yet, it looks in the catalog (Settings ›
   <b>Look for add-ons online</b>, on by default: the list is read from GitHub every few hours, nothing
   is sent but the request). If an add-on knows that agent, <b>Updates and suggestions</b> (the
   header's <b>!</b>) says so (<i>"Kilo Code is on this PC but not on the map"</i>) and a card under <b>Suggested for this PC</b>; one click installs it. If no add-on exists yet, the
   agent's details say so, with a link to ask for one.</p>
 
   <h2 id="addons-make">Making an add-on</h2>
-  <p>A new local LLM or a new agent needs nothing but an add-on: Asterism builds its card, its box and
+  <p>A new local LLM or a new agent needs nothing but an add-on: Maprisma builds its card, its box and
   lines on the map, its details, the Models page and the Security page from what the add-on says about
-  it. If you can program a little, start from the templates in the Asterism repository
+  it. If you can program a little, start from the templates in the Maprisma repository
   (<code>templates/</code>, explained in <code>docs/addons.md</code>): one file for a local LLM, a file
   of facts for an agent. Send the add-on to <code>github.com/uBruckhaus/asterism-addons</code>; once it
   is reviewed and signed, it appears under <b>Available</b> for everyone.</p>
@@ -1433,7 +1433,7 @@
   <table>
     <thead><tr><th>Path</th><th>Contents</th></tr></thead>
     <tbody>
-      <tr><td><code>~/.config/asterism/</code> <span class="badge">Asterism</span><br><code>~/.config/omarchy/ai-agents-map/</code> <span class="badge omarchy">Omarchy</span></td><td>Settings, the MCP server list, looked-up agents, failed connections.</td></tr>
+      <tr><td><code>~/.config/maprisma/</code> <span class="badge">Maprisma</span><br><code>~/.config/omarchy/ai-agents-map/</code> <span class="badge omarchy">Omarchy</span></td><td>Settings, the MCP server list, looked-up agents, failed connections.</td></tr>
       <tr><td><code>~/.local/state/ai-agents-map/backups/</code></td><td>Backups of every file the app changed.</td></tr>
       <tr><td><code>~/.local/state/ai-agents-map/jobs.json</code></td><td>Interrupted downloads and installs.</td></tr>
       <tr><td><code>~/.local/state/ai-agents-map/reorganize.json</code></td><td>The journal of the last reorganize, for Undo.</td></tr>

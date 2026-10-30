@@ -40,7 +40,7 @@ class AddonDetails extends StatelessWidget {
             Text(tr(capabilities[capability]!)),
         const SizedBox(height: 12),
         Text(
-          '${tr('Reads')}: ${reads.isEmpty ? tr('Nothing beyond what Asterism shows anyway.') : reads}',
+          '${tr('Reads')}: ${reads.isEmpty ? tr('Nothing beyond what Maprisma shows anyway.') : reads}',
         ),
         const SizedBox(height: 8),
         Text(
@@ -76,15 +76,7 @@ class AddonInstallReview extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              tr(
-                'Catalog installs and updates also change the add-ons used by Asterism (GTK).',
-              ),
-            ),
-            const SizedBox(height: 12),
-            AddonDetails(item: item, tr: tr),
-          ],
+          children: [AddonDetails(item: item, tr: tr)],
         ),
       ),
     ),

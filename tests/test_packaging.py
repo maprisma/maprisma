@@ -17,7 +17,7 @@ class PackagedDataTest(unittest.TestCase):
         self.assertEqual(len(pdfs), 8, pdfs)        # English and the seven translations
 
     def test_manuals_name_this_version(self):
-        """Each built manual's footer names this Asterism version (docs/manual/build.py --all)."""
+        """Each built manual's footer names this Maprisma version (docs/manual/build.py --all)."""
         import shutil
         import subprocess
         import addons
@@ -27,7 +27,7 @@ class PackagedDataTest(unittest.TestCase):
             with self.subTest(pdf=pdf.name):
                 text = subprocess.run(["pdftotext", "-f", "5", "-l", "5", str(pdf), "-"], capture_output=True,
                                       text=True, timeout=30).stdout
-                self.assertIn(f"Asterism {addons.ASTERISM_VERSION}", text)
+                self.assertIn(f"Maprisma {addons.ASTERISM_VERSION}", text)
 
     def test_unpacker_takes_every_file_an_add_on_may_have(self):
         source = (ROOT / "packaging/unpack-adapters.py").read_text()

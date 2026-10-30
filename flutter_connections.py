@@ -127,7 +127,7 @@ class Connections:
             if any(mcp_ctl.is_connected(c, name) for c in selected):
                 notes.append('Existing definitions with this name will be replaced for the selected agents.')
             plans = [mcp_ctl.plan(c, name, entry=clean) for c in selected]
-            notes.append('Asterism saves configuration only. Agents may start this server when they read it.')
+            notes.append('Maprisma saves configuration only. Agents may start this server when they read it.')
             item = name
         else:
             folder = params['folder']
