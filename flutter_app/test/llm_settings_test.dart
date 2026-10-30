@@ -82,4 +82,114 @@ void main() {
     notify.onChanged!(false);
     expect(updated, {'warn_notify': false});
   });
+
+  testWidgets('the local helper: the suggestion marked, a choice saved', (
+    tester,
+  ) async {
+    Map<String, dynamic>? updated;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SettingsView(
+            settings: const {
+              'language': 'auto',
+              'look': 'adwaita',
+              'map_layers': ['agents'],
+            },
+            busy: false,
+            tr: (key) => key,
+            checkers: const [],
+            helpers: const {
+              'candidates': [
+                {
+                  'key': {
+                    'agent': 'pi',
+                    'provider': 'llama-local',
+                    'model': 'big',
+                  },
+                  'label': 'Pi · llama.cpp · big',
+                },
+                {
+                  'key': {
+                    'agent': 'pi',
+                    'provider': 'llama-local',
+                    'model': 'small',
+                  },
+                  'label': 'Pi · llama.cpp · small',
+                },
+              ],
+              'suggested': {
+                'key': {
+                  'agent': 'pi',
+                  'provider': 'llama-local',
+                  'model': 'big',
+                },
+                'label': 'Pi · llama.cpp · big',
+              },
+              'chosen': null,
+            },
+            unitName: 'fixture.service',
+            onBack: () {},
+            onUpdate: (values) async => updated = values,
+          ),
+        ),
+      ),
+    );
+    await tester.scrollUntilVisible(find.text('Local helper'), 250);
+    await tester.tap(find.text('Off'));
+    await tester.pumpAndSettle();
+    expect(find.text('Pi · llama.cpp · big (suggested)').last, findsOneWidget);
+    await tester.tap(find.text('Pi · llama.cpp · small').last);
+    await tester.pumpAndSettle();
+    expect(updated, {
+      'ai_local_helper': {
+        'agent': 'pi',
+        'provider': 'llama-local',
+        'model': 'small',
+      },
+    });
+  });
+
+  testWidgets('daily AI checks: off by default, switched on, checked now', (
+    tester,
+  ) async {
+    Map<String, dynamic>? updated;
+    var checked = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SettingsView(
+            settings: const {
+              'language': 'auto',
+              'look': 'adwaita',
+              'map_layers': ['agents'],
+            },
+            busy: false,
+            tr: (key) => key,
+            checkers: const [],
+            mcpChecks: const {
+              'servers': 3,
+              'agent': 'Claude Code',
+              'summary': 'daily checks off',
+              'updates': [],
+            },
+            onCheckMcp: () => checked++,
+            onBack: () {},
+            onUpdate: (values) async => updated = values,
+          ),
+        ),
+      ),
+    );
+    final daily = find.byKey(const ValueKey('ai-checks'));
+    await tester.scrollUntilVisible(daily, 250);
+    expect(tester.widget<SwitchListTile>(daily).value, isFalse);
+    final now = find.byKey(const ValueKey('ai-checks-now'));
+    await tester.scrollUntilVisible(now, 100);
+    expect(find.text('MCP server updates: daily checks off'), findsOneWidget);
+    await tester.tap(daily);
+    await tester.pumpAndSettle();
+    expect(updated, {'ai_checks': true});
+    await tester.tap(now);
+    expect(checked, 1);
+  });
 }

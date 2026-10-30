@@ -15,6 +15,7 @@ import 'costs.dart';
 import 'projects.dart' show projectsCard;
 import 'runtime_details.dart';
 import 'usage_box.dart';
+import 'local_helper.dart';
 import 'session_readers.dart' show NumericSession, SessionReaders;
 import 'usage_readers.dart' show UsageReaders;
 import 'found_scan.dart';
@@ -63,6 +64,7 @@ import 'agent_updates.dart';
 import 'model_slots.dart';
 import 'red_limits.dart';
 import 'mcp_tools.dart' show cachedTools;
+import 'mcp_updates.dart' as mcp_updates;
 
 const portedRoutes = {
   'settings.get',
@@ -159,6 +161,11 @@ const portedRoutes = {
   'providers.details',
   'details.mcp',
   'map.usage',
+  'helper.snapshot',
+  'checks.mcp_updates',
+  'checks.mcp_check',
+  'checks.mcp_task',
+  'checks.mcp_release',
   'details.skills',
   'costs.rate',
   ...readOnlyRoutes,
@@ -331,6 +338,179 @@ final class CoreService {
                       (kept['fetched'] as num) >=
                   rateEvery),
     };
+  }
+
+  /// A Check now this run (also while the daily checks are off): its finds
+  /// show until the next check.
+  bool mcpCheckForced = false;
+
+  String get mcpUpdatesCache => p.join(identity.cacheDir, 'mcp-updates.json');
+
+  /// ai_helper.chosen: the agent for AI checks (the one picked in Settings
+  /// when it can look things up, else the first that can), and the agent
+  /// "Do it with …" starts (the chosen one when it can take a task).
+  (String?, String?) _checksAgents() {
+    final (checkers, taskers) = _aiHelpers();
+    final picked = '${settings.load()['ai_checks_agent'] ?? ''}';
+    final chosen = checkers.contains(picked) ? picked : checkers.firstOrNull;
+    final task = taskers.contains(chosen) ? chosen : taskers.firstOrNull;
+    return (chosen, task);
+  }
+
+  /// checks.mcp_updates / mcp_check / mcp_task (ai_popup's daily AI checks,
+  /// the hint lines and Smart Check's Check now): the MCP server updates an
+  /// agent found on the web, its look-up at most once a day (Settings ›
+  /// Daily AI checks) or now, and the task "Do it with …" previews.
+  Map<String, dynamic> mcpChecksRoute(
+    String method,
+    Map<String, dynamic> params,
+  ) {
+    final home = identity.home;
+    final servers = mcp_updates.installedServers(mcp.library(), home);
+    final on = settings.load()['ai_checks'] == true;
+    final open = on || mcpCheckForced
+        ? mcp_updates.stillOpen(mcp_updates.cached(mcpUpdatesCache), servers)
+        : <mcp_updates.McpFound>[];
+    if (method == 'checks.mcp_release') {
+      final update = open.where((u) => u.name == params['name']).firstOrNull;
+      if (params.length != 1 ||
+          update == null ||
+          mcp_updates.safeUrl(update.url).isEmpty) {
+        throw const FormatException('Unknown update');
+      }
+      return {
+        'opened': openWebPage(update.url, identity.environment['PATH'], home),
+      };
+    }
+    if (method == 'checks.mcp_task') {
+      final update = open.where((u) => u.name == params['name']).firstOrNull;
+      final (_, task) = _checksAgents();
+      if (params.length != 1 || update == null || task == null) {
+        throw const FormatException('Update/helper unavailable');
+      }
+      final prompt = mcp_updates.taskPrompt(update, home);
+      final adapter = addons.adapters
+          .where((a) => a.command == task)
+          .firstOrNull;
+      final argv = taskArgv(adapter, task, prompt, identity.environment, home);
+      if (argv == null || argv.isEmpty) {
+        throw const FormatException('Guarded helper unavailable');
+      }
+      return helpPreviews.keep(task, _nameOf(task), prompt, argv, 'mcp-update');
+    }
+    Map<String, dynamic> snapshot() {
+      final images = FoundScan(
+        home,
+        cacheFile: p.join(identity.cacheDir, 'mcp-scan-3.json'),
+        searchPath: identity.environment['PATH'],
+        mcpFolders: _savedList('mcp_folders'),
+      ).appimages();
+      final (chosen, task) = _checksAgents();
+      return {
+        'on': on,
+        'summary': open.isNotEmpty
+            ? i18n
+                  .plural('1 update', '{0} updates', open.length)
+                  .replaceAll('{0}', '${open.length}')
+            : i18n.text(on ? 'nothing new' : 'daily checks off'),
+        'servers': servers.length,
+        'agent': chosen == null ? null : _nameOf(chosen),
+        'task_agent': task == null ? null : _nameOf(task),
+        'due': mcp_updates.due(
+          DateTime.now().millisecondsSinceEpoch / 1000,
+          mcpUpdatesCache,
+        ),
+        'updates': [
+          for (final u in open)
+            {
+              ...mcp_updates.foundJson(u),
+              'on_pc': mcp_updates.onPc(u, home, images),
+              'text': i18n
+                  .text(
+                    mcp_updates.onPc(u, home, images)
+                        ? 'MCP server {0} {1} is on this PC, the agents still start {2}'
+                        : 'MCP server {0} {1} is available (you have {2})',
+                  )
+                  .replaceAll('{0}', u.name)
+                  .replaceAll('{1}', u.latest)
+                  .replaceAll('{2}', u.current),
+            },
+        ],
+      };
+    }
+
+    if (method == 'checks.mcp_updates') {
+      if (params.isNotEmpty) throw const FormatException('Invalid request');
+      return snapshot();
+    }
+    // checks.mcp_check {force}: the daily check (only while it is on and a
+    // day has passed) or Smart Check's Check now.
+    final force = params['force'];
+    if (params.length != 1 || force is! bool) {
+      throw const FormatException('Invalid request');
+    }
+    final now = DateTime.now().millisecondsSinceEpoch / 1000;
+    final (chosen, _) = _checksAgents();
+    if (servers.isEmpty ||
+        chosen == null ||
+        (!force && (!on || !mcp_updates.due(now, mcpUpdatesCache)))) {
+      return {'snapshot': snapshot()};
+    }
+    if (force) mcpCheckForced = true;
+    final body = utf8.encode(
+      pyJsonDumps({
+        'command': chosen,
+        'servers': [for (final s in servers) mcp_updates.serverJson(s)],
+        'cache': mcpUpdatesCache,
+        'now': now,
+        'settings_path': identity.settingsPath,
+      }),
+    );
+    return {
+      ...tasks.startPrivate('checks.mcp', body, (_) => snapshot()),
+      'agent': _nameOf(chosen),
+    };
+  }
+
+  /// The local helper (local_helper): every (agent with an advise fact,
+  /// local LLM it is connected to, chat model), the suggestion for this
+  /// card, and the one confirmed in Settings › AI help while it is there.
+  (List<HelperCandidate>, HelperCandidate?, HelperCandidate?) localHelpers() {
+    final agents = reads.catalog.scan();
+    final inventory = reads.inventory.collect(agents, remember: false);
+    final installed = {
+      for (final a in agents)
+        if (a.installed) a.command,
+    };
+    final tuning = LlmTuning(ContextReader(reads.files, config), identity.home);
+    final found = helperCandidates(
+      advisers(
+        [for (final a in agents) a.adapter],
+        installed,
+        identity.environment['PATH'],
+      ),
+      (adapter) => reads.details.read(adapter).providers,
+      [for (final rt in inventory.runtimes) rt.toJson()],
+      (rt, model) =>
+          tuning.modelSize('${rt['key']}', '${rt['models_dir']}', model),
+    );
+    final vram = ContextReader(reads.files, config).vramTotal();
+    return (
+      found,
+      suggestHelper(found, vram),
+      chosenHelper(found, settings.value(settings.load(), 'ai_local_helper')),
+    );
+  }
+
+  String helperName(HelperCandidate c) {
+    final names = {
+      for (final rt
+          in reads.inventory
+              .collect(reads.catalog.scan(), remember: false)
+              .runtimes)
+        rt.key: rt.name,
+    };
+    return helperLabel(c, _nameOf(c.agent), names[c.runtime] ?? '');
   }
 
   /// The map's usage statistics box (usage_box, Settings › Usage
@@ -1418,7 +1598,11 @@ final class CoreService {
       recordRun(
         runLogPath(env, home),
         identity.shortName,
-        topic == 'fix' ? 'smart-fix' : 'setup-help',
+        switch (topic) {
+          'fix' => 'smart-fix',
+          'mcp-update' => 'mcp-update',
+          _ => 'setup-help',
+        },
         command,
         null,
         true,
@@ -1998,9 +2182,14 @@ final class CoreService {
           // The agents for AI checks that can look this over, the chosen one first.
           final checkers = _aiHelpers().$1;
           final chosen = '${settings.load()['ai_checks_agent'] ?? ''}';
+          // The local helper first, when one is confirmed (it needs no web
+          // and no tokens), then the agents for AI checks.
+          final helper = localHelpers().$3;
           return {
             ...facts,
             'helpers': [
+              if (helper != null)
+                {'command': 'local-helper', 'name': helperName(helper)},
               for (final c in [
                 if (checkers.contains(chosen)) chosen,
                 ...checkers.where((c) => c != chosen),
@@ -2015,9 +2204,10 @@ final class CoreService {
     if (method == 'models.tuning_ask') {
       final command = params['command'];
       final kept = tuningFacts[rt.key];
+      final helper = command == 'local-helper' ? localHelpers().$3 : null;
       if (params.length != 2 ||
           command is! String ||
-          !_aiHelpers().$1.contains(command)) {
+          (helper == null && !_aiHelpers().$1.contains(command))) {
         throw const FormatException('Choose an installed AI checker');
       }
       if (kept == null || DateTime.now().difference(kept.$1).inMinutes >= 10) {
@@ -2025,9 +2215,15 @@ final class CoreService {
       }
       final body = utf8.encode(
         pyJsonDumps({
-          'command': command,
+          'command': helper?.agent ?? command,
           'facts': kept.$2,
           'settings_path': identity.settingsPath,
+          if (helper != null)
+            'helper': {
+              'provider': helper.provider,
+              'runtime': helper.runtime,
+              'model': helper.model,
+            },
         }),
       );
       if (body.length > 256 * 1024) {
@@ -3052,6 +3248,20 @@ final class CoreService {
     if (method == 'health.report') return healthReportRoute(params);
     if (method.startsWith('found.')) return foundRoute(method, params);
     if (method == 'map.usage') return usageRoute(params);
+    if (method.startsWith('checks.mcp_')) return mcpChecksRoute(method, params);
+    if (method == 'helper.snapshot') {
+      if (params.isNotEmpty) throw const FormatException('Invalid request');
+      final (found, suggested, chosen) = localHelpers();
+      return {
+        'candidates': [
+          for (final c in found) {'key': helperKey(c), 'label': helperName(c)},
+        ],
+        'suggested': suggested == null
+            ? null
+            : {'key': helperKey(suggested), 'label': helperName(suggested)},
+        'chosen': chosen == null ? null : helperKey(chosen),
+      };
+    }
     if (method == 'details.mcp' || method == 'details.skills') {
       return itemDetails(method, params);
     }

@@ -801,6 +801,7 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
     try {
       await _backend!.call('settings.update', {'values': values});
       await _refresh();
+      if (values.containsKey('ai_checks')) unawaited(_checkMcp());
     } catch (_) {
       _actionFailed();
     }
@@ -1241,6 +1242,7 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
       (_healthReport?['warn'] as int? ?? 0) +
       (_healthReport?['hint'] as int? ?? 0) +
       _updates.length +
+      _mcpUpdates.length +
       _addonHints.length +
       _foundHints.length;
 
@@ -1248,6 +1250,16 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
 
   /// Newer versions of agents and local LLMs (updates.check, cached 6 h).
   List<Map<String, dynamic>> _updates = [];
+
+  /// Settings › Daily AI checks (checks.mcp_*): the MCP server updates the
+  /// agent for AI checks found on the web; asked at most once a day (the
+  /// core decides), looked at every hour.
+  Map<String, dynamic>? _mcpChecks;
+  bool _mcpChecking = false;
+  Timer? _mcpTimer;
+  List<Map<String, dynamic>> get _mcpUpdates =>
+      (_mcpChecks?['updates'] as List? ?? const [])
+          .cast<Map<String, dynamic>>();
 
   /// The batteries of plan limits and today's costs in the agents' boxes
   /// (map.badges, every minute as the reference's COST_EVERY); in euros the
@@ -1485,6 +1497,87 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
     }
   }
 
+  /// The daily check (force: Settings' Check now, also while it is off):
+  /// minutes in the background when the agent is asked, else the kept answer.
+  Future<void> _checkMcp({bool force = false}) async {
+    if (_mcpChecking || _backend == null) return;
+    setState(() => _mcpChecking = true);
+    try {
+      final started = await _backend!.call('checks.mcp_check', {
+        'force': force,
+      });
+      final snapshot = started['snapshot'] is Map
+          ? started['snapshot'] as Map<String, dynamic>
+          : await _awaitTask('checks.mcp_check', started);
+      if (mounted) setState(() => _mcpChecks = snapshot);
+    } catch (_) {
+      if (force) _actionFailed();
+    } finally {
+      if (mounted) setState(() => _mcpChecking = false);
+    }
+  }
+
+  /// An MCP server update's buttons: its release page, "Do it with …" (the
+  /// task reviewed first, then in a terminal tab here), or Use it… when the
+  /// newer version is already on this PC (the map's own update).
+  Future<void> _mcpUpdateAction(
+    Map<String, dynamic> update,
+    String action,
+  ) async {
+    try {
+      if (action == 'release') {
+        final done = await _backend!.call('checks.mcp_release', {
+          'name': update['name'],
+        });
+        if (done['opened'] != true) _actionFailed();
+        return;
+      }
+      if (action == 'use') {
+        setState(() {
+          _showConnections = true;
+          _showFound = true;
+          _showProviders = false;
+          _showSystemMap = false;
+        });
+        return;
+      }
+      final plan = await _backend!.call('checks.mcp_task', {
+        'name': update['name'],
+      });
+      if (!mounted) return;
+      final yes = await showDialog<bool>(
+        context: _navigator.currentContext!,
+        builder: (context) => AlertDialog(
+          title: Text(
+            '${tr('Update {0}').replaceAll('{0}', '${update['name']}')} · ${plan['name']}',
+          ),
+          content: SizedBox(
+            width: 760,
+            child: SingleChildScrollView(
+              child: SelectableText(plan['prompt'] as String),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(tr('Cancel')),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(tr('Continue')),
+            ),
+          ],
+        ),
+      );
+      if (yes != true || !mounted) return;
+      _systemSession(
+        await _backend!.call('system.help_apply', {'preview': plan['preview']}),
+      );
+    } catch (_) {
+      _actionFailed();
+    }
+  }
+
   Future<void> _checkHealth() async {
     try {
       final report = await _quietTask('health.report', {});
@@ -1512,6 +1605,12 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
           _cancelReview?.call();
           _runUpdate(update);
         },
+        mcpUpdates: _mcpUpdates,
+        mcpTaskAgent: _mcpChecks?['task_agent'] as String?,
+        onMcpUpdate: (update, action) {
+          _cancelReview?.call();
+          _mcpUpdateAction(update, action);
+        },
         addonHints: [..._foundHints, ..._addonHints],
         onAddonHint: (line, action) {
           _cancelReview?.call();
@@ -1531,7 +1630,7 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
         },
         onCheckAgain: () async {
           _cancelReview?.call();
-          await Future.wait([_checkHealth(), _checkUpdates()]);
+          await Future.wait([_checkHealth(), _checkUpdates(), _checkMcp()]);
           if (mounted) await _openProblems();
         },
         onClose: no,
@@ -1720,8 +1819,12 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
   Future<Map<String, dynamic>> _quietTask(
     String method,
     Map<String, dynamic> params,
+  ) async => _awaitTask(method, await _backend!.call(method, params));
+
+  Future<Map<String, dynamic>> _awaitTask(
+    String method,
+    Map<String, dynamic> started,
   ) async {
-    final started = await _backend!.call(method, params);
     if (started['task'] is! String) throw StateError('$method started no task');
     while (true) {
       final status = await _backend!.call('tasks.status', {
@@ -2165,6 +2268,19 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
 
   bool _guideReturn = false;
   final _guideTerminals = <AgentTerminal>{};
+
+  /// The local helper's choices for Settings (helper.snapshot).
+  Map<String, dynamic>? _helpers;
+
+  Future<void> _loadHelpers() async {
+    _helpers = const {};
+    try {
+      final found = await _backend!.call('helper.snapshot');
+      if (mounted) setState(() => _helpers = found);
+    } catch (_) {
+      // Settings show no helper choice.
+    }
+  }
 
   Future<void> _loadShortName() async {
     try {
@@ -3243,6 +3359,11 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
         unawaited(_loadJobs());
         unawaited(_checkHealth());
         unawaited(_checkUpdates());
+        unawaited(_checkMcp());
+        _mcpTimer ??= Timer.periodic(
+          const Duration(hours: 1),
+          (_) => unawaited(_checkMcp()),
+        );
         if (!_welcome) _quietCatalog = _quietAddonCatalog();
         unawaited(_lookForNewApps());
         // Settings › Costs: a desktop notification when a plan limit turns red.
@@ -3298,6 +3419,7 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
   void dispose() {
     _limitsTimer?.cancel();
     _usageTimer?.cancel();
+    _mcpTimer?.cancel();
     windowManager.removeListener(this);
     _liveTimer?.cancel();
     _mapLayoutTimer?.cancel();
@@ -3481,6 +3603,7 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
                     _guideReturn = false; // chosen from the menu
                     _showSettings = !_showSettings;
                     if (_showSettings && _shortName == null) _loadShortName();
+                    if (_showSettings && _helpers == null) _loadHelpers();
                     _showSystemMap = false;
                     _showConnections = false;
                     _showProviders = false;
@@ -3825,6 +3948,10 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
                                       in (_system['helpers'] as List? ?? []))
                                     if (h is Map && h['check'] == true) h,
                                 ],
+                                helpers: _helpers,
+                                mcpChecks: _mcpChecks,
+                                mcpChecking: _mcpChecking,
+                                onCheckMcp: () => _checkMcp(force: true),
                                 unitName: _shortName == null
                                     ? ''
                                     : '$_shortName-providers.service',

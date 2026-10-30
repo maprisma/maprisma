@@ -15,6 +15,7 @@ import 'existing_ai.dart' as existing_ai;
 import 'system_map.dart' show SystemMapReader;
 import 'system_actions.dart' show checkTool;
 import 'system_help.dart' show analyzeMap;
+import 'mcp_updates.dart' as mcp_updates;
 import 'agent_keys.dart' show storeKey;
 import 'model_moves.dart' show SystemMoves, ScanFilesLike;
 import 'dart:math' show Random;
@@ -889,6 +890,7 @@ Future<int> runWorker(List<String> args) async {
           'system.move_apply',
           'system.move_undo',
           'system.analyze',
+          'checks.mcp',
           'agents.key',
           'addons.install_file',
           'mcp.tools',
@@ -1088,10 +1090,20 @@ Future<int> runWorker(List<String> args) async {
         throw const FormatException('Performance facts too large');
       }
       final data = jsonDecode(utf8.decode(body));
+      final helper = data is Map ? data['helper'] : null;
       if (data is! Map ||
           data['command'] is! String ||
           data['facts'] is! Map ||
-          data['settings_path'] is! String) {
+          data['settings_path'] is! String ||
+          helper != null &&
+              (helper is! Map ||
+                  ['provider', 'runtime', 'model'].any(
+                    (k) =>
+                        helper[k] is! String ||
+                        (helper[k] as String).isEmpty ||
+                        (helper[k] as String).length > 200 ||
+                        (helper[k] as String).codeUnits.any((c) => c < 32),
+                  ))) {
         throw const FormatException('Invalid tuning request');
       }
       final identity = AppIdentity();
@@ -1163,6 +1175,81 @@ Future<int> runWorker(List<String> args) async {
           identity.home,
           identity.shortName,
         ),
+      });
+      return 0;
+    }
+    if (operation == 'checks.mcp') {
+      if (body.length > 64 * 1024) {
+        throw const FormatException('MCP update check too large');
+      }
+      final data = jsonDecode(utf8.decode(body));
+      final servers = data is Map ? data['servers'] : null;
+      if (data is! Map ||
+          data['command'] is! String ||
+          data['cache'] is! String ||
+          data['now'] is! num ||
+          data['settings_path'] is! String ||
+          servers is! List ||
+          servers.isEmpty ||
+          servers.length > mcp_updates.maxServers ||
+          !servers.every(
+            (s) =>
+                s is Map &&
+                const {'app', 'npm', 'pypi'}.contains(s['source']) &&
+                ['name', 'app', 'version', 'program'].every(
+                  (k) => s[k] is String && (s[k] as String).length <= 300,
+                ),
+          )) {
+        throw const FormatException('Invalid MCP update check');
+      }
+      final identity = AppIdentity();
+      if (data['cache'] != p.join(identity.cacheDir, 'mcp-updates.json')) {
+        throw const FormatException('Invalid MCP update cache');
+      }
+      final files = ScanFiles(identity);
+      final registry = _reloadAddons(data['settings_path'] as String);
+      final settings = SettingsStore(identity);
+      final i18n = ServiceI18n(identity, settings);
+      final catalog = AgentCatalog(
+        files,
+        detectDesktop(identity, Posix()),
+        adapters: registry.adapters,
+      );
+      final installed = {
+        for (final a in catalog.scan())
+          if (a.installed) a.command,
+      };
+      final helpers = SystemMapReader(
+        files,
+        registry,
+        catalog,
+        i18n.text,
+        i18n.plural,
+        checksAgent: '${settings.load()['ai_checks_agent'] ?? ''}',
+      ).helpers(installed);
+      final command = data['command'] as String;
+      final adapter = registry.adapters
+          .where((a) => a.command == command)
+          .firstOrNull;
+      if (adapter == null ||
+          !helpers.any((h) => h['command'] == command && h['check'] == true)) {
+        throw const FormatException('AI checker unavailable');
+      }
+      final found = await mcp_updates.checkNow(
+        adapter,
+        command,
+        [for (final s in servers) mcp_updates.serverOf(s as Map)],
+        data['cache'] as String,
+        (data['now'] as num).toDouble(),
+        identity.environment,
+        identity.home,
+        identity.shortName,
+      );
+      send({
+        'type': 'result',
+        'result': {
+          'updates': [for (final f in found) mcp_updates.foundJson(f)],
+        },
       });
       return 0;
     }

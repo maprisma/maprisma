@@ -18,6 +18,7 @@ import 'package:asterism_core/src/agent_badges.dart' as badge;
 import 'package:asterism_core/src/projects.dart' as proj;
 import 'package:asterism_core/src/runtime_details.dart' as rtd;
 import 'package:asterism_core/src/usage_box.dart' as ub;
+import 'package:asterism_core/src/local_helper.dart' as lh;
 import 'package:asterism_core/src/claude_sessions.dart' as cs;
 import 'package:asterism_core/src/installers.dart' as inst;
 import 'package:asterism_core/src/provider_scans.dart' show RuntimeRecord;
@@ -35,6 +36,7 @@ import 'package:asterism_core/src/model_hub.dart';
 import 'package:asterism_core/src/provider_watch.dart';
 import 'package:asterism_core/src/pty_sessions.dart';
 import 'package:asterism_core/src/context.dart';
+import 'package:asterism_core/src/mcp_updates.dart' as mu;
 import 'package:asterism_core/src/py_values.dart';
 import 'package:asterism_core/src/py_yaml.dart';
 import 'package:asterism_core/src/read_service.dart';
@@ -306,6 +308,105 @@ Future<void> main() async {
           params['cache'] as String,
           search: params['search'] == true,
         );
+      } else if (request.method == 'dev.mcpupdates') {
+        // mcp_updates.installed_servers, prompt_for, _answer_json, validate,
+        // cached, still_open, on_pc, due and task_prompt.
+        final home = identity.home;
+        final servers = mu.installedServers(params['library'] as Map, home);
+        mu.McpFound found(Map m) => (
+          name: '${m['name']}',
+          app: '${m['app']}',
+          current: '${m['current']}',
+          latest: '${m['latest']}',
+          url: '${m['url']}',
+          notes: '${m['notes'] ?? ''}',
+          source: '${m['source'] ?? ''}',
+          program: '${m['program'] ?? ''}',
+        );
+        final images = [for (final x in params['appimages'] as List) '$x'];
+        result = {
+          'servers': [for (final s in servers) mu.serverJson(s)],
+          'prompt': mu.promptFor(servers),
+          'answers': [
+            for (final text in params['answers'] as List)
+              () {
+                try {
+                  return [
+                    for (final f in mu.validate(
+                      mu.answerJson('$text'),
+                      servers,
+                    ))
+                      mu.foundJson(f),
+                  ];
+                } on FormatException {
+                  return null;
+                }
+              }(),
+          ],
+          'cached': [
+            for (final f in mu.cached(params['cache'] as String))
+              mu.foundJson(f),
+          ],
+          'open': [
+            for (final f in mu.stillOpen([
+              for (final m in params['found'] as List) found(m as Map),
+            ], servers))
+              mu.foundJson(f),
+          ],
+          'on_pc': [
+            for (final m in params['found'] as List)
+              mu.onPc(found(m as Map), home, images),
+          ],
+          'due': [
+            for (final now in params['now'] as List)
+              mu.due((now as num).toDouble(), params['cache'] as String),
+          ],
+          'tasks': [
+            for (final m in params['found'] as List)
+              mu.taskPrompt(found(m as Map), home),
+          ],
+        };
+      } else if (request.method == 'dev.helper') {
+        // local_helper.suggest, chosen, NOT_CHAT and advise_argv.
+        List<lh.HelperCandidate> list(List raw) => [
+          for (final c in raw)
+            (
+              agent: c[0] as String,
+              provider: c[1] as String,
+              runtime: c[2] as String,
+              model: c[3] as String,
+              size: c[4] as int,
+            ),
+        ];
+        List? out(lh.HelperCandidate? c) => c == null
+            ? null
+            : [c.agent, c.provider, c.runtime, c.model, c.size];
+        final adapter = core.reads.catalog
+            .scan()
+            .firstWhere((a) => a.command == 'pi')
+            .adapter;
+        final one = list([params['advise']]).single;
+        final (argv, output) = lh.adviseArgv(
+          adapter,
+          one,
+          identity.environment,
+          identity.home,
+        );
+        result = {
+          'suggested': [
+            for (final c in params['suggest'] as List)
+              out(lh.suggestHelper(list(c[0] as List), c[1] as int)),
+          ],
+          'chosen': [
+            for (final c in params['chosen'] as List)
+              out(lh.chosenHelper(list(c[0] as List), c[1])),
+          ],
+          'not_chat': [
+            for (final n in params['names'] as List)
+              lh.notChat.hasMatch(n as String),
+          ],
+          'advise': [argv, output],
+        };
       } else if (request.method == 'dev.usagebox') {
         // usage_box.read, head_model, newest_file and parts.
         final box = ub.UsageBox();

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'app_theme.dart';
@@ -12,6 +13,10 @@ class SettingsView extends StatelessWidget {
     required this.onBack,
     this.desktopTheme = const {},
     this.checkers = const [],
+    this.helpers,
+    this.mcpChecks,
+    this.mcpChecking = false,
+    this.onCheckMcp,
     this.unitName = '',
   });
 
@@ -24,6 +29,15 @@ class SettingsView extends StatelessWidget {
 
   /// The installed agents that can do the System Map's checks (command, name).
   final List<Map> checkers;
+
+  /// helper.snapshot: the local helper's candidates, suggestion and choice.
+  final Map<String, dynamic>? helpers;
+
+  /// Settings › Daily AI checks: the last check's summary (checks.mcp_*),
+  /// whether one runs, and Check now.
+  final Map<String, dynamic>? mcpChecks;
+  final bool mcpChecking;
+  final VoidCallback? onCheckMcp;
 
   /// The provider watcher's user service, as the user sees it in systemctl.
   final String unitName;
@@ -106,6 +120,50 @@ class SettingsView extends StatelessWidget {
               ? null
               : (v) => v == null ? null : onUpdate({'usage_box_size': v}),
         ),
+      ),
+    ];
+  }
+
+  /// Settings › Local helper: Off, or an agent with a model of the local
+  /// LLM (the suggestion marked; choosing one confirms it).
+  List<Widget> _helperRows() {
+    final found = (helpers?['candidates'] as List? ?? const []).cast<Map>();
+    final suggested = helpers?['suggested'] as Map?;
+    String keyOf(dynamic k) => k is Map ? jsonEncode(k) : '';
+    final current = keyOf(helpers?['chosen']);
+    return [
+      DropdownButtonFormField<String>(
+        key: ValueKey('local-helper-$current-${found.length}'),
+        initialValue: current,
+        isExpanded: true,
+        decoration: InputDecoration(
+          labelText: tr('Local helper'),
+          helperText: tr(
+            'An agent with a model of your local LLM answers the AI help that needs no web (Smart Check, which MCP server fits, help with local LLMs) on this PC, without tokens. Suggested: the largest chat model your graphics card holds.',
+          ),
+          helperMaxLines: 4,
+        ),
+        items: [
+          DropdownMenuItem(
+            value: '',
+            child: Text(tr(found.isEmpty ? 'None set up' : 'Off')),
+          ),
+          for (final c in found)
+            DropdownMenuItem(
+              value: keyOf(c['key']),
+              child: Text(
+                '${c['label']}${keyOf(c['key']) == keyOf(suggested?['key']) ? ' ${tr('(suggested)')}' : ''}',
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+        ],
+        onChanged: busy || found.isEmpty
+            ? null
+            : (v) => onUpdate({
+                'ai_local_helper': v == null || v.isEmpty
+                    ? <String, dynamic>{}
+                    : jsonDecode(v) as Map<String, dynamic>,
+              }),
       ),
     ];
   }
@@ -496,6 +554,46 @@ class SettingsView extends StatelessWidget {
                 'Offered first for AI help and the Smart Check on the System Map; its tokens are used for them.',
               ),
             ),
+            const SizedBox(height: 16),
+            SwitchListTile(
+              key: const ValueKey('ai-checks'),
+              contentPadding: EdgeInsets.zero,
+              title: Text(tr('Daily AI checks')),
+              subtitle: Text(
+                tr(
+                  'Once a day, an installed agent looks on the web for new versions of your MCP servers and shows them as hints, with “Do it with …” to let it do the update. This uses the agent\'s tokens or plan limits; its detail page shows how many.',
+                ),
+              ),
+              value: settings['ai_checks'] as bool? ?? false,
+              onChanged: busy
+                  ? null
+                  : (value) => onUpdate({'ai_checks': value}),
+            ),
+            if (mcpChecks != null && (mcpChecks!['servers'] as int? ?? 0) > 0)
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      mcpChecking
+                          ? tr('Checking…')
+                          : '${tr('MCP server updates')}: ${mcpChecks!['summary']}',
+                    ),
+                  ),
+                  OutlinedButton(
+                    key: const ValueKey('ai-checks-now'),
+                    onPressed:
+                        busy ||
+                            mcpChecking ||
+                            mcpChecks!['agent'] == null ||
+                            onCheckMcp == null
+                        ? null
+                        : onCheckMcp,
+                    child: Text(tr('Check now')),
+                  ),
+                ],
+              ),
+            const SizedBox(height: 16),
+            ..._helperRows(),
             const SizedBox(height: 24),
             Text(
               tr('Automatic map scans'),

@@ -27,6 +27,9 @@ class OpenProblemsView extends StatelessWidget {
     this.onUpdate,
     this.addonHints = const [],
     this.onAddonHint,
+    this.mcpUpdates = const [],
+    this.mcpTaskAgent,
+    this.onMcpUpdate,
     required this.onCheckAgain,
     required this.onClose,
   });
@@ -44,6 +47,12 @@ class OpenProblemsView extends StatelessWidget {
   /// A hint's button: update_all, addons (to get or switch on), mcp or
   /// skills (what was found on this PC).
   final void Function(Map<String, dynamic> line, String action)? onAddonHint;
+
+  /// The daily AI checks' MCP server updates (checks.mcp_updates): text,
+  /// notes, on_pc; actions release, task (Do it with …) and use.
+  final List<Map<String, dynamic>> mcpUpdates;
+  final String? mcpTaskAgent;
+  final void Function(Map<String, dynamic> update, String action)? onMcpUpdate;
   final VoidCallback onCheckAgain;
   final VoidCallback onClose;
 
@@ -107,7 +116,9 @@ class OpenProblemsView extends StatelessWidget {
             Text(tr('Each one opens where it is fixed.')),
             for (final f in problems) _finding(context, f),
           ],
-          if (updates.isNotEmpty || addonHints.isNotEmpty) ...[
+          if (updates.isNotEmpty ||
+              addonHints.isNotEmpty ||
+              mcpUpdates.isNotEmpty) ...[
             const SizedBox(height: 16),
             Text(tr('Updates and suggestions'), style: text.titleMedium),
             for (final h in addonHints)
@@ -164,6 +175,42 @@ class OpenProblemsView extends StatelessWidget {
                     : OutlinedButton(
                         onPressed: () => onUpdate!(u),
                         child: Text(tr('Update')),
+                      ),
+              ),
+            for (final u in mcpUpdates)
+              ListTile(
+                key: ValueKey('mcp-update-${u['name']}'),
+                dense: true,
+                leading: const Icon(Icons.upgrade),
+                title: Text('${u['text']}'),
+                subtitle: '${u['notes'] ?? ''}'.isEmpty
+                    ? null
+                    : Text('${u['notes']}'),
+                trailing: onMcpUpdate == null
+                    ? null
+                    : Wrap(
+                        spacing: 8,
+                        children: [
+                          for (final (action, label) in [
+                            if (u['on_pc'] == true)
+                              ('use', tr('Use it…'))
+                            else ...[
+                              ('release', tr('Release page')),
+                              if (mcpTaskAgent != null)
+                                (
+                                  'task',
+                                  tr(
+                                    'Do it with {0}…',
+                                  ).replaceAll('{0}', mcpTaskAgent!),
+                                ),
+                            ],
+                          ])
+                            OutlinedButton(
+                              key: ValueKey('mcp-$action-${u['name']}'),
+                              onPressed: () => onMcpUpdate!(u, action),
+                              child: Text(label),
+                            ),
+                        ],
                       ),
               ),
           ],

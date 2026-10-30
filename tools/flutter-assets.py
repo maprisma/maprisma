@@ -5,6 +5,21 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 KEYS = (
+    # The daily AI checks (MCP server updates).
+    "Daily AI checks",
+    "Once a day, an installed agent looks on the web for new versions of your MCP servers and shows them as hints, with “Do it with …” to let it do the update. This uses the agent's tokens or plan limits; its detail page shows how many.",
+    "MCP server updates",
+    "Checking…",
+    "Check now",
+    "Use it…",
+    "Release page",
+    "Do it with {0}…",
+    # The local helper.
+    "Local helper",
+    "An agent with a model of your local LLM answers the AI help that needs no web (Smart Check, which MCP server fits, help with local LLMs) on this PC, without tokens. Suggested: the largest chat model your graphics card holds.",
+    "None set up",
+    "Off",
+    "(suggested)",
     # The guide's starter model.
     "Download it",
     # Usage statistics box.

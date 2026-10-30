@@ -2340,3 +2340,65 @@ Check:
 - **On this PC, read only:** this Claude Code session's box reads "98 t/s · 1M · 88%", the same as
   the reference.
 
+
+### Part 2: the local helper, the daily AI checks
+
+- **The local helper** (`local_helper.dart`, a port of `local_helper.py`):
+  - the candidates: installed agents whose adapter has `advise` and `closed`, each local LLM they
+    are connected to, each of its chat models (speech, embedding, reranker, tokenizer and vision
+    names are left out);
+  - the suggestion: the largest model of at least 2 GB that fits 85 % of the card's video memory
+    (without sizes, the first one);
+  - the chosen one: Settings' `ai_local_helper`, while it is still there (now a UI setting on both
+    sides);
+  - its argv: the adapter's `advise` argv with the model and provider, closed in like a look-up,
+    the prompt on stdin.
+
+  `helper.snapshot` gives the candidates, the suggestion and the choice; Settings › AI features ›
+  **Local helper** shows them, the suggestion marked, with **Off**. A chosen helper is offered first
+  under **Ask** on a local LLM's Performance card (`models.tuning_ask` with `local-helper`, its
+  fields checked again in the worker).
+- **The daily AI checks** (`mcp_updates.dart`, a port of `mcp_updates.py`):
+  - the servers of the map's list whose version is known: an app unpacked in
+    `~/Applications/<app>-<version>/` or, beyond the GTK app, as an unpacked AppImage in any other
+    folder (`<folder>/<app>-<version>/usr/bin/<program>`, such as `/mnt/Data/Ai/McpServers`; the
+    reference was changed the same way), also through a link; npm packages pinned to a version (npx,
+    bunx, pnpx), PyPI packages pinned to a version (uvx, `pipx run`); at most 40;
+  - one prompt for all of them, one look-up by the agent for AI checks (the private worker op
+    `checks.mcp`, the agent checked again there), its answer checked as in the reference: a known
+    server, a plain newer version, an https link without spaces or quotes, notes cut to one line;
+  - the cache `$XDG_CACHE_HOME/asterism/mcp-updates.json`: asked again after a day, or after six
+    hours when the look-up failed (the old finds are kept then); the run goes into the shared
+    token log as `mcp-updates`;
+  - a find is shown while the server still starts the version it was about; **Use it…** instead of
+    the download once the newer version is unpacked (in `~/Applications` or beside the installed one)
+    or there as an AppImage; the task "Do it with …" names the installed version's real folder.
+
+  The routes: `checks.mcp_updates` (the finds, their texts, the summary and the agents; nothing is
+  asked), `checks.mcp_check {force}` (the daily check, only while `ai_checks` is on and a check is
+  due, or Check now), `checks.mcp_task {name}` (the task "Do it with …" as a preview, applied
+  through `system.help_apply` into a terminal tab) and `checks.mcp_release {name}` (the find's https
+  link with `xdg-open`). The app asks `checks.mcp_check` at start and every hour, and again when the
+  switch changes; the finds join Open problems' **Updates and suggestions** and the header's
+  **!**. Settings › AI features has the switch `ai_checks` (now a UI setting on both sides), the
+  last result and **Check now**.
+- The manual's "AI checks and the local helper in the Flutter preview" in all eight languages;
+  PDFs rebuilt.
+
+Check:
+- `tests/test_dart_local_helper_parity.py`: suggestions for several cards, without a card, without
+  sizes, too small models; the choice kept and gone; the non-chat names; Pi's advise argv. Python
+  and Dart agree.
+- `tests/test_dart_mcp_updates_parity.py`: apps direct and through a link, pinned and unpinned npm
+  and PyPI packages, `pipx run`, remote servers; answers with prose around the JSON, an unknown or
+  repeated server, older and unparsable versions, http and spaced links, long notes, no JSON; the
+  cache fresh, failed and old; `on_pc` for an unpacked folder and an AppImage; the task prompts.
+  Python and Dart agree.
+- `test/mcp_updates_test.dart`: the look-up with a fake agent (the prompt on stdin, the answer
+  checked and cached, the token log), and a failing agent that keeps the old finds.
+- Widget tests: the switch and Check now in Settings, the finds in Open problems with
+  **Release page** and **Do it with …** (nothing starts without Continue).
+- **On this PC, read only:** both sides find the same 13 Craft servers in `/mnt/Data/Ai/McpServers`
+  (photocraft through its link in `~/.local/bin`); nothing was asked, since the daily checks are
+  off here. The local helper's four candidates and the suggestion are the same as
+  the reference's.

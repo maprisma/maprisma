@@ -1010,7 +1010,7 @@
   <ul>
     <li><b>The daily AI checks</b> (Settings › <b>Daily AI checks</b>, off by default): once a day the
       agent looks on the official release pages for newer versions of servers whose version the app can
-      tell — apps unpacked in <code>~/Applications/&lt;app&gt;-&lt;version&gt;/</code> and npm or PyPI
+      tell — apps unpacked in <code>~/Applications/&lt;app&gt;-&lt;version&gt;/</code> or as an unpacked AppImage in any other folder (the program in <code>&lt;folder&gt;/&lt;app&gt;-&lt;version&gt;/usr/bin/</code>) and npm or PyPI
       packages pinned to a version. <b>Check now</b> on this card asks at once, also while the daily
       checks are off. Each find has <b>Release page</b> and <b>Do it with …</b>: the agent downloads
       the new AppImage in a terminal tab, asking before each step.</li>
@@ -1050,6 +1050,10 @@
   loads the model (a step in the progress box). The helper runs with no tools, no MCP servers, no
   extensions and no project files. Any agent whose add-on says how to ask it one question offline can
   be the helper; Pi is the first.</p>
+
+  <h2 id="ai-checks-flutter">AI checks and the local helper in the Flutter preview</h2>
+  <p>In the Flutter preview, Settings › <b>AI features</b> has <b>Daily AI checks</b> (off by default) and, below it, the result of the last check with <b>Check now</b>, which asks at once, also while the daily checks are off. The check runs in the background when the window opens and is looked at every hour; the agent for AI checks is asked at most once a day (after a failed look-up, again after six hours). What it finds is listed in Open problems under <b>Updates and suggestions</b>: <b>Release page</b> opens the release in the browser, <b>Do it with …</b> first shows the task as it will be sent and starts it in a terminal tab only after <b>Continue</b>, and <b>Use it…</b> opens what was found on this PC when the newer version is already here. Checked are only servers whose version the app can tell (see <a href="#smart-updates">Updates found</a>); other servers are not sent.</p>
+  <p>The local helper is chosen in Settings › <b>AI features</b> › <b>Local helper</b>; the suggestion for your graphics card is marked <b>(suggested)</b>. Once chosen, it is offered first under <b>Ask</b> on a local LLM's Performance card.</p>
 
   <h2 id="smart-protocol">Protocol</h2>
   <p>Every AI help run is kept, so that you — or someone who knows the setup well — can look over what

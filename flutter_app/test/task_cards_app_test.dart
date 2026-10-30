@@ -101,6 +101,9 @@ for line in sys.stdin:
  elif m=='models.slots_reload':r={'ok':True}
  elif m=='updates.check':tasks['up']={'updates':[{'kind':'agent','key':'test','name':'Test agent','current':'1.0','available':'1.1','command':['mise','upgrade','test'],'page':False}]};r={'task':'up'}
  elif m=='updates.run':r={'started':True}
+ elif m=='checks.mcp_check':tasks['mcpc']={'on':True,'summary':'1 update','servers':2,'agent':'Test agent','task_agent':'Test agent','due':False,'updates':[{'name':'fetch','app':'@acme/fetch-mcp','current':'1.4.2','latest':'1.5.0','url':'https://www.npmjs.com/package/@acme/fetch-mcp','notes':'Faster.','source':'npm','program':'','on_pc':False,'text':'MCP server fetch 1.5.0 is available (you have 1.4.2)'}]};r={'task':'mcpc'}
+ elif m=='checks.mcp_release':r={'opened':True}
+ elif m=='checks.mcp_task':r={'preview':'mcp-prev','name':'Test agent','prompt':'The MCP server "fetch" runs the npm package @acme/fetch-mcp pinned to 1.4.2.','topic':'mcp-update'}
  elif m=='gpu.snapshot':tasks['gpu']={'vram_used':0,'vram_total':0,'busy':None,'runtimes':{},'badges':{}};r={'task':'gpu'}
  elif m=='map.badges':r={'badges':{},'rate_due':False}
  elif m in ('agents.projects','agents.costs'):r={'card':None}
@@ -1031,6 +1034,47 @@ void main() {
     await tester.tap(find.widgetWithText(OutlinedButton, 'Get add-ons'));
     await settleService(tester);
     expect(find.byType(MapAddonsFocus), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await unmountApp(tester);
+  });
+
+  testWidgets('the daily AI checks\' MCP updates in Open problems', (
+    tester,
+  ) async {
+    final dir = await mountApp(tester);
+    await settleService(tester);
+    expect(
+      requests(
+        dir,
+      ).firstWhere((q) => q['method'] == 'checks.mcp_check')['params'],
+      {'force': false},
+    ); // the daily check, asked quietly at start
+    await tester.tap(find.byKey(const ValueKey('problems-open')));
+    await settleService(tester);
+    expect(
+      find.text('MCP server fetch 1.5.0 is available (you have 1.4.2)'),
+      findsOneWidget,
+    );
+    expect(find.text('Faster.'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('mcp-release-fetch')));
+    await settleService(tester);
+    expect(
+      requests(
+        dir,
+      ).lastWhere((q) => q['method'] == 'checks.mcp_release')['params'],
+      {'name': 'fetch'},
+    );
+    await tester.tap(find.byKey(const ValueKey('problems-open')));
+    await settleService(tester);
+    await tester.tap(find.byKey(const ValueKey('mcp-task-fetch')));
+    await settleService(tester);
+    expect(find.textContaining('pinned to 1.4.2'), findsOneWidget);
+    await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+    await settleService(tester);
+    expect(
+      requests(dir).where((q) => q['method'] == 'system.help_apply'),
+      isEmpty,
+    ); // nothing starts without Continue
     expect(tester.takeException(), isNull);
     await unmountApp(tester);
   });

@@ -32,6 +32,8 @@ const uiSettings = {
   'usage_box',
   'usage_box_items',
   'usage_box_size',
+  'ai_local_helper',
+  'ai_checks',
 };
 const languages = {'en', 'de', 'fr', 'es', 'it', 'pt', 'nl', 'pl'};
 const mapLayers = ['agents', 'online', 'local', 'models', 'mcp', 'skills'];

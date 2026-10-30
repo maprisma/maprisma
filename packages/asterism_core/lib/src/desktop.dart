@@ -97,6 +97,12 @@ bool openDocument(String path, String? searchPath) {
   return opener != null && _detached([opener, path], p.dirname(path));
 }
 
+/// A web page (an https link already checked) in the default browser.
+bool openWebPage(String url, String? searchPath, String home) {
+  final opener = whichIn('xdg-open', searchPath);
+  return opener != null && _detached([opener, url], home);
+}
+
 /// desktop_generic.TERMINALS: a terminal and what comes before the command.
 const terminals = [
   ('xdg-terminal-exec', <String>[]),

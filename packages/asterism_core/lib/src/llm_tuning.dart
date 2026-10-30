@@ -12,6 +12,7 @@ import 'system_actions.dart' show envWith;
 import 'py_values.dart' show pyJsonDumps, pyRepr, pyStr, pyTruthy;
 import 'adapters.dart' show Adapter;
 import 'posix_ffi.dart';
+import 'local_helper.dart';
 import 'system_help.dart'
     show
         errorText,
@@ -591,12 +592,35 @@ Future<Map<String, dynamic>> askTuning(
 ) async {
   final command = data['command'] as String;
   final facts = data['facts'] as Map;
+  final helper = data['helper'];
   final research = [
     for (final x in (adapter.table('research')['argv'] as List? ?? const []))
       '$x',
   ];
-  if (research.isEmpty) throw const FormatException('AI checker unavailable');
-  final output = '${adapter.table('research')['output'] ?? 'text'}';
+  if (helper == null && research.isEmpty) {
+    throw const FormatException('AI checker unavailable');
+  }
+  // The local helper (ai_helper.advise): its model answers offline, the
+  // prompt on stdin; the prompt itself says which JSON to answer with.
+  final advised = helper is Map && adapter.facts.containsKey('advise')
+      ? adviseArgv(
+          adapter,
+          (
+            agent: command,
+            provider: '${helper['provider']}',
+            runtime: '${helper['runtime']}',
+            model: '${helper['model']}',
+            size: 0,
+          ),
+          env,
+          home,
+        )
+      : null;
+  if (helper != null && advised == null) {
+    throw const FormatException('Local helper unavailable');
+  }
+  final output =
+      advised?.$2 ?? '${adapter.table('research')['output'] ?? 'text'}';
   final work = '$home/.cache/ai-agents-map/research';
   if (!Directory(work).existsSync()) {
     Directory(work).createSync(recursive: true);
@@ -605,16 +629,20 @@ Future<Map<String, dynamic>> askTuning(
   final schemaFile = '$work/schema-$tuningTask.json';
   Posix().atomicWrite(schemaFile, utf8.encode(pyJsonDumps(tuningSchema)));
   final prompt = tuningPrompt(facts);
-  final stdin = research.contains('{prompt}') ? null : utf8.encode(prompt);
+  final stdin = advised != null || !research.contains('{prompt}')
+      ? utf8.encode(prompt)
+      : null;
   final binary = whichIn(command, env['PATH'] ?? '') ?? command;
   final fill = {'{prompt}': prompt, '{schema}': schemaFile};
-  final argv = guardBackground(
-    adapter,
-    command,
-    [binary, for (final a in research.skip(1)) fill[a] ?? a],
-    env,
-    home,
-  );
+  final argv =
+      advised?.$1 ??
+      guardBackground(
+        adapter,
+        command,
+        [binary, for (final a in research.skip(1)) fill[a] ?? a],
+        env,
+        home,
+      );
   ({int input, int cached, int output, double? cost})? usage;
   var ok = false, result = '';
   try {
