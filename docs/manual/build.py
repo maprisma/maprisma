@@ -8,7 +8,7 @@ same markup and ids, the text translated). English goes to data/user-manual.pdf,
 data/user-manual.<lang>.pdf; the app opens the one of its interface language (English when missing).
 
 1. manual.<lang>.html → build/manual.html: chapters and sections numbered, the contents page filled in,
-   {{ASTERISM_VERSION}} / {{PLUGIN_VERSION}} / {{DATE}} replaced.
+   {{MAPRISMA_VERSION}} / {{PLUGIN_VERSION}} / {{DATE}} replaced.
 2. Chromium prints it to PDF. pdftotext tells on which page each heading landed; the contents page
    gets those numbers and is printed again until the numbers stay the same.
 3. pdfcraft (pdfcraft-cli run --script) finishes it: document info, page labels (roman for the
@@ -67,9 +67,9 @@ PLUGIN_MANIFEST = Path.home() / ".config/omarchy/plugins/ubruckhaus.ai-agents-ma
 
 
 def maprisma_version() -> str:
-    """The app's own version (addons.ASTERISM_VERSION), the one About and the packages name."""
+    """The app's own version (addons.MAPRISMA_VERSION), the one About and the packages name."""
     text = (REPO / "addons.py").read_text()
-    return re.search(r'^ASTERISM_VERSION = "([^"]+)"', text, re.M).group(1)
+    return re.search(r'^MAPRISMA_VERSION = "([^"]+)"', text, re.M).group(1)
 
 
 def plugin_version(given: str | None) -> str:
@@ -270,7 +270,7 @@ def build(lang: str, plugin_version_given: str | None, out_given: Path | None, c
     suffix = "" if lang == "en" else f".{lang}"
     av, pv = maprisma_version(), plugin_version(plugin_version_given)
     today = datetime.date.today()
-    values = {"ASTERISM_VERSION": av, "PLUGIN_VERSION": pv,
+    values = {"MAPRISMA_VERSION": av, "PLUGIN_VERSION": pv,
               "DATE": f"{W['months'].split()[today.month - 1]} {today.year}"}
     source = source_file.read_text()
     chapters = outline(source)

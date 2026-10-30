@@ -82,8 +82,9 @@ class DartAddonStoreParityTest(unittest.TestCase):
     def test_same_installs(self):
         dist = ADDONS / 'dist'
         # One signed version so far: a first install, then the same version again.
-        goose = (dist / 'agent-goose-0.11.1.zip').read_bytes()
-        jan = (dist / 'llm-jan-0.11.1.zip').read_bytes()
+        version = json.loads((ADDONS / 'agent-goose/addon.json').read_text())['version']   # as signed
+        goose = (dist / f'agent-goose-{version}.zip').read_bytes()
+        jan = (dist / f'llm-jan-{version}.zip').read_bytes()
         cases = [
             ('first', goose, 'agent-goose'),
             ('again', goose, 'agent-goose'),
@@ -119,8 +120,9 @@ class DartAddonStoreParityTest(unittest.TestCase):
                 sides[side] = (results, tree(user))
         self.assertEqual(sides['python'], sides['dart'])
         results, files = sides['dart']
-        self.assertEqual(results[0]['version'], '0.11.1')
-        self.assertEqual(results[1]['version'], '0.11.1')
+        version = json.loads((ADDONS / 'agent-goose/addon.json').read_text())['version']
+        self.assertEqual(results[0]['version'], version)
+        self.assertEqual(results[1]['version'], version)
         self.assertEqual(results[2]['id'], 'llm-jan')
         self.assertEqual(results[3:], ['refused'] * 7)
         self.assertEqual(files['agent-goose'], ('dir', '0o755'))

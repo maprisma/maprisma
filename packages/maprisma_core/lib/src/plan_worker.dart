@@ -1446,7 +1446,7 @@ Future<bool> setOllamaContext(Map<String, dynamic> c, int uid) async {
   final user = p.join(identity.dataDir, 'addons');
   return (
     AddonStore(posix, user, identity.home, AddonVerifier(posix)),
-    [user, p.join(p.dirname(Platform.resolvedExecutable), 'addons')],
+    [user, p.join(appFolder(), 'addons')],
   );
 }
 

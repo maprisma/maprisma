@@ -9,12 +9,15 @@ set(BINARY_NAME "maprisma")
 # https://wiki.gnome.org/HowDoI/ChooseApplicationID
 set(APPLICATION_ID "com.maprisma.Maprisma")
 
-# Dart migration phase 1: an incomplete core must never produce a shipped app.
-# Devel previews opt in explicitly and have their own application identity.
+# Only the two ways the repository builds: a Devel preview (tools/flutter-dev build: the
+# Devel id and MAPRISMA_DEVEL=true) or a release (tools/build-release.py: the app's own id
+# and MAPRISMA_RELEASE=true, then the bundle gate). A plain `flutter build linux` stops here.
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/flutter/ephemeral/generated_config.cmake" MAPRISMA_FLUTTER_CONFIG)
-if(NOT APPLICATION_ID STREQUAL "com.maprisma.Maprisma.Devel" OR
-   NOT MAPRISMA_FLUTTER_CONFIG MATCHES "TUFQUklTTUFfREVWRUw9dHJ1ZQ==")
-  message(FATAL_ERROR "Dart core migration incomplete: production builds are blocked. Use tools/flutter-dev build for an isolated Devel preview.")
+if(NOT (APPLICATION_ID STREQUAL "com.maprisma.Maprisma.Devel" AND
+        MAPRISMA_FLUTTER_CONFIG MATCHES "TUFQUklTTUFfREVWRUw9dHJ1ZQ==") AND
+   NOT (APPLICATION_ID STREQUAL "com.maprisma.Maprisma" AND
+        MAPRISMA_FLUTTER_CONFIG MATCHES "TUFQUklTTUFfUkVMRUFTRT10cnVl"))
+  message(FATAL_ERROR "Build through tools/flutter-dev build (a Devel preview) or tools/build-release.py (a release).")
 endif()
 
 # Explicitly opt in to modern CMake behaviors to avoid warnings with recent

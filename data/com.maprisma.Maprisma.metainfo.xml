@@ -25,6 +25,15 @@
   <url type="bugtracker">https://github.com/uBruckhaus/Asterism/issues</url>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.12.0" date="2026-10-30">
+      <description>
+        <p>Asterism is now Maprisma: a Flutter app with its service in Dart, nothing of Python in it.
+        Your Asterism settings come along at the first start. On Omarchy it opens as a popup under the
+        bar (maprisma --toggle). New: daily AI checks for MCP server updates, a local helper on your
+        own LLM, recent changes with Undo after a restart, keyboard shortcuts and accessibility checks,
+        safe updates of running agents, usage figures from Omarchy, and add-ons signed with a new key.</p>
+      </description>
+    </release>
     <release version="0.11.1" date="2026-10-26">
       <description>
         <p>Everything AI on this PC is on the map: MCP servers and skill folders that no agent uses yet

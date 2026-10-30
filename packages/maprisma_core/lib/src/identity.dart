@@ -28,3 +28,15 @@ final class AppIdentity {
   String get stateDir =>
       p.join(root('XDG_STATE_HOME', '.local/state'), shortName);
 }
+
+/// The installed app's folder (its bundle): the folder of the app's
+/// program, also when the core's helper in `bundle/lib` asks, so both find
+/// the add-ons and manuals that come with the package (`bundle/addons`,
+/// `bundle/data`).
+String appFolder([String? executable]) {
+  final exe = executable ?? Platform.resolvedExecutable;
+  final dir = p.dirname(exe);
+  return p.basename(exe) == 'maprisma-core' && p.basename(dir) == 'lib'
+      ? p.dirname(dir)
+      : dir;
+}

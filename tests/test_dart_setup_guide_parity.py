@@ -47,7 +47,8 @@ def seed(home: Path):
     user = home / '.local/share/maprisma/addons'
     user.mkdir(parents=True)
     for aid in INSTALLED:
-        with zipfile.ZipFile(ADDONS / 'dist' / f'{aid}-0.11.1.zip') as archive:
+        version = json.loads((ADDONS / aid / 'addon.json').read_text())['version']   # as signed
+        with zipfile.ZipFile(ADDONS / 'dist' / f'{aid}-{version}.zip') as archive:
             archive.extractall(user)
     tools = home / 'tools'
     tools.mkdir()

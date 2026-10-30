@@ -10,8 +10,17 @@ final dist = Directory(
   '${Directory.current.path}/../../../maprisma-addons/dist',
 );
 
+/// The version Uwe signed them with (agent-goose/addon.json beside dist).
+String signedVersion() {
+  final meta = File('${dist.parent.path}/agent-goose/addon.json');
+  return meta.existsSync()
+      ? (jsonDecode(meta.readAsStringSync()) as Map)['version'] as String
+      : '';
+}
+
 void main() {
-  final goose = File('${dist.path}/agent-goose-0.11.1.zip');
+  final version = signedVersion();
+  final goose = File('${dist.path}/agent-goose-$version.zip');
   final skip = goose.existsSync() ? false : 'maprisma-addons/dist not found';
 
   test('an add-on file is reviewed, then installed from the same bytes', () {
@@ -24,7 +33,7 @@ void main() {
     final files = AddonFileImports(() => 'token${n++}');
     final preview = files.preview(zip.path, store, [user]);
     expect(preview['id'], 'agent-goose');
-    expect(preview['version'], '0.11.1');
+    expect(preview['version'], version);
     expect(preview['kind'], 'agent');
     expect(preview['action'], 'install');
     expect(
@@ -37,8 +46,8 @@ void main() {
       Map<String, dynamic>.from(jsonDecode(utf8.decode(request)) as Map),
       store,
     );
-    expect(result, {'ok': true, 'id': 'agent-goose', 'version': '0.11.1'});
-    expect(store.installed([user])['agent-goose']?.version, '0.11.1');
+    expect(result, {'ok': true, 'id': 'agent-goose', 'version': version});
+    expect(store.installed([user])['agent-goose']?.version, version);
     // Reviewed again now, it would replace the installed copy.
     expect(files.preview(zip.path, store, [user])['action'], 'update');
   }, skip: skip);

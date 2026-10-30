@@ -178,8 +178,6 @@ const portedRoutes = {
   'costs.rate',
   ...readOnlyRoutes,
 };
-// Phase 7 removes this blocker only after every route has differential coverage.
-const dartCoreComplete = false;
 
 final class CoreService {
   CoreService({Map<String, String>? environment}) {
@@ -224,7 +222,7 @@ final class CoreService {
   );
   late final addons = AddonRegistry(AddonVerifier(Posix()), [
     addonUserDir,
-    p.join(p.dirname(Platform.resolvedExecutable), 'addons'),
+    p.join(appFolder(), 'addons'),
   ]);
   String get addonUserDir => p.join(identity.dataDir, 'addons');
   Set<String> enabledAddons() => {
@@ -2740,7 +2738,7 @@ final class CoreService {
       'user-manual.pdf',
     ];
     final folders = [
-      p.join(p.dirname(Platform.resolvedExecutable), 'data'),
+      p.join(appFolder(), 'data'),
       if ((identity.environment['MAPRISMA_DATA_DIR'] ?? '').isNotEmpty)
         identity.environment['MAPRISMA_DATA_DIR']!,
     ];
