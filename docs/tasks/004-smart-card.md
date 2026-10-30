@@ -6,15 +6,15 @@ GUI design: Antigravity's proposal (`docs/proposals/004-smart-card-gui.md`), wit
 differ, this file wins.
 
 ## Goal
-A collapsed card at the top of the Models, Providers and Agents columns. The user types one request; a guarded agent
-proposes, the core checks, the user decides through the existing reviews.
+A collapsed card at the top of all four columns (MCP servers and skills, Agents, Providers, Models). The user types
+one request; a guarded agent proposes, the core checks, the user decides through the existing reviews.
 
 ## Changes to the proposal
-1. **Three columns only:** Models, Providers, Agents. No card and no `mcp` column value for MCP servers and skills
-   in this task.
-2. **Keep free card dragging.** `saved['cards']`, dragging anywhere and Move left/right/up/down stay (the manual
-   documents them). No drop separator, no change to `card_order`. The smart card's slot is fixed; a card the user
-   placed there may lie under an open smart card, which is drawn above it.
+1. **All four columns** (Uwe), as proposed: `column` is mcp · agents · providers · models.
+2. **Group cards stay in their column** (Uwe), as proposed: free positions (`saved['cards']`) and Move
+   left/right/up/down go; a card is dragged by its header within its column (`card_order`), with the drop line;
+   the menu keeps Earlier card and Later card, which are also the keyboard way. An old saved `cards` value is
+   ignored. The manual says "put it anywhere" (`docs/manual/manual.html`, the map chapter): change it in 8 languages.
 3. **The GUI never calls a route taken from a proposal.** No `preview.route` / `preview.params` and no
    `connect_after[].route` in the result: the GUI would have to use `call(method, params)`, and `providers.run` is no
    preview, it starts the download at once. Instead the core keeps the checked proposal and the GUI names a candidate:
@@ -26,10 +26,9 @@ proposes, the core checks, the user decides through the existing reviews.
    and `"Ask {0} instead"` and `"{0} has reached its usage or token limit."` go. Eleven states remain.
 6. **Who may answer:** only an agent that is installed, signed in and has a guarded start (today Claude Code, Codex,
    Pi; Pi also as the confirmed local helper). Others are not listed, Antigravity and Gemini included.
-7. `"Move to {0}"` only offers these three columns.
 
 ## Routes (`routes.json`, written by Claude first; the GUI builds against them)
-`map.smart_helpers`, `map.smart_ask` (`column`: models · providers · agents, `command`, `request`, `answer?`; result
+`map.smart_helpers`, `map.smart_ask` (`column`: mcp · agents · providers · models, `command`, `request`, `answer?`; result
 `{task}`, then in `tasks.status`: status proposal · clarify · redirect · error, as in the proposal's section 6 without
 `preview` and `connect_after`, plus `proposal` (a handle) and per candidate `connectable: [{command, name}]`),
 `map.smart_review`, `map.smart_run`, `map.smart_connect`.
@@ -47,3 +46,29 @@ with a fake transport. Uses `CoreClient` only. Manual chapter in all 8 languages
 - A proposal naming something not in the search results, or an action off the list, never reaches the GUI (core test).
 - Opening the card does not move the map; collapsed by default; hidden with no helper.
 - The three suites from AGENTS.md green; review by the other agent until CLEAN on each part.
+
+## Plan for Antigravity (GUI)
+Work in `/mnt/Data/Projects/maprisma-agy` on branch `task/004-gui`, made from `task/004-smart-card`. Never edit
+`packages/`, `routes.json`, `tools/` or the Python reference: what the core lacks goes to Claude as a note in the task.
+
+**Part A: the map (no new route, start now).** One commit each, suites green:
+1. `gui: group cards stay in their column`: remove free positions and the four Move items; vertical drag by the
+   header within the column; the 2 px drop line; Earlier card / Later card stay. Old `cards` ignored. Widget tests,
+   including that a card cannot leave its column.
+2. `gui: a fixed slot for the smart card`: the 38 px slot under each column's summary card, shown only when helpers
+   exist (a plain flag for now), and `MapSmartCard` collapsed and open as an overlay. Test: opening it changes no node
+   position and not the transform; only one card open at a time; it stays inside the Omarchy popup size.
+3. `gui: the manual on moving cards`: the map chapter in 8 languages (`docs/manual/translations.py`), no PDFs yet.
+
+Stop there and ask for review of part A.
+
+**Part B: the steps (after Claude's `protocol:` and `core:` commits are on `task/004-smart-card`).** Merge them into
+`task/004-gui` first, then:
+4. `gui: ask, working, clarify, redirect`: states 1 to 6 with `CoreClient` and a fake transport.
+5. `gui: proposal, review, run, connect`: states 7 to 11, reusing the existing review widgets; `map.smart_review`,
+   `map.smart_run`, `map.smart_connect`.
+6. `gui: smart card texts`: all new texts in 8 languages (append to `translations/*.json`), keyboard and a11y tests
+   in light and dark.
+7. `gui: the manual on the smart card`: a section in 8 languages. PDFs are built by Claude at the end.
+
+Then ask for review of part B. The app is never started on Uwe's desktop to test; widget tests only.
