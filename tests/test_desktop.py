@@ -52,6 +52,9 @@ class GenericTest(unittest.TestCase):
         self.assertEqual((light["background"], light["accent"]), (g.LIGHT["background"], g.ACCENTS["blue"]))
 
     def test_terminal_choice(self):
+        found = {"cosmic-term": "/usr/bin/cosmic-term", "xterm": "/usr/bin/xterm"}     # COSMIC's own
+        with mock.patch.object(g.shutil, "which", side_effect=found.get), mock.patch.dict(g.os.environ, {"TERMINAL": ""}):
+            self.assertEqual(g.terminal(), ["/usr/bin/cosmic-term", "--"])
         found = {"konsole": "/usr/bin/konsole", "xterm": "/usr/bin/xterm"}
         with mock.patch.object(g.shutil, "which", side_effect=found.get), mock.patch.dict(g.os.environ, {"TERMINAL": ""}):
             self.assertEqual(g.terminal(), ["/usr/bin/konsole", "-e"])

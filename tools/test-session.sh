@@ -70,6 +70,13 @@ Tick what worked, cross out what did not, add anything odd.
 - [ ] Settings: language, theme, corners
 - [ ] Help: the manual opens
 - [ ] window: close and open again
+- [ ] an agent started in its own terminal, not inside the window (which terminal opened?)
+- [ ] a link or the manual opens in the browser / PDF viewer
+
+## COSMIC (or any desktop that is not Omarchy)
+- [ ] light or dark as the desktop is (or how it differs)
+- [ ] the title bar: once, not twice
+- [ ] `maprisma --toggle` on a custom shortcut: opens, brings to the front, hides
 
 ## Remove
 - [ ] Settings › Start local LLMs with their agents off, then remove the package / AppImage

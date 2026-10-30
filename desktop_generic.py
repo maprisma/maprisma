@@ -8,7 +8,7 @@
 - windows: GTK itself (the window is handed over with attach_window); the
   desktop draws the title bar
 - terminals: xdg-terminal-exec, $TERMINAL, then the usual ones (Console, Ptyxis,
-  GNOME Terminal, Konsole, Xfce Terminal, foot, Alacritty, kitty, WezTerm, xterm)
+  GNOME Terminal, Konsole, COSMIC Terminal, Xfce Terminal, foot, Alacritty, kitty, WezTerm, xterm)
 - agents: the built-in list (agents.FALLBACK), no default agent, no usage
   records (agents' own stores still count, agent_status)
 - install hints: the command of the package manager found (apt, dnf, zypper,
@@ -41,7 +41,7 @@ DARK = {"background": "#222226", "foreground": "#ffffff", "muted": "#9a9996", "s
 
 # Terminals: (program, how argv follows it).
 TERMINALS = (("xdg-terminal-exec", []), ("kgx", ["--"]), ("ptyxis", ["--"]), ("gnome-terminal", ["--"]),
-             ("konsole", ["-e"]), ("xfce4-terminal", ["-x"]), ("foot", []), ("alacritty", ["-e"]),
+             ("konsole", ["-e"]), ("cosmic-term", ["--"]), ("xfce4-terminal", ["-x"]), ("foot", []), ("alacritty", ["-e"]),
              ("kitty", []), ("wezterm", ["start", "--"]), ("xterm", ["-e"]))
 
 # Package names per package manager.

@@ -110,6 +110,7 @@ const terminals = [
   ('ptyxis', ['--']),
   ('gnome-terminal', ['--']),
   ('konsole', ['-e']),
+  ('cosmic-term', ['--']),
   ('xfce4-terminal', ['-x']),
   ('foot', <String>[]),
   ('alacritty', ['-e']),
