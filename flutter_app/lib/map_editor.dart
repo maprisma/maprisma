@@ -736,27 +736,6 @@ class _MapEditorState extends State<MapEditor>
                           style: widget.lightStyle,
                         ),
                       ),
-                    if (widget.smartCards)
-                      for (final col in [
-                        for (var i = 0; i < mapSmartColumns.length; i++)
-                          if (i != _openSmartColumn) i,
-                        ?_openSmartColumn,
-                      ])
-                        Positioned(
-                          left: 16.0 + col * 302,
-                          top: 106,
-                          width: 266,
-                          child: MapSmartCard(
-                            key: ValueKey(
-                              'smart-card-${mapSmartColumns[col].$1}',
-                            ),
-                            column: mapSmartColumns[col].$1,
-                            title: mapSmartColumns[col].$2,
-                            open: _openSmartColumn == col,
-                            onToggle: () => _toggleSmartCard(col),
-                            tr: widget.tr,
-                          ),
-                        ),
                     for (final curve in layout.curves.where(
                       (c) =>
                           layout.movable(c.edge) &&
@@ -801,6 +780,27 @@ class _MapEditorState extends State<MapEditor>
                           ),
                         ),
                       ),
+                    if (widget.smartCards)
+                      for (final col in [
+                        for (var i = 0; i < mapSmartColumns.length; i++)
+                          if (i != _openSmartColumn) i,
+                        ?_openSmartColumn,
+                      ])
+                        Positioned(
+                          left: 16.0 + col * 302,
+                          top: 106,
+                          width: 266,
+                          child: MapSmartCard(
+                            key: ValueKey(
+                              'smart-card-${mapSmartColumns[col].$1}',
+                            ),
+                            column: mapSmartColumns[col].$1,
+                            title: mapSmartColumns[col].$2,
+                            open: _openSmartColumn == col,
+                            onToggle: () => _toggleSmartCard(col),
+                            tr: widget.tr,
+                          ),
+                        ),
                   ],
                 ),
               ),

@@ -510,4 +510,34 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+  testWidgets(
+    'open smart card sits above line handles so tapping over a handle does not reach it',
+    (tester) async {
+      final edits = <Map<String, dynamic>>[];
+      await mount(tester, edits: edits, smartCards: true);
+      await tester.tap(find.text('agent:a'));
+      await tester.pumpAndSettle();
+      final hook = find
+          .byTooltip(
+            'Move this connection to another compatible box, or to empty space to disconnect.',
+          )
+          .first;
+      final hookCenter = tester.getCenter(hook);
+
+      await tester.tap(find.byKey(const ValueKey('smart-card-providers')));
+      await tester.pumpAndSettle();
+      final cardRect = tester.getRect(
+        find.byKey(const ValueKey('smart-card-providers')),
+      );
+      expect(cardRect.contains(hookCenter), isTrue);
+
+      await tester.tapAt(hookCenter);
+      await tester.pump();
+      expect(find.text('Disconnect'), findsNothing);
+      await tester.dragFrom(hookCenter, const Offset(0, 240));
+      await tester.pump();
+      expect(edits, isEmpty);
+      expect(tester.takeException(), isNull);
+    },
+  );
 }
