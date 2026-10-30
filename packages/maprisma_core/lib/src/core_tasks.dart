@@ -122,7 +122,10 @@ final class CoreTasks {
         if (body != null) '--plan-stdin',
       ]);
       task.process = process;
-      if (task.state == 'stopped') _stop(process); // cancelled while starting
+      if (task.state == 'stopped') {
+        _stop(process); // cancelled while starting
+        return;
+      }
       process.stderr.drain<void>();
       if (body != null) {
         process.stdin
@@ -154,7 +157,7 @@ final class CoreTasks {
       }
       await process.exitCode;
     } catch (_) {
-      task.state = 'failed';
+      if (task.state == 'running') task.state = 'failed';
     }
     if (task.state == 'running') task.state = 'failed';
   }

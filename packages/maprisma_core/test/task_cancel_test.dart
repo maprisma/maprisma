@@ -29,4 +29,12 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 50));
     expect(tasks.status(ident)['state'], 'stopped');
   });
+
+  test('cancelled while starting: stopped, not failed', () async {
+    final tasks = CoreTasks(const ['/bin/sh', '-c', 'exec sleep 30']);
+    final ident = tasks.startPrivate('mcp.tools', [1])['task'] as String;
+    expect(tasks.cancel(ident)['state'], 'stopped');
+    await Future<void>.delayed(const Duration(milliseconds: 800));
+    expect(tasks.status(ident)['state'], 'stopped');
+  });
 }

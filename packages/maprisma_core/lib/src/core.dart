@@ -3404,7 +3404,7 @@ final class CoreService {
         return starter.session(method, params);
       }
       final reply = dispatchHandle(method, params, connections, tasks);
-      if (method == 'tasks.status') jobs.sync();
+      if (method == 'tasks.status' || method == 'tasks.cancel') jobs.sync();
       return reply;
     }
     if (method == 'addons.list' || method == 'addons.set_enabled') {

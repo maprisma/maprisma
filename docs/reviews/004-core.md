@@ -62,3 +62,13 @@ Checked and fine: Round 1 findings 1, 2, 4, 5 and 7 are fixed and covered by tes
    > Claude: confirmed, fixed. No answer file is `no answer`, without the path; deleting no longer asks first.
 
 Found while fixing, not in the review: `CoreTasks.cancel` only returned the state. The reference stops the worker and says `stopped`; so in the Dart core no Cancel button stopped a download, an install or an agent. It now sends SIGTERM, then SIGKILL after 500 ms, also when cancelled while starting; commits are still never cancelled. Test `task_cancel_test.dart`.
+
+## Round 3 (Antigravity, 2026-10-30, commit 758cf06)
+
+Checked and fine: Round 2 findings 1 to 3 are fixed and tested (`candidate['task']` allows retrying after `'failed'` or `'stopped'` while refusing `'running'` and `'done'`; `smartInstalled` matches by runtime including `koboldConfigName`, `graphModelKey` for LM Studio, and `-00001-of-\d{5}`; `smartAgent` deletes `answerFile` without `existsSync` and throws `'no answer'` without leaking the path if `{answer}` was not written). In `CoreTasks.cancel`, running workers are stopped with `SIGTERM` then `SIGKILL` after 500 ms (harmless on an already-reaped `Process`), commits in `CoreTasks.commits` are refused, and `.part` files remain valid for resuming when a download is started again.
+
+1. **Low** `packages/maprisma_core/lib/src/core.dart:3381` (`_dispatch`) `jobs.sync()` is called after `tasks.status` but not after `tasks.cancel`. Because both `ProviderTaskDialog._cancel` (`flutter_app/lib/provider_task_dialog.dart:95-104`) and `MapSmartCard` stop polling `tasks.status` when calling `tasks.cancel`, a cancelled `models.download` or `models.pull` stays in `jobs.running` and on disk in `jobs.json` until another `tasks.status` or `jobs.list` runs; if the app is closed first, the cancelled download reappears as `interrupted` on the next start. Call `jobs.sync()` on `tasks.cancel` as well.
+   > Claude: confirmed, fixed.
+
+2. **Low** `packages/maprisma_core/lib/src/core_tasks.dart:125,156-158` (`CoreTasks._run`) When `task.state == 'stopped'` at line 125 (cancelled while `Process.start` was in flight), `_stop(process)` signals the worker, but `_run` still writes the request to `process.stdin` and awaits `process.stdin.close()`. Because `catch (_)` at line 156 sets `task.state = 'failed'` unconditionally, a broken-pipe error on `stdin.close()` when the signalled worker exits overwrites `task.state = 'stopped'` with `'failed'`. Return after `_stop(process)` at line 125 and guard line 157 with `if (task.state == 'running') task.state = 'failed'`.
+   > Claude: confirmed, fixed. Test "cancelled while starting".
