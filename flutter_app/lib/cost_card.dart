@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'core_client.g.dart';
+
 /// The cost card (agents.costs, the GTK details' API cost / API value card):
 /// what an agent's tokens cost at API prices today, in 7 and in 30 days, and
 /// per model by kind. In euros the day's rate is fetched first (costs.rate).
@@ -35,18 +37,17 @@ class _CostCardState extends State<CostCard> {
   }
 
   Future<void> _load({bool rateAsked = false}) async {
+    final client = CoreClient.fromCall(widget.call);
     try {
-      final found = await widget.call('agents.costs', {
-        'command': widget.command,
-      });
+      final found = await client.agentsCosts(command: widget.command);
       if (!mounted) return;
       setState(() => _card = found['card'] as Map<String, dynamic>?);
       if (found['rate_due'] == true && !rateAsked) {
-        final started = await widget.call('costs.rate', const {});
+        final started = await client.costsRate();
         for (var i = 0; i < 150 && mounted; i++) {
-          final status = await widget.call('tasks.status', {
-            'task': started['task'],
-          });
+          final status = await client.tasksStatus(
+            task: started['task'] as String,
+          );
           if (status['state'] != 'running') break;
           await Future<void>.delayed(const Duration(milliseconds: 200));
         }

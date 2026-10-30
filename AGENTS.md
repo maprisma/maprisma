@@ -45,9 +45,10 @@ Two agents work on this repo, each a whole task at a time, each reviewing the ot
   `packages/maprisma_core/protocol/routes.json` (every route: kind, params, result shape), readable as
   `docs/protocol.md`. The GUI calls no route that is not there; `tests/test_protocol.py` checks it.
 - **Changing the contract.** A new or changed route: first edit `routes.json` (params and result shape,
-  `"source": "manual"`), then `tools/protocol.py doc`, then the core, then the GUI. A route you touch whose
-  shape is still `?` gets its shape. `tools/protocol.py update` finds new routes (it probes the core without a
-  network) and keeps what is written by hand. Raise `"protocol"` when a route changes incompatibly.
+  `"source": "manual"`), then `tools/protocol.py doc` and `tools/protocol.py client`, then the core, then the
+  GUI. A route you touch whose shape is still `?` gets its shape. `tools/protocol.py update` finds new routes
+  (it probes the core without a network) and keeps what is written by hand. Raise `"protocol"` when a route
+  changes incompatibly.
 - **A task:** `docs/tasks/<nr>-<name>.md` (goal, routes, UI, acceptance; template in `docs/tasks/README.md`).
   The author works on branch `task/<nr>-<name>` in their own worktree and commits in this order: `protocol:`
   (routes.json + docs), `core:`, `gui:`, each with the suites green (below).

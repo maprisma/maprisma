@@ -1,9 +1,12 @@
 import 'task_card.dart';
 import 'connection_authoring.dart';
+import 'core_client.g.dart';
 import 'mcp_catalog_view.dart';
 import 'mcp_tools_view.dart';
 import 'skills_web_view.dart';
+
 import 'package:flutter/material.dart';
+
 import 'provider_connections.dart';
 
 class ConnectionsView extends StatefulWidget {
@@ -78,16 +81,17 @@ class _ConnectionsViewState extends State<ConnectionsView> {
   Future<void> _openFound() async {
     final call = widget.onCall;
     if (call == null) return;
+    final client = CoreClient.fromCall(call);
     try {
       final found = {
         for (final kind in ['mcp', 'skills'])
-          kind: await call('found.list', {'kind': kind}),
+          kind: await client.foundList(kind: kind),
       };
       if (!mounted) return;
       setState(() => _found = found);
       // Shown: what is new now is no longer new (mark_seen).
       for (final kind in ['mcp', 'skills']) {
-        await call('found.seen', {'kind': kind});
+        await client.foundSeen(kind: kind);
       }
     } catch (_) {
       if (mounted) setState(() => _found = {});

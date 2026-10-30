@@ -76,6 +76,9 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   bool _closing = false;
   int _reviewDepth = 0;
   Backend? _backend;
+  CoreClient get _client => CoreClient(_backend!);
+  CoreClient? get _maybeClient =>
+      _backend == null ? null : CoreClient(_backend!);
   Map<String, dynamic>? _snapshot;
   Map<String, String> _strings = {};
   String? _selected;
@@ -126,9 +129,9 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     _mapLayoutTimer?.cancel();
     _mapLayoutTimer = Timer(const Duration(milliseconds: 300), () async {
       try {
-        await _backend?.call('settings.update', {
-          'values': {'flutter_map_layout': value},
-        });
+        await _maybeClient?.settingsUpdate(
+          values: {'flutter_map_layout': value},
+        );
       } catch (_) {
         if (mounted) _actionFailed();
       }
@@ -382,9 +385,8 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                   undo ??
                       () async {
                         if (value?['move_undo'] != null) {
-                          final started = await _backend!.call(
-                            'system.move_undo',
-                            {'undo': value!['move_undo']},
+                          final started = await _client.systemMoveUndo(
+                            undo: value!['move_undo'],
                           );
                           final restored = await _runTask(
                             title: tr('Undo'),
@@ -587,9 +589,9 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     _mapLayoutTimer?.cancel();
     if (_mapLayoutOverride != null) {
       try {
-        await _backend?.call('settings.update', {
-          'values': {'flutter_map_layout': _mapLayoutOverride},
-        });
+        await _maybeClient?.settingsUpdate(
+          values: {'flutter_map_layout': _mapLayoutOverride},
+        );
       } catch (_) {
         /* Keep normal close available if the service has disconnected. */
       }
@@ -603,7 +605,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     final command = choice['command'] as String;
     setState(() => _busy = true);
     try {
-      final result = await _backend!.call('sessions.start', choice);
+      final result = await _client.sessionsStart(choice);
       if (!mounted) return;
       if (result['session'] != null) {
         final terminal = AgentTerminal(
@@ -699,7 +701,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
 
   Future<void> _loadDesktop() async {
     try {
-      final found = await _backend!.call('desktop.snapshot');
+      final found = await _client.desktopSnapshot();
       if (!mounted) return;
       _desktopName = '${found['name']}';
       if (_popup) unawaited(_placePopup());
@@ -719,10 +721,10 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     // Just shown: Hyprland may not list the window for a moment.
     for (var i = 0; i < 10; i++) {
       try {
-        final done = await _backend!.call('window.popup', {
-          'width': popupSize.width,
-          'height': popupSize.height,
-        });
+        final done = await _client.windowPopup(
+          width: popupSize.width,
+          height: popupSize.height,
+        );
         if (done['placed'] == true || done['reason'] != 'no window yet') {
           return;
         }
@@ -734,13 +736,13 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   }
 
   Future<Map<String, dynamic>> _freshMap() async {
-    var result = await _backend!.call('map.snapshot', {'force': true});
+    var result = await _client.mapSnapshot(force: true);
     final deadline = DateTime.now().add(const Duration(seconds: 10));
     while (mounted &&
         result['pending'] == true &&
         DateTime.now().isBefore(deadline)) {
       await Future<void>.delayed(const Duration(milliseconds: 50));
-      result = await _backend!.call('map.snapshot', {'poll': true});
+      result = await _client.mapSnapshot(poll: true);
     }
     return result;
   }
@@ -755,7 +757,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     if (_themePending || !(_backend?.isConnected ?? false)) return;
     _themePending = true;
     try {
-      final appearance = await _backend!.call('app.theme');
+      final appearance = await _client.appTheme();
       if (mounted &&
           _snapshot != null &&
           !mapEquals(
@@ -764,14 +766,14 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
           )) {
         setState(() => _snapshot!['theme'] = appearance['theme']);
       }
-      final rounding = (await _backend!.call('window.rounding'))['rounding'];
+      final rounding = (await _client.windowRounding())['rounding'];
       if (mounted &&
           rounding != _windowRounding &&
           (rounding is int || rounding == null)) {
         setState(() => _windowRounding = rounding as int?);
       }
       if (_busy) return; // a change of our own is being written
-      final settings = await _backend!.call('settings.get');
+      final settings = await _client.settingsGet();
       if (mounted &&
           !_busy &&
           _snapshot != null &&
@@ -802,7 +804,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
           _nextSystemMountCheck = DateTime.now().add(
             Duration(seconds: interval < 15 ? 15 : interval),
           );
-          final changed = await _backend!.call('system.mount_signature');
+          final changed = await _client.systemMountSignature();
           if (mounted &&
               _showSystemMap &&
               changed['signature'] != _system['mount_signature']) {
@@ -831,10 +833,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
               (_nextMapScan?.isAfter(DateTime.now()) ?? false))) {
         return;
       }
-      final graph = await _backend!.call(
-        'map.snapshot',
-        pending ? {'poll': true} : const {},
-      );
+      final graph = await _client.mapSnapshot(poll: pending ? true : null);
       if (!pending) {
         _nextMapScan = DateTime.now().add(Duration(seconds: interval));
       }
@@ -855,9 +854,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   Future<void> _openSubagents(String command) async {
     setState(() => _busy = true);
     try {
-      final initial = await _backend!.call('agents.activity', {
-        'command': command,
-      });
+      final initial = await _client.agentsActivity(command: command);
       if (!mounted) return;
       await showDialog<void>(
         context: _navigator.currentContext!,
@@ -891,7 +888,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   Future<void> _updateSettings(Map<String, dynamic> values) async {
     setState(() => _busy = true);
     try {
-      await _backend!.call('settings.update', {'values': values});
+      await _client.settingsUpdate(values: values);
       await _refresh();
       if (values.containsKey('ai_checks')) unawaited(_checkMcp());
     } catch (_) {
@@ -1147,9 +1144,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   Future<void> _removeAddon(Map<String, dynamic> item) async {
     if (_busy || _agentsRunning) return;
     try {
-      final plan = await _backend!.call('addons.remove_preview', {
-        'id': item['id'],
-      });
+      final plan = await _client.addonsRemovePreview(id: item['id']);
       if (!mounted) return;
       final yes = await _cardReview(
         tr('Remove'),
@@ -1163,16 +1158,14 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       );
       if (yes != true || !mounted) return;
       setState(() => _busy = true);
-      final result = await _backend!.call('addons.remove_apply', {
-        'preview': plan['preview'],
-      });
+      final result = await _client.addonsRemoveApply(preview: plan['preview']);
       _addonEntries = null;
       _taskResult(
         tr('Remove'),
         result,
         _focusOf(plan),
         undo: () async {
-          await _backend!.call('addons.remove_undo', {'undo': result['undo']});
+          await _client.addonsRemoveUndo(undo: result['undo']);
         },
       );
       await _refresh();
@@ -1189,7 +1182,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         _addons.where((i) => i['id'] == id).firstOrNull?['enabled'] == true;
     setState(() => _busy = true);
     try {
-      await _backend!.call('addons.set_enabled', {'id': id, 'enabled': on});
+      await _client.addonsSetEnabled(id: id, enabled: on);
       if (!mounted) return;
       setState(() {
         _selected = null;
@@ -1197,10 +1190,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       });
       await _refresh();
       _offerAddonUndo(() async {
-        await _backend!.call('addons.set_enabled', {
-          'id': id,
-          'enabled': before,
-        });
+        await _client.addonsSetEnabled(id: id, enabled: before);
         await _refresh();
       });
     } catch (_) {
@@ -1252,7 +1242,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   Future<void> _loadSystem() async {
     Map<String, dynamic> data;
     try {
-      data = await _backend!.call('system.cached');
+      data = await _client.systemCached();
     } catch (_) {
       return;
     }
@@ -1266,7 +1256,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   }
 
   Future<void> _reloadSystem() async {
-    final data = await _backend!.call('system.cached');
+    final data = await _client.systemCached();
     if (mounted) {
       setState(() {
         _system = data;
@@ -1379,7 +1369,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     }
     _usageAsking = true;
     try {
-      final found = await _backend!.call('map.usage', {'commands': working});
+      final found = await _client.mapUsage(commands: working);
       if (mounted) {
         setState(() {
           _usageBoxes = found['boxes'] as Map<String, dynamic>? ?? {};
@@ -1414,7 +1404,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   Future<void> _loadBadges() async {
     if (_backend?.isConnected != true) return;
     try {
-      final found = await _backend!.call('map.badges');
+      final found = await _client.mapBadges();
       if (!mounted) return;
       setState(() => _agentBadges = found['badges'] as Map<String, dynamic>);
       if (found['rate_due'] == true && !_rateAsked) {
@@ -1445,7 +1435,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   Future<void> _loadFoundHints() async {
     if (_backend?.isConnected != true) return;
     try {
-      final found = await _backend!.call('found.hints');
+      final found = await _client.foundHints();
       if (mounted) {
         setState(
           () => _foundHints = (found['lines'] as List? ?? const [])
@@ -1464,7 +1454,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   Future<void> _loadAddonHints() async {
     if (_backend?.isConnected != true) return;
     try {
-      final found = await _backend!.call('addons.hints');
+      final found = await _client.addonsHints();
       if (mounted) {
         setState(
           () => _addonHints = (found['lines'] as List? ?? const [])
@@ -1575,7 +1565,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       return;
     }
     try {
-      var done = await _backend!.call('updates.run', {'key': update['key']});
+      var done = await _client.updatesRun(key: update['key'] as String);
       if (done['started'] == false && done['running'] != null) {
         // The agent runs now: its program would be replaced under its feet.
         final yes = await showDialog<bool>(
@@ -1605,10 +1595,10 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
           ),
         );
         if (yes != true) return;
-        done = await _backend!.call('updates.run', {
-          'key': update['key'],
-          'running_ok': true,
-        });
+        done = await _client.updatesRun(
+          key: update['key'] as String,
+          runningOk: true,
+        );
       }
       if (done['started'] != true) return;
       if (mounted) {
@@ -1630,9 +1620,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     if (_mcpChecking || _backend == null) return;
     setState(() => _mcpChecking = true);
     try {
-      final started = await _backend!.call('checks.mcp_check', {
-        'force': force,
-      });
+      final started = await _client.checksMcpCheck(force: force);
       final snapshot = started['snapshot'] is Map
           ? started['snapshot'] as Map<String, dynamic>
           : await _awaitTask('checks.mcp_check', started);
@@ -1653,9 +1641,9 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   ) async {
     try {
       if (action == 'release') {
-        final done = await _backend!.call('checks.mcp_release', {
-          'name': update['name'],
-        });
+        final done = await _client.checksMcpRelease(
+          name: update['name'] as String,
+        );
         if (done['opened'] != true) _actionFailed();
         return;
       }
@@ -1668,9 +1656,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         });
         return;
       }
-      final plan = await _backend!.call('checks.mcp_task', {
-        'name': update['name'],
-      });
+      final plan = await _client.checksMcpTask(name: update['name'] as String);
       if (!mounted) return;
       final yes = await showDialog<bool>(
         context: _navigator.currentContext!,
@@ -1697,9 +1683,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         ),
       );
       if (yes != true || !mounted) return;
-      _systemSession(
-        await _backend!.call('system.help_apply', {'preview': plan['preview']}),
-      );
+      _systemSession(await _client.systemHelpApply(preview: plan['preview']));
     } catch (_) {
       _actionFailed();
     }
@@ -1710,7 +1694,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
 
   Future<void> _loadChanges() async {
     try {
-      final found = await _backend!.call('changes.history');
+      final found = await _client.changesHistory();
       if (mounted) {
         setState(
           () => _changes = (found['changes'] as List)
@@ -1725,7 +1709,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   Future<void> _undoChange(String id) async {
     setState(() => _busy = true);
     try {
-      final done = await _backend!.call('changes.undo', {'id': id});
+      final done = await _client.changesUndo(id: id);
       final restored = (done['restored'] as List).cast<String>();
       ScaffoldMessenger.of(_navigator.currentContext!).showSnackBar(
         SnackBar(
@@ -1757,13 +1741,11 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     if (last != null && DateTime.now().difference(last).inMinutes < 10) return;
     _usageAsked[command] = DateTime.now();
     try {
-      final started = await _backend!.call('agents.usage_refresh', {
-        'command': command,
-      });
+      final started = await _client.agentsUsageRefresh(command: command);
       if (started['task'] is! String) return;
       final done = await _awaitTask('agents.usage_refresh', started);
       if (done['ok'] != true || !mounted || _selected != command) return;
-      final info = await _backend!.call('agents.details', {'command': command});
+      final info = await _client.agentsDetails(command: command);
       if (mounted && _selected == command) setState(() => _agentInfo = info);
     } catch (_) {
       // The record stays as it was.
@@ -1931,7 +1913,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     if (_busy) return;
     var manual = false;
     try {
-      manual = (await _backend!.call('help.snapshot'))['manual'] == true;
+      manual = (await _client.helpSnapshot())['manual'] == true;
     } catch (_) {
       // Shown without the manual.
     }
@@ -1947,7 +1929,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         manual: manual,
         tr: tr,
         onOpenManual: () async =>
-            (await _backend!.call('help.open_manual'))['opened'] == true,
+            (await _client.helpOpenManual())['opened'] == true,
         starts: [
           ('Your first agent', Icons.rocket_launch_outlined, after(_openGuide)),
           ('Find existing AI', Icons.manage_search, after(_openExisting)),
@@ -1985,7 +1967,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
 
   Future<void> _loadJobs() async {
     try {
-      final reply = await _backend!.call('jobs.list');
+      final reply = await _client.jobsList();
       if (!mounted) return;
       _interrupted = [
         for (final job in (reply['jobs'] as List).cast<Map<String, dynamic>>())
@@ -2024,7 +2006,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
 
   Future<void> _discardJob(Map<String, dynamic> job) async {
     try {
-      await _backend!.call('jobs.discard', {'id': job['id']});
+      await _client.jobsDiscard(id: job['id']);
     } catch (_) {
       _actionFailed();
     }
@@ -2047,7 +2029,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       _busy = true;
     });
     try {
-      final started = await _backend!.call('jobs.continue', {'id': job['id']});
+      final started = await _client.jobsContinue(id: job['id']);
       if (!mounted) return;
       await _runTask(
         operation: job['kind'] == 'pull' ? 'models.pull' : 'models.download',
@@ -2081,9 +2063,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   ) async {
     if (started['task'] is! String) throw StateError('$method started no task');
     while (true) {
-      final status = await _backend!.call('tasks.status', {
-        'task': started['task'],
-      });
+      final status = await _client.tasksStatus(task: started['task'] as String);
       if (status['state'] == 'done') {
         return status['result'] as Map<String, dynamic>;
       }
@@ -2100,13 +2080,11 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     try {
       Map<String, dynamic>? result;
       if (quiet) {
-        final started = await _backend!.call('system.refresh', {
-          'search': search,
-        });
+        final started = await _client.systemRefresh(search: search);
         while (mounted) {
-          final status = await _backend!.call('tasks.status', {
-            'task': started['task'],
-          });
+          final status = await _client.tasksStatus(
+            task: started['task'] as String,
+          );
           if (status['state'] == 'done') {
             result = status['result'] as Map<String, dynamic>;
             break;
@@ -2183,10 +2161,10 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     if (_busy || source['found'] == null || target['kind'] != 'runtime') return;
     setState(() => _busy = true);
     try {
-      final plan = await _backend!.call('system.folder_preview', {
-        'found': source['found'],
-        'runtime': (target['id'] as String).substring(8),
-      });
+      final plan = await _client.systemFolderPreview(
+        found: source['found'],
+        runtime: (target['id'] as String).substring(8),
+      );
       if (!mounted ||
           !await _cardReview(
             tr('Preview'),
@@ -2200,9 +2178,9 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
           )) {
         return;
       }
-      final started = await _backend!.call('connections.apply', {
-        'plan': plan['plan'],
-      });
+      final started = await _client.connectionsApply(
+        plan: plan['plan'] as String,
+      );
       if (!mounted) return;
       await _runTask(
         operation: 'connections.apply',
@@ -2219,7 +2197,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
 
   Future<void> _openUsage() async {
     try {
-      final result = await _backend!.call('usage.snapshot');
+      final result = await _client.usageSnapshot();
       if (!mounted) return;
       await showDialog<void>(
         context: _navigator.currentContext!,
@@ -2323,10 +2301,9 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     final mcp = id.startsWith('mcp:');
     Map<String, dynamic> details;
     try {
-      details = await _backend!.call(
-        mcp ? 'details.mcp' : 'details.skills',
-        mcp ? {'name': id.substring(4)} : {'path': id.substring(7)},
-      );
+      details = mcp
+          ? await _client.detailsMcp(name: id.substring(4))
+          : await _client.detailsSkills(path: id.substring(7));
     } catch (_) {
       _systemNode(node);
       return;
@@ -2402,11 +2379,11 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       }
     });
     try {
-      final started = await _backend!.call('addons.catalog');
+      final started = await _client.addonsCatalog();
       while (mounted) {
-        final status = await _backend!.call('tasks.status', {
-          'task': started['task'],
-        });
+        final status = await _client.tasksStatus(
+          task: started['task'] as String,
+        );
         if (status['state'] == 'done') {
           final result = status['result'] as Map<String, dynamic>;
           setState(
@@ -2452,9 +2429,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     if (file == null || !mounted) return;
     Map<String, dynamic> preview;
     try {
-      preview = await _backend!.call('addons.file_preview', {
-        'path': file.path,
-      });
+      preview = await _client.addonsFilePreview(path: file.path);
     } catch (_) {
       _actionFailed();
       return;
@@ -2531,7 +2506,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   Future<void> _loadHelpers() async {
     _helpers = const {};
     try {
-      final found = await _backend!.call('helper.snapshot');
+      final found = await _client.helperSnapshot();
       if (mounted) setState(() => _helpers = found);
     } catch (_) {
       // Settings show no helper choice.
@@ -2540,7 +2515,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
 
   Future<void> _loadShortName() async {
     try {
-      final identity = await _backend!.call('app.identity', const {});
+      final identity = await _client.appIdentity();
       if (mounted) setState(() => _shortName = '${identity['short_name']}');
     } catch (_) {
       // the description then names no service
@@ -2572,7 +2547,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     if (_busy) return;
     setState(() => _busy = true);
     try {
-      await _backend!.call('guide.choose', {'route': route});
+      await _client.guideChoose(route: route);
     } catch (_) {
       _actionFailed();
     } finally {
@@ -2708,7 +2683,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     if (_busy) return;
     Map<String, dynamic> report;
     try {
-      report = await _backend!.call('agents.security', {'command': command});
+      report = await _client.agentsSecurity(command: command);
     } catch (_) {
       _actionFailed();
       return;
@@ -2741,9 +2716,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     if (_busy) return;
     Map<String, dynamic> preview;
     try {
-      preview = await _backend!.call('agents.key_preview', {
-        'command': command,
-      });
+      preview = await _client.agentsKeyPreview(command: command);
     } catch (_) {
       _actionFailed();
       return;
@@ -2772,10 +2745,10 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     }
     Map<String, dynamic>? result;
     try {
-      final started = await _backend!.call('agents.key_apply', {
-        'preview': preview['preview'],
-        'key': key,
-      });
+      final started = await _client.agentsKeyApply(
+        preview: preview['preview'],
+        key: key,
+      );
       if (!mounted) return;
       result = await _runTask(
         operation: 'agents.key',
@@ -2819,11 +2792,11 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     if (_busy) return;
     setState(() => _busy = true);
     try {
-      var plan = await _backend!.call('agents.action_preview', {
-        'command': command,
-        'action': action,
-        'kind': ?kind,
-      });
+      var plan = await _client.agentsActionPreview(
+        command: command,
+        action: action,
+        kind: kind,
+      );
       if (!mounted) return;
       if (action == 'login' && (plan['logins'] as List).length > 1) {
         int? index;
@@ -2847,11 +2820,11 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
           ),
         );
         if (!chosen || index == null) return;
-        plan = await _backend!.call('agents.action_preview', {
-          'command': command,
-          'action': action,
-          'login': index,
-        });
+        plan = await _client.agentsActionPreview(
+          command: command,
+          action: action,
+          login: index,
+        );
       }
       if (!mounted ||
           !await _cardReview(
@@ -2866,9 +2839,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
           )) {
         return;
       }
-      final result = await _backend!.call('agents.action_apply', {
-        'preview': plan['preview'],
-      });
+      final result = await _client.agentsActionApply(preview: plan['preview']);
       if (!mounted) return;
       _taskResult(tr(actionLabel(action)), result, _focusOf(plan));
       if (result['session'] != null) {
@@ -3021,9 +2992,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     if (_busy) return;
     setState(() => _busy = true);
     try {
-      final reply = await _backend!.call('agents.halt_preview', {
-        'command': command,
-      });
+      final reply = await _client.agentsHaltPreview(command: command);
       if (!mounted) return;
       String? token;
       final yes = await _cardReview(
@@ -3048,9 +3017,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         ),
       );
       if (!yes || token == null) return;
-      final result = await _backend!.call('agents.halt_apply', {
-        'preview': token,
-      });
+      final result = await _client.agentsHaltApply(preview: token);
       await _runTask(
         operation: 'agents.halt',
         params: const {},
@@ -3247,11 +3214,24 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     setState(() => _busy = true);
     var applied = false;
     try {
-      final plan = await _backend!.call(
-        method ??
-            (author ? 'connections.author_preview' : 'connections.preview'),
-        params,
-      );
+      final plan = method != null
+          ? await _backend!.call(method, params)
+          : author
+          ? await _client.connectionsAuthorPreview(
+              agents: params['agents'],
+              entry: params['entry'],
+              folder: params['folder'] as String?,
+              kind: params['kind'] as String,
+              name: params['name'] as String?,
+            )
+          : await _client.connectionsPreview(
+              command: params['command'] as String,
+              item: params['item'] as String,
+              kind: params['kind'] as String,
+              model: params['model'] as String?,
+              remove: params['remove'],
+              useNow: params['use_now'] as bool?,
+            );
       if (!mounted) return;
       final apply = await _cardReview(
         tr('Preview'),
@@ -3261,9 +3241,9 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       );
       if (apply) {
         setState(() => _taskActive = true);
-        var result = await _backend!.call('connections.apply', {
-          'plan': plan['plan'],
-        });
+        var result = await _client.connectionsApply(
+          plan: plan['plan'] as String,
+        );
         final queued = result['task'] != null;
         if (queued && mounted) {
           final finished = await _runTask(
@@ -3323,7 +3303,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   Future<void> _syncSlots() async {
     Map<String, dynamic> plan;
     try {
-      plan = await _backend!.call('models.slots_preview');
+      plan = await _client.modelsSlotsPreview();
     } catch (_) {
       return;
     }
@@ -3350,9 +3330,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     if (!apply || !mounted) return;
     setState(() => _busy = true);
     try {
-      var result = await _backend!.call('connections.apply', {
-        'plan': plan['plan'],
-      });
+      var result = await _client.connectionsApply(plan: plan['plan'] as String);
       if (result['task'] != null && mounted) {
         result =
             await _runTask(
@@ -3365,7 +3343,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       } else {
         _connectionUndo = result['undo'] as String?;
       }
-      if (plan['reload'] == true) await _backend!.call('models.slots_reload');
+      if (plan['reload'] == true) await _client.modelsSlotsReload();
       await _refresh();
     } catch (_) {
       _actionFailed();
@@ -3379,7 +3357,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     if (token == null) return false;
     setState(() => _busy = true);
     try {
-      final result = await _backend!.call('connections.undo', {'undo': token});
+      final result = await _client.connectionsUndo(undo: token);
       _connectionUndo = null;
       if (mounted) {
         ScaffoldMessenger.of(_navigator.currentContext!).showSnackBar(
@@ -3401,10 +3379,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   Future<void> _removeModel(String key, String model) async {
     setState(() => _busy = true);
     try {
-      final preview = await _backend!.call('models.remove_preview', {
-        'key': key,
-        'model': model,
-      });
+      final preview = await _client.modelsRemovePreview(key: key, model: model);
       if (!mounted ||
           !await _cardReview(
             tr('Remove model'),
@@ -3419,9 +3394,9 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         return;
       }
       setState(() => _taskActive = true);
-      final started = await _backend!.call('models.remove_apply', {
-        'removal': preview['removal'],
-      });
+      final started = await _client.modelsRemoveApply(
+        removal: preview['removal'],
+      );
       if (!mounted) return;
       await _runTask(
         operation: 'models.remove',
@@ -3465,11 +3440,11 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       _setupDetectionFailed = false;
     });
     try {
-      final started = await _backend!.call('setup.detect');
+      final started = await _client.setupDetect();
       while (mounted && revision == _setupRevision) {
-        final status = await _backend!.call('tasks.status', {
-          'task': started['task'],
-        });
+        final status = await _client.tasksStatus(
+          task: started['task'] as String,
+        );
         if (status['state'] == 'done') {
           final result = status['result'] as Map<String, dynamic>;
           _detectionComplete = true;
@@ -3510,10 +3485,11 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
           }.toList();
     setState(() => _busy = true);
     try {
-      await _backend!.call(
-        enabled == null ? 'setup.later' : 'setup.apply',
-        enabled == null ? const {} : {'enabled': enabled},
-      );
+      if (enabled == null) {
+        await _client.setupLater();
+      } else {
+        await _client.setupApply(enabled: enabled);
+      }
       if (!mounted) return;
       setState(() {
         _welcome = false;
@@ -3525,7 +3501,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       if (enabled != null) {
         _offerAddonUndo(() async {
           if (_agentsRunning) return;
-          await _backend!.call('setup.apply', {'enabled': before});
+          await _client.setupApply(enabled: before);
           await _refresh();
         });
       }
@@ -3540,18 +3516,16 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     if (!mounted) return;
     setState(() => _busy = true);
     try {
-      final snapshot = await _backend!.call('app.snapshot');
+      final snapshot = await _client.appSnapshot();
       final connections = _showConnections
-          ? await _backend!.call('connections.snapshot', {
-              if (_connectionCommand != null) 'command': _connectionCommand,
-            })
+          ? await _client.connectionsSnapshot(command: _connectionCommand)
           : null;
       final providerData = _showProviders
-          ? await _backend!.call('providers.snapshot')
+          ? await _client.providersSnapshot()
           : null;
       final firstSnapshot = !_startupChecked;
       final openSetup = firstSnapshot && snapshot['setup_needed'] == true;
-      final addons = await _backend!.call('addons.list');
+      final addons = await _client.addonsList();
       final mapVisible =
           _showMap &&
           !_showSystemMap &&
@@ -3568,7 +3542,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       final selected = _selected;
       final info = selected == null
           ? null
-          : await _backend!.call('agents.details', {'command': selected});
+          : await _client.agentsDetails(command: selected);
       final setting = snapshot['language'] as String? ?? 'auto';
       var language = setting == 'auto'
           ? WidgetsBinding.instance.platformDispatcher.locale.languageCode
@@ -3634,9 +3608,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
           if (_backend?.isConnected == true) {
             unawaited(_loadBadges());
             unawaited(_loadGpu());
-            unawaited(
-              _backend!.call('limits.notify').then((_) {}, onError: (_) {}),
-            );
+            unawaited(_client.limitsNotify().then((_) {}, onError: (_) {}));
           }
         });
         unawaited(_loadBadges());

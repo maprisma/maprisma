@@ -87,12 +87,14 @@ class _SystemMapViewState extends State<SystemMapView> {
     }
   }
 
+  CoreClient get _client => CoreClient(widget.backend);
+
   Future<void> _saveView() async {
     try {
-      await widget.backend.call('system.view', {
-        'selected': _selectedId,
-        'transform': widget.controller.value.storage.toList(),
-      });
+      await _client.systemView(
+        selected: _selectedId,
+        transform: widget.controller.value.storage.toList(),
+      );
     } catch (_) {}
   }
 
@@ -125,9 +127,7 @@ class _SystemMapViewState extends State<SystemMapView> {
         ),
       );
       if (yes != true || !mounted) return;
-      final result = await widget.backend.call('system.forget_disk', {
-        'node': node['id'],
-      });
+      final result = await _client.systemForgetDisk(node: node['id']);
       if (mounted) {
         setState(() {
           _selectedId = null;
@@ -237,10 +237,10 @@ class _SystemMapViewState extends State<SystemMapView> {
   ) async {
     setState(() => _working = true);
     try {
-      final plan = await widget.backend.call('existing.preview', {
-        'found': source['found'],
-        'models': target?['found'],
-      });
+      final plan = await _client.existingPreview(
+        found: source['found'],
+        models: target?['found'],
+      );
       if (!mounted || !await _confirm(plan)) return;
       final result = await widget.onOperation('existing.apply', {
         'plan': plan['plan'],
@@ -304,13 +304,9 @@ class _SystemMapViewState extends State<SystemMapView> {
   Future<void> _stack(String part) async {
     setState(() => _working = true);
     try {
-      final plan = await widget.backend.call('system.stack_preview', {
-        'part': part,
-      });
+      final plan = await _client.systemStackPreview(part: part);
       if (!mounted || !await _confirm(plan)) return;
-      final result = await widget.backend.call('system.stack_apply', {
-        'preview': plan['preview'],
-      });
+      final result = await _client.systemStackApply(preview: plan['preview']);
       await widget.onSaved(result);
     } catch (_) {
       if (mounted) {
@@ -326,12 +322,15 @@ class _SystemMapViewState extends State<SystemMapView> {
   Future<void> _help(String topic, [String? finding]) async {
     setState(() => _working = true);
     try {
-      final plan = await widget.backend.call(
-        finding == null ? 'system.help_preview' : 'system.fix_preview',
-        finding == null
-            ? {'command': _helper, 'topic': topic}
-            : {'command': _helper, 'finding': finding},
-      );
+      final plan = finding == null
+          ? await _client.systemHelpPreview({
+              'command': _helper,
+              'topic': topic,
+            })
+          : await _client.systemFixPreview({
+              'command': _helper,
+              'finding': finding,
+            });
       if (!mounted) return;
       final yes = await showDialog<bool>(
         context: context,
@@ -372,9 +371,7 @@ class _SystemMapViewState extends State<SystemMapView> {
         }, widget.tr('Check this system with AI'));
         if (result != null) await widget.onSaved(result);
       } else {
-        final result = await widget.backend.call('system.help_apply', {
-          'preview': plan['preview'],
-        });
+        final result = await _client.systemHelpApply(preview: plan['preview']);
         widget.onSession(result);
       }
     } catch (_) {

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'core_client.g.dart';
+
 /// A local LLM's details (providers.details, the GTK local LLM page): whether
 /// it runs and what it holds on the GPU, its models, agents and address,
 /// what agents sent through it, and who can reach it.
@@ -36,9 +38,9 @@ class _RuntimeDetailsCardState extends State<RuntimeDetailsCard> {
 
   Future<void> _load() async {
     try {
-      final found = await widget.call('providers.details', {
-        'key': widget.runtime,
-      });
+      final found = await CoreClient.fromCall(
+        widget.call,
+      ).providersDetails(key: widget.runtime);
       if (mounted) setState(() => _details = found);
     } catch (_) {
       // No card: the rest of the page is shown.

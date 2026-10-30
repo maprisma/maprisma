@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'core_client.g.dart';
+
 /// Projects, last 30 days (agents.projects, the GTK details' projects card):
 /// per project folder the working time, sessions, tokens, lines changed and
 /// API value, the subagent runs per type and the busiest hour.
@@ -30,9 +32,9 @@ class _ProjectsCardState extends State<ProjectsCard> {
 
   Future<void> _load() async {
     try {
-      final found = await widget.call('agents.projects', {
-        'command': widget.command,
-      });
+      final found = await CoreClient.fromCall(
+        widget.call,
+      ).agentsProjects(command: widget.command);
       if (mounted) {
         setState(() => _card = found['card'] as Map<String, dynamic>?);
       }

@@ -1,5 +1,7 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
+
 import 'backend.dart';
 
 class SubagentsDialog extends StatefulWidget {
@@ -34,9 +36,9 @@ class _SubagentsDialogState extends State<SubagentsDialog> {
     if (_pending || _data['subagents_supported'] != true) return;
     _pending = true;
     try {
-      final result = await widget.backend.call('agents.activity', {
-        'command': widget.command,
-      });
+      final result = await CoreClient(
+        widget.backend,
+      ).agentsActivity(command: widget.command);
       if (mounted) {
         setState(() {
           _data = result;

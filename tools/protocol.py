@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
 """The contract between the GUI (flutter_app) and the core (packages/maprisma_core):
-packages/maprisma_core/protocol/routes.json, and docs/protocol.md made from it.
+packages/maprisma_core/protocol/routes.json, docs/protocol.md and flutter_app/lib/core_client.g.dart made from it.
 
     tools/protocol.py update [--record FILE]   find the routes (the core's names, probed without a
                                                network), keep what is written by hand, add result
                                                shapes from a recording (MAPRISMA_RECORD_PROTOCOL)
     tools/protocol.py doc                      write docs/protocol.md
+    tools/protocol.py client                   write flutter_app/lib/core_client.g.dart
     tools/protocol.py check                    the contract still holds (tests/test_protocol.py)
 
 routes.json, per route: area, kind (read · preview · change · handle), handle (the field that holds
 the handle), params ({name: type}), result (its shape, or null while not described), source
 (observed · manual · null) and note. "other" lists the core's dotted names that are not routes
 (worker operations, file names): every name the core holds is one or the other, so a new route
-cannot go unnoticed. Hand-written params, result and note are kept by update.
+cannot go unnoticed. Parameters come from routes.json (and recordings); hand-written params,
+result and note are kept by update.
 """
 from __future__ import annotations
 
@@ -28,6 +30,7 @@ ROOT = Path(__file__).resolve().parent.parent
 CORE = ROOT / 'packages/maprisma_core'
 ROUTES = CORE / 'protocol/routes.json'
 DOC = ROOT / 'docs/protocol.md'
+CLIENT = ROOT / 'flutter_app/lib/core_client.g.dart'
 VERSION = 1
 NAME = re.compile(r"""['"]([a-z][a-z0-9]*\.[a-z_]+)['"]""")
 FILE_ENDINGS = {'json', 'toml', 'yaml', 'md', 'pdf', 'py', 'sh', 'service', 'desktop', 'txt', 'log', 'lock',
@@ -37,6 +40,34 @@ FILE_ENDINGS = {'json', 'toml', 'yaml', 'md', 'pdf', 'py', 'sh', 'service', 'des
 CHANGE = re.compile(r'(^|_)(apply|install|install_file|file_install|undo|continue|discard|pin|forget|update|'
                     r'set_enabled|run|unpack|later|choose|start|stop|write|resize|cancel|release|reload|'
                     r'refresh|forget_disk|notify|popup|open_manual|seen|settings_changed|usage_refresh)$')
+DART_TYPES = {'string': 'String', 'int': 'int', 'bool': 'bool', 'number': 'num'}
+DART_WORDS = {'assert', 'break', 'case', 'catch', 'class', 'const', 'continue', 'default', 'do', 'else', 'enum',
+              'extends', 'false', 'final', 'finally', 'for', 'if', 'in', 'is', 'new', 'null', 'rethrow', 'return',
+              'super', 'switch', 'this', 'throw', 'true', 'try', 'var', 'void', 'while', 'with'}
+OPTIONAL = {
+    'agents.action_preview': {'kind', 'login'},
+    'connections.author_preview': {'entry', 'folder', 'name'},
+    'connections.preview': {'extra', 'model', 'use_now', 'x'},
+    'connections.snapshot': {'command'},
+    'help.snapshot': {'x'},
+    'i18n.lookup': {'n', 'other'},
+    'map.snapshot': {'force', 'poll'},
+    'models.attach_preview': {'extra'},
+    'settings.get': {'extra'},
+    'settings.update': {'extra', 'flutter_map_layout'},
+    'updates.run': {'running_ok'},
+}
+# Dotted names in flutter_app/lib whose area is a route area, but that name worker task
+# operations passed to providers.run / TaskProgress rather than RPC routes (in "other").
+GUI_NON_ROUTES = {
+    'agents.halt',
+    'agents.key',
+    'models.download',
+    'models.files',
+    'models.pull',
+    'models.remove',
+    'models.search',
+}
 
 
 def _names(files) -> set[str]:
@@ -89,11 +120,18 @@ def probe(names: list[str]) -> list[str]:
     return json.loads(done.stdout.strip().splitlines()[-1])
 
 
+def gui_names() -> set[str]:
+    """Every quoted dotted name in flutter_app/lib (core_client.g.dart excluded)."""
+    return _names(f for f in sorted((ROOT / 'flutter_app/lib').glob('*.dart')) if f != CLIENT)
+
+
 def gui_calls() -> dict[str, dict[str, str]]:
     """{route: {param: '?'}} from the GUI's literal calls (its parameter names, when written there)."""
     out: dict[str, dict[str, str]] = {}
-    call = re.compile(r"\.call\(\s*'([a-z][a-z0-9]*\.[a-z_]+)'\s*(?:,\s*\{(.*?)\})?\s*[,)]", re.S)
+    call = re.compile(r"\.call\(\s*'([a-z][a-z0-9]*\.[a-z_]+)'(?:\s*,\s*\{(.*?)\}\s*[,)])?", re.S)
     for f in sorted((ROOT / 'flutter_app/lib').glob('*.dart')):
+        if f == CLIENT:
+            continue
         for method, body in call.findall(f.read_text()):
             params = out.setdefault(method, {})
             for key in re.findall(r"'([a-z_]+)'\s*:", body or ''):
@@ -160,13 +198,10 @@ def update(record: Path | None) -> None:
             seen['params'] = merge(seen['params'], shape(entry['params']))
             if 'result' in entry:
                 seen['result'] = merge(seen['result'], shape(entry['result']))
-    calls = gui_calls()
     routes = {}
     for method in sorted(served):
         old = data['routes'].get(method, {})
         params = dict(old.get('params') or {})
-        for key in calls.get(method, {}):
-            params.setdefault(key, '?')
         seen = observed.get(method, {})
         for key, value in (seen.get('params') or {}).items():
             if key != '__contract_probe__' and params.get(key, '?') == '?':
@@ -214,10 +249,129 @@ def doc_text(data: dict) -> str:
     return '\n'.join(out)
 
 
+def _camel(name: str) -> str:
+    parts = re.split(r'[._]+', name)
+    word = parts[0] + ''.join(p.capitalize() for p in parts[1:])
+    return f'{word}Value' if word in DART_WORDS else word
+
+
+def _dart_type(spec, optional: bool) -> str:
+    base = DART_TYPES.get(spec, 'Object?') if isinstance(spec, str) else 'Object?'
+    if base == 'Object?':
+        return base
+    return f'{base}?' if optional else base
+
+
+def client_text(data: dict) -> str:
+    out = [
+        '// Generated from packages/maprisma_core/protocol/routes.json by tools/protocol.py client.',
+        '// Do not edit by hand.',
+        '',
+        "import 'service_transport.dart';",
+        '',
+        'class _CallTransport implements ServiceTransport {',
+        '  const _CallTransport(this._call);',
+        '',
+        '  final Future<Map<String, dynamic>> Function(String, Map<String, dynamic>)',
+        '  _call;',
+        '',
+        '  @override',
+        '  bool get isConnected => true;',
+        '',
+        '  @override',
+        '  Future<Map<String, dynamic>> call(',
+        '    String method, [',
+        '    Map<String, dynamic> params = const {},',
+        '  ]) => _call(method, params);',
+        '',
+        '  @override',
+        '  void dispose() {}',
+        '',
+        '  @override',
+        '  Future<void> shutdown() async {}',
+        '}',
+        '',
+        'class CoreClient {',
+        '  const CoreClient(this.transport);',
+        '',
+        '  CoreClient.fromCall(',
+        '    Future<Map<String, dynamic>> Function(String, Map<String, dynamic>) call,',
+        '  ) : transport = _CallTransport(call);',
+        '',
+        '  final ServiceTransport transport;',
+    ]
+    routes = data['routes']
+    for method in sorted(routes):
+        r = routes[method]
+        name = _camel(method)
+        params = dict(r['params'])
+        if r['kind'] == 'handle' and 'handle' in r:
+            params[r['handle']] = 'string'
+        out.append('')
+        if not params:
+            sig = f'  Future<Map<String, dynamic>> {name}(['
+            one = f'  Future<Map<String, dynamic>> {name}([Map<String, dynamic> params = const {{}}]) =>'
+            call_line = f"      transport.call('{method}', params);"
+            if len(one) <= 80:
+                out.append(one)
+                out.append(call_line)
+            else:
+                out.extend([
+                    sig,
+                    '    Map<String, dynamic> params = const {},',
+                    f"  ]) => transport.call('{method}', params);",
+                ])
+            continue
+        opt = OPTIONAL.get(method, set())
+        arg_parts = []
+        map_parts = []
+        for k in sorted(params):
+            arg_name = _camel(k)
+            is_opt = k in opt and k != r.get('handle')
+            dtype = _dart_type(params[k], is_opt)
+            if is_opt:
+                arg_parts.append(f'{dtype} {arg_name}')
+                map_parts.append(f"'{k}': ?{arg_name}")
+            else:
+                arg_parts.append(f'required {dtype} {arg_name}')
+                map_parts.append(f"'{k}': {arg_name}")
+        args_inline = '{' + ', '.join(arg_parts) + '}'
+        map_inline = '{' + ', '.join(map_parts) + '}'
+        single = f"  Future<Map<String, dynamic>> {name}({args_inline}) => transport.call('{method}', {map_inline});"
+        sig_single = f'  Future<Map<String, dynamic>> {name}({args_inline}) =>'
+        call_single = f"      transport.call('{method}', {map_inline});"
+        if len(single) <= 80:
+            out.append(single)
+        elif len(sig_single) <= 80 and len(call_single) <= 80:
+            out.append(sig_single)
+            out.append(call_single)
+        elif len(sig_single) <= 80:
+            out.append(sig_single)
+            out.append(f"      transport.call('{method}', {{")
+            for mp in map_parts:
+                out.append(f'        {mp},')
+            out.append('      });')
+        else:
+            out.append(f'  Future<Map<String, dynamic>> {name}({{')
+            for ap in arg_parts:
+                out.append(f'    {ap},')
+            tail_inline = f"  }}) => transport.call('{method}', {map_inline});"
+            if len(tail_inline) <= 80:
+                out.append(tail_inline)
+            else:
+                out.append(f"  }}) => transport.call('{method}', {{")
+                for mp in map_parts:
+                    out.append(f'    {mp},')
+                out.append('  });')
+    out.append('}')
+    return '\n'.join(out)
+
+
 def check() -> list[str]:
     """What breaks the contract (static, fast)."""
     data = load()
     routes, other = set(data['routes']), set(data['other'])
+    areas = {r['area'] for r in data['routes'].values()}
     problems = []
     unknown = core_names() - routes - other
     if unknown:
@@ -226,15 +380,16 @@ def check() -> list[str]:
     gone = routes - dispatch_names()
     if gone:
         problems.append(f'routes no longer in the core: {sorted(gone)}')
-    called = set(gui_calls()) - routes
+    called = {n for n in gui_names() if n.split('.')[0] in areas} - routes - GUI_NON_ROUTES
     if called:
         problems.append(f'the GUI calls routes the contract does not have: {sorted(called)}')
-    for method, r in data['routes'].items():
-        missing = set(gui_calls().get(method, {})) - set(r['params'])
-        if missing:
-            problems.append(f'{method}: the GUI sends parameters the contract does not list: {sorted(missing)}')
+    calls = gui_calls()
+    if calls:
+        problems.append(f'the GUI calls routes directly instead of CoreClient: {sorted(calls)}')
     if not DOC.exists() or DOC.read_text() != doc_text(data) + '\n':
         problems.append('docs/protocol.md is not up to date (tools/protocol.py doc)')
+    if not CLIENT.exists() or CLIENT.read_text() != client_text(data) + '\n':
+        problems.append('flutter_app/lib/core_client.g.dart is not up to date (tools/protocol.py client)')
     return problems
 
 
@@ -244,13 +399,18 @@ def main(argv) -> int:
     up = sub.add_parser('update')
     up.add_argument('--record', type=Path)
     sub.add_parser('doc')
+    sub.add_parser('client')
     sub.add_parser('check')
     args = parser.parse_args(argv)
     if args.command == 'update':
         update(args.record)
-        DOC.write_text(doc_text(load()) + '\n')
+        data = load()
+        DOC.write_text(doc_text(data) + '\n')
+        CLIENT.write_text(client_text(data) + '\n')
     elif args.command == 'doc':
         DOC.write_text(doc_text(load()) + '\n')
+    elif args.command == 'client':
+        CLIENT.write_text(client_text(load()) + '\n')
     else:
         problems = check()
         for p in problems:

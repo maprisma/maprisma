@@ -58,21 +58,18 @@ class AgentTerminal extends ChangeNotifier {
     }
     _pumping = true;
     try {
+      final client = CoreClient(backend);
       final size = _size;
       if (size != null && size.$1 >= 2 && size.$2 >= 2) {
-        await backend.call('sessions.resize', {
-          'session': id,
-          'cols': size.$1,
-          'rows': size.$2,
-        });
+        await client.sessionsResize(session: id, cols: size.$1, rows: size.$2);
         if (_size == size) _size = null;
       }
       if (_input.isNotEmpty) {
         final length = _input.length > 4096 ? 4096 : _input.length;
-        final reply = await backend.call('sessions.write', {
-          'session': id,
-          'data': base64Encode(_input.sublist(0, length)),
-        });
+        final reply = await client.sessionsWrite(
+          session: id,
+          data: base64Encode(_input.sublist(0, length)),
+        );
         final accepted = reply['accepted'] as int;
         if (accepted < 0 || accepted > length) {
           throw StateError('Invalid input acknowledgement');
@@ -80,7 +77,7 @@ class AgentTerminal extends ChangeNotifier {
         _input.removeRange(0, accepted);
         if (reply['ended'] == true) _input.clear();
       }
-      final reply = await backend.call('sessions.read', {'session': id});
+      final reply = await client.sessionsRead(session: id);
       if (_disposed) return;
       terminal.write(reply['text'] as String);
       if (reply['verification_failed'] == true) {
@@ -111,7 +108,7 @@ class AgentTerminal extends ChangeNotifier {
   }
 
   Future<void> stop() async {
-    await backend.call('sessions.stop', {'session': id});
+    await CoreClient(backend).sessionsStop(session: id);
     ended = true;
     _timer.cancel();
     if (!_disposed) notifyListeners();
