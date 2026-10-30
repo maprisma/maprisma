@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'core_client.g.dart';
 import 'map_groups.dart';
 import 'map_layout.dart';
 import 'map_lights.dart';
@@ -31,10 +32,16 @@ class MapEditor extends StatefulWidget {
     this.staticState,
     this.lightStyle = defaultMapLightStyle,
     this.smartCards = false,
+    this.smartHelpers = const [],
+    this.client,
+    this.onSmartApplied,
   });
   final Object? staticState;
   final MapLightStyle lightStyle;
   final bool smartCards;
+  final List<Map<String, dynamic>> smartHelpers;
+  final CoreClient? client;
+  final ValueChanged<Map<String, dynamic>>? onSmartApplied;
   final Set<String>? selection;
   final ValueChanged<String>? onSubagents;
   final Widget Function(Map<String, dynamic>)? controls;
@@ -70,6 +77,7 @@ class _MapEditorState extends State<MapEditor>
   Offset? _cursor;
   double? _draggingCardY;
   int? _openSmartColumn;
+  final _smartPrompts = <String, String>{};
   double _reorderDistance = 0;
   int _staticRevision = 0;
   @override
@@ -802,6 +810,19 @@ class _MapEditorState extends State<MapEditor>
                             open: _openSmartColumn == col,
                             onToggle: () => _toggleSmartCard(col),
                             tr: widget.tr,
+                            helpers: widget.smartHelpers,
+                            client: widget.client,
+                            initialPrompt:
+                                _smartPrompts[mapSmartColumns[col].$1],
+                            onMoveToColumn: (targetCol, request) {
+                              final index = mapSmartColumns.indexWhere(
+                                (c) => c.$1 == targetCol,
+                              );
+                              if (index < 0) return;
+                              _smartPrompts[targetCol] = request;
+                              _toggleSmartCard(index);
+                            },
+                            onApplied: widget.onSmartApplied,
                           ),
                         ),
                   ],

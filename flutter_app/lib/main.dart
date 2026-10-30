@@ -113,6 +113,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   bool _startupChecked = false;
   List<Map<String, dynamic>> _addons = [];
   List<Map<String, dynamic>>? _addonEntries;
+  List<Map<String, dynamic>> _smartHelpers = const [];
   bool _taskActive = false;
   Map<String, dynamic> _providers = {'local': [], 'online': []};
   Map<String, dynamic> _connections = {'agents': [], 'mcp': [], 'skills': []};
@@ -3530,6 +3531,14 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       final firstSnapshot = !_startupChecked;
       final openSetup = firstSnapshot && snapshot['setup_needed'] == true;
       final addons = await _client.addonsList();
+      var smartHelpers = _smartHelpers;
+      try {
+        final smart = await _client.mapSmartHelpers();
+        smartHelpers = (smart['helpers'] as List? ?? const [])
+            .cast<Map<String, dynamic>>();
+      } catch (_) {
+        // Smart cards stay hidden when no helper route is available.
+      }
       final mapVisible =
           _showMap &&
           !_showSystemMap &&
@@ -3581,6 +3590,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
           _setupRevision++;
         }
         _addons = (addons['addons'] as List).cast<Map<String, dynamic>>();
+        _smartHelpers = smartHelpers;
         _graph = graph;
         if (_selected == selected) _agentInfo = info;
         _strings = strings;
@@ -4333,6 +4343,17 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                                             onExpandGroup: (col) => setState(
                                               () => _focusCategory = col,
                                             ),
+                                            smartCards:
+                                                _smartHelpers.isNotEmpty,
+                                            smartHelpers: _smartHelpers,
+                                            client: _maybeClient,
+                                            onSmartApplied: (result) {
+                                              if (result['undo'] is String) {
+                                                _connectionUndo =
+                                                    result['undo'] as String;
+                                              }
+                                              unawaited(_refresh());
+                                            },
                                           )
                                         : _viewHost(
                                             const [

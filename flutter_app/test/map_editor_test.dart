@@ -1,3 +1,4 @@
+import 'package:maprisma/backend.dart';
 import 'package:maprisma/map_editor.dart';
 import 'package:maprisma/map_groups.dart';
 import 'package:maprisma/map_lights.dart';
@@ -7,6 +8,30 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'map_layout_test.dart' show fixtureGraph;
+
+class _FakeSmartTransport implements ServiceTransport {
+  _FakeSmartTransport(this.onCall);
+  final Future<Map<String, dynamic>> Function(
+    String method,
+    Map<String, dynamic> params,
+  )
+  onCall;
+
+  @override
+  bool get isConnected => true;
+
+  @override
+  Future<Map<String, dynamic>> call(
+    String method, [
+    Map<String, dynamic> params = const {},
+  ]) => onCall(method, params);
+
+  @override
+  void dispose() {}
+
+  @override
+  Future<void> shutdown() async {}
+}
 
 Future<void> mount(
   WidgetTester tester, {
@@ -19,6 +44,9 @@ Future<void> mount(
   String mode = 'all',
   Set<String>? selection,
   bool smartCards = false,
+  List<Map<String, dynamic>> smartHelpers = const [],
+  CoreClient? client,
+  ValueChanged<Map<String, dynamic>>? onSmartApplied,
   TransformationController? controller,
   Size size = const Size(1500, 1000),
 }) async {
@@ -43,6 +71,9 @@ Future<void> mount(
             animate: mode,
             selection: selection,
             smartCards: smartCards,
+            smartHelpers: smartHelpers,
+            client: client,
+            onSmartApplied: onSmartApplied,
             controller: controller,
             groups: smartCards
                 ? MapGroup.fromGraph(g, const [
@@ -599,6 +630,184 @@ void main() {
           find.descendant(of: agentsCard, matching: find.byType(InkWell)),
         ),
         isTrue,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+  testWidgets(
+    'smart card states 1 to 6: 16 px status slot, helper cost before Ask, working cancel, clarify, redirect move, and error try again',
+    (tester) async {
+      final edits = <Map<String, dynamic>>[];
+      final calls = <(String, Map<String, dynamic>)>[];
+      var nextTaskState = 'running';
+      Map<String, dynamic> nextResult = const {};
+      final client = CoreClient(
+        _FakeSmartTransport((method, params) async {
+          calls.add((method, Map<String, dynamic>.from(params)));
+          switch (method) {
+            case 'map.smart_ask':
+              return {'task': 'task-1'};
+            case 'tasks.status':
+              return {
+                'state': nextTaskState,
+                if (nextTaskState == 'done') 'result': nextResult,
+              };
+            case 'tasks.cancel':
+              return {'cancelled': true};
+            default:
+              throw StateError('Unexpected method $method');
+          }
+        }),
+      );
+      const helpers = [
+        {'command': 'local-helper', 'name': 'Local helper', 'local': true},
+        {'command': 'claude', 'name': 'Claude Code', 'local': false},
+      ];
+      await mount(
+        tester,
+        edits: edits,
+        smartCards: true,
+        smartHelpers: helpers,
+        client: client,
+      );
+
+      // State 2: collapsed bar reserves a 16 px slot at its left and shows the default helper.
+      final slots = find.byKey(const ValueKey('smart-status-slot'));
+      expect(slots, findsNWidgets(4));
+      expect(tester.getSize(slots.first), const Size(16, 16));
+      expect(find.text(' · Local helper'), findsNWidgets(4));
+
+      // Open Agents smart card (State 3: Idle).
+      final agentsCard = find.byKey(const ValueKey('smart-card-agents'));
+      await tester.tap(agentsCard);
+      await tester.pumpAndSettle();
+      expect(find.text('Local, no tokens'), findsOneWidget);
+      expect(find.text('Set up or connect an agent…'), findsOneWidget);
+
+      // Switching helper shows Uses plan/tokens before Ask; no request sent yet.
+      await tester.tap(find.byKey(const ValueKey('smart-helper-select')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Claude Code').last);
+      await tester.pumpAndSettle();
+      expect(find.text('Uses plan/tokens'), findsOneWidget);
+      expect(calls, isEmpty);
+
+      // Clicking Ask with blank prompt sends nothing.
+      await tester.tap(find.text('Ask'));
+      await tester.pump();
+      expect(calls, isEmpty);
+
+      // Typing text does not send; only clicking Ask sends map.smart_ask (State 4: Working).
+      await tester.enterText(
+        find.descendant(of: agentsCard, matching: find.byType(TextField)),
+        'install qwencoder',
+      );
+      await tester.pump();
+      expect(calls, isEmpty);
+      await tester.tap(find.text('Ask'));
+      await tester.pump();
+      expect(calls.first.$1, 'map.smart_ask');
+      expect(calls.first.$2, {
+        'column': 'agents',
+        'command': 'claude',
+        'request': 'install qwencoder',
+      });
+      expect(find.text('Claude Code is checking Agents…'), findsOneWidget);
+      expect(find.byType(LinearProgressIndicator), findsOneWidget);
+
+      // Cancel in Working cancels the task and returns to Idle with the text kept.
+      await tester.tap(find.text('Cancel'));
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(calls.any((c) => c.$1 == 'tasks.cancel'), isTrue);
+      expect(find.text('install qwencoder'), findsOneWidget);
+
+      // State 6: Redirect on a column that is not Models, with Move to Models.
+      calls.clear();
+      nextTaskState = 'done';
+      nextResult = {
+        'helper': 'Claude Code',
+        'local': false,
+        'status': 'redirect',
+        'instead': {
+          'hint': 'Models are managed in the Models column.',
+          'column': 'models',
+          'request': 'install qwencoder',
+        },
+      };
+      await tester.tap(find.text('Ask'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Models are managed in the Models column.'),
+        findsOneWidget,
+      );
+      expect(find.text('Move to Models'), findsOneWidget);
+
+      // Clicking Move to Models opens Models card and pre-fills prompt without auto-sending.
+      calls.clear();
+      await tester.tap(find.text('Move to Models'));
+      await tester.pumpAndSettle();
+      final modelsCard = find.byKey(const ValueKey('smart-card-models'));
+      expect(tester.widget<MapSmartCard>(agentsCard).open, isFalse);
+      expect(tester.widget<MapSmartCard>(modelsCard).open, isTrue);
+      expect(calls, isEmpty);
+      expect(
+        tester
+            .widget<TextField>(
+              find.descendant(of: modelsCard, matching: find.byType(TextField)),
+            )
+            .controller
+            ?.text,
+        'install qwencoder',
+      );
+
+      // State 5: Clarify shows question and choice chips; clicking a chip sends answer.
+      nextResult = {
+        'helper': 'Local helper',
+        'local': true,
+        'status': 'clarify',
+        'question': 'Which local LLM should run this model?',
+        'choices': ['Ollama', 'llama.cpp'],
+      };
+      await tester.tap(find.text('Ask'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Which local LLM should run this model?'),
+        findsOneWidget,
+      );
+      expect(find.text('Ollama'), findsOneWidget);
+      expect(find.text('llama.cpp'), findsOneWidget);
+
+      // Clicking a choice chip sends map.smart_ask with answer; if it returns error,
+      // Try again returns to prompt with text kept (no auto-retry).
+      calls.clear();
+      nextResult = {
+        'helper': 'Local helper',
+        'local': true,
+        'status': 'error',
+        'summary': 'Could not reach the search service.',
+      };
+      await tester.tap(find.text('Ollama'));
+      await tester.pumpAndSettle();
+      expect(calls.first.$1, 'map.smart_ask');
+      expect(calls.first.$2, {
+        'column': 'models',
+        'command': 'local-helper',
+        'request': 'install qwencoder',
+        'answer': 'Ollama',
+      });
+      expect(find.text('Could not reach the search service.'), findsOneWidget);
+      calls.clear();
+      await tester.tap(find.text('Try again'));
+      await tester.pumpAndSettle();
+      expect(calls, isEmpty);
+      expect(
+        tester
+            .widget<TextField>(
+              find.descendant(of: modelsCard, matching: find.byType(TextField)),
+            )
+            .controller
+            ?.text,
+        'install qwencoder',
       );
       expect(tester.takeException(), isNull);
     },
