@@ -3199,5 +3199,8 @@
  "Download {0}?": "{0} herunterladen?",
  "Runtime": "Laufzeitumgebung",
  "{0} is ready.": "{0} ist bereit.",
- "Connect it to an agent now? (Optional)": "Jetzt mit einem Agenten verbinden? (Optional)"
+ "Connect it to an agent now? (Optional)": "Jetzt mit einem Agenten verbinden? (Optional)",
+ "This column does not take requests yet.": "Diese Spalte nimmt noch keine Anfragen an.",
+ "No model was found for this search.": "Für diese Suche wurde kein Modell gefunden.",
+ "This helper is not available.": "Dieser Helfer ist nicht verfügbar."
 }

@@ -2859,7 +2859,11 @@ final class CoreService {
       if (body.length > 256 * 1024) {
         throw const FormatException('Request too large');
       }
-      return tasks.startPrivate('map.smart_ask', body, smartProposals.keep);
+      return tasks.startPrivate(
+        'map.smart_ask',
+        body,
+        (result) => smartProposals.keep(smartWorded(result, i18n.text)),
+      );
     }
     final fields = {
       'proposal',

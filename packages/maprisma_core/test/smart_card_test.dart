@@ -192,6 +192,20 @@ void main() {
     },
   );
 
+  test('the core words only its own texts', () {
+    String tr(String text) => 'de:$text';
+    final out = smartWorded({
+      'summary': smartNoHelper,
+      'instead': {'hint': smartNoModel, 'column': null},
+    }, tr);
+    expect(out['summary'], 'de:$smartNoHelper');
+    expect((out['instead'] as Map)['hint'], 'de:$smartNoModel');
+    expect(
+      smartWorded({'summary': 'by the agent'}, tr)['summary'],
+      'by the agent',
+    );
+  });
+
   test('a column not built yet asks no agent', () async {
     final result = await smartAsk(
       {'column': 'agents', 'command': 'claude'},

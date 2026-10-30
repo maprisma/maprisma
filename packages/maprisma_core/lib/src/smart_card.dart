@@ -28,6 +28,11 @@ const smartTask = 'smart-card';
 const smartMaxPicks = 3;
 const smartProposalMinutes = 30;
 
+/// Texts of the core; the core words them when it hands a result over.
+const smartNotYet = 'This column does not take requests yet.',
+    smartNoModel = 'No model was found for this search.',
+    smartNoHelper = 'This helper is not available.';
+
 /// What one line of an answer may be, for the card.
 String _line(dynamic value, [int limit = 300]) {
   if (value is! String) return '';
@@ -216,11 +221,7 @@ Future<Map<String, dynamic>> smartModels(
   if (repos.isEmpty) {
     return {
       'status': 'redirect',
-      'instead': {
-        'hint': 'No model was found for this search.',
-        'column': null,
-        'request': null,
-      },
+      'instead': {'hint': smartNoModel, 'column': null, 'request': null},
     };
   }
   final answer = firstJson(
@@ -363,15 +364,11 @@ Future<Map<String, dynamic>> smartAsk(
     return {
       ...answer,
       'status': 'redirect',
-      'instead': {
-        'hint': 'This column does not take requests yet.',
-        'column': 'models',
-        'request': null,
-      },
+      'instead': {'hint': smartNotYet, 'column': 'models', 'request': null},
     };
   }
   if (adapter == null) {
-    return {...answer, 'status': 'error', 'summary': 'Helper unavailable'};
+    return {...answer, 'status': 'error', 'summary': smartNoHelper};
   }
   final pc = await pcInfo(['~'], home);
   final free = (pc['free'] as Map).values.whereType<int>();
@@ -394,6 +391,22 @@ Future<Map<String, dynamic>> smartAsk(
   } on Object catch (error) {
     return {...answer, 'status': 'error', 'summary': _line(errorText(error))};
   }
+}
+
+/// The core's own texts of a result in the app's language; the agent's are
+/// written in it already.
+Map<String, dynamic> smartWorded(
+  Map<String, dynamic> result,
+  String Function(String) tr,
+) {
+  const own = {smartNotYet, smartNoModel, smartNoHelper};
+  final instead = result['instead'];
+  return {
+    ...result,
+    if (own.contains(result['summary'])) 'summary': tr(result['summary']),
+    if (instead is Map && own.contains(instead['hint']))
+      'instead': {...instead, 'hint': tr(instead['hint'] as String)},
+  };
 }
 
 /// Checked proposals kept in the core: the GUI names a candidate, it never

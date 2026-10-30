@@ -3199,5 +3199,8 @@
  "Download {0}?": "{0} downloaden?",
  "Runtime": "Runtime",
  "{0} is ready.": "{0} is klaar.",
- "Connect it to an agent now? (Optional)": "Nu met een agent verbinden? (Optioneel)"
+ "Connect it to an agent now? (Optional)": "Nu met een agent verbinden? (Optioneel)",
+ "This column does not take requests yet.": "Deze kolom neemt nog geen verzoeken aan.",
+ "No model was found for this search.": "Geen model gevonden voor deze zoekopdracht.",
+ "This helper is not available.": "Deze helper is niet beschikbaar."
 }
