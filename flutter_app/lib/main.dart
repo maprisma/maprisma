@@ -1578,6 +1578,56 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
     }
   }
 
+  void _toggleSettings() => setState(() {
+    _card = null;
+    _browser = null;
+    _guideReturn = false; // chosen from the menu
+    _showSettings = !_showSettings;
+    if (_showSettings && _shortName == null) _loadShortName();
+    if (_showSettings && _helpers == null) _loadHelpers();
+    _showSystemMap = false;
+    _showConnections = false;
+    _showProviders = false;
+    _showGuide = false;
+    _visibleTerminal = null;
+  });
+
+  /// Esc / Backspace (the manual's keyboard shortcuts): back from a page to
+  /// the map. Text fields, dialogs, cards and terminals keep these keys:
+  /// they handle them before they reach the app.
+  bool get _canGoBack =>
+      !_navigationBlocked &&
+      _card == null &&
+      _browser == null &&
+      _visibleTerminal == null &&
+      (_showSettings ||
+          _showProviders ||
+          _showConnections ||
+          _showGuide ||
+          _showSystemMap);
+
+  void _goBack() => setState(() {
+    _showSettings = false;
+    _showProviders = false;
+    _showConnections = false;
+    _showGuide = false;
+    _showSystemMap = false;
+  });
+
+  /// Ctrl+Plus / Ctrl+Minus / Ctrl+0: the map in view zoomed in, out, back
+  /// to 100 % (within the map's own 30–200 %).
+  void _zoom(double factor) {
+    final controller = _showSystemMap ? _systemTransform : _aiTransform;
+    if (factor == 0) {
+      controller.value = Matrix4.identity();
+      return;
+    }
+    final scale = controller.value.entry(0, 0); // x scale (no rotation)
+    final next = (scale * factor).clamp(0.3, 2.0);
+    controller.value = controller.value.clone()
+      ..scaleByDouble(next / scale, next / scale, 1, 1);
+  }
+
   Future<void> _checkHealth() async {
     try {
       final report = await _quietTask('health.report', {});
@@ -3441,6 +3491,24 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
     shortcuts: {
       ...WidgetsApp.defaultShortcuts,
       const SingleActivator(LogicalKeyboardKey.f1): const _HelpIntent(),
+      const SingleActivator(LogicalKeyboardKey.comma, control: true):
+          const _SettingsIntent(),
+      const SingleActivator(LogicalKeyboardKey.f5): const _RefreshIntent(),
+      const SingleActivator(LogicalKeyboardKey.equal, control: true):
+          const _ZoomIntent(1.25),
+      const SingleActivator(LogicalKeyboardKey.add, control: true):
+          const _ZoomIntent(1.25),
+      const SingleActivator(LogicalKeyboardKey.numpadAdd, control: true):
+          const _ZoomIntent(1.25),
+      const SingleActivator(LogicalKeyboardKey.minus, control: true):
+          const _ZoomIntent(0.8),
+      const SingleActivator(LogicalKeyboardKey.numpadSubtract, control: true):
+          const _ZoomIntent(0.8),
+      const SingleActivator(LogicalKeyboardKey.digit0, control: true):
+          const _ZoomIntent(0),
+      const SingleActivator(LogicalKeyboardKey.numpad0, control: true):
+          const _ZoomIntent(0),
+      const SingleActivator(LogicalKeyboardKey.backspace): const _BackIntent(),
     },
     actions: {
       ...WidgetsApp.defaultActions,
@@ -3450,6 +3518,30 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
           return null;
         },
       ),
+      _SettingsIntent: CallbackAction<_SettingsIntent>(
+        onInvoke: (_) {
+          if (!_navigationBlocked && _snapshot != null && !_showSettings) {
+            _toggleSettings();
+          }
+          return null;
+        },
+      ),
+      _RefreshIntent: CallbackAction<_RefreshIntent>(
+        onInvoke: (_) {
+          if (!_navigationBlocked) _retry();
+          return null;
+        },
+      ),
+      _ZoomIntent: CallbackAction<_ZoomIntent>(
+        onInvoke: (intent) {
+          if (_showMap || _showSystemMap) _zoom(intent.factor);
+          return null;
+        },
+      ),
+      // Esc (Flutter's dismiss key) and Backspace: back from a page; only
+      // when nothing nearer took the key.
+      DismissIntent: _BackAction<DismissIntent>(() => _canGoBack, _goBack),
+      _BackIntent: _BackAction<_BackIntent>(() => _canGoBack, _goBack),
     },
     debugShowCheckedModeBanner: false,
     locale: _locale,
@@ -3467,594 +3559,616 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
     theme: _theme(Brightness.light),
     darkTheme: _theme(Brightness.dark),
     themeMode: appThemeMode(_themePreference, _desktopTheme),
-    home: Scaffold(
-      appBar: AppBar(
-        title: const Text('Asterism'),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: SegmentedButton<bool>(
-              segments: [
-                ButtonSegment(
-                  value: false,
-                  label: DragTarget<Map<String, dynamic>>(
-                    onWillAcceptWithDetails: (details) {
-                      if (details.data['found'] != null) {
-                        setState(() {
-                          _card = null;
-                          _browser = null;
-                          _showSystemMap = false;
-                          _showMap = true;
-                        });
-                        if (_graph == null) _refresh();
-                        return true;
-                      }
-                      return false;
-                    },
-                    builder: (context, candidates, rejected) =>
-                        Text(tr('AI Map')),
-                  ),
+    // Esc on the window's page: back from a page (the route's own dismiss
+    // action would take it first); dialogs are routes of their own and keep
+    // Esc as dismiss.
+    home: Shortcuts(
+      shortcuts: const {
+        SingleActivator(LogicalKeyboardKey.escape): _BackIntent(),
+      },
+      // The page holds the focus when nothing in it does, so its keys
+      // pass through here (not part of Tab's order).
+      child: Focus(
+        autofocus: true,
+        skipTraversal: true,
+        child: Scaffold(
+          appBar: AppBar(
+            title: const Text('Asterism'),
+            actions: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: SegmentedButton<bool>(
+                  segments: [
+                    ButtonSegment(
+                      value: false,
+                      label: DragTarget<Map<String, dynamic>>(
+                        onWillAcceptWithDetails: (details) {
+                          if (details.data['found'] != null) {
+                            setState(() {
+                              _card = null;
+                              _browser = null;
+                              _showSystemMap = false;
+                              _showMap = true;
+                            });
+                            if (_graph == null) _refresh();
+                            return true;
+                          }
+                          return false;
+                        },
+                        builder: (context, candidates, rejected) =>
+                            Text(tr('AI Map')),
+                      ),
+                    ),
+                    ButtonSegment(value: true, label: Text(tr('System Map'))),
+                  ],
+                  selected: {_showSystemMap},
+                  onSelectionChanged: _navigationBlocked
+                      ? null
+                      : (choice) {
+                          if (choice.single) {
+                            _openSystem();
+                          } else {
+                            setState(() {
+                              _card = null;
+                              _browser = null;
+                              _showSystemMap = false;
+                              _showMap = true;
+                              _showGuide = false;
+                              _showSettings = false;
+                              _showProviders = false;
+                              _showConnections = false;
+                              _visibleTerminal = null;
+                            });
+                            _refresh();
+                          }
+                        },
                 ),
-                ButtonSegment(value: true, label: Text(tr('System Map'))),
-              ],
-              selected: {_showSystemMap},
-              onSelectionChanged: _navigationBlocked
-                  ? null
-                  : (choice) {
-                      if (choice.single) {
-                        _openSystem();
-                      } else {
+              ),
+              if (!_showSystemMap)
+                IconButton(
+                  tooltip: tr('Usage'),
+                  onPressed: _navigationBlocked ? null : _openUsage,
+                  icon: const Icon(Icons.bar_chart_outlined),
+                ),
+              if (_healthCount > 0)
+                IconButton(
+                  key: const ValueKey('problems-open'),
+                  tooltip: '${_healthReport?['summary'] ?? ''}',
+                  icon: Icon(
+                    Icons.priority_high,
+                    color: (_healthReport?['warn'] as int? ?? 0) > 0
+                        ? Theme.of(context).colorScheme.error
+                        : null,
+                  ),
+                  onPressed: _navigationBlocked ? null : _openProblems,
+                ),
+              IconButton(
+                key: const ValueKey('help-open'),
+                tooltip: tr('Help (F1)'),
+                icon: const Icon(Icons.help_outline),
+                onPressed: _navigationBlocked || _snapshot == null
+                    ? null
+                    : _openHelp,
+              ),
+              IconButton(
+                tooltip: tr('Your first agent'),
+                icon: const Icon(Icons.rocket_launch_outlined),
+                onPressed: _navigationBlocked ? null : _openGuide,
+              ),
+              IconButton(
+                tooltip: tr('Connections'),
+                icon: const Icon(Icons.account_tree_outlined),
+                onPressed: _navigationBlocked
+                    ? null
+                    : () {
                         setState(() {
                           _card = null;
                           _browser = null;
+                          _connectionCommand = null;
+                          _guideReturn = false; // chosen from the menu
+                          _showConnections = !_showConnections;
                           _showSystemMap = false;
-                          _showMap = true;
+                          _showProviders = false;
                           _showGuide = false;
                           _showSettings = false;
-                          _showProviders = false;
-                          _showConnections = false;
                           _visibleTerminal = null;
                         });
                         _refresh();
-                      }
-                    },
-            ),
-          ),
-          if (!_showSystemMap)
-            IconButton(
-              tooltip: tr('Usage'),
-              onPressed: _navigationBlocked ? null : _openUsage,
-              icon: const Icon(Icons.bar_chart_outlined),
-            ),
-          if (_healthCount > 0)
-            IconButton(
-              key: const ValueKey('problems-open'),
-              tooltip: '${_healthReport?['summary'] ?? ''}',
-              icon: Icon(
-                Icons.priority_high,
-                color: (_healthReport?['warn'] as int? ?? 0) > 0
-                    ? Theme.of(context).colorScheme.error
-                    : null,
+                      },
               ),
-              onPressed: _navigationBlocked ? null : _openProblems,
-            ),
-          IconButton(
-            key: const ValueKey('help-open'),
-            tooltip: tr('Help (F1)'),
-            icon: const Icon(Icons.help_outline),
-            onPressed: _navigationBlocked || _snapshot == null
-                ? null
-                : _openHelp,
+              IconButton(
+                tooltip: tr('Providers and models'),
+                icon: const Icon(Icons.memory_outlined),
+                onPressed: _navigationBlocked
+                    ? null
+                    : () {
+                        setState(() {
+                          _card = null;
+                          _browser = null;
+                          _guideReturn = false; // chosen from the menu
+                          _showProviders = !_showProviders;
+                          _showSystemMap = false;
+                          _showConnections = false;
+                          _showGuide = false;
+                          _showSettings = false;
+                          _visibleTerminal = null;
+                        });
+                        _refresh();
+                      },
+              ),
+              IconButton(
+                tooltip: tr('Settings'),
+                icon: const Icon(Icons.settings_outlined),
+                onPressed: _navigationBlocked || _snapshot == null
+                    ? null
+                    : _toggleSettings,
+              ),
+              IconButton(
+                tooltip: tr(_showMap ? 'Agents' : 'Map'),
+                icon: Icon(_showMap ? Icons.list : Icons.hub_outlined),
+                onPressed: _navigationBlocked
+                    ? null
+                    : () {
+                        setState(() {
+                          _card = null;
+                          _browser = null;
+                          _guideReturn = false; // chosen from the menu
+                          _showMap = !_showMap;
+                          _showSystemMap = false;
+                          _showConnections = false;
+                          _showSettings = false;
+                          _showGuide = false;
+                          _showProviders = false;
+                          _visibleTerminal = null;
+                        });
+                        if (_showMap) _refresh();
+                      },
+              ),
+              IconButton(
+                tooltip: tr('Refresh'),
+                onPressed: _navigationBlocked ? null : _retry,
+                icon: const Icon(Icons.refresh),
+              ),
+            ],
           ),
-          IconButton(
-            tooltip: tr('Your first agent'),
-            icon: const Icon(Icons.rocket_launch_outlined),
-            onPressed: _navigationBlocked ? null : _openGuide,
-          ),
-          IconButton(
-            tooltip: tr('Connections'),
-            icon: const Icon(Icons.account_tree_outlined),
-            onPressed: _navigationBlocked
-                ? null
-                : () {
-                    setState(() {
-                      _card = null;
-                      _browser = null;
-                      _connectionCommand = null;
-                      _guideReturn = false; // chosen from the menu
-                      _showConnections = !_showConnections;
-                      _showSystemMap = false;
-                      _showProviders = false;
-                      _showGuide = false;
-                      _showSettings = false;
-                      _visibleTerminal = null;
-                    });
-                    _refresh();
-                  },
-          ),
-          IconButton(
-            tooltip: tr('Providers and models'),
-            icon: const Icon(Icons.memory_outlined),
-            onPressed: _navigationBlocked
-                ? null
-                : () {
-                    setState(() {
-                      _card = null;
-                      _browser = null;
-                      _guideReturn = false; // chosen from the menu
-                      _showProviders = !_showProviders;
-                      _showSystemMap = false;
-                      _showConnections = false;
-                      _showGuide = false;
-                      _showSettings = false;
-                      _visibleTerminal = null;
-                    });
-                    _refresh();
-                  },
-          ),
-          IconButton(
-            tooltip: tr('Settings'),
-            icon: const Icon(Icons.settings_outlined),
-            onPressed: _navigationBlocked || _snapshot == null
-                ? null
-                : () => setState(() {
-                    _card = null;
-                    _browser = null;
-                    _guideReturn = false; // chosen from the menu
-                    _showSettings = !_showSettings;
-                    if (_showSettings && _shortName == null) _loadShortName();
-                    if (_showSettings && _helpers == null) _loadHelpers();
-                    _showSystemMap = false;
-                    _showConnections = false;
-                    _showProviders = false;
-                    _showGuide = false;
-                    _visibleTerminal = null;
-                  }),
-          ),
-          IconButton(
-            tooltip: tr(_showMap ? 'Agents' : 'Map'),
-            icon: Icon(_showMap ? Icons.list : Icons.hub_outlined),
-            onPressed: _navigationBlocked
-                ? null
-                : () {
-                    setState(() {
-                      _card = null;
-                      _browser = null;
-                      _guideReturn = false; // chosen from the menu
-                      _showMap = !_showMap;
-                      _showSystemMap = false;
-                      _showConnections = false;
-                      _showSettings = false;
-                      _showGuide = false;
-                      _showProviders = false;
-                      _visibleTerminal = null;
-                    });
-                    if (_showMap) _refresh();
-                  },
-          ),
-          IconButton(
-            tooltip: tr('Refresh'),
-            onPressed: _navigationBlocked ? null : _retry,
-            icon: const Icon(Icons.refresh),
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          if (_busy && _taskActive && _card == null && _reviewDepth == 0)
-            const LinearProgressIndicator(),
-          if (_snapshot?['migration_error'] != null)
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    tr(
-                      'Your AI Agents Map settings could not be imported. Asterism will use its current or default settings.',
-                    ),
+          body: Column(
+            children: [
+              if (_busy && _taskActive && _card == null && _reviewDepth == 0)
+                const LinearProgressIndicator(),
+              if (_snapshot?['migration_error'] != null)
+                Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        tr(
+                          'Your AI Agents Map settings could not be imported. Asterism will use its current or default settings.',
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      SelectableText(_snapshot!['migration_error'] as String),
+                    ],
                   ),
-                  const SizedBox(height: 8),
-                  SelectableText(_snapshot!['migration_error'] as String),
-                ],
-              ),
-            ),
-          if (_failed)
-            MaterialBanner(
-              content: Text(
-                tr('The application service could not be reached.'),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: _busy ? null : _retry,
-                  child: Text(tr('Refresh')),
                 ),
-              ],
-            ),
-          if (_welcome)
-            MapWelcome(
-              tr: tr,
-              busy: _busy,
-              skipSearch: _skipWelcomeSearch,
-              searched: _system['search_done'] == true,
-              onLook: _openExisting,
-              onSkip: () => setState(() => _skipWelcomeSearch = true),
-              onSystem: () => _openSystem(),
-              onAgents: () => _openGroups(),
-            ),
-          if (_terminals.isNotEmpty &&
-              (_snapshot?['settings'] as Map?)?['terminal_tabs'] != false)
-            TerminalTabs(
-              tabs: [
-                for (final terminal in _terminals)
-                  (
-                    _catalog
-                                .where((a) => a['command'] == terminal.command)
-                                .firstOrNull?['name']
-                            as String? ??
-                        terminal.command,
-                    terminal.ended
-                        ? 'ended'
-                        : ((_graph?['activity'] as Map?)?[terminal.command]
-                                  as Map?)?['working'] ==
-                              true
-                        ? 'working'
-                        : 'running',
+              if (_failed)
+                MaterialBanner(
+                  content: Text(
+                    tr('The application service could not be reached.'),
                   ),
-              ],
-              current: _visibleTerminal == null || _showSystemMap
-                  ? null
-                  : _terminals.indexOf(_visibleTerminal!),
-              tr: tr,
-              onSelect: (i) => setState(() {
-                _visibleTerminal = _terminals[i];
-                _showSystemMap = false;
-              }),
-            ),
-          Expanded(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                _mapAreaWidth = constraints.maxWidth;
-                return Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    if (_backend != null)
-                      Offstage(
-                        key: const ValueKey('system-slot'),
-                        offstage:
-                            !_showSystemMap ||
-                            _card != null ||
-                            _browser != null,
-                        child: SystemMapView(
-                          key: const ValueKey("system-state"),
-                          suspended:
-                              !_showSystemMap ||
-                              _card != null ||
-                              _browser != null,
-                          data: _system,
-                          backend: _backend!,
-                          tr: tr,
-                          busy: _busy || _systemRefreshing,
-                          controller: _systemTransform,
-                          onRefresh: (search) => _refreshSystem(search),
-                          onOperation: (method, params, title) =>
-                              _addonOperation(method, params),
-                          onSaved: _systemSaved,
-                          onSession: _systemSession,
-                          onShowAI: _showAI,
-                          onHealthAction: (action) {
-                            if (action.first == 'install') {
-                              _openGuide();
-                            } else if ([
-                              'runtime',
-                              'models',
-                            ].contains(action.first)) {
-                              _guideAction('', 'providers');
-                            } else {
-                              setState(() => _systemSelection = 'pc');
-                            }
-                          },
-                          onGroups: _openGroups,
-                          requestedNode: _systemSelection,
-                          onUndo: _connectionUndo == null && _moveUndo == null
-                              ? null
-                              : () async {
-                                  if (_moveUndo != null) {
-                                    final result = await _addonOperation(
-                                      'system.move_undo',
-                                      {'undo': _moveUndo},
-                                    );
-                                    if (result?['ok'] == true) _moveUndo = null;
-                                  } else {
-                                    await _undoConnection();
-                                  }
-                                  await _reloadSystem();
-                                  await _refreshSystem(false, quiet: true);
-                                },
-                        ),
-                      ),
-                    if (_browser != null)
-                      Offstage(
-                        key: const ValueKey('browser-slot'),
-                        offstage: _card != null,
-                        child: _viewHost(
-                          'Download model',
-                          ModelBrowser(
-                            hosted: true,
-                            runtime: _browser!,
-                            tr: tr,
-                            onOperation: _providerOperation,
-                            onClose: () => setState(() => _browser = null),
-                          ),
-                          () => setState(() => _browser = null),
-                        ),
-                      ),
-                    if (_hasTaskView ||
-                        (_card == null && _browser == null && !_showSystemMap))
-                      RetainedTaskView(
-                        key: const ValueKey('view-slot'),
-                        visible:
-                            _card == null &&
-                            _browser == null &&
-                            !_showSystemMap,
-                        child: _showGuide
-                            ? _viewHost(
-                                'Your first agent',
-                                FirstAgentView(
-                                  hosted: true,
-                                  data: _guide,
-                                  busy: _busy,
-                                  tr: tr,
-                                  onChoose: _chooseGuide,
-                                  onAction: _guideAction,
-                                  onStarter: _downloadStarter,
-                                  onBack: () =>
-                                      setState(() => _showGuide = false),
-                                  onRefresh: _openGuide,
-                                ),
-                                () => setState(() => _showGuide = false),
-                              )
-                            : _visibleTerminal != null
-                            ? AgentTerminalView(
-                                session: _visibleTerminal!,
-                                tr: tr,
-                                onBack: () {
-                                  final fromGuide = _guideTerminals.remove(
-                                    _visibleTerminal,
-                                  );
-                                  setState(() => _visibleTerminal = null);
-                                  if (fromGuide) {
-                                    _guideReturn = true;
-                                    _backToGuideIfFromIt();
-                                  }
-                                },
-                                onStop: () => _stopTerminal(_visibleTerminal!),
-                              )
-                            : _showConnections
-                            ? _viewHost(
-                                'Connections',
-                                ConnectionsView(
-                                  hosted: true,
-                                  data: _connections,
-                                  busy: _busy,
-                                  tr: tr,
-                                  onPreview: _connectionPreview,
-                                  onAuthorPreview: (params) =>
-                                      _connectionPreview(params, author: true),
-                                  onCatalogTask: _quietTask,
-                                  onCall: (method, params) =>
-                                      _backend!.call(method, params),
-                                  onSkillPreview: (params) =>
-                                      _connectionPreview(
-                                        params,
-                                        method: 'skills.web_preview',
-                                      ),
-                                  onCatalogPreview: (params) =>
-                                      _connectionPreview(
-                                        params,
-                                        method: 'mcp.option_preview',
-                                      ),
-                                  showFound: _showFound,
-                                  onFoundChanged: _loadFoundHints,
-                                  onUpdatePreview: (params) async {
-                                    await _connectionPreview(
-                                      params,
-                                      method: 'found.update_preview',
-                                    );
-                                    await _lookForNewApps();
-                                  },
-                                  onBack: () {
-                                    setState(() {
-                                      _showConnections = false;
-                                      _showFound = false;
-                                    });
-                                    _backToGuideIfFromIt();
-                                  },
-                                  onUndo: _connectionUndo == null
-                                      ? null
-                                      : _undoConnection,
-                                ),
-                                () {
-                                  setState(() {
-                                    _showConnections = false;
-                                    _showFound = false;
-                                  });
-                                  _backToGuideIfFromIt();
-                                },
-                                width: TaskCardWidth.half,
-                                focus: _focusOf(_connections),
-                              )
-                            : _showProviders
-                            ? _viewHost(
-                                'Providers and models',
-                                ProvidersView(
-                                  hosted: true,
-                                  data: _providers,
-                                  busy: _busy,
-                                  tr: tr,
-                                  onInstall: (key) =>
-                                      _installProgram('runtime', key),
-                                  onOperation: _providerOperation,
-                                  onConfirm: (title, runtime) => _cardReview(
-                                    title,
-                                    runtime,
-                                    (yes, no) => TaskReview(
-                                      content: Text(
-                                        tr(
-                                          'This can interrupt agents using this provider.',
-                                        ),
-                                      ),
-                                      actions: [
-                                        TextButton(
-                                          onPressed: no,
-                                          child: Text(tr('Cancel')),
-                                        ),
-                                        FilledButton(
-                                          onPressed: yes,
-                                          child: Text(tr('Continue')),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  onRemove: _removeModel,
-                                  onPerformance: _performance,
-                                  onCall: (method, params) =>
-                                      _backend!.call(method, params),
-                                  onBrowse: (runtime) =>
-                                      setState(() => _browser = runtime),
-                                  onDiscover: _openExisting,
-                                  onBack: () {
-                                    setState(() => _showProviders = false);
-                                    _backToGuideIfFromIt();
-                                  },
-                                ),
-                                () {
-                                  setState(() => _showProviders = false);
-                                  _backToGuideIfFromIt();
-                                },
-                                width: TaskCardWidth.full,
-                              )
-                            : _showSettings && _snapshot != null
-                            ? SettingsView(
-                                settings:
-                                    _snapshot!['settings']
-                                        as Map<String, dynamic>,
-                                busy: _busy,
-                                tr: tr,
-                                onUpdate: _updateSettings,
-                                desktopTheme: _desktopTheme,
-                                checkers: [
-                                  for (final h
-                                      in (_system['helpers'] as List? ?? []))
-                                    if (h is Map && h['check'] == true) h,
-                                ],
-                                helpers: _helpers,
-                                mcpChecks: _mcpChecks,
-                                mcpChecking: _mcpChecking,
-                                onCheckMcp: () => _checkMcp(force: true),
-                                unitName: _shortName == null
-                                    ? ''
-                                    : '$_shortName-providers.service',
-                                onBack: () =>
-                                    setState(() => _showSettings = false),
-                              )
-                            : _showMap && _graph != null
-                            ? AnimatedSwitcher(
-                                duration: const Duration(milliseconds: 200),
-                                child: _focusCategory == null
-                                    ? AgentMap(
-                                        key: const ValueKey('ai-map'),
-                                        graph: _mapGraph,
-                                        onEdit: _mapEdit,
-                                        lightFps:
-                                            _snapshot!['settings']['map_light_fps']
-                                                as int? ??
-                                            20,
-                                        selection: _mapSelection,
-                                        controls: _mapControls,
-                                        staticState: (
-                                          _snapshot,
-                                          _busy,
-                                          _strings,
-                                          _terminals
-                                              .map((t) => '${t.id}:${t.ended}')
-                                              .join(','),
-                                        ),
-                                        savedLayout:
-                                            _mapLayoutOverride ??
-                                            (_snapshot!['settings']['flutter_map_layout']
-                                                    as Map<String, dynamic>? ??
-                                                {}),
-                                        onLayout: _saveMapLayout,
-                                        animate: _windowFocused
-                                            ? (_snapshot!['settings']['map_animations']
-                                                      as String? ??
-                                                  'all')
-                                            : 'off',
-                                        onAnimationChanged: (mode) =>
-                                            _updateSettings({
-                                              'map_animations': mode,
-                                            }),
-                                        controller: _aiTransform,
-                                        focusedNode: _aiFocus,
-                                        onNode: _aiNode,
-                                        tr: tr,
-                                        onAgent: _selectAgent,
-                                        onSubagents: _openSubagents,
-                                        onNodeDrop: _systemFolderOnAI,
-                                        onNodeMenu: _nodeMenu,
-                                        groups: MapGroup.fromGraph(
-                                          _mapGraph,
-                                          const [
-                                            'MCP servers and skills',
-                                            'Agents',
-                                            'Providers',
-                                            'Models',
-                                          ],
-                                          found: _groupFound,
-                                          available: _groupAvailable,
-                                        ),
-                                        onExpandGroup: (col) => setState(
-                                          () => _focusCategory = col,
-                                        ),
-                                      )
-                                    : _viewHost(
-                                        const [
-                                          'MCP servers and skills',
-                                          'Agents',
-                                          'Providers',
-                                          'Models',
-                                        ][_focusCategory!],
-                                        _groupFocus(),
-                                        () => setState(
-                                          () => _focusCategory = null,
-                                        ),
-                                      ),
-                              )
-                            : LayoutBuilder(
-                                builder: (context, constraints) {
-                                  if (constraints.maxWidth < 800) {
-                                    return _selected == null
-                                        ? _agents()
-                                        : _details();
-                                  }
-                                  return Row(
-                                    children: [
-                                      SizedBox(width: 310, child: _agents()),
-                                      const VerticalDivider(width: 1),
-                                      Expanded(child: _details()),
-                                    ],
-                                  );
-                                },
-                              ),
-                      ),
-                    if (_card != null) _host(_card!, _closeCard),
+                  actions: [
+                    TextButton(
+                      onPressed: _busy ? null : _retry,
+                      child: Text(tr('Refresh')),
+                    ),
                   ],
-                );
-              },
-            ),
+                ),
+              if (_welcome)
+                MapWelcome(
+                  tr: tr,
+                  busy: _busy,
+                  skipSearch: _skipWelcomeSearch,
+                  searched: _system['search_done'] == true,
+                  onLook: _openExisting,
+                  onSkip: () => setState(() => _skipWelcomeSearch = true),
+                  onSystem: () => _openSystem(),
+                  onAgents: () => _openGroups(),
+                ),
+              if (_terminals.isNotEmpty &&
+                  (_snapshot?['settings'] as Map?)?['terminal_tabs'] != false)
+                TerminalTabs(
+                  tabs: [
+                    for (final terminal in _terminals)
+                      (
+                        _catalog
+                                    .where(
+                                      (a) => a['command'] == terminal.command,
+                                    )
+                                    .firstOrNull?['name']
+                                as String? ??
+                            terminal.command,
+                        terminal.ended
+                            ? 'ended'
+                            : ((_graph?['activity'] as Map?)?[terminal.command]
+                                      as Map?)?['working'] ==
+                                  true
+                            ? 'working'
+                            : 'running',
+                      ),
+                  ],
+                  current: _visibleTerminal == null || _showSystemMap
+                      ? null
+                      : _terminals.indexOf(_visibleTerminal!),
+                  tr: tr,
+                  onSelect: (i) => setState(() {
+                    _visibleTerminal = _terminals[i];
+                    _showSystemMap = false;
+                  }),
+                ),
+              Expanded(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    _mapAreaWidth = constraints.maxWidth;
+                    return Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        if (_backend != null)
+                          Offstage(
+                            key: const ValueKey('system-slot'),
+                            offstage:
+                                !_showSystemMap ||
+                                _card != null ||
+                                _browser != null,
+                            child: SystemMapView(
+                              key: const ValueKey("system-state"),
+                              suspended:
+                                  !_showSystemMap ||
+                                  _card != null ||
+                                  _browser != null,
+                              data: _system,
+                              backend: _backend!,
+                              tr: tr,
+                              busy: _busy || _systemRefreshing,
+                              controller: _systemTransform,
+                              onRefresh: (search) => _refreshSystem(search),
+                              onOperation: (method, params, title) =>
+                                  _addonOperation(method, params),
+                              onSaved: _systemSaved,
+                              onSession: _systemSession,
+                              onShowAI: _showAI,
+                              onHealthAction: (action) {
+                                if (action.first == 'install') {
+                                  _openGuide();
+                                } else if ([
+                                  'runtime',
+                                  'models',
+                                ].contains(action.first)) {
+                                  _guideAction('', 'providers');
+                                } else {
+                                  setState(() => _systemSelection = 'pc');
+                                }
+                              },
+                              onGroups: _openGroups,
+                              requestedNode: _systemSelection,
+                              onUndo:
+                                  _connectionUndo == null && _moveUndo == null
+                                  ? null
+                                  : () async {
+                                      if (_moveUndo != null) {
+                                        final result = await _addonOperation(
+                                          'system.move_undo',
+                                          {'undo': _moveUndo},
+                                        );
+                                        if (result?['ok'] == true) {
+                                          _moveUndo = null;
+                                        }
+                                      } else {
+                                        await _undoConnection();
+                                      }
+                                      await _reloadSystem();
+                                      await _refreshSystem(false, quiet: true);
+                                    },
+                            ),
+                          ),
+                        if (_browser != null)
+                          Offstage(
+                            key: const ValueKey('browser-slot'),
+                            offstage: _card != null,
+                            child: _viewHost(
+                              'Download model',
+                              ModelBrowser(
+                                hosted: true,
+                                runtime: _browser!,
+                                tr: tr,
+                                onOperation: _providerOperation,
+                                onClose: () => setState(() => _browser = null),
+                              ),
+                              () => setState(() => _browser = null),
+                            ),
+                          ),
+                        if (_hasTaskView ||
+                            (_card == null &&
+                                _browser == null &&
+                                !_showSystemMap))
+                          RetainedTaskView(
+                            key: const ValueKey('view-slot'),
+                            visible:
+                                _card == null &&
+                                _browser == null &&
+                                !_showSystemMap,
+                            child: _showGuide
+                                ? _viewHost(
+                                    'Your first agent',
+                                    FirstAgentView(
+                                      hosted: true,
+                                      data: _guide,
+                                      busy: _busy,
+                                      tr: tr,
+                                      onChoose: _chooseGuide,
+                                      onAction: _guideAction,
+                                      onStarter: _downloadStarter,
+                                      onBack: () =>
+                                          setState(() => _showGuide = false),
+                                      onRefresh: _openGuide,
+                                    ),
+                                    () => setState(() => _showGuide = false),
+                                  )
+                                : _visibleTerminal != null
+                                ? AgentTerminalView(
+                                    session: _visibleTerminal!,
+                                    tr: tr,
+                                    onBack: () {
+                                      final fromGuide = _guideTerminals.remove(
+                                        _visibleTerminal,
+                                      );
+                                      setState(() => _visibleTerminal = null);
+                                      if (fromGuide) {
+                                        _guideReturn = true;
+                                        _backToGuideIfFromIt();
+                                      }
+                                    },
+                                    onStop: () =>
+                                        _stopTerminal(_visibleTerminal!),
+                                  )
+                                : _showConnections
+                                ? _viewHost(
+                                    'Connections',
+                                    ConnectionsView(
+                                      hosted: true,
+                                      data: _connections,
+                                      busy: _busy,
+                                      tr: tr,
+                                      onPreview: _connectionPreview,
+                                      onAuthorPreview: (params) =>
+                                          _connectionPreview(
+                                            params,
+                                            author: true,
+                                          ),
+                                      onCatalogTask: _quietTask,
+                                      onCall: (method, params) =>
+                                          _backend!.call(method, params),
+                                      onSkillPreview: (params) =>
+                                          _connectionPreview(
+                                            params,
+                                            method: 'skills.web_preview',
+                                          ),
+                                      onCatalogPreview: (params) =>
+                                          _connectionPreview(
+                                            params,
+                                            method: 'mcp.option_preview',
+                                          ),
+                                      showFound: _showFound,
+                                      onFoundChanged: _loadFoundHints,
+                                      onUpdatePreview: (params) async {
+                                        await _connectionPreview(
+                                          params,
+                                          method: 'found.update_preview',
+                                        );
+                                        await _lookForNewApps();
+                                      },
+                                      onBack: () {
+                                        setState(() {
+                                          _showConnections = false;
+                                          _showFound = false;
+                                        });
+                                        _backToGuideIfFromIt();
+                                      },
+                                      onUndo: _connectionUndo == null
+                                          ? null
+                                          : _undoConnection,
+                                    ),
+                                    () {
+                                      setState(() {
+                                        _showConnections = false;
+                                        _showFound = false;
+                                      });
+                                      _backToGuideIfFromIt();
+                                    },
+                                    width: TaskCardWidth.half,
+                                    focus: _focusOf(_connections),
+                                  )
+                                : _showProviders
+                                ? _viewHost(
+                                    'Providers and models',
+                                    ProvidersView(
+                                      hosted: true,
+                                      data: _providers,
+                                      busy: _busy,
+                                      tr: tr,
+                                      onInstall: (key) =>
+                                          _installProgram('runtime', key),
+                                      onOperation: _providerOperation,
+                                      onConfirm: (title, runtime) => _cardReview(
+                                        title,
+                                        runtime,
+                                        (yes, no) => TaskReview(
+                                          content: Text(
+                                            tr(
+                                              'This can interrupt agents using this provider.',
+                                            ),
+                                          ),
+                                          actions: [
+                                            TextButton(
+                                              onPressed: no,
+                                              child: Text(tr('Cancel')),
+                                            ),
+                                            FilledButton(
+                                              onPressed: yes,
+                                              child: Text(tr('Continue')),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      onRemove: _removeModel,
+                                      onPerformance: _performance,
+                                      onCall: (method, params) =>
+                                          _backend!.call(method, params),
+                                      onBrowse: (runtime) =>
+                                          setState(() => _browser = runtime),
+                                      onDiscover: _openExisting,
+                                      onBack: () {
+                                        setState(() => _showProviders = false);
+                                        _backToGuideIfFromIt();
+                                      },
+                                    ),
+                                    () {
+                                      setState(() => _showProviders = false);
+                                      _backToGuideIfFromIt();
+                                    },
+                                    width: TaskCardWidth.full,
+                                  )
+                                : _showSettings && _snapshot != null
+                                ? SettingsView(
+                                    settings:
+                                        _snapshot!['settings']
+                                            as Map<String, dynamic>,
+                                    busy: _busy,
+                                    tr: tr,
+                                    onUpdate: _updateSettings,
+                                    desktopTheme: _desktopTheme,
+                                    checkers: [
+                                      for (final h
+                                          in (_system['helpers'] as List? ??
+                                              []))
+                                        if (h is Map && h['check'] == true) h,
+                                    ],
+                                    helpers: _helpers,
+                                    mcpChecks: _mcpChecks,
+                                    mcpChecking: _mcpChecking,
+                                    onCheckMcp: () => _checkMcp(force: true),
+                                    unitName: _shortName == null
+                                        ? ''
+                                        : '$_shortName-providers.service',
+                                    onBack: () =>
+                                        setState(() => _showSettings = false),
+                                  )
+                                : _showMap && _graph != null
+                                ? AnimatedSwitcher(
+                                    duration: const Duration(milliseconds: 200),
+                                    child: _focusCategory == null
+                                        ? AgentMap(
+                                            key: const ValueKey('ai-map'),
+                                            graph: _mapGraph,
+                                            onEdit: _mapEdit,
+                                            lightFps:
+                                                _snapshot!['settings']['map_light_fps']
+                                                    as int? ??
+                                                20,
+                                            selection: _mapSelection,
+                                            controls: _mapControls,
+                                            staticState: (
+                                              _snapshot,
+                                              _busy,
+                                              _strings,
+                                              _terminals
+                                                  .map(
+                                                    (t) => '${t.id}:${t.ended}',
+                                                  )
+                                                  .join(','),
+                                            ),
+                                            savedLayout:
+                                                _mapLayoutOverride ??
+                                                (_snapshot!['settings']['flutter_map_layout']
+                                                        as Map<
+                                                          String,
+                                                          dynamic
+                                                        >? ??
+                                                    {}),
+                                            onLayout: _saveMapLayout,
+                                            animate: _windowFocused
+                                                ? (_snapshot!['settings']['map_animations']
+                                                          as String? ??
+                                                      'all')
+                                                : 'off',
+                                            onAnimationChanged: (mode) =>
+                                                _updateSettings({
+                                                  'map_animations': mode,
+                                                }),
+                                            controller: _aiTransform,
+                                            focusedNode: _aiFocus,
+                                            onNode: _aiNode,
+                                            tr: tr,
+                                            onAgent: _selectAgent,
+                                            onSubagents: _openSubagents,
+                                            onNodeDrop: _systemFolderOnAI,
+                                            onNodeMenu: _nodeMenu,
+                                            groups: MapGroup.fromGraph(
+                                              _mapGraph,
+                                              const [
+                                                'MCP servers and skills',
+                                                'Agents',
+                                                'Providers',
+                                                'Models',
+                                              ],
+                                              found: _groupFound,
+                                              available: _groupAvailable,
+                                            ),
+                                            onExpandGroup: (col) => setState(
+                                              () => _focusCategory = col,
+                                            ),
+                                          )
+                                        : _viewHost(
+                                            const [
+                                              'MCP servers and skills',
+                                              'Agents',
+                                              'Providers',
+                                              'Models',
+                                            ][_focusCategory!],
+                                            _groupFocus(),
+                                            () => setState(
+                                              () => _focusCategory = null,
+                                            ),
+                                          ),
+                                  )
+                                : LayoutBuilder(
+                                    builder: (context, constraints) {
+                                      if (constraints.maxWidth < 800) {
+                                        return _selected == null
+                                            ? _agents()
+                                            : _details();
+                                      }
+                                      return Row(
+                                        children: [
+                                          SizedBox(
+                                            width: 310,
+                                            child: _agents(),
+                                          ),
+                                          const VerticalDivider(width: 1),
+                                          Expanded(child: _details()),
+                                        ],
+                                      );
+                                    },
+                                  ),
+                          ),
+                        if (_card != null) _host(_card!, _closeCard),
+                      ],
+                    );
+                  },
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     ),
   );
@@ -4092,4 +4206,43 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
 
 class _HelpIntent extends Intent {
   const _HelpIntent();
+}
+
+class _SettingsIntent extends Intent {
+  const _SettingsIntent();
+}
+
+class _RefreshIntent extends Intent {
+  const _RefreshIntent();
+}
+
+class _ZoomIntent extends Intent {
+  const _ZoomIntent(this.factor);
+
+  /// 1.25 in, 0.8 out, 0 back to 100 %.
+  final double factor;
+}
+
+/// Backspace: back from a page (never closes a dialog, unlike Esc).
+class _BackIntent extends Intent {
+  const _BackIntent();
+}
+
+/// Back from a page; disabled (the key passes on) when there is no page.
+class _BackAction<T extends Intent> extends Action<T> {
+  _BackAction(this.enabled, this.back);
+  final bool Function() enabled;
+  final VoidCallback back;
+
+  @override
+  bool isEnabled(T intent) => enabled();
+
+  @override
+  bool consumesKey(T intent) => enabled();
+
+  @override
+  Object? invoke(T intent) {
+    back();
+    return null;
+  }
 }

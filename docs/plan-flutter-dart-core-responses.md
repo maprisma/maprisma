@@ -2402,3 +2402,38 @@ Check:
   (photocraft through its link in `~/.local/bin`); nothing was asked, since the daily checks are
   off here. The local helper's four candidates and the suggestion are the same as
   the reference's.
+
+### Part 3: keyboard and accessibility
+
+- **Shortcuts as in the manual's table** (`main.dart`):
+  - **F1** Help, **Ctrl+,** Settings, **F5** Refresh;
+  - **Ctrl+Plus / Ctrl+Minus / Ctrl+0** zoom the map in view (AI or System Map) by 1.25 / 0.8 /
+    back to 100 %, within the map's 30–200 %;
+  - **Esc** and **Backspace** go back from a page (Settings, Providers, Connections, guide, System
+    Map) to the map.
+
+  Text fields keep Backspace, dialogs keep Esc (they are routes of their own; Backspace has its
+  own intent, so it never closes one), and cards, the map editor and terminals take their keys
+  before they reach the app. The page holds the focus when nothing in it does (an autofocus
+  `Focus` outside Tab's order); without it, Esc stopped at the page route's own disabled dismiss
+  action.
+- **The map by keyboard**: Tab reaches each box (Enter opens it) and its ⋮ Actions button; in the
+  map editor every drag has a keyboard way in the box's Actions menu (Connect, then Tab to the
+  target and Enter; Move connection, Move up, Move down); Esc cancels.
+- **Guideline checks** in light and dark (`test/accessibility_test.dart`, and the whole window
+  with the fake service in `task_cards_app_test.dart`: map, Open problems, Settings, Help, System
+  Map):
+  - every tappable control has a label;
+  - targets are at least 24 × 24 (WCAG 2.2 AA 2.5.8; the 44/48 of the mobile guidelines are for
+    touch);
+  - text contrast is at least 4.5:1.
+
+  Found and fixed: the map box's ⋮ button had a 28 × 28 target, now 44 × 44 in the box's corner
+  (same place, the box no higher). Not a finding: the header's AI Map / System Map switch, which
+  the guideline measures as 2.34 while its pixels give 7.5:1 and 16:1. The whole-window check
+  measures each text on its own and leaves those two out, with the reason in the test.
+- The manual's "Keyboard use in the Flutter preview" in all eight languages; PDFs rebuilt.
+
+Check: widget tests for each shortcut (including that Backspace in Settings goes back and Esc
+does too), the map by Tab/Enter/Space, connecting in the editor by keyboard alone, and the
+guidelines; all 166 Flutter tests pass.

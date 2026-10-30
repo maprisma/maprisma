@@ -197,4 +197,51 @@ void main() {
     expect(edits.single['edge']['kind'], 'uses');
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'connecting works by keyboard: Actions › Connect, Enter on the target',
+    (tester) async {
+      final edits = <Map<String, dynamic>>[];
+      await mount(tester, edits: edits);
+      Finder box(String label) => find
+          .ancestor(of: find.text(label), matching: find.byType(Card))
+          .first;
+      // Tab until the focus is inside `target`.
+      Future<void> tabTo(Finder target) async {
+        final element = target.evaluate().single;
+        for (var i = 0; i < 80; i++) {
+          await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+          await tester.pump();
+          final focused = FocusManager.instance.primaryFocus?.context;
+          if (focused == null) continue;
+          var inside = focused == element;
+          focused.visitAncestorElements((e) {
+            if (e == element) inside = true;
+            return !inside;
+          });
+          if (inside) return;
+        }
+        fail('not reachable by Tab');
+      }
+
+      await tabTo(
+        find.descendant(
+          of: box('agent:a'),
+          matching: find.byType(PopupMenuButton<String>),
+        ),
+      );
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter); // Connect
+      await tester.pumpAndSettle();
+      expect(find.text('Cancel'), findsOneWidget);
+      await tabTo(box('runtime:r'));
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pump();
+      expect(edits.single, {'source': 'agent:a', 'target': 'runtime:r'});
+      expect(tester.takeException(), isNull);
+    },
+  );
 }

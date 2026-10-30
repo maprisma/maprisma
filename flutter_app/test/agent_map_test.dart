@@ -1,5 +1,6 @@
 import 'package:asterism/agent_map.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -257,5 +258,46 @@ void main() {
     final label = tester.widget<Text>(find.text('30 t/s · 1M · 92%'));
     expect(label.style?.fontSize, closeTo(9 * 1.33, 0.01));
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the map works by keyboard: Tab, Enter and the Actions menu', (
+    tester,
+  ) async {
+    String? opened;
+    String? menu;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AgentMap(
+            graph: const {
+              'nodes': [
+                {
+                  'id': 'agent:pi',
+                  'column': 1,
+                  'kind': 'agent',
+                  'label': 'Pi',
+                  'detail': '',
+                  'status': 'running',
+                },
+              ],
+              'edges': [],
+            },
+            onAgent: (command) => opened = command,
+            onNodeMenu: (_, node) => menu = node['id'] as String,
+            tr: (key) => key,
+          ),
+        ),
+      ),
+    );
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab); // the box
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+    expect(opened, 'pi');
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab); // its Actions
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.pump();
+    expect(menu, 'agent:pi');
   });
 }

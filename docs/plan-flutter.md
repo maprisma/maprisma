@@ -93,8 +93,9 @@ a commit.
    Phases 6 and 7 of the Dart-core plan are complete (2026-10-30; the app has no Python, see
    plan-flutter-dart-core-responses.md). Signed agent/provider add-ons work, from the catalog or a file (6b-4); Flutter
    feature/extension add-on contracts remain. Other adapter readers/collaboration views remain.
-4. **Product fit and migration validation:** finish keyboard/accessibility,
-   recovery, safe live-agent updates, desktop theme behaviour during operations,
+4. **Product fit and migration validation:** keyboard/accessibility done (step 4
+   part 3: the manual's shortcuts, the map and editor by keyboard, guideline checks);
+   still to do: recovery, safe live-agent updates, desktop theme behaviour during operations,
    cross-process settings coordination and clean-VM scenarios. New UI remains in
    all eight languages with manual updates; current manuals are rebuilt.
 5. **Omarchy integration (Uwe, 2026-10-28):** on Omarchy the Flutter app must feel

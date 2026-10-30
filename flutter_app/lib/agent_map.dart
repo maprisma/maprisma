@@ -296,43 +296,49 @@ class AgentMap extends StatelessWidget {
                               (node['id'] as String).substring('agent:'.length),
                             )
                           : null,
-                      child: Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Row(
+                      // The Actions button keeps its place in the title row
+                      // but takes a 44 × 44 corner of the box (tap targets).
+                      child: Stack(
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Expanded(child: _title(node)),
-                                if (!readOnly && onNodeMenu != null)
-                                  SizedBox(
-                                    width: 28,
-                                    height: 28,
-                                    child: IconButton(
-                                      padding: EdgeInsets.zero,
-                                      tooltip: tr('Actions'),
-                                      onPressed: () =>
-                                          onNodeMenu!(context, node),
-                                      icon: const Icon(
-                                        Icons.more_vert,
-                                        size: 18,
-                                      ),
-                                    ),
+                                Row(
+                                  children: [
+                                    Expanded(child: _title(node)),
+                                    if (!readOnly && onNodeMenu != null)
+                                      const SizedBox(width: 28, height: 28),
+                                  ],
+                                ),
+                                Text(
+                                  node['detail'] as String,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: colors.onSurfaceVariant,
                                   ),
+                                ),
                               ],
                             ),
-                            Text(
-                              node['detail'] as String,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: colors.onSurfaceVariant,
+                          ),
+                          if (!readOnly && onNodeMenu != null)
+                            Positioned(
+                              top: 11,
+                              right: 4,
+                              width: 44,
+                              height: 44,
+                              child: IconButton(
+                                padding: EdgeInsets.zero,
+                                tooltip: tr('Actions'),
+                                onPressed: () => onNodeMenu!(context, node),
+                                icon: const Icon(Icons.more_vert, size: 18),
                               ),
                             ),
-                          ],
-                        ),
+                        ],
                       ),
                     ),
                   ),

@@ -13,6 +13,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'support/a11y.dart';
+
 const service = r'''
 import json,sys
 from pathlib import Path
@@ -1034,6 +1036,97 @@ void main() {
     await tester.tap(find.widgetWithText(OutlinedButton, 'Get add-ons'));
     await settleService(tester);
     expect(find.byType(MapAddonsFocus), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await unmountApp(tester);
+  });
+
+  testWidgets('the app window meets the accessibility guidelines', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    await mountApp(tester);
+    await settleService(tester);
+    Future<void> check() async {
+      await expectLater(tester, meetsGuideline(labeledTapTargetGuideline));
+      // Each text measured on its own. The header's AI Map / System Map
+      // switch is left out: its pixels measure 7.5:1 and 16:1, but the
+      // guideline reads 2.34 for both (it samples the segmented button
+      // wrongly).
+      await expectLater(
+        tester,
+        meetsGuideline(
+          CustomMinimumContrastGuideline(
+            finder: find.byWidgetPredicate(
+              (w) =>
+                  w is Text &&
+                  (w.data ?? 'rich').trim().isNotEmpty &&
+                  !const {'AI Map', 'System Map'}.contains(w.data),
+            ),
+          ),
+        ),
+      );
+      await expectLater(tester, meetsGuideline(desktopTapTargets));
+    }
+
+    await check(); // the header and the map
+    await tester.tap(find.byKey(const ValueKey('problems-open')));
+    await settleService(tester);
+    await check(); // Open problems
+    await tester.tap(find.byTooltip('Settings').first);
+    await settleService(tester);
+    await check(); // Settings
+    await tester.tap(find.byKey(const ValueKey('help-open')));
+    await settleService(tester);
+    await check(); // Help
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape); // Esc closes it
+    await settleService(tester);
+    expect(find.byKey(const ValueKey('help-manual')), findsNothing);
+    await tester.tap(find.text('System Map'));
+    await settleService(tester);
+    await check(); // the System Map
+    expect(tester.takeException(), isNull);
+    semantics.dispose();
+    await unmountApp(tester);
+  });
+
+  testWidgets('keyboard shortcuts: Ctrl+, F5, zoom, Esc and Backspace', (
+    tester,
+  ) async {
+    final dir = await mountApp(tester);
+    await settleService(tester);
+    final settings = find.byType(SettingsView);
+    Future<void> keys(LogicalKeyboardKey key, {bool control = false}) async {
+      if (control) await tester.sendKeyDownEvent(LogicalKeyboardKey.control);
+      await tester.sendKeyEvent(key);
+      if (control) await tester.sendKeyUpEvent(LogicalKeyboardKey.control);
+      await settleService(tester);
+    }
+
+    await keys(LogicalKeyboardKey.comma, control: true);
+    expect(settings, findsOneWidget);
+    await keys(LogicalKeyboardKey.backspace);
+    expect(settings, findsNothing);
+    await keys(LogicalKeyboardKey.comma, control: true);
+    expect(settings, findsOneWidget);
+    await keys(LogicalKeyboardKey.escape);
+    expect(settings, findsNothing);
+
+    final before = requests(dir).length;
+    await keys(LogicalKeyboardKey.f5);
+    expect(requests(dir).length, greaterThan(before));
+
+    double scale() => tester
+        .widget<InteractiveViewer>(find.byType(InteractiveViewer).first)
+        .transformationController!
+        .value
+        .entry(0, 0);
+    await keys(LogicalKeyboardKey.equal, control: true);
+    expect(scale(), closeTo(1.25, 1e-9));
+    await keys(LogicalKeyboardKey.minus, control: true);
+    await keys(LogicalKeyboardKey.minus, control: true);
+    expect(scale(), closeTo(0.8, 1e-9));
+    await keys(LogicalKeyboardKey.digit0, control: true);
+    expect(scale(), 1);
     expect(tester.takeException(), isNull);
     await unmountApp(tester);
   });
