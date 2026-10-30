@@ -1,4 +1,5 @@
 import 'package:maprisma/agent_map.dart';
+import 'package:maprisma/map_smart_card.dart';
 import 'package:maprisma/open_problems_view.dart';
 import 'package:maprisma/settings_view.dart';
 import 'package:flutter/material.dart';
@@ -95,6 +96,31 @@ void main() {
       onMcpUpdate: (_, _) {},
       onCheckAgain: () {},
       onClose: () {},
+    ),
+    'smart card collapsed': () => Center(
+      child: MapSmartCard(
+        column: 'models',
+        title: 'Models',
+        open: false,
+        onToggle: () {},
+        tr: (key) => key,
+        helpers: const [
+          {'command': 'local-helper', 'name': 'Local helper', 'local': true},
+        ],
+      ),
+    ),
+    'smart card open': () => Center(
+      child: MapSmartCard(
+        column: 'models',
+        title: 'Models',
+        open: true,
+        onToggle: () {},
+        tr: (key) => key,
+        helpers: const [
+          {'command': 'local-helper', 'name': 'Local helper', 'local': true},
+          {'command': 'claude', 'name': 'Claude Code', 'local': false},
+        ],
+      ),
     ),
   };
   for (final MapEntry(key: name, value: view) in views.entries) {

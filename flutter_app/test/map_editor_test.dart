@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:maprisma/backend.dart';
 import 'package:maprisma/connections_view.dart' show ConnectionReview;
 import 'package:maprisma/map_editor.dart';
@@ -1000,6 +1003,120 @@ void main() {
       expect(calls.last.$2, {'plan': 'plan-1'});
       expect(applied.last['undo'], 'undo-1');
       expect(tester.widget<MapSmartCard>(modelsCard).open, isFalse);
+      expect(tester.takeException(), isNull);
+    },
+  );
+  testWidgets(
+    'smart card texts exist in all 8 languages and steps are operable by keyboard',
+    (tester) async {
+      const smartKeys = [
+        'Ask AI…',
+        'Ask AI',
+        'Ask AI · {0}',
+        'Ask for this column…',
+        'Collapse',
+        'Local, no tokens',
+        'Uses plan/tokens',
+        'Ask',
+        'Find an MCP server or skill…',
+        'Set up or connect an agent…',
+        'Set up or tune a provider…',
+        'Find or connect a model…',
+        '{0} is checking {1}…',
+        '← Back',
+        'Move to {0}',
+        'Try again',
+        'PC: {0} VRAM · {1} RAM · {2} free',
+        'PC: {0} RAM · {1} free',
+        'Fits in VRAM',
+        'Uses RAM offload',
+        'Too large for this PC',
+        'Review',
+        'Download {0}?',
+        'Runtime',
+        '{0} is ready.',
+        'Connect it to an agent now? (Optional)',
+        'Done',
+      ];
+      for (final lang in ['de', 'es', 'fr', 'it', 'nl', 'pl', 'pt']) {
+        final file = File('../translations/$lang.json');
+        final table = jsonDecode(file.readAsStringSync()) as Map;
+        for (final key in smartKeys) {
+          expect(
+            table[key],
+            isA<String>(),
+            reason: 'Missing $lang translation for $key',
+          );
+          expect((table[key] as String).isNotEmpty, isTrue);
+        }
+      }
+
+      // Keyboard navigation through the smart card with German translations.
+      final deTable =
+          jsonDecode(File('../translations/de.json').readAsStringSync()) as Map;
+      final calls = <String>[];
+      final client = CoreClient(
+        _FakeSmartTransport((method, params) async {
+          calls.add(method);
+          if (method == 'map.smart_ask') return {'task': 't1'};
+          if (method == 'tasks.status') {
+            return {
+              'state': 'done',
+              'result': {
+                'helper': 'Local helper',
+                'local': true,
+                'status': 'redirect',
+                'instead': {'hint': 'Nur Modelle.'},
+              },
+            };
+          }
+          throw StateError('Unexpected $method');
+        }),
+      );
+      tester.view.physicalSize = const Size(1200, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      var isOpen = false;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: StatefulBuilder(
+              builder: (context, update) => MapSmartCard(
+                column: 'models',
+                title: 'Models',
+                open: isOpen,
+                onToggle: () => update(() => isOpen = !isOpen),
+                tr: (k) => deTable[k] is String ? deTable[k] as String : k,
+                helpers: const [
+                  {
+                    'command': 'local-helper',
+                    'name': 'Lokaler Helfer',
+                    'local': true,
+                  },
+                ],
+                client: client,
+              ),
+            ),
+          ),
+        ),
+      );
+      expect(find.text('KI fragen…'), findsOneWidget);
+      await tester.tap(find.text('KI fragen…'));
+      await tester.pumpAndSettle();
+      expect(find.text('Lokal, keine Tokens'), findsOneWidget);
+      expect(find.text('Modell finden oder verbinden…'), findsOneWidget);
+      await tester.enterText(find.byType(TextField), 'qwen');
+      // Tab from TextField -> Close -> Ask ('Fragen'), then press Enter.
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+      expect(calls, contains('map.smart_ask'));
+      expect(find.text('Nur Modelle.'), findsOneWidget);
+      expect(find.text('← Zurück'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );
