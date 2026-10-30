@@ -1,4 +1,4 @@
-"""Development parity: the pieces of an agent's cost card (plugin_costs.cost_text, ui_helpers.short_number,
+"""Development parity: the pieces of an agent's cost card (plugin_costs.cost_text, reference_texts.short_number,
 plugin_costs.parse_ecb and usd_per_eur, agent_status.pays_per_token) in the Python reference and the Dart
 core: dollars and euros at the edges (<0.01, thousands, rounding), the ECB's daily file and odd ones, the
 kept rate fresh, stale with a fetch, stale with the fetch failing, none at all; an agent with limits, a
@@ -26,7 +26,7 @@ import json, sys
 from pathlib import Path
 from types import SimpleNamespace as NS
 sys.path.insert(0, sys.argv[1])
-import agent_status, plugin_costs, ui_helpers
+import agent_status, plugin_costs, reference_texts
 case = json.loads(sys.stdin.read())
 rates = []
 for r in case['rates']:
@@ -43,7 +43,7 @@ for c in case['pays']:
                  has_usage=bool(record.get('ready')) or bool(record.get('hasLocalStats')))
     pays.append(agent_status.pays_per_token(c['command'], details, environ=c['env']))
 print(json.dumps({'texts': [plugin_costs.cost_text(*t) for t in case['texts']],
-                  'numbers': [ui_helpers.short_number(n) for n in case['numbers']],
+                  'numbers': [reference_texts.short_number(n) for n in case['numbers']],
                   'ecb': [list(x) if x else None for x in map(lambda b: plugin_costs.parse_ecb(b.encode()), case['ecb'])],
                   'rates': rates, 'pays': pays}))
 '''

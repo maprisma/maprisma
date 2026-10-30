@@ -166,17 +166,5 @@ class LlamaCppSlotsTest(unittest.TestCase):
         self.assertEqual(self.engine.slot_changes(self.rt, 2), [])
 
 
-class TintsTest(unittest.TestCase):
-    def test_different_models_one_violet_on_all_their_lines(self):
-        import map_view
-        g = two_agents()
-        tints = map_view.MapView.model_tints(g)
-        edge = {(e.source, e.target): i for i, e in enumerate(g.edges)}
-        lines = [("runtime:llamacpp", "model:runtime:llamacpp:big"), ("runtime:llamacpp", "model:runtime:llamacpp:small"),
-                 ("agent:pi", "runtime:llamacpp"), ("agent:dsh", "runtime:llamacpp")]
-        self.assertEqual({tints[edge[line]] for line in lines}, {"magenta"})
-        self.assertEqual(map_view.MapView.model_tints(two_agents(same=True)), {})
-
-
 if __name__ == "__main__":
     unittest.main()

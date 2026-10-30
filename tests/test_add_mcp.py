@@ -90,12 +90,6 @@ class RegistryTest(unittest.TestCase):
                 page, following, total = mcp_registry.search_page("notes", cursor="#20")
                 self.assertEqual((len(page), following, total), (5, "", 25))   # paged: 21 – 25 / 25
 
-    def test_the_pager_line(self):
-        import mcp_pages
-        self.assertEqual(mcp_pages.registry_range(0, 20, 200, True), "1 – 20 / 200")
-        self.assertEqual(mcp_pages.registry_range(1, 20, 200, True), "21 – 40 / 200")
-        self.assertEqual(mcp_pages.registry_range(1, 20, None, True), "21 – 40 / 40+")    # the registry's own API
-        self.assertEqual(mcp_pages.registry_range(2, 7, None, False), "41 – 47 / 47")
 
     def test_download_cut_short_goes_on_at_the_next_start(self):
         import netfetch

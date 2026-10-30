@@ -113,14 +113,6 @@ class SkillUpdateTest(unittest.TestCase):
         prompts = [{"name": "p", "arguments": [{"name": "topic"}, {"bad": 1}]}]
         self.assertEqual(mcp_tools._clean(prompts, "prompt")[0]["params"], ["topic"])
 
-    def test_rewrite_only_after_a_click(self):
-        from window_source import window_methods      # ai_popup.py and its mixins
-        reaching = set()
-        for _path, method in window_methods():
-            if any(isinstance(n, ast.Call) and getattr(n.func, "attr", "") == "rewrite" for n in ast.walk(method)):
-                reaching.add(method.name)
-        self.assertEqual(reaching, {"update_skill"})       # MCP server page › Update skill…
-
 
 if __name__ == "__main__":
     unittest.main()

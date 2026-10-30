@@ -45,7 +45,7 @@ class SyncPluginTest(unittest.TestCase):
         self.run_quietly(self.tool.sync)
         self.assertEqual(self.run_quietly(self.tool.check), 0)
         self.assertFalse((self.plugin / "gone_module.py").exists())
-        self.assertTrue((self.plugin / "ai_popup.py").is_file())
+        self.assertTrue((self.plugin / "ai_core.py").is_file())        # a shared reference module
         self.assertTrue((self.plugin / "translations/de.json").is_file())
         self.assertTrue((self.plugin / "assets/user-manual.pdf").is_file())
         for rel, text in self.own.items():                       # the plugin's own files untouched

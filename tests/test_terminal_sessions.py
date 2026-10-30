@@ -120,7 +120,8 @@ else:
             state = stat.read_text().rsplit(')',1)[1].split()[0]
         except (FileNotFoundError, ProcessLookupError):
             state = None  # Reaped before or during the read is also stopped.
-        self.assertIn(state, (None, 'Z'))
+        # Z (a zombie) or X (dead, seen for a moment while it is reaped): stopped either way.
+        self.assertIn(state, (None, 'Z', 'X'))
 
     def test_reused_descendant_pid_is_never_signalled(self):
         import terminal_sessions

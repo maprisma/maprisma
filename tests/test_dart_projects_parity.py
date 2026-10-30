@@ -24,11 +24,8 @@ import json, sys
 sys.path.insert(0, sys.argv[1])
 import claude_sessions
 from i18n import _, ngettext
-from ui_helpers import short_number
+from reference_texts import duration_text, short_number
 WEEKDAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
-def duration_text(seconds):
-    minutes = int(seconds // 60)
-    return _("{0} h {1} min").format(minutes // 60, minutes % 60) if minutes >= 60 else _("{0} min").format(minutes)
 case = json.loads(sys.stdin.read())
 sessions = [claude_sessions.Session(**d) for d in case['sessions']]
 since = case['now'] - 30 * 86400

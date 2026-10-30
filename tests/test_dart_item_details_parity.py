@@ -23,12 +23,12 @@ PYTHON = r'''
 import json, sys
 from pathlib import Path
 sys.path.insert(0, sys.argv[1])
-import mcp_ctl, mcp_pages, skills_ctl
+import mcp_ctl, reference_texts, skills_ctl
 from i18n import _
 case = json.loads(sys.stdin.read())
 out = {'mcp': {}, 'skills': {}}
 for name, agents in case['mcp'].items():
-    out['mcp'][name] = {a: [list(r) for r in mcp_pages.McpPages.mcp_rows(a, mcp_ctl.normal(mcp_ctl.raw_entries(a).get(name)))]
+    out['mcp'][name] = {a: [list(r) for r in reference_texts.mcp_rows(a, mcp_ctl.normal(mcp_ctl.raw_entries(a).get(name)))]
                         for a in agents}
 ways = {"native": _("reads the folder by itself"), "listed": _("the folder is in its settings"),
         "links": _("links in its own folder ({0})")}

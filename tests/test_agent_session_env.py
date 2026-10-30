@@ -6,7 +6,6 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import ai_core  # noqa: E402
-import terminal_pane  # noqa: E402
 
 SESSION = {"CLAUDECODE": "1", "CLAUDE_CODE_CHILD_SESSION": "1", "CLAUDE_CODE_MESSAGING_TOKEN": "secret",
            "CLAUDE_CODE_SESSION_ID": "x", "CLAUDE_PID": "4", "CLAUDE_EFFORT": "high",
@@ -25,12 +24,6 @@ class AgentSessionEnvTest(unittest.TestCase):
         removed = ai_core.drop_agent_session_vars(env)
         self.assertEqual(set(removed), set(SESSION))
         self.assertEqual(env, KEEP)
-
-    def test_built_in_terminal_starts_agents_without_them(self):
-        child = dict(item.split("=", 1) for item in terminal_pane.child_env({**SESSION, **KEEP}))
-        self.assertFalse(set(SESSION) & set(child))
-        self.assertEqual(child["CLAUDE_CONFIG_DIR"], "/home/u/.claude")
-        self.assertEqual(child["TERM"], "xterm-256color")
 
 
 class UserProgramDirsTest(unittest.TestCase):

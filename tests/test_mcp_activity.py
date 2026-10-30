@@ -91,26 +91,5 @@ class BusyTest(unittest.TestCase):
         self.assertEqual(mcp_activity.url_place("not a url"), ("", 0))
 
 
-
-class MapLightTest(unittest.TestCase):
-    def test_light_runs_on_the_line_to_a_server_in_use(self):
-        import graph
-        import map_view
-        g = graph.Graph()
-        for node in (graph.Node("agent:claude", 1, "Claude", "", "agent"), graph.Node("mcp:pdf", 0, "pdf", "", "mcp"),
-                     graph.Node("mcp:web", 0, "web", "", "mcp")):
-            g.add(node)
-        g.link("agent:claude", "mcp:pdf", "mcp")
-        g.link("agent:claude", "mcp:web", "mcp")
-
-        class View:
-            mcp_paths = map_view.MapView.mcp_paths
-        view = View()
-        view.graph, view.mcp_busy = g, {("claude", "pdf")}
-        paths = view.mcp_paths({0, 1})
-        self.assertEqual([(key, [e.target for e in edges]) for key, edges in paths], [("mcp:claude:pdf", ["mcp:pdf"])])
-        self.assertEqual(view.mcp_paths({1}), [])          # its line not drawn (MCP layer hidden)
-
-
 if __name__ == "__main__":
     unittest.main()

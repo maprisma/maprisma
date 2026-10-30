@@ -18,25 +18,6 @@ import connect  # noqa: E402
 import session_follow  # noqa: E402
 
 
-def popup():
-    import gi
-    gi.require_version("Gtk", "4.0")
-    gi.require_version("Gdk", "4.0")
-    import ai_popup
-    return ai_popup
-
-
-class RefreshGuardTest(unittest.TestCase):
-    def test_a_copy_of_the_same_runtimes_counts_as_the_same(self):
-        same = popup().same_objects
-        a, b = object(), object()
-        current = [a, b]
-        self.assertTrue(same(list(current), current))            # the poll's copy: was always False with `is`
-        self.assertFalse(same([a, object()], current))           # read again meanwhile
-        self.assertFalse(same([a], current))
-        self.assertNotIn("runtimes is self.inventory.runtimes", Path(popup().__file__).read_text())
-
-
 class Limit:
     def __init__(self, percent, resets_at, label="5h"):
         self.percent, self.resets_at, self.label = percent, resets_at, label
@@ -57,92 +38,6 @@ class BatteryTest(unittest.TestCase):
         limits = [Limit(0.5, later), Limit(0.95, soon), Limit(0.1, now - dt.timedelta(hours=1)), Limit(0.2, None)]
         self.assertEqual(agent_details.next_reset(limits, now), soon)
         self.assertIsNone(agent_details.next_reset([Limit(0.2, None)], now))
-
-    def test_a_red_battery_turns_green_once_its_limit_resets(self):
-        ai_popup = popup()
-
-        class View:
-            set_agent_battery = ai_popup.AgentsMap.set_agent_battery
-            batteries_past_reset = ai_popup.AgentsMap.batteries_past_reset
-            shown = 0
-
-            def warn_red(self, *_args):
-                pass
-
-            def show_batteries(self):
-                self.shown += 1
-
-        view = View()
-        now = dt.datetime.now(dt.timezone.utc)
-        session = Limit(0.97, now + dt.timedelta(seconds=60))
-        week = Limit(0.2, now + dt.timedelta(days=3), "week")
-        view.set_agent_battery("codex", [session, week], show=False)
-        self.assertEqual(view.agent_batteries["agent:codex"][1], "red")
-        view.batteries_past_reset()
-        self.assertEqual(view.agent_batteries["agent:codex"][1], "red")                 # not reset yet
-        session.resets_at = now - dt.timedelta(seconds=1)                               # its session window ended
-        view.battery_resets["codex"] = (session.resets_at, [session, week])
-        view.batteries_past_reset()
-        self.assertEqual(view.agent_batteries["agent:codex"][1], "green")               # only the week counts now
-        self.assertEqual(view.battery_resets["codex"][0], week.resets_at)
-        self.assertEqual(view.shown, 1)
-
-
-class ModelAdviceTest(unittest.TestCase):
-    """Ask on runtime A's page, open B's, ask there: A's answer stays with A."""
-
-    def test_an_answer_goes_to_the_page_that_asked(self):
-        import models_page
-        calls = []
-
-        class View:
-            ask_model_advice = models_page.ModelsPage.ask_model_advice
-            models_ask_text = "a coding model"
-            shown = []
-
-            def fill_model_ask(self):
-                calls.append(self.models_state["rt"].name)
-
-            def show_model_suggestions(self, state):
-                self.shown.append(state["rt"].name)
-
-            def toast(self, *_args):
-                pass
-
-            def run_ai_help(self, _title, _agent, _steps, work, done):
-                step = lambda *_a: None                       # noqa: E731
-                step.done = lambda *_a: None
-                pending.append(lambda: done(work(step)))
-
-        class Rt:
-            def __init__(self, name):
-                self.name, self.models = name, []
-
-        view = View()
-        page_a = {"rt": Rt("A"), "vram": 0, "ram": 0}
-        page_b = {"rt": Rt("B"), "vram": 0, "ram": 0}
-        pending = []
-        gpu = mock.Mock(vram=0, vendor="amd")
-        gpu.name = "gpu"
-        with mock.patch.object(models_page.threading, "Thread",
-                               lambda target, daemon: mock.Mock(start=lambda: pending.append(target))), \
-                mock.patch.object(models_page.GLib, "idle_add", lambda fn, *a: fn(*a)), \
-                mock.patch.object(models_page.install_ctl, "detect_gpu", return_value=gpu), \
-                mock.patch.object(models_page.model_advice, "ask",
-                                  side_effect=lambda *a, **k: mock.Mock(models=[], agent="claude", tag=f"answer for {a[2]}")):
-            view.models_state = page_a
-            view.ask_model_advice("claude")
-            self.assertTrue(page_a["asking"])
-            view.models_state = page_b                    # another runtime's page opened meanwhile
-            view.ask_model_advice("claude")               # not blocked by A's request
-            self.assertTrue(page_b["asking"])
-            pending.pop(0)()                              # A answers first
-            self.assertEqual(page_a.get("advice").tag, "answer for A")
-            self.assertTrue(page_b["asking"])             # B still waits
-            self.assertNotIn("advice", page_b)
-            pending.pop(0)()
-            self.assertEqual(page_b["advice"].tag, "answer for B")
-            self.assertFalse(page_b["asking"])
 
 
 class SessionFileTest(unittest.TestCase):
@@ -308,7 +203,6 @@ class NotificationTextTest(unittest.TestCase):
             self.assertNotIn(bad, text)
         self.assertTrue(text.startswith("5h img src="))
         self.assertEqual(len(ai_core.plain_text("x" * 500, 80)), 80)
-        self.assertIn("ai_core.plain_text(body", Path(popup().__file__).read_text())
 
 
 class FollowerTest(unittest.TestCase):
@@ -394,30 +288,6 @@ class DiskBudgetTest(unittest.TestCase):
         self.assertNotIn("\x1b", out.getvalue())
 
 
-class ModelAskProgressTest(unittest.TestCase):
-    """While the agent looks for models: a spinner and the time it has taken so far."""
-
-    def test_the_time_counts_up_and_stops_with_the_answer(self):
-        popup()
-        import models_page
-        from gi.repository import Gtk
-
-        class View:
-            model_ask_progress = models_page.ModelsPage.model_ask_progress
-            ask_progress = models_page.ModelsPage.ask_progress
-
-        view, ticks = View(), []
-        state = {"asking": True, "asked_at": time.monotonic() - 75}
-        view.models_state = state
-        with mock.patch.object(models_page.GLib, "timeout_add_seconds", lambda _s, fn: ticks.append(fn)):
-            row = view.model_ask_progress(state, "Codex")
-        label = row.get_last_child()
-        self.assertEqual(label.get_label(), "Codex is looking on the web for models · 1:15")
-        self.assertIsNotNone(row.get_first_child())                       # the spinner
-        state["asking"] = False                                           # the answer came
-        self.assertFalse(ticks[0]())                                      # the timer ends
-
-
 class ModelAdviceCountTest(unittest.TestCase):
     """Ask an agent: 10 suggestions by default, another number from the Suggestions control."""
 
@@ -433,58 +303,6 @@ class ModelAdviceCountTest(unittest.TestCase):
         self.assertEqual(len(model_advice.validate(answer, "codex", "q").models), 10)
         self.assertEqual(len(model_advice.validate(answer, "codex", "q", most=20).models), 20)
         self.assertEqual(len(model_advice.validate(answer, "codex", "q", most=5).models), 5)
-
-
-class SuggestionsInResultListTest(unittest.TestCase):
-    """The agent's suggestions go into the search result list, found as Hugging Face repos."""
-
-    def test_found_ones_are_listed_missing_ones_named(self):
-        import models_page
-        import model_advice
-        rows, labels = [], {}
-
-        class Listbox:
-            def get_first_child(self):
-                return None
-
-            def append(self, row):
-                rows.append(row)
-
-        class Label:
-            def __init__(self, key):
-                self.key = key
-
-            def set_label(self, text):
-                labels[self.key] = text
-
-        class View:
-            show_model_suggestions = models_page.ModelsPage.show_model_suggestions
-            SUGGESTED = models_page.ModelsPage.SUGGESTED
-            models_repos = Listbox()
-            models_results_heading, models_status = Label("heading"), Label("status")
-
-            def repo_row(self, repo, subtitle=None, tip=""):
-                return (repo, subtitle, tip)
-
-            def update_model_buttons(self):
-                pass
-
-            def set_models_note(self, text):
-                labels["note"] = text
-
-        repo = mock.Mock(id="unsloth/Qwen3-GGUF")
-        item = model_advice.Suggestion("Qwen3 8B", "Qwen3-8B GGUF", "Q4_K_M, 5 GB", "fits 24 GB")
-        state = {"advice": model_advice.Advice("codex", "q", "s", [item]),
-                 "advice_found": [(repo, item)] * 12, "advice_missing": ["Nope 3B"]}
-        view = View()
-        view.models_state = state
-        with mock.patch.object(models_page.ai_core, "setting", return_value=10):
-            view.show_model_suggestions(state)
-        self.assertEqual(len(rows), 10)                                   # as many as Suggestions says
-        self.assertEqual(rows[0], (repo, "Q4_K_M, 5 GB · fits 24 GB", "Qwen3 8B: fits 24 GB"))
-        self.assertEqual(labels["heading"], "SUGGESTED BY CODEX")
-        self.assertIn("Nope 3B", labels["note"])                         # under the heading, not in a footer
-        self.assertEqual(state["query"], View.SUGGESTED)                  # a late search does not replace them
 
 
 class OllamaNameTest(unittest.TestCase):
@@ -539,30 +357,6 @@ class OllamaRegistryCheckTest(unittest.TestCase):
                              "This repository only contains sharded GGUF files.")
         self.assertEqual(models_ctl.ollama_tag_problem("bad repo", "Q8_0"), "not a model name")
 
-    def test_the_page_offers_only_what_the_registry_accepts(self):
-        import models_page
-        import models_ctl
-        G = models_ctl.GgufFile
-
-        class View:
-            pull_problems = models_page.ModelsPage.pull_problems
-            PULL_CHECKS = models_page.ModelsPage.PULL_CHECKS
-
-        rt = mock.Mock()
-        files = [G("A-Q8_0", ["A-Q8_0.gguf"], 8, "Q8_0"), G("A-Q4_K_M", ["A-Q4_K_M.gguf"], 4, "Q4_K_M"),
-                 G("A-BF16", ["BF16/A-BF16-00001-of-00002.gguf", "BF16/A-BF16-00002-of-00002.gguf"], 16, "BF16")]
-        asked = []
-        def registry(repo, quant, base):
-            asked.append(quant)
-            return "sharded only" if quant == "Q8_0" else ""
-        with mock.patch.object(models_page.llm_engine, "of", return_value=mock.Mock(download="pull")), \
-                mock.patch.object(models_page.models_ctl, "ollama_tag_problem", side_effect=registry):
-            problems = View().pull_problems(rt, "u/A-GGUF", files, "https://huggingface.co")
-        self.assertEqual(problems, {"A-Q8_0": "registry:sharded only", "A-BF16": "split"})
-        self.assertEqual(sorted(asked), ["Q4_K_M", "Q8_0"])             # the split one is not even asked
-        with mock.patch.object(models_page.llm_engine, "of", return_value=mock.Mock(download="file")):
-            self.assertEqual(View().pull_problems(rt, "u/A-GGUF", files, "https://huggingface.co"), {})
-
 
 class McpAdviceTest(unittest.TestCase):
     """Ask an agent on the Add MCP server page: search words from the agent, candidates from the
@@ -611,22 +405,6 @@ class McpAdviceTest(unittest.TestCase):
             path = self.registry(tmp)
             advice = mcp_advice.ask("codex", "x", look_up=lambda *a, **k: '{"terms": ["kubernetes"]}', path=path)
         self.assertEqual((advice.servers, advice.terms), ([], ["kubernetes"]))
-
-
-class OllamaUncheckedTest(unittest.TestCase):
-    def test_sizes_beyond_the_checked_ones_are_not_offered(self):
-        import models_page
-        import models_ctl
-
-        class View:
-            pull_problems = models_page.ModelsPage.pull_problems
-            PULL_CHECKS = 3
-
-        files = [models_ctl.GgufFile(f"M-Q{i}", [f"M-Q{i}.gguf"], i, f"Q{i}") for i in range(5)]
-        with mock.patch.object(models_page.llm_engine, "of", return_value=mock.Mock(download="pull")), \
-                mock.patch.object(models_page.models_ctl, "ollama_tag_problem", return_value=""):
-            problems = View().pull_problems(mock.Mock(), "u/M-GGUF", files, "https://huggingface.co")
-        self.assertEqual(problems, {"M-Q3": "unchecked", "M-Q4": "unchecked"})
 
 
 if __name__ == "__main__":

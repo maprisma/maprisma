@@ -2236,3 +2236,63 @@ Not part of the phase-6 list and not in Flutter yet (GTK features for later):
 
 Next: phase 7, Python out of the app.
 
+## Phase 7 — Python out of the app (2026-10-30)
+
+**Part 1 (57fa170): the app's service is the Dart core alone.**
+- `Backend.start()` is the core in its background isolate. The router with its Devel Python fallback
+  (`service_router.dart`) is gone; a route the core does not know is refused (`unported_route`), as the
+  release probe of `tools/check-dart-core-release.py` checks.
+- `PythonTransport` moved to `flutter_app/test/support/`: it only drives the widget tests' fake service
+  scripts. `ASTERISM_SOURCE` and the unused `tools/check-flutter-transport.dart` are gone.
+- **Release gate `tools/check-bundle.py`**, run by `tools/flutter-dev build`, fails on any of these:
+  - a `.py`/`.pyc` file, a Python executable or a Python environment folder in the bundle;
+  - the markers of a Python service in its binaries (`/usr/bin/python3`, `flutter_backend`,
+    `PythonTransport`, `ASTERISM_SOURCE`);
+  - one of them in the code of the app's or the core's Dart sources. Comments naming the reference a
+    port follows are allowed, and so are process names like `python3` in the core's data.
+
+  The bundle built before part 1 failed it (its UI still had the transport); every bundle since
+  passes.
+- **Safety fix: a Devel build must never install the real asterism-providers.service.**
+  - **What happened:** the core installed the user service for whatever compiled core it ran as. A
+    scratch copy run against the real home had written and enabled
+    `~/.config/systemd/user/asterism-providers.service` on 2026-10-29. It is removed.
+  - **Layer 1:** the core now never manages the unit for a binary in `/tmp`, `/var/tmp`, `$TMPDIR`,
+    a `.flutter-previews` bundle or `build/linux` output (tests in `write_path_test.dart`).
+  - **Layer 2:** a Devel build of the app marks its core `ASTERISM_FLUTTER_DEVEL=1`, as the Python
+    service did.
+
+**Part 2: the GTK UI is gone from this tree** (its frozen copy is `/mnt/Data/Projects/omarchy-ai-agents-map`,
+synced last on 2026-10-28; git history keeps everything).
+- **Removed:**
+  - the 28 GTK modules (`ai_popup`, `map_view`, the pages and dialogs, `ui_helpers`, `text_guard`,
+    `theme_css`, …) and `plugin_catalog.py` (only for the GTK info page);
+  - `tools/profile-map.py` (GTK profiler), `bin/asterism` (the GTK launcher), and the GTK app's
+    AppImage builder and AUR `PKGBUILD`.
+
+  `desktop_generic.py` and `models_ctl.py` stay: they are reference logic that only loads GTK lazily
+  in a function, and other reference modules import them.
+- **Reference texts:** what the parity tests need from the deleted pages is in the new
+  `reference_texts.py`, copied unchanged: `short_number`, `duration_text`, `mcp_rows`.
+- **Tests:** every test that used a deleted module was removed, line-exact, with an AST tool. Tests of
+  reference modules in the same files were kept.
+  - 14 files are gone completely: the GTK map, terminal, add-ons page, previews, window and
+    launcher tests, and the plugin catalog.
+  - 10 files lost their GTK tests and kept the rest.
+  - `test_packaging.py` keeps its data tests (manual PDFs, versions, the add-on unpacker).
+  - `test_sync_plugin.py` checks a shared module that still exists. The tool itself is untouched, as
+    the plan's rules say; it is retired (`plan-naming.md`).
+  - One flaky reference test (a process seen as `X`, dead, while it is reaped) accepts that state.
+- `AGENTS.md` says every `*.py` is reference only and names the gate; `README.md` no longer describes
+  the GTK app's install, plugin sync or code add-ons; `pyrightconfig.json` lost the deleted files.
+
+Check: `tools/flutter-dev check`, with 74 Dart tests, 69 differential cases, the release probe and 148
+Flutter tests. `tools/flutter-dev build` passes the gate. 1324 Python tests run (1482 before: 158 GTK
+tests went with their modules), and `tools/typecheck.sh` reports 0 errors. Read only against this PC's
+real data, the bundle's AOT `asterism-core` answered the routes I tried, and no user unit appeared.
+
+Phase 7 is done. Next: `plan-flutter.md` steps 4–8 (product fit, Omarchy integration, packaging without
+Python, the `ubruckhaus.asterism` launcher plugin, final review) and the rename to Maprisma. The GTK
+features not in Flutter yet (local helper, starter models, usage box, daily AI checks, terminal-tab
+states) are open for step 4.
+

@@ -10,7 +10,6 @@ import agents  # noqa: E402
 import extra_folders  # noqa: E402
 import graph  # noqa: E402
 import inventory as invmod  # noqa: E402
-import map_view  # noqa: E402
 import mcp_scan  # noqa: E402
 import skills_scan  # noqa: E402
 
@@ -42,12 +41,6 @@ class AvailableOnTheMapTest(unittest.TestCase):
         self.assertNotIn("mcp:photocraft", lined)
         self.assertNotIn("skills:/data/Skills", lined)
 
-    def test_online_servers_get_their_own_card(self):
-        g = self.build([("mcp", "docs", "docs", "not connected"), ("mcp", "photocraft", "photocraft", "")])
-        nodes = {n.id: n for n in g.nodes}
-        self.assertEqual(map_view.MapView.group_key(nodes["mcp:docs"]), "mcp-online")
-        self.assertEqual(map_view.MapView.group_key(nodes["mcp:photocraft"]), "mcp")
-        self.assertEqual(map_view.MapView.group_key(nodes["mcp:github"]), "mcp")
 
     def test_unused_layers_keep_unconnected_boxes(self):
         g = self.build([("mcp", "photocraft", "photocraft", "")])

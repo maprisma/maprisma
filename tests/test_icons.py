@@ -13,12 +13,6 @@ GOOD = b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M0
 class StoredIconsTest(unittest.TestCase):
     """The app brings its own icons: every glyph the cards and the map use is stored as an SVG."""
 
-    def test_the_glyphs_in_use_are_stored(self):
-        import glyphs
-        from map_view import CONSOLE, PIN, PIN_OUTLINE, PLAY
-        for char in list(glyphs.GLYPHS.values()) + [PIN, PIN_OUTLINE, PLAY, CONSOLE, "\U000F0493"]:
-            name = icons.name_for(char)
-            self.assertTrue(name and icons.path_for(name), f"U+{ord(char):X} has no stored icon")
 
     def test_the_ui_icons_are_in_the_apps_theme(self):
         for name in ("view-refresh-symbolic", "go-previous-symbolic", "am-chart-symbolic", "am-smartcheck-symbolic",

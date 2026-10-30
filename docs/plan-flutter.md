@@ -90,7 +90,7 @@ a commit.
    guide. Installer service routes and their Flutter UI are connected (6b-1, 2026-10-29): the
    first-agent guide's mise/Node.js/local-LLM steps and Install under Providers and models. Steps
    started from the guide return to it, refreshed (6b-3).
-   Phase 6 of the Dart-core plan is complete (final test 2026-10-30; see
+   Phases 6 and 7 of the Dart-core plan are complete (2026-10-30; the app has no Python, see
    plan-flutter-dart-core-responses.md). Signed agent/provider add-ons work, from the catalog or a file (6b-4); Flutter
    feature/extension add-on contracts remain. Other adapter readers/collaboration views remain.
 4. **Product fit and migration validation:** finish keyboard/accessibility,

@@ -1,14 +1,21 @@
 # Notes for coding agents
 
 - **Flutter target (user decision, 2026-10-27):** `docs/plan-flutter.md` is the active
-  UI migration plan. The final app must be Flutter; retain Python services where
-  useful. The one-app/thin-launcher plan below still governs identity and delivery.
+  UI migration plan. The final app must be Flutter, its service the Dart core (Python only as the
+  reference, see below). The one-app/thin-launcher plan below still governs identity and delivery.
 - **Current plan:** `docs/plan-one-app.md`: Asterism as the one app for every distribution, the Omarchy plugin
   as a thin launcher. It has Uwe's decisions, the facts with file paths, the next steps and the state of the repos.
 - **GTK app frozen (Uwe, 2026-10-28):** Flutter replaces it on Linux too. The GTK repo gets fixes only, no
-  new features; new work happens here. Next slice: `docs/plan-flutter-dart-core.md` (phase 2 after Uwe's go).
+  new features; new work happens here (plan: `docs/plan-flutter-dart-core.md`).
 - **Flutter only, Python for testing (Uwe, 2026-10-28):** the shipped app contains no Python; the service is
   ported to Dart (`docs/plan-flutter-dart-core.md`), Python stays as the reference and test oracle.
+- **Python is reference only (phase 7, 2026-10-30):** every `*.py` here (and `adapters/*.py`) is the
+  reference implementation for the differential and parity tests; nothing of it runs in the app. The app's
+  service is the Dart core (`packages/asterism_core`); a route it does not know is refused. The GTK UI was
+  removed from this tree; its frozen copy is `/mnt/Data/Projects/omarchy-ai-agents-map`. New features are
+  Dart only; change a Python module only to keep a reference in step with a port.
+- **Release gate:** `tools/check-bundle.py` (run by `tools/flutter-dev build`): no `.py`, no Python
+  executable or service marker in the bundle, none in the Dart code of the app or the core.
 - **macOS later:** `docs/plan-macos.md`. Not before Linux is completely done and Uwe's OK; meanwhile keep
   new platform code behind the desktop adapter.
 - **Working with Codex and Claude:** work on `main` here. A new task gets `docs/plan-<topic>.md`; the

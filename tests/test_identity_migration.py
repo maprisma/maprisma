@@ -13,7 +13,6 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import ai_core
 import ai_helper
-import ai_popup
 import config_migration as migration
 import desktop
 import desktop_generic
@@ -55,10 +54,6 @@ class IdentityTest(unittest.TestCase):
             with mock.patch.dict(os.environ, {"XDG_CONFIG_HOME": "relative"}):
                 self.assertEqual(identity.config_dir(), Path("/home/test/.config/asterism"))
 
-    def test_launchers_leave_desktop_detection_automatic(self):
-        root = Path(__file__).resolve().parent.parent
-        for relative in ("bin/asterism", "packaging/appimage/AppRun"):
-            self.assertNotIn("ASTERISM_DESKTOP:=generic", (root / relative).read_text())
 
 
 class MigrationTest(unittest.TestCase):
@@ -206,32 +201,6 @@ class MigrationTest(unittest.TestCase):
         self.assertTrue(self.run_migration())
 
 
-class ActivationTest(unittest.TestCase):
-    def test_only_verified_installed_adapters_and_online_group_are_enabled(self):
-        state = {"addons_pending": True, "backup": "retained"}
-        values = {"plugin_migration": state, "addons_enabled": ["existing"]}
-        adapters = [SimpleNamespace(id="agent-present", kind="agent", provides=["present"]),
-                    SimpleNamespace(id="agent-absent", kind="agent", provides=["absent"]),
-                    SimpleNamespace(id="local-present", kind="provider", provides=["local"]),
-                    SimpleNamespace(id="online", kind="provider", provides=["a", "b"])]
-        view = SimpleNamespace(adapter_addons=lambda: adapters, installed_adapters=lambda _a: {"agent-present", "local-present"},
-                               save_setting=lambda **kw: values.update(kw), load_addons=mock.Mock())
-        with mock.patch.object(ai_core, "setting", side_effect=values.get):
-            ai_popup.AgentsMap.finish_plugin_migration(view)
-            self.assertEqual(values["addons_enabled"], ["agent-present", "existing", "local-present", "online"])
-            self.assertFalse(values["plugin_migration"]["addons_pending"])
-            self.assertEqual(values["plugin_migration"]["backup"], "retained")
-            self.assertTrue(values["setup_done"])
-            ai_popup.AgentsMap.finish_plugin_migration(view)
-            view.load_addons.assert_called_once()
-
-    def test_missing_signed_addons_keeps_activation_pending(self):
-        view = SimpleNamespace(adapter_addons=lambda: [], save_setting=mock.Mock())
-        with mock.patch.object(ai_core, "setting", return_value={"addons_pending": True}):
-            ai_popup.AgentsMap.finish_plugin_migration(view)
-        view.save_setting.assert_not_called()
-
-
 if __name__ == "__main__":
     unittest.main()
 
@@ -277,27 +246,3 @@ class MigrationFailedBackupTest(unittest.TestCase):
             self.assertEqual((source/'settings.json').read_text(), '{}')
 
 
-class MigrationNoticeTest(unittest.TestCase):
-    def test_gtk_import_failure_is_explained_only_once_on_repeat_activation(self):
-        app = mock.Mock()
-        callbacks = []
-        app.connect.side_effect = lambda signal, callback: callbacks.append(callback) or 73
-        def run():
-            callbacks[0](app)
-            callbacks[0](app)
-            return 0
-        app.run.side_effect = run
-        with mock.patch.object(ai_popup.ai_core,'drop_agent_session_vars'), \
-             mock.patch.object(ai_popup.ai_core,'add_user_program_dirs'), \
-             mock.patch.object(migration,'migrate',side_effect=ValueError('fixture detail')), \
-             mock.patch.object(ai_popup.i18n,'set_name'), \
-             mock.patch.object(ai_popup,'_',side_effect=lambda key:key), \
-             mock.patch.object(ai_popup,'AgentsMap',return_value=app), \
-             mock.patch.object(ai_popup.atexit,'register'), \
-             mock.patch.object(ai_popup.GLib,'idle_add',side_effect=lambda callback: callback()), \
-             mock.patch.object(ai_popup.Adw,'AlertDialog') as dialog:
-            self.assertEqual(ai_popup.main(), 0)
-        app.disconnect.assert_called_once_with(73)
-        self.assertEqual(dialog.call_count, 1)
-        self.assertIn('could not be imported', dialog.call_args.kwargs['body'])
-        self.assertIn('fixture detail', dialog.call_args.kwargs['body'])

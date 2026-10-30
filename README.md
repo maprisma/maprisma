@@ -1,6 +1,6 @@
 # Asterism
 
-Your AI agents, models and tools on one map: a GTK 4 / libadwaita app.
+Your AI agents, models and tools on one map: a Flutter app with its service written in Dart.
 
 ![An agent is connected to a local LLM, a model, an MCP server and a skill folder by drawing lines; then its pin and right-click menu](docs/drawing-demo.gif)
 
@@ -43,17 +43,15 @@ local LLMs are enabled automatically. The legacy plugin remains supported during
 
 ## Install
 
-- **Arch Linux (AUR):** `asterism` (`packaging/aur/PKGBUILD`).
-- **AppImage:** `Asterism-<version>-x86_64.AppImage` from the releases. It uses your distribution's
-  Python 3 with PyGObject, GTK 4 and libadwaita:
-  - Fedora: `sudo dnf install python3-gobject gtk4 libadwaita`
-  - Ubuntu/Debian: `sudo apt install python3-gi gir1.2-gtk-4.0 gir1.2-adw-1`
-  - Arch: `sudo pacman -S python-gobject gtk4 libadwaita`
+Not released yet: the Flutter app is packaged with `plan-flutter.md` step 6 (it carries no Python). The
+earlier GTK app's AUR and AppImage packages were removed from this tree (phase 7); its frozen source is
+the AI Agents Map plugin repository.
 
-  Agent icons need a Nerd Font (Symbols Nerd Font). Optional: `vte4` for agents in a terminal
-  inside the window, `bubblewrap` (`bwrap`) for unpacking AppImages (MCP server apps, Jan): they
-  are unpacked closed in, and without it not at all.
-- **From source:** `bin/asterism` in a checkout.
+- **From source:** `tools/flutter-dev build` makes a development bundle in `.flutter-previews/` (not
+  installed, not started); `tools/check-bundle.py` checks that it has no Python in it.
+
+Agent icons need a Nerd Font (Symbols Nerd Font). Optional: `bubblewrap` (`bwrap`) for unpacking
+AppImages (MCP server apps, Jan): they are unpacked closed in, and without it not at all.
 
 Settings live in `~/.config/asterism/`. Light or dark and the accent colour follow your system.
 
@@ -69,57 +67,33 @@ The **Healthy & Security check** reads only the security keys of the agents' set
 changes one key at a time, after a preview, with a backup and Undo. **Disk space** only looks at
 file sizes (`lstat`, links not followed, bounded); nothing is opened or deleted.
 
-**Session numbers per project** for Claude Code, OpenCode and Hermes (one adapter per harness,
-`harness_<name>.py`, registered in `harnesses.py`; more harnesses are added there):
-
-- per project, numbers only (tokens, working time, sessions, lines changed, API value, subagent
-  runs): Claude Code from its session files (`~/.claude/projects`, its replies and cost summaries,
-  bounded and incremental); OpenCode and Hermes from their own databases, opened read-only, only the
-  folder, time, token and cost columns and the message times; no message text;
-- with the **Insights** add-on: **Topics**, the title each harness gave its sessions itself (Claude
-  Code's `ai-title` lines, cached owner-only; OpenCode's and Hermes's title column), which topics
-  took the most tokens, and **Summarize with Claude…** (only on a click, after showing exactly what is sent): those titles and
-  numbers, never the conversations, go to your own `claude -p`, which runs in plan mode without
-  MCP servers or a saved session, in an empty folder.
-
-(Without add-ons, and always in the AI Agents Map plugin, only the numbers: `edition.py` takes the
-level from the loaded add-ons.)
+**Session numbers per project** (Projects, last 30 days, on an agent's details): numbers only (tokens,
+working time, sessions, lines changed, API value, subagent runs), from each agent's own session files
+or databases (opened read-only), as its adapter names them; Claude Code's files are read bounded and
+incrementally. No message text, title or prompt is read.
 
 ## Add-ons
 
-Features beyond the numbers come as add-ons, from the author only. An add-on is a folder in
-`~/.local/share/asterism/addons/` (or `/usr/lib/asterism/addons/`) and loads only when it is
-switched on in Settings and **signed with the author's key** (checked with OpenSSH's
-`ssh-keygen -Y verify`; fingerprint `SHA256:e5cC634Ke3Our5LAeSc88qs22NKZEHTncBW5Ig3amWQ`). Every
-file must match the signed list, nothing may be added, and nothing of it runs before those checks.
-Each add-on states in plain words what it reads and sends, and its privacy level (numbers, titles
-or summary) is the most it can do. Add-ons build on a small, versioned API (`addon_api.py`), so a
-new add-on needs no new Asterism. An add-on can also bring a **new agent or LLM provider**: every
-agent is described as data (`adapters/<command>.toml`, format in
-[docs/adapter-format.md](docs/adapter-format.md), plus a small `adapters/<command>.py` for the few
-facts data cannot say), every provider is an adapter (`provider_<key>.py`); an add-on that declares
-the capability ("agent", "provider", and "installer" for one that installs something) adds its own
-(`agent.toml`, mostly with no code at all), and it then appears on the map, in the cards and on its
-details page like the built-in ones. An **extension add-on** adds facts to an agent another one
-brings, without replacing it. A built-in agent or provider cannot be
-replaced, and an add-on's agent cannot bring an updater of its own. The AI Agents Map plugin has no
-add-ons.
+Agents and LLM providers beyond the built-in ones come as add-ons, from the author only. An add-on is a
+folder in `~/.local/share/asterism/addons/` (or `/usr/lib/asterism/addons/`), loads only when it is
+switched on, and only when it is **signed with the author's key** (the SSHSIG signature, checked by the
+Dart core; fingerprint `SHA256:e5cC634Ke3Our5LAeSc88qs22NKZEHTncBW5Ig3amWQ`). Every file must match the
+signed list and nothing may be added. Add-ons are **data only**: an agent is described in `agent.toml`
+(format in [docs/adapter-format.md](docs/adapter-format.md)), a provider in `provider.toml`, read by
+built-in named readers; nothing of an add-on runs. Each one states in plain words what it reads and
+sends. A built-in agent or provider cannot be replaced. Feature add-ons with code of their own (the GTK
+app's Insights) are not possible in the Flutter app.
 
 ## Development
 
-`python3 -m unittest discover -s tests`. `ASTERISM_DESKTOP=omarchy|generic` picks the desktop
-integration.
+- `tools/flutter-dev check`: the Dart core's analyzer and tests, the differential cases against the
+  Python reference (`tools/diff-core.py`), the release transport check, the Flutter analyzer and tests.
+- `python3 -m unittest discover -s tests` and `tools/typecheck.sh`: the Python reference and the
+  Python ↔ Dart parity tests. Every `*.py` here is the reference implementation only; nothing of it runs
+  in the app (see AGENTS.md). `ASTERISM_DESKTOP=omarchy|generic` picks the desktop integration.
 
-This tree is the one source of both editions: the Omarchy plugin (AI Agents Map) gets its shared
-files (the Python modules but the add-on ones, `tests/`, `icons/`, `translations/`, the manuals)
-from here and keeps only its own (`BarWidget.qml`, `I18n.js`, `manifest.json`, its README and
-assets). Never edit a shared file in the plugin:
-
-- `tools/sync-plugin.py <plugin checkout>` copies what changed and removes what is gone here
-  (`--release`: only from a committed tree);
-- `tools/sync-plugin.py --check <plugin checkout>` lists every difference;
-- `tools/sync-plugin.py --install-hook <plugin checkout>` makes the plugin refuse commits whose
-  shared files differ from this tree.
+The AI Agents Map plugin is its own GTK source since 2026-10-28; nothing is synced into it from here
+(`tools/sync-plugin.py` is retired).
 
 The user manual is `docs/manual/manual.html` (English) and `manual.<lang>.html` (the translations);
 `python3 docs/manual/build.py --all` makes the PDFs. After an edit of the English one,

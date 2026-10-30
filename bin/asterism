@@ -1,9 +1,0 @@
-#!/bin/sh
-# Asterism: start the app from where the package put it.
-# Detect desktop integration independently of the app's identity.
-here=$(dirname "$(readlink -f "$0")")
-for dir in "$here/../lib/asterism" "$here/.."; do
-    [ -f "$dir/ai_popup.py" ] && exec /usr/bin/python3 "$dir/ai_popup.py" "$@"
-done
-echo "asterism: ai_popup.py not found" >&2
-exit 1
