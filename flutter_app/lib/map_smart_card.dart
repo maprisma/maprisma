@@ -3,7 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'app_theme.dart' show corners;
+import 'connections_view.dart' show ConnectionReview;
 import 'core_client.g.dart';
+import 'providers_view.dart' show modelSize;
+import 'task_card.dart' show TaskReview;
 
 const mapSmartColumns = [
   ('mcp', 'MCP servers and skills'),
@@ -20,7 +23,84 @@ String _columnHint(String column) => switch (column) {
   _ => 'Ask for this column…',
 };
 
-enum _SmartStep { idle, working, clarify, redirect, proposal, error }
+String smartFitLabel(String? fit, String Function(String) tr) => switch (fit) {
+  'ok' => tr('Fits in VRAM'),
+  'tight' => tr('Uses RAM offload'),
+  'too_large' => tr('Too large for this PC'),
+  _ => '',
+};
+
+class SmartModelDownloadReview extends StatelessWidget {
+  const SmartModelDownloadReview({
+    super.key,
+    required this.review,
+    required this.tr,
+    required this.onConfirm,
+    required this.onCancel,
+  });
+
+  final Map<String, dynamic> review;
+  final String Function(String) tr;
+  final VoidCallback onConfirm;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    final title = '${review['title'] ?? ''}';
+    final subtitle = '${review['subtitle'] ?? ''}';
+    final runtime = '${review['runtime'] ?? ''}';
+    final size = modelSize(review['size'] as int? ?? 0);
+    final fit = smartFitLabel(review['fit'] as String?, tr);
+    return TaskReview(
+      title: Text(
+        tr('Download {0}?').replaceAll('{0}', title),
+        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (subtitle.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Text(subtitle, style: const TextStyle(fontSize: 12)),
+            ),
+          if (runtime.isNotEmpty)
+            Text(
+              '${tr('Runtime')}: $runtime',
+              style: const TextStyle(fontSize: 12),
+            ),
+          Text(
+            '${tr('Download')}: $size',
+            style: const TextStyle(fontSize: 12),
+          ),
+          if (fit.isNotEmpty)
+            Text(
+              '${tr('This PC')}: $fit',
+              style: const TextStyle(fontSize: 12),
+            ),
+        ],
+      ),
+      actions: [
+        TextButton(onPressed: onCancel, child: Text(tr('Cancel'))),
+        FilledButton(onPressed: onConfirm, child: Text(tr('Download'))),
+      ],
+    );
+  }
+}
+
+enum _SmartStep {
+  idle,
+  working,
+  clarify,
+  redirect,
+  proposal,
+  review,
+  running,
+  done,
+  connectReview,
+  error,
+}
 
 class MapSmartCard extends StatefulWidget {
   const MapSmartCard({
@@ -61,6 +141,12 @@ class _MapSmartCardState extends State<MapSmartCard> {
   String? _activeTask;
   int _runToken = 0;
   Map<String, dynamic> _reply = const {};
+  String? _activeProposal;
+  Map<String, dynamic>? _activeCandidate;
+  Map<String, dynamic> _reviewData = const {};
+  Map<String, dynamic> _connectPlan = const {};
+  double? _runFraction;
+  String _runText = '';
   String _errorText = '';
 
   Map<String, dynamic>? get _activeHelper {
@@ -133,7 +219,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
     });
   }
 
-  void _cancelAsk() {
+  void _cancelTask({_SmartStep returnTo = _SmartStep.idle}) {
     _runToken++;
     final taskId = _activeTask;
     _activeTask = null;
@@ -142,7 +228,11 @@ class _MapSmartCardState extends State<MapSmartCard> {
         widget.client!.tasksCancel(task: taskId).then((_) {}, onError: (_) {}),
       );
     }
-    _backToIdle();
+    if (returnTo == _SmartStep.idle) {
+      _backToIdle();
+    } else {
+      setState(() => _step = returnTo);
+    }
   }
 
   Future<void> _ask({String? answer}) async {
@@ -216,6 +306,180 @@ class _MapSmartCardState extends State<MapSmartCard> {
     } catch (_) {
       if (!mounted || token != _runToken) return;
       _activeTask = null;
+      setState(() {
+        _errorText = widget.tr('The action could not be completed.');
+        _step = _SmartStep.error;
+      });
+    }
+  }
+
+  Future<void> _openReview(
+    String proposal,
+    Map<String, dynamic> candidate,
+  ) async {
+    final client = widget.client;
+    if (client == null) return;
+    final token = ++_runToken;
+    try {
+      final review = await client.mapSmartReview(
+        proposal: proposal,
+        candidate: '${candidate['id']}',
+      );
+      if (!mounted || token != _runToken) return;
+      setState(() {
+        _activeProposal = proposal;
+        _activeCandidate = candidate;
+        _reviewData = review;
+        _step = _SmartStep.review;
+      });
+    } catch (_) {
+      if (!mounted || token != _runToken) return;
+      setState(() {
+        _errorText = widget.tr('The action could not be completed.');
+        _step = _SmartStep.error;
+      });
+    }
+  }
+
+  Future<void> _confirmReview() async {
+    final client = widget.client;
+    final proposal = _activeProposal;
+    final candidate = _activeCandidate;
+    if (client == null || proposal == null || candidate == null) return;
+    final token = ++_runToken;
+    setState(() {
+      _step = _SmartStep.running;
+      _activeTask = null;
+      _runFraction = null;
+      _runText = '${candidate['title'] ?? ''}';
+    });
+    try {
+      final started = await client.mapSmartRun(
+        proposal: proposal,
+        candidate: '${candidate['id']}',
+      );
+      if (!mounted || token != _runToken) return;
+      final taskId = started['task'] as String?;
+      if (taskId == null || taskId.isEmpty) {
+        setState(() {
+          _errorText = widget.tr('The action could not be completed.');
+          _step = _SmartStep.error;
+        });
+        return;
+      }
+      _activeTask = taskId;
+      while (mounted && token == _runToken) {
+        final status = await client.tasksStatus(task: taskId);
+        if (!mounted || token != _runToken) return;
+        final state = status['state'] as String?;
+        if (state == 'done') {
+          _activeTask = null;
+          final result =
+              (status['result'] as Map?)?.cast<String, dynamic>() ?? const {};
+          if (result['ok'] == false) {
+            setState(() {
+              _errorText =
+                  '${result['message'] ?? widget.tr('The action could not be completed.')}';
+              _step = _SmartStep.error;
+            });
+            return;
+          }
+          widget.onApplied?.call(result);
+          setState(() => _step = _SmartStep.done);
+          return;
+        }
+        if (state == 'cancelled') {
+          _activeTask = null;
+          setState(() => _step = _SmartStep.proposal);
+          return;
+        }
+        if (state != 'running') {
+          _activeTask = null;
+          setState(() {
+            _errorText = widget.tr('The action could not be completed.');
+            _step = _SmartStep.error;
+          });
+          return;
+        }
+        setState(() {
+          _runFraction = (status['fraction'] as num?)?.toDouble();
+          final text = '${status['text'] ?? ''}';
+          if (text.isNotEmpty) _runText = text;
+        });
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      }
+    } catch (_) {
+      if (!mounted || token != _runToken) return;
+      _activeTask = null;
+      setState(() {
+        _errorText = widget.tr('The action could not be completed.');
+        _step = _SmartStep.error;
+      });
+    }
+  }
+
+  Future<void> _openConnect(String agentCommand) async {
+    final client = widget.client;
+    final proposal = _activeProposal;
+    final candidate = _activeCandidate;
+    if (client == null || proposal == null || candidate == null) return;
+    final token = ++_runToken;
+    try {
+      final plan = await client.mapSmartConnect(
+        proposal: proposal,
+        candidate: '${candidate['id']}',
+        agent: agentCommand,
+      );
+      if (!mounted || token != _runToken) return;
+      setState(() {
+        _connectPlan = plan;
+        _step = _SmartStep.connectReview;
+      });
+    } catch (_) {
+      if (!mounted || token != _runToken) return;
+      setState(() {
+        _errorText = widget.tr('The action could not be completed.');
+        _step = _SmartStep.error;
+      });
+    }
+  }
+
+  Future<void> _applyConnect() async {
+    final client = widget.client;
+    final planToken = _connectPlan['plan'] as String?;
+    if (client == null || planToken == null) return;
+    final token = ++_runToken;
+    try {
+      var result = await client.connectionsApply(plan: planToken);
+      if (!mounted || token != _runToken) return;
+      final taskId = result['task'] as String?;
+      if (taskId != null && taskId.isNotEmpty) {
+        _activeTask = taskId;
+        while (mounted && token == _runToken) {
+          final status = await client.tasksStatus(task: taskId);
+          if (!mounted || token != _runToken) return;
+          if (status['state'] == 'done') {
+            _activeTask = null;
+            result =
+                (status['result'] as Map?)?.cast<String, dynamic>() ?? const {};
+            break;
+          }
+          if (status['state'] != 'running') {
+            _activeTask = null;
+            setState(() {
+              _errorText = widget.tr('The action could not be completed.');
+              _step = _SmartStep.error;
+            });
+            return;
+          }
+          await Future<void>.delayed(const Duration(milliseconds: 50));
+        }
+      }
+      widget.onApplied?.call(result);
+      setState(() => _step = _SmartStep.idle);
+      _close();
+    } catch (_) {
+      if (!mounted || token != _runToken) return;
       setState(() {
         _errorText = widget.tr('The action could not be completed.');
         _step = _SmartStep.error;
@@ -355,7 +619,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
         Align(
           alignment: Alignment.centerRight,
           child: TextButton(
-            onPressed: _cancelAsk,
+            onPressed: _cancelTask,
             child: Text(widget.tr('Cancel')),
           ),
         ),
@@ -453,6 +717,206 @@ class _MapSmartCardState extends State<MapSmartCard> {
               child: Text(widget.tr('← Back')),
             ),
             TextButton(onPressed: _close, child: Text(widget.tr('Close'))),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildProposal(ColorScheme colors) {
+    final summary = '${_reply['summary'] ?? ''}';
+    final proposal = _reply['proposal'] as String?;
+    final limits =
+        (_reply['limits'] as Map?)?.cast<String, dynamic>() ?? const {};
+    final candidates = (_reply['candidates'] as List? ?? const [])
+        .cast<Map<String, dynamic>>();
+    final vram = limits['vram'] as int?;
+    final ram = limits['ram'] as int?;
+    final freeDisk = limits['free_disk'] as int?;
+    final limitsLine = (ram != null || freeDisk != null)
+        ? (vram != null && vram > 0
+              ? widget
+                    .tr('PC: {0} VRAM · {1} RAM · {2} free')
+                    .replaceAll('{0}', modelSize(vram))
+                    .replaceAll('{1}', modelSize(ram ?? 0))
+                    .replaceAll('{2}', modelSize(freeDisk ?? 0))
+              : widget
+                    .tr('PC: {0} RAM · {1} free')
+                    .replaceAll('{0}', modelSize(ram ?? 0))
+                    .replaceAll('{1}', modelSize(freeDisk ?? 0)))
+        : '';
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (summary.isNotEmpty) ...[
+          Text(summary, style: const TextStyle(fontSize: 12)),
+          const SizedBox(height: 6),
+        ],
+        if (limitsLine.isNotEmpty) ...[
+          Text(
+            limitsLine,
+            style: TextStyle(fontSize: 11, color: colors.onSurfaceVariant),
+          ),
+          const SizedBox(height: 6),
+        ],
+        for (final c in candidates)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: colors.surfaceContainer,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: colors.outlineVariant),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      (c['size'] as int? ?? 0) > 0
+                          ? '${c['title']} · ${modelSize(c['size'] as int)}'
+                          : '${c['title']}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    if ('${c['subtitle'] ?? ''}'.isNotEmpty)
+                      Text(
+                        '${c['subtitle']}',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: colors.onSurfaceVariant,
+                        ),
+                      ),
+                    if (smartFitLabel(
+                      c['fit'] as String?,
+                      widget.tr,
+                    ).isNotEmpty)
+                      Text(
+                        smartFitLabel(c['fit'] as String?, widget.tr),
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: c['fit'] == 'too_large'
+                              ? colors.error
+                              : colors.onSurfaceVariant,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    if ('${c['reason'] ?? ''}'.isNotEmpty)
+                      Text(
+                        '${c['reason']}',
+                        style: const TextStyle(fontSize: 11),
+                      ),
+                    if (c['fit'] != 'too_large' && proposal != null) ...[
+                      const SizedBox(height: 4),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: FilledButton.tonal(
+                          key: ValueKey('smart-review-${c['id']}'),
+                          onPressed: () => _openReview(proposal, c),
+                          child: Text(widget.tr('Review')),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          spacing: 8,
+          runSpacing: 6,
+          children: [
+            TextButton(
+              onPressed: _backToIdle,
+              child: Text(widget.tr('← Back')),
+            ),
+            TextButton(onPressed: _close, child: Text(widget.tr('Close'))),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRunning() => Column(
+    mainAxisSize: MainAxisSize.min,
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      Text(
+        '${_activeCandidate?['title'] ?? ''}',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+      ),
+      const SizedBox(height: 8),
+      LinearProgressIndicator(value: _runFraction),
+      const SizedBox(height: 8),
+      if (_runText.isNotEmpty)
+        Text(_runText, style: const TextStyle(fontSize: 12)),
+      const SizedBox(height: 8),
+      Align(
+        alignment: Alignment.centerRight,
+        child: TextButton(
+          onPressed: () => _cancelTask(returnTo: _SmartStep.proposal),
+          child: Text(widget.tr('Cancel')),
+        ),
+      ),
+    ],
+  );
+
+  Widget _buildDone() {
+    final title = '${_activeCandidate?['title'] ?? ''}';
+    final connectAgents = [
+      for (final h in widget.helpers)
+        if (h['command'] != 'local-helper') h,
+    ];
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          widget.tr('{0} is ready.').replaceAll('{0}', title),
+          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+        ),
+        if (connectAgents.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          Text(
+            widget.tr('Connect it to an agent now? (Optional)'),
+            style: const TextStyle(fontSize: 12),
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final agent in connectAgents)
+                ActionChip(
+                  label: Text(
+                    '${agent['name']}',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  onPressed: () => _openConnect('${agent['command']}'),
+                ),
+            ],
+          ),
+        ],
+        const SizedBox(height: 8),
+        Wrap(
+          alignment: WrapAlignment.end,
+          spacing: 8,
+          runSpacing: 6,
+          children: [
+            FilledButton.tonal(
+              onPressed: () {
+                _step = _SmartStep.idle;
+                _close();
+              },
+              child: Text(widget.tr('Done')),
+            ),
           ],
         ),
       ],
@@ -625,22 +1089,45 @@ class _MapSmartCardState extends State<MapSmartCard> {
                   ),
                 ),
                 const Divider(height: 1),
-                Flexible(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(10),
-                    child: switch (_step) {
-                      _SmartStep.idle => _buildIdle(colors),
-                      _SmartStep.working => _buildWorking(),
-                      _SmartStep.clarify => _buildClarify(),
-                      _SmartStep.redirect => _buildRedirect(),
-                      _SmartStep.proposal => Text(
-                        '${_reply['summary'] ?? ''}',
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                      _SmartStep.error => _buildError(colors),
-                    },
+                if (_step == _SmartStep.review)
+                  SizedBox(
+                    height: 240,
+                    child: SmartModelDownloadReview(
+                      review: _reviewData,
+                      tr: widget.tr,
+                      onConfirm: _confirmReview,
+                      onCancel: () =>
+                          setState(() => _step = _SmartStep.proposal),
+                    ),
+                  )
+                else if (_step == _SmartStep.connectReview)
+                  SizedBox(
+                    height: 240,
+                    child: ConnectionReview(
+                      plan: _connectPlan,
+                      tr: widget.tr,
+                      onConfirm: _applyConnect,
+                      onCancel: () => setState(() => _step = _SmartStep.done),
+                    ),
+                  )
+                else
+                  Flexible(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(10),
+                      child: switch (_step) {
+                        _SmartStep.idle => _buildIdle(colors),
+                        _SmartStep.working => _buildWorking(),
+                        _SmartStep.clarify => _buildClarify(),
+                        _SmartStep.redirect => _buildRedirect(),
+                        _SmartStep.proposal => _buildProposal(colors),
+                        _SmartStep.running => _buildRunning(),
+                        _SmartStep.done => _buildDone(),
+                        _SmartStep.error => _buildError(colors),
+                        _SmartStep.review ||
+                        _SmartStep.connectReview => const SizedBox.shrink(),
+                      },
+                    ),
                   ),
-                ),
               ],
             ),
           ),

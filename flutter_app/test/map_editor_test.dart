@@ -1,8 +1,10 @@
 import 'package:maprisma/backend.dart';
+import 'package:maprisma/connections_view.dart' show ConnectionReview;
 import 'package:maprisma/map_editor.dart';
 import 'package:maprisma/map_groups.dart';
 import 'package:maprisma/map_lights.dart';
 import 'package:maprisma/map_smart_card.dart';
+import 'package:maprisma/task_card.dart' show TaskReview;
 import 'package:maprisma/window_popup.dart' show popupSize;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -809,6 +811,195 @@ void main() {
             ?.text,
         'install qwencoder',
       );
+      expect(tester.takeException(), isNull);
+    },
+  );
+  testWidgets(
+    'smart card states 7 to 10: proposal words fit, omits Review on too_large, reviews and runs download, then connects via ConnectionReview',
+    (tester) async {
+      final edits = <Map<String, dynamic>>[];
+      final calls = <(String, Map<String, dynamic>)>[];
+      final applied = <Map<String, dynamic>>[];
+      const gib = 1024 * 1024 * 1024;
+      final client = CoreClient(
+        _FakeSmartTransport((method, params) async {
+          calls.add((method, Map<String, dynamic>.from(params)));
+          switch (method) {
+            case 'map.smart_ask':
+              return {'task': 'ask-task'};
+            case 'tasks.status':
+              final task = params['task'] as String;
+              if (task == 'ask-task') {
+                return {
+                  'state': 'done',
+                  'result': {
+                    'helper': 'Local helper',
+                    'local': true,
+                    'status': 'proposal',
+                    'proposal': 'prop-1',
+                    'summary': 'Found 3 models for Ollama.',
+                    'limits': {
+                      'gpu_name': 'AMD Radeon',
+                      'vram': 12 * gib,
+                      'ram': 32 * gib,
+                      'free_disk': 80 * gib,
+                    },
+                    'candidates': [
+                      {
+                        'id': 'c1',
+                        'title': 'Qwen2.5-Coder-7B-Q4_K_M.gguf',
+                        'subtitle': 'bartowski/Qwen2.5-Coder-7B-GGUF · Ollama',
+                        'reason': 'Fast coding model.',
+                        'fit': 'ok',
+                        'size': 5 * gib,
+                      },
+                      {
+                        'id': 'c2',
+                        'title': 'Qwen2.5-Coder-14B-Q4_K_M.gguf',
+                        'subtitle': 'bartowski/Qwen2.5-Coder-14B-GGUF · Ollama',
+                        'reason': 'Larger coding model.',
+                        'fit': 'tight',
+                        'size': 9 * gib,
+                      },
+                      {
+                        'id': 'c3',
+                        'title': 'Qwen2.5-Coder-72B-Q8_0.gguf',
+                        'subtitle': 'bartowski/Qwen2.5-Coder-72B-GGUF · Ollama',
+                        'reason': 'Exceeds memory.',
+                        'fit': 'too_large',
+                        'size': 75 * gib,
+                      },
+                    ],
+                  },
+                };
+              }
+              return {
+                'state': 'done',
+                'result': {'ok': true},
+              };
+            case 'map.smart_review':
+              return {
+                'title': 'Qwen2.5-Coder-7B-Q4_K_M.gguf',
+                'subtitle': 'bartowski/Qwen2.5-Coder-7B-GGUF · Ollama',
+                'size': 5 * gib,
+                'fit': 'ok',
+                'runtime': 'Ollama',
+              };
+            case 'map.smart_run':
+              return {
+                'task': 'run-task',
+                'focus': ['runtime:ollama'],
+              };
+            case 'map.smart_connect':
+              return {
+                'plan': 'plan-1',
+                'empty': false,
+                'command': 'claude',
+                'item': 'ollama',
+                'remove': false,
+                'files': [
+                  {'path': '~/.claude.json', 'added': 2, 'removed': 0},
+                ],
+                'links_add': [],
+                'links_remove': [],
+              };
+            case 'connections.apply':
+              return {'ok': true, 'undo': 'undo-1'};
+            default:
+              throw StateError('Unexpected method $method');
+          }
+        }),
+      );
+      const helpers = [
+        {'command': 'local-helper', 'name': 'Local helper', 'local': true},
+        {'command': 'claude', 'name': 'Claude Code', 'local': false},
+      ];
+      await mount(
+        tester,
+        edits: edits,
+        smartCards: true,
+        smartHelpers: helpers,
+        client: client,
+        onSmartApplied: applied.add,
+      );
+
+      final modelsCard = find.byKey(const ValueKey('smart-card-models'));
+      await tester.tap(modelsCard);
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.descendant(of: modelsCard, matching: find.byType(TextField)),
+        'coding model for ollama',
+      );
+      await tester.tap(find.text('Ask'));
+      await tester.pumpAndSettle();
+
+      // State 7: Proposal shows PC limits, worded fit, and Review only on ok/tight.
+      expect(find.text('Found 3 models for Ollama.'), findsOneWidget);
+      expect(
+        find.text('PC: 12.0 GiB VRAM · 32.0 GiB RAM · 80.0 GiB free'),
+        findsOneWidget,
+      );
+      expect(find.text('Fits in VRAM'), findsOneWidget);
+      expect(find.text('Uses RAM offload'), findsOneWidget);
+      expect(find.text('Too large for this PC'), findsOneWidget);
+      expect(find.byKey(const ValueKey('smart-review-c1')), findsOneWidget);
+      expect(find.byKey(const ValueKey('smart-review-c2')), findsOneWidget);
+      expect(find.byKey(const ValueKey('smart-review-c3')), findsNothing);
+
+      // State 8: Clicking Review calls map.smart_review and shows SmartModelDownloadReview (TaskReview).
+      await tester.tap(find.byKey(const ValueKey('smart-review-c1')));
+      await tester.pumpAndSettle();
+      expect(calls.last.$1, 'map.smart_review');
+      expect(calls.last.$2, {'proposal': 'prop-1', 'candidate': 'c1'});
+      expect(find.byType(SmartModelDownloadReview), findsOneWidget);
+      expect(find.byType(TaskReview), findsOneWidget);
+      expect(
+        find.text('Download Qwen2.5-Coder-7B-Q4_K_M.gguf?'),
+        findsOneWidget,
+      );
+
+      // Cancelling review keeps the proposal in State 7.
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(find.byType(SmartModelDownloadReview), findsNothing);
+      expect(find.byKey(const ValueKey('smart-review-c1')), findsOneWidget);
+
+      // Re-open review and confirm: runs map.smart_run (State 9) and arrives at State 10 (Done).
+      await tester.tap(find.byKey(const ValueKey('smart-review-c1')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Download'));
+      await tester.pumpAndSettle();
+      expect(calls.any((c) => c.$1 == 'map.smart_run'), isTrue);
+      expect(
+        find.text('Qwen2.5-Coder-7B-Q4_K_M.gguf is ready.'),
+        findsOneWidget,
+      );
+      expect(
+        find.text('Connect it to an agent now? (Optional)'),
+        findsOneWidget,
+      );
+      // Only real agents (Claude Code), not local-helper, are offered as connect chips.
+      expect(find.widgetWithText(ActionChip, 'Claude Code'), findsOneWidget);
+      expect(find.widgetWithText(ActionChip, 'Local helper'), findsNothing);
+
+      // Clicking Claude Code calls map.smart_connect and shows ConnectionReview.
+      await tester.tap(find.widgetWithText(ActionChip, 'Claude Code'));
+      await tester.pumpAndSettle();
+      expect(calls.last.$1, 'map.smart_connect');
+      expect(calls.last.$2, {
+        'proposal': 'prop-1',
+        'candidate': 'c1',
+        'agent': 'claude',
+      });
+      expect(find.byType(ConnectionReview), findsOneWidget);
+
+      // Clicking Apply in ConnectionReview calls connections.apply, records Undo, and closes the card.
+      await tester.tap(find.text('Apply'));
+      await tester.pumpAndSettle();
+      expect(calls.last.$1, 'connections.apply');
+      expect(calls.last.$2, {'plan': 'plan-1'});
+      expect(applied.last['undo'], 'undo-1');
+      expect(tester.widget<MapSmartCard>(modelsCard).open, isFalse);
       expect(tester.takeException(), isNull);
     },
   );
