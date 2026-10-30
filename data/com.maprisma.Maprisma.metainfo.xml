@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-  <id>io.github.ubruckhaus.Asterism</id>
+  <id>com.maprisma.Maprisma</id>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>MIT</project_license>
-  <name>Asterism</name>
+  <name>Maprisma</name>
   <summary>Your AI agents, models and tools on one map</summary>
   <developer id="io.github.ubruckhaus">
     <name>Uwe Bruckhaus</name>
@@ -20,7 +20,7 @@
     </ul>
     <p>On Omarchy, the same app is the AI Agents Map plugin.</p>
   </description>
-  <launchable type="desktop-id">io.github.ubruckhaus.Asterism.desktop</launchable>
+  <launchable type="desktop-id">com.maprisma.Maprisma.desktop</launchable>
   <url type="homepage">https://github.com/uBruckhaus/Asterism</url>
   <url type="bugtracker">https://github.com/uBruckhaus/Asterism/issues</url>
   <content_rating type="oars-1.1"/>

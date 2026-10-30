@@ -42,7 +42,7 @@ def seed(home: Path):
     for name in ('work', 'other'):
         (home / name).mkdir()
     (home / 'link-to-work').symlink_to(home / 'work')
-    (home / '.config/asterism').mkdir(parents=True)
+    (home / '.config/maprisma').mkdir(parents=True)
 
 
 class Side:
@@ -105,7 +105,7 @@ class DartAgentStartParityTest(unittest.TestCase):
                                                                   'outside': False}))
                 finally:
                     runner.close()
-                settings = json.loads((home / '.config/asterism/settings.json').read_text())
+                settings = json.loads((home / '.config/maprisma/settings.json').read_text())
                 sides[side] = json.loads(json.dumps([answers, {k: settings.get(k) for k in
                                                                ('agent_projects', 'agent_project_history')}])
                                          .replace(str(home), '$HOME'))

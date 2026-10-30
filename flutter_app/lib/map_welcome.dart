@@ -19,7 +19,7 @@ class MapWelcome extends StatelessWidget {
   @override
   Widget build(BuildContext context) => MaterialBanner(
     content: Text(
-      '${tr('Welcome to {0}').replaceAll('{0}', 'Asterism')}\n${tr(separateMountHint)}\n${tr(simplifyHint)}\n${tr('Only this PC is inspected. Nothing is sent and no detected program is run. You can skip the disk search.')}',
+      '${tr('Welcome to {0}').replaceAll('{0}', 'Maprisma')}\n${tr(separateMountHint)}\n${tr(simplifyHint)}\n${tr('Only this PC is inspected. Nothing is sent and no detected program is run. You can skip the disk search.')}',
     ),
     actions: [
       if (!skipSearch && !searched) ...[

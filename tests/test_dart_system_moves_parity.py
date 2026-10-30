@@ -48,8 +48,8 @@ def seed(home: Path, source: Path):
         f'[Service]\nEnvironment=LLAMA_ARG_MODELS_DIR={router}\nExecStart={bin_dir}/llama-server\n')
     (home / '.config/llama.cpp').mkdir(parents=True)
     (home / '.config/llama.cpp/models.ini').write_text(f'[a-Q4]\nmodel = {router}/a-Q4.gguf\nmmproj = {source}/mmproj-a.gguf\n')
-    (home / '.config/asterism').mkdir(parents=True)
-    (home / '.config/asterism/settings.json').write_text(json.dumps({'setup_done': True, 'model_folders': [str(source)]}))
+    (home / '.config/maprisma').mkdir(parents=True)
+    (home / '.config/maprisma/settings.json').write_text(json.dumps({'setup_done': True, 'model_folders': [str(source)]}))
 
 
 def tree(*roots: Path) -> dict:
@@ -57,7 +57,7 @@ def tree(*roots: Path) -> dict:
     for root in roots:
         for path in sorted(root.rglob('*')):
             rel = str(path)
-            if '/.config/asterism/model-moves' in rel or '/.cache' in rel or '/.local/state' in rel:
+            if '/.config/maprisma/model-moves' in rel or '/.cache' in rel or '/.local/state' in rel:
                 continue
             if path.is_symlink():
                 found[rel] = ('link', os.readlink(path))
@@ -105,7 +105,7 @@ class DartSystemMovesParityTest(unittest.TestCase):
                    'XDG_CONFIG_HOME': str(home / '.config'), 'XDG_CACHE_HOME': str(home / '.cache'),
                    'XDG_DATA_HOME': str(home / '.local/share'), 'ASTERISM_DESKTOP': 'generic',
                    'ASTERISM_FLUTTER_DEVEL': '1'}
-            settings = str(home / '.config/asterism/settings.json')
+            settings = str(home / '.config/maprisma/settings.json')
             selection = {'source': str(source), 'disk': str(disk),
                          'mount': existing_ai.root_for(str(disk), existing_ai.mounts()), 'settings_path': settings}
             answers = []

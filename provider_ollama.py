@@ -237,7 +237,7 @@ def _model_folder_changes(rt, folder):
     link=HOME/'.local/bin/ollama'
     if not link.is_symlink() and link.is_file():
         text=connect._read(link)
-        if '# Connected by Asterism' not in text:raise ValueError('Use AI help to review this custom wrapper')
+        if '# Connected by Maprisma' not in text and '# Connected by Asterism' not in text:raise ValueError('Use AI help to review this custom wrapper')
         before='export OLLAMA_MODELS='+shlex.quote(rt.models_dir)
         if before not in text:raise ValueError('Wrapper model path changed')
         changes.append(connect.Change(link,text,text.replace(before,'export OLLAMA_MODELS='+shlex.quote(str(folder)),1)))

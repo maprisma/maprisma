@@ -73,7 +73,7 @@ final class RedLimits {
     if (program == null) return false;
     try {
       return Process.runSync(program, [
-            '--app-name=Asterism',
+            '--app-name=Maprisma',
             '--',
             title,
             body,

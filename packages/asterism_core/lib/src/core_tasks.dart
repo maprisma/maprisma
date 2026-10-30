@@ -18,7 +18,8 @@ String newHandle() {
 }
 
 /// The worker this core starts: the AOT executable itself, the Dart VM
-/// running bin/asterism-core.dart, or the bundle's helper next to the app.
+/// running bin/asterism-core.dart, or the bundle's helper (maprisma-core)
+/// next to the app.
 List<String> defaultWorkerCommand(Map<String, String> environment) {
   final explicit = environment['ASTERISM_CORE_WORKER'];
   if (explicit != null && explicit.isNotEmpty) return [explicit, 'worker'];
@@ -34,8 +35,8 @@ List<String> defaultWorkerCommand(Map<String, String> environment) {
       'worker',
     ];
   }
-  if (p.basename(executable) == 'asterism-core') return [executable, 'worker'];
-  return [p.join(p.dirname(executable), 'lib', 'asterism-core'), 'worker'];
+  if (p.basename(executable) == 'maprisma-core') return [executable, 'worker'];
+  return [p.join(p.dirname(executable), 'lib', 'maprisma-core'), 'worker'];
 }
 
 final class CoreTask {

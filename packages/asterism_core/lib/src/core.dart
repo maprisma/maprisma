@@ -66,6 +66,7 @@ import 'red_limits.dart';
 import 'mcp_tools.dart' show cachedTools;
 import 'mcp_updates.dart' as mcp_updates;
 import 'change_history.dart';
+import 'legacy_move.dart';
 import 'hyprland.dart' show placePopup, WindowRounding;
 
 const portedRoutes = {
@@ -183,6 +184,8 @@ const dartCoreComplete = false;
 final class CoreService {
   CoreService({Map<String, String>? environment}) {
     identity = AppIdentity(environment: environment);
+    // Asterism's folders, copied once at Maprisma's first start.
+    migrationError = moveFromAsterism(identity);
     settings = SettingsStore(identity);
     settings.migrate();
     desktop = detectDesktop(identity, Posix());
@@ -196,7 +199,9 @@ final class CoreService {
     // After each scan the provider watcher's config, and its service on or off.
     reads.onInventory = watch.sync;
   }
-  late final reads = ReadService(identity, settings, desktop, i18n);
+  late final reads = ReadService(identity, settings, desktop, i18n)
+    ..migrationError = migrationError;
+  String? migrationError;
   late final tasks = CoreTasks(defaultWorkerCommand(identity.environment));
   late final config = ConfigFiles(Posix(), identity.home);
   late final connections = CoreConnections(
@@ -221,8 +226,7 @@ final class CoreService {
     addonUserDir,
     p.join(p.dirname(Platform.resolvedExecutable), 'addons'),
   ]);
-  String get addonUserDir =>
-      p.join(identity.root('XDG_DATA_HOME', '.local/share'), 'asterism/addons');
+  String get addonUserDir => p.join(identity.dataDir, 'addons');
   Set<String> enabledAddons() => {
     for (final x in settings.value(settings.load(), 'addons_enabled') as List)
       x as String,

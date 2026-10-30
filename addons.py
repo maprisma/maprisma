@@ -42,7 +42,7 @@ ALLOWED_SIGNERS = ('addons@asterism namespaces="asterism-addon" '
 PRINCIPAL = "addons@asterism"
 NAMESPACE = "asterism-addon"
 
-USER_DIR = Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local/share") / "asterism/addons"
+USER_DIR = Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local/share") / "maprisma/addons"
 # The add-ons that come with the app (signed like any other), next to its own files: /usr/lib/asterism/
 # addons from the package, inside the AppImage; a newer copy in USER_DIR (from the catalog) wins.
 SYSTEM_DIR = Path(__file__).resolve().parent / "addons"

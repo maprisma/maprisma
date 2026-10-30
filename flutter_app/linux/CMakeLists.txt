@@ -4,15 +4,15 @@ project(runner LANGUAGES CXX)
 
 # The name of the executable created for the application. Change this to change
 # the on-disk name of your application.
-set(BINARY_NAME "asterism")
+set(BINARY_NAME "maprisma")
 # The unique GTK application identifier for this application. See:
 # https://wiki.gnome.org/HowDoI/ChooseApplicationID
-set(APPLICATION_ID "io.github.ubruckhaus.Asterism")
+set(APPLICATION_ID "com.maprisma.Maprisma")
 
 # Dart migration phase 1: an incomplete core must never produce a shipped app.
 # Devel previews opt in explicitly and have their own application identity.
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/flutter/ephemeral/generated_config.cmake" ASTERISM_FLUTTER_CONFIG)
-if(NOT APPLICATION_ID STREQUAL "io.github.ubruckhaus.Asterism.Devel" OR
+if(NOT APPLICATION_ID STREQUAL "com.maprisma.Maprisma.Devel" OR
    NOT ASTERISM_FLUTTER_CONFIG MATCHES "QVNURVJJU01fREVWRUw9dHJ1ZQ==")
   message(FATAL_ERROR "Dart core migration incomplete: production builds are blocked. Use tools/flutter-dev build for an isolated Devel preview.")
 endif()

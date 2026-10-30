@@ -32,8 +32,8 @@ def seed(home: Path):
     for name, text in (('claude', CLAUDE), ('mise', '#!/bin/sh\nexit 0\n'), ('xdg-terminal-exec', TERMINAL)):
         (bin_dir / name).write_text(text)
         os.chmod(bin_dir / name, 0o700)
-    (home / '.config/asterism').mkdir(parents=True)
-    (home / '.config/asterism/settings.json').write_text(json.dumps({'setup_done': True}))
+    (home / '.config/maprisma').mkdir(parents=True)
+    (home / '.config/maprisma/settings.json').write_text(json.dumps({'setup_done': True}))
 
 
 @unittest.skipIf(DART is None, 'native Dart SDK not available')
@@ -90,7 +90,7 @@ class DartAgentActionsParityTest(unittest.TestCase):
                     runner.call('sessions.stop', {'session': started['session']})
                 finally:
                     runner.close()
-                settings = json.loads((home / '.config/asterism/settings.json').read_text())
+                settings = json.loads((home / '.config/maprisma/settings.json').read_text())
                 log = (home / 'term.log').read_text() if (home / 'term.log').exists() else ''
                 sides[side] = json.loads(json.dumps([answers, settings.get('first_agent'), log]).replace(str(home), '$HOME'))
         self.assertEqual(sides['python'], sides['dart'])

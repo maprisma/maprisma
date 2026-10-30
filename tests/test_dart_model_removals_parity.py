@@ -78,8 +78,8 @@ def seed(home: Path, port: int):
     manifest = home / 'ollama/manifests/registry.ollama.ai/library/qwen3'
     manifest.mkdir(parents=True)
     (manifest / '8b').write_text('{}')
-    (home / '.config/asterism').mkdir(parents=True)
-    (home / '.config/asterism/settings.json').write_text(json.dumps({'setup_done': True}))
+    (home / '.config/maprisma').mkdir(parents=True)
+    (home / '.config/maprisma/settings.json').write_text(json.dumps({'setup_done': True}))
 
 
 def tree(home: Path) -> dict:

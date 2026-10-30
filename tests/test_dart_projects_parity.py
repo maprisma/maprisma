@@ -95,8 +95,8 @@ class DartProjectsParityTest(unittest.TestCase):
                 home = Path(temp)
                 (home / '.config/ai-agents-map').mkdir(parents=True)
                 (home / '.config/ai-agents-map/settings.json').write_text(json.dumps({'language': lang}))
-                (home / '.config/asterism').mkdir(parents=True)
-                (home / '.config/asterism/settings.json').write_text(json.dumps({'language': lang}))
+                (home / '.config/maprisma').mkdir(parents=True)
+                (home / '.config/maprisma/settings.json').write_text(json.dumps({'language': lang}))
                 case = {'sessions': sessions, 'now': now, 'note': note}
                 env = {k: v for k, v in os.environ.items() if not k.startswith('XDG_')}
                 env.update(HOME=str(home), LANG='de_DE.UTF-8' if lang == 'de' else 'C.UTF-8', TZ='Europe/Berlin', ASTERISM_DESKTOP='generic')

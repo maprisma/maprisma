@@ -92,8 +92,8 @@ class DartFoundationReferenceTests(unittest.TestCase):
             config = root / 'configs'
             config.mkdir()
             (home / '.config').symlink_to(config)
-            ai_core.atomic_write(root / 'home/user/.config/asterism/settings.json', 'yes')
-            self.assertEqual((config / 'asterism/settings.json').read_text(), 'yes')
+            ai_core.atomic_write(root / 'home/user/.config/maprisma/settings.json', 'yes')
+            self.assertEqual((config / 'maprisma/settings.json').read_text(), 'yes')
 
     def test_untrusted_writable_and_hidden_intermediate_parents_are_refused(self):
         with tempfile.TemporaryDirectory() as temp:

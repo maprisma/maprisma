@@ -21,7 +21,7 @@ class RecheckTest(unittest.TestCase):
             cmake = stage/'linux/CMakeLists.txt'
             cmake.write_text(original)
             module.preview_identity(stage)
-            self.assertIn('set(APPLICATION_ID "io.github.ubruckhaus.Asterism.Devel")', cmake.read_text())
+            self.assertIn('set(APPLICATION_ID "com.maprisma.Maprisma.Devel")', cmake.read_text())
         self.assertEqual((root/'flutter_app/linux/CMakeLists.txt').read_text(), original)
 
     def test_idle_map_is_cached_but_settings_changes_trigger_scan(self):

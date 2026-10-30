@@ -20,17 +20,18 @@ if [[ ! -d "$frontend/linux" ]]; then
     staging=$(mktemp -d)
     trap 'rm -rf -- "$staging"' EXIT
     flutter --suppress-analytics --no-version-check create --offline --no-pub --platforms=linux --project-name=asterism \
-        --org=io.github.ubruckhaus "$staging/asterism"
+        --org=com.maprisma "$staging/asterism"
     # Use the SDK's current Linux runner, retaining the production application id.
     python3 - "$staging/asterism/linux/CMakeLists.txt" <<'PY'
 from pathlib import Path
 import sys
 path = Path(sys.argv[1])
 text = path.read_text()
-old = 'set(APPLICATION_ID "io.github.ubruckhaus.asterism")'
+old = 'set(APPLICATION_ID "com.maprisma.asterism")'
 if old not in text:
     raise SystemExit('Unexpected Flutter runner template; inspect application id before continuing')
-path.write_text(text.replace(old, 'set(APPLICATION_ID "io.github.ubruckhaus.Asterism")'))
+path.write_text(text.replace(old, 'set(APPLICATION_ID "com.maprisma.Maprisma")')
+                .replace('set(BINARY_NAME "asterism")', 'set(BINARY_NAME "maprisma")'))
 PY
     cp -R -- "$staging/asterism/linux" "$frontend/linux"
     cp -- "$staging/asterism/.metadata" "$frontend/.metadata"

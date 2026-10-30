@@ -42,6 +42,9 @@ final class ReadService {
   }
   final AppIdentity identity;
   final SettingsStore settings;
+
+  /// Why Asterism's folders could not be copied (legacy_move.dart), if so.
+  String? migrationError;
   final Desktop desktop;
   final ServiceI18n i18n;
   late final ScanFiles files;
@@ -164,7 +167,7 @@ final class ReadService {
           history = mapOf(saved['agent_project_history']);
       return {
         'protocol': 1,
-        'migration_error': null,
+        'migration_error': migrationError,
         'language': settings.value(saved, 'language'),
         'settings': settings.snapshot(),
         'theme':

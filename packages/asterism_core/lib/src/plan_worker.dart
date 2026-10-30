@@ -1444,10 +1444,7 @@ Future<bool> setOllamaContext(Map<String, dynamic> c, int uid) async {
 (AddonStore, List<String>) _addonStore() {
   final identity = AppIdentity();
   final posix = Posix();
-  final user = p.join(
-    identity.root('XDG_DATA_HOME', '.local/share'),
-    'asterism/addons',
-  );
+  final user = p.join(identity.dataDir, 'addons');
   return (
     AddonStore(posix, user, identity.home, AddonVerifier(posix)),
     [user, p.join(p.dirname(Platform.resolvedExecutable), 'addons')],

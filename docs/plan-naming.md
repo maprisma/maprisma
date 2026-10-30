@@ -160,3 +160,36 @@ people with v0.11 would land on an unfinished app.
 1. ~~Where the GTK code lives~~: the plugin repo (decided and done 2026-10-28).
 2. Registering `asterismai.app` (or `.dev`), and whether the README links to it.
 3. The moment of the GitHub/AUR switch. Recommended: the first Flutter release, `v1.0.0`.
+
+## Step 7: the rename to Maprisma (Uwe, 2026-10-30: "rename first", before packaging)
+
+The Flutter app is called **Maprisma** (decided 2026-10-29; maprisma.com and the GitHub org `maprisma`
+are Uwe's). The rename comes before step 6 of plan-flutter.md, so the packages are built once under
+the final name. Nothing is published.
+
+| What | Before | After |
+|---|---|---|
+| App ID | `io.github.ubruckhaus.Asterism` (Devel: `….Devel`) | `com.maprisma.Maprisma` (Devel: `….Devel`): the reverse of Uwe's domain, as Flathub wants |
+| Name in the interface | Asterism | Maprisma |
+| Program, core | `asterism`, `lib/asterism-core` | `maprisma`, `lib/maprisma-core` |
+| Toggle | `asterism --toggle` | `maprisma --toggle` |
+| Folders | `~/.config/asterism`, `~/.local/share/asterism`, `~/.local/state/asterism`, `~/.cache/asterism` | the same with `maprisma` |
+| User unit | `asterism-providers.service` | `maprisma-providers.service` (follows the short name) |
+| Desktop file, metainfo | `data/io.github.ubruckhaus.Asterism.*` | `data/com.maprisma.Maprisma.*` |
+
+**Existing data moves over once, nothing is deleted.** At the first start of Maprisma, while
+`~/.config/maprisma` does not exist yet: the config folder (settings, the MCP server list, connection
+backups), the installed add-ons and the state folder (jobs, notices) are copied from the Asterism folders,
+modes kept, links not followed. The cache is not copied (it is rebuilt). The Asterism folders stay as they
+were. A failed copy shows as `migration_error`, and the app starts with defaults.
+
+**Kept on purpose** (invisible, or changing them would break something):
+- the add-on signature namespace `asterism-addon` (every add-on signed so far would fail its check);
+- the Dart package `asterism_core`, the `ASTERISM_*` environment variables of the tools and tests, the
+  repository folder `/mnt/Data/Projects/asterism` and the add-on repository `asterism-addons` (renamed at the
+  GitHub switch, with Uwe);
+- the marker `# Connected by Asterism` in files the app wrote: still recognised; new files get
+  `# Connected by Maprisma`.
+
+Parts: **R1** identity, folders and the move of existing data (with the tools that build the bundle);
+**R2** the name in the texts: interface, eight translations, manual, README, metainfo; **R3** tools and docs.

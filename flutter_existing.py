@@ -22,7 +22,7 @@ TTL = 600
 
 
 def wrapper(record: dict, default_args: list[str], home_arguments: tuple = ()) -> str:
-    lines = ['#!/bin/sh', '# Connected by Asterism', 'set -eu']
+    lines = ['#!/bin/sh', '# Connected by Maprisma', 'set -eu']
     for name, value in record['environment'].items():
         lines.append('export ' + name + '=' + shlex.quote(value))
     launch = record.get('launch_path', record['path'])

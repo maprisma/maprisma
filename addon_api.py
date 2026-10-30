@@ -156,7 +156,7 @@ class AddonAPI:
         """The add-on's own cache folder (owner-only), created on first use."""
         import os
         from pathlib import Path
-        folder = Path.home() / ".cache/asterism/addons" / self.addon_id
+        folder = Path.home() / ".cache/maprisma/addons" / self.addon_id
         folder.mkdir(parents=True, exist_ok=True, mode=0o700)
         os.chmod(folder, 0o700)
         return folder

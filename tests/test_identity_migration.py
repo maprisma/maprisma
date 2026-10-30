@@ -26,7 +26,7 @@ class IdentityTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp, mock.patch.object(identity, "HOME", Path(tmp)), \
                 mock.patch.dict(os.environ, {"XDG_CONFIG_HOME": str(Path(tmp) / ".config")}):
             for plugin, name, app_id, config in (
-                (False, "Asterism", "io.github.ubruckhaus.Asterism", "asterism"),
+                (False, "Maprisma", "com.maprisma.Maprisma", "maprisma"),
                 (True, "AI Agents Map", "org.omarchy.aiagentsmap", "omarchy/ai-agents-map"),
             ):
                 for backend in (desktop_generic, desktop_omarchy):
@@ -36,7 +36,7 @@ class IdentityTest(unittest.TestCase):
                         self.assertEqual(desktop.app_name(), name)
                         self.assertEqual(desktop.app_id(), app_id)
                         self.assertEqual(desktop.config_dir(), Path(tmp) / ".config" / config)
-                        self.assertEqual(ai_helper.plugin_id(), "ai-agents-map" if plugin else "asterism")
+                        self.assertEqual(ai_helper.plugin_id(), "ai-agents-map" if plugin else "maprisma")
                         self.assertEqual(provider_watch._unit_name(), identity.short_name() + "-providers.service")
                         self.assertEqual(desktop.launcher_entry(), plugin and backend.NAME == "omarchy")
 
@@ -50,9 +50,9 @@ class IdentityTest(unittest.TestCase):
         with mock.patch.object(identity, "is_plugin", return_value=False), \
                 mock.patch.object(identity, "HOME", Path("/home/test")):
             with mock.patch.dict(os.environ, {"XDG_CONFIG_HOME": "/custom/config"}):
-                self.assertEqual(identity.config_dir(), Path("/custom/config/asterism"))
+                self.assertEqual(identity.config_dir(), Path("/custom/config/maprisma"))
             with mock.patch.dict(os.environ, {"XDG_CONFIG_HOME": "relative"}):
-                self.assertEqual(identity.config_dir(), Path("/home/test/.config/asterism"))
+                self.assertEqual(identity.config_dir(), Path("/home/test/.config/maprisma"))
 
 
 
@@ -62,7 +62,7 @@ class MigrationTest(unittest.TestCase):
         self.addCleanup(tmp.cleanup)
         self.home = Path(tmp.name)
         self.source = self.home / ".config/omarchy/ai-agents-map"
-        self.target = self.home / ".config/asterism"
+        self.target = self.home / ".config/maprisma"
         self.source.mkdir(parents=True)
         self.enterContext(mock.patch.object(identity, "HOME", self.home))
         self.enterContext(mock.patch.object(identity, "is_plugin", return_value=False))
@@ -216,11 +216,11 @@ class MigrationHomeAncestorTest(unittest.TestCase):
             config = root / 'dotfiles'
             config.mkdir()
             (real / '.config').symlink_to(config, target_is_directory=True)
-            (config / 'asterism').mkdir()
+            (config / 'maprisma').mkdir()
             with mock.patch.object(Path, 'home', return_value=alias):
-                fd = migration._directory(alias / '.config/asterism')
+                fd = migration._directory(alias / '.config/maprisma')
             try:
-                self.assertEqual(os.fstat(fd).st_ino, (config / 'asterism').stat().st_ino)
+                self.assertEqual(os.fstat(fd).st_ino, (config / 'maprisma').stat().st_ino)
             finally:
                 os.close(fd)
 

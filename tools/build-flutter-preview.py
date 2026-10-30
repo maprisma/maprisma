@@ -9,10 +9,10 @@ import tempfile
 def preview_identity(stage: Path):
     cmake = stage / 'linux/CMakeLists.txt'
     text = cmake.read_text()
-    expected = 'set(APPLICATION_ID "io.github.ubruckhaus.Asterism")'
+    expected = 'set(APPLICATION_ID "com.maprisma.Maprisma")'
     if expected not in text:
         raise SystemExit('Unexpected production application id')
-    cmake.write_text(text.replace(expected, 'set(APPLICATION_ID "io.github.ubruckhaus.Asterism.Devel")'))
+    cmake.write_text(text.replace(expected, 'set(APPLICATION_ID "com.maprisma.Maprisma.Devel")'))
 
 def main():
     root = Path(__file__).resolve().parent.parent
@@ -35,13 +35,13 @@ def main():
     core = stage.parent / 'packages/asterism_core'
     subprocess.run([resolve_dart(), 'pub', 'get', '--offline'], cwd=core, check=True)
     subprocess.run([resolve_dart(), 'compile', 'exe', 'bin/asterism-core.dart', '-o',
-                    str(stage / 'build/linux/x64/release/bundle/lib/asterism-core')], cwd=core, check=True)
+                    str(stage / 'build/linux/x64/release/bundle/lib/maprisma-core')], cwd=core, check=True)
     # The user manuals beside the app (Help opens the one in the interface language).
     data = stage / 'build/linux/x64/release/bundle/data'
     data.mkdir(exist_ok=True)
     for manual in sorted((root / 'data').glob('user-manual*.pdf')):
         shutil.copy2(manual, data / manual.name)
-    print(f'\nDevelopment preview: {stage / "build/linux/x64/release/bundle/asterism"}', flush=True)
+    print(f'\nDevelopment preview: {stage / "build/linux/x64/release/bundle/maprisma"}', flush=True)
 
 
 if __name__ == '__main__':

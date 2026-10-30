@@ -10,7 +10,7 @@
 struct _MyApplication {
   GtkApplication parent_instance;
   char** dart_entrypoint_arguments;
-  // "asterism/window": tells the app its window is shown again (popup mode
+  // "maprisma/window": tells the app its window is shown again (popup mode
   // places it then).
   FlMethodChannel* window_channel;
 };
@@ -30,7 +30,7 @@ static void first_frame_cb(MyApplication* self, FlView* view) {
   notify_shown(self);
 }
 
-// The "toggle" action (asterism --toggle, the bar icon): the window hides
+// The "toggle" action (maprisma --toggle, the bar icon): the window hides
 // when it is shown and focused, else it is shown and focused.
 static void toggle_activated(GSimpleAction* action, GVariant* parameter,
                              gpointer user_data) {
@@ -84,11 +84,11 @@ static void my_application_activate(GApplication* application) {
   if (use_header_bar) {
     GtkHeaderBar* header_bar = GTK_HEADER_BAR(gtk_header_bar_new());
     gtk_widget_show(GTK_WIDGET(header_bar));
-    gtk_header_bar_set_title(header_bar, "Asterism");
+    gtk_header_bar_set_title(header_bar, "Maprisma");
     gtk_header_bar_set_show_close_button(header_bar, TRUE);
     gtk_window_set_titlebar(window, GTK_WIDGET(header_bar));
   } else {
-    gtk_window_set_title(window, "Asterism");
+    gtk_window_set_title(window, "Maprisma");
   }
 
   gtk_window_set_default_size(window, 1280, 720);
@@ -117,7 +117,7 @@ static void my_application_activate(GApplication* application) {
   g_autoptr(FlStandardMethodCodec) codec = fl_standard_method_codec_new();
   self->window_channel = fl_method_channel_new(
       fl_engine_get_binary_messenger(fl_view_get_engine(view)),
-      "asterism/window", FL_METHOD_CODEC(codec));
+      "maprisma/window", FL_METHOD_CODEC(codec));
 
   gtk_widget_grab_focus(GTK_WIDGET(view));
 }

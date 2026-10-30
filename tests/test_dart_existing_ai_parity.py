@@ -56,14 +56,14 @@ def home_files(home: Path) -> dict:
     found = {}
     for path in sorted(home.rglob('*')):
         rel = str(path.relative_to(home))
-        if rel.startswith(('.cache', '.local/share', '.local/state', '.config/asterism')) or path.is_dir():
+        if rel.startswith(('.cache', '.local/share', '.local/state', '.config/maprisma')) or path.is_dir():
             continue
         found[rel] = (path.read_text(errors='replace'), oct(path.stat().st_mode & 0o777))
-    settings = home / '.config/asterism/settings.json'
+    settings = home / '.config/maprisma/settings.json'
     found['model_folders'] = json.loads(settings.read_text()).get('model_folders') if settings.exists() else None
     # The backups' manifests by content: the reference's production service keeps them in
     # ~/.local/state/ai-agents-map/backups, the core in its config folder (phase 3).
-    roots = [home / '.local/state/ai-agents-map/backups', home / '.config/asterism/connection-backups']
+    roots = [home / '.local/state/ai-agents-map/backups', home / '.config/maprisma/connection-backups']
     found['backups'] = [(folder / 'manifest.json').read_text() for root in roots if root.is_dir()
                         for folder in sorted(root.iterdir())]
     return found
@@ -79,8 +79,8 @@ class DartExistingAiParityTest(unittest.TestCase):
             seed_disk(disk)
             for side in ('python', 'dart'):
                 home = Path(temp) / side
-                (home / '.config/asterism').mkdir(parents=True)
-                (home / '.config/asterism/settings.json').write_text(json.dumps({'setup_done': True}))
+                (home / '.config/maprisma').mkdir(parents=True)
+                (home / '.config/maprisma/settings.json').write_text(json.dumps({'setup_done': True}))
                 env = {'HOME': str(home), 'PATH': '/usr/bin:/bin', 'LANG': 'C.UTF-8',
                        'XDG_CONFIG_HOME': str(home / '.config'), 'XDG_CACHE_HOME': str(home / '.cache'),
                        'XDG_DATA_HOME': str(home / '.local/share'), 'ASTERISM_DESKTOP': 'generic',

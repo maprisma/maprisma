@@ -40,7 +40,7 @@ class DartAgentHaltParityTest(unittest.TestCase):
             for side in ('python', 'dart'):
                 home = Path(temp) / side
                 (home / '.local/bin').mkdir(parents=True)
-                (home / '.config/asterism').mkdir(parents=True)
+                (home / '.config/maprisma').mkdir(parents=True)
                 agent = home / '.local/bin/opencode'
                 agent.write_text('#!/bin/sh\n[ "$1" = stubborn ] && trap "" TERM\nwhile :; do sleep 1; done\n')
                 os.chmod(agent, 0o700)

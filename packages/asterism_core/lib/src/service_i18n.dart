@@ -26,7 +26,7 @@ final class ServiceI18n {
         : systemLanguage();
   }
 
-  String _named(String text) => text.replaceAll('AI Agents Map', 'Asterism');
+  String _named(String text) => text.replaceAll('AI Agents Map', identity.name);
   String text(String key) {
     final value = (serviceTables[language] as Map?)?[key];
     return _named(value is String ? value : key);

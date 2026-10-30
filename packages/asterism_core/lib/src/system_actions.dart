@@ -249,7 +249,9 @@ List<Change> modelFolderChanges(
   );
   if (!FileSystemEntity.isLinkSync(link) && FileSystemEntity.isFileSync(link)) {
     final text = config.read(link);
-    if (!text.contains('# Connected by Asterism')) {
+    // Files written before the rename say Asterism.
+    if (!text.contains('# Connected by Maprisma') &&
+        !text.contains('# Connected by Asterism')) {
       throw const FormatException('Use AI help to review this custom wrapper');
     }
     if (!text.contains(before)) {

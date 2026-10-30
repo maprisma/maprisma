@@ -115,10 +115,10 @@ void main() {
     final config = Directory('${temp.path}/configs')..createSync();
     Link('${home.path}/.config').createSync(config.path);
     Posix().atomicWrite(
-      '${temp.path}/home/user/.config/asterism/settings.json',
+      '${temp.path}/home/user/.config/maprisma/settings.json',
       [1],
     );
-    expect(File('${config.path}/asterism/settings.json').readAsBytesSync(), [
+    expect(File('${config.path}/maprisma/settings.json').readAsBytesSync(), [
       1,
     ]);
   });
@@ -168,7 +168,7 @@ void main() {
     expect(Directory('${chosen.path}-old').listSync(), isEmpty);
   });
   test('identity uses absolute XDG paths, ignores relative overrides', () {
-    expect(core.identity.appId, 'io.github.ubruckhaus.Asterism');
+    expect(core.identity.appId, 'com.maprisma.Maprisma');
     final id = AppIdentity(
       environment: {
         'HOME': temp.path,
@@ -176,8 +176,8 @@ void main() {
         'XDG_CACHE_HOME': '/tmp/cache',
       },
     );
-    expect(id.configDir, '${temp.path}/.config/asterism');
-    expect(id.cacheDir, '/tmp/cache/asterism');
+    expect(id.configDir, '${temp.path}/.config/maprisma');
+    expect(id.cacheDir, '/tmp/cache/maprisma');
   });
   test(
     'defaults; strict atomic validation; nullable deletion; unknown keys retained',
@@ -318,7 +318,7 @@ void main() {
   test('i18n uses environment precedence and refreshes saved language', () {
     expect(core.i18n.language, 'de');
     expect(core.i18n.text('Unknown text'), 'Unknown text');
-    expect(core.i18n.text('AI Agents Map'), 'Asterism');
+    expect(core.i18n.text('AI Agents Map'), 'Maprisma');
     expect(core.i18n.plural('one', 'many', 2), 'many');
     core.settings.update({
       'values': {'language': 'fr'},

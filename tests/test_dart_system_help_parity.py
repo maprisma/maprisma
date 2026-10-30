@@ -58,8 +58,8 @@ def seed(home: Path):
         'usage': {'input_tokens': 10, 'cache_read_input_tokens': 5, 'output_tokens': 7},
         'total_cost_usd': 0.01234}) + '\n')
     (home / '.claude').mkdir()
-    (home / '.config/asterism').mkdir(parents=True)
-    (home / '.config/asterism/settings.json').write_text(json.dumps({'setup_done': True}))
+    (home / '.config/maprisma').mkdir(parents=True)
+    (home / '.config/maprisma/settings.json').write_text(json.dumps({'setup_done': True}))
 
 
 @unittest.skipIf(DART is None, 'native Dart SDK not available')

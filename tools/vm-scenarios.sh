@@ -8,12 +8,12 @@ echo omarchy | sudo -S mount -t 9p -o trans=virtio,version=9p2000.L,ro asterism 
 B=/mnt/asterism
 ls "$B" "$B/lib" | tr '\n' ' '; echo
 echo "== A libraries missing"
-for f in "$B/asterism" "$B"/lib/*.so; do ldd "$f" | grep "not found" | sed "s|^|$(basename "$f"): |"; done
+for f in "$B/maprisma" "$B"/lib/*.so; do ldd "$f" | grep "not found" | sed "s|^|$(basename "$f"): |"; done
 echo "(end)"
 
 echo "== B core on a fresh home"
 export ASTERISM_FLUTTER_DEVEL=1
-coproc CORE { "$B/lib/asterism-core" 2>/tmp/core.err; }
+coproc CORE { "$B/lib/maprisma-core" 2>/tmp/core.err; }
 n=0
 ask() {  # method [params-json] -> prints the answer line
   n=$((n + 1))
@@ -34,7 +34,7 @@ short() { cut -c1-${2:-600}; }
 echo "-- app.snapshot"; ask app.snapshot; printf '%s\n' "${REPLY_LINE:0:900}"
 echo "-- settings.get"; ask settings.get; printf '%s\n' "${REPLY_LINE:0:400}"
 echo "-- settings.update language de"; ask settings.update '{"values":{"language":"de"}}'; printf '%s\n' "${REPLY_LINE:0:200}"
-echo "-- files in config"; ls -la ~/.config/asterism
+echo "-- files in config"; ls -la ~/.config/maprisma
 echo "-- changes.history"; ask changes.history; printf '%s\n' "${REPLY_LINE:0:600}"
 echo "-- helper.snapshot"; ask helper.snapshot; printf '%s\n' "${REPLY_LINE:0:300}"
 echo "-- checks.mcp_updates"; ask checks.mcp_updates; printf '%s\n' "${REPLY_LINE:0:300}"
@@ -45,7 +45,7 @@ echo "-- map.snapshot"; ask map.snapshot '{"force":true}'; printf '%s\n' "${REPL
 exec {CORE[1]}>&-
 sleep 1
 echo "-- core stderr"; head -c 2000 /tmp/core.err; echo
-echo "-- user units"; ls ~/.config/systemd/user 2>/dev/null | grep -i asterism || echo none
+echo "-- user units"; ls ~/.config/systemd/user 2>/dev/null | grep -i maprisma || echo none
 
 echo "== C the app in the session"
 sleep 5
@@ -53,8 +53,8 @@ export XDG_RUNTIME_DIR=/run/user/$(id -u)
 export WAYLAND_DISPLAY=$(ls "$XDG_RUNTIME_DIR" | grep -m1 '^wayland-[0-9]*$')
 echo "display: ${WAYLAND_DISPLAY:-none}"
 export HYPRLAND_INSTANCE_SIGNATURE=$(ls "$XDG_RUNTIME_DIR/hypr" 2>/dev/null | head -1)
-rm -rf ~/.config/asterism   # first start, as a new user sees it
-setsid "$B/asterism" >/tmp/app.out 2>&1 &
+rm -rf ~/.config/maprisma   # first start, as a new user sees it
+setsid "$B/maprisma" >/tmp/app.out 2>&1 &
 app=$!
 sleep 15
 echo "app alive: $(kill -0 $app 2>/dev/null && echo yes || echo no)"

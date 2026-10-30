@@ -92,7 +92,7 @@
       ],
       "files": [
         {
-          "path": ".config/asterism/settings.json",
+          "path": ".config/maprisma/settings.json",
           "content": "{\"unknown\": \"\\u00fc\\u00f1icode \\ud83d\\ude00\", \"agent_project_history\": {\"x\": [\"0\", \"1\", \"2\", \"3\", \"4\", \"5\", \"6\", \"7\", \"8\", \"9\", \"10\", \"11\", \"12\", \"13\", \"14\", \"15\", \"16\", \"17\", \"18\", \"19\", \"20\", \"21\", \"22\", \"23\", \"24\", \"25\", \"26\", \"27\", \"28\", \"29\", \"30\", \"31\", \"32\", \"33\", \"34\", \"35\", \"36\", \"37\", \"38\", \"39\", \"40\", \"41\", \"42\", \"43\", \"44\", \"45\", \"46\", \"47\", \"48\", \"49\", \"50\", \"51\", \"52\", \"53\", \"54\", \"55\", \"56\", \"57\", \"58\", \"59\"], \"bad\": \"drop\"}}",
           "mode": "0644"
         }
@@ -296,7 +296,7 @@
       ],
       "files": [
         {
-          "path": ".config/asterism/settings.json",
+          "path": ".config/maprisma/settings.json",
           "content": "{\"language\":\"pl\"}\n",
           "mode": "0600"
         }
@@ -373,7 +373,7 @@
           "content": "{\"language\":\"nl\"}"
         },
         {
-          "path": ".config/asterism/settings.json",
+          "path": ".config/maprisma/settings.json",
           "type": "symlink",
           "target": "$HOME/other"
         }
@@ -406,7 +406,7 @@
           "content": "{\"language\":\"nl\"}"
         },
         {
-          "path": ".config/asterism/settings.json",
+          "path": ".config/maprisma/settings.json",
           "type": "fifo"
         }
       ],
@@ -438,7 +438,7 @@
           "content": "{\"language\":\"nl\"}"
         },
         {
-          "path": ".config/asterism/settings.json",
+          "path": ".config/maprisma/settings.json",
           "content": "{invalid"
         }
       ],
@@ -470,7 +470,7 @@
           "content": "{\"language\":\"nl\"}"
         },
         {
-          "path": ".config/asterism/settings.json",
+          "path": ".config/maprisma/settings.json",
           "content": "[]"
         }
       ],
@@ -502,7 +502,7 @@
           "content": "{\"language\":\"nl\"}"
         },
         {
-          "path": ".config/asterism/settings.json",
+          "path": ".config/maprisma/settings.json",
           "content_repeat": [
             "x",
             262145
@@ -1435,7 +1435,7 @@
       "name": "legacy settings migration",
       "files": [
         {
-          "path": ".config/asterism/settings.json",
+          "path": ".config/maprisma/settings.json",
           "content": "{\"animate_lines\": false, \"widen\": true, \"unknown\":\"keep\"}"
         }
       ],
@@ -1450,7 +1450,7 @@
       "name": "migration retains explicit animation",
       "files": [
         {
-          "path": ".config/asterism/settings.json",
+          "path": ".config/maprisma/settings.json",
           "content": "{\"animate_lines\": false, \"map_animations\":\"agents\", \"sidebar\":true}"
         }
       ],
@@ -1465,7 +1465,7 @@
       "name": "valid oversized prefix is refused",
       "files": [
         {
-          "path": ".config/asterism/settings.json",
+          "path": ".config/maprisma/settings.json",
           "content_prefix": "{\"language\":\"pl\"}",
           "content_repeat": [
             " ",
@@ -1508,7 +1508,7 @@
       "name": "unknown large integers preserved exactly",
       "files": [
         {
-          "path": ".config/asterism/settings.json",
+          "path": ".config/maprisma/settings.json",
           "content": "{\"future_integer\": 100000000000000000000000000000000000000000000000000000000000000000000000000000000, \"future_negative\": -1000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000, \"quoted\": \"123456789012345678901234567890\", \"map_light_fps\": 1000000000000000000000000000000000000000000000000000000000000}"
         }
       ],
@@ -1531,7 +1531,7 @@
       "name": "settings write overflow preserves bytes",
       "files": [
         {
-          "path": ".config/asterism/settings.json",
+          "path": ".config/maprisma/settings.json",
           "content_prefix": "{\"unknown\":\"",
           "content_suffix": "\"}",
           "content_repeat": [

@@ -949,7 +949,7 @@
      "content": "# header\n- id: ui-settings-general\n  name: x\n  config:\n    welcome: 1\n- id: llm-pi-ai\n  name: '@deepseek-ai/dsh-llm-pi-ai'\n  config:\n    providers:\n      llama-local:\n        baseURL: http://127.0.0.1:8080/v1\n        models:\n        - id: fixture-model\n          contextWindow: 4096\n- id: agent-default-model\n  name: '@deepseek-ai/dsh-agent-default-model'\n  config:\n    provider: llama-local\n    model: fixture-model\n- insert:\n  - id: mcp-files\n    name: '@deepseek-ai/dsh-mcp-client'\n    config:\n      serverName: files\n      transport: stdio\n      command: npx\n      args:\n      - -y\n      - '@test/files'\n- id: js-entry\n  name: x\n  config:\n    value: !!js \"() => 1\"\n"
     },
     {
-     "path": ".config/asterism/failed-links.json",
+     "path": ".config/maprisma/failed-links.json",
      "content": "{\"agent:codex|runtime:llamacpp\": {\"kind\": \"provider\", \"applied\": true, \"when\": \"2026-10-28\", \"target\": \"x\", \"hints\": [{\"level\": \"error\", \"text\": \"fixture failure\"}, {\"level\": \"bogus\", \"text\": \"dropped\"}]}, \"bad key\": {\"kind\": \"provider\", \"hints\": [{\"level\": \"error\", \"text\": \"x\"}]}}"
     }
    ],
@@ -1150,7 +1150,7 @@
      "content": "{\"agent:codex|runtime:llamacpp\": {\"kind\": \"provider\", \"applied\": true, \"when\": \"2026-10-28\", \"target\": \"x\", \"hints\": [{\"level\": \"error\", \"text\": \"fixture failure\"}, {\"level\": \"bogus\", \"text\": \"dropped\"}]}, \"bad key\": {\"kind\": \"provider\", \"hints\": [{\"level\": \"error\", \"text\": \"x\"}]}}"
     },
     {
-     "path": ".config/asterism/failed-links.json",
+     "path": ".config/maprisma/failed-links.json",
      "type": "symlink",
      "target": "$HOME/elsewhere.json"
     }
@@ -2126,7 +2126,7 @@
      "content": "{\n  \"agents\": {\n    \"defaults\": {}\n  },\n  \"mcp\": {\n    \"servers\": {}\n  }\n}\n"
     },
     {
-     "path": ".config/asterism/mcp-servers.json",
+     "path": ".config/maprisma/mcp-servers.json",
      "content": "{\n  \"servers\": {\n    \"kept\": {\n      \"transport\": \"stdio\",\n      \"command\": \"/opt/kept\",\n      \"args\": [\n        \"serve\"\n      ],\n      \"env\": {},\n      \"url\": \"\",\n      \"headers\": {}\n    },\n    \"Bad Name!\": {\n      \"transport\": \"stdio\",\n      \"command\": \"x\"\n    }\n  }\n}\n"
     }
    ],
@@ -2929,7 +2929,7 @@
      "content": "# my profile\n- id: llm-pi-ai\n  name: '@deepseek-ai/dsh-llm-pi-ai'\n  config:\n    providers:\n      llama-local:\n        displayName: llama.cpp (local)\n        api: openai-completions\n        baseURL: http://127.0.0.1:8080/v1\n        headers:\n          Authorization: Bearer local\n        models:\n        - id: old-model\n          contextWindow: 4096\n      cloud:\n        api: x\n        enabled: yes\n        port: 0x1F\n- id: agent-default-model\n  name: '@deepseek-ai/dsh-agent-default-model'\n  config:\n    provider: llama-local\n    model: old-model\n"
     },
     {
-     "path": ".config/asterism/settings.json",
+     "path": ".config/maprisma/settings.json",
      "content": "{\"model_folders\": [\"~/nope\", \"/tmp\", 5]}"
     }
    ],
@@ -3634,7 +3634,7 @@
      "content": "---\nname: one\n---\n"
     },
     {
-     "path": ".config/asterism/failed-links.json",
+     "path": ".config/maprisma/failed-links.json",
      "content": "{\n  \"agent:claude|mcp:files\": {\n    \"kind\": \"mcp\",\n    \"applied\": true,\n    \"when\": \"x\",\n    \"target\": \"\",\n    \"hints\": [\n      {\n        \"level\": \"error\",\n        \"text\": \"did not start\"\n      }\n    ]\n  },\n  \"agent:opencode|runtime:ollama\": {\n    \"kind\": \"provider\",\n    \"applied\": false,\n    \"when\": \"x\",\n    \"target\": \"\",\n    \"hints\": [\n      {\n        \"level\": \"warning\",\n        \"text\": \"not reached\"\n      }\n    ]\n  }\n}\n"
     }
    ],

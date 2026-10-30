@@ -40,8 +40,8 @@ def seed(home: Path):
         f'[Service]\nEnvironment=LLAMA_ARG_MODELS_DIR={home}/models\nExecStart={bin_dir}/llama-server\n')
     (home / 'models').mkdir()
     (home / 'models/small-Q4.gguf').write_bytes(b'GGUF' + b'x' * 5000)
-    (home / '.config/asterism').mkdir(parents=True)
-    (home / '.config/asterism/settings.json').write_text(json.dumps({
+    (home / '.config/maprisma').mkdir(parents=True)
+    (home / '.config/maprisma/settings.json').write_text(json.dumps({
         'setup_done': True, 'model_folders': [str(home / 'more-models'), str(home / 'models')]}))
 
 
@@ -105,7 +105,7 @@ class DartSystemMapParityTest(unittest.TestCase):
                     call('unknown node', 'system.view', {'selected': 'nothing', 'transform': IDENTITY})
                     call('bad refresh', 'system.refresh', {'search': 'yes'})
                     call('forget present', 'system.forget_disk', {'node': 'disk:' + str(home)})
-                    add_missing_disk(home / '.cache/asterism/system-map.json')
+                    add_missing_disk(home / '.cache/maprisma/system-map.json')
                     call('refresh with a missing disk', 'system.refresh')
                     call('forget', 'system.forget_disk', {'node': 'disk:/mnt/Gone'})
                     call('scan', 'existing.scan', {'path': str(disk)})
@@ -120,7 +120,7 @@ class DartSystemMapParityTest(unittest.TestCase):
                     call('undo bad token', 'system.move_undo', {'undo': 'x'})
                 finally:
                     runner.close()
-                cache = json.loads((home / '.cache/asterism/system-map.json').read_text())
+                cache = json.loads((home / '.cache/maprisma/system-map.json').read_text())
                 text = json.dumps([answers, cache.get('view'), sorted(cache)])
                 text = text.replace(str(home), '$HOME').replace(str(disk), '$DISK')
                 text = re.sub(r'"(core-)?[0-9a-f]{32}"', '"<handle>"', text)

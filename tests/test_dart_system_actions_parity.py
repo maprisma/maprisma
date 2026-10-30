@@ -46,8 +46,8 @@ def seed(home: Path):
     units.mkdir(parents=True)
     (units / 'llama-server.service').write_text(
         f'[Service]\nEnvironmentFile={home}/.config/llama.cpp/server.env\nExecStart={bin_dir}/llama-server\n')
-    (home / '.config/asterism').mkdir(parents=True)
-    (home / '.config/asterism/settings.json').write_text(json.dumps({'setup_done': True}))
+    (home / '.config/maprisma').mkdir(parents=True)
+    (home / '.config/maprisma/settings.json').write_text(json.dumps({'setup_done': True}))
 
 
 @unittest.skipIf(DART is None or not ON_DISK, 'native Dart SDK or a mounted data disk not available')
@@ -110,7 +110,7 @@ class DartSystemActionsParityTest(unittest.TestCase):
                 log = (home / 'term.log').read_text() if (home / 'term.log').exists() else ''
                 files = {name: (home / name).read_text() for name in
                          ('.config/llama.cpp/server.env', '.local/bin/llama-server')}
-                settings = json.loads((home / '.config/asterism/settings.json').read_text())
+                settings = json.loads((home / '.config/maprisma/settings.json').read_text())
                 text = json.dumps([answers, log, files, settings.get('model_folders'), bool(stack)])
                 text = text.replace(str(home), '$HOME').replace(str(disk), '$DISK')
                 text = re.sub(r'"(core-)?[0-9a-f]{32}"', '"<handle>"', text)

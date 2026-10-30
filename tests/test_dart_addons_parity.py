@@ -49,7 +49,7 @@ REAL = ['agent-claude', 'agent-hermes', 'agent-goose', 'llm-jan', 'providers-onl
 
 
 def seed(home: Path):
-    user = home / '.local/share/asterism/addons'
+    user = home / '.local/share/maprisma/addons'
     user.mkdir(parents=True)
     for name in REAL:
         shutil.copytree(ADDONS / name, user / name)
@@ -60,8 +60,8 @@ def seed(home: Path):
     (user / 'agent-crush/extra.txt').write_text('x')
     for path in user.rglob('*'):
         os.chmod(path, 0o755 if path.is_dir() else 0o644)
-    (home / '.config/asterism').mkdir(parents=True)
-    (home / '.config/asterism/settings.json').write_text(json.dumps(
+    (home / '.config/maprisma').mkdir(parents=True)
+    (home / '.config/maprisma/settings.json').write_text(json.dumps(
         {'addons_enabled': ['agent-claude', 'agent-hermes', 'providers-online'], 'setup_done': True}))
 
 
@@ -106,7 +106,7 @@ class DartAddonsParityTest(unittest.TestCase):
                         answers.append(visible(runner))
                 finally:
                     runner.close()
-                settings = json.loads((home / '.config/asterism/settings.json').read_text())
+                settings = json.loads((home / '.config/maprisma/settings.json').read_text())
                 sides[side] = json.loads(json.dumps([answers, settings.get('addons_enabled')]).replace(str(home), '$HOME'))
         python, dart = sides['python'], sides['dart']
         # The intended difference: Insights brings code; the Dart core takes it as data only.

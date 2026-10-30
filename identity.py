@@ -1,6 +1,6 @@
 """Application identity is independent of the desktop integration.
 
-Asterism packages include the add-on loader; the legacy plugin build omits it
+Maprisma (until 2026-10-30 called Asterism) packages include the add-on loader; the legacy plugin build omits it
 (tools/sync-plugin.py). This build fact, rather than the current desktop, selects
 the identity. Both editions may use either desktop backend.
 """
@@ -17,15 +17,15 @@ def is_plugin() -> bool:
 
 
 def name() -> str:
-    return "AI Agents Map" if is_plugin() else "Asterism"
+    return "AI Agents Map" if is_plugin() else "Maprisma"
 
 
 def app_id() -> str:
-    return "org.omarchy.aiagentsmap" if is_plugin() else "io.github.ubruckhaus.Asterism"
+    return "org.omarchy.aiagentsmap" if is_plugin() else "com.maprisma.Maprisma"
 
 
 def short_name() -> str:
-    return "ai-agents-map" if is_plugin() else "asterism"
+    return "ai-agents-map" if is_plugin() else "maprisma"
 
 
 def config_dir() -> Path:
@@ -33,7 +33,7 @@ def config_dir() -> Path:
         return HOME / ".config/omarchy/ai-agents-map"
     configured = os.environ.get("XDG_CONFIG_HOME", "")
     root = Path(configured) if configured and Path(configured).is_absolute() else HOME / ".config"
-    return root / "asterism"
+    return root / short_name()
 
 
 def cache_dir() -> Path:

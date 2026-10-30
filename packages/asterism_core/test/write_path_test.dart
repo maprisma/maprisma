@@ -32,7 +32,7 @@ void main() {
     final connections = CoreConnections(
       ConfigFiles(Posix(), home.path),
       tasks,
-      '${home.path}/.config/asterism/connection-backups',
+      '${home.path}/.config/maprisma/connection-backups',
     );
     final preview = connections.keep(
       Plan(
@@ -325,7 +325,7 @@ void main() {
       );
     }
 
-    const core = '/usr/lib/asterism/lib/asterism-core';
+    const core = '/usr/lib/maprisma/lib/maprisma-core';
     expect(service({}, [core, 'worker']).binary, core);
     expect(
       service({'ASTERISM_FLUTTER_DEVEL': '1'}, [core, 'worker']).binary,
@@ -336,20 +336,20 @@ void main() {
       service({}, ['/usr/bin/dart', 'bin/asterism-core.dart', 'worker']).binary,
       isNull,
     );
-    expect(service({}, ['/tmp/x y/asterism-core', 'worker']).binary, isNull);
+    expect(service({}, ['/tmp/x y/maprisma-core', 'worker']).binary, isNull);
     // Builds and temporary copies are never installed as the user service.
     for (final path in [
-      '/tmp/claude-1000/scratchpad/asterism-core',
-      '/var/tmp/asterism-core',
-      '/home/u/src/asterism/.flutter-previews/preview-x/flutter_app/build/linux/x64/release/bundle/lib/asterism-core',
-      '/home/u/src/asterism/flutter_app/build/linux/x64/release/bundle/lib/asterism-core',
+      '/tmp/claude-1000/scratchpad/maprisma-core',
+      '/var/tmp/maprisma-core',
+      '/home/u/src/asterism/.flutter-previews/preview-x/flutter_app/build/linux/x64/release/bundle/lib/maprisma-core',
+      '/home/u/src/asterism/flutter_app/build/linux/x64/release/bundle/lib/maprisma-core',
     ]) {
       expect(service({}, [path, 'worker']).binary, isNull, reason: path);
     }
     expect(
       service(
         {'TMPDIR': '/run/user/1000/tmp'},
-        ['/run/user/1000/tmp/asterism-core', 'worker'],
+        ['/run/user/1000/tmp/maprisma-core', 'worker'],
       ).binary,
       isNull,
     );
@@ -360,10 +360,10 @@ void main() {
     expect(
       watchUnitText(
         core,
-        '/home/u/.config/asterism/providers-with-agents.json',
+        '/home/u/.config/maprisma/providers-with-agents.json',
       ),
       contains(
-        'ExecStart=$core provider-watch --config /home/u/.config/asterism/providers-with-agents.json\n',
+        'ExecStart=$core provider-watch --config /home/u/.config/maprisma/providers-with-agents.json\n',
       ),
     );
   });

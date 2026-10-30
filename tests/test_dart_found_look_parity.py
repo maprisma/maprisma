@@ -62,8 +62,8 @@ def fixture(home: Path) -> dict:
     image = apps / 'toolx-1.4.0-x86_64.AppImage'
     image.write_text(APPIMAGE)
     image.chmod(0o755)
-    return {'opt': str(home / 'opt'), 'cache': str(home / '.cache/asterism/mcp-scan-3.json'),
-            'temp': str(home / '.cache/asterism/tmp'), 'image': str(image)}
+    return {'opt': str(home / 'opt'), 'cache': str(home / '.cache/maprisma/mcp-scan-3.json'),
+            'temp': str(home / '.cache/maprisma/tmp'), 'image': str(image)}
 
 
 @unittest.skipIf(DART is None or shutil.which('bwrap') is None, 'native Dart SDK or bwrap not available')

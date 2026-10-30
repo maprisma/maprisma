@@ -826,7 +826,7 @@ final class WatchService {
     }
     return p.isAbsolute(path) &&
             unitSafe.hasMatch(path) &&
-            p.basename(path) == 'asterism-core'
+            p.basename(path) == 'maprisma-core'
         ? path
         : null;
   }

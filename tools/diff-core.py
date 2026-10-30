@@ -103,7 +103,7 @@ def oracle():
     sys.path.insert(0, str(ROOT))
     import flutter_backend
     import i18n
-    i18n.set_name('AI Agents Map', 'Asterism')
+    i18n.set_name('AI Agents Map', 'Maprisma')
     import ai_core
     if os.environ.get('ASTERISM_DIFF_COMPONENT') == 'scans':
         import core_scan_oracle
@@ -220,8 +220,8 @@ def tree(home):
             result[key] = (mode, *data)
     # The oracle reads Claude Code's sessions without a cache (collect_by_id(cache=None)); the Dart
     # core keeps its own: left out, with folders that hold nothing else.
-    result.pop('.cache/asterism/claude-sessions.json', None)
-    for folder in ('.cache/asterism', '.cache'):
+    result.pop('.cache/maprisma/claude-sessions.json', None)
+    for folder in ('.cache/maprisma', '.cache'):
         if folder in result and not any(k.startswith(folder + '/') for k in result):
             result.pop(folder)
     return result

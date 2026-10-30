@@ -29,22 +29,22 @@ class WatchServiceTest(unittest.TestCase):
         self.assertEqual(result.stdout.split(), ["/tmp/c.json", "providers-with-agents.json"])
 
     def test_unit_passes_the_config_file(self):
-        text = provider_watch.unit_text(Path("/p/provider_watch.py"), Path("/home/u/.config/asterism/w.json"))
-        self.assertIn("ExecStart=/usr/bin/python3 -I /p/provider_watch.py --config /home/u/.config/asterism/w.json\n", text)
+        text = provider_watch.unit_text(Path("/p/provider_watch.py"), Path("/home/u/.config/maprisma/w.json"))
+        self.assertIn("ExecStart=/usr/bin/python3 -I /p/provider_watch.py --config /home/u/.config/maprisma/w.json\n", text)
         odd = provider_watch.unit_text(Path("/p/provider_watch.py"), Path("/home/u/my dir/w.json"))
         self.assertIn("ExecStart=/usr/bin/python3 -I /p/provider_watch.py\n", odd)
         self.assertEqual(provider_watch.config_from(["x", "--config", "relative.json"]), provider_watch.CONFIG)
         self.assertEqual(provider_watch.config_from(["x"]), provider_watch.CONFIG)
 
 
-    def test_asterism_has_its_own_unit(self):
-        """The plugin and a standalone Asterism on one machine never share the watcher unit."""
+    def test_maprisma_has_its_own_unit(self):
+        """The plugin and a standalone Maprisma on one machine never share the watcher unit."""
         from unittest import mock
         import identity
         with mock.patch.object(identity, "is_plugin", return_value=True):
             self.assertEqual(provider_watch._unit_name(), "ai-agents-map-providers.service")
         with mock.patch.object(identity, "is_plugin", return_value=False):
-            self.assertEqual(provider_watch._unit_name(), "asterism-providers.service")
+            self.assertEqual(provider_watch._unit_name(), "maprisma-providers.service")
 
 
 if __name__ == "__main__":

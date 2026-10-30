@@ -55,7 +55,7 @@ void main() {
       '"notes": "Faster."}, {"name": "evil", "latest": "9.0", '
       '"release_url": "https://x.org", "notes": ""}]}\'',
     );
-    final cache = '${home.path}/.cache/asterism/mcp-updates.json';
+    final cache = '${home.path}/.cache/maprisma/mcp-updates.json';
     final found = await checkNow(
       adapter,
       'fake',
@@ -87,7 +87,7 @@ void main() {
   });
 
   test('a failing agent keeps the old answer', () async {
-    final cache = '${home.path}/.cache/asterism/mcp-updates.json';
+    final cache = '${home.path}/.cache/maprisma/mcp-updates.json';
     File(cache)
       ..createSync(recursive: true)
       ..writeAsStringSync(

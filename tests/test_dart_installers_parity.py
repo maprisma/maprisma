@@ -118,7 +118,7 @@ def files_of(home: Path) -> dict:
     found = {}
     for path in sorted(home.rglob('*')):
         rel = str(path.relative_to(home))
-        if rel.startswith(('.cache', '.config/asterism', 'web', 'tools', '.local/bin/curl', '.local/bin/systemctl')) \
+        if rel.startswith(('.cache', '.config/maprisma', 'web', 'tools', '.local/bin/curl', '.local/bin/systemctl')) \
                 or rel.endswith('.lock') or '__pycache__' in rel:
             continue
         if path.is_symlink():
@@ -224,8 +224,8 @@ class DartInstallersParityTest(unittest.TestCase):
                 for name, text in (('curl', FAKE_CURL), ('systemctl', FAKE_SYSTEMCTL)):
                     (bin_dir / name).write_text(text)
                     os.chmod(bin_dir / name, 0o700)
-                (home / '.config/asterism').mkdir(parents=True)
-                (home / '.config/asterism/settings.json').write_text(json.dumps({'setup_done': True}))
+                (home / '.config/maprisma').mkdir(parents=True)
+                (home / '.config/maprisma/settings.json').write_text(json.dumps({'setup_done': True}))
                 # Only the tools the installers use: a mise or llama-server of this PC stays out.
                 tools = home / 'tools'
                 tools.mkdir()

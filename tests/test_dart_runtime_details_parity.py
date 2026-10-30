@@ -71,7 +71,7 @@ class DartRuntimeDetailsParityTest(unittest.TestCase):
         env.update(LANG='C.UTF-8', TZ='Europe/Berlin', ASTERISM_DESKTOP='generic')
         python = json.loads(subprocess.run([sys.executable, '-c', PYTHON, str(ROOT)], input=json.dumps(case),
                                            capture_output=True, check=True, text=True, env=env, timeout=60)
-                            .stdout.replace('AI Agents Map', 'Asterism'))          # the core names the app
+                            .stdout.replace('AI Agents Map', 'Maprisma'))          # the core names the app
         line = json.dumps({'id': 1, 'protocol': 1, 'method': 'dev.runtime', 'params': case})
         out = subprocess.run([DART, '--disable-dart-dev', '--packages=.dart_tool/package_config.json',
                               'bin/fixture_probe.dart'], input=(line + '\n').encode(), capture_output=True,

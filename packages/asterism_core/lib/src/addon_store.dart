@@ -268,7 +268,7 @@ final class AddonStore {
   final Posix posix;
   final String userDir, home;
   final AddonVerifier verifier;
-  String get cache => p.join(home, '.cache/asterism/catalog.json');
+  String get cache => p.join(home, '.cache/maprisma/catalog.json');
 
   Map? _loadCache() {
     try {

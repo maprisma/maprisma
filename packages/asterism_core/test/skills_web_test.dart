@@ -45,7 +45,7 @@ void main() {
   final posix = Posix();
   setUp(() {
     home = Directory.systemTemp.createTempSync('asterism-skills-web-');
-    staging = p.join(home.path, '.cache/asterism/skill-staging');
+    staging = p.join(home.path, '.cache/maprisma/skill-staging');
   });
   tearDown(() => home.deleteSync(recursive: true));
 
@@ -87,7 +87,7 @@ void main() {
     );
     final staged = (result['files'] as List).first[1] as String;
     expect(File(staged).statSync().mode & 0x1ff, 0x180);
-    final backups = p.join(home.path, '.config/asterism/connection-backups');
+    final backups = p.join(home.path, '.config/maprisma/connection-backups');
     final applied = await applyPlan(
       encodePlan(plan, backups),
       posix,

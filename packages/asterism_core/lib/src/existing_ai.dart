@@ -564,7 +564,7 @@ String wrapper(
   final launch = (record['launch_path'] ?? record['path']) as String;
   return [
     '#!/bin/sh',
-    '# Connected by Asterism',
+    '# Connected by Maprisma',
     'set -eu',
     for (final e in (record['environment'] as Map).entries)
       'export ${e.key}=${shellQuote('${e.value}')}',

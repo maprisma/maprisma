@@ -42,9 +42,9 @@ def seed(home: Path):
         os.chmod(bin_dir / name, 0o700)
     (home / '.claude').mkdir()
     (home / '.claude/.credentials.json').write_text('{}')    # only whether it exists is looked at
-    (home / '.config/asterism').mkdir(parents=True)
-    (home / '.config/asterism/settings.json').write_text(json.dumps({'first_agent': {'verified': ['claude']}}))
-    user = home / '.local/share/asterism/addons'
+    (home / '.config/maprisma').mkdir(parents=True)
+    (home / '.config/maprisma/settings.json').write_text(json.dumps({'first_agent': {'verified': ['claude']}}))
+    user = home / '.local/share/maprisma/addons'
     user.mkdir(parents=True)
     for aid in INSTALLED:
         with zipfile.ZipFile(ADDONS / 'dist' / f'{aid}-0.11.1.zip') as archive:
@@ -105,7 +105,7 @@ class DartSetupGuideParityTest(unittest.TestCase):
                     call('setup.later')
                 finally:
                     runner.close()
-                settings = json.loads((home / '.config/asterism/settings.json').read_text())
+                settings = json.loads((home / '.config/maprisma/settings.json').read_text())
                 kept = {key: settings.get(key) for key in ('addons_enabled', 'setup_done', 'first_agent')}
                 sides[side] = json.loads(json.dumps([answers, kept]).replace(str(home), '$HOME'))
         self.maxDiff = None

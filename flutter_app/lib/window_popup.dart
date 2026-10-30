@@ -2,7 +2,7 @@ import 'package:flutter/services.dart';
 
 /// Popup mode (plan-flutter step 5): on Omarchy the window sits floating at
 /// the top right under the bar, as the plugins' popups do, and goes away
-/// with Esc or a click elsewhere; `asterism --toggle` (the bar icon) shows
+/// with Esc or a click elsewhere; `maprisma --toggle` (the bar icon) shows
 /// and hides it. Elsewhere it stays a normal window.
 
 /// The popup's size on first show (logical pixels; kept inside the monitor).
@@ -30,4 +30,4 @@ abstract final class PopupGuard {
 
 /// The runner's channel: "shown" when the window is shown again (first
 /// frame, a second launch, --toggle).
-const windowChannel = MethodChannel('asterism/window');
+const windowChannel = MethodChannel('maprisma/window');

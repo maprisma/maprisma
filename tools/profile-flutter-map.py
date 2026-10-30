@@ -3,7 +3,7 @@
 
     tools/profile-flutter-map.py <config dir> [seconds]
 
-<config dir> holds a COPY of settings.json (e.g. cp ~/.config/asterism/settings.json /tmp/x/), so the
+<config dir> holds a COPY of settings.json (e.g. cp ~/.config/maprisma/settings.json /tmp/x/), so the
 settings migration never runs and nothing in ~/.config is written. Agents, inventory and add-ons are the
 real ones (read only). Prints the in-process scan cost (cold, then warm) and the average load of the
 service plus its workers in % of one core. Start nothing else; no UI, no PTY, no network.

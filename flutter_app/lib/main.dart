@@ -3706,7 +3706,7 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
 
   @override
   Widget build(BuildContext context) => MaterialApp(
-    title: 'Asterism',
+    title: 'Maprisma',
     navigatorKey: _navigator,
     // F1 opens Help, as in the GTK app.
     shortcuts: {
@@ -3801,7 +3801,7 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
         skipTraversal: true,
         child: Scaffold(
           appBar: AppBar(
-            title: const Text('Asterism'),
+            title: const Text('Maprisma'),
             actions: [
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 8),

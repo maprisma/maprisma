@@ -68,7 +68,7 @@ class DartMcpUpdateParityTest(unittest.TestCase):
                 f'model = "x"\n\n[mcp_servers.grid2]\ncommand = "{old}"\nargs = ["mcp"]\n')
             listed = {'servers': {'grid': {'transport': 'stdio', 'command': str(old), 'args': ['mcp'], 'env': {},
                                            'url': '', 'headers': {}}}}
-            for app in ('ai-agents-map', 'asterism'):
+            for app in ('ai-agents-map', 'maprisma'):
                 (home / f'.config/{app}').mkdir(parents=True)
                 (home / f'.config/{app}/mcp-servers.json').write_text(json.dumps(listed, indent=2) + '\n')
             case = {'opt': str(home / 'opt'), 'cache': str(home / 'scan.json'), 'agents': ['claude', 'codex'],
@@ -93,7 +93,7 @@ class DartMcpUpdateParityTest(unittest.TestCase):
             dart = [json.loads(x) for x in run.stdout.splitlines() if x.startswith(b'{')]
             self.assertEqual(len(dart), 1, run.stderr.decode()[-3000:])
             self.assertIn('result', dart[0], dart[0])
-            expected = json.loads(json.dumps(python['plan']).replace('.config/ai-agents-map', '.config/asterism'))
+            expected = json.loads(json.dumps(python['plan']).replace('.config/ai-agents-map', '.config/maprisma'))
         self.maxDiff = None
         self.assertEqual(expected, dart[0]['result'])
         plan = python['plan']

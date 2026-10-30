@@ -1,12 +1,12 @@
 [Desktop Entry]
 Type=Application
-Name=Asterism
+Name=Maprisma
 GenericName=AI setup
 Comment=Your AI agents, models and tools on one map
-Exec=asterism
-Icon=io.github.ubruckhaus.Asterism
+Exec=maprisma
+Icon=com.maprisma.Maprisma
 Terminal=false
 Categories=Development;GTK;
 Keywords=AI;agents;LLM;MCP;models;skills;Claude;Codex;Ollama;
 StartupNotify=true
-StartupWMClass=io.github.ubruckhaus.Asterism
+StartupWMClass=com.maprisma.Maprisma
