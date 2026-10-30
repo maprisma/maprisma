@@ -1,8 +1,10 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'map_groups.dart';
 import 'map_layout.dart';
 import 'map_lights.dart';
+import 'map_smart_card.dart';
 import 'map_static_cache.dart';
 import 'app_theme.dart' show corners;
 import 'map_snapshot.dart';
@@ -29,9 +31,11 @@ class MapEditor extends StatefulWidget {
     this.controls,
     this.staticState,
     this.lightStyle = defaultMapLightStyle,
+    this.smartCards = false,
   });
   final Object? staticState;
   final MapLightStyle lightStyle;
+  final bool smartCards;
   final Set<String>? selection;
   final ValueChanged<String>? onSubagents;
   final Widget Function(Map<String, dynamic>)? controls;
@@ -66,6 +70,7 @@ class _MapEditorState extends State<MapEditor>
   Map<String, dynamic>? _moving;
   Offset? _cursor;
   double? _draggingCardY;
+  int? _openSmartColumn;
   double _reorderDistance = 0;
   int _staticRevision = 0;
   @override
@@ -80,9 +85,11 @@ class _MapEditorState extends State<MapEditor>
     super.didUpdateWidget(old);
     final savedChanged = !sameMapJson(old.saved, widget.saved);
     final graphChanged = !sameMapJson(old.graph, widget.graph);
-    if (savedChanged) {
+    final smartChanged = old.smartCards != widget.smartCards;
+    if (savedChanged || smartChanged) {
       _saved = widget.saved;
       _layout = null;
+      if (!widget.smartCards) _openSmartColumn = null;
     }
     if (graphChanged &&
         _layout != null &&
@@ -90,6 +97,7 @@ class _MapEditorState extends State<MapEditor>
       _layout = null;
     }
     if (savedChanged ||
+        smartChanged ||
         old.staticState != widget.staticState ||
         !sameMapJson(mapAppearance(old.graph), mapAppearance(widget.graph)) ||
         old.controls != widget.controls ||
@@ -423,7 +431,12 @@ class _MapEditorState extends State<MapEditor>
 
   @override
   Widget build(BuildContext context) {
-    final layout = _layout ??= MapLayout(widget.graph, _saved);
+    final layout = _layout ??= MapLayout(
+      widget.graph,
+      _saved,
+      smartCards: widget.smartCards,
+    );
+    final viewportWidth = MediaQuery.sizeOf(context).width;
     final colors = Theme.of(context).colorScheme;
     final active =
         widget.animate != 'off' &&
@@ -693,6 +706,36 @@ class _MapEditorState extends State<MapEditor>
                           style: widget.lightStyle,
                         ),
                       ),
+                    if (widget.smartCards)
+                      for (final col in [
+                        for (var i = 0; i < mapSmartColumns.length; i++)
+                          if (i != _openSmartColumn) i,
+                        ?_openSmartColumn,
+                      ])
+                        Positioned(
+                          left: _openSmartColumn == col && viewportWidth > 300
+                              ? math.min(
+                                  16.0 + col * 302,
+                                  math.max(16.0, viewportWidth - 266 - 16),
+                                )
+                              : 16.0 + col * 302,
+                          top: 106,
+                          width: 266,
+                          child: MapSmartCard(
+                            key: ValueKey(
+                              'smart-card-${mapSmartColumns[col].$1}',
+                            ),
+                            column: mapSmartColumns[col].$1,
+                            title: mapSmartColumns[col].$2,
+                            open: _openSmartColumn == col,
+                            onToggle: () => setState(() {
+                              _openSmartColumn = _openSmartColumn == col
+                                  ? null
+                                  : col;
+                            }),
+                            tr: widget.tr,
+                          ),
+                        ),
                     for (final curve in layout.curves.where(
                       (c) =>
                           layout.movable(c.edge) &&

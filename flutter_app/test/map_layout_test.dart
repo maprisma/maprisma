@@ -113,6 +113,10 @@ void main() {
       expect(col0, ['0:skills:', '0:mcp:']);
       expect(after.cards['0:skills:']!.rect.left, 16);
       expect(after.cards['0:mcp:']!.rect.left, 16);
+      expect(
+        MapLayout(graph, {}, smartCards: true).cards['1:agent:']!.rect.top,
+        156,
+      );
       expect((fixtureGraph()['nodes'] as List).length, 7);
     },
   );

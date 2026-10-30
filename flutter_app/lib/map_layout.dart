@@ -100,8 +100,10 @@ class MapLayout {
   MapLayout(
     Map<String, dynamic> graph,
     Map<String, dynamic> saved, {
-    double top = 144,
+    double? top,
+    bool smartCards = false,
   }) {
+    final startTop = top ?? (smartCards ? 156.0 : 144.0);
     _geometry = mapGeometry(graph);
     for (final node
         in (graph['nodes'] as List? ?? []).cast<Map<String, dynamic>>()) {
@@ -132,7 +134,7 @@ class MapLayout {
       ids.sort((a, b) => (rank[a] ?? 10000).compareTo(rank[b] ?? 10000));
       final column = nodes[ids.first]!['column'] as int;
       final folded = (saved['collapsed'] as List? ?? []).contains(id);
-      final origin = Offset(16 + column * 302, heights[column] ?? top);
+      final origin = Offset(16 + column * 302, heights[column] ?? startTop);
       final height = folded ? 38.0 : 48 + ids.length * mapRowStep;
       final rect = origin & Size(266, height);
       final first = nodes[ids.first]!;
@@ -154,7 +156,7 @@ class MapLayout {
         ids,
         folded,
       );
-      heights[column] = math.max(heights[column] ?? top, rect.bottom + 18);
+      heights[column] = math.max(heights[column] ?? startTop, rect.bottom + 18);
       if (!folded) {
         for (var i = 0; i < ids.length; i++) {
           boxes[ids[i]] = Rect.fromLTWH(

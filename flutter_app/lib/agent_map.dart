@@ -31,6 +31,7 @@ class AgentMap extends StatelessWidget {
     this.groups,
     this.onExpandGroup,
     this.onNodeMenu,
+    this.smartCards = false,
     this.columns = const [
       'MCP servers and skills',
       'Agents',
@@ -40,6 +41,7 @@ class AgentMap extends StatelessWidget {
   });
 
   final Object? staticState;
+  final bool smartCards;
   final Set<String>? selection;
   final Widget Function(Map<String, dynamic>)? controls;
   final Future<void> Function(Map<String, dynamic>)? onEdit;
@@ -199,6 +201,7 @@ class AgentMap extends StatelessWidget {
         animate: animate,
         lightFps: lightFps,
         onAnimationChanged: onAnimationChanged,
+        smartCards: smartCards,
       );
     }
     final groups = readOnly ? null : this.groups;

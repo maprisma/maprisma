@@ -1,5 +1,8 @@
 import 'package:maprisma/map_editor.dart';
+import 'package:maprisma/map_groups.dart';
 import 'package:maprisma/map_lights.dart';
+import 'package:maprisma/map_smart_card.dart';
+import 'package:maprisma/window_popup.dart' show popupSize;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -15,21 +18,22 @@ Future<void> mount(
   bool reduced = false,
   String mode = 'all',
   Set<String>? selection,
+  bool smartCards = false,
+  TransformationController? controller,
+  Size size = const Size(1500, 1000),
 }) async {
-  tester.view.physicalSize = const Size(1500, 1000);
+  tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
+  final g = graph ?? fixtureGraph(active: active);
   await tester.pumpWidget(
     MaterialApp(
       home: MediaQuery(
-        data: MediaQueryData(
-          size: const Size(1500, 1000),
-          disableAnimations: reduced,
-        ),
+        data: MediaQueryData(size: size, disableAnimations: reduced),
         child: Scaffold(
           body: MapEditor(
-            graph: graph ?? fixtureGraph(active: active),
+            graph: g,
             saved: saved ?? {},
             onLayout: onLayout,
             onEdit: (e) async {
@@ -38,6 +42,16 @@ Future<void> mount(
             tr: (s) => s,
             animate: mode,
             selection: selection,
+            smartCards: smartCards,
+            controller: controller,
+            groups: smartCards
+                ? MapGroup.fromGraph(g, const [
+                    'MCP servers and skills',
+                    'Agents',
+                    'Providers',
+                    'Models',
+                  ])
+                : null,
           ),
         ),
       ),
@@ -337,6 +351,111 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.enter);
       await tester.pump();
       expect(edits.single, {'source': 'agent:a', 'target': 'runtime:r'});
+      expect(tester.takeException(), isNull);
+    },
+  );
+  testWidgets(
+    'smart card slot is hidden without helpers, changes no node or transform when opened, keeps one open, and fits Omarchy popup',
+    (tester) async {
+      final edits = <Map<String, dynamic>>[];
+      await mount(tester, edits: edits, smartCards: false);
+      expect(find.byType(MapSmartCard), findsNothing);
+
+      final controller = TransformationController()
+        ..value = (Matrix4.identity()..translateByDouble(10, 12, 0, 1));
+      addTearDown(controller.dispose);
+      final popup = Size(
+        popupSize.width.toDouble(),
+        popupSize.height.toDouble(),
+      );
+      await mount(
+        tester,
+        edits: edits,
+        smartCards: true,
+        controller: controller,
+        size: popup,
+      );
+      expect(find.byType(MapSmartCard), findsNWidgets(4));
+      for (final (col, _) in mapSmartColumns) {
+        final card = tester.widget<MapSmartCard>(
+          find.byKey(ValueKey('smart-card-$col')),
+        );
+        expect(card.open, isFalse);
+        expect(
+          tester.getSize(find.byKey(ValueKey('smart-card-$col'))),
+          const Size(266, 38),
+        );
+      }
+
+      Map<String, Rect> nodeRects() => {
+        for (final label in [
+          'agent:a',
+          'agent:b',
+          'runtime:r',
+          'runtime:s',
+          'model:r:m',
+          'model:r:n',
+          'mcp:c',
+        ])
+          label: tester.getRect(find.text(label)),
+      };
+      final beforeNodes = nodeRects();
+      final beforeMatrix = controller.value.clone();
+
+      // Open the Agents smart card: node positions and transform do not change.
+      await tester.tap(find.byKey(const ValueKey('smart-card-agents')));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<MapSmartCard>(
+              find.byKey(const ValueKey('smart-card-agents')),
+            )
+            .open,
+        isTrue,
+      );
+      expect(nodeRects(), beforeNodes);
+      expect(controller.value, beforeMatrix);
+      final agentsRect = tester.getRect(
+        find.byKey(const ValueKey('smart-card-agents')),
+      );
+      expect(agentsRect.left, greaterThanOrEqualTo(0));
+      expect(agentsRect.top, greaterThanOrEqualTo(0));
+      expect(agentsRect.right, lessThanOrEqualTo(popup.width));
+      expect(agentsRect.bottom, lessThanOrEqualTo(popup.height));
+
+      // Opening another column closes the previously open card, and even the rightmost
+      // column (Models) stays inside the 1100 × 760 Omarchy popup size.
+      await tester.tap(find.byKey(const ValueKey('smart-card-models')));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<MapSmartCard>(
+              find.byKey(const ValueKey('smart-card-agents')),
+            )
+            .open,
+        isFalse,
+      );
+      expect(
+        tester
+            .widget<MapSmartCard>(
+              find.byKey(const ValueKey('smart-card-models')),
+            )
+            .open,
+        isTrue,
+      );
+      expect(
+        find.byWidgetPredicate((w) => w is MapSmartCard && w.open),
+        findsOneWidget,
+      );
+      expect(nodeRects(), beforeNodes);
+      expect(controller.value, beforeMatrix);
+      final modelsRect = tester.getRect(
+        find.byKey(const ValueKey('smart-card-models')),
+      );
+      expect(modelsRect.left, greaterThanOrEqualTo(0));
+      expect(modelsRect.top, greaterThanOrEqualTo(0));
+      expect(modelsRect.right, lessThanOrEqualTo(popup.width));
+      expect(modelsRect.bottom, lessThanOrEqualTo(popup.height));
       expect(tester.takeException(), isNull);
     },
   );
