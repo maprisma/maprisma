@@ -50,7 +50,15 @@ gives all tools back. So the app proves it, with the method already used by hand
 - The result is kept per agent and version (`~/.local/state/maprisma/smart-helpers.json`). A new version tests again.
 - A failure keeps the agent out and says why in its details. It is never an error on the map.
 
-It costs a few tokens of the user's plan, so it runs only with their OK, see the questions.
+## Tokens: always the user's decision (Uwe, 2026-10-30)
+Nothing spends a user's tokens without their act. No test, retry or background check does it on its own.
+
+- **Self test:** when a card is opened and an agent is ready but not proved, the card names it and offers
+  **Test {agent} (a few tokens)** and **Not now**. Nothing runs before that click. "Not now" is kept until the agent's
+  version changes; the agent stays out meanwhile. A local agent is tested the same way, without the token wording.
+- **A request:** the card shows who answers and what it costs before **Ask**; that click is the consent, for one
+  request. A failed answer is not sent again by itself.
+- **No helper proved yet:** the card says so and offers the test, it is not hidden, once an agent is ready.
 
 ## Agent by agent
 Each is a small task: read the agent's own docs, find the flags, write `[smart]`, run the self test on a PC where the
@@ -70,12 +78,9 @@ answer: it needs its credentials and the network, and a hostile model card could
 Agents differ in how well they keep to JSON. The core takes the first valid JSON object and refuses the rest, so a bad
 answer is a helpful error, never an action. A helper that fails twice in a row is offered less, not removed.
 
-## Questions for Uwe
-1. **When does the self test run?** Recommended: once per agent and version, when the user first opens a smart card,
-   after one notice ("Antigravity is tested once, a few tokens"). Alternative: silently at the first start after
-   sign-in, more automatic, but it spends tokens unasked.
-2. **May an agent with only a plan's limits be used by default,** or only local ones until the user chooses? Recommended:
-   the order above, with the cost line on the card.
+## Decided (Uwe, 2026-10-30)
+The test runs once per agent and version, when a card is first opened, after the user's click. Order of helpers:
+the local helper, then `ai_checks_agent`, then the others, with the cost line on the card.
 
 ## Order
 Steps 1 and the rule go with task 004's core; the self test is the next task (005); steps 2 to 4 are one small task

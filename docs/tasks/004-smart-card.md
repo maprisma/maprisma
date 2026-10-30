@@ -27,6 +27,9 @@ one request; a guarded agent proposes, the core checks, the user decides through
 6. **Who may answer:** the rule in `docs/plan-smart-helpers.md`, no list of agents. In this task: Claude Code, Codex
    and Pi (Pi also as the confirmed local helper); others follow without a change to the GUI.
 
+7. **Tokens are always the user's decision** (Uwe): the card shows who answers and what it costs; only the click on
+   Ask sends. No retry, no background request. See `docs/plan-smart-helpers.md`.
+
 ## Routes (`routes.json`, written by Claude first; the GUI builds against them)
 `map.smart_helpers`, `map.smart_ask` (`column`: mcp · agents · providers · models, `command`, `request`, `answer?`; result
 `{task}`, then in `tasks.status`: status proposal · clarify · redirect · error, as in the proposal's section 6 without
