@@ -8,6 +8,7 @@ import 'map_layout_test.dart' show fixtureGraph;
 Future<void> mount(
   WidgetTester tester, {
   required List<Map<String, dynamic>> edits,
+  Map<String, dynamic>? graph,
   Map<String, dynamic>? saved,
   ValueChanged<Map<String, dynamic>>? onLayout,
   bool active = false,
@@ -28,7 +29,7 @@ Future<void> mount(
         ),
         child: Scaffold(
           body: MapEditor(
-            graph: fixtureGraph(active: active),
+            graph: graph ?? fixtureGraph(active: active),
             saved: saved ?? {},
             onLayout: onLayout,
             onEdit: (e) async {
@@ -166,7 +167,102 @@ void main() {
       edits.clear();
       await tester.drag(find.text('Agents'), const Offset(40, 60));
       await tester.pumpAndSettle();
-      expect((saved.last['cards'] as Map)['1:agent:'], isNotNull);
+      expect((saved.last['card_order'] as List), contains('1:agent:'));
+      expect(saved.last.containsKey('cards'), false);
+      expect(edits, isEmpty);
+      expect(tester.takeException(), isNull);
+    },
+  );
+  testWidgets(
+    'group cards stay in their column with 2 px drop line and Earlier/Later menu only',
+    (tester) async {
+      final edits = <Map<String, dynamic>>[], saved = <Map<String, dynamic>>[];
+      final base = fixtureGraph();
+      final graph = {
+        ...base,
+        'nodes': [
+          ...(base['nodes'] as List),
+          {
+            'id': 'skills:s',
+            'kind': 'skills',
+            'column': 0,
+            'label': 'skills:s',
+            'detail': '',
+          },
+        ],
+      };
+      await mount(
+        tester,
+        edits: edits,
+        graph: graph,
+        saved: {
+          'cards': {
+            '0:mcp:': [600, 400],
+          },
+        },
+        onLayout: saved.add,
+      );
+      final mcpHeader = find
+          .ancestor(
+            of: find.text('MCP servers'),
+            matching: find.byType(Positioned),
+          )
+          .first;
+      final skillsHeader = find
+          .ancestor(of: find.text('Skills'), matching: find.byType(Positioned))
+          .first;
+      expect(tester.getTopLeft(mcpHeader).dx, 16);
+      expect(tester.getTopLeft(skillsHeader).dx, 16);
+      expect(
+        tester.getTopLeft(mcpHeader).dy,
+        lessThan(tester.getTopLeft(skillsHeader).dy),
+      );
+
+      // Header menu only has Earlier card and Later card (the four Move items are gone).
+      await tester.tap(
+        find.descendant(
+          of: mcpHeader,
+          matching: find.byType(PopupMenuButton<String>),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Earlier card'), findsOneWidget);
+      expect(find.text('Later card'), findsOneWidget);
+      expect(find.text('Move left'), findsNothing);
+      expect(find.text('Move right'), findsNothing);
+      expect(find.text('Move up'), findsNothing);
+      expect(find.text('Move down'), findsNothing);
+      // Trying Earlier card on the top card in column 0 keeps it in column 0 at index 0.
+      await tester.tap(find.text('Earlier card'));
+      await tester.pumpAndSettle();
+      expect(tester.getTopLeft(mcpHeader).dx, 16);
+      expect(
+        tester.getTopLeft(mcpHeader).dy,
+        lessThan(tester.getTopLeft(skillsHeader).dy),
+      );
+
+      // Vertical drag shows the 2 px drop line inside the column and reorders on release,
+      // while horizontal offset cannot move the card out of its column.
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.text('MCP servers')),
+      );
+      await gesture.moveBy(const Offset(250, 260));
+      await tester.pump();
+      final dropLine = find.byKey(const ValueKey('card-drop-line'));
+      expect(dropLine, findsOneWidget);
+      final lineRect = tester.getRect(dropLine);
+      expect(lineRect.left, 16);
+      expect(lineRect.width, 266);
+      expect(lineRect.height, 2);
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(dropLine, findsNothing);
+      expect(tester.getTopLeft(mcpHeader).dx, 16);
+      expect(tester.getTopLeft(skillsHeader).dx, 16);
+      expect(
+        tester.getTopLeft(skillsHeader).dy,
+        lessThan(tester.getTopLeft(mcpHeader).dy),
+      );
       expect(edits, isEmpty);
       expect(tester.takeException(), isNull);
     },

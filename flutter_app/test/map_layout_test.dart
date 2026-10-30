@@ -72,17 +72,48 @@ void main() {
     },
   );
   test(
-    'saved layout retains folds, order and moves independently of graph',
+    'saved layout retains folds and column order, and ignores old free card positions',
     () {
-      final graph = fixtureGraph(), l = MapLayout(fixtureGraph(), {});
-      final saved = reorderMapBox({}, l, 'agent:b', 0);
-      expect(MapLayout(graph, saved).cards['1:agent:']!.nodes.first, 'agent:b');
-      final moved = moveMapCard(saved, l, '1:agent:', const Offset(40, 300));
-      expect(
-        MapLayout(graph, moved).cards['1:agent:']!.rect.topLeft,
-        const Offset(40, 300),
+      final graph = {
+        ...fixtureGraph(),
+        'nodes': [
+          ...(fixtureGraph()['nodes'] as List),
+          {
+            'id': 'skills:s',
+            'kind': 'skills',
+            'column': 0,
+            'label': 'skills:s',
+            'detail': '',
+          },
+        ],
+      };
+      final l = MapLayout(graph, {
+        'cards': {
+          '0:mcp:': [500, 300],
+          '1:agent:': [40, 300],
+        },
+      });
+      // Old free card coordinates in `cards` are ignored; cards stay in their column.
+      expect(l.cards['0:mcp:']!.rect.topLeft, const Offset(16, 144));
+      expect(l.cards['1:agent:']!.rect.topLeft, const Offset(318, 144));
+      final saved = reorderMapBox(
+        l.cards.isEmpty ? {} : {'cards': {}},
+        l,
+        'agent:b',
+        0,
       );
-      expect((graph['nodes'] as List).length, 7);
+      expect(MapLayout(graph, saved).cards['1:agent:']!.nodes.first, 'agent:b');
+      final reordered = reorderMapCard(saved, l, '0:mcp:', 1);
+      expect(reordered.containsKey('cards'), false);
+      final after = MapLayout(graph, reordered);
+      final col0 = [
+        for (final c in after.cards.values)
+          if (c.column == 0) c.id,
+      ];
+      expect(col0, ['0:skills:', '0:mcp:']);
+      expect(after.cards['0:skills:']!.rect.left, 16);
+      expect(after.cards['0:mcp:']!.rect.left, 16);
+      expect((fixtureGraph()['nodes'] as List).length, 7);
     },
   );
 }

@@ -132,10 +132,7 @@ class MapLayout {
       ids.sort((a, b) => (rank[a] ?? 10000).compareTo(rank[b] ?? 10000));
       final column = nodes[ids.first]!['column'] as int;
       final folded = (saved['collapsed'] as List? ?? []).contains(id);
-      final xy = (saved['cards'] as Map?)?[id] as List?;
-      final origin = xy == null
-          ? Offset(16 + column * 302, heights[column] ?? top)
-          : Offset((xy[0] as num).toDouble(), (xy[1] as num).toDouble());
+      final origin = Offset(16 + column * 302, heights[column] ?? top);
       final height = folded ? 38.0 : 48 + ids.length * mapRowStep;
       final rect = origin & Size(266, height);
       final first = nodes[ids.first]!;
@@ -328,6 +325,30 @@ class MapLayout {
         providerFor(model) != null &&
         connected(agent, providerFor(model)!);
   }
+
+  (int, Rect) cardDrop(String id, double y) {
+    final card = cards[id]!;
+    final colCards = [
+      for (final c in cards.values)
+        if (c.column == card.column) c,
+    ];
+    final current = colCards.indexOf(card);
+    final index = [
+      for (final other in colCards)
+        if (other.id != id &&
+            (other.rect.top < card.rect.top
+                ? y >= other.rect.bottom
+                : y > other.rect.top))
+          other,
+    ].length;
+    final lineY = index > current
+        ? colCards[index].rect.bottom + 9
+        : colCards[index].rect.top - 9;
+    return (
+      index,
+      Rect.fromLTWH(card.rect.left, lineY - 1, card.rect.width, 2),
+    );
+  }
 }
 
 Map<String, dynamic> reorderMapBox(
@@ -345,45 +366,25 @@ Map<String, dynamic> reorderMapBox(
   };
 }
 
-Map<String, dynamic> moveMapCard(
+Map<String, dynamic> reorderMapCard(
   Map<String, dynamic> saved,
   MapLayout layout,
   String id,
-  Offset position,
+  int index,
 ) {
-  final positions = <String, dynamic>{...?saved['cards'] as Map?};
   final card = layout.cards[id]!;
-  var rect = Rect.fromLTWH(
-    position.dx.clamp(0, 29000),
-    position.dy.clamp(120, 29000),
-    card.rect.width,
-    card.rect.height,
-  );
-  positions[id] = [rect.left, rect.top];
-  final placed = <Rect>[rect];
-  final others = layout.cards.values.where((c) => c.id != id).toList()
-    ..sort((a, b) => a.rect.top.compareTo(b.rect.top));
-  for (final other in others) {
-    var candidate = other.rect;
-    while (placed.any((r) => r.inflate(8).overlaps(candidate))) {
-      final bottom =
-          placed
-              .where((r) => r.inflate(8).overlaps(candidate))
-              .map((r) => r.bottom)
-              .reduce(math.max) +
-          18;
-      if (bottom > 30000) return saved;
-      candidate = Rect.fromLTWH(
-        candidate.left,
-        bottom,
-        candidate.width,
-        candidate.height,
-      );
-    }
-    placed.add(candidate);
-    if (candidate != other.rect) {
-      positions[other.id] = [candidate.left, candidate.top];
-    }
-  }
-  return {...saved, 'cards': positions};
+  final colCards = [
+    for (final c in layout.cards.values)
+      if (c.column == card.column && c.id != id) c.id,
+  ];
+  colCards.insert(index.clamp(0, colCards.length), id);
+  return {
+    for (final e in saved.entries)
+      if (e.key != 'cards') e.key: e.value,
+    'card_order': [
+      for (final c in layout.cards.values)
+        if (c.column != card.column) c.id,
+      ...colCards,
+    ],
+  };
 }

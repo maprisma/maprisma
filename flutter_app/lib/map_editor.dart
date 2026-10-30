@@ -61,10 +61,11 @@ class _MapEditorState extends State<MapEditor>
   Set<String> get _selected => widget.selection ?? _localSelection;
   late Map<String, dynamic> _saved;
   MapLayout? _layout;
-  String? _source, _hover;
+  String? _source, _hover, _draggingCard;
   bool _pointerDrawing = false;
   Map<String, dynamic>? _moving;
   Offset? _cursor;
+  double? _draggingCardY;
   double _reorderDistance = 0;
   int _staticRevision = 0;
   @override
@@ -571,14 +572,36 @@ class _MapEditorState extends State<MapEditor>
                                 width: card.rect.width,
                                 height: 36,
                                 child: GestureDetector(
-                                  onPanUpdate: (d) => _save(
-                                    moveMapCard(
-                                      _saved,
-                                      layout,
-                                      card.id,
-                                      card.rect.topLeft + d.delta,
-                                    ),
+                                  behavior: HitTestBehavior.opaque,
+                                  onVerticalDragStart: (d) => _renderChange(() {
+                                    _draggingCard = card.id;
+                                    _draggingCardY = _local(
+                                      d.globalPosition,
+                                    ).dy;
+                                  }),
+                                  onVerticalDragUpdate: (d) => _renderChange(
+                                    () => _draggingCardY = _local(
+                                      d.globalPosition,
+                                    ).dy,
                                   ),
+                                  onVerticalDragEnd: (_) {
+                                    final y = _draggingCardY;
+                                    _draggingCard = null;
+                                    _draggingCardY = null;
+                                    if (y == null) return;
+                                    _save(
+                                      reorderMapCard(
+                                        _saved,
+                                        layout,
+                                        card.id,
+                                        layout.cardDrop(card.id, y).$1,
+                                      ),
+                                    );
+                                  },
+                                  onVerticalDragCancel: () => _renderChange(() {
+                                    _draggingCard = null;
+                                    _draggingCardY = null;
+                                  }),
                                   child: Row(
                                     children: [
                                       IconButton(
@@ -603,81 +626,54 @@ class _MapEditorState extends State<MapEditor>
                                       PopupMenuButton<String>(
                                         tooltip: widget.tr('Move card'),
                                         onSelected: (direction) {
-                                          if (direction == 'before' ||
-                                              direction == 'after') {
-                                            final order = layout.cards.keys
-                                                .toList();
-                                            final index = order.indexOf(
-                                              card.id,
-                                            );
-                                            order.remove(card.id);
-                                            order.insert(
-                                              (index +
-                                                      (direction == 'before'
-                                                          ? -1
-                                                          : 1))
-                                                  .clamp(0, order.length),
-                                              card.id,
-                                            );
-                                            final positions = {
-                                              ...?_saved['cards'] as Map?,
-                                            };
-                                            for (final c
-                                                in layout.cards.values.where(
-                                                  (c) =>
-                                                      c.column == card.column,
-                                                )) {
-                                              positions.remove(c.id);
-                                            }
-                                            _save({
-                                              ..._saved,
-                                              'card_order': order,
-                                              'cards': positions,
-                                            });
-                                            return;
-                                          }
-                                          final delta = {
-                                            'left': const Offset(-30, 0),
-                                            'right': const Offset(30, 0),
-                                            'up': const Offset(0, -30),
-                                            'down': const Offset(0, 30),
-                                          }[direction]!;
+                                          final colCards = [
+                                            for (final c in layout.cards.values)
+                                              if (c.column == card.column) c.id,
+                                          ];
+                                          final index = colCards.indexOf(
+                                            card.id,
+                                          );
                                           _save(
-                                            moveMapCard(
+                                            reorderMapCard(
                                               _saved,
                                               layout,
                                               card.id,
-                                              card.rect.topLeft + delta,
+                                              index +
+                                                  (direction == 'before'
+                                                      ? -1
+                                                      : 1),
                                             ),
                                           );
                                         },
                                         itemBuilder: (_) => [
-                                          for (final d in [
-                                            'left',
-                                            'right',
-                                            'up',
-                                            'down',
-                                            'before',
-                                            'after',
-                                          ])
+                                          for (final d in ['before', 'after'])
                                             PopupMenuItem(
                                               value: d,
                                               child: Text(
                                                 widget.tr(
-                                                  {
-                                                    'before': 'Earlier card',
-                                                    'after': 'Later card',
-                                                    'left': 'Move left',
-                                                    'right': 'Move right',
-                                                    'up': 'Move up',
-                                                    'down': 'Move down',
-                                                  }[d]!,
+                                                  d == 'before'
+                                                      ? 'Earlier card'
+                                                      : 'Later card',
                                                 ),
                                               ),
                                             ),
                                         ],
                                       ),
                                     ],
+                                  ),
+                                ),
+                              ),
+                            if (_draggingCard != null &&
+                                _draggingCardY != null &&
+                                layout.cards.containsKey(_draggingCard))
+                              Positioned.fromRect(
+                                rect: layout
+                                    .cardDrop(_draggingCard!, _draggingCardY!)
+                                    .$2,
+                                child: IgnorePointer(
+                                  child: ColoredBox(
+                                    key: const ValueKey('card-drop-line'),
+                                    color: colors.primary,
                                   ),
                                 ),
                               ),
