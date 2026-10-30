@@ -1,4 +1,5 @@
 {
+  "System Map": "Systemkarte",
   "Costs": "Kosten",
   "Currency": "Währung",
   "US dollar ($)": "US-Dollar ($)",
@@ -325,7 +326,6 @@
   "Skip": "Überspringen",
   "Some components need an explicit check. Executable, network and credential probes were skipped.": "Einige Komponenten müssen ausdrücklich geprüft werden. Programm-, Netzwerk- und Zugangsdatenprüfungen wurden übersprungen.",
   "Some runtimes will need their model folder updated after this move.": "Bei einigen Laufzeiten muss der Modellordner nach dem Verschieben angepasst werden.",
-  "System Map": "Systemkarte",
   "The new folder is on another disk: copied first, then removed here.": "Der neue Ordner liegt auf einem anderen Laufwerk: erst kopiert, dann hier entfernt.",
   "The saved map opens immediately. Visits refresh status; Refresh searches mounted disks and measures sizes. Missing disks stay visible.": "Die gespeicherte Karte erscheint sofort. Aufrufe aktualisieren den Status; Aktualisieren durchsucht eingehängte Datenträger und misst Größen. Fehlende Datenträger bleiben sichtbar.",
   "The selected AI agent and, for an online model, its service receive this System Map, including folder paths. Its use may consume your plan or tokens.": "Der gewählte KI-Agent und bei einem Online-Modell dessen Dienst erhalten diese Systemkarte einschließlich Ordnerpfaden. Die Nutzung kann dein Kontingent oder Tokens verbrauchen.",

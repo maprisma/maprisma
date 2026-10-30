@@ -1,6 +1,7 @@
 import 'health_card.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
+import 'runtime_details_card.dart';
 
 typedef ProviderOperation =
     Future<Map<String, dynamic>?> Function(
@@ -210,6 +211,13 @@ class ProvidersView extends StatelessWidget {
                           ),
                       ],
                     ),
+                    if (onCall != null && rt['installed'] == true)
+                      RuntimeDetailsCard(
+                        key: ValueKey('runtime-details-${rt['key']}'),
+                        runtime: rt['key'] as String,
+                        call: onCall!,
+                        tr: tr,
+                      ),
                     if (onCall != null && rt['installed'] == true)
                       HealthCard(
                         key: ValueKey('health-${rt['key']}'),

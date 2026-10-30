@@ -2,6 +2,7 @@ import 'health_card.dart';
 import 'package:flutter/material.dart';
 import 'agent_usage.dart';
 import 'cost_card.dart';
+import 'projects_card.dart';
 import 'project_start_menu.dart';
 
 class AgentDetailsView extends StatelessWidget {
@@ -79,6 +80,12 @@ class AgentDetailsView extends StatelessWidget {
             command: command,
             call: onCall!,
             tr: tr,
+          ),
+        if (onCall != null)
+          ProjectsCard(
+            key: ValueKey('projects-$command'),
+            command: command,
+            call: onCall!,
           ),
         const SizedBox(height: 16),
         if (onAction != null)

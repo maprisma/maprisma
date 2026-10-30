@@ -1,4 +1,5 @@
 {
+  "System Map": "System Map",
   "Costs": "Costs",
   "Currency": "Currency",
   "US dollar ($)": "US dollar ($)",
@@ -325,7 +326,6 @@
   "Skip": "Skip",
   "Some components need an explicit check. Executable, network and credential probes were skipped.": "Some components need an explicit check. Executable, network and credential probes were skipped.",
   "Some runtimes will need their model folder updated after this move.": "Some runtimes will need their model folder updated after this move.",
-  "System Map": "System Map",
   "The new folder is on another disk: copied first, then removed here.": "The new folder is on another disk: copied first, then removed here.",
   "The saved map opens immediately. Visits refresh status; Refresh searches mounted disks and measures sizes. Missing disks stay visible.": "The saved map opens immediately. Visits refresh status; Refresh searches mounted disks and measures sizes. Missing disks stay visible.",
   "The selected AI agent and, for an online model, its service receive this System Map, including folder paths. Its use may consume your plan or tokens.": "The selected AI agent and, for an online model, its service receive this System Map, including folder paths. Its use may consume your plan or tokens.",

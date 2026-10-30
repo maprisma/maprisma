@@ -5,6 +5,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 KEYS = (
+    # Details of MCP servers and skills.
+    "System Map",
+    # A local LLM's details.
     # Settings › Costs.
     "Costs",
     "Currency",

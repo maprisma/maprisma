@@ -1,4 +1,5 @@
 {
+  "System Map": "Systeemkaart",
   "Costs": "Kosten",
   "Currency": "Valuta",
   "US dollar ($)": "Amerikaanse dollar ($)",
@@ -325,7 +326,6 @@
   "Skip": "Overslaan",
   "Some components need an explicit check. Executable, network and credential probes were skipped.": "Sommige componenten vereisen een expliciete controle. Programma-, netwerk- en aanmeldgegevenscontroles zijn overgeslagen.",
   "Some runtimes will need their model folder updated after this move.": "Voor sommige runtimes moet de modelmap na deze verplaatsing worden bijgewerkt.",
-  "System Map": "Systeemkaart",
   "The new folder is on another disk: copied first, then removed here.": "De nieuwe map staat op een andere schijf: eerst gekopieerd, dan hier verwijderd.",
   "The saved map opens immediately. Visits refresh status; Refresh searches mounted disks and measures sizes. Missing disks stay visible.": "De opgeslagen kaart verschijnt direct. Bezoeken vernieuwen de status; Vernieuwen doorzoekt aangekoppelde schijven en meet groottes. Ontbrekende schijven blijven zichtbaar.",
   "The selected AI agent and, for an online model, its service receive this System Map, including folder paths. Its use may consume your plan or tokens.": "De gekozen AI-agent en bij een online model diens dienst ontvangen deze systeemkaart, inclusief mappaden. Het gebruik kan je abonnement of tokens verbruiken.",

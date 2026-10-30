@@ -31,6 +31,7 @@ import 'api_key_review.dart';
 import 'performance_view.dart';
 import 'interrupted_jobs.dart';
 import 'help_view.dart';
+import 'item_details_view.dart';
 import 'map_layout.dart' show withAgentLinks;
 import 'open_problems_view.dart';
 import 'agent_action_dialog.dart';
@@ -828,7 +829,10 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
       ? {'nodes': <dynamic>[], 'edges': <dynamic>[]}
       : _graph == null
       ? {'nodes': <dynamic>[], 'edges': <dynamic>[]}
-      : {...withAgentLinks(_graph!), 'agent_badges': _agentBadges};
+      : {
+          ...withAgentLinks(_graph!),
+          'agent_badges': {..._agentBadges, ..._gpuBadges},
+        };
 
   Map<int, int> get _groupAvailable => {
     for (final col in [1, 2])
@@ -1255,6 +1259,24 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
   Map<String, dynamic> _agentBadges = {};
   bool _rateAsked = false;
 
+  /// Running local LLMs: the GPU memory still free as a battery in their
+  /// box (gpu.snapshot, read only: sysfs, their processes, their own APIs).
+  Map<String, dynamic> _gpuBadges = {};
+
+  Future<void> _loadGpu() async {
+    if (_backend?.isConnected != true) return;
+    try {
+      final found = await _quietTask('gpu.snapshot', {});
+      if (mounted) {
+        setState(
+          () => _gpuBadges = found['badges'] as Map<String, dynamic>? ?? {},
+        );
+      }
+    } catch (_) {
+      // Shown next time.
+    }
+  }
+
   Future<void> _loadBadges() async {
     if (_backend?.isConnected != true) return;
     try {
@@ -1670,6 +1692,7 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
     Map<String, dynamic> params,
   ) async {
     final started = await _backend!.call(method, params);
+    if (started['task'] is! String) throw StateError('$method started no task');
     while (true) {
       final status = await _backend!.call('tasks.status', {
         'task': started['task'],
@@ -1898,6 +1921,50 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
       _selectAgent((node['id'] as String).substring(6));
       return;
     }
+    final id = node['id'] as String;
+    if (!_busy && (id.startsWith('mcp:') || id.startsWith('skills:'))) {
+      unawaited(_itemDetails(node));
+      return;
+    }
+    _systemNode(node);
+  }
+
+  /// An MCP server's or a skill set's box: its details (details.mcp /
+  /// details.skills); the System Map is a button away, as before.
+  Future<void> _itemDetails(Map<String, dynamic> node) async {
+    final id = node['id'] as String;
+    final mcp = id.startsWith('mcp:');
+    Map<String, dynamic> details;
+    try {
+      details = await _backend!.call(
+        mcp ? 'details.mcp' : 'details.skills',
+        mcp ? {'name': id.substring(4)} : {'path': id.substring(7)},
+      );
+    } catch (_) {
+      _systemNode(node);
+      return;
+    }
+    if (!mounted) return;
+    var toSystem = false;
+    await _cardReview(
+      '${details['title']}',
+      {
+        'focus': [id],
+      },
+      (yes, no) => ItemDetailsView(
+        details: details,
+        tr: tr,
+        onSystemMap: () {
+          toSystem = true;
+          no();
+        },
+        onClose: no,
+      ),
+    );
+    if (toSystem && mounted) _systemNode(node);
+  }
+
+  void _systemNode(Map<String, dynamic> node) {
     String? target;
     if (node['kind'] == 'runtime') {
       target = node['id'] as String;
@@ -3124,12 +3191,14 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
         _limitsTimer ??= Timer.periodic(const Duration(minutes: 1), (_) {
           if (_backend?.isConnected == true) {
             unawaited(_loadBadges());
+            unawaited(_loadGpu());
             unawaited(
               _backend!.call('limits.notify').then((_) {}, onError: (_) {}),
             );
           }
         });
         unawaited(_loadBadges());
+        unawaited(_loadGpu());
       }
       unawaited(_loadAddonHints());
       unawaited(_loadFoundHints());

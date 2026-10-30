@@ -60,7 +60,7 @@ class _CostCardState extends State<CostCard> {
   @override
   Widget build(BuildContext context) {
     final card = _card;
-    if (card == null) return const SizedBox.shrink();
+    if (card == null || card['tiles'] is! List) return const SizedBox.shrink();
     final text = Theme.of(context).textTheme;
     return Card(
       key: ValueKey('cost-${widget.command}'),

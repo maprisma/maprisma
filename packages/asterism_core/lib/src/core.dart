@@ -12,6 +12,9 @@ import 'addon_store.dart';
 import 'addon_hints.dart';
 import 'agent_badges.dart';
 import 'costs.dart';
+import 'projects.dart' show projectsCard;
+import 'runtime_details.dart';
+import 'session_readers.dart' show NumericSession, SessionReaders;
 import 'usage_readers.dart' show UsageReaders;
 import 'found_scan.dart';
 import 'mcp_update.dart';
@@ -150,6 +153,11 @@ const portedRoutes = {
   'found.update_preview',
   'agents.costs',
   'map.badges',
+  'agents.projects',
+  'gpu.snapshot',
+  'providers.details',
+  'details.mcp',
+  'details.skills',
   'costs.rate',
   ...readOnlyRoutes,
 };
@@ -322,6 +330,197 @@ final class CoreService {
                   rateEvery),
     };
   }
+
+  /// mcp_pages.open_mcp_details / open_skills_details: which agents have an
+  /// MCP server and how each starts or calls it (values of keys and tokens
+  /// hidden), or which agents read a skill set and how, with each skill's
+  /// description; who has not got it yet.
+  Map<String, dynamic> itemDetails(String method, Map<String, dynamic> params) {
+    final field = method == 'details.mcp' ? 'name' : 'path';
+    if (params.length != 1 || params[field] is! String) {
+      throw const FormatException('Invalid request');
+    }
+    final agents = reads.catalog.scan();
+    final inventory = reads.inventory.collect(agents, remember: false);
+    final names = {for (final a in agents) a.command: a.name};
+    final tr = i18n.text;
+    String notSet(List<String> missing) =>
+        '${missing.join(', ')} · ${tr('draw a line from the agent to this box on the map to add it.')}';
+    if (method == 'details.mcp') {
+      final name = params['name'] as String;
+      final server = inventory.mcp.where((m) => m['name'] == name).firstOrNull;
+      if (server == null) throw const FormatException('Unknown MCP server');
+      final users = [
+        for (final a in server['agents'] as List? ?? const []) '$a',
+      ];
+      List<List<String>> rows(String command) {
+        final spec = mcp.spec(command);
+        final prof = spec == null ? mcp.profile(command) : null;
+        final file = spec != null
+            ? '${spec['path'] ?? ''}'
+            : prof != null
+            ? '${prof['file'] ?? ''}'
+            : '';
+        final out = [
+          [
+            tr('Settings file'),
+            config.tilde(mcp.expand(file)),
+            tr('Where this agent keeps the server.'),
+          ],
+        ];
+        final entry = normalEntry(mcp.rawEntries(command)[name]);
+        if (entry == null) {
+          return [
+            ...out,
+            [tr('Type'), tr('cannot be read'), ''],
+          ];
+        }
+        if (entry['transport'] == 'stdio') {
+          return [
+            ...out,
+            [tr('Type'), tr('runs a program (stdio)'), ''],
+            [tr('Command'), '${entry['command']}', ''],
+            [
+              tr('Arguments'),
+              shellJoin([for (final a in entry['args'] as List) '$a']),
+              '',
+            ],
+            [
+              tr('Environment'),
+              [
+                for (final k in (entry['env'] as Map).keys) '$k = •••',
+              ].join(', '),
+              tr('Values are not shown: they may be keys or tokens.'),
+            ],
+          ];
+        }
+        final url = Uri.tryParse('${entry['url']}');
+        final address = url == null
+            ? ''
+            : '${url.scheme}://${url.authority}${url.path}${url.hasQuery ? ' ?…' : ''}';
+        return [
+          ...out,
+          [
+            tr('Type'),
+            tr(
+              entry['transport'] == 'http'
+                  ? 'remote server (HTTP)'
+                  : 'remote server (SSE)',
+            ),
+            '',
+          ],
+          [
+            tr('Address'),
+            address,
+            tr('Query parameters are not shown: they may hold a token.'),
+          ],
+          [
+            tr('Headers'),
+            [
+              for (final k in (entry['headers'] as Map).keys) '$k: •••',
+            ].join(', '),
+            tr('Values are not shown: they may be keys or tokens.'),
+          ],
+        ];
+      }
+
+      final missing = [
+        for (final a in agents)
+          if (a.installed &&
+              !users.contains(a.command) &&
+              mcp.supported(a.command))
+            a.name,
+      ];
+      final cached = cachedTools(identity.home, name);
+      return {
+        'title': tr('MCP server {0}').replaceAll('{0}', name),
+        'intro': tr('An MCP server gives agents tools.'),
+        'text': tr(
+          'The agents below have this server: each starts or calls it when a task needs its tools (listed at the end). You do not call it yourself; ask the agent for the task. To give it to another agent, draw a line on the map from that agent to the server.',
+        ),
+        'sections': [
+          for (final command in users)
+            {'heading': names[command] ?? command, 'rows': rows(command)},
+        ],
+        'missing': missing.isEmpty ? '' : notSet(missing),
+        'missing_title': tr('Not set up'),
+        'tools': [
+          for (final t in (cached?['tools'] as List? ?? const []).cast<Map>())
+            ['${t['name']}', '${t['description'] ?? ''}'],
+        ],
+        'server': name,
+      };
+    }
+    final path = params['path'] as String;
+    final set = inventory.skillSets.where((s) => s['path'] == path).firstOrNull;
+    if (set == null) throw const FormatException('Unknown skill set');
+    final users = [for (final a in set['agents'] as List? ?? const []) '$a'];
+    final folder = skills.expand(path);
+    final ways = <List<String>>[];
+    for (final command in users) {
+      final (through, listed, links) = skills.reach(command, folder);
+      final String text;
+      if (listed) {
+        text = tr('the folder is in its settings');
+      } else if (links.isNotEmpty) {
+        text = tr(
+          'links in its own folder ({0})',
+        ).replaceAll('{0}', skills.ownDir(command) ?? '');
+      } else if (through.isNotEmpty) {
+        text = tr('reads the folder by itself');
+      } else {
+        text = tr('through a folder it reads');
+      }
+      ways.add([names[command] ?? command, text, '']);
+    }
+    final missing = [
+      for (final a in agents)
+        if (a.installed &&
+            !users.contains(a.command) &&
+            skills.ownDir(a.command) != null)
+          a.name,
+    ];
+    final located = {for (final s in skills.skillsOf(folder)) p.basename(s): s};
+    final list = [for (final s in set['skills'] as List? ?? const []) '$s'];
+    String describe(String name) {
+      final at = located[name];
+      if (at == null) return '—';
+      final text = reads.files.text(
+        p.join(at, 'SKILL.md'),
+        limit: 16 * 1024,
+        portion: 'head',
+        follow: true,
+        allowRootOwned: true,
+      );
+      final found = text == null ? '' : skillDescription(text);
+      return found.isEmpty ? '—' : found;
+    }
+
+    return {
+      'title': tr('Skills in {0}').replaceAll('{0}', path),
+      'intro': tr('Skills teach your agents how to do a task.'),
+      'text': tr(
+        'The agents below read this folder. Each one uses a skill from it when a task fits: you just ask for the task. To give the folder to another agent, draw a line on the map from that agent to it.',
+      ),
+      'sections': [
+        {'heading': tr('Used by'), 'rows': ways},
+        {
+          'heading': i18n
+              .plural('1 skill', '{0} skills', list.length)
+              .replaceAll('{0}', '${list.length}'),
+          'rows': [
+            for (final s in list) [s, describe(s), ''],
+          ],
+        },
+      ],
+      'missing': missing.isEmpty ? '' : notSet(missing),
+      'missing_title': tr('Not set up'),
+      'tools': <dynamic>[],
+    };
+  }
+
+  /// The last gpu.snapshot: the GPU's totals and each local LLM's share.
+  Map<String, dynamic> lastGpu = const {};
 
   /// The last look for new programs and skill sets (found.scan): mcp,
   /// versions, not_looked, skills; empty until one was made.
@@ -2733,6 +2932,17 @@ final class CoreService {
     if (method == 'addons.file_preview' || method == 'addons.file_install') {
       return addonFileRoute(method, params);
     }
+    if (method == 'addons.hints') {
+      if (params.isNotEmpty) throw const FormatException('Invalid request');
+      return {
+        'lines': addonHints(
+          catalogRows,
+          {for (final a in addons.items) a.id: a.state},
+          i18n.text,
+          i18n.plural,
+        ),
+      };
+    }
     if (method.startsWith('addons.')) return addonStoreRoute(method, params);
     if (method.startsWith('installers.')) return installerRoute(method, params);
     if (method.startsWith('system.move_')) return moveRoute(method, params);
@@ -2792,6 +3002,130 @@ final class CoreService {
     }
     if (method == 'health.report') return healthReportRoute(params);
     if (method.startsWith('found.')) return foundRoute(method, params);
+    if (method == 'details.mcp' || method == 'details.skills') {
+      return itemDetails(method, params);
+    }
+    if (method == 'providers.details') {
+      if (params.length != 1 || params['key'] is! String) {
+        throw const FormatException('Expected a local LLM');
+      }
+      final agents = reads.catalog.scan();
+      final inventory = reads.inventory.collect(agents, remember: false);
+      final rt = inventory.runtimes
+          .where((r) => r.key == params['key'])
+          .firstOrNull;
+      if (rt == null) throw const FormatException('Unknown local LLM');
+      final names = {for (final a in agents) a.command: a.name};
+      // What agents sent through it: every agent with a session reader.
+      final readers = SessionReaders(reads.files);
+      final sessions = <String, List<NumericSession>>{};
+      for (final a in agents.where((a) => a.installed)) {
+        if (a.adapter.table('sessions').isEmpty) continue;
+        try {
+          sessions[a.name] = readers.read(a.adapter).values.toList();
+        } on Object {
+          continue;
+        }
+      }
+      final connect = [
+        for (final l in providerFacts['local'] as List)
+          if ((l as Map)['key'] == rt.key) '${l['connect_key'] ?? ''}',
+      ].firstOrNull;
+      return {
+        ...runtimeDetails(
+          rt: rt.toJson(),
+          use: (lastGpu['runtimes'] as Map?)?[rt.key] as Map?,
+          agentNames: names,
+          usage: runtimeUsage(
+            rt.models,
+            sessions,
+            connect ?? '',
+            DateTime.now(),
+          ),
+          tr: i18n.text,
+          plural: i18n.plural,
+          tilde: config.tilde,
+        ),
+        'risks': runtimeRisks(rt.installed, rt.address, i18n.text),
+      };
+    }
+    if (method == 'gpu.snapshot') {
+      if (params.isNotEmpty) throw const FormatException('Invalid request');
+      final inventory = reads.inventory.collect(
+        reads.catalog.scan(),
+        remember: false,
+      );
+      return tasks.start(
+        'gpu.snapshot',
+        {
+          'runtimes': [
+            for (final rt in inventory.runtimes)
+              if (rt.installed)
+                {
+                  'key': rt.key,
+                  'name': rt.name,
+                  'address': rt.address,
+                  'models_dir': rt.modelsDir,
+                },
+          ],
+        },
+        (usage) {
+          lastGpu = usage;
+          final saved = settings.load();
+          final levels = warnLevels(
+            settings.value(saved, 'warn_yellow'),
+            settings.value(saved, 'warn_red'),
+          );
+          final total = usage['vram_total'] as int? ?? 0;
+          final used = usage['vram_used'] as int? ?? 0;
+          final free = total - used < 0 ? 0 : total - used;
+          return {
+            ...usage,
+            // Running local LLMs: the GPU memory still free as a battery.
+            'badges': {
+              for (final e in (usage['runtimes'] as Map? ?? const {}).entries)
+                if ((e.value as Map)['running'] == true && total > 0)
+                  'runtime:${e.key}': gpuBattery(
+                    free,
+                    total,
+                    (e.value as Map)['vram'] as int? ?? 0,
+                    levels,
+                    i18n.text,
+                  )!,
+            },
+          };
+        },
+      );
+    }
+    if (method == 'agents.projects') {
+      if (params.length != 1 || params['command'] is! String) {
+        throw const FormatException('Expected an agent');
+      }
+      final agent = reads.catalog
+          .scan()
+          .where((a) => a.command == params['command'])
+          .firstOrNull;
+      if (agent == null) throw const FormatException('Unknown agent');
+      final spec = agent.adapter.table('sessions');
+      if (spec.isEmpty) return {'card': null};
+      var note = spec['note'] is String
+          ? i18n.text(spec['note'] as String)
+          : '';
+      final args = spec['note_args'] as List? ?? const [];
+      for (var i = 0; i < args.length; i++) {
+        note = note.replaceAll('{$i}', '${args[i]}');
+      }
+      return {
+        'card': projectsCard(
+          SessionReaders(reads.files).read(agent.adapter).values,
+          DateTime.now().millisecondsSinceEpoch / 1000,
+          note,
+          i18n.text,
+          i18n.plural,
+          config.tilde,
+        ),
+      };
+    }
     if (method == 'map.badges') {
       if (params.isNotEmpty) throw const FormatException('Invalid request');
       final (badges, rateDue) = agentBadges();
@@ -2808,17 +3142,6 @@ final class CoreService {
     }
     if (method == 'agents.costs' || method == 'costs.rate') {
       return costsRoute(method, params);
-    }
-    if (method == 'addons.hints') {
-      if (params.isNotEmpty) throw const FormatException('Invalid request');
-      return {
-        'lines': addonHints(
-          catalogRows,
-          {for (final a in addons.items) a.id: a.state},
-          i18n.text,
-          i18n.plural,
-        ),
-      };
     }
     if (method == 'limits.notify') {
       if (params.isNotEmpty) {

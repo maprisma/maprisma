@@ -101,6 +101,9 @@ for line in sys.stdin:
  elif m=='models.slots_reload':r={'ok':True}
  elif m=='updates.check':tasks['up']={'updates':[{'kind':'agent','key':'test','name':'Test agent','current':'1.0','available':'1.1','command':['mise','upgrade','test'],'page':False}]};r={'task':'up'}
  elif m=='updates.run':r={'started':True}
+ elif m=='gpu.snapshot':tasks['gpu']={'vram_used':0,'vram_total':0,'busy':None,'runtimes':{},'badges':{}};r={'task':'gpu'}
+ elif m=='map.badges':r={'badges':{},'rate_due':False}
+ elif m in ('agents.projects','agents.costs'):r={'card':None}
  elif m=='found.scan':tasks['found']={'mcp':[],'versions':[],'not_looked':[],'skills':[]};r={'task':'found'}
  elif m=='found.hints':r={'lines':[{'kind':'found','text':'New on this PC: wordcraft','mcp':True,'skills':False}]}
  elif m=='found.list':r=({'checked':True,'set_up':1,'not_looked':[],'items':[{'name':'wordcraft','where':'~/.local/bin/wordcraft-cli','command':['/h/.local/bin/wordcraft-cli','mcp','--headless'],'sure':True,'version':'','new':True,'ready':True},{'name':'vectorcraft','where':'vectorcraft.AppImage','command':['/h/Applications/vectorcraft-1.2.0/usr/bin/vectorcraft-cli','mcp'],'sure':True,'version':'1.2.0','new':False,'ready':False,'program':'/h/Applications/vectorcraft-1.2.0/usr/bin/vectorcraft-cli','unpack_text':'Unpacks vectorcraft.AppImage into ~/Applications/vectorcraft-1.2.0 first (the server lives inside it).'}],'updates':[{'name':'gridcraft','from':'0.7.0','to':'0.8.0','program':'/h/Applications/gridcraft-0.8.0/usr/bin/gridcraft-cli','ready':True,'used_by':'Update · used by Claude Code'}],'not_looked_text':'1 AppImage not looked into yet (wordcraft.AppImage).','looking_text':'Looking inside 1 AppImages…'} if p['kind']=='mcp' else {'checked':True,'items':[]})

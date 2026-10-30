@@ -1,4 +1,5 @@
 {
+  "System Map": "Mapa do sistema",
   "Costs": "Custos",
   "Currency": "Moeda",
   "US dollar ($)": "Dólar americano ($)",
@@ -325,7 +326,6 @@
   "Skip": "Ignorar",
   "Some components need an explicit check. Executable, network and credential probes were skipped.": "Alguns componentes exigem uma verificação explícita. As sondagens de executáveis, rede e credenciais foram ignoradas.",
   "Some runtimes will need their model folder updated after this move.": "Alguns motores precisarão de atualizar a pasta de modelos após esta transferência.",
-  "System Map": "Mapa do sistema",
   "The new folder is on another disk: copied first, then removed here.": "A nova pasta está noutro disco: primeiro copiada, depois removida aqui.",
   "The saved map opens immediately. Visits refresh status; Refresh searches mounted disks and measures sizes. Missing disks stay visible.": "O mapa guardado abre imediatamente. As visitas atualizam o estado; Atualizar pesquisa discos montados e mede tamanhos. Os discos ausentes continuam visíveis.",
   "The selected AI agent and, for an online model, its service receive this System Map, including folder paths. Its use may consume your plan or tokens.": "O agente de IA escolhido e, num modelo online, o seu serviço recebem este mapa do sistema, incluindo caminhos de pastas. A utilização pode consumir o teu plano ou tokens.",

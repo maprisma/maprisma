@@ -57,9 +57,15 @@ final class GpuUsage {
   double? _number(String path) =>
       double.tryParse(_read(path, limit: 64).trim());
 
-  /// gpu_totals()[2]: the busy percent (sysfs, else nvidia-smi).
-  Future<double?> busy() async {
-    if (gpuDir != null) return _number('$gpuDir/gpu_busy_percent');
+  /// gpu_totals: (used, total, busy percent), from sysfs, else nvidia-smi.
+  Future<(int, int, double?)> totals() async {
+    if (gpuDir != null) {
+      return (
+        (_number('$gpuDir/mem_info_vram_used') ?? 0).toInt(),
+        (_number('$gpuDir/mem_info_vram_total') ?? 0).toInt(),
+        _number('$gpuDir/gpu_busy_percent'),
+      );
+    }
     try {
       final process = await Process.start('nvidia-smi', [
         '--query-gpu=memory.used,memory.total,utilization.gpu',
@@ -79,17 +85,48 @@ final class GpuUsage {
         },
       );
       await done.timeout(const Duration(seconds: 1), onTimeout: () {});
-      if (code != 0) return null;
+      if (code != 0) return (0, 0, null);
       final parts = utf8
           .decode(out, allowMalformed: true)
           .split('\n')
           .first
           .split(',');
-      if (parts.length != 3) return null;
-      return double.parse(parts[2].trim());
+      if (parts.length != 3) return (0, 0, null);
+      final mib = 1024 * 1024;
+      return (
+        (double.parse(parts[0].trim()) * mib).toInt(),
+        (double.parse(parts[1].trim()) * mib).toInt(),
+        double.parse(parts[2].trim()),
+      );
     } catch (_) {
-      return null;
+      return (0, 0, null);
     }
+  }
+
+  /// gpu_totals()[2]: the busy percent.
+  Future<double?> busy() async => (await totals()).$3;
+
+  /// snapshot: the GPU's totals and, per local LLM, whether it runs, the
+  /// GPU memory its processes hold and its loaded models (asked only of the
+  /// running ones, on loopback).
+  Future<Map<String, dynamic>> snapshot(List<RuntimeRecord> runtimes) async {
+    final (used, total, percent) = await totals();
+    final groups = runtimePids(scans.processes());
+    final found = <String, dynamic>{};
+    for (final rt in runtimes) {
+      final pids = groups[rt.key] ?? const <int>{};
+      found[rt.key] = {
+        'running': pids.isNotEmpty,
+        'vram': pids.fold(0, (a, pid) => a + procVram(pid)),
+        'models': pids.isEmpty ? <String, String>{} : await loadedModels(rt),
+      };
+    }
+    return {
+      'vram_used': used,
+      'vram_total': total,
+      'busy': percent,
+      'runtimes': found,
+    };
   }
 
   static int _kib(String info, List<String> keys) {

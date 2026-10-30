@@ -1,5 +1,5 @@
 import 'costs.dart';
-import 'py_values.dart' show pyRound;
+import 'py_values.dart' show pyFixedExact, pyRound;
 import 'red_limits.dart' show clock;
 
 /// The badge in an agent's map box (ai_popup.set_agent_battery /
@@ -133,4 +133,26 @@ Map<String, dynamic> costBadge(
           )
           .replaceAll('{2}', limitText),
   };
+}
+
+/// agent_details.gpu_battery: a running local LLM's battery of the GPU
+/// memory still free, with the limits' colours; null without a GPU.
+Map<String, dynamic>? gpuBattery(
+  int free,
+  int total,
+  int own,
+  (double, double) levels,
+  String Function(String) tr,
+) {
+  if (total <= 0) return null;
+  const gib = 1024 * 1024 * 1024;
+  var tip = tr('GPU memory: {0} of {1} GB free')
+      .replaceAll('{0}', pyFixedExact((free < 0 ? 0 : free) / gib, 1))
+      .replaceAll('{1}', pyFixedExact(total / gib, 1));
+  if (own >= 64 * 1024 * 1024) {
+    tip +=
+        '\n${tr('This local LLM uses {0} GB').replaceAll('{0}', pyFixedExact(own / gib, 1))}';
+  }
+  final (left, colour) = charge((free / total).clamp(0.0, 1.0), levels);
+  return {'kind': 'battery', 'left': left, 'colour': colour, 'tip': tip};
 }

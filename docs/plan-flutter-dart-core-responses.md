@@ -2152,3 +2152,87 @@ Check:
   Code, OpenCode, DeepSeek Harness and Pi have no badge, as in the reference (no limits in their usage
   records, not paid per token).
 
+### 6b-20 — The last details: projects, a local LLM's page, MCP server and skill set details
+
+New in the core:
+- **`agents.projects {command}`** (`projects.dart`, the reference is `claude_sessions.projects`,
+  `subagents`, `busiest` and `details_pages.fill_session_projects`): per project folder of the last 30
+  days the working time, sessions, tokens (subagent runs counted in), lines changed and API value; the
+  subagent runs per type; the busiest hour; and the agent's own note on where the numbers come from
+  (`[sessions] note` in its adapter).
+- **`providers.details {key}`** (`runtime_details.dart`, the reference is `open_runtime_status`,
+  `fill_usage_card`, `agent_status.runtime_usage` and `agent_security.runtime_report`):
+  - whether it runs, the GPU memory it holds and its loaded models (from the last GPU snapshot);
+  - tiles for its models (folder), agents and address;
+  - "Usage and tokens through …": what agents sent through it, matched by model name, with a provider
+    prefix counting only for this LLM's connect key;
+  - its risks: who can reach it, no password on the local API, models from the web.
+- **`gpu.snapshot`** (worker, read only): `GpuUsage` (`model_guard.dart`) gained `totals()` (sysfs,
+  else nvidia-smi) and `snapshot()`: per local LLM whether it runs, the GPU memory its processes hold
+  (DRM fdinfo), and its loaded models asked of it on loopback. A running local LLM shows the GPU memory
+  still free as a battery in its box (`gpuBattery`, the limits' colours).
+- **`details.mcp {name}`** and **`details.skills {path}`** (the reference is `mcp_pages.open_mcp_details`,
+  `mcp_rows` and `open_skills_details`). An MCP server shows, per agent that has it, the settings file,
+  its type, and its command and arguments, or its address and headers. Values of environment
+  variables, headers and query parameters are never shown. Also who has not got it, and its tools as
+  last asked. A skill set shows how each agent reads it (by itself, in its settings, links in its own
+  folder) and each skill's description, read from SKILL.md like the reference (also a system folder's).
+  The routes are named `details.*`: `mcp.*` and `skills.*` go to the catalogs first.
+- **Flutter:** `ProjectsCard` in the agent details, `RuntimeDetailsCard` in the local LLM card
+  (status, tiles, usage, Risk management), the GPU battery refreshed every minute, and
+  `ItemDetailsView` when an MCP or skills box is clicked (**System Map** still opens the System Map).
+  The cards show nothing for an answer without their fields. `_quietTask` refuses an answer without a
+  task. The manual's "Details in the Flutter preview" in all eight languages; PDFs rebuilt.
+
+Check:
+- **Parity tests:**
+  - `tests/test_dart_projects_parity.py`: English and German, old sessions, an unknown folder,
+    subagents, lines, API value, the busiest hour.
+  - `tests/test_dart_runtime_details_parity.py`: model-name matching with tags, file endings and
+    prefixes; the risks for loopback, network, no address and not installed; GPU batteries.
+  - `tests/test_dart_item_details_parity.py`: stdio and HTTP entries in Claude Code's and Codex's
+    settings, with environment, query and header values that never appear; a skill set through
+    links, with folded and plain descriptions.
+- **Widget tests** for the three views.
+- **On this PC, read only:** projects for Claude Code and Codex; Ollama's and llama.cpp's pages
+  (models, agents, address, risks); chrome-devtools in Claude Code and Hermes; the omaraw skill's
+  description, as the reference reads it. The GPU totals agree with the reference's (24 GB card,
+  1.6 GB used).
+
+## Phase 6 — final test (2026-10-30)
+
+Phase 6 is complete as planned: 6a (every route in Dart) and 6b-1 to 6b-20. That covers the online
+MCP and skill catalogs and tool checks, web skills, API keys, settings, security, help and
+notifications, tuning, durable jobs, the installer UI, the guide return, the subagent readers and
+add-on file import, and with them the found-on-this-PC, AppImage, app-update, cost, badge and
+details work.
+
+The final test on this PC:
+- **`tools/flutter-dev check`:** `dart analyze --fatal-infos` clean, 74 Dart tests, 69 differential
+  cases, the AOT release transport check (no Python fallback code), Flutter analyze clean and 148
+  Flutter tests.
+- **`tools/flutter-dev build`:** a release bundle with the AOT `asterism-core`.
+- **`python3 -m unittest discover -s tests`:** 1482 tests, among them every Python ↔ Dart parity test
+  of phase 6.
+- **`tools/typecheck.sh`:** 0 errors.
+- **End to end, read only, on the bundle's compiled `asterism-core` against this PC's real data**
+  (caches in a scratch folder): `map.badges`, `agents.costs`, `agents.projects`, `providers.details`,
+  `details.mcp`, `details.skills`, `found.hints` and `addons.hints` all answer.
+
+The test found three faults, all fixed before this checkpoint:
+- **`addons.hints` (6b-16) never reached its branch:** the `addons.*` prefix route answered first.
+  The unit tests and the app test (fake service) hid it. `test/route_reach_test.dart` now sends every
+  6b route through `CoreService.dispatch` and fails when another branch answers. It was checked to
+  catch the earlier `mcp.details` case.
+- **The app could not start against a service without the new routes:** a quiet task without a task
+  id made the test service fail, and every app test with it.
+- **A lint info** that only `--fatal-infos` reports.
+
+Not part of the phase-6 list and not in Flutter yet (GTK features for later):
+- the local helper, starter-model guidance, the map's usage box, daily AI checks and terminal tabs;
+- feature/extension add-ons, which data-only add-ons cannot carry by design;
+- the step 4 work of `plan-flutter.md` (host interaction checks, layout, keyboard/accessibility,
+  clean-VM scenarios).
+
+Next: phase 7, Python out of the app.
+

@@ -713,6 +713,41 @@ Future<int> runWorker(List<String> args) async {
       });
       return 0;
     }
+    // gpu_usage.snapshot: the GPU's totals and each local LLM's share,
+    // its loaded models asked of it on loopback (read only).
+    if (args.isEmpty && request['operation'] == 'gpu.snapshot') {
+      final params = request['params'] as Map;
+      final list = params['runtimes'];
+      if (params.length != 1 ||
+          list is! List ||
+          list.length > 32 ||
+          !list.every(
+            (r) =>
+                r is Map &&
+                r['key'] is String &&
+                r['name'] is String &&
+                r['address'] is String &&
+                r['models_dir'] is String,
+          )) {
+        throw const FormatException('Invalid worker request');
+      }
+      final files = ScanFiles(AppIdentity());
+      final runtimes = [
+        for (final r in list.cast<Map>())
+          RuntimeRecord('${r['key']}', '${r['name']}')
+            ..installed = true
+            ..address = '${r['address']}'
+            ..modelsDir = '${r['models_dir']}',
+      ];
+      send({
+        'type': 'result',
+        'result': await GpuUsage(
+          files,
+          ProviderScans(files),
+        ).snapshot(runtimes),
+      });
+      return 0;
+    }
     // plugin_costs.usd_per_eur: the ECB's daily euro rate, kept a day.
     if (args.isEmpty && request['operation'] == 'costs.rate') {
       final params = request['params'] as Map;

@@ -15,6 +15,9 @@ import 'package:asterism_core/src/found_scan.dart' as fs;
 import 'package:asterism_core/src/mcp_update.dart' as mu;
 import 'package:asterism_core/src/costs.dart' as cost;
 import 'package:asterism_core/src/agent_badges.dart' as badge;
+import 'package:asterism_core/src/projects.dart' as proj;
+import 'package:asterism_core/src/runtime_details.dart' as rtd;
+import 'package:asterism_core/src/claude_sessions.dart' as cs;
 import 'package:asterism_core/src/installers.dart' as inst;
 import 'package:asterism_core/src/provider_scans.dart' show RuntimeRecord;
 import 'package:asterism_core/src/system_map.dart' show SystemMapReader;
@@ -302,6 +305,71 @@ Future<void> main() async {
           params['cache'] as String,
           search: params['search'] == true,
         );
+      } else if (request.method == 'dev.runtime') {
+        // agent_status.runtime_usage, agent_security.runtime_report and
+        // agent_details.gpu_battery.
+        final sessions = {
+          for (final e in (params['sessions'] as Map).entries)
+            '${e.key}': [for (final d in e.value as List) cs.sessionFrom(d)!],
+        };
+        final t = DateTime.parse(params['today'] as String);
+        final usage = rtd.runtimeUsage(
+          (params['models'] as List).cast<String>(),
+          sessions,
+          params['connect_key'] as String,
+          t,
+        );
+        result = {
+          'usage': usage == null
+              ? null
+              : {
+                  ...usage,
+                  'days': [
+                    for (final d
+                        in (usage['days'] as List).cast<(DateTime, int)>())
+                      [
+                        '${d.$1.year}-${'${d.$1.month}'.padLeft(2, '0')}-${'${d.$1.day}'.padLeft(2, '0')}',
+                        d.$2,
+                      ],
+                  ],
+                },
+          'risks': [
+            for (final r in params['risks'] as List)
+              rtd.runtimeRisks(r[0] as bool, r[1] as String, i18n.text),
+          ],
+          'gpu': [
+            for (final g in params['gpu'] as List)
+              badge.gpuBattery(g[0] as int, g[1] as int, g[2] as int, (
+                0.75,
+                0.9,
+              ), i18n.text),
+          ],
+        };
+      } else if (request.method == 'dev.projects') {
+        // details_pages.fill_session_projects over given session numbers.
+        final sessions = [
+          for (final d in params['sessions'] as List)
+            () {
+              final s = cs.sessionFrom(d)!;
+              for (final e in (d['subagents'] as Map).entries) {
+                s.subagents['${e.key}'] = [
+                  for (final n in e.value as List) n as num,
+                ];
+              }
+              return s;
+            }(),
+        ];
+        result = {
+          'card': proj.projectsCard(
+            sessions,
+            (params['now'] as num).toDouble(),
+            params['note'] as String,
+            i18n.text,
+            i18n.plural,
+            (path) =>
+                path.startsWith('/home/u/') ? '~${path.substring(7)}' : path,
+          ),
+        };
       } else if (request.method == 'dev.badges') {
         // agent_details.battery / battery_tip and update_costs' label.
         final now = DateTime.parse(params['now'] as String);
