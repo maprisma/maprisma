@@ -23,6 +23,8 @@ void main() {
         'HOME': temp.path,
         'MAPRISMA_DESKTOP': 'generic',
         'PATH': '${temp.path}/bin',
+        // No real agent instances: a codex running on this PC must not count.
+        'MAPRISMA_SCAN_PROC': '${temp.path}/proc',
       },
     );
     Map<String, dynamic> u(String key, List<String> command) => update(

@@ -267,6 +267,8 @@ def native(agent: str, e: dict) -> dict:
         return item
     if shape == "gemini":
         item = {"httpUrl" if e["transport"] == "http" else "url": e["url"]}
+    elif shape == "antigravity":      # Streamable HTTP only, as serverUrl (no httpUrl, no SSE)
+        item = {"serverUrl": e["url"]}
     elif shape in ("claude", "copilot", "omp"):
         item = {"type": e["transport"], "url": e["url"]}
     else:

@@ -1987,7 +1987,7 @@
    ]
   },
   {
-   "name": "MCP servers: JSON, TOML, YAML, Goose, Muse defaults, OpenClaw, library, Undo, refusals",
+   "name": "MCP servers: JSON, TOML, YAML, Goose, Muse defaults, OpenClaw, Antigravity, library, Undo, refusals",
    "environment": {
     "MAPRISMA_DIFF_COMPONENT": "scans",
     "MAPRISMA_SCAN_NOW": "1793188800",
@@ -2128,6 +2128,10 @@
     {
      "path": ".config/maprisma/mcp-servers.json",
      "content": "{\n  \"servers\": {\n    \"kept\": {\n      \"transport\": \"stdio\",\n      \"command\": \"/opt/kept\",\n      \"args\": [\n        \"serve\"\n      ],\n      \"env\": {},\n      \"url\": \"\",\n      \"headers\": {}\n    },\n    \"Bad Name!\": {\n      \"transport\": \"stdio\",\n      \"command\": \"x\"\n    }\n  }\n}\n"
+    },
+    {
+     "path": ".gemini/config/mcp_config.json",
+     "content": ""
     }
    ],
    "requests": [
@@ -2489,6 +2493,70 @@
       "item": "web search",
       "remove": false
      }
+    },
+    {
+     "method": "connections.preview",
+     "params": {
+      "kind": "mcp",
+      "command": "agy",
+      "item": "remote",
+      "remove": false
+     }
+    },
+    {
+     "method": "connections.apply",
+     "params": {},
+     "refs": {
+      "plan": [
+       35,
+       "result",
+       "plan"
+      ]
+     }
+    },
+    {
+     "method": "tasks.status",
+     "params": {},
+     "refs": {
+      "task": [
+       36,
+       "result",
+       "task"
+      ]
+     },
+     "until_done": true
+    },
+    {
+     "method": "connections.preview",
+     "params": {
+      "kind": "mcp",
+      "command": "agy",
+      "item": "files",
+      "remove": false
+     }
+    },
+    {
+     "method": "connections.apply",
+     "params": {},
+     "refs": {
+      "plan": [
+       38,
+       "result",
+       "plan"
+      ]
+     }
+    },
+    {
+     "method": "tasks.status",
+     "params": {},
+     "refs": {
+      "task": [
+       39,
+       "result",
+       "task"
+      ]
+     },
+     "until_done": true
     }
    ]
   },

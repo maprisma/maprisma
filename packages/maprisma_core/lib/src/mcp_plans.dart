@@ -426,6 +426,9 @@ final class McpPlans {
     final Map<String, dynamic> item;
     if (shape == 'gemini') {
       item = {e['transport'] == 'http' ? 'httpUrl' : 'url': e['url']};
+    } else if (shape == 'antigravity') {
+      // Streamable HTTP only, as serverUrl (no httpUrl, no SSE)
+      item = {'serverUrl': e['url']};
     } else if (shape == 'claude' || shape == 'copilot' || shape == 'omp') {
       item = {'type': e['transport'], 'url': e['url']};
     } else {

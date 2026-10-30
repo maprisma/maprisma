@@ -38,7 +38,7 @@ class FactsTest(unittest.TestCase):
 
     def test_same_as_the_old_tables(self):
         self.assertEqual(set(self.facts("web_search")), {"claude", "codex", "gemini", "grok", "copilot",
-                                                         "cursor-agent"})
+                                                         "cursor-agent", "agy"})
         self.assertEqual(set(self.facts("chat_app")), {"bionic"})
         self.assertEqual(self.facts("herdr"), {"cursor-agent": "cursor"})
         self.assertEqual(self.facts("program_dir"), {"hermes": "~/.hermes/hermes-agent"})
@@ -47,11 +47,11 @@ class FactsTest(unittest.TestCase):
         self.assertEqual(set(self.facts("rewrite")), {"claude", "codex"})
         self.assertEqual(set(self.facts("models")), {"claude", "codex", "dsh", "hermes", "opencode", "pi"})
         self.assertEqual(self.facts("sandbox_setting"), {"claude": "sandbox.enabled", "codex": "sandbox_mode",
-                                                         "cursor-agent": "sandbox.mode"})
+                                                         "cursor-agent": "sandbox.mode", "agy": "enableTerminalSandbox"})
         self.assertEqual(self.facts("asks_setting"), {
             "claude": "permissions.defaultMode", "codex": "approval_policy", "copilot": "defaultPermissionMode",
             "cursor-agent": "approvalMode", "hermes": "approvals.mode", "opencode": "permission.bash",
-            "pi": "defaultTools"})
+            "pi": "defaultTools", "agy": "toolPermission"})
         self.assertEqual(set(self.facts("details")), {"claude", "codex", "copilot", "cursor-agent", "opencode",
                                                       "pi", "omp", "hermes", "dsh", "bionic", "openclaw", "goose"})
         self.assertEqual(self.facts("home")["pi"], "~/.pi/agent")
