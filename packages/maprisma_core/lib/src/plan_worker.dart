@@ -1148,9 +1148,19 @@ Future<int> runWorker(List<String> args) async {
         throw const FormatException('Request too large');
       }
       final data = jsonDecode(utf8.decode(body));
+      final helper = data is Map ? data['helper'] : null;
       if (data is! Map ||
           data['command'] is! String ||
-          data['settings_path'] is! String) {
+          data['settings_path'] is! String ||
+          helper != null &&
+              (helper is! Map ||
+                  ['provider', 'runtime', 'model'].any(
+                    (k) =>
+                        helper[k] is! String ||
+                        (helper[k] as String).isEmpty ||
+                        (helper[k] as String).length > 200 ||
+                        (helper[k] as String).codeUnits.any((c) => c < 32),
+                  ))) {
         throw const FormatException('Invalid request');
       }
       final identity = AppIdentity();

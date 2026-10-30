@@ -4,7 +4,7 @@ import 'desktop.dart';
 import 'identity.dart';
 import 'posix_ffi.dart';
 import 'protocol.dart';
-import 'provider_scans.dart' show ProviderScans;
+import 'provider_scans.dart' show ProviderScans, RuntimeRecord;
 import 'provider_watch.dart';
 import 'read_service.dart';
 import 'connect_apply.dart';
@@ -2834,17 +2834,19 @@ final class CoreService {
         pyJsonDumps({
           'column': column,
           'command': helper?.agent ?? command,
+          'shown': command,
           'request': request.trim(),
           'answer': ?answer,
           'language': i18n.language,
           'settings_path': identity.settingsPath,
           'runtimes': [
             for (final rt in reads.inventory.collect(agents).runtimes)
-              if (rt.installed)
+              if (rt.installed && _takesDownloads(rt, engines))
                 {
                   'key': rt.key,
                   'name': rt.name,
                   'download': '${(engines[rt.key] as Map?)?['download'] ?? ''}',
+                  'models_dir': rt.modelsDir,
                   'models': rt.models.take(40).toList(),
                 },
           ],
@@ -2890,19 +2892,39 @@ final class CoreService {
       if (candidate['fit'] == 'too_large') {
         throw const FormatException('This model is too large for this PC');
       }
+      if (candidate['ran'] == true) {
+        throw const FormatException('This one has already been started');
+      }
+      candidate['ran'] = true;
       return dispatch('providers.run', {
         'operation': action['operation'],
         'params': action['params'],
       });
+    }
+    final rt = reads.inventory
+        .collect(reads.catalog.scan())
+        .runtimes
+        .where((r) => r.key == action['runtime'])
+        .firstOrNull;
+    final model = rt == null ? null : smartInstalled(rt.models, action);
+    if (model == null) {
+      throw const FormatException('This model is not on this PC yet');
     }
     return dispatch('connections.preview', {
       'kind': 'provider',
       'command': params['agent'],
       'item': action['runtime'],
       'remove': false,
-      'model': action['model'],
+      'model': model,
       'use_now': false,
     });
+  }
+
+  /// A local LLM a model can be downloaded for: Ollama pulls, the others need
+  /// a model folder.
+  bool _takesDownloads(RuntimeRecord rt, Map engines) {
+    final download = (engines[rt.key] as Map?)?['download'];
+    return download == 'pull' || download == 'file' && rt.modelsDir.isNotEmpty;
   }
 
   Map<String, dynamic> _askTools(Map<String, dynamic> body, String operation) {
