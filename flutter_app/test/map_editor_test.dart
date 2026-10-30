@@ -779,6 +779,17 @@ void main() {
         find.text('Which local LLM should run this model?'),
         findsOneWidget,
       );
+      expect(
+        find.descendant(
+          of: modelsCard,
+          matching: find.text('Local, no tokens'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: modelsCard, matching: find.text('Local helper')),
+        findsOneWidget,
+      );
       expect(find.text('Ollama'), findsOneWidget);
       expect(find.text('llama.cpp'), findsOneWidget);
 

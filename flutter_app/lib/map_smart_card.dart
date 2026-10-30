@@ -524,102 +524,97 @@ class _MapSmartCardState extends State<MapSmartCard> {
     super.dispose();
   }
 
-  Widget _buildIdle(ColorScheme colors) {
+  List<Widget> _buildHelperLine(ColorScheme colors) {
     final helper = _activeHelper;
-    final cost = helper == null
-        ? ''
-        : widget.tr(
-            helper['local'] == true ? 'Local, no tokens' : 'Uses plan/tokens',
-          );
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (helper != null) ...[
-          Row(
-            children: [
-              Expanded(
-                child: widget.helpers.length > 1
-                    ? DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          key: const ValueKey('smart-helper-select'),
-                          isExpanded: true,
-                          isDense: true,
-                          value: '${helper['command']}',
-                          onChanged: (value) {
-                            if (value != null) {
-                              setState(() => _selectedCommand = value);
-                            }
-                          },
-                          items: [
-                            for (final h in widget.helpers)
-                              DropdownMenuItem<String>(
-                                value: '${h['command']}',
-                                child: Text(
-                                  '${h['name']}',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(fontSize: 12),
-                                ),
-                              ),
-                          ],
-                        ),
-                      )
-                    : Text(
-                        '${helper['name']}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-              ),
-              const SizedBox(width: 6),
-              Flexible(
-                child: Text(
-                  cost,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: colors.onSurfaceVariant,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-        ],
-        TextField(
-          controller: _prompt,
-          focusNode: _fieldFocus,
-          autofocus: true,
-          minLines: 2,
-          maxLines: 3,
-          style: const TextStyle(fontSize: 13),
-          decoration: InputDecoration(
-            isDense: true,
-            hintText: widget.tr(_columnHint(widget.column)),
-            border: const OutlineInputBorder(),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Wrap(
-          alignment: WrapAlignment.end,
-          spacing: 8,
-          runSpacing: 6,
-          children: [
-            TextButton(onPressed: _close, child: Text(widget.tr('Close'))),
-            FilledButton(
-              onPressed: () => _ask(),
-              child: Text(widget.tr('Ask')),
-            ),
-          ],
-        ),
-      ],
+    if (helper == null) return const [];
+    final cost = widget.tr(
+      helper['local'] == true ? 'Local, no tokens' : 'Uses plan/tokens',
     );
+    return [
+      Row(
+        children: [
+          Expanded(
+            child: widget.helpers.length > 1
+                ? DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      key: const ValueKey('smart-helper-select'),
+                      isExpanded: true,
+                      isDense: true,
+                      value: '${helper['command']}',
+                      onChanged: (value) {
+                        if (value != null) {
+                          setState(() => _selectedCommand = value);
+                        }
+                      },
+                      items: [
+                        for (final h in widget.helpers)
+                          DropdownMenuItem<String>(
+                            value: '${h['command']}',
+                            child: Text(
+                              '${h['name']}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                          ),
+                      ],
+                    ),
+                  )
+                : Text(
+                    '${helper['name']}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+          ),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              cost,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 11, color: colors.onSurfaceVariant),
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 6),
+    ];
   }
+
+  Widget _buildIdle(ColorScheme colors) => Column(
+    mainAxisSize: MainAxisSize.min,
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      ..._buildHelperLine(colors),
+      TextField(
+        controller: _prompt,
+        focusNode: _fieldFocus,
+        autofocus: true,
+        minLines: 2,
+        maxLines: 3,
+        style: const TextStyle(fontSize: 13),
+        decoration: InputDecoration(
+          isDense: true,
+          hintText: widget.tr(_columnHint(widget.column)),
+          border: const OutlineInputBorder(),
+        ),
+      ),
+      const SizedBox(height: 8),
+      Wrap(
+        alignment: WrapAlignment.end,
+        spacing: 8,
+        runSpacing: 6,
+        children: [
+          TextButton(onPressed: _close, child: Text(widget.tr('Close'))),
+          FilledButton(onPressed: () => _ask(), child: Text(widget.tr('Ask'))),
+        ],
+      ),
+    ],
+  );
 
   Widget _buildWorking() {
     final helperName = '${_activeHelper?['name'] ?? ''}';
@@ -655,7 +650,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
     );
   }
 
-  Widget _buildClarify() {
+  Widget _buildClarify(ColorScheme colors) {
     final question = '${_reply['question'] ?? ''}';
     final choices = (_reply['choices'] as List? ?? const [])
         .map((c) => '$c')
@@ -669,6 +664,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
           style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
         ),
         const SizedBox(height: 8),
+        ..._buildHelperLine(colors),
         Wrap(
           spacing: 6,
           runSpacing: 6,
@@ -1147,7 +1143,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
                       child: switch (_step) {
                         _SmartStep.idle => _buildIdle(colors),
                         _SmartStep.working => _buildWorking(),
-                        _SmartStep.clarify => _buildClarify(),
+                        _SmartStep.clarify => _buildClarify(colors),
                         _SmartStep.redirect => _buildRedirect(),
                         _SmartStep.proposal => _buildProposal(colors),
                         _SmartStep.running => _buildRunning(),
