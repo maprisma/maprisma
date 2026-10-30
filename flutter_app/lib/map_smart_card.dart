@@ -327,7 +327,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
           });
           return;
         }
-        await Future<void>.delayed(const Duration(milliseconds: 50));
+        await Future<void>.delayed(const Duration(milliseconds: 200));
       }
     } catch (_) {
       if (!mounted || token != _runToken) return;
@@ -433,7 +433,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
           final text = '${status['text'] ?? ''}';
           if (text.isNotEmpty) _runText = text;
         });
-        await Future<void>.delayed(const Duration(milliseconds: 50));
+        await Future<void>.delayed(const Duration(milliseconds: 200));
       }
     } catch (_) {
       if (!mounted || token != _runToken) return;
@@ -499,7 +499,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
             });
             return;
           }
-          await Future<void>.delayed(const Duration(milliseconds: 50));
+          await Future<void>.delayed(const Duration(milliseconds: 200));
         }
       }
       widget.onApplied?.call(result);
