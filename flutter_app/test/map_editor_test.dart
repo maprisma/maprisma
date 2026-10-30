@@ -423,8 +423,13 @@ void main() {
       expect(agentsRect.right, lessThanOrEqualTo(popup.width));
       expect(agentsRect.bottom, lessThanOrEqualTo(popup.height));
 
-      // Opening another column closes the previously open card, and even the rightmost
-      // column (Models) stays inside the 1100 × 760 Omarchy popup size.
+      // At scale 0.8 in the 1100 × 760 Omarchy popup, the Models column (board left 922)
+      // is already fully in view: opening it keeps board left at 922 and does not touch
+      // the transform or any node position.
+      controller.value = Matrix4.diagonal3Values(0.8, 0.8, 1);
+      await tester.pump();
+      final scaledNodes = nodeRects();
+      final scaledMatrix = controller.value.clone();
       await tester.tap(find.byKey(const ValueKey('smart-card-models')));
       await tester.pumpAndSettle();
       expect(
@@ -447,8 +452,54 @@ void main() {
         find.byWidgetPredicate((w) => w is MapSmartCard && w.open),
         findsOneWidget,
       );
-      expect(nodeRects(), beforeNodes);
-      expect(controller.value, beforeMatrix);
+      expect(
+        tester
+            .widget<Positioned>(
+              find
+                  .ancestor(
+                    of: find.byKey(const ValueKey('smart-card-models')),
+                    matching: find.byType(Positioned),
+                  )
+                  .first,
+            )
+            .left,
+        922,
+      );
+      expect(nodeRects(), scaledNodes);
+      expect(controller.value, scaledMatrix);
+      final scaledModelsRect = tester.getRect(
+        find.byKey(const ValueKey('smart-card-models')),
+      );
+      expect(scaledModelsRect.left, greaterThanOrEqualTo(0));
+      expect(scaledModelsRect.right, lessThanOrEqualTo(popup.width));
+      expect(scaledModelsRect.bottom, lessThanOrEqualTo(popup.height));
+
+      // When cut off at scale 1.0 in 1100 × 760, opening Models keeps board left at 922
+      // and brings it into view through the transform.
+      await tester.tap(find.text('Close'));
+      await tester.pumpAndSettle();
+      controller.value = Matrix4.identity();
+      await tester.pump();
+      await tester.tap(
+        find.descendant(
+          of: find.byKey(const ValueKey('smart-card-models')),
+          matching: find.text('Ask AI…'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<Positioned>(
+              find
+                  .ancestor(
+                    of: find.byKey(const ValueKey('smart-card-models')),
+                    matching: find.byType(Positioned),
+                  )
+                  .first,
+            )
+            .left,
+        922,
+      );
       final modelsRect = tester.getRect(
         find.byKey(const ValueKey('smart-card-models')),
       );

@@ -1,4 +1,3 @@
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'map_groups.dart';
@@ -57,7 +56,7 @@ class MapEditor extends StatefulWidget {
 
 class _MapEditorState extends State<MapEditor>
     with SingleTickerProviderStateMixin {
-  final _board = GlobalKey();
+  final _board = GlobalKey(), _viewport = GlobalKey();
   final _ownTransform = TransformationController();
   TransformationController get _transform => widget.controller ?? _ownTransform;
   late final MapLightClock _phase;
@@ -216,6 +215,37 @@ class _MapEditorState extends State<MapEditor>
     final folded = {...(_saved['collapsed'] as List? ?? []).cast<String>()};
     if (!folded.add(id)) folded.remove(id);
     _save({..._saved, 'collapsed': folded.toList()});
+  }
+
+  void _toggleSmartCard(int col) {
+    setState(() {
+      if (_openSmartColumn == col) {
+        _openSmartColumn = null;
+        return;
+      }
+      _openSmartColumn = col;
+      final box = _viewport.currentContext?.findRenderObject() as RenderBox?;
+      if (box == null || !box.hasSize) return;
+      final visible = Rect.fromPoints(
+        _transform.toScene(Offset.zero),
+        _transform.toScene(Offset(box.size.width, box.size.height)),
+      );
+      final card = Rect.fromLTWH(16.0 + col * 302, 106, 266, 320);
+      final dx = card.right > visible.right
+          ? visible.right - 16 - card.right
+          : card.left < visible.left
+          ? visible.left + 16 - card.left
+          : 0.0;
+      final dy = card.bottom > visible.bottom
+          ? visible.bottom - 16 - card.bottom
+          : card.top < visible.top
+          ? visible.top + 16 - card.top
+          : 0.0;
+      if (dx != 0 || dy != 0) {
+        _transform.value = _transform.value.clone()
+          ..translateByDouble(dx, dy, 0, 1);
+      }
+    });
   }
 
   Widget _node(String id, MapLayout layout, Set<String> lit) {
@@ -436,7 +466,6 @@ class _MapEditorState extends State<MapEditor>
       _saved,
       smartCards: widget.smartCards,
     );
-    final viewportWidth = MediaQuery.sizeOf(context).width;
     final colors = Theme.of(context).colorScheme;
     final active =
         widget.animate != 'off' &&
@@ -516,6 +545,7 @@ class _MapEditorState extends State<MapEditor>
           ),
           Expanded(
             child: InteractiveViewer(
+              key: _viewport,
               transformationController: _transform,
               constrained: false,
               minScale: .3,
@@ -713,12 +743,7 @@ class _MapEditorState extends State<MapEditor>
                         ?_openSmartColumn,
                       ])
                         Positioned(
-                          left: _openSmartColumn == col && viewportWidth > 300
-                              ? math.min(
-                                  16.0 + col * 302,
-                                  math.max(16.0, viewportWidth - 266 - 16),
-                                )
-                              : 16.0 + col * 302,
+                          left: 16.0 + col * 302,
                           top: 106,
                           width: 266,
                           child: MapSmartCard(
@@ -728,11 +753,7 @@ class _MapEditorState extends State<MapEditor>
                             column: mapSmartColumns[col].$1,
                             title: mapSmartColumns[col].$2,
                             open: _openSmartColumn == col,
-                            onToggle: () => setState(() {
-                              _openSmartColumn = _openSmartColumn == col
-                                  ? null
-                                  : col;
-                            }),
+                            onToggle: () => _toggleSmartCard(col),
                             tr: widget.tr,
                           ),
                         ),
