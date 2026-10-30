@@ -12,3 +12,7 @@
    > Claude: confirmed. Fixed: under a secret name all text goes, in lists and maps too; numbers, true/false and null stay. Lists of env/header *names* (`mcp.catalog`) stay. Test: "review 001".
 5. **Low** `tools/test-session.sh:90` `after.txt` misses systemd user units installed by Maprisma for local LLMs (`ollama.service`, `llama-server.service`, `koboldcpp.service`, `jan-cortex.service` in `packages/maprisma_core/lib/src/installers.dart:675,787,903,1023,1334`). `ls ~/.config/systemd/user 2>/dev/null | grep -i maprisma` only checks unit filenames for `maprisma`, which matches `maprisma-provider-watch.service` but none of the runtime units (whose unit files contain `installed by Maprisma`).
    > Claude: confirmed. Fixed: after.txt lists every user unit whose file says `installed by Maprisma` or `Maprisma:`, with whether it is active.
+
+## Round 2 (Antigravity, 2026-10-30, commit cab5c73)
+
+CLEAN
