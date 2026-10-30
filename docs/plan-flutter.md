@@ -128,6 +128,17 @@ a commit.
 6. **Packaging:** bundle Python and dependencies next to Flutter; resolve bundle
    paths instead of ASTERISM_SOURCE. Validate Linux/AUR/AppImage on a clean system.
    Replace the production entrypoint only after parity and delivery are validated.
+   **Done 2026-10-30 (local, nothing published):** no Python at all instead of a bundled
+   one: the compiled Dart core (`lib/maprisma-core`) and data-only signed add-ons
+   (addon.json + agent.toml; a provider add-on names built-in providers, b3d9316, signed
+   0.12.0 with `~/.ssh/maprisma-addons`). `tools/build-release.py` → `dist/maprisma-0.12.0-x86_64.tar.gz`
+   (+ .sha256, bundle gate); AUR `maprisma-bin` in `/mnt/Data/Projects/aur-maprisma-bin`
+   (c3fcc3b, prebuilt tarball from the GitHub release); `packaging/build-appimage.py`
+   (pinned appimagetool 1.9.1 + type2 runtime 20251108). `tools/vm-packages`: both
+   packages installed/started/removed in the edge VM, 24 add-ons verified, no unit.
+   The AppImage runs from /tmp/.mount_*, so it never installs the providers service.
+   Manual chapter 2 rewritten (8 languages, PDFs). Open for the switch: GitHub repos
+   maprisma/maprisma and maprisma/maprisma-addons, the release upload, the AUR upload.
 7. **A new Omarchy plugin "Asterism" as a thin launcher** (Uwe, 2026-10-28; `plan-one-app.md`):
    a new marketplace plugin `ubruckhaus.asterism` with its own repository, not the old
    AI Agents Map plugin (that one only points its users to the new plugin and gets

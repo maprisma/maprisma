@@ -36,7 +36,7 @@
     <tbody>
       <tr><th>What it is</th><td>A stand-alone GTK&nbsp;4 / libadwaita app for any Linux desktop</td>
           <td>A plugin for the Omarchy desktop, opened from a button in the bar</td></tr>
-      <tr><th>Install from</th><td>AUR, AppImage or source</td><td>The Omarchy Plugin Marketplace</td></tr>
+      <tr><th>Install from</th><td>AUR (<code>maprisma-bin</code>) or AppImage</td><td>The Omarchy Plugin Marketplace</td></tr>
       <tr><th>Look</th><td>Follows the system's light/dark mode and accent colour</td>
           <td>Omarchy theme colours, or GNOME's Adwaita look</td></tr>
       <tr><th>Settings folder</th><td><code>~/.config/maprisma/</code></td><td><code>~/.config/omarchy/ai-agents-map/</code></td></tr>
@@ -116,35 +116,18 @@
 <section class="chapter" id="installation">
   <h1>Installation</h1>
 
-  <h2 id="install-asterism">Maprisma <span class="badge">Maprisma</span></h2>
-  <p>Maprisma also runs on Omarchy. It automatically uses the desktop integration while keeping its own name, application identity and <code>~/.config/maprisma</code> settings folder. An absolute <code>XDG_CONFIG_HOME</code> moves that folder to <code>$XDG_CONFIG_HOME/maprisma</code>.</p>
-  <p>Choose one of these ways:</p>
+  <h2 id="install-asterism">Installing Maprisma</h2>
+  <p>Maprisma is one program for Linux on x86-64 computers. It needs no Python and brings its own icons and its signed add-ons. Choose one of these ways:</p>
   <ul>
-    <li><b>Arch Linux (AUR):</b> install the package <code>maprisma</code> with your AUR helper.</li>
-    <li><b>AppImage:</b> download <code>Maprisma-&lt;version&gt;-x86_64.AppImage</code> from the
-      releases page at <code>github.com/uBruckhaus/Asterism</code>, make it executable and run it.
-      The AppImage uses your distribution's Python 3 with PyGObject, GTK&nbsp;4 and libadwaita:
-      <table class="compact">
-        <tbody>
-          <tr><th scope="row">Fedora</th><td><code>sudo dnf install python3-gobject gtk4 libadwaita</code></td></tr>
-          <tr><th scope="row">Ubuntu / Debian</th><td><code>sudo apt install python3-gi gir1.2-gtk-4.0 gir1.2-adw-1</code></td></tr>
-          <tr><th scope="row">Arch</th><td><code>sudo pacman -S python-gobject gtk4 libadwaita</code></td></tr>
-        </tbody>
-      </table></li>
-    <li><b>From source:</b> run <code>bin/asterism</code> in a checkout of the repository.</li>
+    <li><b>Arch Linux and Omarchy (AUR):</b> install the package <code>maprisma-bin</code> with your AUR helper, for example <code>yay -S maprisma-bin</code>. It puts the app in <code>/usr/lib/maprisma</code>, the command <code>maprisma</code> on your path and Maprisma in the app launcher.</li>
+    <li><b>AppImage, for other distributions:</b> download <code>Maprisma-&lt;version&gt;-x86_64.AppImage</code> from <code>github.com/maprisma/maprisma/releases</code>, make it executable (<code>chmod +x Maprisma-*.AppImage</code>) and run it. It uses the GTK&nbsp;3 that nearly every Linux desktop has.</li>
   </ul>
-  <p>The app brings its own icons, so no icon font is needed. To run agents inside the window, also
-  install VTE for GTK&nbsp;4 (<code>vte4</code>).</p>
-
-  <h2 id="install-plugin">AI Agents Map on Omarchy <span class="badge omarchy">Omarchy</span></h2>
-  <p>Install the plugin from the Omarchy Plugin Marketplace, or from a terminal:</p>
-  <pre>omarchy plugin add https://github.com/uBruckhaus/omarchy-ai-agents-map.git --enable</pre>
-  <p>A robot button appears in the bar. Everything else it needs comes with a standard Omarchy
-  install. To run agents inside the window, install VTE: <code>sudo pacman -S vte4</code>.</p>
+  <div class="note"><p><b>Note</b> The AppImage runs from a temporary folder, so it does not set up the background service behind Settings › <b>Start local LLMs with their agents</b>. Use the AUR package if local LLMs should start and stop with their agents.</p></div>
+  <p>Optional programs: <code>xdg-terminal-exec</code> starts agents in your own terminal, <code>xdg-utils</code> opens the manual and web pages, and <code>mise</code> installs and updates agents.</p>
+  <p>Maprisma keeps its settings in <code>~/.config/maprisma</code>; an absolute <code>XDG_CONFIG_HOME</code> moves that folder to <code>$XDG_CONFIG_HOME/maprisma</code>. On Omarchy it uses the desktop integration by itself: <code>maprisma --toggle</code> opens the window as a popup under the bar, brings it to the front, or hides it.</p>
 
   <h2 id="first-start">First start</h2>
-  <p>Maprisma’s package provides its app-launcher entry. Only the legacy AI Agents Map plugin asks whether to create its own launcher entry.</p>
-  <p>On Maprisma’s first start, if it has no settings yet but the legacy plugin has them, it copies the settings, MCP server list, failed-link records, local-LLM launch settings and agent profiles. A private <code>plugin-backup-…</code> folder inside Maprisma’s settings folder keeps the original bytes. The plugin’s originals remain untouched, and existing Maprisma files are preserved. Verified add-ons for installed agents and local LLMs, plus the online-provider group, are enabled automatically. If Maprisma already has settings, no import takes place.</p>
+  <p>The package and the AppImage need no further setup. If you used Maprisma under its earlier name Asterism, the first start copies Asterism’s folders once; the originals stay untouched.</p>
   <p>The window is a normal app window: it can be tiled, floated, moved to another workspace and
   reached with <kbd>Alt</kbd>+<kbd>Tab</kbd>. <span class="badge">Maprisma</span> A fresh Maprisma opens on
   its <b>welcome page</b>: the agents and local LLMs installed on this computer are cards that are
@@ -164,15 +147,10 @@
   a moment; a click closes it at once. The window opens at once, with this overview as a box in its middle; the map fills in behind it.</p>
 
   <h2 id="remove">Removing the app</h2>
-  <p><span class="badge omarchy">Omarchy</span> <code>omarchy plugin remove ubruckhaus.ai-agents-map</code>.
-  <span class="badge">Maprisma</span> Remove the package or delete the AppImage.</p>
-  <p>Before removing, switch off Settings › <b>Start local LLMs with their agents</b> so the
-  background watcher is removed too, and Settings › <b>In the app launcher</b> to delete the
-  launcher entry. Changes you made with the app stay: agents' settings, MCP servers, skills and
-  installed local LLMs. Uninstall a local LLM first (right-click › <b>Uninstall…</b>) if you want it
-  gone. To delete the app's own state as well:</p>
-  <pre>rm -rf ~/.config/omarchy/ai-agents-map ~/.config/maprisma \
-       ~/.local/state/ai-agents-map ~/.cache/ai-agents-map</pre>
+  <p>AUR: <code>sudo pacman -R maprisma-bin</code>. AppImage: delete the file.</p>
+  <p>Before removing, switch off Settings › <b>Start local LLMs with their agents</b> so the background watcher is removed too. Changes you made with the app stay: agents’ settings, MCP servers, skills and installed local LLMs. Uninstall a local LLM first (right-click › <b>Uninstall…</b>) if you want it gone. To delete the app’s own state as well:</p>
+  <pre>rm -rf ~/.config/maprisma ~/.cache/maprisma \
+       ~/.local/share/maprisma ~/.local/state/maprisma</pre>
 </section>
 
 <!-- ============================== 3 The window ============================== -->
