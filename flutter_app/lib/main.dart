@@ -496,10 +496,10 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
   void initState() {
     super.initState();
     windowManager.addListener(this);
-    _liveTimer = Timer.periodic(
-      const Duration(seconds: 2),
-      (_) => _refreshLive(),
-    );
+    _liveTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+      _refreshTheme();
+      _refreshLive();
+    });
     _connect();
   }
 
@@ -685,19 +685,34 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
     return result;
   }
 
-  Future<void> _refreshLive() async {
-    if (_busy || _livePending || !(_backend?.isConnected ?? false)) return;
-    _livePending = true;
+  /// The desktop's theme, every two seconds also while the app is busy (a
+  /// download, an install, a change): app.theme only reads the theme files.
+  bool _themePending = false;
+
+  Future<void> _refreshTheme() async {
+    if (_themePending || !(_backend?.isConnected ?? false)) return;
+    _themePending = true;
     try {
       final appearance = await _backend!.call('app.theme');
-      if (!mounted) return;
-      if (_snapshot != null &&
+      if (mounted &&
+          _snapshot != null &&
           !mapEquals(
             _snapshot!['theme'] as Map?,
             appearance['theme'] as Map?,
           )) {
         setState(() => _snapshot!['theme'] = appearance['theme']);
       }
+    } catch (_) {
+      // The next tick asks again.
+    } finally {
+      _themePending = false;
+    }
+  }
+
+  Future<void> _refreshLive() async {
+    if (_busy || _livePending || !(_backend?.isConnected ?? false)) return;
+    _livePending = true;
+    try {
       if (_taskActive || _reviewDepth > 0 || _card?.closable == false) return;
       final idleTaskSurface = _card != null || _browser != null;
       if (_showSystemMap) {
@@ -1483,7 +1498,42 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
       return;
     }
     try {
-      await _backend!.call('updates.run', {'key': update['key']});
+      var done = await _backend!.call('updates.run', {'key': update['key']});
+      if (done['started'] == false && done['running'] != null) {
+        // The agent runs now: its program would be replaced under its feet.
+        final yes = await showDialog<bool>(
+          context: _navigator.currentContext!,
+          builder: (context) => AlertDialog(
+            title: Text(
+              tr(
+                '{0} is running right now.',
+              ).replaceAll('{0}', '${update['name']}'),
+            ),
+            content: Text(
+              tr(
+                'An update replaces its program while it works: its sessions may stop or behave oddly, and some updaters refuse. Finish its work first, or update anyway.',
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text(tr('Cancel')),
+              ),
+              FilledButton(
+                key: const ValueKey('update-anyway'),
+                onPressed: () => Navigator.pop(context, true),
+                child: Text(tr('Update anyway')),
+              ),
+            ],
+          ),
+        );
+        if (yes != true) return;
+        done = await _backend!.call('updates.run', {
+          'key': update['key'],
+          'running_ok': true,
+        });
+      }
+      if (done['started'] != true) return;
       if (mounted) {
         setState(
           () => _updates = [
@@ -1578,6 +1628,48 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
     }
   }
 
+  /// Settings › Recent changes (changes.history / changes.undo).
+  List<Map<String, dynamic>>? _changes;
+
+  Future<void> _loadChanges() async {
+    try {
+      final found = await _backend!.call('changes.history');
+      if (mounted) {
+        setState(
+          () => _changes = (found['changes'] as List)
+              .cast<Map<String, dynamic>>(),
+        );
+      }
+    } catch (_) {
+      // The section stays away.
+    }
+  }
+
+  Future<void> _undoChange(String id) async {
+    setState(() => _busy = true);
+    try {
+      final done = await _backend!.call('changes.undo', {'id': id});
+      final restored = (done['restored'] as List).cast<String>();
+      ScaffoldMessenger.of(_navigator.currentContext!).showSnackBar(
+        SnackBar(
+          content: Text(
+            restored.isEmpty
+                ? tr(
+                    'Nothing was put back: the files were changed again since.',
+                  )
+                : tr('Put back: {0}').replaceAll('{0}', restored.join(', ')),
+          ),
+        ),
+      );
+      await _loadChanges();
+      await _refresh();
+    } catch (_) {
+      _actionFailed();
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   void _toggleSettings() => setState(() {
     _card = null;
     _browser = null;
@@ -1585,6 +1677,7 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
     _showSettings = !_showSettings;
     if (_showSettings && _shortName == null) _loadShortName();
     if (_showSettings && _helpers == null) _loadHelpers();
+    if (_showSettings) _loadChanges();
     _showSystemMap = false;
     _showConnections = false;
     _showProviders = false;
@@ -4056,6 +4149,8 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
                                     mcpChecks: _mcpChecks,
                                     mcpChecking: _mcpChecking,
                                     onCheckMcp: () => _checkMcp(force: true),
+                                    changes: _changes,
+                                    onUndoChange: _undoChange,
                                     unitName: _shortName == null
                                         ? ''
                                         : '$_shortName-providers.service',

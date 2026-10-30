@@ -3147,5 +3147,14 @@
  "Everything this app does, step by step, as a PDF for this version in your language.": "Alles wat deze app doet, stap voor stap, als pdf voor deze versie in jouw taal.",
  "Where to start": "Waar je begint",
  "A desktop notification when an agent's plan limit turns red: once for each limit until it resets.": "Een bureaubladmelding wanneer een planlimiet van een agent rood wordt: één keer per limiet tot die wordt gereset.",
- "Unpack": "Uitpakken"
+ "Unpack": "Uitpakken",
+ "Recent changes": "Recente wijzigingen",
+ "Every change this app wrote to an agent's settings, newest first. Undo puts back what was not changed again since, also after the app was closed or crashed.": "Elke wijziging die deze app in de instellingen van een agent heeft geschreven, de nieuwste eerst. Ongedaan maken zet terug wat sindsdien niet opnieuw is gewijzigd, ook nadat de app is gesloten of vastgelopen.",
+ "No changes yet.": "Nog geen wijzigingen.",
+ "Changed again since: nothing left to undo": "Sindsdien opnieuw gewijzigd: niets meer ongedaan te maken",
+ "Put back: {0}": "Teruggezet: {0}",
+ "Nothing was put back: the files were changed again since.": "Er is niets teruggezet: de bestanden zijn sindsdien opnieuw gewijzigd.",
+ "{0} is running right now.": "{0} draait op dit moment.",
+ "An update replaces its program while it works: its sessions may stop or behave oddly, and some updaters refuse. Finish its work first, or update anyway.": "Een update vervangt zijn programma terwijl hij werkt: zijn sessies kunnen stoppen of zich vreemd gedragen, en sommige updaters weigeren. Laat hem eerst klaar zijn, of werk toch bij.",
+ "Update anyway": "Toch bijwerken"
 }

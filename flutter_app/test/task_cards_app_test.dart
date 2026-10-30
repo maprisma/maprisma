@@ -16,8 +16,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'support/a11y.dart';
 
 const service = r'''
-import json,sys
+import json,sys,threading,time
 from pathlib import Path
+out=threading.Lock()
 connected=False
 welcome=False
 install_fails=False
@@ -43,7 +44,7 @@ for line in sys.stdin:
  if m=='app.snapshot':r={'agents':[{'command':'test','name':'Test agent','version':'1.0','installed':True}],
   'projects':{'test':{'history':[],'default':'/home/u','pinned':''}},'settings':settings,'language':'en','setup_needed':welcome,'theme':{}}
  elif m=='settings.update':settings.update(p['values']);r=settings
- elif m=='app.theme':r={'theme':{}}
+ elif m=='app.theme':r={'theme':json.loads(Path('theme.json').read_text()) if Path('theme.json').exists() else {}}
  elif m=='addons.list':r={'addons':[addon]+([new_addon] if installed else [])}
  elif m=='system.cached':r={'nodes':[],'edges':[],'notes':[],'helpers':[]}
  elif m=='map.snapshot':r={'nodes':nodes,'edges':[{'source':'agent:test','target':'mcp:known-server','kind':'mcp'}] if connected else [],'activity':{},'pending':Path('pending').exists()}
@@ -102,9 +103,17 @@ for line in sys.stdin:
  elif m=='models.slots_preview':r={'plan':'opaque-slots','empty':False,'files':[{'path':'~/.config/llama.cpp/server.env','added':1,'removed':0}],'links_add':[],'links_remove':[],'notes':['Fixture provider keeps 2 models loaded at once'],'warnings':['Too big together.'],'reload':True,'focus':['runtime:fixture']}
  elif m=='models.slots_reload':r={'ok':True}
  elif m=='updates.check':tasks['up']={'updates':[{'kind':'agent','key':'test','name':'Test agent','current':'1.0','available':'1.1','command':['mise','upgrade','test'],'page':False}]};r={'task':'up'}
- elif m=='updates.run':r={'started':True}
+ elif m=='updates.run':r=({'started':True} if p.get('running_ok') else {'started':False,'running':1,'here':0})
  elif m=='checks.mcp_check':tasks['mcpc']={'on':True,'summary':'1 update','servers':2,'agent':'Test agent','task_agent':'Test agent','due':False,'updates':[{'name':'fetch','app':'@acme/fetch-mcp','current':'1.4.2','latest':'1.5.0','url':'https://www.npmjs.com/package/@acme/fetch-mcp','notes':'Faster.','source':'npm','program':'','on_pc':False,'text':'MCP server fetch 1.5.0 is available (you have 1.4.2)'}]};r={'task':'mcpc'}
  elif m=='checks.mcp_release':r={'opened':True}
+ elif m=='changes.undo' and Path('slow').exists():
+  # Answered only once 'release' exists: the app stays busy meanwhile.
+  def later(i=q['id']):
+   while not Path('release').exists():time.sleep(0.05)
+   with out:print(json.dumps({'id':i,'result':{'ok':True,'restored':[]}}),flush=True)
+  threading.Thread(target=later,daemon=True).start();continue
+ elif m=='changes.history':r={'changes':[{'id':'20261030-100000-000000','when':'2026-10-30T10:00:00.000','changed':['~/.claude.json'],'count':1,'undoable':['~/.claude.json']},{'id':'20261029-090000-000000','when':'2026-10-29T09:00:00.000','changed':['~/.codex/config.toml'],'count':1,'undoable':[]}]}
+ elif m=='changes.undo':r={'ok':True,'restored':['~/.claude.json']}
  elif m=='checks.mcp_task':r={'preview':'mcp-prev','name':'Test agent','prompt':'The MCP server "fetch" runs the npm package @acme/fetch-mcp pinned to 1.4.2.','topic':'mcp-update'}
  elif m=='gpu.snapshot':tasks['gpu']={'vram_used':0,'vram_total':0,'busy':None,'runtimes':{},'badges':{}};r={'task':'gpu'}
  elif m=='map.badges':r={'badges':{},'rate_due':False}
@@ -131,7 +140,7 @@ for line in sys.stdin:
  elif m=='mcp.option_preview':r={'plan':'opaque-catalog','empty':False,'files':[],'links_add':[],'links_remove':[],'kind':'mcp','agents':['Test agent'],'focus':['agent:test']}
  elif m=='tasks.status':r=({'state':'failed'} if p['task']=='install' and install_fails else {'state':'done','result':tasks[p['task']]})
  else:r={}
- print(json.dumps({'id':q['id'],'result':r}),flush=True)
+ with out:print(json.dumps({'id':q['id'],'result':r}),flush=True)
 ''';
 
 Future<void> settleService(WidgetTester tester) async {
@@ -700,9 +709,17 @@ void main() {
     );
     await tester.tap(find.widgetWithText(OutlinedButton, 'Update'));
     await settleService(tester);
+    // The agent runs now: nothing starts before the user agrees.
+    expect(find.text('Test agent is running right now.'), findsOneWidget);
     expect(
       requests(dir).lastWhere((q) => q['method'] == 'updates.run')['params'],
       {'key': 'test'},
+    );
+    await tester.tap(find.byKey(const ValueKey('update-anyway')));
+    await settleService(tester);
+    expect(
+      requests(dir).lastWhere((q) => q['method'] == 'updates.run')['params'],
+      {'key': 'test', 'running_ok': true},
     );
     await tester.tap(find.byKey(const ValueKey('problems-open')));
     await settleService(tester);
@@ -1127,6 +1144,61 @@ void main() {
     expect(scale(), closeTo(0.8, 1e-9));
     await keys(LogicalKeyboardKey.digit0, control: true);
     expect(scale(), 1);
+    expect(tester.takeException(), isNull);
+    await unmountApp(tester);
+  });
+
+  testWidgets('recent changes in Settings: Undo after a restart', (
+    tester,
+  ) async {
+    final dir = await mountApp(tester);
+    await settleService(tester);
+    await tester.tap(find.byTooltip('Settings').first);
+    await settleService(tester);
+    final undo = find.byKey(const ValueKey('undo-20261030-100000-000000'));
+    await tester.scrollUntilVisible(undo, 300);
+    expect(find.text('~/.claude.json'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('undo-20261029-090000-000000')),
+      findsNothing,
+    ); // changed again since: nothing to undo
+    await tester.tap(undo);
+    await settleService(tester);
+    expect(
+      requests(dir).lastWhere((q) => q['method'] == 'changes.undo')['params'],
+      {'id': '20261030-100000-000000'},
+    );
+    expect(find.text('Put back: ~/.claude.json'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await unmountApp(tester);
+  });
+
+  testWidgets('the desktop theme follows also while the app is busy', (
+    tester,
+  ) async {
+    final dir = await mountApp(tester);
+    await settleService(tester);
+    Color primary() => tester
+        .widget<MaterialApp>(find.byType(MaterialApp))
+        .theme!
+        .colorScheme
+        .primary;
+    final before = primary();
+    await tester.tap(find.byTooltip('Settings').first);
+    await settleService(tester);
+    final undo = find.byKey(const ValueKey('undo-20261030-100000-000000'));
+    await tester.scrollUntilVisible(undo, 300);
+    File('${dir.path}/slow').writeAsStringSync('');
+    await tester.tap(undo); // busy until the core answers
+    await settleService(tester);
+    File(
+      '${dir.path}/theme.json',
+    ).writeAsStringSync(jsonEncode({'accent': '#d03030'}));
+    await tester.pump(const Duration(seconds: 2)); // the next theme tick
+    await settleService(tester);
+    expect(primary(), isNot(before)); // followed while busy
+    File('${dir.path}/release').writeAsStringSync('');
+    await settleService(tester);
     expect(tester.takeException(), isNull);
     await unmountApp(tester);
   });

@@ -65,6 +65,7 @@ import 'model_slots.dart';
 import 'red_limits.dart';
 import 'mcp_tools.dart' show cachedTools;
 import 'mcp_updates.dart' as mcp_updates;
+import 'change_history.dart';
 
 const portedRoutes = {
   'settings.get',
@@ -166,6 +167,8 @@ const portedRoutes = {
   'checks.mcp_check',
   'checks.mcp_task',
   'checks.mcp_release',
+  'changes.history',
+  'changes.undo',
   'details.skills',
   'costs.rate',
   ...readOnlyRoutes,
@@ -2652,9 +2655,30 @@ final class CoreService {
       );
     }
     final key = params['key'];
+    final runningOk = params['running_ok'] ?? false;
     final found = lastUpdates.where((u) => u['key'] == key).firstOrNull;
-    if (params.length != 1 || found == null) {
+    if (found == null ||
+        runningOk is! bool ||
+        params.length != (params.containsKey('running_ok') ? 2 : 1)) {
       throw const FormatException('Unknown update');
+    }
+    // An agent that runs now (here or in a terminal of its own): its
+    // program is replaced under its feet. Started only when the user says
+    // so after seeing how many run.
+    if (found['kind'] == 'agent' && !runningOk) {
+      final pids =
+          agentInstancePids(halt.scans, {'$key'})['$key'] ?? const <int>[];
+      final own = [
+        for (final s in starter.sessions.items.values)
+          if (starter.sessions.running(s) && s.command == key) s,
+      ];
+      if (pids.isNotEmpty || own.isNotEmpty) {
+        return {
+          'started': false,
+          'running': pids.length > own.length ? pids.length : own.length,
+          'here': own.length,
+        };
+      }
     }
     final argv = (found['command'] as List).cast<String>();
     if (argv.isEmpty ||
@@ -3249,6 +3273,25 @@ final class CoreService {
     if (method.startsWith('found.')) return foundRoute(method, params);
     if (method == 'map.usage') return usageRoute(params);
     if (method.startsWith('checks.mcp_')) return mcpChecksRoute(method, params);
+    // The connection changes kept on disk, each with Undo, also after the
+    // app was closed or crashed (the in-session Undo knows only the last).
+    if (method == 'changes.history') {
+      if (params.isNotEmpty) throw const FormatException('Invalid request');
+      return {'changes': changeHistory(config, connections.backupRoot)};
+    }
+    if (method == 'changes.undo') {
+      final id = params['id'];
+      if (params.length != 1 || id is! String) {
+        throw const FormatException('Invalid request');
+      }
+      if (addonInstalling) {
+        throw const FormatException('An installation is already running');
+      }
+      return {
+        'ok': true,
+        'restored': undoChange(config, connections.backupRoot, id),
+      };
+    }
     if (method == 'helper.snapshot') {
       if (params.isNotEmpty) throw const FormatException('Invalid request');
       final (found, suggested, chosen) = localHelpers();

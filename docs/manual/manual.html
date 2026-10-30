@@ -514,6 +514,9 @@
   the update the same way the agent was installed — for example <code>mise upgrade &lt;tool&gt;</code>
   or <code>claude update</code> — in a terminal window of its own, so you can follow it.</p>
 
+  <h2 id="update-running-flutter">Updating a running agent in the Flutter preview</h2>
+  <p>When you click <b>Update</b> for an agent that is running right now — in a terminal tab here or in a terminal of its own — the Flutter preview first says so: an update replaces the agent's program while it works, so its sessions may stop or behave oddly, and some updaters refuse. <b>Cancel</b> leaves everything as it is; finish the agent's work and update later. <b>Update anyway</b> starts the update in a terminal as usual.</p>
+
   <h2 id="installed-agents">Agents the app can install</h2>
   <p>Four agents can be installed, updated and uninstalled from the map (right-click the agent ›
   <b>Install…</b>):</p>
@@ -889,7 +892,7 @@
   <h1>Settings and Help</h1>
 
   <h2 id="flutter-appearance">Flutter themes and map lights</h2>
-<p>In the Flutter app, Settings offers System, Light and Dark with small previews. System follows the desktop appearance and the existing desktop palette; Light and Dark set a fixed brightness with matching backgrounds and readable colours. The choice is saved and also applies to task cards. The GTK appearance preference is kept separately.</p>
+<p>In the Flutter app, Settings offers System, Light and Dark with small previews. System follows the desktop appearance and the existing desktop palette; Light and Dark set a fixed brightness with matching backgrounds and readable colours. The choice is saved and also applies to task cards. The GTK appearance preference is kept separately. With System, a new desktop theme shows within two seconds, also while the app is busy with a download, an install or a change.</p>
 <p>Map light frame rate offers 20 fps (default), 30 and 60. It is a maximum for flowing map lights, not the automatic scan interval. The light speed stays the same; higher rates add intermediate frames. Actual delivery depends on the display and available rendering time. Lights off, reduced motion, an unfocused window or a hidden map still stop the animation. The choice is saved.</p>
 <p>Settings also offers <b>Start local LLMs with their agents</b>: when an agent connected to a local LLM starts, its LLM starts too, and when the last such agent closes, the LLM stops and its GPU memory is free again (a user service does this, also with the window closed). <b>Agent for AI checks</b> chooses which installed agent is offered first for AI help and the Smart Check on the System Map; its tokens are used for them. It lists the agents the System Map found able to do that.</p>
 
@@ -925,6 +928,9 @@
 
   <h2 id="red-flutter">Red limits in the Flutter preview</h2>
   <p>In the Flutter preview, the app looks once a minute at the plan limits of your installed agents (a 5-hour session, a week…). When one is used up to the red level of Settings › Costs, a desktop notification says so, with the share used and when the limit resets: once for each limit until it resets, also after a restart. <b>Notify when red</b> in Settings turns it off. A cost of an agent paid per token is not shown yet in the preview, so neither is its notification.</p>
+
+  <h2 id="changes-flutter">Recent changes and Undo after a restart</h2>
+  <p>In the Flutter preview, Settings ends with <b>Recent changes</b>: the last 20 changes this app wrote to agents' settings (connections, MCP servers, skills, security settings, app updates), newest first, with the files they touched. <b>Undo</b> puts back what was not changed again since — also after the app was closed or crashed, when the <b>Undo</b> of the last change is gone. A change whose files were edited again since shows no <b>Undo</b>. A change that stopped half way (the app closed while writing) puts back only the files it had already written. The backups stay where they are; Undo only reads them.</p>
 
   <h2 id="help">Help</h2>
   <p><b>?</b> (<kbd>F1</kbd>) opens Help: <b>Open user manual</b> opens this manual (the copy that

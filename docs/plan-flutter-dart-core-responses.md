@@ -2437,3 +2437,60 @@ Check:
 Check: widget tests for each shortcut (including that Backspace in Settings goes back and Esc
 does too), the map by Tab/Enter/Space, connecting in the editor by keyboard alone, and the
 guidelines; all 166 Flutter tests pass.
+
+### Part 4: recovery — recent changes with Undo after a restart
+
+Every connection change already writes its backup and `manifest.json` before it touches a file, and
+`ConfigFiles.undo` puts back only what still reads as written. But the app's Undo knew only the last
+change and only until the app closed: after a crash or a restart the backups could not be reached
+from the app.
+
+- `change_history.dart`: the backup folders in the app's backup root (named by their time, own
+  folders, `manifest.json` at most 1 MiB, no links), newest first, at most 20; for each its time,
+  the files and links it changed and what Undo would put back now (the same checks as
+  `ConfigFiles.undo`, nothing changed). `undoChange` takes only a backup's name, directly in the
+  root.
+- Routes `changes.history` and `changes.undo {id}` (refused while an add-on installs).
+- Settings › **Recent changes**: each change with its time and files, **Undo** while there is
+  something to put back, else a mark "changed again since"; a message says what was put back.
+- An apply that stopped half way (the app closed while writing) left its manifest first: its
+  written files are undone, the others are rightly seen as unchanged.
+- Translations in all eight languages; the manual's "Recent changes and Undo after a restart";
+  PDFs rebuilt.
+
+Check: `test/change_history_test.dart` (order, Undo by id, a file edited again since, the
+half-done apply, folders and ids that are not changes), an app test with the fake service.
+On this PC, read only: the list is empty, since this app has not written a change here yet. The
+GTK app's 144 backups live in `~/.local/state/ai-agents-map/backups` and are not listed (the known
+difference in backup places, still to decide).
+
+### Part 5: safe updates of running agents
+
+The GTK app started an agent's update in a terminal even while the agent worked, so its program
+was replaced under running sessions. Now `updates.run` for an agent first counts its open
+instances (`agentInstancePids`: in this app's terminal tabs and in terminals of their own,
+background servers and the app's own look-ups left out). While any run it starts nothing and
+answers `{started: false, running, here}`; the app says "<agent> is running right now", why an
+update then is risky, and offers **Cancel** or **Update anyway** (`updates.run` again with
+`running_ok: true`). Local LLM updates go through their install review as before.
+
+- Translations in all eight languages; the manual's "Updating a running agent in the Flutter
+  preview"; PDFs rebuilt.
+
+Check: the app test of Open problems' Update now goes through the dialog (nothing starts before
+**Update anyway**); the instance detection itself is covered by
+`tests/test_dart_agent_halt_parity.py`.
+
+### Part 6: the desktop theme during operations
+
+The app read the desktop theme in its two-second live refresh, which stops while the app is busy
+(a download, an install, a change being written) — so a new Omarchy theme showed only after the
+operation. The theme now has its own read every two seconds (`app.theme` only reads the theme
+files), with its own pending flag, whatever the app is doing; the live map refresh keeps its
+pauses.
+
+- The manual's Flutter themes section says so, in all eight languages; PDFs rebuilt.
+
+Check: an app test keeps the app busy (the fake core answers an Undo only later), changes the
+desktop accent meanwhile and sees the app's colours follow before the answer; with the theme read
+taken out again, the same test fails.

@@ -3147,5 +3147,14 @@
  "Everything this app does, step by step, as a PDF for this version in your language.": "Tout ce que fait cette app, pas à pas, en PDF pour cette version et dans ta langue.",
  "Where to start": "Par où commencer",
  "A desktop notification when an agent's plan limit turns red: once for each limit until it resets.": "Une notification de bureau quand une limite de forfait d’un agent passe au rouge : une fois par limite jusqu’à sa réinitialisation.",
- "Unpack": "Décompresser"
+ "Unpack": "Décompresser",
+ "Recent changes": "Modifications récentes",
+ "Every change this app wrote to an agent's settings, newest first. Undo puts back what was not changed again since, also after the app was closed or crashed.": "Chaque modification que cette application a écrite dans les réglages d’un agent, la plus récente en premier. Annuler remet ce qui n’a pas été modifié de nouveau depuis, même après la fermeture ou le plantage de l’application.",
+ "No changes yet.": "Aucune modification pour l’instant.",
+ "Changed again since: nothing left to undo": "Modifié de nouveau depuis : plus rien à annuler",
+ "Put back: {0}": "Remis : {0}",
+ "Nothing was put back: the files were changed again since.": "Rien n’a été remis : les fichiers ont été modifiés de nouveau depuis.",
+ "{0} is running right now.": "{0} est en cours d’exécution.",
+ "An update replaces its program while it works: its sessions may stop or behave oddly, and some updaters refuse. Finish its work first, or update anyway.": "Une mise à jour remplace son programme pendant qu’il travaille : ses sessions peuvent s’arrêter ou se comporter bizarrement, et certains outils de mise à jour refusent. Laissez-le d’abord terminer, ou mettez à jour quand même.",
+ "Update anyway": "Mettre à jour quand même"
 }

@@ -95,8 +95,10 @@ a commit.
    feature/extension add-on contracts remain. Other adapter readers/collaboration views remain.
 4. **Product fit and migration validation:** keyboard/accessibility done (step 4
    part 3: the manual's shortcuts, the map and editor by keyboard, guideline checks);
-   still to do: recovery, safe live-agent updates, desktop theme behaviour during operations,
-   cross-process settings coordination and clean-VM scenarios. New UI remains in
+   recovery: recent changes with Undo after a restart (part 4);
+   safe live-agent updates: a running agent is updated only after a warning (part 5);
+   the desktop theme follows during operations too (part 6);
+   still to do: cross-process settings coordination and clean-VM scenarios. New UI remains in
    all eight languages with manual updates; current manuals are rebuilt.
 5. **Omarchy integration (Uwe, 2026-10-28):** on Omarchy the Flutter app must feel
    like the plugin does today, without becoming a different app elsewhere. Only when

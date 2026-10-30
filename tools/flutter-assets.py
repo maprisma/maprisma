@@ -5,6 +5,17 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 KEYS = (
+    # Updating an agent that runs now.
+    "{0} is running right now.",
+    "An update replaces its program while it works: its sessions may stop or behave oddly, and some updaters refuse. Finish its work first, or update anyway.",
+    "Update anyway",
+    # Recent changes (Undo after a restart).
+    "Recent changes",
+    "Every change this app wrote to an agent's settings, newest first. Undo puts back what was not changed again since, also after the app was closed or crashed.",
+    "No changes yet.",
+    "Changed again since: nothing left to undo",
+    "Put back: {0}",
+    "Nothing was put back: the files were changed again since.",
     # The daily AI checks (MCP server updates).
     "Daily AI checks",
     "Once a day, an installed agent looks on the web for new versions of your MCP servers and shows them as hints, with “Do it with …” to let it do the update. This uses the agent's tokens or plan limits; its detail page shows how many.",

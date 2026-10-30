@@ -17,6 +17,8 @@ class SettingsView extends StatelessWidget {
     this.mcpChecks,
     this.mcpChecking = false,
     this.onCheckMcp,
+    this.changes,
+    this.onUndoChange,
     this.unitName = '',
   });
 
@@ -38,6 +40,11 @@ class SettingsView extends StatelessWidget {
   final Map<String, dynamic>? mcpChecks;
   final bool mcpChecking;
   final VoidCallback? onCheckMcp;
+
+  /// Recent changes (changes.history): the connection changes kept on disk,
+  /// each with Undo, also after a restart; null while loading.
+  final List<Map<String, dynamic>>? changes;
+  final ValueChanged<String>? onUndoChange;
 
   /// The provider watcher's user service, as the user sees it in systemctl.
   final String unitName;
@@ -126,6 +133,51 @@ class SettingsView extends StatelessWidget {
 
   /// Settings › Local helper: Off, or an agent with a model of the local
   /// LLM (the suggestion marked; choosing one confirms it).
+  static String _when(BuildContext context, DateTime t) {
+    final words = MaterialLocalizations.of(context);
+    return '${words.formatShortDate(t)} '
+        '${words.formatTimeOfDay(TimeOfDay.fromDateTime(t))}';
+  }
+
+  List<Widget> _changeRows(BuildContext context) {
+    final changes = this.changes;
+    if (changes == null) return const [];
+    return [
+      Text(tr('Recent changes'), style: Theme.of(context).textTheme.titleLarge),
+      const SizedBox(height: 8),
+      Text(
+        tr(
+          "Every change this app wrote to an agent's settings, newest first. Undo puts back what was not changed again since, also after the app was closed or crashed.",
+        ),
+      ),
+      if (changes.isEmpty) Text(tr('No changes yet.')),
+      for (final c in changes)
+        ListTile(
+          key: ValueKey('change-${c['id']}'),
+          contentPadding: EdgeInsets.zero,
+          title: Text(_when(context, DateTime.parse('${c['when']}'))),
+          subtitle: Text(
+            [
+              ...(c['changed'] as List).take(3),
+              if ((c['count'] as int? ?? 0) > 3) '…',
+            ].join(', '),
+          ),
+          trailing: (c['undoable'] as List).isEmpty
+              ? Tooltip(
+                  message: tr('Changed again since: nothing left to undo'),
+                  child: const Icon(Icons.history_toggle_off),
+                )
+              : OutlinedButton(
+                  key: ValueKey('undo-${c['id']}'),
+                  onPressed: busy || onUndoChange == null
+                      ? null
+                      : () => onUndoChange!(c['id'] as String),
+                  child: Text(tr('Undo')),
+                ),
+        ),
+    ];
+  }
+
   List<Widget> _helperRows() {
     final found = (helpers?['candidates'] as List? ?? const []).cast<Map>();
     final suggested = helpers?['suggested'] as Map?;
@@ -677,6 +729,8 @@ class SettingsView extends StatelessWidget {
                         onUpdate({'map_layers': next.toList()});
                       },
               ),
+            const SizedBox(height: 24),
+            ..._changeRows(context),
           ],
         ),
       ),

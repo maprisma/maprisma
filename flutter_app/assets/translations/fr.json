@@ -1,4 +1,13 @@
 {
+  "{0} is running right now.": "{0} est en cours d’exécution.",
+  "An update replaces its program while it works: its sessions may stop or behave oddly, and some updaters refuse. Finish its work first, or update anyway.": "Une mise à jour remplace son programme pendant qu’il travaille : ses sessions peuvent s’arrêter ou se comporter bizarrement, et certains outils de mise à jour refusent. Laissez-le d’abord terminer, ou mettez à jour quand même.",
+  "Update anyway": "Mettre à jour quand même",
+  "Recent changes": "Modifications récentes",
+  "Every change this app wrote to an agent's settings, newest first. Undo puts back what was not changed again since, also after the app was closed or crashed.": "Chaque modification que cette application a écrite dans les réglages d’un agent, la plus récente en premier. Annuler remet ce qui n’a pas été modifié de nouveau depuis, même après la fermeture ou le plantage de l’application.",
+  "No changes yet.": "Aucune modification pour l’instant.",
+  "Changed again since: nothing left to undo": "Modifié de nouveau depuis : plus rien à annuler",
+  "Put back: {0}": "Remis : {0}",
+  "Nothing was put back: the files were changed again since.": "Rien n’a été remis : les fichiers ont été modifiés de nouveau depuis.",
   "Daily AI checks": "Vérifications IA quotidiennes",
   "Once a day, an installed agent looks on the web for new versions of your MCP servers and shows them as hints, with “Do it with …” to let it do the update. This uses the agent's tokens or plan limits; its detail page shows how many.": "Une fois par jour, un agent installé cherche sur le web de nouvelles versions de vos serveurs MCP et les affiche comme indications, avec « Le faire avec … » pour lui confier la mise à jour. Cela utilise les jetons ou les limites du forfait de l'agent ; sa page de détails indique combien.",
   "MCP server updates": "Mises à jour des serveurs MCP",
