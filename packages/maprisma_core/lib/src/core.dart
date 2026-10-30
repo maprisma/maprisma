@@ -2892,14 +2892,18 @@ final class CoreService {
       if (candidate['fit'] == 'too_large') {
         throw const FormatException('This model is too large for this PC');
       }
-      if (candidate['ran'] == true) {
+      // Once: while it runs or when it worked. A failed or cancelled download
+      // can start again, without a new request and its tokens.
+      final last = tasks.items[candidate['task']]?.state;
+      if (last == 'running' || last == 'done') {
         throw const FormatException('This one has already been started');
       }
-      candidate['ran'] = true;
-      return dispatch('providers.run', {
+      final started = dispatch('providers.run', {
         'operation': action['operation'],
         'params': action['params'],
       });
+      candidate['task'] = started['task'];
+      return started;
     }
     final rt = reads.inventory
         .collect(reads.catalog.scan())

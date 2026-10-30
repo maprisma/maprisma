@@ -442,15 +442,39 @@ void main() {
   );
 
   test('review 004: the name a download got, by runner', () {
-    Map action(String model) => {'model': model, 'repo': 'org/Model-GGUF'};
-    expect(smartInstalled(['m-Q4'], action('m-Q4')), 'm-Q4');
-    expect(smartInstalled(['m-Q4.kcpps'], action('m-Q4')), 'm-Q4.kcpps');
-    expect(smartInstalled(['Model-GGUF'], action('m-Q4')), 'Model-GGUF');
+    Map action(String runtime, String model) => {
+      'runtime': runtime,
+      'model': model,
+      'repo': 'org/Model-7B-GGUF',
+    };
+    expect(smartInstalled(['m-Q4'], action('llamacpp', 'm-Q4')), 'm-Q4');
     expect(
-      smartInstalled(['m-Q4-00001-of-00002'], action('m-Q4')),
+      smartInstalled(['m-Q4-00001-of-00002'], action('llamacpp', 'm-Q4')),
       'm-Q4-00001-of-00002',
     );
-    expect(smartInstalled(['other'], action('m-Q4')), isNull);
+    // The repository's name is no match on llama.cpp: it may be an old model.
+    expect(
+      smartInstalled(['Model-7B-GGUF'], action('llamacpp', 'm-Q4')),
+      isNull,
+    );
+    expect(
+      smartInstalled(['m-Q4.kcpps'], action('koboldcpp', 'm-Q4')),
+      'm-Q4.kcpps',
+    );
+    final long = 'm' * 130;
+    expect(
+      smartInstalled(['${'m' * 120}.kcpps'], action('koboldcpp', long)),
+      '${'m' * 120}.kcpps',
+    );
+    expect(
+      smartInstalled(['model-7b'], action('lmstudio', 'x-Q4')),
+      'model-7b',
+    );
+    expect(
+      smartInstalled(['hf.co/a/b:Q4'], action('ollama', 'hf.co/a/b:Q4')),
+      'hf.co/a/b:Q4',
+    );
+    expect(smartInstalled(['other'], action('ollama', 'hf.co/a/b:Q4')), isNull);
   });
 
   test('the routes refuse what is not theirs', () {

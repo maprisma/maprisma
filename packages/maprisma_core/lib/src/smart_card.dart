@@ -3,7 +3,9 @@ import 'dart:io';
 import 'adapters.dart' show Adapter;
 import 'desktop.dart' show whichIn;
 import 'health_report.dart' show pcInfo;
+import 'installers.dart' show koboldConfigName;
 import 'local_helper.dart';
+import 'map_graph.dart' show graphModelKey;
 import 'model_downloads.dart' show ModelFiles;
 import 'model_hub.dart';
 import 'posix_ffi.dart';
@@ -192,16 +194,23 @@ Map<String, dynamic>? smartFile(
       usable.first;
 }
 
-/// The name a downloaded file got in a runner's list, which differs by runner:
-/// the same, a split file's first part, KoboldCpp's .kcpps, LM Studio's
-/// repository name. Null: not there yet.
+/// The name a downloaded file got in its runner's list, which differs by
+/// runner: Ollama's pull name, KoboldCpp's .kcpps, a split file's first part, LM
+/// Studio's own identifier (matched without case, quantization and -GGUF; it
+/// may list a new file only later). Null: not there yet.
 String? smartInstalled(List<String> models, Map action) {
   final name = '${action['model']}';
-  final repo = '${action['repo']}'.split('/').last;
-  for (final wanted in [name, '$name.kcpps', repo]) {
-    if (models.contains(wanted)) return wanted;
+  switch (action['runtime']) {
+    case 'koboldcpp':
+      final config = koboldConfigName(name);
+      return models.contains(config) ? config : null;
+    case 'lmstudio':
+      final wanted = {graphModelKey(name), graphModelKey('${action['repo']}')};
+      return models.where((m) => wanted.contains(graphModelKey(m))).firstOrNull;
   }
-  return models.where((m) => m.startsWith('$name-00001-of-')).firstOrNull;
+  if (models.contains(name)) return name;
+  final part = RegExp('^${RegExp.escape(name)}-00001-of-\\d{5}\$');
+  return models.where(part.hasMatch).firstOrNull;
 }
 
 /// A candidate for the GUI and, in 'action', what the core will run for it.
@@ -355,7 +364,15 @@ SmartAgent smartAgent(
     Posix().chmodPath(work, 0x1c0);
     final answerFile = '$work/answer-$smartTask-$pid.txt';
     final writesFile = advised == null && rewrite.contains('{answer}');
-    if (File(answerFile).existsSync()) File(answerFile).deleteSync();
+    void removeAnswer() {
+      try {
+        File(answerFile).deleteSync();
+      } on FileSystemException {
+        // none, or already gone
+      }
+    }
+
+    removeAnswer();
     final binary = whichIn(command, env['PATH'] ?? '') ?? command;
     final argv =
         advised?.$1 ??
@@ -385,17 +402,15 @@ SmartAgent smartAgent(
       if (!done) throw StateError('no answer');
       ok = true;
       result = 'answered';
-      return writesFile ? File(answerFile).readAsStringSync() : answer;
+      if (!writesFile) return answer;
+      if (!File(answerFile).existsSync()) throw StateError('no answer');
+      return File(answerFile).readAsStringSync();
     } catch (error) {
       result = errorText(error);
       if (result.length > 120) result = result.substring(0, 120);
       rethrow;
     } finally {
-      try {
-        File(answerFile).deleteSync();
-      } on FileSystemException {
-        // it wrote none
-      }
+      removeAnswer();
       recordRun(
         runLogPath(env, home),
         plugin,
