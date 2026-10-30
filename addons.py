@@ -246,7 +246,7 @@ def verify(folder: Path, signers: str = ALLOWED_SIGNERS, uid: int | None = None)
         return _refuse(addon, "addon.json is missing or not JSON")
     if not isinstance(meta, dict) or meta.get("id") != folder.name:
         return _refuse(addon, "addon.json does not name this add-on")
-    if "addon.py" not in files and "agent.toml" not in files:
+    if "addon.py" not in files and "agent.toml" not in files and not _built_in_providers(meta):
         return _refuse(addon, "addon.py (or an agent's agent.toml) is missing")
     if "agent.toml" in files and meta.get("kind") != "agent":
         return _refuse(addon, "agent.toml belongs only in an agent add-on")
@@ -313,6 +313,15 @@ def strings(addon: Addon) -> dict:
     return found
 
 
+def _built_in_providers(meta: dict) -> bool:
+    """Maprisma's provider add-ons are data: they name providers the app has built in."""
+    provides = meta.get("provides")
+    if meta.get("kind") != "provider" or not isinstance(provides, list) or not provides:
+        return False
+    known = {p.key for p in providers.built_in_local() + providers.built_in_online()}
+    return all(isinstance(key, str) and key in known for key in provides)
+
+
 def load(addon: Addon, hooks: addon_api.Hooks = addon_api.HOOKS) -> Addon:
     """Run a verified add-on's register(api) from its verified bytes."""
     if addon.state != "verified":
@@ -329,8 +338,15 @@ def load(addon: Addon, hooks: addon_api.Hooks = addon_api.HOOKS) -> Addon:
             import adapter_data
             facts = tomllib.loads(addon.files["agent.toml"].decode("utf-8"))
             hooks_file = addon.files.get("hooks.py")      # its code, from the verified bytes too
-            agent_hooks = adapter_data.hooks_from(hooks_file, f"{addon.id}/hooks.py") if hooks_file else None
+            # Maprisma's agent add-ons are data: an agent the app knows keeps its built-in hooks.
+            agent_hooks = adapter_data.hooks_from(hooks_file, f"{addon.id}/hooks.py") if hooks_file \
+                else adapter_data.hooks_module(str(facts.get("command", "")))
             api.add_harness(adapter_data.harness(facts, f"{addon.id}/agent.toml", agent_hooks))
+        if addon.kind == "provider" and "addon.py" not in addon.files:
+            # A data add-on: the built-in providers it names, shown through it.
+            built_in = {p.key: p for p in providers.built_in_local() + providers.built_in_online()}
+            for key in addon.provides:
+                providers.add(built_in[key], addon.id)
         if "addon.py" in addon.files:
             exec(compile(addon.files["addon.py"], module.__file__, "exec"), module.__dict__)
             register = getattr(module, "register", None)

@@ -84,6 +84,20 @@ class AdapterAddonsTest(unittest.TestCase):
         self.assertEqual((claude.kind, claude.needs, claude.commands), ("agent", addons.MAPRISMA_VERSION, ["claude"]))
         self.assertIn("updater", claude.capabilities)
 
+    def test_no_code_in_any_addon(self):
+        self.assertEqual(sorted(str(f.relative_to(self.out)) for f in self.out.rglob("*.py")), [])
+
+    def test_a_data_provider_names_only_built_in_providers(self):
+        import json
+        folder = Path(self.tmp.name) / "unknown" / "llm-x"
+        folder.mkdir(parents=True)
+        (folder / "addon.json").write_text(json.dumps({"id": "llm-x", "version": "1.0.0", "api": 1, "kind": "provider",
+                                                       "capabilities": ["provider"], "provides": ["not-built-in"],
+                                                       "privacy": "numbers"}))
+        self.sign(folder)
+        addon = addons.verify(folder, self.signers)
+        self.assertEqual((addon.state, addon.reason), ("refused", "addon.py (or an agent's agent.toml) is missing"))
+
     def test_empty_until_switched_on(self):
         self.load(set())
         self.assertEqual((harnesses.all_harnesses(), providers.all_providers()), ((), ()))

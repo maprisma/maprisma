@@ -30,5 +30,12 @@ void main() {
       ),
       isNull,
     );
+    expect(
+      AddonRegistry.dataOnlyRefusal(
+        addon('llm-ollama', 'provider', {'addon.json': []})
+          ..provides = ['ollama'],
+      ),
+      isNull,
+    );
   });
 }

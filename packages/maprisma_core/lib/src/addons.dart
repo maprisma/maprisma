@@ -316,8 +316,16 @@ final class AddonVerifier {
     if (meta is! Map || meta['id'] != addon.id) {
       return _refuse(addon, 'addon.json does not name this add-on');
     }
+    // Maprisma's provider add-ons are data: they name built-in providers.
+    final named = meta['provides'];
+    final builtInProviders =
+        meta['kind'] == 'provider' &&
+        named is List &&
+        named.isNotEmpty &&
+        named.every(providerFactsAll().contains);
     if (!verified.containsKey('addon.py') &&
-        !verified.containsKey('agent.toml')) {
+        !verified.containsKey('agent.toml') &&
+        !builtInProviders) {
       return _refuse(addon, 'addon.py (or an agent\'s agent.toml) is missing');
     }
     if (verified.containsKey('agent.toml') && meta['kind'] != 'agent') {
