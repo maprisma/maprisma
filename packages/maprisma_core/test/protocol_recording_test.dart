@@ -72,6 +72,100 @@ void main() {
     );
   });
 
+  test('review 001: form values, odd names, args, URLs, lists', () {
+    String text(String method, Object value) =>
+        jsonEncode(redactForRecord(method, value));
+    // An MCP server form: every value the user typed goes, the names stay.
+    final form =
+        redactForRecord('mcp.option_test', {
+              'params': {
+                'option': 'brave',
+                'values': {
+                  'X-Subscription-Token': 'plain1',
+                  'DATABASE_URL': 'x',
+                  'arg:0': 'y',
+                },
+              },
+            })
+            as Map;
+    expect(form['params']['values'], {
+      'X-Subscription-Token': recordBlank,
+      'DATABASE_URL': recordBlank,
+      'arg:0': recordBlank,
+    });
+    // Secret names with a hyphen, ending in _KEY, AWS's.
+    final names = text('details.mcp', {
+      'X-API-Key': 'plain2',
+      'X-Auth-Token': 'plain3',
+      'OPENAI_KEY': 'plain4',
+      'AWS_SECRET_ACCESS_KEY': 'plain5',
+      'fix_key': 'disk-space',
+    });
+    for (final s in ['plain2', 'plain3', 'plain4', 'plain5']) {
+      expect(names, isNot(contains(s)), reason: s);
+    }
+    expect(names, contains('disk-space'));
+    // Arguments: after a secret flag, a secret name=value; others stay.
+    final args =
+        redactForRecord('connections.author_preview', {
+              'entry': {
+                'args': [
+                  '--token',
+                  'plain6',
+                  '--api-key=plain7',
+                  '-e',
+                  'API_KEY=plain8',
+                  '--port',
+                  '8080',
+                  'MODE=fast',
+                ],
+              },
+            })
+            as Map;
+    expect(args['entry']['args'], [
+      '--token',
+      recordBlank,
+      '--api-key=$recordBlank',
+      '-e',
+      'API_KEY=$recordBlank',
+      '--port',
+      '8080',
+      'MODE=fast',
+    ]);
+    // URLs: password and query values, wherever the text is.
+    final urls = text('details.mcp', {
+      'url': 'https://host/mcp?api_key=plain9&token=abc',
+      'address': 'https://user:plain10@host/mcp',
+      'note': 'set DATABASE_URL=postgres://me:plain11@db/app first',
+    });
+    for (final s in ['plain9', 'abc', 'plain10', 'plain11']) {
+      expect(urls, isNot(contains(s)), reason: s);
+    }
+    expect(urls, contains('https://host/mcp?api_key=***&token=***'));
+    expect(urls, contains('user:***@host'));
+    // A list under a secret name goes; a list of env names stays.
+    final lists =
+        redactForRecord('mcp.catalog', {
+              'cookie': ['sid=plain12'],
+              'credentials': ['plain13', true],
+              'options': [
+                {
+                  'env': ['GITHUB_TOKEN'],
+                  'headers': ['Authorization'],
+                },
+              ],
+            })
+            as Map;
+    expect(lists['cookie'], [recordBlank]);
+    expect(lists['credentials'], [recordBlank, true]);
+    expect(lists['options'], [
+      {
+        'env': ['GITHUB_TOKEN'],
+        'headers': ['Authorization'],
+      },
+    ]);
+  });
+
   test('a recorded route writes blanked lines; off, nothing is written', () {
     final home = Directory.systemTemp.createTempSync('recording');
     addTearDown(() => home.deleteSync(recursive: true));

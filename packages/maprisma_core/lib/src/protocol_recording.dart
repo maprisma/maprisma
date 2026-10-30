@@ -1,17 +1,25 @@
 /// The protocol recording (MAPRISMA_RECORD_PROTOCOL): what a recorded line may
 /// hold. A recording is read by people and agents later, so secrets are blanked
-/// before it is written: values of secret-named fields, every value of an
-/// `env` or `headers` map (an MCP server's keys live there; the names stay),
-/// the key of an API-key route, and strings that look like a key wherever they
-/// are.
+/// before it is written:
+/// - everything under a secret name (`api_key`, `X-API-Key`, `OPENAI_KEY`,
+///   `cookie` …): text, also inside lists and maps; numbers, true/false and
+///   null stay (they say whether, not what);
+/// - every value of an `env` or `headers` map and of the `values` an MCP
+///   server form sends (the names stay; a list of names stays);
+/// - in `args`: the value after a secret flag (`--token x`) and of a secret
+///   `name=value` (`--api-key=x`, `API_KEY=x`);
+/// - in every text: the password and query values of a URL, and strings that
+///   look like a key (sk-…, AIza…, ghp_…, "Bearer …").
 library;
 
 const recordBlank = '***';
 
+/// A field or flag name that holds a secret.
 final _secretName = RegExp(
-  r'(^|_)(api_?key|apikey|token|access_token|refresh_token|id_token|password|'
-  r'passphrase|secret|client_secret|authorization|cookie|credentials?|'
-  r'private_key)$',
+  r'((^|[_-])(api[_-]?key|apikey|token|access[_-]?token|refresh[_-]?token|'
+  r'id[_-]?token|auth[_-]?token|password|passwd|passphrase|secret|'
+  r'client[_-]?secret|authorization|cookie|credentials?|private[_-]?key)$)|'
+  r'([_-]key$)',
   caseSensitive: false,
 );
 
@@ -22,42 +30,124 @@ final _secretText = RegExp(
   r'hf_[A-Za-z0-9]{20,}|Bearer\s+\S+)',
 );
 
+final _url = RegExp(r'''[a-zA-Z][a-zA-Z0-9+.-]*://[^\s'"<>]+''');
+final _flag = RegExp(r'^--?([A-Za-z0-9][A-Za-z0-9_-]*)$');
+final _assignment = RegExp(
+  r'^(--?)?([A-Za-z_][A-Za-z0-9_-]*)=(.*)$',
+  dotAll: true,
+);
+
+/// Field names that end like a secret but are none (the core's own ids).
+const _notSecret = {'fix_key'};
+
 /// The routes whose `key` parameter is an API key, not a name.
 const _keyRoutes = {'agents.key_preview', 'agents.key_apply'};
 
+/// The routes whose `values` are what the user typed into an MCP server form.
+const _formRoutes = {'mcp.option_test', 'mcp.option_preview'};
+
 /// [value] as it may be recorded for [method].
 Object? redactForRecord(String method, Object? value) =>
-    _redact(value, keyIsSecret: _keyRoutes.contains(method));
+    _Redactor(method).plain(value);
 
-Object? _redact(Object? value, {bool keyIsSecret = false, bool all = false}) {
-  if (value is Map) {
-    return {
-      for (final e in value.entries)
-        e.key: _blank('${e.key}', keyIsSecret: keyIsSecret, all: all)
-            ? _secret(e.value)
-            : _redact(
-                e.value,
-                keyIsSecret: keyIsSecret,
-                all: '${e.key}' == 'env' || '${e.key}' == 'headers',
-              ),
-    };
+final class _Redactor {
+  _Redactor(this.method);
+  final String method;
+
+  bool _secretField(String name) =>
+      (_secretName.hasMatch(name) && !_notSecret.contains(name)) ||
+      (name == 'key' && _keyRoutes.contains(method));
+
+  /// Outside any secret: names decide.
+  Object? plain(Object? value) {
+    if (value is Map) {
+      return {
+        for (final e in value.entries) e.key: _field('${e.key}', e.value),
+      };
+    }
+    if (value is List) return [for (final v in value) plain(v)];
+    if (value is String) return cleanText(value);
+    return value;
   }
-  if (value is List) {
-    return [
-      for (final v in value) _redact(v, keyIsSecret: keyIsSecret, all: all),
-    ];
+
+  Object? _field(String name, Object? value) {
+    if (_secretField(name)) return secret(value);
+    if ((name == 'env' || name == 'headers') && value is Map) {
+      return valuesOf(value);
+    }
+    if (name == 'values' && value is Map && _formRoutes.contains(method)) {
+      return valuesOf(value);
+    }
+    if (name == 'args' && value is List) return args(value);
+    return plain(value);
   }
-  if (value is String) return value.replaceAll(_secretText, recordBlank);
-  return value;
+
+  /// Under a secret name: all text goes, numbers, true/false and null stay.
+  Object? secret(Object? value) => switch (value) {
+    String() => recordBlank,
+    Map() => {for (final e in value.entries) e.key: secret(e.value)},
+    List() => [for (final v in value) secret(v)],
+    _ => value,
+  };
+
+  /// A map of names and values (env, headers, a form): the names stay.
+  Map valuesOf(Map value) => {
+    for (final e in value.entries) e.key: secret(e.value),
+  };
+
+  /// A program's arguments: what follows a secret flag, and the value of a
+  /// secret name=value.
+  List args(List value) {
+    final out = [];
+    var next = false;
+    for (final v in value) {
+      if (v is! String) {
+        out.add(plain(v));
+        next = false;
+        continue;
+      }
+      if (next) {
+        out.add(recordBlank);
+        next = false;
+        continue;
+      }
+      final assigned = _assignment.firstMatch(v);
+      if (assigned != null && _secretName.hasMatch(assigned.group(2)!)) {
+        out.add('${assigned.group(1) ?? ''}${assigned.group(2)}=$recordBlank');
+        continue;
+      }
+      final flag = _flag.firstMatch(v);
+      next = flag != null && _secretName.hasMatch(flag.group(1)!);
+      out.add(cleanText(v));
+    }
+    return out;
+  }
 }
 
-/// A value under a secret name: text goes, everything inside a map or list
-/// too; a number, true/false or null says nothing secret and stays.
-Object? _secret(Object? value) => switch (value) {
-  String() => recordBlank,
-  Map() || List() => _redact(value, all: true),
-  _ => value,
-};
+/// A text with key-like strings blanked and every URL's password and query
+/// values blanked (`https://user:***@host/mcp?api_key=***`).
+String cleanText(String text) => text
+    .replaceAllMapped(_url, (m) => _cleanUrl(m[0]!))
+    .replaceAll(_secretText, recordBlank);
 
-bool _blank(String name, {required bool keyIsSecret, required bool all}) =>
-    all || _secretName.hasMatch(name) || (keyIsSecret && name == 'key');
+String _cleanUrl(String text) {
+  final url = Uri.tryParse(text);
+  if (url == null || (url.userInfo.isEmpty && !url.hasQuery)) return text;
+  final user = url.userInfo.isEmpty
+      ? ''
+      : url.userInfo.contains(':')
+      ? '${url.userInfo.split(':').first}:$recordBlank'
+      : recordBlank;
+  final query = url.hasQuery
+      ? url.query
+            .split('&')
+            .map(
+              (p) => p.contains('=') ? '${p.split('=').first}=$recordBlank' : p,
+            )
+            .join('&')
+      : null;
+  return url
+      .replace(userInfo: user.isEmpty ? null : user, query: query)
+      .toString()
+      .replaceAll('%2A%2A%2A', recordBlank);
+}
