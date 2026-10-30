@@ -1,0 +1,20 @@
+#!/bin/bash
+# Clean-VM scenarios (plan-flutter step 4): the newest built bundle in a throwaway Omarchy VM,
+# headless. Nothing is written to the image and nothing touches this desktop.
+#
+#   tools/vm-scenarios [image]     default: ~/VMs/omarchy-edge/omarchy-edge-*.qcow2 (newest)
+#
+# Shares the bundle read-only into the VM (9p), runs tools/vm-scenarios.sh there over ssh: the
+# system and missing libraries, the core on a fresh home (settings, Recent changes, Open problems,
+# guide, scan, map), then the app in the VM's session with a screenshot. Prints the report and
+# saves the screenshot as vm-scenarios.png in the current folder.
+set -euo pipefail
+root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+bundle=$(ls -dt "$root"/.flutter-previews/preview-*/flutter_app/build/linux/x64/release/bundle | head -1)
+image=${1:-$(ls -t ~/VMs/omarchy-edge/omarchy-edge-*.qcow2 | head -1)}
+out=$(mktemp)
+trap 'rm -f -- "$out"' EXIT
+QEMU_EXTRA="-virtfs local,path=$bundle,mount_tag=asterism,security_model=none,readonly=on" \
+  bash "$(dirname -- "$image")/vm-boot" "$image" bash -s < "$root/tools/vm-scenarios.sh" > "$out" 2>&1
+sed -n '/== SHOT/,/== END/!p' "$out"
+sed -n '/== SHOT/{n;p}' "$out" | base64 -d > vm-scenarios.png 2>/dev/null && echo "Screenshot: vm-scenarios.png"

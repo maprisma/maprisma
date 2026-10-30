@@ -2517,3 +2517,30 @@ Check: `test/settings_lock_test.dart` has two isolates save different keys 150 t
 once; before the lock, saves were lost in each of three runs (a key ended at 117, 136 or 148 of
 149), with it none are. An app test changes a setting from "another process" and sees Settings
 follow within one check.
+
+### Part 8: clean-VM scenarios
+
+`tools/vm-scenarios` runs the newest built bundle (the release preview `tools/flutter-dev build`
+makes, 66 MB, gate passed) in a throwaway Omarchy VM (`~/VMs/omarchy-edge`, the edge image of
+2026-10-13), headless (`-display none`, a copy-on-write overlay deleted on exit; nothing touches
+the host's desktop). The bundle is shared read-only over 9p; `tools/vm-scenarios.sh` runs inside
+over ssh.
+
+Results on 2026-10-30, all as they should be:
+- **Libraries:** the app needs nothing the clean system lacks (the plugins find
+  `libflutter_linux_gtk.so` through the app's own search path).
+- **The core on a fresh home** (the bundle's `asterism-core`, no agents, no add-ons):
+  `app.snapshot` with every default; `settings.update` to German makes `settings.json` and
+  `settings.json.lock` (0600, folder 0700) and every later answer German; Recent changes, the
+  local helper and the MCP checks empty and worded so ("tägliche Prüfungen aus"); Open problems
+  sees the VM right (no graphics card for local models, 3.8 GB memory, no agent yet); the guide
+  offers its routes with mise already there; the scan finds the skill sets Omarchy and
+  Superwhisper ship; the map's first build is pending; nothing on stderr; no user unit installed.
+- **The app in the VM's Hyprland session:** starts (Impeller over OpenGL ES in software), window
+  `io.github.ubruckhaus.Asterism.Devel` titled Asterism; the first start shows the welcome and
+  the Agents focus with no add-ons yet, Look for add-ons online and Install from file.
+
+Not covered here: anything that needs the network beyond the catalog (installing agents, models),
+or input in the VM's session; those stay with the step-8 review.
+
+With this, plan-flutter step 4 is done.

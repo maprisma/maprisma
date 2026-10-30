@@ -99,7 +99,7 @@ a commit.
    safe live-agent updates: a running agent is updated only after a warning (part 5);
    the desktop theme follows during operations too (part 6);
    settings across processes: saves under a lock, outside changes shown (part 7);
-   still to do: clean-VM scenarios. New UI remains in
+   clean-VM scenarios: tools/vm-scenarios, all passed (part 8). Step 4 is done. New UI remains in
    all eight languages with manual updates; current manuals are rebuilt.
 5. **Omarchy integration (Uwe, 2026-10-28):** on Omarchy the Flutter app must feel
    like the plugin does today, without becoming a different app elsewhere. Only when
