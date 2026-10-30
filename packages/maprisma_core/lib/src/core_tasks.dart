@@ -46,6 +46,7 @@ final class CoreTask {
   String state = 'running', text = '';
   double fraction = 0;
   Map<String, dynamic> result = {};
+  Process? process;
 }
 
 /// Python flutter_tasks.Tasks for the operations this core runs: a worker
@@ -120,6 +121,8 @@ final class CoreTasks {
         ...workerCommand.skip(1),
         if (body != null) '--plan-stdin',
       ]);
+      task.process = process;
+      if (task.state == 'stopped') _stop(process); // cancelled while starting
       process.stderr.drain<void>();
       if (body != null) {
         process.stdin
@@ -195,7 +198,22 @@ final class CoreTasks {
     if (task.state == 'running' && commits.contains(task.operation)) {
       throw const FormatException('A commit cannot be cancelled');
     }
+    if (task.state == 'running') {
+      task.state = 'stopped';
+      final process = task.process;
+      if (process != null) _stop(process);
+    }
     return status(ident);
+  }
+
+  /// flutter_tasks._close: SIGTERM, which ends an agent's run too (runLookUp),
+  /// then SIGKILL for a worker that does not go.
+  void _stop(Process process) {
+    process.kill();
+    Future<void>.delayed(
+      const Duration(milliseconds: 500),
+      () => process.kill(ProcessSignal.sigkill),
+    );
   }
 }
 
