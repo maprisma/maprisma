@@ -1160,7 +1160,7 @@ void main() {
             case 'map.smart_run':
               return {'task': 'run-1'};
             case 'tasks.cancel':
-              return {'state': 'cancelled'};
+              return {'state': 'stopped'};
             case 'tasks.status':
               if (params['task'] == 'ask-1') {
                 if (!askDone) {
@@ -1292,6 +1292,106 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Qwen 2.5 Coder 7B is ready.'), findsOneWidget);
       expect(calls, isNot(contains('tasks.cancel')));
+    },
+  );
+
+  testWidgets(
+    'tasks.status state "stopped" returns working to prompt and running download to proposal',
+    (tester) async {
+      tester.view.physicalSize = const Size(1200, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      var askState = 'stopped';
+      var runState = 'stopped';
+      final client = CoreClient(
+        _FakeSmartTransport((method, params) async {
+          switch (method) {
+            case 'map.smart_ask':
+              return {'task': 'ask-1'};
+            case 'map.smart_review':
+              return {
+                'title': 'Qwen 2.5 Coder 7B',
+                'subtitle': 'Q4_K_M',
+                'size': 4683073920,
+                'fit': 'ok',
+                'runtime': 'Ollama',
+              };
+            case 'map.smart_run':
+              return {'task': 'run-1'};
+            case 'tasks.status':
+              if (params['task'] == 'ask-1') {
+                if (askState != 'done') return {'state': askState};
+                return {
+                  'state': 'done',
+                  'result': {
+                    'helper': 'Local helper',
+                    'local': true,
+                    'status': 'proposal',
+                    'proposal': 'prop-1',
+                    'summary': 'Found 1 model.',
+                    'candidates': [
+                      {
+                        'id': 'c1',
+                        'title': 'Qwen 2.5 Coder 7B',
+                        'subtitle': 'Q4_K_M',
+                        'reason': 'Fast.',
+                        'fit': 'ok',
+                        'size': 4683073920,
+                      },
+                    ],
+                  },
+                };
+              }
+              return {'state': runState};
+            default:
+              throw StateError('Unexpected $method');
+          }
+        }),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: MapSmartCard(
+              column: 'models',
+              title: 'Models',
+              open: true,
+              onToggle: () {},
+              tr: (k) => k,
+              helpers: const [
+                {
+                  'command': 'local-helper',
+                  'name': 'Local helper',
+                  'local': true,
+                },
+              ],
+              client: client,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // 1. Working task answering "stopped" returns to idle prompt with text kept.
+      await tester.enterText(find.byType(TextField), 'qwen');
+      await tester.tap(find.text('Ask'));
+      await tester.pumpAndSettle();
+      expect(find.widgetWithText(TextField, 'qwen'), findsOneWidget);
+      expect(find.text('Ask'), findsOneWidget);
+
+      // 2. Running download answering "stopped" returns to proposal, not error.
+      askState = 'done';
+      await tester.tap(find.text('Ask'));
+      await tester.pumpAndSettle();
+      expect(find.text('Found 1 model.'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('smart-review-c1')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Download'));
+      await tester.pumpAndSettle();
+      expect(find.text('Found 1 model.'), findsOneWidget);
+      expect(find.byKey(const ValueKey('smart-review-c1')), findsOneWidget);
     },
   );
 }

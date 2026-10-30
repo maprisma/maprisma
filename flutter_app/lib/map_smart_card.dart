@@ -314,7 +314,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
           });
           return;
         }
-        if (state == 'cancelled') {
+        if (state == 'stopped') {
           _activeTask = null;
           _backToIdle();
           return;
@@ -415,7 +415,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
           setState(() => _step = _SmartStep.done);
           return;
         }
-        if (state == 'cancelled') {
+        if (state == 'stopped') {
           _activeTask = null;
           setState(() => _step = _SmartStep.proposal);
           return;
