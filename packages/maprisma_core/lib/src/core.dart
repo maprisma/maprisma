@@ -68,6 +68,7 @@ import 'mcp_updates.dart' as mcp_updates;
 import 'change_history.dart';
 import 'legacy_move.dart';
 import 'hyprland.dart' show placePopup, WindowRounding;
+import 'protocol_recording.dart';
 
 const portedRoutes = {
   'settings.get',
@@ -3197,12 +3198,19 @@ final class CoreService {
         identity.environment['MAPRISMA_RECORD_PROTOCOL'] ??
         Platform.environment['MAPRISMA_RECORD_PROTOCOL'];
     if (record == null || record.isEmpty) return _dispatch(method, params);
-    // Dev only (tools/protocol.py): every request and its answer, one JSON
-    // line each, to derive the protocol's shapes from what really happens.
+    // Every request and its answer, one JSON line each, secrets blanked
+    // (protocol_recording.dart): for the protocol's shapes (tools/protocol.py)
+    // and for reviewing a manual test (tools/test-session.sh).
     void write(Map<String, dynamic> line) {
       try {
+        final entry = {
+          'time': DateTime.now().toIso8601String(),
+          'method': method,
+          'params': params,
+          ...line,
+        };
         File(record).writeAsStringSync(
-          '${jsonEncode({'method': method, 'params': params, ...line})}\n',
+          '${jsonEncode(redactForRecord(method, entry))}\n',
           mode: FileMode.append,
         );
       } catch (_) {
@@ -3219,6 +3227,9 @@ final class CoreService {
       rethrow;
     } on FormatException catch (e) {
       write({'error': 'invalid', 'message': e.message});
+      rethrow;
+    } catch (e) {
+      write({'error': e.runtimeType.toString(), 'message': '$e'});
       rethrow;
     }
   }
