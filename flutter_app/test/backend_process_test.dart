@@ -1,4 +1,4 @@
-import 'package:asterism/python_transport.dart';
+import 'support/python_transport.dart';
 import 'dart:io';
 
 import 'package:asterism/backend.dart';

@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'package:asterism/python_transport.dart';
+import 'support/python_transport.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'package:asterism/backend.dart';

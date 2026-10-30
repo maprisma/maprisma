@@ -27,7 +27,7 @@ def main():
     command = ['flutter', '--suppress-analytics', '--no-version-check']
     subprocess.run([*command, 'pub', 'get', '--offline'], cwd=stage, check=True)
     subprocess.run([*command, 'build', 'linux', '--no-pub',
-                    '--dart-define=ASTERISM_DEVEL=true', f'--dart-define=ASTERISM_SOURCE={root}'], cwd=stage, check=True)
+                    '--dart-define=ASTERISM_DEVEL=true'], cwd=stage, check=True)
     # The core's plan worker sits next to the app (CoreTasks looks in bundle/lib).
     import sys
     sys.path.insert(0, str(root / 'tools'))

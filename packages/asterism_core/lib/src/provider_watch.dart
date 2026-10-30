@@ -813,6 +813,17 @@ final class WatchService {
     }
     if (workerCommand.length != 2 || workerCommand[1] != 'worker') return null;
     final path = workerCommand.first;
+    // Only an installed core: never a build or a copy in a temporary folder
+    // (a development bundle, a test run), whose unit would start a binary
+    // that is replaced or gone, at the next login.
+    final temp = env['TMPDIR'] ?? '';
+    if (p.isWithin('/tmp', path) ||
+        p.isWithin('/var/tmp', path) ||
+        temp.isNotEmpty && p.isWithin(temp, path) ||
+        path.contains('/.flutter-previews/') ||
+        path.contains('/build/linux/')) {
+      return null;
+    }
     return p.isAbsolute(path) &&
             unitSafe.hasMatch(path) &&
             p.basename(path) == 'asterism-core'

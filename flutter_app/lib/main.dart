@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 import 'dart:async';
 
 import 'package:file_selector/file_selector.dart';
@@ -517,13 +516,7 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
       _failed = false;
     });
     try {
-      // Development location is explicit; release packaging will bundle the service.
-      const definedRoot = String.fromEnvironment('ASTERISM_SOURCE');
-      final root = definedRoot.isNotEmpty
-          ? definedRoot
-          : File(Platform.resolvedExecutable).parent.path;
-      final backend =
-          await (widget.connectBackend?.call() ?? Backend.start(root));
+      final backend = await (widget.connectBackend?.call() ?? Backend.start());
       if (!mounted) {
         backend.dispose();
         return;

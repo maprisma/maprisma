@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Phase-1 regression: AOT tree shaking excludes the Devel Python fallback."""
+"""Release regression: the app's Backend is the Dart core alone; an unknown route is refused (unported_route),
+and the compiled release has no Python fallback in it."""
 from pathlib import Path
 import os
 import argparse
@@ -24,7 +25,7 @@ def main():
         source.write_text("""import 'dart:io';
 import 'package:asterism/backend.dart';
 Future<void> main() async {
-  final backend = await Backend.start('/reference-must-not-start');
+  final backend = await Backend.start();
   try {
     final settings = await backend.call('settings.get');
     if (settings['map_light_fps'] != 20) throw StateError('Wrong defaults');

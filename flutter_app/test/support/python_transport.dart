@@ -1,9 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'service_transport.dart';
+import 'package:asterism/service_transport.dart';
 import 'package:asterism_core/asterism_core.dart';
 
+/// Test support only: drives a fake service script (python3) over the same
+/// line protocol, for widget tests of the app. The app itself has no Python
+/// transport.
 class PythonTransport implements ServiceTransport {
   PythonTransport._(this._process) {
     _process.stdout.listen(

@@ -2,7 +2,6 @@ import 'package:asterism_core/asterism_core.dart' show Posix;
 import 'dart:io';
 import 'package:asterism/backend.dart';
 import 'package:asterism/isolate_transport.dart';
-import 'package:asterism/service_router.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -50,16 +49,15 @@ void main() {
     },
   );
   test(
-    'router never starts fallback on ported error; non-Devel refuses unported',
+    'the core answers every route itself; an unknown one is refused',
     () async {
-      final home = Directory.systemTemp.createTempSync('asterism-router-');
-      final router = ServiceRouter(
+      final home = Directory.systemTemp.createTempSync('asterism-backend-');
+      final backend = Backend.fromTransport(
         await IsolateTransport.start(environment: {'HOME': home.path}),
-        root: home.path,
       );
       try {
         await expectLater(
-          router.call('settings.update', {
+          backend.call('settings.update', {
             'values': {'map_light_fps': 99},
           }),
           throwsA(
@@ -70,22 +68,14 @@ void main() {
             ),
           ),
         );
-        if (!develPythonFallback) {
-          await expectLater(
-            router.call('nothing.unported', {}),
-            throwsA(
-              isA<BackendError>().having(
-                (e) => e.code,
-                'code',
-                'unported_route',
-              ),
-            ),
-          );
-        }
-        // Handles go to the side that made them: a core handle to the core
-        // (unknown here), any other one only to the Devel reference.
         await expectLater(
-          router.call('tasks.status', {'task': 'core-0000'}),
+          backend.call('nothing.unported', {}),
+          throwsA(
+            isA<BackendError>().having((e) => e.code, 'code', 'unported_route'),
+          ),
+        );
+        await expectLater(
+          backend.call('tasks.status', {'task': 'core-0000'}),
           throwsA(
             isA<BackendError>().having(
               (e) => e.code,
@@ -94,23 +84,23 @@ void main() {
             ),
           ),
         );
-        if (!develPythonFallback) {
-          await expectLater(
-            router.call('connections.undo', {'undo': 'a1b2c3'}),
-            throwsA(
-              isA<BackendError>().having(
-                (e) => e.code,
-                'code',
-                'unported_route',
-              ),
-            ),
-          );
-        }
         expect(home.listSync(), isEmpty);
       } finally {
-        await router.shutdown();
+        await backend.shutdown();
         home.deleteSync(recursive: true);
       }
+    },
+  );
+  test(
+    'a Devel build marks its core, so it never manages the user service',
+    () {
+      expect(coreEnvironment(devel: false, environment: {'HOME': '/h'}), {
+        'HOME': '/h',
+      });
+      expect(coreEnvironment(devel: true, environment: {'HOME': '/h'}), {
+        'HOME': '/h',
+        'ASTERISM_FLUTTER_DEVEL': '1',
+      });
     },
   );
   test(
@@ -142,45 +132,4 @@ void main() {
       }
     },
   );
-  test('Devel router starts Python only for unported routes', () async {
-    if (!develPythonFallback) return;
-    final home = Directory.systemTemp.createTempSync('asterism-fallback-');
-    final script = File('${home.path}/flutter_backend.py')
-      ..writeAsStringSync('''import json,sys
-invalidations=0
-for line in sys.stdin:
- q=json.loads(line)
- if q['method']=='app.settings_changed': invalidations+=1
- print(json.dumps({'id':q['id'],'result':{'reference':True,'invalidations':invalidations}}),flush=True)
-''');
-    final router = ServiceRouter(
-      await IsolateTransport.start(environment: {'HOME': home.path}),
-      root: home.path,
-    );
-    try {
-      expect((await router.call('settings.get'))['map_light_fps'], 20);
-      expect(await router.call('app.snapshot'), {
-        'reference': true,
-        'invalidations': 0,
-      });
-      expect(
-        (await router.call('settings.update', {
-          'values': {'language': 'de'},
-        }))['language'],
-        'de',
-      );
-      expect(
-        (await router.call('i18n.lookup', {'text': 'Settings'}))['language'],
-        'de',
-      );
-      expect(await router.call('app.snapshot'), {
-        'reference': true,
-        'invalidations': 1,
-      });
-      expect(script.existsSync(), true);
-    } finally {
-      await router.shutdown();
-      home.deleteSync(recursive: true);
-    }
-  });
 }

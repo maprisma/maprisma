@@ -57,7 +57,11 @@ case "$action" in
         flutter --suppress-analytics --no-version-check analyze --no-pub
         flutter --suppress-analytics --no-version-check test --no-pub --timeout 60s
         ;;
-    build) python3 "$root/tools/build-flutter-preview.py" ;;
+    build)
+        python3 "$root/tools/build-flutter-preview.py"
+        # Phase 7: nothing of Python in what was built.
+        python3 "$root/tools/check-bundle.py"
+        ;;
     run)
         # The isolated builder assigns the Devel identity for every preview.
         preview_log=$(mktemp)

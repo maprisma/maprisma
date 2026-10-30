@@ -337,6 +337,22 @@ void main() {
       isNull,
     );
     expect(service({}, ['/tmp/x y/asterism-core', 'worker']).binary, isNull);
+    // Builds and temporary copies are never installed as the user service.
+    for (final path in [
+      '/tmp/claude-1000/scratchpad/asterism-core',
+      '/var/tmp/asterism-core',
+      '/home/u/src/asterism/.flutter-previews/preview-x/flutter_app/build/linux/x64/release/bundle/lib/asterism-core',
+      '/home/u/src/asterism/flutter_app/build/linux/x64/release/bundle/lib/asterism-core',
+    ]) {
+      expect(service({}, [path, 'worker']).binary, isNull, reason: path);
+    }
+    expect(
+      service(
+        {'TMPDIR': '/run/user/1000/tmp'},
+        ['/run/user/1000/tmp/asterism-core', 'worker'],
+      ).binary,
+      isNull,
+    );
     // Not managed: nothing written, no systemctl.
     final devel = service({'ASTERISM_FLUTTER_DEVEL': '1'}, [core, 'worker']);
     expect(await devel.ensure(true), isFalse);
