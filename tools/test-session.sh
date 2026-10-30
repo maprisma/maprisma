@@ -21,7 +21,9 @@ else
   [[ -x $app ]] || { echo "$app is not an executable AppImage (chmod +x it)" >&2; exit 1; }
   app=$(realpath "$app")
 fi
-if pgrep -x maprisma >/dev/null || pgrep -f '[M]aprisma.*AppImage' >/dev/null; then
+# The program is called maprisma in the package and inside the AppImage alike (pgrep -f would also
+# find this script, whose command line holds the AppImage's name).
+if pgrep -x maprisma >/dev/null; then
   echo "Maprisma is already running: close it first (its window would only be brought to the front," >&2
   echo "and nothing of this run would be recorded)." >&2
   exit 1
@@ -86,8 +88,13 @@ MAPRISMA_RECORD_PROTOCOL="$run/protocol.jsonl" "$app" > "$run/app.log" 2>&1 || s
   for d in ~/.config/maprisma ~/.cache/maprisma ~/.local/share/maprisma ~/.local/state/maprisma; do
     [[ -e $d ]] && find "$d" -maxdepth 2 -printf '%y %8s %p\n' | sort -k3
   done
-  echo "== user units"
-  ls ~/.config/systemd/user 2>/dev/null | grep -i maprisma || echo none
+  echo "== user units (Maprisma's own and the local LLMs it installed)"
+  units=$(grep -l -e 'installed by Maprisma' -e 'Maprisma:' ~/.config/systemd/user/*.service 2>/dev/null || true)
+  if [[ -n $units ]]; then
+    for u in $units; do echo "$(basename "$u")  $(systemctl --user is-active "$(basename "$u")" 2>/dev/null)"; done
+  else
+    echo none
+  fi
 } > "$run/after.txt" 2>&1
 
 echo "Done (exit $status). Everything is in $run"
