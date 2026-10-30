@@ -30,11 +30,13 @@ one request; a guarded agent proposes, the core checks, the user decides through
 7. **Tokens are always the user's decision** (Uwe): the card shows who answers and what it costs; only the click on
    Ask sends. No retry, no background request. See `docs/plan-smart-helpers.md`.
 
+8. **Room for the status (task 006):** the bar leaves a place for a 16 px symbol at its left, and `MapSmartCard` takes
+   its visibility from one value, so that 006 can show it without a helper. Nothing is shown there yet.
+
 ## Routes (`routes.json`, written by Claude first; the GUI builds against them)
-`map.smart_helpers`, `map.smart_ask` (`column`: mcp · agents · providers · models, `command`, `request`, `answer?`; result
-`{task}`, then in `tasks.status`: status proposal · clarify · redirect · error, as in the proposal's section 6 without
-`preview` and `connect_after`, plus `proposal` (a handle) and per candidate `connectable: [{command, name}]`),
-`map.smart_review`, `map.smart_run`, `map.smart_connect`.
+See `docs/protocol.md`: `map.smart_helpers`, `map.smart_ask`, `map.smart_review`, `map.smart_run`, `map.smart_connect`.
+Different from the proposal: no `fit_label` (the GUI words `fit`: ok, tight, too_large), no `connect_after` (the GUI
+offers the helpers' agents and asks `map.smart_connect`). No `out_of_tokens` (point 5).
 
 ## Core (Claude)
 Allowed actions per column as a fixed list; the agent's answer is data checked against it, candidates must come from
