@@ -3214,11 +3214,24 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     setState(() => _busy = true);
     var applied = false;
     try {
-      final plan = await _backend!.call(
-        method ??
-            (author ? 'connections.author_preview' : 'connections.preview'),
-        params,
-      );
+      final plan = method != null
+          ? await _backend!.call(method, params)
+          : author
+          ? await _client.connectionsAuthorPreview(
+              agents: params['agents'],
+              entry: params['entry'],
+              folder: params['folder'] as String?,
+              kind: params['kind'] as String,
+              name: params['name'] as String?,
+            )
+          : await _client.connectionsPreview(
+              command: params['command'] as String,
+              item: params['item'] as String,
+              kind: params['kind'] as String,
+              model: params['model'] as String?,
+              remove: params['remove'],
+              useNow: params['use_now'] as bool?,
+            );
       if (!mounted) return;
       final apply = await _cardReview(
         tr('Preview'),
