@@ -50,6 +50,7 @@ for line in sys.stdin:
   r=settings
  elif m=='desktop.snapshot':r={'name':'omarchy' if Path('omarchy').exists() else 'generic','theme_dir':''}
  elif m=='window.popup':r={'placed':True,'x':10,'y':40,'width':p['width'],'height':p['height']}
+ elif m=='agents.usage_refresh':tasks['usage']={'ok':True};r={'task':'usage'}
  elif m=='app.theme':r={'theme':json.loads(Path('theme.json').read_text()) if Path('theme.json').exists() else {}}
  elif m=='addons.list':r={'addons':[addon]+([new_addon] if installed else [])}
  elif m=='system.cached':r={'nodes':[],'edges':[],'notes':[],'helpers':[]}
@@ -753,6 +754,15 @@ void main() {
     );
     expect(find.text('Needs a look'), findsOneWidget);
     expect(find.text('Select it on the map.'), findsOneWidget);
+    // Omarchy's usage record was stale: asked for, then the details again.
+    final asked = requests(
+      dir,
+    ).indexWhere((q) => q['method'] == 'agents.usage_refresh');
+    expect(asked, greaterThanOrEqualTo(0));
+    expect(
+      requests(dir).skip(asked).where((q) => q['method'] == 'agents.details'),
+      isNotEmpty,
+    );
     expect(tester.takeException(), isNull);
     await unmountApp(tester);
   });

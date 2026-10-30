@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'app_theme.dart' show corners;
 import 'package:flutter/services.dart';
 
 /// UI-only metadata. Never inserted into the graph or serialized.
@@ -49,14 +50,16 @@ class MapGroupCard extends StatelessWidget {
         group.dummy ? 'Nothing set up yet. Expand to add one' : 'Expand',
       ),
       child: CustomPaint(
-        foregroundPainter: group.dummy ? _DashedBorder(colors.outline) : null,
+        foregroundPainter: group.dummy
+            ? _DashedBorder(colors.outline, corners(context))
+            : null,
         child: Card(
           color: group.dummy
               ? colors.surfaceContainerLowest
               : colors.surfaceContainerHigh,
           child: InkWell(
             onTap: onExpand,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(corners(context)),
             child: Padding(
               padding: const EdgeInsets.all(10),
               child: Row(
@@ -105,13 +108,14 @@ class MapGroupCard extends StatelessWidget {
 }
 
 class _DashedBorder extends CustomPainter {
-  _DashedBorder(this.color);
+  _DashedBorder(this.color, this.radius);
   final Color color;
+  final double radius;
   @override
   void paint(Canvas canvas, Size size) {
     final path = Path()
       ..addRRect(
-        RRect.fromRectAndRadius(Offset.zero & size, const Radius.circular(12)),
+        RRect.fromRectAndRadius(Offset.zero & size, Radius.circular(radius)),
       );
     final paint = Paint()
       ..color = color
@@ -124,7 +128,8 @@ class _DashedBorder extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_DashedBorder oldDelegate) => oldDelegate.color != color;
+  bool shouldRepaint(_DashedBorder oldDelegate) =>
+      oldDelegate.color != color || oldDelegate.radius != radius;
 }
 
 /// Finite transition only; the map's controller and selection live outside it.

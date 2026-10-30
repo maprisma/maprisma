@@ -2583,3 +2583,32 @@ and the guard). **In the edge VM** (headless, the built bundle): the first start
 foot takes the focus it hides; a second plain start brings it back; no title bar.
 Not yet: Omarchy's agent menu entries and usage records, the floating terminal for external
 starts, rounding from `window_rounding()`.
+
+### Part 2: Omarchy's usage figures, the windows' corners
+
+Of the Omarchy data the GTK app used, the agent menu entries, the default agent and the usage
+records were already read by the Dart core (phases 2–6); what was missing:
+
+- **Fresh usage figures** (`desktop_omarchy.refresh_usage`, `agent_details.usage_is_stale`): Omarchy
+  collects an agent's usage when `omarchy-agent-usage-<command>` is in its bin folder or /usr/bin;
+  a record is stale when it is missing, older than ten minutes or older than the agent's sign-in
+  (the adapter's access files, by their times only). Route `agents.usage_refresh {command}`
+  answers `{refreshed: false}` while fresh, else starts the worker op that runs
+  `omarchy-agent-usage-update <command>` (a minute at most). The app asks when an agent's details
+  load, at most every ten minutes per agent, and reads the details again when it worked. Only on
+  Omarchy (the core reads usage records there only).
+- **Corners** (`corners.radius`, `desktop_omarchy.window_rounding`): route `window.rounding` reads
+  `hyprctl getoption decoration:rounding -j` (0–24, kept 30 s; a route of its own, so
+  `app.snapshot` and `app.theme` stay as the reference's). `corners` is a UI setting on both
+  sides; Like windows is Hyprland's rounding (Material's own while unknown), Rounded 12, Square
+  0, for cards, dialogs and the map's boxes (a theme extension `Corners`; the six fixed 12 px radii
+  read it). Settings › Corners shows "Like windows (0 px)" with the rounding read.
+- The manual's "Usage figures and corners from Omarchy in the Flutter preview" in all eight
+  languages; PDFs rebuilt.
+
+Check: `test/usage_refresh_test.dart` (a fake Omarchy with a collector and an update tool: stale,
+refreshed, fresh, stale after ten minutes and after a sign-in; agents without a collector and
+other desktops never asked), the rounding parser, `corners_test.dart`, the details app test asks
+and reads again. On this PC, read only: `window.rounding` answers 0, as Omarchy's windows are
+square. The floating terminal for external starts was already Omarchy's
+(`omarchy-launch-floating-terminal-with-presentation`, phase 5). With this, step 5 is done.

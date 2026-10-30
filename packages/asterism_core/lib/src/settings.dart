@@ -35,6 +35,7 @@ const uiSettings = {
   'ai_local_helper',
   'ai_checks',
   'window_mode',
+  'corners',
 };
 const languages = {'en', 'de', 'fr', 'es', 'it', 'pt', 'nl', 'pl'};
 const mapLayers = ['agents', 'online', 'local', 'models', 'mcp', 'skills'];

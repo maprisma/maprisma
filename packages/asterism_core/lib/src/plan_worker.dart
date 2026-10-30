@@ -16,6 +16,7 @@ import 'system_map.dart' show SystemMapReader;
 import 'system_actions.dart' show checkTool;
 import 'system_help.dart' show analyzeMap;
 import 'mcp_updates.dart' as mcp_updates;
+import 'agent_details.dart' show refreshUsage;
 import 'agent_keys.dart' show storeKey;
 import 'model_moves.dart' show SystemMoves, ScanFilesLike;
 import 'dart:math' show Random;
@@ -750,6 +751,21 @@ Future<int> runWorker(List<String> args) async {
           files,
           ProviderScans(files),
         ).snapshot(runtimes),
+      });
+      return 0;
+    }
+    // desktop_omarchy.refresh_usage: Omarchy asked for an agent's usage.
+    if (args.isEmpty && request['operation'] == 'agents.usage_refresh') {
+      final params = request['params'] as Map;
+      final command = params['command'];
+      if (params.length != 1 || command is! String) {
+        throw const FormatException('Invalid worker request');
+      }
+      send({
+        'type': 'result',
+        'result': {
+          'ok': await refreshUsage(command, AppIdentity().environment),
+        },
       });
       return 0;
     }

@@ -4,6 +4,7 @@ import 'map_groups.dart';
 import 'map_layout.dart';
 import 'map_lights.dart';
 import 'map_static_cache.dart';
+import 'app_theme.dart' show corners;
 import 'map_snapshot.dart';
 
 /// The editable canvas keeps its topology separate from gesture and ticker state.
@@ -244,7 +245,7 @@ class _MapEditorState extends State<MapEditor>
                   ? colors.secondaryContainer
                   : colors.surfaceContainer,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(corners(context)),
                 side: BorderSide(
                   color: valid || lit.contains(id)
                       ? colors.primary

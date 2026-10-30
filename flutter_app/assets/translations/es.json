@@ -1,4 +1,10 @@
 {
+  "Corners": "Esquinas",
+  "Like windows": "Como las ventanas",
+  "Like windows ({0} px)": "Como las ventanas ({0} px)",
+  "Rounded": "Redondeadas",
+  "Square": "Rectas",
+  "Corners of the window, its cards and the map's boxes. “Like windows” follows Hyprland's window rounding.": "Esquinas de la ventana, sus tarjetas y las casillas del mapa. «Como las ventanas» sigue el redondeo de ventanas de Hyprland.",
   "Window": "Ventana",
   "Automatic: a popup under the bar on Omarchy": "Automático: una ventana emergente bajo la barra en Omarchy",
   "A popup under the bar": "Una ventana emergente bajo la barra",

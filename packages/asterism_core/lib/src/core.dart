@@ -66,7 +66,7 @@ import 'red_limits.dart';
 import 'mcp_tools.dart' show cachedTools;
 import 'mcp_updates.dart' as mcp_updates;
 import 'change_history.dart';
-import 'hyprland.dart' show placePopup;
+import 'hyprland.dart' show placePopup, WindowRounding;
 
 const portedRoutes = {
   'settings.get',
@@ -160,6 +160,7 @@ const portedRoutes = {
   'map.badges',
   'agents.projects',
   'gpu.snapshot',
+  'agents.usage_refresh',
   'providers.details',
   'details.mcp',
   'map.usage',
@@ -171,6 +172,7 @@ const portedRoutes = {
   'changes.history',
   'changes.undo',
   'window.popup',
+  'window.rounding',
   'details.skills',
   'costs.rate',
   ...readOnlyRoutes,
@@ -348,6 +350,9 @@ final class CoreService {
   /// A Check now this run (also while the daily checks are off): its finds
   /// show until the next check.
   bool mcpCheckForced = false;
+
+  /// Hyprland's window rounding for Settings › Corners "Like windows".
+  late final rounding = WindowRounding(identity.environment);
 
   String get mcpUpdatesCache => p.join(identity.cacheDir, 'mcp-updates.json');
 
@@ -3279,6 +3284,10 @@ final class CoreService {
     // app was closed or crashed (the in-session Undo knows only the last).
     // Popup mode on Omarchy: this process's window floated at the top right
     // under the bar (the core runs in the app's own process).
+    if (method == 'window.rounding') {
+      if (params.isNotEmpty) throw const FormatException('Invalid request');
+      return {'rounding': rounding.value};
+    }
     if (method == 'window.popup') {
       final width = params['width'], height = params['height'];
       if (params.length != 2 ||
@@ -3371,6 +3380,30 @@ final class CoreService {
         ),
         'risks': runtimeRisks(rt.installed, rt.address, i18n.text),
       };
+    }
+    // agent_details.refresh_usage: an agent's details ask Omarchy for fresh
+    // usage in the background when its record is stale.
+    if (method == 'agents.usage_refresh') {
+      final command = params['command'];
+      final agent = command is String
+          ? reads.catalog
+                .scan()
+                .where((a) => a.command == command && a.installed)
+                .firstOrNull
+          : null;
+      if (params.length != 1 || agent == null) {
+        throw const FormatException('Unknown agent');
+      }
+      final access = [
+        for (final f in agent.adapter.table('access')['files'] as List? ?? [])
+          if (f is String) f,
+      ];
+      if (!reads.details.usageIsStale(agent.command, access)) {
+        return {'refreshed': false};
+      }
+      return tasks.start('agents.usage_refresh', {
+        'command': agent.command,
+      }, (result) => result);
     }
     if (method == 'gpu.snapshot') {
       if (params.isNotEmpty) throw const FormatException('Invalid request');

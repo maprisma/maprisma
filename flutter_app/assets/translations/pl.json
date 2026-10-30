@@ -1,4 +1,10 @@
 {
+  "Corners": "Narożniki",
+  "Like windows": "Jak okna",
+  "Like windows ({0} px)": "Jak okna ({0} px)",
+  "Rounded": "Zaokrąglone",
+  "Square": "Proste",
+  "Corners of the window, its cards and the map's boxes. “Like windows” follows Hyprland's window rounding.": "Narożniki okna, jego kart i pól mapy. „Jak okna” podąża za zaokrągleniem okien Hyprlanda.",
   "Window": "Okno",
   "Automatic: a popup under the bar on Omarchy": "Automatycznie: okno wyskakujące pod paskiem w Omarchy",
   "A popup under the bar": "Okno wyskakujące pod paskiem",

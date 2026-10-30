@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'agent_map.dart';
+import 'app_theme.dart' show corners;
 import 'task_focus.dart';
 
 enum TaskCardWidth { half, full }
@@ -72,7 +73,7 @@ class TaskHost extends StatelessWidget {
                     key: const ValueKey('task-card'),
                     color: colors.surfaceContainer,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(corners(context)),
                       side: BorderSide(color: colors.outlineVariant),
                     ),
                     clipBehavior: Clip.antiAlias,

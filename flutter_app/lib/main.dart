@@ -764,6 +764,12 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
           )) {
         setState(() => _snapshot!['theme'] = appearance['theme']);
       }
+      final rounding = (await _backend!.call('window.rounding'))['rounding'];
+      if (mounted &&
+          rounding != _windowRounding &&
+          (rounding is int || rounding == null)) {
+        setState(() => _windowRounding = rounding as int?);
+      }
       if (_busy) return; // a change of our own is being written
       final settings = await _backend!.call('settings.get');
       if (mounted &&
@@ -1738,6 +1744,29 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
       _actionFailed();
     } finally {
       if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// Omarchy's usage records (agents.usage_refresh): when an agent's details
+  /// show and its record is stale, Omarchy is asked in the background (at
+  /// most every ten minutes per agent), then the details read again.
+  final _usageAsked = <String, DateTime>{};
+
+  Future<void> _refreshUsage(String command) async {
+    final last = _usageAsked[command];
+    if (last != null && DateTime.now().difference(last).inMinutes < 10) return;
+    _usageAsked[command] = DateTime.now();
+    try {
+      final started = await _backend!.call('agents.usage_refresh', {
+        'command': command,
+      });
+      if (started['task'] is! String) return;
+      final done = await _awaitTask('agents.usage_refresh', started);
+      if (done['ok'] != true || !mounted || _selected != command) return;
+      final info = await _backend!.call('agents.details', {'command': command});
+      if (mounted && _selected == command) setState(() => _agentInfo = info);
+    } catch (_) {
+      // The record stays as it was.
     }
   }
 
@@ -3577,6 +3606,9 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
         _graph = graph;
         if (_selected == selected) _agentInfo = info;
         _strings = strings;
+        if (selected != null && info != null) {
+          unawaited(_refreshUsage(selected));
+        }
         _locale = Locale(language);
         _busy = false;
         _failed = false;
@@ -3625,8 +3657,19 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
   String get _themePreference =>
       _snapshot?['settings']['flutter_theme_mode'] as String? ?? 'system';
   Map get _desktopTheme => _snapshot?['theme'] as Map? ?? const {};
-  ThemeData _theme(Brightness brightness) =>
-      appTheme(brightness, mode: _themePreference, desktop: _desktopTheme);
+  ThemeData _theme(Brightness brightness) => appTheme(
+    brightness,
+    mode: _themePreference,
+    desktop: _desktopTheme,
+    radius: cornerRadius(
+      (_snapshot?['settings'] as Map?)?['corners'] as String?,
+      _windowRounding,
+    ),
+  );
+
+  /// Hyprland's window rounding (window.rounding; the core reads it at most
+  /// every 30 s), for Settings › Corners "Like windows".
+  int? _windowRounding;
 
   Future<void> _projectAction(
     String method,
@@ -4242,6 +4285,7 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
                                     mcpChecking: _mcpChecking,
                                     onCheckMcp: () => _checkMcp(force: true),
                                     changes: _changes,
+                                    windowRounding: _windowRounding,
                                     onUndoChange: _undoChange,
                                     unitName: _shortName == null
                                         ? ''

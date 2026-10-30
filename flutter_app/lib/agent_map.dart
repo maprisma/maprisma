@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'map_groups.dart';
+import 'app_theme.dart' show corners;
 import 'map_editor.dart';
 
 class AgentMap extends StatelessWidget {
@@ -274,7 +275,9 @@ class AgentMap extends StatelessWidget {
                     shape: focusedNode == node['id']
                         ? RoundedRectangleBorder(
                             side: BorderSide(color: colors.primary, width: 2),
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(
+                              corners(context),
+                            ),
                           )
                         : null,
                     color: node['status'] == 'running'

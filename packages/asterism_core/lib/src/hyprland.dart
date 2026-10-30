@@ -141,3 +141,33 @@ Map<String, dynamic> placePopup(
     'height': g.height,
   };
 }
+
+/// corners.parse_rounding: the windows' rounding from Hyprland's
+/// `getoption decoration:rounding -j`, 0–24, null when unknown.
+int? parseRounding(String text) {
+  try {
+    final value = (jsonDecode(text) as Map)['int'];
+    return value is int ? value.clamp(0, 24) : null;
+  } on Object {
+    return null;
+  }
+}
+
+/// desktop_omarchy.window_rounding, read at most every 30 seconds.
+final class WindowRounding {
+  WindowRounding(this.env);
+  final Map<String, String> env;
+  DateTime? _read;
+  int? _value;
+
+  int? get value {
+    final now = DateTime.now();
+    if (_read != null && now.difference(_read!).inSeconds < 30) return _value;
+    _read = now;
+    if ((env['HYPRLAND_INSTANCE_SIGNATURE'] ?? '').isEmpty) {
+      return _value = null;
+    }
+    final text = _hyprctl(['getoption', 'decoration:rounding', '-j'], env);
+    return _value = text == null ? null : parseRounding(text);
+  }
+}

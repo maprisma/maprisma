@@ -92,4 +92,15 @@ void main() {
       ],
     );
   });
+
+  test("the windows' rounding from getoption", () {
+    expect(
+      parseRounding('{"option": "decoration:rounding", "int": 0, "set": true}'),
+      0,
+    );
+    expect(parseRounding('{"int": 8}'), 8);
+    expect(parseRounding('{"int": 99}'), 24);
+    expect(parseRounding('{"int": true}'), isNull);
+    expect(parseRounding('no json'), isNull);
+  });
 }

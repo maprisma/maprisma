@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:io';
 import 'package:yaml/yaml.dart';
 import 'dsh_profile.dart';
 import 'py_time.dart';
@@ -59,6 +61,49 @@ final class AgentInfo {
     if (date == null) return null;
     final text = date.toUtc().toIso8601String();
     return '${text.replaceFirst(RegExp(r'\.000Z$'), 'Z').replaceFirst(RegExp(r'Z$'), '')}+00:00';
+  }
+}
+
+/// desktop_omarchy.has_usage_collector: Omarchy collects this agent's usage
+/// (`omarchy-agent-usage-<command>` in its bin folder or /usr/bin).
+bool usageCollectorExists(String command, Map<String, String> env) {
+  if (!RegExp(r'^[a-z0-9-]{1,64}$').hasMatch(command)) return false;
+  final root = (env['OMARCHY_PATH'] ?? '').isNotEmpty
+      ? env['OMARCHY_PATH']!
+      : '/usr/share/omarchy';
+  return ['$root/bin', '/usr/bin'].any(
+    (dir) =>
+        FileSystemEntity.typeSync('$dir/omarchy-agent-usage-$command') ==
+        FileSystemEntityType.file,
+  );
+}
+
+/// desktop_omarchy.refresh_usage: Omarchy asked for this agent's usage
+/// (omarchy-agent-usage-update, at most a minute); true when it worked.
+Future<bool> refreshUsage(String command, Map<String, String> env) async {
+  if (!usageCollectorExists(command, env)) return false;
+  final tool = whichIn('omarchy-agent-usage-update', env['PATH']);
+  if (tool == null) return false;
+  try {
+    final process = await Process.start(
+      tool,
+      [command],
+      environment: env,
+      includeParentEnvironment: false,
+    );
+    unawaited(process.stdout.drain<void>());
+    unawaited(process.stderr.drain<void>());
+    await process.stdin.close();
+    final code = await process.exitCode.timeout(
+      const Duration(seconds: 60),
+      onTimeout: () {
+        process.kill(ProcessSignal.sigkill);
+        return -1;
+      },
+    );
+    return code == 0;
+  } on ProcessException {
+    return false;
   }
 }
 
@@ -388,6 +433,40 @@ final class DetailReaders {
     final home = adapter.facts['home'] as String? ?? '';
     info.configDir = home.isNotEmpty && files.exists(home) ? home : '';
     return info;
+  }
+
+  /// agent_details.USAGE_MAX_AGE: seconds before details ask Omarchy for fresh
+  /// usage.
+  static const usageMaxAge = 10 * 60;
+
+  /// desktop_omarchy.has_usage_collector, on Omarchy only.
+  bool hasUsageCollector(String command) =>
+      desktop.name == 'omarchy' &&
+      usageCollectorExists(command, files.identity.environment);
+
+  /// agent_details.usage_is_stale: Omarchy collects usage for this agent and
+  /// its record is missing or old, or older than the agent's sign-in (only
+  /// the credential files' times are looked at, never their text).
+  bool usageIsStale(String command, List<String> accessFiles, {DateTime? now}) {
+    if (!hasUsageCollector(command)) return false;
+    final record =
+        '${files.identity.root('XDG_STATE_HOME', '.local/state')}/omarchy/agents/usage/$command.json';
+    if (FileSystemEntity.typeSync(record) == FileSystemEntityType.notFound) {
+      return true;
+    }
+    final written = File(record).statSync().modified;
+    if ((now ?? DateTime.now()).difference(written).inMilliseconds >
+        usageMaxAge * 1000) {
+      return true;
+    }
+    for (final name in accessFiles) {
+      final path = '${files.identity.home}/$name';
+      if (FileSystemEntity.typeSync(path) == FileSystemEntityType.notFound) {
+        continue;
+      }
+      if (File(path).statSync().modified.isAfter(written)) return true;
+    }
+    return false;
   }
 
   /// agent_details.usage_record: the desktop's usage record of an agent.

@@ -1,4 +1,10 @@
 {
+  "Corners": "Corners",
+  "Like windows": "Like windows",
+  "Like windows ({0} px)": "Like windows ({0} px)",
+  "Rounded": "Rounded",
+  "Square": "Square",
+  "Corners of the window, its cards and the map's boxes. “Like windows” follows Hyprland's window rounding.": "Corners of the window, its cards and the map's boxes. “Like windows” follows Hyprland's window rounding.",
   "Window": "Window",
   "Automatic: a popup under the bar on Omarchy": "Automatic: a popup under the bar on Omarchy",
   "A popup under the bar": "A popup under the bar",

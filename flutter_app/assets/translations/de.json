@@ -1,4 +1,10 @@
 {
+  "Corners": "Ecken",
+  "Like windows": "Wie Fenster",
+  "Like windows ({0} px)": "Wie Fenster ({0} px)",
+  "Rounded": "Abgerundet",
+  "Square": "Eckig",
+  "Corners of the window, its cards and the map's boxes. “Like windows” follows Hyprland's window rounding.": "Ecken des Fensters, seiner Karten und der Felder der Karte. „Wie Fenster“ folgt der Fensterrundung von Hyprland.",
   "Window": "Fenster",
   "Automatic: a popup under the bar on Omarchy": "Automatisch: ein Popup unter der Leiste auf Omarchy",
   "A popup under the bar": "Ein Popup unter der Leiste",

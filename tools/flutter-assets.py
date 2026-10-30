@@ -5,6 +5,13 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 KEYS = (
+    # Settings › Corners.
+    "Corners",
+    "Like windows",
+    "Like windows ({0} px)",
+    "Rounded",
+    "Square",
+    "Corners of the window, its cards and the map's boxes. “Like windows” follows Hyprland's window rounding.",
     # Popup mode on Omarchy.
     "Window",
     "Automatic: a popup under the bar on Omarchy",

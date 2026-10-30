@@ -19,6 +19,7 @@ class SettingsView extends StatelessWidget {
     this.mcpChecking = false,
     this.onCheckMcp,
     this.changes,
+    this.windowRounding,
     this.onUndoChange,
     this.unitName = '',
   });
@@ -45,6 +46,9 @@ class SettingsView extends StatelessWidget {
   /// Recent changes (changes.history): the connection changes kept on disk,
   /// each with Undo, also after a restart; null while loading.
   final List<Map<String, dynamic>>? changes;
+
+  /// Hyprland's window rounding, for Corners "Like windows" (null: unknown).
+  final int? windowRounding;
   final ValueChanged<String>? onUndoChange;
 
   /// The provider watcher's user service, as the user sees it in systemctl.
@@ -412,6 +416,45 @@ class SettingsView extends StatelessWidget {
             Text(
               tr(
                 'The popup sits at the top right under the bar and closes with Esc or a click elsewhere; the bar icon or starting the app again brings it back. A change applies the next time the window opens.',
+              ),
+            ),
+            const SizedBox(height: 24),
+            DropdownButtonFormField<String>(
+              key: ValueKey('corners-${settings['corners'] ?? 'windows'}'),
+              initialValue:
+                  const [
+                    'windows',
+                    'rounded',
+                    'square',
+                  ].contains(settings['corners'])
+                  ? settings['corners'] as String
+                  : 'windows',
+              isExpanded: true,
+              decoration: InputDecoration(labelText: tr('Corners')),
+              items: [
+                DropdownMenuItem(
+                  value: 'windows',
+                  child: Text(
+                    windowRounding == null
+                        ? tr('Like windows')
+                        : tr(
+                            'Like windows ({0} px)',
+                          ).replaceAll('{0}', '$windowRounding'),
+                  ),
+                ),
+                DropdownMenuItem(value: 'rounded', child: Text(tr('Rounded'))),
+                DropdownMenuItem(value: 'square', child: Text(tr('Square'))),
+              ],
+              onChanged: busy
+                  ? null
+                  : (value) {
+                      if (value != null) onUpdate({'corners': value});
+                    },
+            ),
+            const SizedBox(height: 8),
+            Text(
+              tr(
+                "Corners of the window, its cards and the map's boxes. “Like windows” follows Hyprland's window rounding.",
               ),
             ),
             const SizedBox(height: 24),

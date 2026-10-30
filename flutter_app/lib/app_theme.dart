@@ -1,3 +1,5 @@
+import 'dart:ui' show lerpDouble;
+
 import 'package:flutter/material.dart';
 
 Color? desktopThemeColor(Map theme, String key) {
@@ -16,10 +18,34 @@ ThemeMode appThemeMode(String mode, Map desktop) {
   return background.computeLuminance() < .5 ? ThemeMode.dark : ThemeMode.light;
 }
 
+/// Settings › Corners: the radius of the window's cards, dialogs and the
+/// map's boxes (corners.radius): "windows" follows Hyprland's rounding,
+/// "rounded" is 12, "square" 0; null keeps Material's own.
+double? cornerRadius(String? setting, int? windowRounding) => switch (setting) {
+  'rounded' => 12,
+  'square' => 0,
+  _ => windowRounding?.toDouble(),
+};
+
+/// The corner radius in effect (12 when nothing set it).
+class Corners extends ThemeExtension<Corners> {
+  const Corners(this.radius);
+  final double radius;
+  @override
+  Corners copyWith({double? radius}) => Corners(radius ?? this.radius);
+  @override
+  Corners lerp(Corners? other, double t) =>
+      other == null ? this : Corners(lerpDouble(radius, other.radius, t)!);
+}
+
+double corners(BuildContext context) =>
+    Theme.of(context).extension<Corners>()?.radius ?? 12;
+
 ThemeData appTheme(
   Brightness brightness, {
   String mode = 'system',
   Map desktop = const {},
+  double? radius,
 }) {
   var colors = ColorScheme.fromSeed(
     seedColor: desktopThemeColor(desktop, 'accent') ?? const Color(0xff517f70),
@@ -32,7 +58,16 @@ ThemeData appTheme(
       onSurface: desktopThemeColor(desktop, 'foreground') ?? colors.onSurface,
     );
   }
-  return ThemeData(colorScheme: colors, useMaterial3: true);
+  final shape = radius == null
+      ? null
+      : RoundedRectangleBorder(borderRadius: BorderRadius.circular(radius));
+  return ThemeData(
+    colorScheme: colors,
+    useMaterial3: true,
+    extensions: [Corners(radius ?? 12)],
+    cardTheme: shape == null ? null : CardThemeData(shape: shape),
+    dialogTheme: shape == null ? null : DialogThemeData(shape: shape),
+  );
 }
 
 /// The preview and the application use the same theme factory.
@@ -68,7 +103,7 @@ class ThemeChoices extends StatelessWidget {
                   margin: EdgeInsets.zero,
                   clipBehavior: Clip.antiAlias,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(corners(context)),
                     side: BorderSide(
                       width: value == mode ? 2 : 1,
                       color: value == mode

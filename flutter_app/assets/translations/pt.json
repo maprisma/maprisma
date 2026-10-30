@@ -1,4 +1,10 @@
 {
+  "Corners": "Cantos",
+  "Like windows": "Como as janelas",
+  "Like windows ({0} px)": "Como as janelas ({0} px)",
+  "Rounded": "Arredondados",
+  "Square": "Retos",
+  "Corners of the window, its cards and the map's boxes. “Like windows” follows Hyprland's window rounding.": "Cantos da janela, dos seus cartões e das caixas do mapa. «Como as janelas» segue o arredondamento das janelas do Hyprland.",
   "Window": "Janela",
   "Automatic: a popup under the bar on Omarchy": "Automático: uma janela flutuante sob a barra no Omarchy",
   "A popup under the bar": "Uma janela flutuante sob a barra",

@@ -71,6 +71,7 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('theme-light')));
       expect(updates.single, {'flutter_theme_mode': 'light'});
       final rate = find.byKey(const ValueKey('map-light-fps-20'));
+      await tester.scrollUntilVisible(rate, 200);
       await tester.ensureVisible(rate);
       await tester.pumpAndSettle();
       await tester.tap(rate);

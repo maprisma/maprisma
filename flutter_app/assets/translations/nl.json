@@ -1,4 +1,10 @@
 {
+  "Corners": "Hoeken",
+  "Like windows": "Zoals vensters",
+  "Like windows ({0} px)": "Zoals vensters ({0} px)",
+  "Rounded": "Afgerond",
+  "Square": "Hoekig",
+  "Corners of the window, its cards and the map's boxes. “Like windows” follows Hyprland's window rounding.": "Hoeken van het venster, zijn kaarten en de vakken van de kaart. ‘Zoals vensters’ volgt de vensterafronding van Hyprland.",
   "Window": "Venster",
   "Automatic: a popup under the bar on Omarchy": "Automatisch: een pop-up onder de balk op Omarchy",
   "A popup under the bar": "Een pop-up onder de balk",
