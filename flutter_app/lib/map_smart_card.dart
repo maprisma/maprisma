@@ -149,6 +149,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
   double? _runFraction;
   String _runText = '';
   String _errorText = '';
+  _SmartStep _errorReturnTo = _SmartStep.idle;
 
   Map<String, dynamic>? get _activeHelper {
     if (widget.helpers.isEmpty) return null;
@@ -236,12 +237,25 @@ class _MapSmartCardState extends State<MapSmartCard> {
     setState(() {
       _step = _SmartStep.idle;
       _errorText = '';
+      _errorReturnTo = _SmartStep.idle;
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && widget.open && _step == _SmartStep.idle) {
         _fieldFocus.requestFocus();
       }
     });
+  }
+
+  void _tryAgain() {
+    if (_errorReturnTo == _SmartStep.proposal &&
+        _reply['status'] == 'proposal') {
+      setState(() {
+        _errorText = '';
+        _step = _SmartStep.proposal;
+      });
+    } else {
+      _backToIdle();
+    }
   }
 
   void _cancelTask({_SmartStep returnTo = _SmartStep.idle}) {
@@ -270,6 +284,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
       _step = _SmartStep.working;
       _activeTask = null;
       _errorText = '';
+      _errorReturnTo = _SmartStep.idle;
     });
     _focusOpenCard();
     try {
@@ -378,6 +393,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
       _activeTask = null;
       _runFraction = null;
       _runText = '${candidate['title'] ?? ''}';
+      _errorReturnTo = _SmartStep.proposal;
     });
     _focusOpenCard();
     try {
@@ -960,7 +976,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
         children: [
           TextButton(onPressed: _close, child: Text(widget.tr('Close'))),
           FilledButton.tonal(
-            onPressed: _backToIdle,
+            onPressed: _tryAgain,
             child: Text(widget.tr('Try again')),
           ),
         ],

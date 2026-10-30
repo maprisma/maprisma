@@ -1394,4 +1394,124 @@ void main() {
       expect(find.byKey(const ValueKey('smart-review-c1')), findsOneWidget);
     },
   );
+
+  testWidgets(
+    'after a failed download, "Try again" returns to the proposal (not the prompt) so the candidate can be started again without spending tokens',
+    (tester) async {
+      tester.view.physicalSize = const Size(1200, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      var askCalls = 0;
+      var runCalls = 0;
+      var runState = 'failed';
+      final client = CoreClient(
+        _FakeSmartTransport((method, params) async {
+          switch (method) {
+            case 'map.smart_ask':
+              askCalls++;
+              return {'task': 'ask-1'};
+            case 'map.smart_review':
+              return {
+                'title': 'Qwen 2.5 Coder 7B',
+                'subtitle': 'Q4_K_M',
+                'size': 4683073920,
+                'fit': 'ok',
+                'runtime': 'Ollama',
+              };
+            case 'map.smart_run':
+              runCalls++;
+              return {'task': 'run-$runCalls'};
+            case 'tasks.status':
+              if (params['task'] == 'ask-1') {
+                return {
+                  'state': 'done',
+                  'result': {
+                    'helper': 'Local helper',
+                    'local': true,
+                    'status': 'proposal',
+                    'proposal': 'prop-1',
+                    'summary': 'Found 1 model.',
+                    'candidates': [
+                      {
+                        'id': 'c1',
+                        'title': 'Qwen 2.5 Coder 7B',
+                        'subtitle': 'Q4_K_M',
+                        'reason': 'Fast.',
+                        'fit': 'ok',
+                        'size': 4683073920,
+                      },
+                    ],
+                  },
+                };
+              }
+              if (runState == 'done') {
+                return {
+                  'state': 'done',
+                  'result': {'ok': true},
+                };
+              }
+              return {'state': runState};
+            default:
+              throw StateError('Unexpected $method');
+          }
+        }),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: MapSmartCard(
+              column: 'models',
+              title: 'Models',
+              open: true,
+              onToggle: () {},
+              tr: (k) => k,
+              helpers: const [
+                {
+                  'command': 'local-helper',
+                  'name': 'Local helper',
+                  'local': true,
+                },
+              ],
+              client: client,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextField), 'qwen');
+      await tester.tap(find.text('Ask'));
+      await tester.pumpAndSettle();
+      expect(askCalls, 1);
+      expect(find.text('Found 1 model.'), findsOneWidget);
+
+      // Start download -> fails -> shows error.
+      await tester.tap(find.byKey(const ValueKey('smart-review-c1')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Download'));
+      await tester.pumpAndSettle();
+      expect(runCalls, 1);
+      expect(find.text('The action could not be completed.'), findsOneWidget);
+      expect(find.text('Try again'), findsOneWidget);
+
+      // Clicking "Try again" returns to the proposal (not the prompt) and starts again on Review -> Download.
+      await tester.tap(find.text('Try again'));
+      await tester.pumpAndSettle();
+      expect(find.text('Found 1 model.'), findsOneWidget);
+      expect(find.byKey(const ValueKey('smart-review-c1')), findsOneWidget);
+      expect(askCalls, 1);
+
+      runState = 'done';
+      await tester.tap(find.byKey(const ValueKey('smart-review-c1')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Download'));
+      await tester.pumpAndSettle();
+      expect(runCalls, 2);
+      expect(askCalls, 1);
+      expect(find.text('Qwen 2.5 Coder 7B is ready.'), findsOneWidget);
+    },
+  );
 }
