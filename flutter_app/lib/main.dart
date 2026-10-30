@@ -687,6 +687,8 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
 
   /// The desktop's theme, every two seconds also while the app is busy (a
   /// download, an install, a change): app.theme only reads the theme files.
+  /// The settings too: a change made by another process (another build of
+  /// the app, the core's own saves) shows here without a refresh.
   bool _themePending = false;
 
   Future<void> _refreshTheme() async {
@@ -701,6 +703,15 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
             appearance['theme'] as Map?,
           )) {
         setState(() => _snapshot!['theme'] = appearance['theme']);
+      }
+      if (_busy) return; // a change of our own is being written
+      final settings = await _backend!.call('settings.get');
+      if (mounted &&
+          !_busy &&
+          _snapshot != null &&
+          settings['language'] is String &&
+          jsonEncode(_snapshot!['settings']) != jsonEncode(settings)) {
+        setState(() => _snapshot!['settings'] = settings);
       }
     } catch (_) {
       // The next tick asks again.

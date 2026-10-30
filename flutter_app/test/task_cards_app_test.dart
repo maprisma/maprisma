@@ -26,7 +26,7 @@ interrupted=False
 installed=False
 installed_runtime=False
 catalog_loads=0
-settings={'map_scan_interval':6,'map_light_fps':20,'flutter_theme_mode':'system','map_layers':['agents']}
+settings={'map_scan_interval':6,'map_light_fps':20,'flutter_theme_mode':'system','map_layers':['agents'],'language':'en'}
 addon={'id':'fixture-addon','name':'Fixture adapter','version':'1.0','summary':'Summary',
  'kind':'agent','state':'verified','enabled':False,'supported':True,'verified':True,'provides':['test']}
 new_addon={**addon,'id':'catalog-addon','name':'Catalog adapter','version':'2.0','provides':['new']}
@@ -44,6 +44,10 @@ for line in sys.stdin:
  if m=='app.snapshot':r={'agents':[{'command':'test','name':'Test agent','version':'1.0','installed':True}],
   'projects':{'test':{'history':[],'default':'/home/u','pinned':''}},'settings':settings,'language':'en','setup_needed':welcome,'theme':{}}
  elif m=='settings.update':settings.update(p['values']);r=settings
+ elif m=='settings.get':
+  # Another process may have changed them: other.json is merged in.
+  if Path('other.json').exists():settings.update(json.loads(Path('other.json').read_text()));Path('other.json').unlink()
+  r=settings
  elif m=='app.theme':r={'theme':json.loads(Path('theme.json').read_text()) if Path('theme.json').exists() else {}}
  elif m=='addons.list':r={'addons':[addon]+([new_addon] if installed else [])}
  elif m=='system.cached':r={'nodes':[],'edges':[],'notes':[],'helpers':[]}
@@ -1199,6 +1203,26 @@ void main() {
     expect(primary(), isNot(before)); // followed while busy
     File('${dir.path}/release').writeAsStringSync('');
     await settleService(tester);
+    expect(tester.takeException(), isNull);
+    await unmountApp(tester);
+  });
+
+  testWidgets('settings changed by another process show without a refresh', (
+    tester,
+  ) async {
+    final dir = await mountApp(tester);
+    await settleService(tester);
+    await tester.tap(find.byTooltip('Settings').first);
+    await settleService(tester);
+    final daily = find.byKey(const ValueKey('ai-checks'));
+    await tester.scrollUntilVisible(daily, 300);
+    expect(tester.widget<SwitchListTile>(daily).value, isFalse);
+    File(
+      '${dir.path}/other.json',
+    ).writeAsStringSync(jsonEncode({'ai_checks': true}));
+    await tester.pump(const Duration(seconds: 2)); // the next check
+    await settleService(tester);
+    expect(tester.widget<SwitchListTile>(daily).value, isTrue);
     expect(tester.takeException(), isNull);
     await unmountApp(tester);
   });

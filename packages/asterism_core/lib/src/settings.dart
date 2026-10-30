@@ -292,7 +292,50 @@ final class SettingsStore {
     if (changes.isNotEmpty) _saveChanges(changes);
   }
 
-  void _saveChanges(Map<String, dynamic> values) {
+  /// One writer at a time (the app's core, another build of the app, a
+  /// worker): an exclusive flock on settings.json.lock beside the settings
+  /// around read, change and write, so no save undoes another's. The lock
+  /// file is this account's own regular file, never a link.
+  T _locked<T>(T Function() body) {
+    // Missing folders are made 0700, as the atomic write makes them.
+    final missing = <String>[];
+    for (
+      var folder = p.dirname(identity.settingsPath);
+      !Directory(folder).existsSync();
+      folder = p.dirname(folder)
+    ) {
+      missing.add(folder);
+    }
+    for (final folder in missing.reversed) {
+      try {
+        Directory(folder).createSync();
+        posix.chmodPath(folder, 0x1c0);
+      } on FileSystemException {
+        // made by another writer meanwhile
+      }
+    }
+    final fd = posix.openAt(
+      -100,
+      '${identity.settingsPath}.lock',
+      0x2 | 0x40 | Posix.noFollow | Posix.cloexec,
+      0x180,
+    );
+    try {
+      final info = posix.statFull(fd);
+      if (info.mode & 0xf000 != 0x8000 || info.uid != posix.uid) {
+        throw const FileSystemException('Untrusted settings lock');
+      }
+      posix.lockExclusive(fd);
+      return body();
+    } finally {
+      posix.close(fd);
+    }
+  }
+
+  void _saveChanges(Map<String, dynamic> values) =>
+      _locked(() => _saveLocked(values));
+
+  void _saveLocked(Map<String, dynamic> values) {
     final saved = load();
     for (final e in values.entries) {
       if (e.value == null) {

@@ -2494,3 +2494,26 @@ pauses.
 Check: an app test keeps the app busy (the fake core answers an Undo only later), changes the
 desktop accent meanwhile and sees the app's colours follow before the answer; with the theme read
 taken out again, the same test fails.
+
+### Part 7: settings across processes
+
+`settings.json` has more than one writer: the app's core (the user's changes and its own saves of
+project history and add-ons) and, at the same time, another build of the app (a Devel build next
+to an installed one; the app itself is a unique GApplication, so a second launch of the same build
+only raises the first window). Each save read, changed and wrote the whole file without a lock, so
+two saves at once could undo each other. The Python reference had no lock either.
+
+- `SettingsStore._saveChanges` now runs under an exclusive `flock` on `settings.json.lock` beside
+  the settings (this account's own regular file, opened without following links); read, change
+  and atomic write happen inside it. Missing folders are made 0700 first, as the atomic write
+  makes them. The Python reference (`ai_core.update_settings`) takes the same lock on the same
+  file, so the differential cases see the same files on both sides (they had caught the lock
+  file as a Dart-only difference).
+- The app reads the UI settings every two seconds with the theme (`settings.get`, skipped while it
+  writes a change of its own) and shows a change made elsewhere without a refresh; an answer
+  without the settings' `language` is ignored.
+
+Check: `test/settings_lock_test.dart` has two isolates save different keys 150 times each at
+once; before the lock, saves were lost in each of three runs (a key ended at 117, 136 or 148 of
+149), with it none are. An app test changes a setting from "another process" and sees Settings
+follow within one check.

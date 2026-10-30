@@ -290,6 +290,38 @@ def update_settings(path: Path | None = None, **values) -> None:
     if unknown:
         raise KeyError(f"not a declared setting: {', '.join(unknown)} (settings_schema.SCHEMA)")
     path = path or settings_file()
+    lock = _settings_lock(path)
+    try:
+        _update_locked(path, values)
+    finally:
+        os.close(lock)
+
+
+def _settings_lock(path: Path) -> int:
+    """One writer at a time (the app's core, another build of the app): an exclusive flock on
+    <settings>.lock beside the settings, this account's own regular file, never through a link.
+    Missing folders are made 0700, as atomic_write makes them."""
+    import fcntl
+    missing = []
+    folder = Path(os.path.abspath(path)).parent
+    while not folder.exists():
+        missing.append(folder)
+        folder = folder.parent
+    for folder in reversed(missing):
+        try:
+            os.mkdir(folder, 0o700)
+        except FileExistsError:
+            pass
+    fd = os.open(f"{os.path.abspath(path)}.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+    info = os.fstat(fd)
+    if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid():
+        os.close(fd)
+        raise OSError("Untrusted settings lock")
+    fcntl.flock(fd, fcntl.LOCK_EX)
+    return fd
+
+
+def _update_locked(path: Path, values: dict) -> None:
     data = load_settings(path)
     for key, value in values.items():
         if value is None:

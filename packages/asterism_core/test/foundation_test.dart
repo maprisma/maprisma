@@ -378,7 +378,14 @@ void main() {
       core.settings.update({
         'values': {'language': 'nl'},
       });
-      expect(Directory(core.identity.configDir).listSync().length, 1);
+      // The settings and their lock (kept on purpose: flock), nothing else.
+      expect(
+        {
+          for (final e in Directory(core.identity.configDir).listSync())
+            e.uri.pathSegments.last,
+        },
+        {'settings.json', 'settings.json.lock'},
+      );
     },
   );
   test('openat pins directory and nofollow resists final symlink swap', () {
