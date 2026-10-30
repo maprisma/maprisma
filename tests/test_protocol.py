@@ -53,6 +53,26 @@ class ContractTest(unittest.TestCase):
             problems = protocol.check()
         self.assertTrue(any('core_client.g.dart is not up to date' in p for p in problems))
 
+    def test_update_learns_only_from_answered_requests(self):
+        import tempfile
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as tmp:
+            routes = Path(tmp) / 'routes.json'
+            routes.write_text(json.dumps({'protocol': 1, 'other': [], 'routes': {
+                'found.list': {'params': {}, 'optional': ['x'], 'result': None, 'source': None, 'note': 'kept'}}}))
+            record = Path(tmp) / 'record.jsonl'
+            record.write_text(json.dumps({'method': 'found.list', 'params': {'kind': 'mcp'}, 'result': {'a': 1}}) + '\n'
+                              + json.dumps({'method': 'found.list', 'params': {'bogus': 1}, 'error': 'invalid'}) + '\n')
+            with mock.patch.object(protocol, 'ROUTES', routes), \
+                    mock.patch.object(protocol, 'core_names', return_value={'found.list'}), \
+                    mock.patch.object(protocol, 'dispatch_names', return_value={'found.list'}), \
+                    mock.patch.object(protocol, 'handle_routes', return_value={}), \
+                    mock.patch.object(protocol, 'probe', return_value=['found.list']):
+                protocol.update(record)
+            route = json.loads(routes.read_text())['routes']['found.list']
+        self.assertEqual(route['params'], {'kind': 'string'})
+        self.assertEqual((route['result'], route['optional'], route['note']), ({'a': 'int'}, ['x'], 'kept'))
+
     def test_every_route_is_well_formed(self):
         data = protocol.load()
         self.assertEqual(data['protocol'], protocol.VERSION)
@@ -63,6 +83,7 @@ class ContractTest(unittest.TestCase):
             self.assertIn(route['source'], (None, 'observed', 'manual'), method)
             self.assertEqual(route['result'] is None, route['source'] is None, method)
             self.assertIsInstance(route['params'], dict, method)
+            self.assertLessEqual(set(route.get('optional', ())), set(route['params']), method)
         self.assertFalse(set(data['routes']) & set(data['other']))
 
     @unittest.skipUnless(shutil.which('unshare') and shutil.which('dart') or (ROOT / '.dart-sdk').exists(),

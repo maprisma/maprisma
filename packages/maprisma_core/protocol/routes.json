@@ -131,6 +131,10 @@
    "area": "agents",
    "kind": "preview",
    "note": "",
+   "optional": [
+    "kind",
+    "login"
+   ],
    "params": {
     "action": "?",
     "command": "?",
@@ -381,22 +385,16 @@
    "area": "connections",
    "kind": "preview",
    "note": "",
+   "optional": [
+    "entry",
+    "folder",
+    "name"
+   ],
    "params": {
     "agents": [
      "string"
     ],
-    "entry": {
-     "args": [
-      "string"
-     ],
-     "command": "string",
-     "env": {
-      "TOKEN": "string"
-     },
-     "headers": {},
-     "transport": "string",
-     "url": "string"
-    },
+    "entry": "object",
     "folder": "string",
     "kind": "string",
     "name": "string"
@@ -469,15 +467,17 @@
    "area": "connections",
    "kind": "preview",
    "note": "",
+   "optional": [
+    "model",
+    "use_now"
+   ],
    "params": {
     "command": "string",
-    "extra": "int",
     "item": "string",
     "kind": "string",
     "model": "string",
-    "remove": "bool|string",
-    "use_now": "bool",
-    "x": "int"
+    "remove": "bool",
+    "use_now": "bool"
    },
    "result": {
     "command": "string",
@@ -541,6 +541,9 @@
    "area": "connections",
    "kind": "read",
    "note": "",
+   "optional": [
+    "command"
+   ],
    "params": {
     "command": "?"
    },
@@ -802,9 +805,7 @@
    "area": "help",
    "kind": "read",
    "note": "",
-   "params": {
-    "x": "int"
-   },
+   "params": {},
    "result": {
     "manual": "bool"
    },
@@ -822,6 +823,10 @@
    "area": "i18n",
    "kind": "read",
    "note": "",
+   "optional": [
+    "n",
+    "other"
+   ],
    "params": {
     "n": "int",
     "other": "string",
@@ -902,6 +907,10 @@
    "area": "map",
    "kind": "read",
    "note": "",
+   "optional": [
+    "force",
+    "poll"
+   ],
    "params": {
     "force": "?",
     "poll": "?"
@@ -977,7 +986,6 @@
     "agents": [
      "string"
     ],
-    "extra": "int",
     "model": "string",
     "provider": "string"
    },
@@ -1203,7 +1211,11 @@
    "area": "sessions",
    "kind": "change",
    "note": "",
-   "params": {},
+   "params": {
+    "command": "string",
+    "outside": "bool",
+    "path": "string|null"
+   },
    "result": null,
    "source": null
   },
@@ -1234,9 +1246,7 @@
    "area": "settings",
    "kind": "read",
    "note": "",
-   "params": {
-    "extra": "int"
-   },
+   "params": {},
    "result": {
     "addons_online": "bool",
     "agent_folder": "null|string",
@@ -1290,33 +1300,7 @@
    "kind": "change",
    "note": "",
    "params": {
-    "extra": {},
-    "flutter_map_layout": "?",
-    "values": {
-     "addons_online": "bool|null",
-     "agent_folder": "string",
-     "bogus": "int",
-     "flutter_map_layout": {
-      "cards": "?",
-      "pins": [
-       "string"
-      ]
-     },
-     "flutter_theme_mode": "null|string",
-     "language": "null|string",
-     "look": "string",
-     "map_animations": "null|string",
-     "map_layers": "?",
-     "map_light_fps": "bool|int|null|number|string",
-     "map_scan_interval": "bool|int|number",
-     "map_scan_pause_unfocused": "bool",
-     "map_scan_targets": [
-      "string"
-     ],
-     "subagents_kept": "int",
-     "subagents_minutes": "number",
-     "unknown": "int"
-    }
+    "values": "object"
    },
    "result": {
     "addons_online": "bool",
@@ -1431,7 +1415,10 @@
    "area": "system",
    "kind": "preview",
    "note": "",
-   "params": {},
+   "params": {
+    "command": "string",
+    "finding": "string"
+   },
    "result": null,
    "source": null
   },
@@ -1470,7 +1457,10 @@
    "area": "system",
    "kind": "preview",
    "note": "",
-   "params": {},
+   "params": {
+    "command": "string",
+    "topic": "string"
+   },
    "result": null,
    "source": null
   },
@@ -1602,6 +1592,9 @@
    "area": "updates",
    "kind": "change",
    "note": "",
+   "optional": [
+    "running_ok"
+   ],
    "params": {
     "key": "string",
     "running_ok": "?"

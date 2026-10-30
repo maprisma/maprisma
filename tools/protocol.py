@@ -10,7 +10,8 @@ packages/maprisma_core/protocol/routes.json, docs/protocol.md and flutter_app/li
     tools/protocol.py check                    the contract still holds (tests/test_protocol.py)
 
 routes.json, per route: area, kind (read · preview · change · handle), handle (the field that holds
-the handle), params ({name: type}), result (its shape, or null while not described), source
+the handle), params ({name: type}), optional (the params that may be left out), result (its shape,
+or null while not described), source
 (observed · manual · null) and note. "other" lists the core's dotted names that are not routes
 (worker operations, file names): every name the core holds is one or the other, so a new route
 cannot go unnoticed. Parameters come from routes.json (and recordings); hand-written params,
@@ -44,19 +45,6 @@ DART_TYPES = {'string': 'String', 'int': 'int', 'bool': 'bool', 'number': 'num'}
 DART_WORDS = {'assert', 'break', 'case', 'catch', 'class', 'const', 'continue', 'default', 'do', 'else', 'enum',
               'extends', 'false', 'final', 'finally', 'for', 'if', 'in', 'is', 'new', 'null', 'rethrow', 'return',
               'super', 'switch', 'this', 'throw', 'true', 'try', 'var', 'void', 'while', 'with'}
-OPTIONAL = {
-    'agents.action_preview': {'kind', 'login'},
-    'connections.author_preview': {'entry', 'folder', 'name'},
-    'connections.preview': {'extra', 'model', 'use_now', 'x'},
-    'connections.snapshot': {'command'},
-    'help.snapshot': {'x'},
-    'i18n.lookup': {'n', 'other'},
-    'map.snapshot': {'force', 'poll'},
-    'models.attach_preview': {'extra'},
-    'settings.get': {'extra'},
-    'settings.update': {'extra', 'flutter_map_layout'},
-    'updates.run': {'running_ok'},
-}
 # Dotted names in flutter_app/lib whose area is a route area, but that name worker task
 # operations passed to providers.run / TaskProgress rather than RPC routes (in "other").
 GUI_NON_ROUTES = {
@@ -194,10 +182,11 @@ def update(record: Path | None) -> None:
     if record is not None:
         for line in record.read_text().splitlines():
             entry = json.loads(line)
+            if 'result' not in entry:     # a refused request says nothing about the route's parameters
+                continue
             seen = observed.setdefault(entry['method'], {'params': None, 'result': None})
             seen['params'] = merge(seen['params'], shape(entry['params']))
-            if 'result' in entry:
-                seen['result'] = merge(seen['result'], shape(entry['result']))
+            seen['result'] = merge(seen['result'], shape(entry['result']))
     routes = {}
     for method in sorted(served):
         old = data['routes'].get(method, {})
@@ -211,7 +200,8 @@ def update(record: Path | None) -> None:
             result, source = merge(result if source == 'observed' else None, seen['result']), 'observed'
         routes[method] = {'area': method.split('.')[0], 'kind': kind(method, handles),
                           **({'handle': handles[method]} if method in handles else {}),
-                          'params': params, 'result': result, 'source': source, 'note': old.get('note', '')}
+                          'params': params, **({'optional': old['optional']} if old.get('optional') else {}),
+                          'result': result, 'source': source, 'note': old.get('note', '')}
     data = {'protocol': data.get('protocol', VERSION), 'routes': routes,
             'other': sorted(set(names) - served)}
     save(data)
@@ -228,13 +218,15 @@ def doc_text(data: dict) -> str:
            '`{"id", "result"}` or `{"id", "error": {"code"}}`. Kinds: **read** changes nothing; **preview** returns a plan',
            'and changes nothing; **change** changes files or state (after a preview where there is one); **handle**',
            'takes the handle a preview or start returned (`plan`, `undo`, `task`, `session`).',
-           '', '`?` marks a parameter type or a result shape not described yet: describe it when you touch the route.', '']
+           '', '`?` marks a parameter type or a result shape not described yet: describe it when you touch the route.',
+           'A parameter written `name?` may be left out.', '']
     routes = data['routes']
     for area in sorted({r['area'] for r in routes.values()}):
         out += [f'## {area}', '', '| Route | Kind | Params | Result |', '|---|---|---|---|']
         for method in sorted(m for m, r in routes.items() if r['area'] == area):
             r = routes[method]
-            params = ', '.join(f'`{k}`: {v if isinstance(v, str) else json.dumps(v)}'
+            params = ', '.join(f'`{k}{"?" if k in r.get("optional", ()) else ""}`: '
+                               f'{v if isinstance(v, str) else json.dumps(v)}'
                                for k, v in sorted(r['params'].items())) or '—'
             if r['result'] is None:
                 result = '?'
@@ -322,7 +314,7 @@ def client_text(data: dict) -> str:
                     f"  ]) => transport.call('{method}', params);",
                 ])
             continue
-        opt = OPTIONAL.get(method, set())
+        opt = set(r.get('optional', ()))
         arg_parts = []
         map_parts = []
         for k in sorted(params):

@@ -9,6 +9,7 @@ and changes nothing; **change** changes files or state (after a preview where th
 takes the handle a preview or start returned (`plan`, `undo`, `task`, `session`).
 
 `?` marks a parameter type or a result shape not described yet: describe it when you touch the route.
+A parameter written `name?` may be left out.
 
 ## addons
 
@@ -30,7 +31,7 @@ takes the handle a preview or start returned (`plan`, `undo`, `task`, `session`)
 | Route | Kind | Params | Result |
 |---|---|---|---|
 | `agents.action_apply` | change | `preview`: ? | ? |
-| `agents.action_preview` | preview | `action`: ?, `command`: ?, `kind`: ?, `login`: ? | ? |
+| `agents.action_preview` | preview | `action`: ?, `command`: ?, `kind?`: ?, `login?`: ? | ? |
 | `agents.activity` | read | `command`: ? | ? |
 | `agents.costs` | read | `command`: string | `card`, `rate_due` |
 | `agents.details` | read | `command`: ? | ? |
@@ -74,11 +75,11 @@ takes the handle a preview or start returned (`plan`, `undo`, `task`, `session`)
 | Route | Kind | Params | Result |
 |---|---|---|---|
 | `connections.apply` | handle (plan) | `plan`: string | `ok`, `task`, `undo` |
-| `connections.author_preview` | preview | `agents`: ["string"], `entry`: {"args": ["string"], "command": "string", "env": {"TOKEN": "string"}, "headers": {}, "transport": "string", "url": "string"}, `folder`: string, `kind`: string, `name`: string | `agents`, `contexts`, `empty`, `files`, `focus`, `item`, `kind`, `links_add`, `links_remove`, `notes`, `plan` |
+| `connections.author_preview` | preview | `agents`: ["string"], `entry?`: object, `folder?`: string, `kind`: string, `name?`: string | `agents`, `contexts`, `empty`, `files`, `focus`, `item`, `kind`, `links_add`, `links_remove`, `notes`, `plan` |
 | `connections.move_preview` | preview | `agent`: string, `new`: null|string, `old`: string | `agents`, `contexts`, `empty`, `files`, `focus`, `links_add`, `links_remove`, `model_actions`, `notes`, `plan` |
-| `connections.preview` | preview | `command`: string, `extra`: int, `item`: string, `kind`: string, `model`: string, `remove`: bool|string, `use_now`: bool, `x`: int | `command`, `contexts`, `empty`, `files`, `focus`, `item`, `kind`, `links_add`, `links_remove`, `plan`, `remove` |
+| `connections.preview` | preview | `command`: string, `item`: string, `kind`: string, `model?`: string, `remove`: bool, `use_now?`: bool | `command`, `contexts`, `empty`, `files`, `focus`, `item`, `kind`, `links_add`, `links_remove`, `plan`, `remove` |
 | `connections.repair_preview` | preview | `agent`: string, `target`: string | `command`, `contexts`, `empty`, `files`, `focus`, `item`, `kind`, `links_add`, `links_remove`, `plan`, `remove` |
-| `connections.snapshot` | read | `command`: ? | ? |
+| `connections.snapshot` | read | `command?`: ? | ? |
 | `connections.undo` | handle (undo) | `undo`: string | `ok`, `restored` |
 
 ## costs
@@ -146,7 +147,7 @@ takes the handle a preview or start returned (`plan`, `undo`, `task`, `session`)
 | Route | Kind | Params | Result |
 |---|---|---|---|
 | `help.open_manual` | change | — | `opened` |
-| `help.snapshot` | read | `x`: int | `manual` |
+| `help.snapshot` | read | — | `manual` |
 
 ## helper
 
@@ -158,7 +159,7 @@ takes the handle a preview or start returned (`plan`, `undo`, `task`, `session`)
 
 | Route | Kind | Params | Result |
 |---|---|---|---|
-| `i18n.lookup` | read | `n`: int, `other`: string, `text`: string | `language`, `text` |
+| `i18n.lookup` | read | `n?`: int, `other?`: string, `text`: string | `language`, `text` |
 
 ## installers
 
@@ -186,7 +187,7 @@ takes the handle a preview or start returned (`plan`, `undo`, `task`, `session`)
 | Route | Kind | Params | Result |
 |---|---|---|---|
 | `map.badges` | read | — | `badges`, `rate_due` |
-| `map.snapshot` | read | `force`: ?, `poll`: ? | ? |
+| `map.snapshot` | read | `force?`: ?, `poll?`: ? | ? |
 | `map.usage` | read | `commands`: ? | ? |
 
 ## mcp
@@ -204,7 +205,7 @@ takes the handle a preview or start returned (`plan`, `undo`, `task`, `session`)
 
 | Route | Kind | Params | Result |
 |---|---|---|---|
-| `models.attach_preview` | preview | `agents`: ["string"], `extra`: int, `model`: string, `provider`: string | `agents`, `contexts`, `empty`, `files`, `focus`, `links_add`, `links_remove`, `model_actions`, `notes`, `plan` |
+| `models.attach_preview` | preview | `agents`: ["string"], `model`: string, `provider`: string | `agents`, `contexts`, `empty`, `files`, `focus`, `links_add`, `links_remove`, `model_actions`, `notes`, `plan` |
 | `models.remove_apply` | change | `removal`: ? | ? |
 | `models.remove_preview` | preview | `key`: ?, `model`: ? | ? |
 | `models.slots_preview` | preview | — | ? |
@@ -236,7 +237,7 @@ takes the handle a preview or start returned (`plan`, `undo`, `task`, `session`)
 |---|---|---|---|
 | `sessions.read` | handle (session) | `session`: ? | ? |
 | `sessions.resize` | handle (session) | `cols`: ?, `rows`: ?, `session`: ? | ? |
-| `sessions.start` | change | — | ? |
+| `sessions.start` | change | `command`: string, `outside`: bool, `path`: string|null | ? |
 | `sessions.stop` | handle (session) | `session`: ? | ? |
 | `sessions.write` | handle (session) | `data`: ?, `session`: ? | ? |
 
@@ -244,8 +245,8 @@ takes the handle a preview or start returned (`plan`, `undo`, `task`, `session`)
 
 | Route | Kind | Params | Result |
 |---|---|---|---|
-| `settings.get` | read | `extra`: int | `addons_online`, `agent_folder`, `ai_checks`, `ai_checks_agent`, `ai_local_helper`, `corners`, `cost_currency`, `cost_limit`, `flutter_map_layout`, `flutter_theme_mode`, `language`, `look`, `map_animations`, `map_layers`, `map_light_fps`, `map_scan_interval`, `map_scan_pause_unfocused`, `map_scan_targets`, `providers_with_agents`, `subagents_kept`, `subagents_minutes`, `terminal_tabs`, `usage_box`, `usage_box_items`, `usage_box_size`, `warn_notify`, `warn_red`, `warn_yellow`, `window_mode` |
-| `settings.update` | change | `extra`: {}, `flutter_map_layout`: ?, `values`: {"addons_online": "bool|null", "agent_folder": "string", "bogus": "int", "flutter_map_layout": {"cards": "?", "pins": ["string"]}, "flutter_theme_mode": "null|string", "language": "null|string", "look": "string", "map_animations": "null|string", "map_layers": "?", "map_light_fps": "bool|int|null|number|string", "map_scan_interval": "bool|int|number", "map_scan_pause_unfocused": "bool", "map_scan_targets": ["string"], "subagents_kept": "int", "subagents_minutes": "number", "unknown": "int"} | `addons_online`, `agent_folder`, `ai_checks`, `ai_checks_agent`, `ai_local_helper`, `corners`, `cost_currency`, `cost_limit`, `flutter_map_layout`, `flutter_theme_mode`, `language`, `look`, `map_animations`, `map_layers`, `map_light_fps`, `map_scan_interval`, `map_scan_pause_unfocused`, `map_scan_targets`, `providers_with_agents`, `subagents_kept`, `subagents_minutes`, `terminal_tabs`, `usage_box`, `usage_box_items`, `usage_box_size`, `warn_notify`, `warn_red`, `warn_yellow`, `window_mode` |
+| `settings.get` | read | — | `addons_online`, `agent_folder`, `ai_checks`, `ai_checks_agent`, `ai_local_helper`, `corners`, `cost_currency`, `cost_limit`, `flutter_map_layout`, `flutter_theme_mode`, `language`, `look`, `map_animations`, `map_layers`, `map_light_fps`, `map_scan_interval`, `map_scan_pause_unfocused`, `map_scan_targets`, `providers_with_agents`, `subagents_kept`, `subagents_minutes`, `terminal_tabs`, `usage_box`, `usage_box_items`, `usage_box_size`, `warn_notify`, `warn_red`, `warn_yellow`, `window_mode` |
+| `settings.update` | change | `values`: object | `addons_online`, `agent_folder`, `ai_checks`, `ai_checks_agent`, `ai_local_helper`, `corners`, `cost_currency`, `cost_limit`, `flutter_map_layout`, `flutter_theme_mode`, `language`, `look`, `map_animations`, `map_layers`, `map_light_fps`, `map_scan_interval`, `map_scan_pause_unfocused`, `map_scan_targets`, `providers_with_agents`, `subagents_kept`, `subagents_minutes`, `terminal_tabs`, `usage_box`, `usage_box_items`, `usage_box_size`, `warn_notify`, `warn_red`, `warn_yellow`, `window_mode` |
 
 ## setup
 
@@ -268,11 +269,11 @@ takes the handle a preview or start returned (`plan`, `undo`, `task`, `session`)
 | Route | Kind | Params | Result |
 |---|---|---|---|
 | `system.cached` | read | — | ? |
-| `system.fix_preview` | preview | — | ? |
+| `system.fix_preview` | preview | `command`: string, `finding`: string | ? |
 | `system.folder_preview` | preview | `found`: ?, `runtime`: ? | ? |
 | `system.forget_disk` | change | `node`: ? | ? |
 | `system.help_apply` | change | `preview`: ? | ? |
-| `system.help_preview` | preview | — | ? |
+| `system.help_preview` | preview | `command`: string, `topic`: string | ? |
 | `system.mount_signature` | read | — | ? |
 | `system.move_apply` | change | — | ? |
 | `system.move_preview` | preview | — | ? |
@@ -295,7 +296,7 @@ takes the handle a preview or start returned (`plan`, `undo`, `task`, `session`)
 | Route | Kind | Params | Result |
 |---|---|---|---|
 | `updates.check` | read | — | ? |
-| `updates.run` | change | `key`: string, `running_ok`: ? | ? |
+| `updates.run` | change | `key`: string, `running_ok?`: ? | ? |
 
 ## usage
 

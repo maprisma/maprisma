@@ -191,22 +191,18 @@ class CoreClient {
 
   Future<Map<String, dynamic>> connectionsPreview({
     required String command,
-    int? extra,
     required String item,
     required String kind,
     String? model,
-    required Object? remove,
+    required bool remove,
     bool? useNow,
-    int? x,
   }) => transport.call('connections.preview', {
     'command': command,
-    'extra': ?extra,
     'item': item,
     'kind': kind,
     'model': ?model,
     'remove': remove,
     'use_now': ?useNow,
-    'x': ?x,
   });
 
   Future<Map<String, dynamic>> connectionsRepairPreview({
@@ -302,8 +298,9 @@ class CoreClient {
     Map<String, dynamic> params = const {},
   ]) => transport.call('help.open_manual', params);
 
-  Future<Map<String, dynamic>> helpSnapshot({int? x}) =>
-      transport.call('help.snapshot', {'x': ?x});
+  Future<Map<String, dynamic>> helpSnapshot([
+    Map<String, dynamic> params = const {},
+  ]) => transport.call('help.snapshot', params);
 
   Future<Map<String, dynamic>> helperSnapshot([
     Map<String, dynamic> params = const {},
@@ -372,12 +369,10 @@ class CoreClient {
 
   Future<Map<String, dynamic>> modelsAttachPreview({
     required Object? agents,
-    int? extra,
     required String model,
     required String provider,
   }) => transport.call('models.attach_preview', {
     'agents': agents,
-    'extra': ?extra,
     'model': model,
     'provider': provider,
   });
@@ -460,9 +455,15 @@ class CoreClient {
     'session': session,
   });
 
-  Future<Map<String, dynamic>> sessionsStart([
-    Map<String, dynamic> params = const {},
-  ]) => transport.call('sessions.start', params);
+  Future<Map<String, dynamic>> sessionsStart({
+    required String command,
+    required bool outside,
+    required Object? path,
+  }) => transport.call('sessions.start', {
+    'command': command,
+    'outside': outside,
+    'path': path,
+  });
 
   Future<Map<String, dynamic>> sessionsStop({required String session}) =>
       transport.call('sessions.stop', {'session': session});
@@ -472,18 +473,12 @@ class CoreClient {
     required String session,
   }) => transport.call('sessions.write', {'data': data, 'session': session});
 
-  Future<Map<String, dynamic>> settingsGet({int? extra}) =>
-      transport.call('settings.get', {'extra': ?extra});
+  Future<Map<String, dynamic>> settingsGet([
+    Map<String, dynamic> params = const {},
+  ]) => transport.call('settings.get', params);
 
-  Future<Map<String, dynamic>> settingsUpdate({
-    Object? extra,
-    Object? flutterMapLayout,
-    required Object? values,
-  }) => transport.call('settings.update', {
-    'extra': ?extra,
-    'flutter_map_layout': ?flutterMapLayout,
-    'values': values,
-  });
+  Future<Map<String, dynamic>> settingsUpdate({required Object? values}) =>
+      transport.call('settings.update', {'values': values});
 
   Future<Map<String, dynamic>> setupApply({required Object? enabled}) =>
       transport.call('setup.apply', {'enabled': enabled});
@@ -512,9 +507,13 @@ class CoreClient {
     Map<String, dynamic> params = const {},
   ]) => transport.call('system.cached', params);
 
-  Future<Map<String, dynamic>> systemFixPreview([
-    Map<String, dynamic> params = const {},
-  ]) => transport.call('system.fix_preview', params);
+  Future<Map<String, dynamic>> systemFixPreview({
+    required String command,
+    required String finding,
+  }) => transport.call('system.fix_preview', {
+    'command': command,
+    'finding': finding,
+  });
 
   Future<Map<String, dynamic>> systemFolderPreview({
     required Object? found,
@@ -530,9 +529,13 @@ class CoreClient {
   Future<Map<String, dynamic>> systemHelpApply({required Object? preview}) =>
       transport.call('system.help_apply', {'preview': preview});
 
-  Future<Map<String, dynamic>> systemHelpPreview([
-    Map<String, dynamic> params = const {},
-  ]) => transport.call('system.help_preview', params);
+  Future<Map<String, dynamic>> systemHelpPreview({
+    required String command,
+    required String topic,
+  }) => transport.call('system.help_preview', {
+    'command': command,
+    'topic': topic,
+  });
 
   Future<Map<String, dynamic>> systemMountSignature([
     Map<String, dynamic> params = const {},
