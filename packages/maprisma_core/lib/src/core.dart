@@ -3192,6 +3192,38 @@ final class CoreService {
   late final Desktop desktop;
   late final ServiceI18n i18n;
   Map<String, dynamic> dispatch(String method, Map<String, dynamic> params) {
+    // Read from the process too: test cores get an environment of their own.
+    final record =
+        identity.environment['MAPRISMA_RECORD_PROTOCOL'] ??
+        Platform.environment['MAPRISMA_RECORD_PROTOCOL'];
+    if (record == null || record.isEmpty) return _dispatch(method, params);
+    // Dev only (tools/protocol.py): every request and its answer, one JSON
+    // line each, to derive the protocol's shapes from what really happens.
+    void write(Map<String, dynamic> line) {
+      try {
+        File(record).writeAsStringSync(
+          '${jsonEncode({'method': method, 'params': params, ...line})}\n',
+          mode: FileMode.append,
+        );
+      } catch (_) {
+        // a recording must never break a route
+      }
+    }
+
+    try {
+      final result = _dispatch(method, params);
+      write({'result': result});
+      return result;
+    } on ServiceError catch (e) {
+      write({'error': e.code});
+      rethrow;
+    } on FormatException catch (e) {
+      write({'error': 'invalid', 'message': e.message});
+      rethrow;
+    }
+  }
+
+  Map<String, dynamic> _dispatch(String method, Map<String, dynamic> params) {
     if (handleRoutes.containsKey(method)) {
       final value = params[handleRoutes[method]];
       if (value is! String || !value.startsWith(coreHandle)) {

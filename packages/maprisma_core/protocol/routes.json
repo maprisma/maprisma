@@ -1,0 +1,1640 @@
+{
+ "other": [
+  "addons.install_file",
+  "agents.halt",
+  "agents.key",
+  "checks.mcp",
+  "health.pc",
+  "llama.cpp",
+  "mcp.registry_refresh",
+  "mcp.tools_test",
+  "model.import",
+  "model.load",
+  "model.unload",
+  "model.yml",
+  "models.download",
+  "models.files",
+  "models.providers",
+  "models.pull",
+  "models.remove",
+  "models.search",
+  "runtime.start",
+  "runtime.stop",
+  "system.analyze"
+ ],
+ "protocol": 1,
+ "routes": {
+  "addons.catalog": {
+   "area": "addons",
+   "kind": "read",
+   "note": "",
+   "params": {},
+   "result": null,
+   "source": null
+  },
+  "addons.file_install": {
+   "area": "addons",
+   "kind": "change",
+   "note": "",
+   "params": {},
+   "result": null,
+   "source": null
+  },
+  "addons.file_preview": {
+   "area": "addons",
+   "kind": "preview",
+   "note": "",
+   "params": {
+    "path": "?"
+   },
+   "result": null,
+   "source": null
+  },
+  "addons.hints": {
+   "area": "addons",
+   "kind": "read",
+   "note": "",
+   "params": {},
+   "result": {
+    "lines": []
+   },
+   "source": "observed"
+  },
+  "addons.install": {
+   "area": "addons",
+   "kind": "change",
+   "note": "",
+   "params": {},
+   "result": null,
+   "source": null
+  },
+  "addons.list": {
+   "area": "addons",
+   "kind": "read",
+   "note": "",
+   "params": {},
+   "result": null,
+   "source": null
+  },
+  "addons.remove_apply": {
+   "area": "addons",
+   "kind": "change",
+   "note": "",
+   "params": {
+    "preview": "?"
+   },
+   "result": null,
+   "source": null
+  },
+  "addons.remove_preview": {
+   "area": "addons",
+   "kind": "preview",
+   "note": "",
+   "params": {
+    "id": "?"
+   },
+   "result": null,
+   "source": null
+  },
+  "addons.remove_undo": {
+   "area": "addons",
+   "kind": "change",
+   "note": "",
+   "params": {
+    "undo": "?"
+   },
+   "result": null,
+   "source": null
+  },
+  "addons.set_enabled": {
+   "area": "addons",
+   "kind": "change",
+   "note": "",
+   "params": {
+    "enabled": "?",
+    "id": "?"
+   },
+   "result": null,
+   "source": null
+  },
+  "agents.action_apply": {
+   "area": "agents",
+   "kind": "change",
+   "note": "",
+   "params": {
+    "preview": "?"
+   },
+   "result": null,
+   "source": null
+  },
+  "agents.action_preview": {
+   "area": "agents",
+   "kind": "preview",
+   "note": "",
+   "params": {
+    "action": "?",
+    "command": "?",
+    "kind": "?",
+    "login": "?"
+   },
+   "result": null,
+   "source": null
+  },
+  "agents.activity": {
+   "area": "agents",
+   "kind": "read",
+   "note": "",
+   "params": {
+    "command": "?"
+   },
+   "result": null,
+   "source": null
+  },
+  "agents.costs": {
+   "area": "agents",
+   "kind": "read",
+   "note": "",
+   "params": {
+    "command": "string"
+   },
+   "result": {
+    "card": "null",
+    "rate_due": "bool"
+   },
+   "source": "observed"
+  },
+  "agents.details": {
+   "area": "agents",
+   "kind": "read",
+   "note": "",
+   "params": {
+    "command": "?"
+   },
+   "result": null,
+   "source": null
+  },
+  "agents.halt_apply": {
+   "area": "agents",
+   "kind": "change",
+   "note": "",
+   "params": {
+    "preview": "?"
+   },
+   "result": null,
+   "source": null
+  },
+  "agents.halt_preview": {
+   "area": "agents",
+   "kind": "preview",
+   "note": "",
+   "params": {
+    "command": "?"
+   },
+   "result": null,
+   "source": null
+  },
+  "agents.health": {
+   "area": "agents",
+   "kind": "read",
+   "note": "",
+   "params": {},
+   "result": null,
+   "source": null
+  },
+  "agents.key_apply": {
+   "area": "agents",
+   "kind": "change",
+   "note": "",
+   "params": {
+    "key": "?",
+    "preview": "?"
+   },
+   "result": null,
+   "source": null
+  },
+  "agents.key_preview": {
+   "area": "agents",
+   "kind": "preview",
+   "note": "",
+   "params": {
+    "command": "?"
+   },
+   "result": null,
+   "source": null
+  },
+  "agents.projects": {
+   "area": "agents",
+   "kind": "read",
+   "note": "",
+   "params": {
+    "command": "string"
+   },
+   "result": {
+    "card": "null"
+   },
+   "source": "observed"
+  },
+  "agents.security": {
+   "area": "agents",
+   "kind": "read",
+   "note": "",
+   "params": {
+    "command": "?"
+   },
+   "result": null,
+   "source": null
+  },
+  "agents.security_preview": {
+   "area": "agents",
+   "kind": "preview",
+   "note": "",
+   "params": {},
+   "result": null,
+   "source": null
+  },
+  "agents.usage_refresh": {
+   "area": "agents",
+   "kind": "change",
+   "note": "",
+   "params": {
+    "command": "?"
+   },
+   "result": null,
+   "source": null
+  },
+  "app.identity": {
+   "area": "app",
+   "kind": "read",
+   "note": "",
+   "params": {},
+   "result": {
+    "app_id": "string",
+    "cache_dir": "string",
+    "config_dir": "string",
+    "name": "string",
+    "short_name": "string"
+   },
+   "source": "observed"
+  },
+  "app.settings_changed": {
+   "area": "app",
+   "kind": "change",
+   "note": "",
+   "params": {},
+   "result": null,
+   "source": null
+  },
+  "app.snapshot": {
+   "area": "app",
+   "kind": "read",
+   "note": "",
+   "params": {},
+   "result": null,
+   "source": null
+  },
+  "app.theme": {
+   "area": "app",
+   "kind": "read",
+   "note": "",
+   "params": {},
+   "result": {
+    "theme": {
+     "accent": "string",
+     "background": "string",
+     "foreground": "string"
+    }
+   },
+   "source": "observed"
+  },
+  "changes.history": {
+   "area": "changes",
+   "kind": "read",
+   "note": "",
+   "params": {},
+   "result": null,
+   "source": null
+  },
+  "changes.undo": {
+   "area": "changes",
+   "kind": "change",
+   "note": "",
+   "params": {
+    "id": "?"
+   },
+   "result": null,
+   "source": null
+  },
+  "checks.mcp_check": {
+   "area": "checks",
+   "kind": "read",
+   "note": "",
+   "params": {
+    "force": "?"
+   },
+   "result": null,
+   "source": null
+  },
+  "checks.mcp_release": {
+   "area": "checks",
+   "kind": "change",
+   "note": "",
+   "params": {
+    "name": "?"
+   },
+   "result": null,
+   "source": null
+  },
+  "checks.mcp_task": {
+   "area": "checks",
+   "kind": "read",
+   "note": "",
+   "params": {
+    "name": "?"
+   },
+   "result": null,
+   "source": null
+  },
+  "checks.mcp_updates": {
+   "area": "checks",
+   "kind": "read",
+   "note": "",
+   "params": {},
+   "result": null,
+   "source": null
+  },
+  "connections.apply": {
+   "area": "connections",
+   "handle": "plan",
+   "kind": "handle",
+   "note": "",
+   "params": {
+    "plan": "string"
+   },
+   "result": {
+    "ok": "bool",
+    "task": "string",
+    "undo": "null"
+   },
+   "source": "observed"
+  },
+  "connections.author_preview": {
+   "area": "connections",
+   "kind": "preview",
+   "note": "",
+   "params": {
+    "agents": [
+     "string"
+    ],
+    "entry": {
+     "args": [
+      "string"
+     ],
+     "command": "string",
+     "env": {
+      "TOKEN": "string"
+     },
+     "headers": {},
+     "transport": "string",
+     "url": "string"
+    },
+    "folder": "string",
+    "kind": "string",
+    "name": "string"
+   },
+   "result": {
+    "agents": [
+     "string"
+    ],
+    "contexts": [],
+    "empty": "bool",
+    "files": [
+     {
+      "added": "int",
+      "path": "string",
+      "removed": "int"
+     }
+    ],
+    "focus": [
+     "string"
+    ],
+    "item": "string",
+    "kind": "string",
+    "links_add": [
+     [
+      "string"
+     ]
+    ],
+    "links_remove": [],
+    "notes": [
+     "string"
+    ],
+    "plan": "string"
+   },
+   "source": "observed"
+  },
+  "connections.move_preview": {
+   "area": "connections",
+   "kind": "preview",
+   "note": "",
+   "params": {
+    "agent": "string",
+    "new": "null|string",
+    "old": "string"
+   },
+   "result": {
+    "agents": [
+     "string"
+    ],
+    "contexts": [],
+    "empty": "bool",
+    "files": [
+     {
+      "added": "int",
+      "path": "string",
+      "removed": "int"
+     }
+    ],
+    "focus": [
+     "string"
+    ],
+    "links_add": [],
+    "links_remove": [],
+    "model_actions": [],
+    "notes": [],
+    "plan": "string"
+   },
+   "source": "observed"
+  },
+  "connections.preview": {
+   "area": "connections",
+   "kind": "preview",
+   "note": "",
+   "params": {
+    "command": "string",
+    "extra": "int",
+    "item": "string",
+    "kind": "string",
+    "model": "string",
+    "remove": "bool|string",
+    "use_now": "bool",
+    "x": "int"
+   },
+   "result": {
+    "command": "string",
+    "contexts": [],
+    "empty": "bool",
+    "files": [
+     {
+      "added": "int",
+      "path": "string",
+      "removed": "int"
+     }
+    ],
+    "focus": [
+     "string"
+    ],
+    "item": "string",
+    "kind": "string",
+    "links_add": [
+     [
+      "string"
+     ]
+    ],
+    "links_remove": [],
+    "plan": "string",
+    "remove": "bool"
+   },
+   "source": "observed"
+  },
+  "connections.repair_preview": {
+   "area": "connections",
+   "kind": "preview",
+   "note": "",
+   "params": {
+    "agent": "string",
+    "target": "string"
+   },
+   "result": {
+    "command": "string",
+    "contexts": [],
+    "empty": "bool",
+    "files": [
+     {
+      "added": "int",
+      "path": "string",
+      "removed": "int"
+     }
+    ],
+    "focus": [
+     "string"
+    ],
+    "item": "string",
+    "kind": "string",
+    "links_add": [],
+    "links_remove": [],
+    "plan": "string",
+    "remove": "bool"
+   },
+   "source": "observed"
+  },
+  "connections.snapshot": {
+   "area": "connections",
+   "kind": "read",
+   "note": "",
+   "params": {
+    "command": "?"
+   },
+   "result": null,
+   "source": null
+  },
+  "connections.undo": {
+   "area": "connections",
+   "handle": "undo",
+   "kind": "handle",
+   "note": "",
+   "params": {
+    "undo": "string"
+   },
+   "result": {
+    "ok": "bool",
+    "restored": [
+     "string"
+    ]
+   },
+   "source": "observed"
+  },
+  "costs.rate": {
+   "area": "costs",
+   "kind": "read",
+   "note": "",
+   "params": {},
+   "result": null,
+   "source": null
+  },
+  "desktop.snapshot": {
+   "area": "desktop",
+   "kind": "read",
+   "note": "",
+   "params": {},
+   "result": {
+    "name": "string",
+    "theme_dir": "null|string"
+   },
+   "source": "observed"
+  },
+  "details.mcp": {
+   "area": "details",
+   "kind": "read",
+   "note": "",
+   "params": {
+    "name": "string"
+   },
+   "result": {
+    "intro": "string",
+    "missing": "string",
+    "missing_title": "string",
+    "sections": [
+     {
+      "heading": "string",
+      "rows": [
+       [
+        "string"
+       ]
+      ]
+     }
+    ],
+    "server": "string",
+    "text": "string",
+    "title": "string",
+    "tools": []
+   },
+   "source": "observed"
+  },
+  "details.skills": {
+   "area": "details",
+   "kind": "read",
+   "note": "",
+   "params": {
+    "path": "string"
+   },
+   "result": {
+    "intro": "string",
+    "missing": "string",
+    "missing_title": "string",
+    "sections": [
+     {
+      "heading": "string",
+      "rows": [
+       [
+        "string"
+       ]
+      ]
+     }
+    ],
+    "text": "string",
+    "title": "string",
+    "tools": []
+   },
+   "source": "observed"
+  },
+  "existing.apply": {
+   "area": "existing",
+   "kind": "change",
+   "note": "",
+   "params": {},
+   "result": null,
+   "source": null
+  },
+  "existing.check": {
+   "area": "existing",
+   "kind": "read",
+   "note": "",
+   "params": {},
+   "result": null,
+   "source": null
+  },
+  "existing.mounts": {
+   "area": "existing",
+   "kind": "read",
+   "note": "",
+   "params": {},
+   "result": null,
+   "source": null
+  },
+  "existing.preview": {
+   "area": "existing",
+   "kind": "preview",
+   "note": "",
+   "params": {
+    "found": "?",
+    "models": "?"
+   },
+   "result": null,
+   "source": null
+  },
+  "existing.scan": {
+   "area": "existing",
+   "kind": "read",
+   "note": "",
+   "params": {},
+   "result": null,
+   "source": null
+  },
+  "found.hints": {
+   "area": "found",
+   "kind": "read",
+   "note": "",
+   "params": {},
+   "result": {
+    "lines": []
+   },
+   "source": "observed"
+  },
+  "found.list": {
+   "area": "found",
+   "kind": "read",
+   "note": "",
+   "params": {
+    "kind": "string"
+   },
+   "result": {
+    "checked": "bool",
+    "items": [],
+    "looking_text": "string",
+    "not_looked": [],
+    "not_looked_text": "string",
+    "set_up": "int",
+    "updates": []
+   },
+   "source": "observed"
+  },
+  "found.look_inside": {
+   "area": "found",
+   "kind": "read",
+   "note": "",
+   "params": {},
+   "result": null,
+   "source": null
+  },
+  "found.scan": {
+   "area": "found",
+   "kind": "read",
+   "note": "",
+   "params": {},
+   "result": null,
+   "source": null
+  },
+  "found.seen": {
+   "area": "found",
+   "kind": "change",
+   "note": "",
+   "params": {
+    "kind": "string"
+   },
+   "result": {
+    "ok": "bool"
+   },
+   "source": "observed"
+  },
+  "found.unpack": {
+   "area": "found",
+   "kind": "change",
+   "note": "",
+   "params": {
+    "program": "string"
+   },
+   "result": null,
+   "source": null
+  },
+  "found.update_preview": {
+   "area": "found",
+   "kind": "preview",
+   "note": "",
+   "params": {},
+   "result": null,
+   "source": null
+  },
+  "gpu.snapshot": {
+   "area": "gpu",
+   "kind": "read",
+   "note": "",
+   "params": {},
+   "result": null,
+   "source": null
+  },
+  "guide.choose": {
+   "area": "guide",
+   "kind": "change",
+   "note": "",
+   "params": {
+    "route": "?"
+   },
+   "result": null,
+   "source": null
+  },
+  "guide.snapshot": {
+   "area": "guide",
+   "kind": "read",
+   "note": "",
+   "params": {},
+   "result": null,
+   "source": null
+  },
+  "health.report": {
+   "area": "health",
+   "kind": "read",
+   "note": "",
+   "params": {},
+   "result": null,
+   "source": null
+  },
+  "help.open_manual": {
+   "area": "help",
+   "kind": "change",
+   "note": "",
+   "params": {},
+   "result": {
+    "opened": "bool"
+   },
+   "source": "observed"
+  },
+  "help.snapshot": {
+   "area": "help",
+   "kind": "read",
+   "note": "",
+   "params": {
+    "x": "int"
+   },
+   "result": {
+    "manual": "bool"
+   },
+   "source": "observed"
+  },
+  "helper.snapshot": {
+   "area": "helper",
+   "kind": "read",
+   "note": "",
+   "params": {},
+   "result": null,
+   "source": null
+  },
+  "i18n.lookup": {
+   "area": "i18n",
+   "kind": "read",
+   "note": "",
+   "params": {
+    "n": "int",
+    "other": "string",
+    "text": "string"
+   },
+   "result": {
+    "language": "string",
+    "text": "string"
+   },
+   "source": "observed"
+  },
+  "installers.install": {
+   "area": "installers",
+   "kind": "change",
+   "note": "",
+   "params": {},
+   "result": null,
+   "source": null
+  },
+  "installers.preview": {
+   "area": "installers",
+   "kind": "preview",
+   "note": "",
+   "params": {},
+   "result": null,
+   "source": null
+  },
+  "jobs.continue": {
+   "area": "jobs",
+   "kind": "change",
+   "note": "",
+   "params": {
+    "id": "?"
+   },
+   "result": null,
+   "source": null
+  },
+  "jobs.discard": {
+   "area": "jobs",
+   "kind": "change",
+   "note": "",
+   "params": {
+    "id": "?"
+   },
+   "result": null,
+   "source": null
+  },
+  "jobs.list": {
+   "area": "jobs",
+   "kind": "read",
+   "note": "",
+   "params": {},
+   "result": null,
+   "source": null
+  },
+  "limits.notify": {
+   "area": "limits",
+   "kind": "change",
+   "note": "",
+   "params": {},
+   "result": {
+    "sent": []
+   },
+   "source": "observed"
+  },
+  "map.badges": {
+   "area": "map",
+   "kind": "read",
+   "note": "",
+   "params": {},
+   "result": {
+    "badges": {},
+    "rate_due": "bool"
+   },
+   "source": "observed"
+  },
+  "map.snapshot": {
+   "area": "map",
+   "kind": "read",
+   "note": "",
+   "params": {
+    "force": "?",
+    "poll": "?"
+   },
+   "result": null,
+   "source": null
+  },
+  "map.usage": {
+   "area": "map",
+   "kind": "read",
+   "note": "",
+   "params": {
+    "commands": "?"
+   },
+   "result": null,
+   "source": null
+  },
+  "mcp.catalog": {
+   "area": "mcp",
+   "kind": "read",
+   "note": "",
+   "params": {},
+   "result": null,
+   "source": null
+  },
+  "mcp.option_preview": {
+   "area": "mcp",
+   "kind": "preview",
+   "note": "",
+   "params": {},
+   "result": null,
+   "source": null
+  },
+  "mcp.option_test": {
+   "area": "mcp",
+   "kind": "read",
+   "note": "",
+   "params": {},
+   "result": null,
+   "source": null
+  },
+  "mcp.search": {
+   "area": "mcp",
+   "kind": "read",
+   "note": "",
+   "params": {},
+   "result": null,
+   "source": null
+  },
+  "mcp.tools": {
+   "area": "mcp",
+   "kind": "read",
+   "note": "",
+   "params": {},
+   "result": null,
+   "source": null
+  },
+  "mcp.tools_cached": {
+   "area": "mcp",
+   "kind": "read",
+   "note": "",
+   "params": {
+    "name": "?"
+   },
+   "result": null,
+   "source": null
+  },
+  "models.attach_preview": {
+   "area": "models",
+   "kind": "preview",
+   "note": "",
+   "params": {
+    "agents": [
+     "string"
+    ],
+    "extra": "int",
+    "model": "string",
+    "provider": "string"
+   },
+   "result": {
+    "agents": [
+     "string"
+    ],
+    "contexts": [],
+    "empty": "bool",
+    "files": [
+     {
+      "added": "int",
+      "path": "string",
+      "removed": "int"
+     }
+    ],
+    "focus": [
+     "string"
+    ],
+    "links_add": [],
+    "links_remove": [],
+    "model_actions": [
+     {
+      "model": "string",
+      "operation": "string"
+     }
+    ],
+    "notes": [
+     "string"
+    ],
+    "plan": "string"
+   },
+   "source": "observed"
+  },
+  "models.remove_apply": {
+   "area": "models",
+   "kind": "change",
+   "note": "",
+   "params": {
+    "removal": "?"
+   },
+   "result": null,
+   "source": null
+  },
+  "models.remove_preview": {
+   "area": "models",
+   "kind": "preview",
+   "note": "",
+   "params": {
+    "key": "?",
+    "model": "?"
+   },
+   "result": null,
+   "source": null
+  },
+  "models.slots_preview": {
+   "area": "models",
+   "kind": "preview",
+   "note": "",
+   "params": {},
+   "result": null,
+   "source": null
+  },
+  "models.slots_reload": {
+   "area": "models",
+   "kind": "change",
+   "note": "",
+   "params": {},
+   "result": null,
+   "source": null
+  },
+  "models.switch_preview": {
+   "area": "models",
+   "kind": "preview",
+   "note": "",
+   "params": {
+    "new": "null|string",
+    "old": "string",
+    "provider": "string"
+   },
+   "result": {
+    "agents": [
+     "string"
+    ],
+    "contexts": [],
+    "empty": "bool",
+    "files": [
+     {
+      "added": "int",
+      "path": "string",
+      "removed": "int"
+     }
+    ],
+    "focus": [
+     "string"
+    ],
+    "links_add": [],
+    "links_remove": [],
+    "model_actions": [
+     {
+      "model": "string",
+      "operation": "string"
+     }
+    ],
+    "notes": [
+     "string"
+    ],
+    "plan": "string"
+   },
+   "source": "observed"
+  },
+  "models.tuning": {
+   "area": "models",
+   "kind": "read",
+   "note": "",
+   "params": {},
+   "result": null,
+   "source": null
+  },
+  "models.tuning_ask": {
+   "area": "models",
+   "kind": "read",
+   "note": "",
+   "params": {},
+   "result": null,
+   "source": null
+  },
+  "models.tuning_preview": {
+   "area": "models",
+   "kind": "preview",
+   "note": "",
+   "params": {},
+   "result": null,
+   "source": null
+  },
+  "projects.forget": {
+   "area": "projects",
+   "kind": "change",
+   "note": "",
+   "params": {},
+   "result": null,
+   "source": null
+  },
+  "projects.pin": {
+   "area": "projects",
+   "kind": "change",
+   "note": "",
+   "params": {},
+   "result": null,
+   "source": null
+  },
+  "providers.details": {
+   "area": "providers",
+   "kind": "read",
+   "note": "",
+   "params": {
+    "key": "string"
+   },
+   "result": {
+    "now": "string",
+    "risks": [],
+    "tiles": [
+     [
+      "string"
+     ]
+    ],
+    "usage": "null"
+   },
+   "source": "observed"
+  },
+  "providers.health": {
+   "area": "providers",
+   "kind": "read",
+   "note": "",
+   "params": {},
+   "result": null,
+   "source": null
+  },
+  "providers.run": {
+   "area": "providers",
+   "kind": "change",
+   "note": "",
+   "params": {
+    "operation": "?",
+    "params": "?"
+   },
+   "result": null,
+   "source": null
+  },
+  "providers.snapshot": {
+   "area": "providers",
+   "kind": "read",
+   "note": "",
+   "params": {},
+   "result": null,
+   "source": null
+  },
+  "sessions.read": {
+   "area": "sessions",
+   "handle": "session",
+   "kind": "handle",
+   "note": "",
+   "params": {
+    "session": "?"
+   },
+   "result": null,
+   "source": null
+  },
+  "sessions.resize": {
+   "area": "sessions",
+   "handle": "session",
+   "kind": "handle",
+   "note": "",
+   "params": {
+    "cols": "?",
+    "rows": "?",
+    "session": "?"
+   },
+   "result": null,
+   "source": null
+  },
+  "sessions.start": {
+   "area": "sessions",
+   "kind": "change",
+   "note": "",
+   "params": {},
+   "result": null,
+   "source": null
+  },
+  "sessions.stop": {
+   "area": "sessions",
+   "handle": "session",
+   "kind": "handle",
+   "note": "",
+   "params": {
+    "session": "?"
+   },
+   "result": null,
+   "source": null
+  },
+  "sessions.write": {
+   "area": "sessions",
+   "handle": "session",
+   "kind": "handle",
+   "note": "",
+   "params": {
+    "data": "?",
+    "session": "?"
+   },
+   "result": null,
+   "source": null
+  },
+  "settings.get": {
+   "area": "settings",
+   "kind": "read",
+   "note": "",
+   "params": {
+    "extra": "int"
+   },
+   "result": {
+    "addons_online": "bool",
+    "agent_folder": "null|string",
+    "ai_checks": "bool",
+    "ai_checks_agent": "string",
+    "ai_local_helper": {},
+    "corners": "string",
+    "cost_currency": "string",
+    "cost_limit": "int",
+    "flutter_map_layout": {
+     "cards": {
+      "a": [
+       "int|number"
+      ]
+     },
+     "pins": [
+      "string"
+     ]
+    },
+    "flutter_theme_mode": "string",
+    "language": "string",
+    "look": "string",
+    "map_animations": "string",
+    "map_layers": [
+     "string"
+    ],
+    "map_light_fps": "int",
+    "map_scan_interval": "int",
+    "map_scan_pause_unfocused": "bool",
+    "map_scan_targets": [
+     "string"
+    ],
+    "providers_with_agents": "bool",
+    "subagents_kept": "int",
+    "subagents_minutes": "int|number",
+    "terminal_tabs": "bool",
+    "usage_box": "bool",
+    "usage_box_items": [
+     "string"
+    ],
+    "usage_box_size": "int",
+    "warn_notify": "bool",
+    "warn_red": "int",
+    "warn_yellow": "int",
+    "window_mode": "string"
+   },
+   "source": "observed"
+  },
+  "settings.update": {
+   "area": "settings",
+   "kind": "change",
+   "note": "",
+   "params": {
+    "extra": {},
+    "flutter_map_layout": "?",
+    "values": {
+     "addons_online": "bool|null",
+     "agent_folder": "string",
+     "bogus": "int",
+     "flutter_map_layout": {
+      "cards": "?",
+      "pins": [
+       "string"
+      ]
+     },
+     "flutter_theme_mode": "null|string",
+     "language": "null|string",
+     "look": "string",
+     "map_animations": "null|string",
+     "map_layers": "?",
+     "map_light_fps": "bool|int|null|number|string",
+     "map_scan_interval": "bool|int|number",
+     "map_scan_pause_unfocused": "bool",
+     "map_scan_targets": [
+      "string"
+     ],
+     "subagents_kept": "int",
+     "subagents_minutes": "number",
+     "unknown": "int"
+    }
+   },
+   "result": {
+    "addons_online": "bool",
+    "agent_folder": "null|string",
+    "ai_checks": "bool",
+    "ai_checks_agent": "string",
+    "ai_local_helper": {},
+    "corners": "string",
+    "cost_currency": "string",
+    "cost_limit": "int",
+    "flutter_map_layout": {
+     "cards": {
+      "a": [
+       "int|number"
+      ],
+      "b": [
+       "number"
+      ]
+     },
+     "pins": [
+      "string"
+     ]
+    },
+    "flutter_theme_mode": "string",
+    "language": "string",
+    "look": "string",
+    "map_animations": "string",
+    "map_layers": [
+     "string"
+    ],
+    "map_light_fps": "int",
+    "map_scan_interval": "int",
+    "map_scan_pause_unfocused": "bool",
+    "map_scan_targets": [
+     "string"
+    ],
+    "providers_with_agents": "bool",
+    "subagents_kept": "int",
+    "subagents_minutes": "int|number",
+    "terminal_tabs": "bool",
+    "usage_box": "bool",
+    "usage_box_items": [
+     "string"
+    ],
+    "usage_box_size": "int",
+    "warn_notify": "bool",
+    "warn_red": "int",
+    "warn_yellow": "int",
+    "window_mode": "string"
+   },
+   "source": "observed"
+  },
+  "setup.apply": {
+   "area": "setup",
+   "kind": "change",
+   "note": "",
+   "params": {
+    "enabled": "?"
+   },
+   "result": null,
+   "source": null
+  },
+  "setup.detect": {
+   "area": "setup",
+   "kind": "read",
+   "note": "",
+   "params": {},
+   "result": null,
+   "source": null
+  },
+  "setup.later": {
+   "area": "setup",
+   "kind": "change",
+   "note": "",
+   "params": {},
+   "result": null,
+   "source": null
+  },
+  "skills.web_fetch": {
+   "area": "skills",
+   "kind": "read",
+   "note": "",
+   "params": {},
+   "result": null,
+   "source": null
+  },
+  "skills.web_preview": {
+   "area": "skills",
+   "kind": "preview",
+   "note": "",
+   "params": {},
+   "result": null,
+   "source": null
+  },
+  "skills.web_search": {
+   "area": "skills",
+   "kind": "read",
+   "note": "",
+   "params": {},
+   "result": null,
+   "source": null
+  },
+  "system.cached": {
+   "area": "system",
+   "kind": "read",
+   "note": "",
+   "params": {},
+   "result": null,
+   "source": null
+  },
+  "system.fix_preview": {
+   "area": "system",
+   "kind": "preview",
+   "note": "",
+   "params": {},
+   "result": null,
+   "source": null
+  },
+  "system.folder_preview": {
+   "area": "system",
+   "kind": "preview",
+   "note": "",
+   "params": {
+    "found": "?",
+    "runtime": "?"
+   },
+   "result": null,
+   "source": null
+  },
+  "system.forget_disk": {
+   "area": "system",
+   "kind": "change",
+   "note": "",
+   "params": {
+    "node": "?"
+   },
+   "result": null,
+   "source": null
+  },
+  "system.help_apply": {
+   "area": "system",
+   "kind": "change",
+   "note": "",
+   "params": {
+    "preview": "?"
+   },
+   "result": null,
+   "source": null
+  },
+  "system.help_preview": {
+   "area": "system",
+   "kind": "preview",
+   "note": "",
+   "params": {},
+   "result": null,
+   "source": null
+  },
+  "system.mount_signature": {
+   "area": "system",
+   "kind": "read",
+   "note": "",
+   "params": {},
+   "result": null,
+   "source": null
+  },
+  "system.move_apply": {
+   "area": "system",
+   "kind": "change",
+   "note": "",
+   "params": {},
+   "result": null,
+   "source": null
+  },
+  "system.move_preview": {
+   "area": "system",
+   "kind": "preview",
+   "note": "",
+   "params": {},
+   "result": null,
+   "source": null
+  },
+  "system.move_undo": {
+   "area": "system",
+   "kind": "change",
+   "note": "",
+   "params": {
+    "undo": "?"
+   },
+   "result": null,
+   "source": null
+  },
+  "system.refresh": {
+   "area": "system",
+   "kind": "change",
+   "note": "",
+   "params": {
+    "search": "?"
+   },
+   "result": null,
+   "source": null
+  },
+  "system.stack_apply": {
+   "area": "system",
+   "kind": "change",
+   "note": "",
+   "params": {
+    "preview": "?"
+   },
+   "result": null,
+   "source": null
+  },
+  "system.stack_preview": {
+   "area": "system",
+   "kind": "preview",
+   "note": "",
+   "params": {
+    "part": "?"
+   },
+   "result": null,
+   "source": null
+  },
+  "system.tool_check": {
+   "area": "system",
+   "kind": "read",
+   "note": "",
+   "params": {},
+   "result": null,
+   "source": null
+  },
+  "system.view": {
+   "area": "system",
+   "kind": "read",
+   "note": "",
+   "params": {
+    "selected": "?",
+    "transform": "?"
+   },
+   "result": null,
+   "source": null
+  },
+  "tasks.cancel": {
+   "area": "tasks",
+   "handle": "task",
+   "kind": "handle",
+   "note": "",
+   "params": {
+    "task": "?"
+   },
+   "result": null,
+   "source": null
+  },
+  "tasks.status": {
+   "area": "tasks",
+   "handle": "task",
+   "kind": "handle",
+   "note": "",
+   "params": {
+    "task": "string"
+   },
+   "result": {
+    "fraction": "number",
+    "operation": "string",
+    "result": {
+     "context_failures": "int",
+     "ok": "bool",
+     "undo": "string"
+    },
+    "state": "string",
+    "task": "string",
+    "text": "string"
+   },
+   "source": "observed"
+  },
+  "updates.check": {
+   "area": "updates",
+   "kind": "read",
+   "note": "",
+   "params": {},
+   "result": null,
+   "source": null
+  },
+  "updates.run": {
+   "area": "updates",
+   "kind": "change",
+   "note": "",
+   "params": {
+    "key": "string",
+    "running_ok": "?"
+   },
+   "result": null,
+   "source": null
+  },
+  "usage.snapshot": {
+   "area": "usage",
+   "kind": "read",
+   "note": "",
+   "params": {},
+   "result": null,
+   "source": null
+  },
+  "window.popup": {
+   "area": "window",
+   "kind": "change",
+   "note": "",
+   "params": {
+    "height": "?",
+    "width": "?"
+   },
+   "result": null,
+   "source": null
+  },
+  "window.rounding": {
+   "area": "window",
+   "kind": "read",
+   "note": "",
+   "params": {},
+   "result": null,
+   "source": null
+  }
+ }
+}
