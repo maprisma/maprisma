@@ -69,6 +69,7 @@ import 'change_history.dart';
 import 'legacy_move.dart';
 import 'hyprland.dart' show placePopup, WindowRounding;
 import 'protocol_recording.dart';
+import 'smart_card.dart';
 
 const portedRoutes = {
   'settings.get',
@@ -78,6 +79,11 @@ const portedRoutes = {
   'app.identity',
   'desktop.snapshot',
   'i18n.lookup',
+  'map.smart_helpers',
+  'map.smart_ask',
+  'map.smart_review',
+  'map.smart_run',
+  'map.smart_connect',
   'addons.list',
   'addons.set_enabled',
   'addons.catalog',
@@ -2771,6 +2777,129 @@ final class CoreService {
   }
 
   /// One MCP server asked at a time: asking starts its program.
+  late final smartProposals = SmartProposals(newHandle);
+
+  /// The agents that can answer a smart card (docs/plan-smart-helpers.md): the
+  /// confirmed local helper first, then the agent for AI checks, then the
+  /// others, each with a guarded start that has no tools.
+  List<Map<String, dynamic>> smartHelpers() {
+    final local = localHelpers().$3;
+    final (checkers, _) = _aiHelpers();
+    final chosen = '${settings.load()['ai_checks_agent'] ?? ''}';
+    bool ready(String command) {
+      final a = addons.adapters.where((a) => a.command == command).firstOrNull;
+      return a != null &&
+          a.facts.containsKey('closed') &&
+          a.table('rewrite').containsKey('argv');
+    }
+
+    return [
+      if (local != null)
+        {'command': 'local-helper', 'name': helperName(local), 'local': true},
+      for (final c in [
+        if (checkers.contains(chosen)) chosen,
+        ...checkers.where((c) => c != chosen),
+      ])
+        if (ready(c)) {'command': c, 'name': _nameOf(c), 'local': false},
+    ];
+  }
+
+  Map<String, dynamic> smartRoute(String method, Map<String, dynamic> params) {
+    if (method == 'map.smart_helpers') {
+      if (params.isNotEmpty) throw const FormatException('Invalid request');
+      return {'helpers': smartHelpers()};
+    }
+    if (method == 'map.smart_ask') {
+      final column = params['column'], command = params['command'];
+      final request = params['request'], answer = params['answer'];
+      if (params.keys.any(
+            (k) =>
+                !const {'column', 'command', 'request', 'answer'}.contains(k),
+          ) ||
+          !smartColumns.contains(column) ||
+          command is! String ||
+          request is! String ||
+          request.trim().isEmpty ||
+          request.length > 2000 ||
+          answer != null && (answer is! String || answer.length > 200)) {
+        throw const FormatException('Invalid request');
+      }
+      if (!smartHelpers().any((h) => h['command'] == command)) {
+        throw const FormatException('This helper is not ready');
+      }
+      final helper = command == 'local-helper' ? localHelpers().$3 : null;
+      final agents = reads.catalog.scan();
+      final engines = providerFacts['engines'] as Map;
+      final body = utf8.encode(
+        pyJsonDumps({
+          'column': column,
+          'command': helper?.agent ?? command,
+          'request': request.trim(),
+          'answer': ?answer,
+          'settings_path': identity.settingsPath,
+          'runtimes': [
+            for (final rt in reads.inventory.collect(agents).runtimes)
+              if (rt.installed)
+                {
+                  'key': rt.key,
+                  'name': rt.name,
+                  'download': '${(engines[rt.key] as Map?)?['download'] ?? ''}',
+                  'models': rt.models.take(40).toList(),
+                },
+          ],
+          if (helper != null)
+            'helper': {
+              'provider': helper.provider,
+              'runtime': helper.runtime,
+              'model': helper.model,
+            },
+        }),
+      );
+      if (body.length > 256 * 1024) {
+        throw const FormatException('Request too large');
+      }
+      return tasks.startPrivate('map.smart_ask', body, smartProposals.keep);
+    }
+    final fields = {
+      'proposal',
+      'candidate',
+      if (method == 'map.smart_connect') 'agent',
+    };
+    if (params.length != fields.length ||
+        !params.keys.every(fields.contains) ||
+        params.values.any((v) => v is! String)) {
+      throw const FormatException('Invalid request');
+    }
+    final candidate = smartProposals.candidate(params);
+    final action = candidate['action'] as Map;
+    if (method == 'map.smart_review') {
+      return {
+        'title': candidate['title'],
+        'subtitle': candidate['subtitle'],
+        'size': candidate['size'],
+        'fit': candidate['fit'],
+        'runtime': action['runtime_name'],
+      };
+    }
+    if (method == 'map.smart_run') {
+      if (candidate['fit'] == 'too_large') {
+        throw const FormatException('This model is too large for this PC');
+      }
+      return dispatch('providers.run', {
+        'operation': action['operation'],
+        'params': action['params'],
+      });
+    }
+    return dispatch('connections.preview', {
+      'kind': 'provider',
+      'command': params['agent'],
+      'item': action['runtime'],
+      'remove': false,
+      'model': action['model'],
+      'use_now': false,
+    });
+  }
+
   Map<String, dynamic> _askTools(Map<String, dynamic> body, String operation) {
     if (tasks.items.values.any(
       (t) =>
@@ -3553,6 +3682,7 @@ final class CoreService {
     if (method == 'models.slots_preview' || method == 'models.slots_reload') {
       return slotsRoute(method, params);
     }
+    if (method.startsWith('map.smart_')) return smartRoute(method, params);
     if (method == 'updates.check' || method == 'updates.run') {
       return updatesRoute(method, params);
     }

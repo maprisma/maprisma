@@ -14,6 +14,7 @@ import 'model_removals.dart';
 import 'existing_ai.dart' as existing_ai;
 import 'system_map.dart' show SystemMapReader;
 import 'system_actions.dart' show checkTool;
+import 'smart_card.dart';
 import 'system_help.dart' show analyzeMap;
 import 'mcp_updates.dart' as mcp_updates;
 import 'agent_details.dart' show refreshUsage;
@@ -911,6 +912,7 @@ Future<int> runWorker(List<String> args) async {
           'mcp.tools',
           'mcp.tools_test',
           'models.tuning_ask',
+          'map.smart_ask',
         }.contains(operation) ||
         (request['params'] as Map).isNotEmpty) {
       throw const FormatException('Invalid private operation');
@@ -1134,6 +1136,32 @@ Future<int> runWorker(List<String> args) async {
         'result': await askTuning(
           data,
           adapter,
+          identity.environment,
+          identity.home,
+          identity.shortName,
+        ),
+      });
+      return 0;
+    }
+    if (operation == 'map.smart_ask') {
+      if (body.length > 256 * 1024) {
+        throw const FormatException('Request too large');
+      }
+      final data = jsonDecode(utf8.decode(body));
+      if (data is! Map ||
+          data['command'] is! String ||
+          data['settings_path'] is! String) {
+        throw const FormatException('Invalid request');
+      }
+      final identity = AppIdentity();
+      final registry = _reloadAddons(data['settings_path'] as String);
+      send({
+        'type': 'result',
+        'result': await smartAsk(
+          data,
+          registry.adapters
+              .where((a) => a.command == data['command'])
+              .firstOrNull,
           identity.environment,
           identity.home,
           identity.shortName,
