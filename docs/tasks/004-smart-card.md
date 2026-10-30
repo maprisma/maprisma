@@ -24,8 +24,8 @@ one request; a guarded agent proposes, the core checks, the user decides through
 4. **Helpers from their own route:** `map.smart_helpers` (read), not in `map.snapshot`, which is polled.
 5. **No `out_of_tokens` state.** Nothing in the core can tell it from another failure yet: it is state 11 (error),
    and `"Ask {0} instead"` and `"{0} has reached its usage or token limit."` go. Eleven states remain.
-6. **Who may answer:** only an agent that is installed, signed in and has a guarded start (today Claude Code, Codex,
-   Pi; Pi also as the confirmed local helper). Others are not listed, Antigravity and Gemini included.
+6. **Who may answer:** the rule in `docs/plan-smart-helpers.md`, no list of agents. In this task: Claude Code, Codex
+   and Pi (Pi also as the confirmed local helper); others follow without a change to the GUI.
 
 ## Routes (`routes.json`, written by Claude first; the GUI builds against them)
 `map.smart_helpers`, `map.smart_ask` (`column`: mcp · agents · providers · models, `command`, `request`, `answer?`; result
