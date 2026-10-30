@@ -33,10 +33,41 @@ class MapSmartCard extends StatefulWidget {
 
 class _MapSmartCardState extends State<MapSmartCard> {
   final _prompt = TextEditingController();
+  final _barFocus = FocusNode();
+  final _fieldFocus = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.open) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && widget.open) _fieldFocus.requestFocus();
+      });
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant MapSmartCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!oldWidget.open && widget.open) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && widget.open) _fieldFocus.requestFocus();
+      });
+    }
+  }
+
+  void _close() {
+    widget.onToggle();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && !widget.open) _barFocus.requestFocus();
+    });
+  }
 
   @override
   void dispose() {
     _prompt.dispose();
+    _barFocus.dispose();
+    _fieldFocus.dispose();
     super.dispose();
   }
 
@@ -60,6 +91,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
             ),
             clipBehavior: Clip.antiAlias,
             child: InkWell(
+              focusNode: _barFocus,
               onTap: widget.onToggle,
               borderRadius: radius,
               child: Padding(
@@ -96,7 +128,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
       onKeyEvent: (_, event) {
         if (event is KeyDownEvent &&
             event.logicalKey == LogicalKeyboardKey.escape) {
-          widget.onToggle();
+          _close();
           return KeyEventResult.handled;
         }
         return KeyEventResult.ignored;
@@ -130,7 +162,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
                 SizedBox(
                   height: 38,
                   child: InkWell(
-                    onTap: widget.onToggle,
+                    onTap: _close,
                     child: Padding(
                       padding: const EdgeInsets.only(left: 10, right: 4),
                       child: Row(
@@ -154,7 +186,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
                           ),
                           IconButton(
                             tooltip: widget.tr('Collapse'),
-                            onPressed: widget.onToggle,
+                            onPressed: _close,
                             icon: const Icon(Icons.expand_less, size: 18),
                           ),
                         ],
@@ -172,6 +204,8 @@ class _MapSmartCardState extends State<MapSmartCard> {
                       children: [
                         TextField(
                           controller: _prompt,
+                          focusNode: _fieldFocus,
+                          autofocus: true,
                           minLines: 2,
                           maxLines: 3,
                           style: const TextStyle(fontSize: 13),
@@ -186,7 +220,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
                           mainAxisAlignment: MainAxisAlignment.end,
                           children: [
                             TextButton(
-                              onPressed: widget.onToggle,
+                              onPressed: _close,
                               child: Text(widget.tr('Close')),
                             ),
                             const SizedBox(width: 8),

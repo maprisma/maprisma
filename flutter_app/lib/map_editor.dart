@@ -787,6 +787,9 @@ class _MapEditorState extends State<MapEditor>
                         ?_openSmartColumn,
                       ])
                         Positioned(
+                          key: ValueKey(
+                            'smart-card-slot-${mapSmartColumns[col].$1}',
+                          ),
                           left: 16.0 + col * 302,
                           top: 106,
                           width: 266,

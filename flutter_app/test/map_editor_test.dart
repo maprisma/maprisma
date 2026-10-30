@@ -540,4 +540,67 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+  testWidgets(
+    'opening smart card focuses the text field; Esc and Close return focus to the collapsed bar',
+    (tester) async {
+      final edits = <Map<String, dynamic>>[];
+      await mount(tester, edits: edits, smartCards: true);
+      final agentsCard = find.byKey(const ValueKey('smart-card-agents'));
+
+      bool focusInside(Finder finder) {
+        final focused = FocusManager.instance.primaryFocus?.context;
+        if (focused == null) return false;
+        final target = finder.evaluate().single;
+        var inside = focused == target;
+        focused.visitAncestorElements((e) {
+          if (e == target) inside = true;
+          return !inside;
+        });
+        return inside;
+      }
+
+      // Opening focuses the TextField inside the open smart card.
+      await tester.tap(agentsCard);
+      await tester.pumpAndSettle();
+      expect(
+        focusInside(
+          find.descendant(of: agentsCard, matching: find.byType(TextField)),
+        ),
+        isTrue,
+      );
+
+      // Pressing Escape closes the card and returns focus to its collapsed bar.
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+      expect(tester.widget<MapSmartCard>(agentsCard).open, isFalse);
+      expect(
+        focusInside(
+          find.descendant(of: agentsCard, matching: find.byType(InkWell)),
+        ),
+        isTrue,
+      );
+
+      // Re-open with Enter on the focused collapsed bar, then click Close:
+      // focus returns to the collapsed bar again.
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+      expect(tester.widget<MapSmartCard>(agentsCard).open, isTrue);
+      expect(
+        focusInside(
+          find.descendant(of: agentsCard, matching: find.byType(TextField)),
+        ),
+        isTrue,
+      );
+      await tester.tap(find.text('Close'));
+      await tester.pumpAndSettle();
+      expect(tester.widget<MapSmartCard>(agentsCard).open, isFalse);
+      expect(
+        focusInside(
+          find.descendant(of: agentsCard, matching: find.byType(InkWell)),
+        ),
+        isTrue,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
 }
