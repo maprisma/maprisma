@@ -28,6 +28,15 @@ class ContractTest(unittest.TestCase):
         self.assertTrue(any('agents.brand_new' in p and 'neither route nor other' in p for p in problems))
         self.assertTrue(any('agents.brand_new' in p and 'GUI calls' in p for p in problems))
 
+    def test_a_literal_gui_call_or_stale_client_is_caught(self):
+        from unittest import mock
+        with mock.patch.object(protocol, 'gui_calls', return_value={'agents.details': {'command': '?'}}):
+            problems = protocol.check()
+        self.assertTrue(any('agents.details' in p and 'CoreClient' in p for p in problems))
+        with mock.patch.object(protocol, 'client_text', return_value='// stale'):
+            problems = protocol.check()
+        self.assertTrue(any('core_client.g.dart is not up to date' in p for p in problems))
+
     def test_every_route_is_well_formed(self):
         data = protocol.load()
         self.assertEqual(data['protocol'], protocol.VERSION)
