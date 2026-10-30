@@ -28,6 +28,88 @@ class SettingsView extends StatelessWidget {
   /// The provider watcher's user service, as the user sees it in systemctl.
   final String unitName;
 
+  static const _boxItems = [
+    (
+      'rate',
+      'Tokens per second',
+      'How fast its latest reply came: output tokens over the time from its input to the end.',
+    ),
+    ('context', 'Context size', 'How many tokens its model can keep in mind.'),
+    (
+      'used',
+      'Context used',
+      'The part of the context in use: green, yellow from 75 %, red over 90 %, as the batteries.',
+    ),
+  ];
+  static const _boxSizes = [7, 8, 9, 10, 12];
+
+  /// Settings › Usage statistics box: whether a working agent shows it,
+  /// what it shows, and how big.
+  List<Widget> _usageBoxRows() {
+    final on = settings['usage_box'] as bool? ?? true;
+    final items = [
+      for (final i
+          in settings['usage_box_items'] as List? ??
+              const ['rate', 'context', 'used'])
+        '$i',
+    ];
+    return [
+      SwitchListTile(
+        key: const ValueKey('usage-box'),
+        title: Text(tr('Show the usage statistics box')),
+        subtitle: Text(
+          tr(
+            "Small numbers over a working agent's line to its provider, while light runs along it, read from the agent's own session files (numbers only).",
+          ),
+        ),
+        value: on,
+        onChanged: busy ? null : (value) => onUpdate({'usage_box': value}),
+      ),
+      for (final (item, title, hint) in _boxItems)
+        SwitchListTile(
+          key: ValueKey('usage-box-$item'),
+          title: Text(tr(title)),
+          subtitle: Text(tr(hint)),
+          value: items.contains(item),
+          onChanged: busy || !on
+              ? null
+              : (value) => onUpdate({
+                  'usage_box_items': [
+                    for (final (i, _, _) in _boxItems)
+                      if (i == item ? value : items.contains(i)) i,
+                  ],
+                }),
+        ),
+      Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: DropdownButtonFormField<int>(
+          key: ValueKey('usage-box-size-${settings['usage_box_size']}'),
+          initialValue: _boxSizes.contains(settings['usage_box_size'])
+              ? settings['usage_box_size'] as int
+              : 7,
+          decoration: InputDecoration(
+            labelText: tr('Text size'),
+            helperText: tr('How big its numbers are written on the line.'),
+          ),
+          items: [
+            for (final n in _boxSizes)
+              DropdownMenuItem(
+                value: n,
+                child: Text(
+                  tr(
+                    n == 7 ? '{0} pt (default)' : '{0} pt',
+                  ).replaceAll('{0}', '$n'),
+                ),
+              ),
+          ],
+          onChanged: busy || !on
+              ? null
+              : (v) => v == null ? null : onUpdate({'usage_box_size': v}),
+        ),
+      ),
+    ];
+  }
+
   static const _limits = [10, 25, 50, 100, 200, 500];
   static const _yellows = [50, 60, 70, 75, 80, 85];
   static const _reds = [80, 85, 90, 95, 100];
@@ -338,6 +420,26 @@ class SettingsView extends StatelessWidget {
                   ? null
                   : (value) => onUpdate({'providers_with_agents': value}),
             ),
+            SwitchListTile(
+              key: const ValueKey('terminal-tabs'),
+              title: Text(tr('Terminal tabs above the map')),
+              subtitle: Text(
+                tr(
+                  'While agents run in terminals here: a tab for each, with a dot for working, running or ended, above the map and the terminals. A click shows the terminal.',
+                ),
+              ),
+              value: settings['terminal_tabs'] as bool? ?? true,
+              onChanged: busy
+                  ? null
+                  : (value) => onUpdate({'terminal_tabs': value}),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              tr('Usage statistics box'),
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 8),
+            ..._usageBoxRows(),
             const SizedBox(height: 24),
             Text(tr('Costs'), style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 16),

@@ -9,7 +9,7 @@ import 'installers.dart' show Installers;
 import 'local_llm.dart';
 import 'provider_facts.dart';
 import 'provider_scans.dart';
-import 'py_values.dart' show pyTruthy;
+import 'py_values.dart' show pyFixedExact, pyTruthy;
 import 'scan_files.dart';
 
 /// first_agent: the routes to a first working agent (data/first-agent.json,
@@ -89,6 +89,121 @@ List<FirstAgentRoute> parseRoutes(dynamic data) {
 }
 
 /// first_agent.load: a loaded add-on's first-agent.json first, else the app's.
+final _repo = RegExp(
+  r'^[A-Za-z0-9][A-Za-z0-9._-]{0,95}/[A-Za-z0-9][A-Za-z0-9._-]{0,95}$',
+);
+final _gguf = RegExp(r'^[A-Za-z0-9][A-Za-z0-9._-]{0,159}\.gguf$');
+const _minContext = 16384;
+
+int _positive(dynamic v) => v is int && v > 0 ? v : 0;
+
+/// first_agent.Model: a starter model of the catalog.
+typedef StarterModel = ({
+  String id,
+  String title,
+  String repo,
+  String file,
+  int bytes,
+  int minVram,
+  String license,
+  int context,
+});
+
+/// first_agent.parse's models: only entries that hold up.
+List<StarterModel> parseModels(dynamic data) {
+  final models = <StarterModel>[];
+  if (data is! Map) return models;
+  final items = pyTruthy(data['models']) ? data['models'] : const [];
+  for (final item in items is List ? items : const []) {
+    if (item is! Map) continue;
+    final repo = item['repo'], name = item['file'], mid = item['id'];
+    final size = _positive(item['bytes']), vram = _positive(item['min_vram']);
+    final context = _positive(item['context']) != 0
+        ? _positive(item['context'])
+        : 32768;
+    if (!(mid is String &&
+        _id.hasMatch(mid) &&
+        repo is String &&
+        _repo.hasMatch(repo) &&
+        name is String &&
+        _gguf.hasMatch(name) &&
+        size != 0 &&
+        vram != 0 &&
+        context >= _minContext)) {
+      continue;
+    }
+    final title = _text(item['title'], 80);
+    if (title.isEmpty) continue;
+    models.add((
+      id: mid,
+      title: title,
+      repo: repo,
+      file: name,
+      bytes: size,
+      minVram: vram,
+      license: _text(item['license'], 40),
+      context: context,
+    ));
+  }
+  return models;
+}
+
+/// ui_helpers.size_text: 2490000000 → "2.5 GB".
+String decimalSize(int n) {
+  for (final (size, unit) in [(1e12, 'TB'), (1e9, 'GB'), (1e6, 'MB')]) {
+    if (n >= size) return '${pyFixedExact(n / size, 1)} $unit';
+  }
+  return '${(n < 0 ? 0 : n) ~/ 1000} kB';
+}
+
+/// first_agent.fit: fits (with its context), partly (some layers in RAM),
+/// too large; unknown without a card.
+String starterFit(StarterModel m, int vram) {
+  if (vram != 0 && vram >= m.minVram) return 'fits';
+  if (vram != 0 && vram >= m.bytes * 1.1) return 'partly';
+  return vram != 0 ? 'too large' : 'unknown';
+}
+
+/// first_agent.suggested: the largest that fits; without one the smallest.
+StarterModel? suggestedStarter(List<StarterModel> models, int vram) {
+  final fitting = [
+    for (final m in models)
+      if (starterFit(m, vram) == 'fits') m,
+  ];
+  StarterModel? pick(List<StarterModel> list, bool largest) {
+    StarterModel? best;
+    for (final m in list) {
+      if (best == null ||
+          (largest ? m.bytes > best.bytes : m.bytes < best.bytes)) {
+        best = m;
+      }
+    }
+    return best;
+  }
+
+  return fitting.isNotEmpty ? pick(fitting, true) : pick(models, false);
+}
+
+/// The catalog's starter models, from the same file as the routes.
+List<StarterModel> loadModels(Iterable<Addon> loaded) {
+  final candidates = [
+    for (final a in loaded)
+      if (a.state == 'loaded' && a.files.containsKey('first-agent.json'))
+        a.files['first-agent.json']!,
+    utf8.encode(firstAgentCatalogText),
+  ];
+  for (final bytes in candidates) {
+    if (bytes.length > _maxCatalog) continue;
+    try {
+      final data = jsonDecode(utf8.decode(bytes));
+      if (parseRoutes(data).isNotEmpty) return parseModels(data);
+    } on FormatException {
+      continue;
+    }
+  }
+  return [];
+}
+
 List<FirstAgentRoute> loadRoutes(Iterable<Addon> loaded) {
   final candidates = [
     for (final a in loaded)
@@ -156,10 +271,12 @@ Map<String, dynamic> guideSnapshot(
   ScanFiles files,
   AgentCatalog catalog,
   Map firstAgent,
-  String Function(String) translate,
-) {
+  String Function(String) translate, {
+  int vram = 0,
+}) {
   final home = files.identity.home, path = files.identity.environment['PATH'];
   final routes = loadRoutes(registry.items);
+  final starters = loadModels(registry.items);
   final verifiedAgents = firstAgent['verified'] is List
       ? firstAgent['verified'] as List
       : const [];
@@ -192,12 +309,14 @@ Map<String, dynamic> guideSnapshot(
       String detail = '',
       String action = '',
       String? target,
+      Map<String, dynamic>? starter,
     }) => steps.add({
       'title': title,
       'done': done,
       'detail': detail,
       'action': action,
       'target': ?target,
+      'starter': ?starter,
     });
     if (adapter == null) {
       step(translate('Switch on its add-on'), false, action: 'addons');
@@ -261,10 +380,45 @@ Map<String, dynamic> guideSnapshot(
             : 'providers',
         target: route.runtime,
       );
+      // The starter model that fits the card, downloaded as the Models
+      // page downloads one (first_agent_page.first_local_steps).
+      final haveModel = runtime != null && runtime.models.isNotEmpty;
+      final starter = suggestedStarter(starters, vram);
+      final fit = starter == null ? '' : starterFit(starter, vram);
       step(
         translate('A model'),
-        runtime != null && runtime.models.isNotEmpty,
-        action: 'providers',
+        haveModel,
+        detail: haveModel || starter == null
+            ? ''
+            : translate('{0}: {1}, {2} (fits your graphics card: {3})')
+                  .replaceAll('{0}', translate('Suggested'))
+                  .replaceAll('{1}', starter.title)
+                  .replaceAll('{2}', decimalSize(starter.bytes))
+                  .replaceAll(
+                    '{3}',
+                    translate(
+                      const {
+                            'fits': 'yes',
+                            'partly': 'partly',
+                            'too large': 'no',
+                          }[fit] ??
+                          'not known',
+                    ),
+                  ),
+        action: !haveModel && haveRuntime && starter != null
+            ? 'download-starter'
+            : 'providers',
+        target: !haveModel && haveRuntime && starter != null
+            ? route.runtime
+            : null,
+        starter: !haveModel && haveRuntime && starter != null
+            ? {
+                'title': starter.title,
+                'repo': starter.repo,
+                'file': starter.file,
+                'size': starter.bytes,
+              }
+            : null,
       );
       final connected =
           present &&

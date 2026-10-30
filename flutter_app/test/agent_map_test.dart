@@ -216,4 +216,46 @@ void main() {
     expect(find.byTooltip('Paid per token'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('a working agent shows its usage statistics box', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AgentMap(
+            graph: const {
+              'nodes': [
+                {
+                  'id': 'agent:claude',
+                  'column': 1,
+                  'kind': 'agent',
+                  'label': 'Claude Code',
+                  'detail': '',
+                  'status': 'running',
+                },
+              ],
+              'edges': [],
+              'usage_boxes': {
+                'agent:claude': {
+                  'parts': [
+                    ['30 t/s', 'line'],
+                    ['1M', 'line'],
+                    ['92%', 'red'],
+                  ],
+                  'model': 'claude-opus-5-5',
+                },
+              },
+              'usage_box_size': 9,
+            },
+            onAgent: (_) {},
+            tr: (key) => key,
+          ),
+        ),
+      ),
+    );
+    expect(find.text('30 t/s · 1M · 92%'), findsOneWidget);
+    expect(find.byTooltip('claude-opus-5-5'), findsOneWidget);
+    final label = tester.widget<Text>(find.text('30 t/s · 1M · 92%'));
+    expect(label.style?.fontSize, closeTo(9 * 1.33, 0.01));
+    expect(tester.takeException(), isNull);
+  });
 }

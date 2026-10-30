@@ -11,6 +11,7 @@ import harnesses
 import inventory
 import install_ctl
 import providers
+import reference_texts
 import settings_schema
 from i18n import _
 
@@ -35,6 +36,7 @@ def snapshot(registry, path: Path | None) -> dict:
     agent_list = agents.list_agents()
     installed = {item.command for item in agent_list if item.installed}
     runtimes = inventory.collect(agent_list).runtimes if any(route.kind == 'local' for route in found.routes) else []
+    vram = install_ctl.detect_gpu().vram if any(route.kind == 'local' for route in found.routes) else 0
     rows = []
     for route in found.routes:
         harness = harnesses.get(route.agent)
@@ -68,7 +70,19 @@ def snapshot(registry, path: Path | None) -> dict:
             inst = install_ctl.INSTALLERS.get(route.runtime)
             runtime_action = 'install-runtime' if not have_runtime and inst and inst.can_install else 'providers'
             step(provider.name if provider else route.runtime, have_runtime, action=runtime_action, target=route.runtime)
-            step(_('A model'), bool(runtime and runtime.models), action='providers')
+            # The starter model that fits the card, downloaded as the Models page downloads one
+            # (first_agent_page.first_local_steps).
+            have_model = bool(runtime and runtime.models)
+            starter = first_agent.suggested(found.models, vram)
+            detail = '' if have_model or starter is None else _('{0}: {1}, {2} (fits your graphics card: {3})').format(
+                _('Suggested'), starter.title, reference_texts.size_text(starter.bytes),
+                {'fits': _('yes'), 'partly': _('partly'), 'too large': _('no'), 'unknown': _('not known')}[
+                    first_agent.fit(starter, vram)])
+            offer = not have_model and have_runtime and starter is not None
+            extra = {'target': route.runtime,
+                     'starter': {'title': starter.title, 'repo': starter.repo, 'file': starter.file,
+                                 'size': starter.bytes}} if offer else {}
+            step(_('A model'), have_model, detail, 'download-starter' if offer else 'providers', **extra)
             # The existing Connections page remains authoritative for previews and Undo.
             connected = bool(present and runtime and connect.is_connected(route.agent, route.runtime)
                              and connect.is_active(route.agent, route.runtime))

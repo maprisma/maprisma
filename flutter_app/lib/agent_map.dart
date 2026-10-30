@@ -79,6 +79,13 @@ class AgentMap extends StatelessWidget {
         ),
         if ((graph['agent_badges'] as Map?)?[node['id']] case final Map badge)
           AgentBadge(badge: badge),
+        if ((graph['usage_boxes'] as Map?)?[node['id']] case final Map box)
+          Flexible(
+            child: UsageBoxLabel(
+              box: box,
+              size: (graph['usage_box_size'] as int? ?? 7).toDouble(),
+            ),
+          ),
         if ((node['badges'] as int? ?? 0) > 0)
           Tooltip(
             message: tr('Findings'),
@@ -479,6 +486,49 @@ class AgentBadge extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4),
       child: Tooltip(message: '${badge['tip']}', child: child),
+    );
+  }
+}
+
+/// The usage statistics box of a working agent (map.usage): tokens per
+/// second of its latest reply, its context size and the share in use
+/// (yellow from 75 %, red over 90 %), in the chosen text size.
+class UsageBoxLabel extends StatelessWidget {
+  const UsageBoxLabel({super.key, required this.box, required this.size});
+  final Map box;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final parts = (box['parts'] as List? ?? const []).cast<List>();
+    return Padding(
+      key: const ValueKey('usage-box'),
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Tooltip(
+        message: '${box['model'] ?? ''}',
+        child: Text.rich(
+          TextSpan(
+            children: [
+              for (var i = 0; i < parts.length; i++)
+                TextSpan(
+                  text: '${i > 0 ? ' · ' : ''}${parts[i][0]}',
+                  style: TextStyle(
+                    color: switch ('${parts[i][1]}') {
+                      'red' => scheme.error,
+                      'yellow' => Colors.amber.shade700,
+                      _ => scheme.onSurfaceVariant,
+                    },
+                  ),
+                ),
+            ],
+          ),
+          style: TextStyle(fontSize: size * 1.33),
+          maxLines: 1,
+          overflow: TextOverflow.fade,
+          softWrap: false,
+        ),
+      ),
     );
   }
 }

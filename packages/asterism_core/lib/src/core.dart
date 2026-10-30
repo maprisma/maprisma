@@ -14,6 +14,7 @@ import 'agent_badges.dart';
 import 'costs.dart';
 import 'projects.dart' show projectsCard;
 import 'runtime_details.dart';
+import 'usage_box.dart';
 import 'session_readers.dart' show NumericSession, SessionReaders;
 import 'usage_readers.dart' show UsageReaders;
 import 'found_scan.dart';
@@ -157,6 +158,7 @@ const portedRoutes = {
   'gpu.snapshot',
   'providers.details',
   'details.mcp',
+  'map.usage',
   'details.skills',
   'costs.rate',
   ...readOnlyRoutes,
@@ -328,6 +330,53 @@ final class CoreService {
               DateTime.now().millisecondsSinceEpoch / 1000 -
                       (kept['fetched'] as num) >=
                   rateEvery),
+    };
+  }
+
+  /// The map's usage statistics box (usage_box, Settings › Usage
+  /// statistics box): for the working agents, how fast the latest reply came,
+  /// the context size and how much of it is in use.
+  late final usageBox = UsageBox();
+
+  Map<String, dynamic> usageRoute(Map<String, dynamic> params) {
+    final commands = params['commands'];
+    if (params.length != 1 ||
+        commands is! List ||
+        commands.length > 64 ||
+        !commands.every((c) => c is String)) {
+      throw const FormatException('Invalid request');
+    }
+    final saved = settings.load();
+    if (settings.value(saved, 'usage_box') == false) {
+      return {'boxes': <String, dynamic>{}, 'size': 7};
+    }
+    final items = settings.value(saved, 'usage_box_items');
+    final size = settings.value(saved, 'usage_box_size');
+    final where = <String, (String, int, String, Map)>{};
+    for (final a in reads.catalog.scan()) {
+      if (!a.installed || !commands.contains(a.command)) continue;
+      final r = a.adapter.table('replies');
+      if (r['folder'] is! String || r['format'] is! String) continue;
+      where[a.command] = (
+        repliesFolder(r['folder'] as String, identity.home),
+        r['depth'] as int? ?? 1,
+        r['format'] as String,
+        r['contexts'] as Map? ?? const {},
+      );
+    }
+    final found = usageBox.readings(
+      where,
+      DateTime.now().microsecondsSinceEpoch / 1e6,
+      DateTime.now().microsecondsSinceEpoch / 1e6,
+    );
+    return {
+      'boxes': {
+        for (final e in found.entries)
+          if (usageParts(e.value, items is List ? items : usageItems)
+              case final parts when parts.isNotEmpty)
+            'agent:${e.key}': {'parts': parts, 'model': e.value.model},
+      },
+      'size': usageSizes.contains(size) ? size : 7,
     };
   }
 
@@ -3002,6 +3051,7 @@ final class CoreService {
     }
     if (method == 'health.report') return healthReportRoute(params);
     if (method.startsWith('found.')) return foundRoute(method, params);
+    if (method == 'map.usage') return usageRoute(params);
     if (method == 'details.mcp' || method == 'details.skills') {
       return itemDetails(method, params);
     }

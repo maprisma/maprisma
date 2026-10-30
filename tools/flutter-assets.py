@@ -5,6 +5,29 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 KEYS = (
+    # The guide's starter model.
+    "Download it",
+    # Usage statistics box.
+    "Usage statistics box",
+    "Show the usage statistics box",
+    "Small numbers over a working agent's line to its provider, while light runs along it, read from the agent's own session files (numbers only).",
+    "Tokens per second",
+    "How fast its latest reply came: output tokens over the time from its input to the end.",
+    "Context size",
+    "How many tokens its model can keep in mind.",
+    "Context used",
+    "The part of the context in use: green, yellow from 75 %, red over 90 %, as the batteries.",
+    "Text size",
+    "How big its numbers are written on the line.",
+    "{0} pt (default)",
+    "{0} pt",
+    # Terminal tabs.
+    "Terminals",
+    "working",
+    "running",
+    "ended",
+    "Terminal tabs above the map",
+    "While agents run in terminals here: a tab for each, with a dot for working, running or ended, above the map and the terminals. A click shows the terminal.",
     # Details of MCP servers and skills.
     "System Map",
     # A local LLM's details.

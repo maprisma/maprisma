@@ -17,6 +17,7 @@ import 'package:asterism_core/src/costs.dart' as cost;
 import 'package:asterism_core/src/agent_badges.dart' as badge;
 import 'package:asterism_core/src/projects.dart' as proj;
 import 'package:asterism_core/src/runtime_details.dart' as rtd;
+import 'package:asterism_core/src/usage_box.dart' as ub;
 import 'package:asterism_core/src/claude_sessions.dart' as cs;
 import 'package:asterism_core/src/installers.dart' as inst;
 import 'package:asterism_core/src/provider_scans.dart' show RuntimeRecord;
@@ -305,6 +306,44 @@ Future<void> main() async {
           params['cache'] as String,
           search: params['search'] == true,
         );
+      } else if (request.method == 'dev.usagebox') {
+        // usage_box.read, head_model, newest_file and parts.
+        final box = ub.UsageBox();
+        result = {
+          'reads': [
+            for (final c in params['reads'] as List)
+              () {
+                final r = box.read(c[0] as String, c[1] as String, c[2] as Map);
+                return r == null
+                    ? null
+                    : [
+                        r.$1.toJson(),
+                        r.$2,
+                        ub.usageParts(r.$1, ub.usageItems),
+                        ub.usageParts(r.$1, const ['used']),
+                      ];
+              }(),
+          ],
+          'heads': [
+            for (final c in params['heads'] as List)
+              box.headModel(c[0] as String, c[1] as String),
+          ],
+          'newest': [
+            for (final c in params['newest'] as List)
+              box.newestFile(
+                c[0] as String,
+                c[1] as int,
+                (c[2] as num).toDouble(),
+              ),
+          ],
+          'sizes': [
+            for (final n in params['sizes'] as List) ub.sizeText(n as int),
+          ],
+          'rates': [
+            for (final r in params['rates'] as List)
+              ub.rateText((r as num).toDouble()),
+          ],
+        };
       } else if (request.method == 'dev.runtime') {
         // agent_status.runtime_usage, agent_security.runtime_report and
         // agent_details.gpu_battery.

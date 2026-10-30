@@ -28,6 +28,10 @@ const uiSettings = {
   'cost_limit',
   'warn_yellow',
   'warn_red',
+  'terminal_tabs',
+  'usage_box',
+  'usage_box_items',
+  'usage_box_size',
 };
 const languages = {'en', 'de', 'fr', 'es', 'it', 'pt', 'nl', 'pl'};
 const mapLayers = ['agents', 'online', 'local', 'models', 'mcp', 'skills'];

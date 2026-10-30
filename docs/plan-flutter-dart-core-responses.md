@@ -2296,3 +2296,47 @@ Python, the `ubruckhaus.asterism` launcher plugin, final review) and the rename 
 features not in Flutter yet (local helper, starter models, usage box, daily AI checks, terminal-tab
 states) are open for step 4.
 
+## plan-flutter.md step 4 — the GTK features still missing (from 2026-10-30)
+
+### Part 1: terminal tabs, the usage statistics box, the starter model
+
+- **Terminal tabs** (`terminal_tabs.dart`, the reference is `ai_popup.build_terminal_tabs`):
+  - a legend (TERMINALS · ● working · ● running · ● ended) over a tab per terminal;
+  - the state comes from the terminal (ended) and the core's activity (`working`);
+  - the tab in view is marked, and a click shows its terminal;
+  - the setting `terminal_tabs` joins the UI settings on both sides ("Terminal tabs above the map").
+- **Usage statistics box** (`usage_box.dart`, a port of `usage_box.py`):
+  - the newest session file of the agent's `[replies]` written in the last 60 s, its last 256 KiB
+    (own regular files, no links, lines up to 64 KiB);
+  - Claude Code's, Codex's and Pi's line formats;
+  - the speed of the latest reply, from its input to its last line;
+  - the context size from the file, else the adapter's `contexts`, and the share in use.
+
+  The route is `map.usage {commands}`: the app sends its working agents every 2 s (the reference's
+  checks), and the core answers with the box parts as the settings say (`usage_box`,
+  `usage_box_items`, `usage_box_size`, now UI settings on both sides). Flutter shows it in the
+  working agent's box title (`UsageBoxLabel`, shortened when the box is narrow), since lines carry
+  no labels in the Flutter map; Settings has its switch, its three items and its text size.
+  Not yet: the context size from the local LLM the agent uses.
+- **The starter model in the guide** (`first_agent.dart`, the reference is `first_agent.parse`'s models,
+  `fit` and `suggested`, and `first_agent_page.first_local_steps`):
+  - the catalog's starter models are parsed in Dart too, with the same checks;
+  - the worker passes the card's video memory (`detectGpu`);
+  - a local route's **A model** step, while its LLM has no model, names the suggestion ("Suggested:
+    Gemma 4 12B, 7.0 GB (fits your graphics card: yes)"), and **Download it** starts the Models
+    page's durable download, or Ollama's pull of `hf.co/<repo>`.
+
+  The Python reference (`flutter_first_agent.py`) gives the same step, and `reference_texts.size_text`
+  keeps the GTK size text.
+- The manual's "Terminal tabs, the usage box and the starter model in the Flutter preview" in all
+  eight languages; PDFs rebuilt.
+
+Check:
+- `tests/test_dart_usage_box_parity.py`: the three formats, a reply over several lines, a tool
+  result, a too-long line, a file cut at 256 KiB, context sizes from the file, the adapter and none,
+  the newest file at a depth, a link. Python and Dart agree.
+- `tests/test_dart_setup_guide_parity.py` now also checks the starter step; Python and Dart agree.
+- Widget tests for the tabs, the box, the box settings and the guide's download.
+- **On this PC, read only:** this Claude Code session's box reads "98 t/s · 1M · 88%", the same as
+  the reference.
+

@@ -206,4 +206,65 @@ void main() {
     await tester.tap(find.text('Change'));
     expect(confirmed, isTrue);
   });
+
+  testWidgets('a local route offers the starter model for its local LLM', (
+    tester,
+  ) async {
+    (String, Map<String, dynamic>)? downloaded;
+    List<String>? action;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: FirstAgentView(
+            data: {
+              'routes': [
+                {
+                  'id': 'pi-local',
+                  'kind': 'local',
+                  'title': 'Pi with llama.cpp',
+                  'access': 'This PC',
+                  'command': 'pi',
+                  'verified': false,
+                  'steps': [
+                    {
+                      'title': 'A model',
+                      'done': false,
+                      'detail':
+                          'Suggested: Gemma 4 12B, 7.0 GB (fits your graphics card: yes)',
+                      'action': 'download-starter',
+                      'target': 'llamacpp',
+                      'starter': {
+                        'title': 'Gemma 4 12B',
+                        'repo': 'lmstudio-community/gemma-4-12B-it-QAT-GGUF',
+                        'file': 'gemma-4-12B-it-QAT-Q4_0.gguf',
+                        'size': 6980000000,
+                      },
+                    },
+                  ],
+                },
+              ],
+              'selected': 'pi-local',
+            },
+            busy: false,
+            tr: (key) => key,
+            onChoose: (_) {},
+            onAction: (command, name) => action = [command, name],
+            onStarter: (key, starter) => downloaded = (key, starter),
+            onBack: () {},
+            onRefresh: () {},
+          ),
+        ),
+      ),
+    );
+    expect(
+      find.text(
+        'Suggested: Gemma 4 12B, 7.0 GB (fits your graphics card: yes)',
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Download it'));
+    expect(downloaded?.$1, 'llamacpp');
+    expect(downloaded?.$2['file'], 'gemma-4-12B-it-QAT-Q4_0.gguf');
+    expect(action, isNull);
+  });
 }

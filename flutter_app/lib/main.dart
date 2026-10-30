@@ -12,6 +12,7 @@ import 'backend.dart';
 import 'map_benchmark.dart';
 import 'map_snapshot.dart';
 import 'task_card.dart';
+import 'terminal_tabs.dart';
 import 'agent_terminal.dart';
 import 'agent_map.dart';
 import 'agent_list_view.dart';
@@ -825,6 +826,8 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
       : {
           ...withAgentLinks(_graph!),
           'agent_badges': {..._agentBadges, ..._gpuBadges},
+          'usage_boxes': _usageBoxes,
+          'usage_box_size': _usageBoxSize,
         };
 
   Map<int, int> get _groupAvailable => {
@@ -1251,6 +1254,40 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
   /// day's rate is fetched once (costs.rate).
   Map<String, dynamic> _agentBadges = {};
   bool _rateAsked = false;
+
+  /// The usage statistics box of working agents (map.usage, every two
+  /// seconds while one works, as the reference's checks).
+  Map<String, dynamic> _usageBoxes = {};
+  int _usageBoxSize = 7;
+  Timer? _usageTimer;
+  bool _usageAsking = false;
+
+  Future<void> _loadUsageBoxes() async {
+    if (_backend?.isConnected != true || _usageAsking) return;
+    final activity = _graph?['activity'] as Map? ?? const {};
+    final working = [
+      for (final e in activity.entries)
+        if ((e.value as Map?)?['working'] == true) '${e.key}',
+    ];
+    if (working.isEmpty) {
+      if (_usageBoxes.isNotEmpty && mounted) setState(() => _usageBoxes = {});
+      return;
+    }
+    _usageAsking = true;
+    try {
+      final found = await _backend!.call('map.usage', {'commands': working});
+      if (mounted) {
+        setState(() {
+          _usageBoxes = found['boxes'] as Map<String, dynamic>? ?? {};
+          _usageBoxSize = found['size'] as int? ?? 7;
+        });
+      }
+    } catch (_) {
+      // Shown at the next check.
+    } finally {
+      _usageAsking = false;
+    }
+  }
 
   /// Running local LLMs: the GPU memory still free as a battery in their
   /// box (gpu.snapshot, read only: sysfs, their processes, their own APIs).
@@ -2209,6 +2246,34 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
       _showSettings = false;
     });
     _refresh();
+  }
+
+  /// The guide's starter model, as the Models page downloads one: a GGUF
+  /// file into the local LLM's folder, or Ollama's pull of it (a durable
+  /// job, continued after an interruption).
+  Future<void> _downloadStarter(
+    String key,
+    Map<String, dynamic> starter,
+  ) async {
+    if (_busy) return;
+    final runtime = (_providers['local'] as List? ?? const [])
+        .cast<Map>()
+        .where((r) => r['key'] == key)
+        .firstOrNull;
+    final pull = runtime?['download'] == 'pull';
+    final result = await _providerOperation(
+      pull ? 'models.pull' : 'models.download',
+      pull
+          ? {'key': key, 'name': 'hf.co/${starter['repo']}'}
+          : {
+              'key': key,
+              'repo': starter['repo'],
+              'file': starter['file'],
+              'size': starter['size'],
+            },
+      tr('Download model'),
+    );
+    if (result != null && mounted) await _openGuide();
   }
 
   /// A program the app installs itself (mise, a local LLM): the release is
@@ -3181,6 +3246,10 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
         if (!_welcome) _quietCatalog = _quietAddonCatalog();
         unawaited(_lookForNewApps());
         // Settings › Costs: a desktop notification when a plan limit turns red.
+        _usageTimer ??= Timer.periodic(
+          const Duration(seconds: 2),
+          (_) => unawaited(_loadUsageBoxes()),
+        );
         _limitsTimer ??= Timer.periodic(const Duration(minutes: 1), (_) {
           if (_backend?.isConnected == true) {
             unawaited(_loadBadges());
@@ -3228,6 +3297,7 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
   @override
   void dispose() {
     _limitsTimer?.cancel();
+    _usageTimer?.cancel();
     windowManager.removeListener(this);
     _liveTimer?.cancel();
     _mapLayoutTimer?.cancel();
@@ -3489,26 +3559,34 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
               onSystem: () => _openSystem(),
               onAgents: () => _openGroups(),
             ),
-          if (_terminals.isNotEmpty)
-            SizedBox(
-              height: 48,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                children: [
-                  for (final terminal in _terminals)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      child: ActionChip(
-                        avatar: const Icon(Icons.terminal),
-                        label: Text(terminal.command),
-                        onPressed: () => setState(() {
-                          _visibleTerminal = terminal;
-                          _showSystemMap = false;
-                        }),
-                      ),
-                    ),
-                ],
-              ),
+          if (_terminals.isNotEmpty &&
+              (_snapshot?['settings'] as Map?)?['terminal_tabs'] != false)
+            TerminalTabs(
+              tabs: [
+                for (final terminal in _terminals)
+                  (
+                    _catalog
+                                .where((a) => a['command'] == terminal.command)
+                                .firstOrNull?['name']
+                            as String? ??
+                        terminal.command,
+                    terminal.ended
+                        ? 'ended'
+                        : ((_graph?['activity'] as Map?)?[terminal.command]
+                                  as Map?)?['working'] ==
+                              true
+                        ? 'working'
+                        : 'running',
+                  ),
+              ],
+              current: _visibleTerminal == null || _showSystemMap
+                  ? null
+                  : _terminals.indexOf(_visibleTerminal!),
+              tr: tr,
+              onSelect: (i) => setState(() {
+                _visibleTerminal = _terminals[i];
+                _showSystemMap = false;
+              }),
             ),
           Expanded(
             child: LayoutBuilder(
@@ -3606,6 +3684,7 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
                                   tr: tr,
                                   onChoose: _chooseGuide,
                                   onAction: _guideAction,
+                                  onStarter: _downloadStarter,
                                   onBack: () =>
                                       setState(() => _showGuide = false),
                                   onRefresh: _openGuide,

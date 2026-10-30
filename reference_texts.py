@@ -1,7 +1,7 @@
 """Texts the GTK pages built from reference data, kept here as the reference for the Dart core's ports
 (phase 7 removed the GTK UI from this tree; its frozen copy is the plugin repo's). Copied unchanged from
-ui_helpers.short_number, details_pages.duration_text and mcp_pages.mcp_rows; the parity tests compare the
-Dart core's texts with these. Nothing here runs in the app."""
+ui_helpers.short_number and size_text, details_pages.duration_text and mcp_pages.mcp_rows; the parity
+tests compare the Dart core's texts with these. Nothing here runs in the app."""
 
 import harnesses
 import mcp_ctl
@@ -15,6 +15,14 @@ def short_number(n: int) -> str:
         if n >= size:
             return f"{n / size:.1f}".rstrip("0").rstrip(".") + suffix
     return str(n)
+
+
+def size_text(n: int) -> str:
+    """2490000000 -> "2.5 GB"."""
+    for size, unit in ((1e12, "TB"), (1e9, "GB"), (1e6, "MB")):
+        if n >= size:
+            return f"{n / size:.1f} {unit}"
+    return f"{max(0, n) // 1000} kB"
 
 
 def duration_text(seconds: float) -> str:

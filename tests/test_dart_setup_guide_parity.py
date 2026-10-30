@@ -116,6 +116,15 @@ class DartSetupGuideParityTest(unittest.TestCase):
         self.assertIn('llm-llamacpp', answers[0][1][1]['installed'])
         self.assertEqual(kept['first_agent'], {'verified': ['claude'], 'route': 'claude', 'later': False})
         self.assertTrue(kept['setup_done'])
+        # A local route with its runtime and no model: the starter model to download.
+        steps = [step for answer in answers for item in [answer[1][1] if isinstance(answer[1], list) and
+                                                           len(answer[1]) > 1 and isinstance(answer[1][1], dict)
+                                                           else {}]
+                 for route in item.get('routes', []) for step in route['steps']]
+        starters = [step for step in steps if step['action'] == 'download-starter']
+        self.assertTrue(starters, [s['action'] for s in steps])
+        self.assertTrue(starters[0]['starter']['file'].endswith('.gguf'))
+        self.assertTrue(starters[0]['detail'].startswith('Suggested: '))
 
 
 if __name__ == '__main__':

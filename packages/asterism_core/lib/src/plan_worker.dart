@@ -397,6 +397,10 @@ Future<int> runWorker(List<String> args) async {
           AgentCatalog(files, desktop, adapters: registry.adapters),
           settings.value(settings.load(), 'first_agent') as Map,
           ServiceI18n(identity, settings).text,
+          // The starter models' fit: the card with the most video memory.
+          vram: loadRoutes(registry.items).any((r) => r.kind == 'local')
+              ? (await detectGpu()).vram
+              : 0,
         ),
       });
       return 0;

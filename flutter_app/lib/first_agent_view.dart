@@ -9,6 +9,7 @@ class FirstAgentView extends StatelessWidget {
     required this.tr,
     required this.onChoose,
     required this.onAction,
+    this.onStarter,
     required this.onBack,
     required this.onRefresh,
   });
@@ -18,6 +19,9 @@ class FirstAgentView extends StatelessWidget {
   final String Function(String) tr;
   final ValueChanged<String> onChoose;
   final void Function(String, String) onAction;
+
+  /// A starter model to download into this local LLM (its key, the model).
+  final void Function(String, Map<String, dynamic>)? onStarter;
   final VoidCallback onBack;
   final VoidCallback onRefresh;
 
@@ -39,6 +43,7 @@ class FirstAgentView extends StatelessWidget {
       'install-tool': 'Install mise',
       'install-node': 'Install Node.js',
       'install-runtime': 'Install {0}…',
+      'download-starter': 'Download it',
     };
     return Align(
       alignment: Alignment.topCenter,
@@ -145,6 +150,12 @@ class FirstAgentView extends StatelessWidget {
                               // A tool or a local LLM is named by its step's target.
                               onPressed: busy
                                   ? null
+                                  : step['action'] == 'download-starter' &&
+                                        onStarter != null
+                                  ? () => onStarter!(
+                                      step['target'] as String,
+                                      step['starter'] as Map<String, dynamic>,
+                                    )
                                   : () => onAction(
                                       const {
                                             'install-tool',
