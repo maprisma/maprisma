@@ -5,6 +5,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 KEYS = (
+    # Popup mode on Omarchy.
+    "Window",
+    "Automatic: a popup under the bar on Omarchy",
+    "A popup under the bar",
+    "A normal window",
+    "The popup sits at the top right under the bar and closes with Esc or a click elsewhere; the bar icon or starting the app again brings it back. A change applies the next time the window opens.",
     # Updating an agent that runs now.
     "{0} is running right now.",
     "An update replaces its program while it works: its sessions may stop or behave oddly, and some updaters refuse. Finish its work first, or update anyway.",

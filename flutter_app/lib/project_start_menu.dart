@@ -1,4 +1,5 @@
 import 'package:file_selector/file_selector.dart';
+import 'window_popup.dart';
 import 'package:flutter/material.dart';
 
 class ProjectStartMenuController extends ChangeNotifier {
@@ -118,7 +119,7 @@ class _ProjectStartMenuState extends State<ProjectStartMenu> {
           closeOnActivate: false,
           onPressed: widget.enabled
               ? () async {
-                  final chosen = await getDirectoryPath();
+                  final chosen = await PopupGuard.around(getDirectoryPath);
                   if (chosen != null && mounted) {
                     setState(() {
                       _path = chosen;

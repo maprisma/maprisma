@@ -19,6 +19,7 @@ import 'agent_list_view.dart';
 import 'agent_details_view.dart';
 import 'settings_view.dart';
 import 'app_theme.dart';
+import 'window_popup.dart';
 import 'project_start_menu.dart';
 import 'addon_details.dart';
 import 'map_groups.dart';
@@ -496,6 +497,9 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
   void initState() {
     super.initState();
     windowManager.addListener(this);
+    windowChannel.setMethodCallHandler((call) async {
+      if (call.method == 'shown') _placePopup();
+    });
     _liveTimer = Timer.periodic(const Duration(seconds: 2), (_) {
       _refreshTheme();
       _refreshLive();
@@ -525,6 +529,7 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
       _backend?.dispose();
       _backend = backend;
       await _refresh();
+      unawaited(_loadDesktop());
       if (mounted) unawaited(_loadSystem());
     } catch (_) {
       if (mounted) {
@@ -665,12 +670,67 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
 
   @override
   void onWindowFocus() {
+    _blurHide?.cancel();
     setState(() => _windowFocused = true);
   }
 
   @override
   void onWindowBlur() {
     setState(() => _windowFocused = false);
+    // Popup mode: a click elsewhere closes it (not while a file chooser of
+    // ours runs; a moment's grace for focus that comes straight back).
+    if (_popup && !PopupGuard.busy) {
+      _blurHide?.cancel();
+      _blurHide = Timer(const Duration(milliseconds: 250), () {
+        if (!_windowFocused && !PopupGuard.busy) windowManager.hide();
+      });
+    }
+  }
+
+  /// Popup mode (window_popup.dart): the desktop (desktop.snapshot) and the
+  /// window_mode setting decide; the core floats the window at the top right
+  /// under the bar each time it is shown.
+  String _desktopName = '';
+  Timer? _blurHide;
+  bool get _popup => popupWanted(
+    (_snapshot?['settings'] as Map?)?['window_mode'] as String?,
+    _desktopName,
+  );
+
+  Future<void> _loadDesktop() async {
+    try {
+      final found = await _backend!.call('desktop.snapshot');
+      if (!mounted) return;
+      _desktopName = '${found['name']}';
+      if (_popup) unawaited(_placePopup());
+    } catch (_) {
+      // A normal window.
+    }
+  }
+
+  Future<void> _placePopup() async {
+    if (!_popup || !(_backend?.isConnected ?? false)) return;
+    // No GTK title bar on the popup: Hyprland draws its border.
+    try {
+      await windowManager.setTitleBarStyle(TitleBarStyle.hidden);
+    } catch (_) {
+      // The window plugin is missing (tests): the bar stays.
+    }
+    // Just shown: Hyprland may not list the window for a moment.
+    for (var i = 0; i < 10; i++) {
+      try {
+        final done = await _backend!.call('window.popup', {
+          'width': popupSize.width,
+          'height': popupSize.height,
+        });
+        if (done['placed'] == true || done['reason'] != 'no window yet') {
+          return;
+        }
+      } catch (_) {
+        return;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+    }
   }
 
   Future<Map<String, dynamic>> _freshMap() async {
@@ -1710,6 +1770,17 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
           _showGuide ||
           _showSystemMap);
 
+  /// Esc on the main page in popup mode closes the popup (Backspace never).
+  bool get _canCloseTopLevel =>
+      _popup &&
+      !_navigationBlocked &&
+      _card == null &&
+      _browser == null &&
+      _visibleTerminal == null;
+
+  void _backOrClose() =>
+      _canGoBack ? _goBack() : unawaited(windowManager.hide());
+
   void _goBack() => setState(() {
     _showSettings = false;
     _showProviders = false;
@@ -2342,10 +2413,12 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
   /// reviewed like a catalog entry before the worker installs it.
   Future<void> _installAddonFile() async {
     if (_busy) return;
-    final file = await openFile(
-      acceptedTypeGroups: [
-        XTypeGroup(label: tr('Add-on (.zip)'), extensions: const ['zip']),
-      ],
+    final file = await PopupGuard.around(
+      () => openFile(
+        acceptedTypeGroups: [
+          XTypeGroup(label: tr('Add-on (.zip)'), extensions: const ['zip']),
+        ],
+      ),
     );
     if (file == null || !mounted) return;
     Map<String, dynamic> preview;
@@ -3574,6 +3647,7 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
     _limitsTimer?.cancel();
     _usageTimer?.cancel();
     _mcpTimer?.cancel();
+    _blurHide?.cancel();
     windowManager.removeListener(this);
     _liveTimer?.cancel();
     _mapLayoutTimer?.cancel();
@@ -3644,7 +3718,14 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
       ),
       // Esc (Flutter's dismiss key) and Backspace: back from a page; only
       // when nothing nearer took the key.
-      DismissIntent: _BackAction<DismissIntent>(() => _canGoBack, _goBack),
+      DismissIntent: _BackAction<DismissIntent>(
+        () => _canGoBack || _canCloseTopLevel,
+        _backOrClose,
+      ),
+      _EscIntent: _BackAction<_EscIntent>(
+        () => _canGoBack || _canCloseTopLevel,
+        _backOrClose,
+      ),
       _BackIntent: _BackAction<_BackIntent>(() => _canGoBack, _goBack),
     },
     debugShowCheckedModeBanner: false,
@@ -3668,7 +3749,7 @@ class _AsterismAppState extends State<AsterismApp> with WindowListener {
     // Esc as dismiss.
     home: Shortcuts(
       shortcuts: const {
-        SingleActivator(LogicalKeyboardKey.escape): _BackIntent(),
+        SingleActivator(LogicalKeyboardKey.escape): _EscIntent(),
       },
       // The page holds the focus when nothing in it does, so its keys
       // pass through here (not part of Tab's order).
@@ -4332,6 +4413,12 @@ class _ZoomIntent extends Intent {
 /// Backspace: back from a page (never closes a dialog, unlike Esc).
 class _BackIntent extends Intent {
   const _BackIntent();
+}
+
+/// Esc on the window's page: back from a page; on the main page in popup
+/// mode it closes the popup.
+class _EscIntent extends Intent {
+  const _EscIntent();
 }
 
 /// Back from a page; disabled (the key passes on) when there is no page.

@@ -34,6 +34,7 @@ const uiSettings = {
   'usage_box_size',
   'ai_local_helper',
   'ai_checks',
+  'window_mode',
 };
 const languages = {'en', 'de', 'fr', 'es', 'it', 'pt', 'nl', 'pl'};
 const mapLayers = ['agents', 'online', 'local', 'models', 'mcp', 'skills'];
@@ -161,6 +162,8 @@ final class SettingsStore {
         return validLayout(v);
       case 'look':
         return ['omarchy', 'adwaita'].contains(v);
+      case 'window_mode':
+        return ['auto', 'popup', 'window'].contains(v);
       case 'map_animations':
         return ['all', 'agents', 'off'].contains(v);
       case 'choice_text':

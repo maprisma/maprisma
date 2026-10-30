@@ -48,6 +48,8 @@ for line in sys.stdin:
   # Another process may have changed them: other.json is merged in.
   if Path('other.json').exists():settings.update(json.loads(Path('other.json').read_text()));Path('other.json').unlink()
   r=settings
+ elif m=='desktop.snapshot':r={'name':'omarchy' if Path('omarchy').exists() else 'generic','theme_dir':''}
+ elif m=='window.popup':r={'placed':True,'x':10,'y':40,'width':p['width'],'height':p['height']}
  elif m=='app.theme':r={'theme':json.loads(Path('theme.json').read_text()) if Path('theme.json').exists() else {}}
  elif m=='addons.list':r={'addons':[addon]+([new_addon] if installed else [])}
  elif m=='system.cached':r={'nodes':[],'edges':[],'notes':[],'helpers':[]}
@@ -170,9 +172,11 @@ Future<Directory> mountApp(
   bool installFails = false,
   bool interrupted = false,
   double? areaWidth,
+  void Function(Directory dir)? beforeStart,
 }) async {
   rootBundle.clear();
   final dir = Directory.systemTemp.createTempSync('asterism-review-cards-');
+  beforeStart?.call(dir);
   File('${dir.path}/flutter_backend.py').writeAsStringSync(
     service
         .replaceFirst('welcome=False', 'welcome=${welcome ? 'True' : 'False'}')
@@ -1223,6 +1227,56 @@ void main() {
     await tester.pump(const Duration(seconds: 2)); // the next check
     await settleService(tester);
     expect(tester.widget<SwitchListTile>(daily).value, isTrue);
+    expect(tester.takeException(), isNull);
+    await unmountApp(tester);
+  });
+
+  testWidgets('popup mode on Omarchy: placed when shown, Esc closes it', (
+    tester,
+  ) async {
+    final calls = <String>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      const MethodChannel('window_manager'),
+      (call) async {
+        calls.add(call.method);
+        return null;
+      },
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        const MethodChannel('window_manager'),
+        null,
+      ),
+    );
+    final dir = await mountApp(
+      tester,
+      beforeStart: (d) {
+        File('${d.path}/omarchy').writeAsStringSync('');
+      },
+    );
+    await settleService(tester);
+    expect(
+      requests(dir).where((q) => q['method'] == 'window.popup').first['params'],
+      {'width': 1100, 'height': 760},
+    ); // floated under the bar at start
+    await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
+    await settleService(tester);
+    expect(calls, isNot(contains('hide'))); // Backspace never closes it
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await settleService(tester);
+    expect(calls, contains('hide'));
+    expect(tester.takeException(), isNull);
+    await unmountApp(tester);
+  });
+
+  testWidgets('a normal window elsewhere: Esc on the main page stays', (
+    tester,
+  ) async {
+    final dir = await mountApp(tester);
+    await settleService(tester);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await settleService(tester);
+    expect(requests(dir).where((q) => q['method'] == 'window.popup'), isEmpty);
     expect(tester.takeException(), isNull);
     await unmountApp(tester);
   });

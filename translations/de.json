@@ -3156,5 +3156,9 @@
  "Nothing was put back: the files were changed again since.": "Nichts wurde wiederhergestellt: Die Dateien wurden seitdem erneut geändert.",
  "{0} is running right now.": "{0} läuft gerade.",
  "An update replaces its program while it works: its sessions may stop or behave oddly, and some updaters refuse. Finish its work first, or update anyway.": "Ein Update ersetzt sein Programm, während es arbeitet: Seine Sitzungen können abbrechen oder sich seltsam verhalten, und manche Updater verweigern es. Lass es zuerst fertig arbeiten oder aktualisiere trotzdem.",
- "Update anyway": "Trotzdem aktualisieren"
+ "Update anyway": "Trotzdem aktualisieren",
+ "Automatic: a popup under the bar on Omarchy": "Automatisch: ein Popup unter der Leiste auf Omarchy",
+ "A popup under the bar": "Ein Popup unter der Leiste",
+ "A normal window": "Ein normales Fenster",
+ "The popup sits at the top right under the bar and closes with Esc or a click elsewhere; the bar icon or starting the app again brings it back. A change applies the next time the window opens.": "Das Popup sitzt oben rechts unter der Leiste und schließt sich mit Esc oder einem Klick daneben; das Leisten-Symbol oder ein neuer Start der App holt es zurück. Eine Änderung gilt beim nächsten Öffnen des Fensters."
 }

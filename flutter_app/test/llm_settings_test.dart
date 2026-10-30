@@ -186,9 +186,13 @@ void main() {
     final now = find.byKey(const ValueKey('ai-checks-now'));
     await tester.scrollUntilVisible(now, 100);
     expect(find.text('MCP server updates: daily checks off'), findsOneWidget);
+    await tester.ensureVisible(daily);
+    await tester.pumpAndSettle();
     await tester.tap(daily);
     await tester.pumpAndSettle();
     expect(updated, {'ai_checks': true});
+    await tester.ensureVisible(now);
+    await tester.pumpAndSettle();
     await tester.tap(now);
     expect(checked, 1);
   });

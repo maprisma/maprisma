@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
+import 'window_popup.dart';
 import 'app_theme.dart';
 
 class SettingsView extends StatelessWidget {
@@ -385,6 +386,35 @@ class SettingsView extends StatelessWidget {
             const SizedBox(height: 12),
             Text(tr('System follows the desktop appearance.')),
             const SizedBox(height: 24),
+            DropdownButtonFormField<String>(
+              key: ValueKey('window-mode-${settings['window_mode'] ?? 'auto'}'),
+              initialValue: settings['window_mode'] as String? ?? 'auto',
+              isExpanded: true,
+              decoration: InputDecoration(labelText: tr('Window')),
+              items: [
+                for (final (value, label) in const [
+                  ('auto', 'Automatic: a popup under the bar on Omarchy'),
+                  ('popup', 'A popup under the bar'),
+                  ('window', 'A normal window'),
+                ])
+                  DropdownMenuItem(
+                    value: value,
+                    child: Text(tr(label), overflow: TextOverflow.ellipsis),
+                  ),
+              ],
+              onChanged: busy
+                  ? null
+                  : (value) {
+                      if (value != null) onUpdate({'window_mode': value});
+                    },
+            ),
+            const SizedBox(height: 8),
+            Text(
+              tr(
+                'The popup sits at the top right under the bar and closes with Esc or a click elsewhere; the bar icon or starting the app again brings it back. A change applies the next time the window opens.',
+              ),
+            ),
+            const SizedBox(height: 24),
             DropdownButtonFormField<int>(
               key: ValueKey('map-light-fps-${settings['map_light_fps'] ?? 20}'),
               initialValue: settings['map_light_fps'] as int? ?? 20,
@@ -429,7 +459,9 @@ class SettingsView extends StatelessWidget {
                       onPressed: busy
                           ? null
                           : () async {
-                              final chosen = await getDirectoryPath();
+                              final chosen = await PopupGuard.around(
+                                getDirectoryPath,
+                              );
                               if (chosen != null) {
                                 await onUpdate({'agent_folder': chosen});
                               }

@@ -2544,3 +2544,42 @@ Not covered here: anything that needs the network beyond the catalog (installing
 or input in the VM's session; those stay with the step-8 review.
 
 With this, plan-flutter step 4 is done.
+
+## plan-flutter.md step 5 — Omarchy integration (from 2026-10-30)
+
+### Part 1: the popup under the bar (a floating window)
+
+Uwe chose a floating window over a layer-shell surface (2026-10-30): no new library (the GTK3
+`gtk-layer-shell` is not installed on his PC), and drag and drop and the keyboard behave as in any
+window — the map editor relies on dragging.
+
+- **Placement** (`hyprland.dart`): the core runs in the app's process, so it finds its own window in
+  `hyprctl clients -j` by its pid, takes the focused monitor from `hyprctl monitors -j` (logical
+  size = pixels / scale, the bar from `reserved`) and dispatches Lua: `hl.dsp.window.float`,
+  `.resize`, `.move` (tried in the edge VM, Hyprland 0.56.2 as on Uwe's PC). 1100 × 760, top right,
+  10 px from the bar and the edge, kept inside the free area; only a plain `0x…` address goes into
+  the Lua; `hyprctl` runs under `timeout 2`. Route `window.popup {width, height}` (only on
+  Omarchy). Window rules cannot be added at runtime, so the window is placed right after it maps.
+- **Runner** (`my_application.cc`): a `toggle` action; `asterism --toggle` hands it to the running
+  instance over D-Bus (GApplication; flushed before the second process ends) — it hides the window
+  when shown and focused, else shows and focuses it. Every show (first frame, toggle, a second
+  plain start) tells the app on the channel `asterism/window`, and the app has the core place the
+  window again. This replaces the GTK toggle's PID file and SIGUSR1: the launcher plugin of step 7
+  only runs `asterism --toggle`.
+- **App:** `window_mode` (auto, popup, window; a UI setting on both sides, the reference's schema
+  too): auto is a popup on Omarchy (`desktop.snapshot`), else a window. In popup mode the GTK title
+  bar is hidden (Hyprland draws the border); Esc on the main page closes it (Backspace never;
+  Esc on a page still goes back); losing the focus closes it after 250 ms unless the focus comes
+  back or a file chooser of the app runs (`PopupGuard` around all six choosers). Settings ›
+  Window chooses the mode.
+- Translations in all eight languages; the manual's "The popup under the bar on Omarchy"; PDFs
+  rebuilt.
+
+Check: `test/hyprland_test.dart` (a 4K monitor at scale 2 with a 30 px bar as on Uwe's PC, a size
+too big for the VM's monitor, no own window, an address that is not plain, the Lua); widget tests
+(placed at start on Omarchy, Esc closes and Backspace does not, nothing of it elsewhere, the mode
+and the guard). **In the edge VM** (headless, the built bundle): the first start floats at
+(170, 36) 1100 × 754 under the 26 px bar; `--toggle` hides it and shows it again in place; when
+foot takes the focus it hides; a second plain start brings it back; no title bar.
+Not yet: Omarchy's agent menu entries and usage records, the floating terminal for external
+starts, rounding from `window_rounding()`.

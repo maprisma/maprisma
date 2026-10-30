@@ -71,6 +71,8 @@ SCHEMA: dict[str, Setting] = {
     # Look and language
     "language": Setting("auto", _text, "Settings › Language: \"auto\" (the system's) or a language code"),
     "flutter_theme_mode": Setting("system", _one_of("system", "light", "dark"), "Flutter Settings › Theme"),
+    "window_mode": Setting("auto", _one_of("auto", "popup", "window"),
+                           "Flutter Settings › Window: auto = a popup under the bar on Omarchy, else a window"),
     "map_light_fps": Setting(20, lambda v: type(v) is int and v in (20, 30, 60), "Flutter map-light frame rate: 20, 30 or 60 fps"),
     "look": Setting("omarchy", _one_of(*LOOKS), "Settings › Look on Omarchy: its theme or GNOME's Adwaita"),
     "choice_text": Setting("bright", _one_of("bright", "dim"),

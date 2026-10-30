@@ -1,4 +1,5 @@
 import 'package:file_selector/file_selector.dart';
+import 'window_popup.dart';
 import 'package:flutter/material.dart';
 
 class ConnectionAuthoring extends StatefulWidget {
@@ -302,9 +303,11 @@ class _ConnectionAuthoringState extends State<ConnectionAuthoring> {
                   onPressed: _busy
                       ? null
                       : () async {
-                          final selected =
-                              await (widget.chooseFolder?.call() ??
-                                  getDirectoryPath());
+                          final selected = await PopupGuard.around(
+                            () =>
+                                widget.chooseFolder?.call() ??
+                                getDirectoryPath(),
+                          );
                           if (mounted && selected != null) {
                             setState(() => _folder.text = selected);
                           }

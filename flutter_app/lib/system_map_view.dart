@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'agent_map.dart';
 import 'map_groups.dart';
 import 'backend.dart';
+import 'window_popup.dart';
 import 'providers_view.dart';
 
 const separateMountHint =
@@ -146,7 +147,7 @@ class _SystemMapViewState extends State<SystemMapView> {
   }
 
   Future<void> _scanFolder() async {
-    final path = await getDirectoryPath();
+    final path = await PopupGuard.around(getDirectoryPath);
     if (path == null || !mounted) return;
     setState(() => _working = true);
     try {

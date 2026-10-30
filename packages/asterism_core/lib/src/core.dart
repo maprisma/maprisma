@@ -66,6 +66,7 @@ import 'red_limits.dart';
 import 'mcp_tools.dart' show cachedTools;
 import 'mcp_updates.dart' as mcp_updates;
 import 'change_history.dart';
+import 'hyprland.dart' show placePopup;
 
 const portedRoutes = {
   'settings.get',
@@ -169,6 +170,7 @@ const portedRoutes = {
   'checks.mcp_release',
   'changes.history',
   'changes.undo',
+  'window.popup',
   'details.skills',
   'costs.rate',
   ...readOnlyRoutes,
@@ -3275,6 +3277,24 @@ final class CoreService {
     if (method.startsWith('checks.mcp_')) return mcpChecksRoute(method, params);
     // The connection changes kept on disk, each with Undo, also after the
     // app was closed or crashed (the in-session Undo knows only the last).
+    // Popup mode on Omarchy: this process's window floated at the top right
+    // under the bar (the core runs in the app's own process).
+    if (method == 'window.popup') {
+      final width = params['width'], height = params['height'];
+      if (params.length != 2 ||
+          width is! int ||
+          height is! int ||
+          width < 1 ||
+          height < 1 ||
+          width > 20000 ||
+          height > 20000) {
+        throw const FormatException('Invalid request');
+      }
+      if (desktop.name != 'omarchy') {
+        return {'placed': false, 'reason': 'not Omarchy'};
+      }
+      return placePopup(identity.environment, pid, width, height);
+    }
     if (method == 'changes.history') {
       if (params.isNotEmpty) throw const FormatException('Invalid request');
       return {'changes': changeHistory(config, connections.backupRoot)};

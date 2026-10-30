@@ -1,6 +1,7 @@
 import 'health_card.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
+import 'window_popup.dart';
 import 'runtime_details_card.dart';
 
 typedef ProviderOperation =
@@ -181,13 +182,15 @@ class ProvidersView extends StatelessWidget {
                             onPressed: busy
                                 ? null
                                 : () async {
-                                    final file = await openFile(
-                                      acceptedTypeGroups: [
-                                        const XTypeGroup(
-                                          label: 'GGUF',
-                                          extensions: ['gguf'],
-                                        ),
-                                      ],
+                                    final file = await PopupGuard.around(
+                                      () => openFile(
+                                        acceptedTypeGroups: [
+                                          const XTypeGroup(
+                                            label: 'GGUF',
+                                            extensions: ['gguf'],
+                                          ),
+                                        ],
+                                      ),
                                     );
                                     if (file != null) {
                                       await onOperation('model.import', {

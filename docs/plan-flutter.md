@@ -101,7 +101,9 @@ a commit.
    settings across processes: saves under a lock, outside changes shown (part 7);
    clean-VM scenarios: tools/vm-scenarios, all passed (part 8). Step 4 is done. New UI remains in
    all eight languages with manual updates; current manuals are rebuilt.
-5. **Omarchy integration (Uwe, 2026-10-28):** on Omarchy the Flutter app must feel
+5. **Omarchy integration (Uwe, 2026-10-28):** popup done as a floating window (Uwe,
+   2026-10-30; part 1: placed under the bar, `asterism --toggle`, Esc/focus loss close it).
+   On Omarchy the Flutter app must feel
    like the plugin does today, without becoming a different app elsewhere. Only when
    `desktop.NAME == "omarchy"`; other desktops keep a normal window.
    - **Popup under the bar icon:** an optional popup mode as a layer-shell surface
