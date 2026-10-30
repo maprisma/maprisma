@@ -23,7 +23,7 @@ step.
   - PyPI, npm, crates.io: taken, which matters only for a library under that name.
 - **Domains:**
   - `asterism.app`, `.com`, `.dev`, `.ai` and `.org` are taken.
-  - `asterismai.app`, `maprisma-ai.app`, `asterismai.dev` and `maprisma-ai.dev` are free; registering one is
+  - `asterismai.app`, `asterism-ai.app`, `asterismai.dev` and `asterism-ai.dev` are free; registering one is
     Uwe's choice.
 - **Trademarks (TMview, 46 entries):** no EU (EUIPO) and no German (DPMA) "Asterism" mark. In the software
   classes:
@@ -36,7 +36,7 @@ step.
 
 | Before | Now | What |
 |---|---|---|
-| `/mnt/Data/Projects/maprisma-flutter` | `/mnt/Data/Projects/asterism` | Asterism (Flutter), this repo |
+| `/mnt/Data/Projects/asterism-flutter` | `/mnt/Data/Projects/asterism` | Asterism (Flutter), this repo |
 | `/mnt/Data/Projects/asterism` | `/mnt/Data/Projects/ai-agents-map` | AI Agents Map (GTK), frozen |
 | (none) | `~/Projects/ai-agents-map` → `/mnt/Data/Projects/ai-agents-map` | New link |
 | `~/Projects/asterism` → `/mnt/Data/Projects/asterism` | unchanged | Now points to the Flutter app |
@@ -171,10 +171,10 @@ the final name. Nothing is published.
 |---|---|---|
 | App ID | `io.github.ubruckhaus.Asterism` (Devel: `….Devel`) | `com.maprisma.Maprisma` (Devel: `….Devel`): the reverse of Uwe's domain, as Flathub wants |
 | Name in the interface | Asterism | Maprisma |
-| Program, core | `asterism`, `lib/maprisma-core` | `maprisma`, `lib/maprisma-core` |
+| Program, core | `asterism`, `lib/asterism-core` | `maprisma`, `lib/maprisma-core` |
 | Toggle | `asterism --toggle` | `maprisma --toggle` |
 | Folders | `~/.config/asterism`, `~/.local/share/asterism`, `~/.local/state/asterism`, `~/.cache/asterism` | the same with `maprisma` |
-| User unit | `maprisma-providers.service` | `maprisma-providers.service` (follows the short name) |
+| User unit | `asterism-providers.service` | `maprisma-providers.service` (follows the short name) |
 | Desktop file, metainfo | `data/io.github.ubruckhaus.Asterism.*` | `data/com.maprisma.Maprisma.*` |
 
 **Existing data moves over once, nothing is deleted.** At the first start of Maprisma, while
@@ -206,3 +206,12 @@ Parts: **R1** identity, folders and the move of existing data (with the tools th
 **R2** the name in the texts: interface, eight translations, manual, README, metainfo; **C1** the plugin
 out of Maprisma; **C2** the code names; **C3** the add-ons (new namespace and key; Uwe signs); **C4** the
 local folders.
+
+**Done (2026-10-30):** R1 fc95b0b, R2 6f7721e, C1 5b0141e, C2 and C3 a4df792, C4 (this folder):
+- the repository folder is `/mnt/Data/Projects/maprisma` (link `~/Projects/maprisma`; the link
+  `~/Projects/asterism` is gone), the new add-on repository `/mnt/Data/Projects/maprisma-addons` (link
+  `~/Projects/maprisma-addons`), with the 24 add-ons Uwe signed with `~/.ssh/maprisma-addons`;
+- `asterism-addons` and `aur-asterism` stay as they are: they serve the released Asterism versions.
+  Maprisma's AUR folder comes with its package (plan-flutter step 6);
+- the build folders with the old paths were removed (`flutter_app/build`, `.flutter-previews`);
+- not done here: CachyOS's links into `/mnt/Data/Projects` (check at its next start), GitHub (step 4).

@@ -26,8 +26,8 @@ This replaces "Python may remain as the local service" in `plan-flutter.md` (Com
 |---|---|
 | AOT Dart cannot load code from an add-on | **Add-ons become data-only** (format v2: `agent.toml`, `provider.toml`, signed). The six hook modules and the provider engines (`provider_*.py`) become **built-in named readers/writers/engines** in Dart, chosen by name from the TOML, like `adapter_data.READERS` today. A new agent needing new code needs an app update. **Uwe confirms this before phase 5.** |
 | Low-level calls Dart lacks: `O_NOFOLLOW`/`openat`, `fstat` on a descriptor, `fsync`, `pidfd_open`/`pidfd_send_signal`, `prctl`, `forkpty`/`setsid`, `/proc` start times | One small `posix_ffi.dart` (libc through `dart:ffi`), Linux-only behind the desktop adapter (macOS later gets its own), each call unit-tested, including hostile cases (symlink swap, PID reuse). |
-| The Python worker applies plans in a separate process (wire v1–3) | Keep a separate process: a Dart CLI `maprisma-core` (`dart compile exe`) with the **same wire**, so the existing Python worker tests can drive it as well. |
-| `provider_watch.py` runs as a systemd user unit | The same `maprisma-core` executable, `maprisma-core provider-watch`. Unit rewritten once with a backup; the old Python unit is migrated, never left half-installed. |
+| The Python worker applies plans in a separate process (wire v1–3) | Keep a separate process: a Dart CLI `asterism-core` (`dart compile exe`) with the **same wire**, so the existing Python worker tests can drive it as well. |
+| `provider_watch.py` runs as a systemd user unit | The same `asterism-core` executable, `asterism-core provider-watch`. Unit rewritten once with a backup; the old Python unit is migrated, never left half-installed. |
 | Heavy scans must not stall the UI | The core runs in a background **isolate** (in-process transport: the same JSON messages over `SendPort`), not on the UI thread. |
 | Config edits must stay byte-for-byte what Python writes (comments, order, CRLF) | Port the text transforms as text transforms, not parse-and-reserialize. The differential tests compare **file bytes**. |
 | Signed add-ons are verified with `ssh-keygen -Y verify` | Verify the SSHSIG Ed25519 format in pure Dart; test vectors made by `ssh-keygen` (in tests only). Keep the same embedded key. |
@@ -37,7 +37,7 @@ This replaces "Python may remain as the local service" in `plan-flutter.md` (Com
 - `packages/asterism_core/`: pure Dart (no Flutter import), unit-tested with `dart test`. Contains the
   routes, policies, adapters, plans, backups/Undo, scans, providers, add-ons, jobs. Desktop facts behind a
   `Desktop` interface (`desktop_linux.dart`, `desktop_omarchy.dart`, later macOS).
-- `packages/asterism_core/bin/maprisma-core.dart`: worker and provider-watch entry points (one AOT exe).
+- `packages/asterism_core/bin/asterism-core.dart`: worker and provider-watch entry points (one AOT exe).
 - `flutter_app/`: a `ServiceTransport` interface with two implementations: `IsolateTransport` (Dart core,
   the shipped path) and `PythonTransport` (today's subprocess). A **router** sends each route to Dart once
   it is ported; unported routes go to Python **only in Devel builds**. A release build has no
@@ -71,7 +71,7 @@ phase), Claude reviews, Uwe decides the commit. Do not start the next phase befo
    mounts, health, model folders). Hooks needed here become built-in Dart readers.
 3. **Write path.** Plans and previews (`connect.py`, `mcp_ctl.py`, `skills_ctl.py`, `context_ctl.py`,
    map editor routes), opaque expiring handles, stale checks, backups and Undo, settings updates, the
-   `maprisma-core` worker with wire v1–3 (the Python worker tests pass against it).
+   `asterism-core` worker with wire v1–3 (the Python worker tests pass against it).
 4. **Processes and providers.** Terminal sessions (PTY through FFI; the xterm widget stays), agent start,
    owned/external instances with the PID + start-time + pidfd stop guard, own-UID port check, provider
    engines (Ollama, LM Studio, llama.cpp, vLLM, Jan, KoboldCpp, online), `provider-watch` and its unit
