@@ -18,7 +18,7 @@ A parameter written `name?` may be left out.
 | `addons.catalog` | read | — | ? |
 | `addons.file_install` | change | — | ? |
 | `addons.file_preview` | preview | `path`: ? | ? |
-| `addons.hints` | read | — | `lines` |
+| `addons.hints` | read | — | `lines` Each line has kind (off, new, updates), column (agents, providers), title, and ids or count. |
 | `addons.install` | change | — | ? |
 | `addons.list` | read | — | ? |
 | `addons.remove_apply` | change | `preview`: ? | ? |
@@ -69,7 +69,7 @@ A parameter written `name?` may be left out.
 | `checks.mcp_check` | read | `force`: ? | ? |
 | `checks.mcp_release` | change | `name`: ? | ? |
 | `checks.mcp_task` | read | `name`: ? | ? |
-| `checks.mcp_updates` | read | — | ? |
+| `checks.mcp_updates` | read | — | `checked`, `updates` Each update has column: mcp. |
 
 ## connections
 
@@ -116,7 +116,7 @@ A parameter written `name?` may be left out.
 
 | Route | Kind | Params | Result |
 |---|---|---|---|
-| `found.hints` | read | — | `lines` |
+| `found.hints` | read | — | `lines` Each line has column: mcp, kind (mcp, skill), title, and text or updates. |
 | `found.list` | read | `kind`: string | `checked`, `items`, `looking_text`, `not_looked`, `not_looked_text`, `set_up`, `updates` |
 | `found.look_inside` | read | — | ? |
 | `found.scan` | read | — | ? |
@@ -141,7 +141,7 @@ A parameter written `name?` may be left out.
 
 | Route | Kind | Params | Result |
 |---|---|---|---|
-| `health.report` | read | — | ? |
+| `health.report` | read | — | `areas`, `hint_count`, `state`, `summary`, `uses`, `warn_count` Every finding and use step has column: mcp, agents, providers, models. |
 
 ## help
 
@@ -302,7 +302,7 @@ A parameter written `name?` may be left out.
 
 | Route | Kind | Params | Result |
 |---|---|---|---|
-| `updates.check` | read | — | ? |
+| `updates.check` | read | — | `updates` Each update has column: agents, providers. |
 | `updates.run` | change | `key`: string, `running_ok?`: ? | ? |
 
 ## usage
