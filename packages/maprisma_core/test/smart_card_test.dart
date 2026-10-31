@@ -357,6 +357,7 @@ void main() {
       ...facts(),
       'folders': [
         {'id': 'f1', 'label': 'ollama', 'node': 'folder:/secret/path/ollama'},
+        {'id': 'f2', 'label': 'llama', 'node': 'folder:/secret/path/llama'},
       ],
       'disks': [
         {'id': 'd1', 'label': 'Data', 'node': 'disk:/mnt/Data'},
@@ -364,12 +365,15 @@ void main() {
     };
     Future<Map<String, dynamic>> ask(String disk) => smartModels(
       base,
-      answers(['{"action": "move", "folder": "f1", "disk": "$disk"}'], []),
+      answers([
+        '{"action": "move", "folders": ["f1", "f2", "nope"], "disk": "$disk"}',
+      ], []),
       (_) async => [],
       (_, _) async => [],
     );
     final found = await ask('d1');
-    final candidate = (found['candidates'] as List).single as Map;
+    expect(found['candidates'], hasLength(2));
+    final candidate = (found['candidates'] as List).first as Map;
     expect(candidate['kind'], 'model_move');
     expect(candidate['subtitle'], '→ Data');
     expect(
@@ -377,7 +381,7 @@ void main() {
       'folder:/secret/path/ollama',
     );
     expect(smartModelsPrompt(base), isNot(contains('/secret/path')));
-    expect(ask('/etc'), throwsFormatException);
+    await expectLater(ask('/etc'), throwsFormatException);
     expect(smartModelsPrompt(facts()), isNot(contains('"move"')));
     expect(smartModelsPrompt(base), contains('"move"'));
   });

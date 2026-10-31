@@ -3038,14 +3038,17 @@ final class CoreService {
       if (saved.isNotEmpty) systemMapLast = saved;
     }
     final nodes = (systemMapLast?['nodes'] as List? ?? const []).cast<Map>();
+    // A folder by its name; a disk where it is mounted, home as "~".
+    String label(Map n) {
+      final path = '${n['path']}';
+      if (n['kind'] != 'disk') return p.basename(path);
+      return path == identity.home ? '~' : path;
+    }
+
     List<Map> short(String prefix, bool Function(Map) wanted) => [
       for (final (i, n)
           in nodes.where((n) => n['status'] != 'missing' && wanted(n)).indexed)
-        {
-          'id': '$prefix${i + 1}',
-          'label': p.basename('${n['path']}'),
-          'node': n['id'],
-        },
+        {'id': '$prefix${i + 1}', 'label': label(n), 'node': n['id']},
     ];
     return {
       'folders': short(

@@ -657,6 +657,18 @@ class _MapSmartCardState extends State<MapSmartCard> {
           }
           widget.onApplied?.call(result);
           if (candidate['kind'] != null) {
+            // The others of the proposal stay to choose, one by one.
+            final left = [
+              for (final c in _reply['candidates'] as List? ?? const [])
+                if ((c as Map)['id'] != candidate['id']) c,
+            ];
+            if (left.isNotEmpty) {
+              setState(() {
+                _reply = {..._reply, 'candidates': left};
+                _step = _SmartStep.proposal;
+              });
+              return;
+            }
             setState(() => _step = _SmartStep.idle);
             _close();
             return;

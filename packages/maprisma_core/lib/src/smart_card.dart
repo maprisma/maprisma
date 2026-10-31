@@ -87,8 +87,8 @@ String _moveChoice(Map facts) {
   ];
   return 'Model folders: ${jsonEncode(named(folders))}. '
       'Disks: ${jsonEncode(named(disks))}.\n'
-      '{"action": "move", "folder": "<id of a model folder>", "disk": "<id of a disk>"}\n'
-      'when the request is to move or reorganise model folders; one folder for one request.\n';
+      '{"action": "move", "folders": ["<ids of model folders>"], "disk": "<id of a disk>"}\n'
+      'when the request is to move or reorganise model folders. Leave out a folder that is on that disk already.\n';
 }
 
 /// The first step: what the user wants, for the Models column.
@@ -366,13 +366,17 @@ Map<String, dynamic> smartChecked(
     };
   }
   if (action == 'move') {
-    if (!folders.contains(answer['folder']) ||
-        !disks.contains(answer['disk'])) {
+    final raw = answer['folders'];
+    final chosen = [
+      for (final f in raw is List ? raw : const [])
+        if (folders.contains(f)) f as String,
+    ];
+    if (chosen.isEmpty || !disks.contains(answer['disk'])) {
       throw const FormatException('no folder');
     }
     return {
       'action': action,
-      'folder': answer['folder'],
+      'folders': {...chosen}.toList(),
       'disk': answer['disk'],
     };
   }
@@ -553,26 +557,26 @@ Future<Map<String, dynamic>> smartModels(
   if (first['action'] == 'move') {
     Map named(String key, dynamic id) =>
         (facts[key] as List).cast<Map>().firstWhere((n) => n['id'] == id);
-    final folder = named('folders', first['folder']);
     final disk = named('disks', first['disk']);
     return {
       'status': 'proposal',
       'summary': '',
       'candidates': [
-        {
-          'id': 'c1',
-          'kind': 'model_move',
-          'title': _line(folder['label']),
-          'subtitle': '→ ${_line(disk['label'])}',
-          'reason': '',
-          'fit': 'ok',
-          'size': 0,
-          'action': {
+        for (final (i, id) in (first['folders'] as List).indexed)
+          {
+            'id': 'c${i + 1}',
             'kind': 'model_move',
-            'source': folder['node'],
-            'target': disk['node'],
+            'title': _line(named('folders', id)['label']),
+            'subtitle': '→ ${_line(disk['label'])}',
+            'reason': '',
+            'fit': 'ok',
+            'size': 0,
+            'action': {
+              'kind': 'model_move',
+              'source': named('folders', id)['node'],
+              'target': disk['node'],
+            },
           },
-        },
       ],
     };
   }
