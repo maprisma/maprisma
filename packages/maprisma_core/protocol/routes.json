@@ -982,7 +982,7 @@
   "map.smart_review": {
    "area": "map",
    "kind": "read",
-   "note": "The facts for the review of one candidate; for a model removal the preview of models.remove_preview.",
+   "note": "The facts for the review of one candidate; for a model removal the preview of models.remove_preview; for a folder move a task whose result is the plan.",
    "params": {
     "candidate": "string",
     "proposal": "string"

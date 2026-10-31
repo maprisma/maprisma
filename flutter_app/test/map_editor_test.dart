@@ -101,6 +101,90 @@ Future<void> mount(
 }
 
 void main() {
+  testWidgets('a folder move: preview task, review, run, then closed', (
+    tester,
+  ) async {
+    final calls = <String>[];
+    final applied = <Map<String, dynamic>>[];
+    var closed = false;
+    final client = CoreClient(
+      _FakeSmartTransport((method, params) async {
+        calls.add(method);
+        if (method == 'map.smart_ask') return {'task': 'ask'};
+        if (method == 'map.smart_review') return {'task': 'plan'};
+        if (method == 'map.smart_run') return {'task': 'run'};
+        return switch (params['task']) {
+          'ask' => {
+            'state': 'done',
+            'result': {
+              'status': 'proposal',
+              'proposal': 'p',
+              'candidates': [
+                {
+                  'id': 'c1',
+                  'kind': 'model_move',
+                  'title': 'Models',
+                  'subtitle': '→ Data',
+                  'fit': 'ok',
+                  'size': 0,
+                },
+              ],
+            },
+          },
+          'plan' => {
+            'state': 'done',
+            'result': {
+              'notes': ['Moves 2 GB'],
+              'files': const [],
+            },
+          },
+          _ => {
+            'state': 'done',
+            'result': {'ok': true, 'move_undo': 'u'},
+          },
+        };
+      }),
+    );
+    tester.view.physicalSize = const Size(400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MapSmartCard(
+            column: 'models',
+            title: 'Models',
+            open: true,
+            enabled: true,
+            onToggle: () => closed = true,
+            tr: (s) => s,
+            client: client,
+            onApplied: applied.add,
+            helpers: const [
+              {'command': 'claude', 'name': 'Claude Code', 'local': false},
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.enterText(find.byType(TextField), 'move my models to Data');
+    await tester.tap(find.widgetWithText(FilledButton, 'Ask'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.byKey(const ValueKey('smart-review-c1')));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('Moves 2 GB'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('smart-move-confirm')));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(calls, contains('map.smart_run'));
+    expect(applied.single['move_undo'], 'u');
+    expect(closed, isTrue);
+  });
+
   testWidgets('the legend explains the marks', (tester) async {
     await tester.pumpWidget(
       MaterialApp(

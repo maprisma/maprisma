@@ -90,6 +90,63 @@ class SmartModelDownloadReview extends StatelessWidget {
   }
 }
 
+/// The review of a model folder move: the System Map's notes and files.
+class SmartMoveReview extends StatelessWidget {
+  const SmartMoveReview({
+    super.key,
+    required this.plan,
+    required this.title,
+    required this.subtitle,
+    required this.tr,
+    required this.onConfirm,
+    required this.onCancel,
+  });
+  final Map<String, dynamic> plan;
+  final String title, subtitle;
+  final String Function(String) tr;
+  final VoidCallback onConfirm, onCancel;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      Expanded(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                tr('Move model folder'),
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+              Text('$title $subtitle', style: const TextStyle(fontSize: 12)),
+              for (final note in plan['notes'] as List? ?? const [])
+                Text(tr('$note'), style: const TextStyle(fontSize: 12)),
+              for (final file in plan['files'] as List? ?? const [])
+                SelectableText(
+                  '${(file as Map)['path']}',
+                  style: const TextStyle(fontSize: 11),
+                ),
+            ],
+          ),
+        ),
+      ),
+      OverflowBar(
+        alignment: MainAxisAlignment.end,
+        children: [
+          TextButton(onPressed: onCancel, child: Text(tr('Cancel'))),
+          FilledButton(
+            key: const ValueKey('smart-move-confirm'),
+            onPressed: onConfirm,
+            child: Text(tr('Move model folder')),
+          ),
+        ],
+      ),
+    ],
+  );
+}
+
 enum _SmartStep {
   idle,
   working,
@@ -512,10 +569,31 @@ class _MapSmartCardState extends State<MapSmartCard> {
     if (client == null) return;
     final token = ++_runToken;
     try {
-      final review = await client.mapSmartReview(
+      var review = await client.mapSmartReview(
         proposal: proposal,
         candidate: '${candidate['id']}',
       );
+      // A folder move works out its preview as a task.
+      if (review['task'] is String) {
+        setState(() => _step = _SmartStep.working);
+        final task = review['task'] as String;
+        _activeTask = task;
+        while (mounted && token == _runToken) {
+          final status = await client.tasksStatus(task: task);
+          if (!mounted || token != _runToken) return;
+          if (status['state'] == 'running') {
+            await Future<void>.delayed(const Duration(milliseconds: 200));
+            continue;
+          }
+          _activeTask = null;
+          if (status['state'] != 'done') {
+            throw StateError('no preview');
+          }
+          review = (status['result'] as Map).cast<String, dynamic>();
+          if (review['ok'] == false) throw StateError('no preview');
+          break;
+        }
+      }
       if (!mounted || token != _runToken) return;
       setState(() {
         _activeProposal = proposal;
@@ -578,7 +656,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
             return;
           }
           widget.onApplied?.call(result);
-          if (candidate['kind'] == 'model_remove') {
+          if (candidate['kind'] != null) {
             setState(() => _step = _SmartStep.idle);
             _close();
             return;
@@ -1315,7 +1393,17 @@ class _MapSmartCardState extends State<MapSmartCard> {
                 if (_step == _SmartStep.review)
                   SizedBox(
                     height: 240,
-                    child: _reviewData['removal'] != null
+                    child: _activeCandidate?['kind'] == 'model_move'
+                        ? SmartMoveReview(
+                            plan: _reviewData,
+                            title: '${_activeCandidate?['title'] ?? ''}',
+                            subtitle: '${_activeCandidate?['subtitle'] ?? ''}',
+                            tr: widget.tr,
+                            onConfirm: _confirmReview,
+                            onCancel: () =>
+                                setState(() => _step = _SmartStep.proposal),
+                          )
+                        : _reviewData['removal'] != null
                         ? ModelRemovalReview(
                             preview: _reviewData,
                             tr: widget.tr,

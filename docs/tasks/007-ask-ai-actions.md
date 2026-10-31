@@ -17,7 +17,7 @@ the GUI names a candidate and never holds what runs; tokens only on the click on
 | Column | Actions | State |
 |---|---|---|
 | MCP servers and skills | add an MCP server from the registry, connect a server to an agent, disconnect it | this step |
-| Models | search and download, remove | remove in this step; reorganise folders next |
+| Models | search and download, remove, move a model folder to a disk | done |
 | Agents | install, update, remove | later |
 | Providers | install, update, remove | later |
 

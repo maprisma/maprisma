@@ -352,6 +352,33 @@ void main() {
     expect((await ask('made-up'))['status'], 'redirect');
   });
 
+  test('moving: only a known folder to a known disk', () async {
+    final base = {
+      ...facts(),
+      'folders': [
+        {'id': 'models:1', 'label': 'Models'},
+      ],
+      'disks': [
+        {'id': 'disk:/mnt/Data', 'label': 'Data'},
+      ],
+    };
+    Future<Map<String, dynamic>> ask(String disk) => smartModels(
+      base,
+      answers([
+        '{"action": "move", "folder": "models:1", "disk": "$disk"}',
+      ], []),
+      (_) async => [],
+      (_, _) async => [],
+    );
+    final found = await ask('disk:/mnt/Data');
+    final candidate = (found['candidates'] as List).single as Map;
+    expect(candidate['kind'], 'model_move');
+    expect(candidate['subtitle'], '→ Data');
+    expect(ask('/etc'), throwsFormatException);
+    expect(smartModelsPrompt(facts()), isNot(contains('"move"')));
+    expect(smartModelsPrompt(base), contains('"move"'));
+  });
+
   test('a column not built yet asks no agent', () async {
     final result = await smartAsk(
       {'column': 'agents', 'command': 'claude'},

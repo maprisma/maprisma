@@ -2887,6 +2887,24 @@ final class CoreService {
           'answer': ?answer,
           'language': i18n.language,
           'settings_path': identity.settingsPath,
+          if (column == 'models')
+            ...() {
+              final nodes = (systemMapLast?['nodes'] as List? ?? const [])
+                  .cast<Map>();
+              List<Map> kind(Set<String> kinds) => [
+                for (final n in nodes)
+                  if (kinds.contains(n['kind']) && n['status'] != 'missing')
+                    {
+                      'id': n['id'],
+                      'label': n['label'],
+                      if (n['size'] != null) 'size': n['size'],
+                    },
+              ];
+              return {
+                'folders': kind(const {'models', 'folder'}),
+                'disks': kind(const {'disk'}),
+              };
+            }(),
           if (column == 'mcp')
             ...() {
               final inventory = reads.inventory.collect(agents);
@@ -2965,6 +2983,22 @@ final class CoreService {
       }
       final removal = candidate.remove('removal');
       return dispatch('models.remove_apply', {'removal': removal});
+    }
+    if (action['kind'] == 'model_move') {
+      if (method == 'map.smart_review') {
+        final started = dispatch('system.move_preview', {
+          'source': action['source'],
+          'target': action['target'],
+        });
+        candidate['move_task'] = started['task'];
+        return started;
+      }
+      final preview = tasks.items[candidate['move_task']]?.result['preview'];
+      if (method != 'map.smart_run' || preview == null) {
+        throw const FormatException('Review it first');
+      }
+      candidate.remove('move_task');
+      return dispatch('system.move_apply', {'preview': preview});
     }
     if (action['kind'] != null) throw const FormatException('Invalid request');
     if (method == 'map.smart_review') {

@@ -4591,6 +4591,12 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                                             smartHelpers: _smartHelpers,
                                             client: _maybeClient,
                                             onSmartApplied: (result) {
+                                              if (result['move_undo']
+                                                  is String) {
+                                                _moveUndo =
+                                                    result['move_undo']
+                                                        as String;
+                                              }
                                               if (result['undo'] is String) {
                                                 _connectionUndo =
                                                     result['undo'] as String;

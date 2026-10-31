@@ -76,6 +76,17 @@ List<Map> _runners(Map facts) => [
     {'key': (r as Map)['key'], 'name': r['name'], 'models': r['models']},
 ];
 
+/// Moving a folder is offered only when the System Map knows folders and disks.
+String _moveChoice(Map facts) {
+  final folders = facts['folders'], disks = facts['disks'];
+  if (folders is! List || disks is! List || folders.isEmpty || disks.isEmpty) {
+    return '';
+  }
+  return 'Model folders: ${jsonEncode(folders)}. Disks: ${jsonEncode(disks)}.\n'
+      '{"action": "move", "folder": "<id of a model folder>", "disk": "<id of a disk>"}\n'
+      'when the request is to move or reorganise model folders; one folder for one request.\n';
+}
+
 /// The first step: what the user wants, for the Models column.
 String smartModelsPrompt(Map facts) {
   return '$_rules ${_language(facts)}\n\n'
@@ -87,6 +98,7 @@ String smartModelsPrompt(Map facts) {
       'when the request is to find or add a model for a runner.\n'
       '{"action": "remove", "runtime": "<key of a runner listed above>", "model": "<exact name in its models>"}\n'
       'when the request is to remove a model that is listed above.\n'
+      '${_moveChoice(facts)}'
       '{"action": "clarify", "question": "<one short question>", "choices": ["<2 to 4 short answers>"]}\n'
       'when you cannot tell what is meant, for example which runner, or whether "image" means understanding or generating images.\n'
       '{"action": "redirect", "hint": "<what works instead, one sentence>", "column": "<agents, providers or mcp, or null>", "request": "<the request for that column, or null>"}\n'
@@ -321,7 +333,12 @@ Future<Map<String, dynamic>> smartMcp(
 }
 
 /// The first answer, checked: a known action or an error.
-Map<String, dynamic> smartChecked(Map answer, Set<String> runtimes) {
+Map<String, dynamic> smartChecked(
+  Map answer,
+  Set<String> runtimes, {
+  Set<String> folders = const {},
+  Set<String> disks = const {},
+}) {
   final action = answer['action'];
   if (action == 'clarify') {
     final question = _line(answer['question']);
@@ -342,6 +359,17 @@ Map<String, dynamic> smartChecked(Map answer, Set<String> runtimes) {
           ? column
           : null,
       'request': _line(answer['request'], 500),
+    };
+  }
+  if (action == 'move') {
+    if (!folders.contains(answer['folder']) ||
+        !disks.contains(answer['disk'])) {
+      throw const FormatException('no folder');
+    }
+    return {
+      'action': action,
+      'folder': answer['folder'],
+      'disk': answer['disk'],
     };
   }
   if (action == 'remove') {
@@ -492,6 +520,14 @@ Future<Map<String, dynamic>> smartModels(
   final first = smartChecked(
     firstJson(await agent(smartModelsPrompt(facts)), 'action'),
     {for (final r in runtimes) '${r['key']}'},
+    folders: {
+      for (final f in facts['folders'] as List? ?? const [])
+        '${(f as Map)['id']}',
+    },
+    disks: {
+      for (final d in facts['disks'] as List? ?? const [])
+        '${(d as Map)['id']}',
+    },
   );
   if (first['action'] == 'clarify') {
     return {
@@ -508,6 +544,31 @@ Future<Map<String, dynamic>> smartModels(
         'column': first['column'],
         'request': first['request'],
       },
+    };
+  }
+  if (first['action'] == 'move') {
+    String label(String key, dynamic id) =>
+        '${[for (final n in facts[key] as List)
+          if ((n as Map)['id'] == id) n['label']].first}';
+    return {
+      'status': 'proposal',
+      'summary': '',
+      'candidates': [
+        {
+          'id': 'c1',
+          'kind': 'model_move',
+          'title': _line(label('folders', first['folder'])),
+          'subtitle': '→ ${_line(label('disks', first['disk']))}',
+          'reason': '',
+          'fit': 'ok',
+          'size': 0,
+          'action': {
+            'kind': 'model_move',
+            'source': first['folder'],
+            'target': first['disk'],
+          },
+        },
+      ],
     };
   }
   if (first['action'] == 'remove') {
