@@ -1391,6 +1391,9 @@
     "providers_with_agents": "bool",
     "subagents_kept": "int",
     "subagents_minutes": "int|number",
+    "system_map_columns": [
+     "string"
+    ],
     "terminal_tabs": "bool",
     "usage_box": "bool",
     "usage_box_items": [
@@ -1402,7 +1405,7 @@
     "warn_yellow": "int",
     "window_mode": "string"
    },
-   "source": "observed"
+   "source": "manual"
   },
   "settings.update": {
    "area": "settings",
@@ -1449,6 +1452,9 @@
     "providers_with_agents": "bool",
     "subagents_kept": "int",
     "subagents_minutes": "int|number",
+    "system_map_columns": [
+     "string"
+    ],
     "terminal_tabs": "bool",
     "usage_box": "bool",
     "usage_box_items": [
@@ -1460,7 +1466,7 @@
     "warn_yellow": "int",
     "window_mode": "string"
    },
-   "source": "observed"
+   "source": "manual"
   },
   "setup.apply": {
    "area": "setup",
