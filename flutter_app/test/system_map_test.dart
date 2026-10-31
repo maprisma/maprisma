@@ -461,6 +461,26 @@ void main() {
       expect(find.text('Ollama'), findsOneWidget);
       expect(find.text('uv'), findsNothing);
 
+      // With Tools off in the saved filter, forcing Tools on and off in Small view
+      // changes only _forcedColumns (does not save to settings, and Tools stays off in Max view).
+      savedColumns.clear();
+      tester.view.physicalSize = const Size(1000, 800);
+      await tester.pumpWidget(buildView(key: const ValueKey('restarted')));
+      await tester.pump();
+      expect(find.text('uv'), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('system-column-3')));
+      await tester.pump();
+      expect(find.text('uv'), findsOneWidget);
+      expect(savedColumns, isEmpty);
+      await tester.tap(find.byKey(const ValueKey('system-column-3')));
+      await tester.pump();
+      expect(find.text('uv'), findsNothing);
+      expect(savedColumns, isEmpty);
+      tester.view.physicalSize = const Size(1700, 1000);
+      await tester.pumpWidget(buildView(key: const ValueKey('restarted')));
+      await tester.pump();
+      expect(find.text('uv'), findsNothing);
+
       // Toggling the filter chip back on restores the column and saves through settings.
       await tester.tap(find.byKey(const ValueKey('system-column-3')));
       await tester.pump();
@@ -479,6 +499,7 @@ void main() {
     tester,
   ) async {
     final asks = <String>[];
+    final savedColumns = <List<String>>[];
     final controller = TransformationController();
     addTearDown(controller.dispose);
     tester.view.physicalSize = const Size(1000, 800);
@@ -506,6 +527,8 @@ void main() {
             backend: _RedirectBackend(asks),
             tr: (k) => k,
             busy: false,
+            columns: const ['pc', 'disks', 'folders'],
+            onColumns: savedColumns.add,
             onRefresh: (_) async {},
             onOperation: (_, _, _) async => null,
             onSaved: (_) async {},
@@ -542,6 +565,7 @@ void main() {
       findsOneWidget,
     );
     expect(asks, ['install codex']); // moved, not asked again
+    expect(savedColumns, isEmpty);
   });
 }
 

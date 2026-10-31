@@ -200,8 +200,9 @@ class _SystemMapViewState extends State<SystemMapView> {
 
   List<int> _shownColumnsFor(MapViewSize viewSize) => [
     for (var col = 0; col < systemMapColumns.length; col++)
-      if (_enabledColumns.contains(systemMapColumnKeys[col]) &&
-          (viewSize.allowsSystem(col) || _forcedColumns.contains(col)))
+      if ((_enabledColumns.contains(systemMapColumnKeys[col]) &&
+              viewSize.allowsSystem(col)) ||
+          _forcedColumns.contains(col))
         col,
   ];
 
@@ -209,13 +210,12 @@ class _SystemMapViewState extends State<SystemMapView> {
     final key = systemMapColumnKeys[col];
     var changed = false;
     setState(() {
-      if (on) {
-        changed = _enabledColumns.add(key);
-        if (!viewSize.allowsSystem(col)) _forcedColumns.add(col);
-      } else if (_forcedColumns.remove(col) && !viewSize.allowsSystem(col)) {
-        // Back to what the window's view shows; the saved filter stays as it was.
-      } else if (viewSize.allowsSystem(col)) {
-        changed = _enabledColumns.remove(key);
+      if (viewSize.allowsSystem(col)) {
+        changed = on ? _enabledColumns.add(key) : _enabledColumns.remove(key);
+      } else if (on) {
+        _forcedColumns.add(col);
+      } else {
+        _forcedColumns.remove(col);
       }
     });
     if (changed) {
