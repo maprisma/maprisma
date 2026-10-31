@@ -225,14 +225,20 @@ int forcedScans(Directory dir) => requests(dir)
 int snapshots(Directory dir) =>
     requests(dir).where((q) => q['method'] == 'app.snapshot').length;
 
+Future<void> openFromHelp(WidgetTester tester, String tab) async {
+  await tester.tap(find.byKey(const ValueKey('help-open')));
+  await settleService(tester);
+  await tester.tap(find.byKey(ValueKey('help-tab-$tab')));
+  await settleService(tester);
+}
+
 void main() {
   testWidgets(
     'search/files do no inventory refresh; model load scans once; idle surfaces keep updates',
     (tester) async {
       final dir = await mountApp(tester);
       final baseline = forcedScans(dir);
-      await tester.tap(find.byTooltip('Providers and models'));
-      await settleService(tester);
+      await openFromHelp(tester, 'Providers and models');
       expect(forcedScans(dir), baseline);
       expect(find.text('Providers and models'), findsOneWidget);
       expect(find.widgetWithText(TextButton, 'Back'), findsOneWidget);
@@ -293,8 +299,7 @@ void main() {
     'connection search survives review and apply; first result includes Undo',
     (tester) async {
       final dir = await mountApp(tester);
-      await tester.tap(find.byTooltip('Connections'));
-      await settleService(tester);
+      await openFromHelp(tester, 'Connections');
       final field = find.byType(TextField);
       await tester.enterText(field, 'Known');
       await tester.tap(find.text('Known server'));
@@ -420,8 +425,7 @@ void main() {
     (tester) async {
       final dir = await mountApp(tester, areaWidth: 880);
       final scans = forcedScans(dir);
-      await tester.tap(find.byTooltip('Providers and models'));
-      await settleService(tester);
+      await openFromHelp(tester, 'Providers and models');
       await tester.tap(find.text('Models (1)'));
       await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Load'));
@@ -438,8 +442,7 @@ void main() {
     'new MCP form requests a private preview and Cancel performs no apply',
     (tester) async {
       final dir = await mountApp(tester);
-      await tester.tap(find.byTooltip('Connections'));
-      await settleService(tester);
+      await openFromHelp(tester, 'Connections');
       await tester.tap(find.widgetWithText(OutlinedButton, 'Add MCP server'));
       await tester.pumpAndSettle();
       await tester.enterText(
@@ -641,8 +644,7 @@ void main() {
 
   testWidgets('a tuning setting goes through the preview', (tester) async {
     final dir = await mountApp(tester);
-    await tester.tap(find.byTooltip('Providers and models'));
-    await settleService(tester);
+    await openFromHelp(tester, 'Providers and models');
     await tester.tap(find.byKey(const ValueKey('performance-fixture')));
     await settleService(tester);
     expect(find.text('A mode'), findsOneWidget);
@@ -672,8 +674,7 @@ void main() {
     tester,
   ) async {
     final dir = await mountApp(tester);
-    await tester.tap(find.byTooltip('Providers and models'));
-    await settleService(tester);
+    await openFromHelp(tester, 'Providers and models');
     await tester.tap(find.byKey(const ValueKey('performance-fixture')));
     await settleService(tester);
     final ask = find.byKey(const ValueKey('tuning-ask'));
@@ -828,8 +829,7 @@ void main() {
 
   testWidgets('a skill from the web goes through the preview', (tester) async {
     final dir = await mountApp(tester);
-    await tester.tap(find.byTooltip('Connections'));
-    await settleService(tester);
+    await openFromHelp(tester, 'Connections');
     await tester.tap(find.byKey(const ValueKey('skills-web-open')));
     await tester.pumpAndSettle();
     await tester.enterText(
@@ -866,8 +866,7 @@ void main() {
 
   testWidgets('a set-up MCP server is asked for its tools', (tester) async {
     final dir = await mountApp(tester);
-    await tester.tap(find.byTooltip('Connections'));
-    await settleService(tester);
+    await openFromHelp(tester, 'Connections');
     final card = find.text('Known server');
     await tester.ensureVisible(card);
     await tester.pumpAndSettle();
@@ -889,8 +888,7 @@ void main() {
     tester,
   ) async {
     final dir = await mountApp(tester);
-    await tester.tap(find.byTooltip('Connections'));
-    await settleService(tester);
+    await openFromHelp(tester, 'Connections');
     await tester.tap(find.byKey(const ValueKey('mcp-catalog-open')));
     await settleService(tester);
     await tester.tap(find.byKey(const ValueKey('mcp-pick-time')));
@@ -927,8 +925,7 @@ void main() {
     tester,
   ) async {
     final dir = await mountApp(tester);
-    await tester.tap(find.byTooltip('Connections'));
-    await settleService(tester);
+    await openFromHelp(tester, 'Connections');
     unawaited(
       tester.widget<ConnectionsView>(find.byType(ConnectionsView)).onPreview({
         'kind': 'provider',
@@ -1006,8 +1003,7 @@ void main() {
     final dir = await mountApp(tester);
     int guides() =>
         requests(dir).where((q) => q['method'] == 'guide.snapshot').length;
-    await tester.tap(find.byTooltip('Your first agent'));
-    await settleService(tester);
+    await openFromHelp(tester, 'Your first agent');
     expect(guides(), 1);
     // Install the route's local LLM: reviewed, installed, the guide again.
     await tester.tap(find.text('Install llama.cpp…'));
@@ -1035,9 +1031,8 @@ void main() {
     await settleService(tester);
     expect(guides(), 3);
     expect(find.text('Local route'), findsWidgets);
-    // Chosen from the menu, Providers goes back to the map, not the guide.
-    await tester.tap(find.byTooltip('Providers and models'));
-    await settleService(tester);
+    // Chosen from Help, Providers goes back to the map, not the guide.
+    await openFromHelp(tester, 'Providers and models');
     await tester.tap(find.text('Back').first);
     await settleService(tester);
     expect(guides(), 3);

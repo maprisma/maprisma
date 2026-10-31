@@ -2168,31 +2168,61 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         tr: tr,
         onOpenManual: () async =>
             (await _client.helpOpenManual())['opened'] == true,
-        starts: [
+        tabs: [
           ('Your first agent', Icons.rocket_launch_outlined, after(_openGuide)),
-          ('Find existing AI', Icons.manage_search, after(_openExisting)),
           (
-            'Providers and models',
-            Icons.memory,
+            'Agents',
+            Icons.list,
             after(
               () => setState(() {
+                _guideReturn = false;
+                _showMap = false;
+                _showSystemMap = false;
+                _showConnections = false;
+                _showSettings = false;
+                _showGuide = false;
+                _showProviders = false;
+                _visibleTerminal = null;
+              }),
+            ),
+          ),
+          (
+            'Providers and models',
+            Icons.memory_outlined,
+            after(() {
+              setState(() {
+                _guideReturn = false;
                 _showProviders = true;
                 _showConnections = false;
                 _showSystemMap = false;
-              }),
-            ),
+                _showGuide = false;
+                _showSettings = false;
+                _visibleTerminal = null;
+              });
+              _refresh();
+            }),
           ),
           (
             'Connections',
             Icons.account_tree_outlined,
-            after(
-              () => setState(() {
+            after(() {
+              setState(() {
+                _connectionCommand = null;
+                _guideReturn = false;
                 _showConnections = true;
                 _showProviders = false;
                 _showSystemMap = false;
-              }),
-            ),
+                _showGuide = false;
+                _showSettings = false;
+                _visibleTerminal = null;
+              });
+              _refresh();
+            }),
           ),
+        ],
+        onUsage: () => _client.usageSnapshot(),
+        starts: [
+          ('Find existing AI', Icons.manage_search, after(_openExisting)),
         ],
         onClose: no,
       ),
@@ -2430,54 +2460,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       _actionFailed();
     } finally {
       if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  Future<void> _openUsage() async {
-    try {
-      final result = await _client.usageSnapshot();
-      if (!mounted) return;
-      await showDialog<void>(
-        context: _navigator.currentContext!,
-        builder: (context) => AlertDialog(
-          title: Text(tr('Usage')),
-          content: SizedBox(
-            width: 720,
-            child: ListView(
-              shrinkWrap: true,
-              children: [
-                Text(tr('Last 30 days')),
-                if ((result['categories'] as List).isEmpty)
-                  Text(tr('No AI runs recorded in the last 30 days.')),
-                for (final c in result['categories'] as List)
-                  ExpansionTile(
-                    title: Text('${c['plugin']} · ${tr(c['task'] as String)}'),
-                    subtitle: Text(
-                      '${c['runs']} ${tr('Sessions')} · ${c['totals']['tokens']} ${tr('Tokens')} · ${c['totals']['unknown']} ${tr('Unknown')}',
-                    ),
-                    children: [
-                      for (final run in c['entries'] as List)
-                        ListTile(
-                          title: Text('${run['when']} · ${run['agent']}'),
-                          subtitle: Text(
-                            '${tr(run['ok'] == true ? 'Succeeded' : 'Failed')} · ${run['tokens'] ?? '—'} ${tr('Tokens')}',
-                          ),
-                        ),
-                    ],
-                  ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text(tr('Close')),
-            ),
-          ],
-        ),
-      );
-    } catch (_) {
-      if (mounted) _actionFailed();
     }
   }
 
@@ -4121,12 +4103,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                         },
                 ),
               ),
-              if (!_showSystemMap)
-                IconButton(
-                  tooltip: tr('Usage'),
-                  onPressed: _navigationBlocked ? null : _openUsage,
-                  icon: const Icon(Icons.bar_chart_outlined),
-                ),
               if (_healthCount > 0)
                 IconButton(
                   key: const ValueKey('problems-open'),
@@ -4149,78 +4125,11 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                     : _openHelp,
               ),
               IconButton(
-                tooltip: tr('Your first agent'),
-                icon: const Icon(Icons.rocket_launch_outlined),
-                onPressed: _navigationBlocked ? null : _openGuide,
-              ),
-              IconButton(
-                tooltip: tr('Connections'),
-                icon: const Icon(Icons.account_tree_outlined),
-                onPressed: _navigationBlocked
-                    ? null
-                    : () {
-                        setState(() {
-                          _card = null;
-                          _browser = null;
-                          _connectionCommand = null;
-                          _guideReturn = false; // chosen from the menu
-                          _showConnections = !_showConnections;
-                          _showSystemMap = false;
-                          _showProviders = false;
-                          _showGuide = false;
-                          _showSettings = false;
-                          _visibleTerminal = null;
-                        });
-                        _refresh();
-                      },
-              ),
-              IconButton(
-                tooltip: tr('Providers and models'),
-                icon: const Icon(Icons.memory_outlined),
-                onPressed: _navigationBlocked
-                    ? null
-                    : () {
-                        setState(() {
-                          _card = null;
-                          _browser = null;
-                          _guideReturn = false; // chosen from the menu
-                          _showProviders = !_showProviders;
-                          _showSystemMap = false;
-                          _showConnections = false;
-                          _showGuide = false;
-                          _showSettings = false;
-                          _visibleTerminal = null;
-                        });
-                        _refresh();
-                      },
-              ),
-              IconButton(
                 tooltip: tr('Settings'),
                 icon: const Icon(Icons.settings_outlined),
                 onPressed: _navigationBlocked || _snapshot == null
                     ? null
                     : _toggleSettings,
-              ),
-              IconButton(
-                tooltip: tr(_showMap ? 'Agents' : 'Map'),
-                icon: Icon(_showMap ? Icons.list : Icons.hub_outlined),
-                onPressed: _navigationBlocked
-                    ? null
-                    : () {
-                        setState(() {
-                          _card = null;
-                          _browser = null;
-                          _guideReturn = false; // chosen from the menu
-                          _showMap = !_showMap;
-                          _showSystemMap = false;
-                          _showConnections = false;
-                          _showSettings = false;
-                          _showGuide = false;
-                          _showProviders = false;
-                          _visibleTerminal = null;
-                        });
-                        if (_showMap) _refresh();
-                      },
               ),
               IconButton(
                 tooltip: tr('Refresh'),
@@ -4347,6 +4256,22 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                                 }
                               },
                               onGroups: _openGroups,
+                              smartHelpers: _smartHelpers,
+                              onSmartProvider: _smartProvider,
+                              onSmartTask: _smartTask,
+                              onSmartApplied: (result) {
+                                if (result['session'] != null) {
+                                  _systemSession(result);
+                                }
+                                if (result['move_undo'] is String) {
+                                  _moveUndo = result['move_undo'] as String;
+                                }
+                                if (result['undo'] is String) {
+                                  _connectionUndo = result['undo'] as String;
+                                }
+                                unawaited(_reloadSystem());
+                                unawaited(_refreshSystem(false, quiet: true));
+                              },
                               requestedNode: _systemSelection,
                               onUndo:
                                   _connectionUndo == null && _moveUndo == null

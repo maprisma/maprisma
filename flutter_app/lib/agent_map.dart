@@ -7,6 +7,7 @@ import 'core_client.g.dart';
 import 'map_groups.dart';
 import 'app_theme.dart' show corners;
 import 'map_editor.dart';
+import 'map_smart_card.dart';
 import 'map_zoom.dart';
 
 export 'map_groups.dart' show AgentBadge, UsageBoxLabel;
@@ -15,6 +16,7 @@ class AgentMap extends StatelessWidget {
   const AgentMap({
     this.layers,
     this.onLayers,
+    this.shownColumns,
     super.key,
     required this.graph,
     required this.onAgent,
@@ -54,6 +56,7 @@ class AgentMap extends StatelessWidget {
   });
 
   final Object? staticState;
+  final List<int>? shownColumns;
   final bool smartCards;
   final Set<String>? smartAskColumns;
   final void Function(String step, String key, String name)? onSmartProvider;
@@ -232,20 +235,44 @@ class AgentMap extends StatelessWidget {
       );
     }
     final groups = readOnly ? null : this.groups;
-    final nodes = (graph['nodes'] as List).cast<Map<String, dynamic>>();
-    final edges = (graph['edges'] as List).cast<Map<String, dynamic>>();
+    final allNodes = (graph['nodes'] as List).cast<Map<String, dynamic>>();
+    final allEdges = (graph['edges'] as List).cast<Map<String, dynamic>>();
+    final shownCols =
+        shownColumns ?? [for (var i = 0; i < columns.length; i++) i];
+    final nodes = [
+      for (final n in allNodes)
+        if (shownCols.contains(n['column'] as int)) n,
+    ];
+    final shownNodeIds = {for (final n in nodes) n['id']};
+    final edges = [
+      for (final e in allEdges)
+        if (shownNodeIds.contains(e['source']) &&
+            shownNodeIds.contains(e['target']))
+          e,
+    ];
     final counts = <int, int>{};
     for (final node in nodes) {
       final col = node['column'] as int;
       counts[col] = (counts[col] ?? 0) + 1;
     }
+    final startTop = groups == null ? 64.0 : (smartCards ? 156.0 : 106.0);
     final height = math
         .max(
           readOnly ? 0 : 650,
-          (counts.values.fold<int>(0, math.max) * 106) + 170,
+          (counts.values.fold<int>(0, math.max) * 106) +
+              (groups == null ? 170 : (smartCards ? 220 : 210)),
         )
         .toDouble();
     final colors = Theme.of(context).colorScheme;
+
+    String nodeInfoLine(Map<String, dynamic> node) {
+      final raw = '${node['info'] ?? ''}'.trim();
+      if (raw.isEmpty || raw == '${node['detail'] ?? ''}'.trim()) return '';
+      if (node['kind'] == 'runtime' && RegExp(r'^\d+$').hasMatch(raw)) {
+        return '$raw ${tr('Models')}';
+      }
+      return raw;
+    }
 
     Widget buildCanvas({
       required double colWidth,
@@ -253,19 +280,38 @@ class AgentMap extends StatelessWidget {
       required double boxWidth,
       required double inset,
       required Size canvasSize,
+      int? openSmartColumn,
+      ValueChanged<int>? onToggleSmart,
+      Map<int, String>? smartPrompts,
+      void Function(int col, String targetCol, String request)? onSmartMove,
     }) {
       final step = colWidth + colGap;
+      double colLeft(int col) {
+        final slot = shownCols.indexOf(col);
+        return inset + 24 + (slot < 0 ? col : slot) * step;
+      }
+
       final positions = <String, Offset>{};
       final rowCounts = <int, int>{};
       for (final node in nodes) {
         final col = node['column'] as int;
         final row = rowCounts[col] ?? 0;
         positions[node['id'] as String] = Offset(
-          inset + 24 + col * step,
-          (groups == null ? 64 : 128) + row * 106,
+          colLeft(col),
+          startTop + row * 106,
         );
         rowCounts[col] = row + 1;
       }
+      const systemSmartKeys = [
+        'providers',
+        'models',
+        'agents',
+        'mcp',
+        'models',
+      ];
+      String smartKeyFor(int col) => columns.length == 5
+          ? systemSmartKeys[col]
+          : mapSmartColumns[col % mapSmartColumns.length].$1;
       return SizedBox(
         width: canvasSize.width,
         height: canvasSize.height,
@@ -283,12 +329,12 @@ class AgentMap extends StatelessWidget {
                 ),
               ),
             ),
-            for (var col = 0; col < columns.length; col++)
+            for (final col in shownCols)
               Positioned(
-                left: inset + 24 + col * step,
-                top: 16,
+                left: colLeft(col),
+                top: groups == null ? 16 : 8,
                 width: colWidth,
-                height: groups == null ? 40 : 98,
+                height: groups == null ? 40 : 86,
                 child: groups == null
                     ? Text(
                         tr(columns[col]),
@@ -308,7 +354,7 @@ class AgentMap extends StatelessWidget {
                 left: positions[node['id']]!.dx,
                 top: positions[node['id']]!.dy,
                 width: boxWidth,
-                height: 82,
+                height: 88,
                 child: _interactiveNode(
                   context,
                   node,
@@ -352,7 +398,10 @@ class AgentMap extends StatelessWidget {
                         child: Stack(
                           children: [
                             Padding(
-                              padding: const EdgeInsets.all(12),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 mainAxisAlignment: MainAxisAlignment.center,
@@ -364,15 +413,26 @@ class AgentMap extends StatelessWidget {
                                         const SizedBox(width: 28, height: 28),
                                     ],
                                   ),
-                                  Text(
-                                    node['detail'] as String,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: colors.onSurfaceVariant,
+                                  if ('${node['detail'] ?? ''}'.isNotEmpty)
+                                    Text(
+                                      node['detail'] as String,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: colors.onSurfaceVariant,
+                                      ),
                                     ),
-                                  ),
+                                  if (nodeInfoLine(node).isNotEmpty)
+                                    Text(
+                                      nodeInfoLine(node),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: colors.onSurfaceVariant,
+                                      ),
+                                    ),
                                 ],
                               ),
                             ),
@@ -396,13 +456,44 @@ class AgentMap extends StatelessWidget {
                   ),
                 ),
               ),
+            if (!readOnly && smartCards)
+              for (final col in [
+                for (final c in shownCols)
+                  if (c != openSmartColumn) c,
+                if (openSmartColumn != null &&
+                    shownCols.contains(openSmartColumn))
+                  openSmartColumn,
+              ])
+                Positioned(
+                  key: ValueKey('system-smart-slot-$col'),
+                  left: colLeft(col),
+                  top: 106,
+                  width: colWidth,
+                  child: MapSmartCard(
+                    key: ValueKey('system-smart-card-$col'),
+                    width: colWidth,
+                    column: smartKeyFor(col),
+                    title: columns[col],
+                    open: openSmartColumn == col,
+                    onToggle: () => onToggleSmart?.call(col),
+                    tr: tr,
+                    helpers: smartHelpers,
+                    client: client,
+                    onProvider: onSmartProvider,
+                    onTask: onSmartTask,
+                    onApplied: onSmartApplied,
+                    initialPrompt: smartPrompts?[col],
+                    onMoveToColumn: (targetCol, request) =>
+                        onSmartMove?.call(col, targetCol, request),
+                  ),
+                ),
           ],
         ),
       );
     }
 
     if (readOnly) {
-      final canvasSize = Size((columns.length * 290 + 20).toDouble(), height);
+      final canvasSize = Size((shownCols.length * 290 + 20).toDouble(), height);
       return FittedBox(
         fit: BoxFit.scaleDown,
         alignment: Alignment.centerRight,
@@ -416,103 +507,177 @@ class AgentMap extends StatelessWidget {
       );
     }
 
-    return LayoutBuilder(
-      builder: (context, box) {
-        final colCount = columns.length;
-        final width = box.maxWidth.isFinite ? box.maxWidth : 0.0;
-        final minNatural =
-            48.0 + colCount * 250.0 + math.max(0, colCount - 1) * 40.0;
-        final double colWidth, colGap, boxWidth, inset;
-        if (colCount == 0 || width <= minNatural) {
-          colWidth = 250;
-          colGap = 40;
-          boxWidth = 242;
-          inset = 0;
-        } else {
-          colGap = (width * 0.035).floorToDouble().clamp(36.0, 96.0);
-          colWidth = ((width - 48.0 - (colCount - 1) * colGap) / colCount)
-              .floorToDouble()
-              .clamp(250.0, 420.0);
-          boxWidth = colWidth - 8;
-          final natural = 48.0 + colCount * colWidth + (colCount - 1) * colGap;
-          inset = width > natural ? ((width - natural) / 2).floorToDouble() : 0;
-        }
-        final naturalWidth = colCount == 0
-            ? 20.0
-            : inset * 2 + 48.0 + colCount * colWidth + (colCount - 1) * colGap;
-        final canvasSize = Size(naturalWidth, height);
-        final canvas = buildCanvas(
-          colWidth: colWidth,
-          colGap: colGap,
-          boxWidth: boxWidth,
-          inset: inset,
-          canvasSize: canvasSize,
-        );
-        final viewer = InteractiveViewer(
-          transformationController: controller,
-          onInteractionEnd: (_) => onViewChanged?.call(),
-          constrained: false,
-          scaleEnabled: false, // the wheel scrolls; zoom has its control
-          minScale: 0.3,
-          maxScale: 2,
-          boundaryMargin: const EdgeInsets.fromLTRB(0, 0, 120, 120),
-          child: canvas,
-        );
-        final zoom = controller;
-        if (zoom == null) {
-          return viewer;
-        }
-        void clampAndSave() {
-          if (!context.mounted) return; // the map was closed
-          scrollMap(
-            zoom,
-            Offset.zero,
-            viewport: box.biggest,
-            content: canvasSize,
-          );
-          onViewChanged?.call();
-        }
-
-        void fitToWindow() {
-          if (!context.mounted) return;
-          final w = box.biggest.width;
-          final scale = w > 0 && canvasSize.width > 0
-              ? (w / canvasSize.width).clamp(0.3, 1.0)
-              : 1.0;
-          zoom.value = Matrix4.diagonal3Values(scale, scale, 1);
-          clampAndSave();
-        }
-
-        mapClamp[zoom] = clampAndSave;
-        mapFit[zoom] = fitToWindow;
-        return Stack(
-          children: [
-            Positioned.fill(
-              child: Listener(
-                onPointerSignal: (event) {
-                  if (event is PointerScrollEvent) {
-                    GestureBinding.instance.pointerSignalResolver.register(
-                      event,
-                      (e) {
-                        scrollMap(
-                          zoom,
-                          (e as PointerScrollEvent).scrollDelta,
-                          viewport: box.biggest,
-                          content: canvasSize,
-                        );
-                        onViewChanged?.call();
-                      },
-                    );
-                  }
-                },
-                child: viewer,
-              ),
-            ),
-          ],
-        );
-      },
+    return _InteractiveBoard(
+      shownCols: shownCols,
+      height: height,
+      controller: controller,
+      onViewChanged: onViewChanged,
+      buildCanvas: buildCanvas,
     );
   }
+}
+
+class _InteractiveBoard extends StatefulWidget {
+  const _InteractiveBoard({
+    required this.shownCols,
+    required this.height,
+    required this.controller,
+    required this.onViewChanged,
+    required this.buildCanvas,
+  });
+  final List<int> shownCols;
+  final double height;
+  final TransformationController? controller;
+  final VoidCallback? onViewChanged;
+  final Widget Function({
+    required double colWidth,
+    required double colGap,
+    required double boxWidth,
+    required double inset,
+    required Size canvasSize,
+    int? openSmartColumn,
+    ValueChanged<int>? onToggleSmart,
+    Map<int, String>? smartPrompts,
+    void Function(int col, String targetCol, String request)? onSmartMove,
+  })
+  buildCanvas;
+
+  @override
+  State<_InteractiveBoard> createState() => _InteractiveBoardState();
+}
+
+class _InteractiveBoardState extends State<_InteractiveBoard> {
+  int? _openSmartColumn;
+  final _smartPrompts = <int, String>{};
+
+  void _toggleSmart(int col) {
+    setState(() {
+      _openSmartColumn = _openSmartColumn == col ? null : col;
+    });
+  }
+
+  void _moveSmart(int fromCol, String targetKey, String request) {
+    const keyToSystemCol = {'providers': 0, 'models': 4, 'agents': 2, 'mcp': 3};
+    final targetCol = keyToSystemCol[targetKey] ?? 0;
+    if (!widget.shownCols.contains(targetCol)) return;
+    setState(() {
+      _smartPrompts[targetCol] = request;
+      _openSmartColumn = targetCol;
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant _InteractiveBoard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_openSmartColumn != null &&
+        !widget.shownCols.contains(_openSmartColumn)) {
+      _openSmartColumn = null;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, box) {
+      final colCount = widget.shownCols.length;
+      final width = box.maxWidth.isFinite ? box.maxWidth : 0.0;
+      final minNatural =
+          48.0 + colCount * 250.0 + math.max(0, colCount - 1) * 40.0;
+      final double colWidth, colGap, boxWidth, inset;
+      if (colCount == 0 || width <= minNatural) {
+        colWidth = 250;
+        colGap = 40;
+        boxWidth = 242;
+        inset = 0;
+      } else {
+        colGap = (width * 0.035).floorToDouble().clamp(36.0, 96.0);
+        colWidth = ((width - 48.0 - (colCount - 1) * colGap) / colCount)
+            .floorToDouble()
+            .clamp(250.0, 420.0);
+        boxWidth = colWidth - 8;
+        final natural = 48.0 + colCount * colWidth + (colCount - 1) * colGap;
+        inset = width > natural ? ((width - natural) / 2).floorToDouble() : 0;
+      }
+      final naturalWidth = colCount == 0
+          ? 20.0
+          : inset * 2 + 48.0 + colCount * colWidth + (colCount - 1) * colGap;
+      final canvasSize = Size(naturalWidth, widget.height);
+      final canvas = widget.buildCanvas(
+        colWidth: colWidth,
+        colGap: colGap,
+        boxWidth: boxWidth,
+        inset: inset,
+        canvasSize: canvasSize,
+        openSmartColumn: _openSmartColumn,
+        onToggleSmart: _toggleSmart,
+        smartPrompts: _smartPrompts,
+        onSmartMove: _moveSmart,
+      );
+      final controller = widget.controller;
+      final onViewChanged = widget.onViewChanged;
+      final viewer = InteractiveViewer(
+        transformationController: controller,
+        onInteractionEnd: (_) => onViewChanged?.call(),
+        constrained: false,
+        scaleEnabled: false, // the wheel scrolls; zoom has its control
+        minScale: 0.3,
+        maxScale: 2,
+        boundaryMargin: const EdgeInsets.fromLTRB(0, 0, 120, 120),
+        child: canvas,
+      );
+      final zoom = controller;
+      if (zoom == null) {
+        return viewer;
+      }
+      void clampAndSave() {
+        if (!context.mounted) return; // the map was closed
+        scrollMap(
+          zoom,
+          Offset.zero,
+          viewport: box.biggest,
+          content: canvasSize,
+        );
+        onViewChanged?.call();
+      }
+
+      void fitToWindow() {
+        if (!context.mounted) return;
+        final w = box.biggest.width;
+        final scale = w > 0 && canvasSize.width > 0
+            ? (w / canvasSize.width).clamp(0.3, 1.0)
+            : 1.0;
+        zoom.value = Matrix4.diagonal3Values(scale, scale, 1);
+        clampAndSave();
+      }
+
+      mapClamp[zoom] = clampAndSave;
+      mapFit[zoom] = fitToWindow;
+      return Stack(
+        children: [
+          Positioned.fill(
+            child: Listener(
+              onPointerSignal: (event) {
+                if (event is PointerScrollEvent) {
+                  GestureBinding.instance.pointerSignalResolver.register(
+                    event,
+                    (e) {
+                      scrollMap(
+                        zoom,
+                        (e as PointerScrollEvent).scrollDelta,
+                        viewport: box.biggest,
+                        content: canvasSize,
+                      );
+                      onViewChanged?.call();
+                    },
+                  );
+                }
+              },
+              child: viewer,
+            ),
+          ),
+        ],
+      );
+    },
+  );
 }
 
 class _Connections extends CustomPainter {

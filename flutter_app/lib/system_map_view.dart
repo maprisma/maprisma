@@ -33,6 +33,10 @@ class SystemMapView extends StatefulWidget {
     this.onGroups,
     this.onHealthAction,
     this.requestedNode,
+    this.smartHelpers = const [],
+    this.onSmartProvider,
+    this.onSmartTask,
+    this.onSmartApplied,
   });
   final Map<String, dynamic> data;
   final Backend backend;
@@ -49,9 +53,21 @@ class SystemMapView extends StatefulWidget {
   final VoidCallback? onGroups;
   final ValueChanged<List<dynamic>>? onHealthAction;
   final String? requestedNode;
+  final List<Map<String, dynamic>> smartHelpers;
+  final void Function(String step, String key, String name)? onSmartProvider;
+  final ValueChanged<Map<String, dynamic>>? onSmartTask;
+  final ValueChanged<Map<String, dynamic>>? onSmartApplied;
   @override
   State<SystemMapView> createState() => _SystemMapViewState();
 }
+
+const systemMapColumns = [
+  'This PC',
+  'Disks and home',
+  'Programs',
+  'Tools',
+  'Folders',
+];
 
 class _SystemMapViewState extends State<SystemMapView> {
   String? _selectedId, _helper, _models;
@@ -60,7 +76,16 @@ class _SystemMapViewState extends State<SystemMapView> {
   String? _error;
   bool _restored = false;
   bool _showSidebar = false;
-  bool? _wasSmallView;
+  MapViewSize? _lastViewSize;
+  final _forcedColumns = <int>{};
+  final _hiddenColumns = <int>{};
+
+  static String? _canonicalNodeId(String? id) {
+    if (id == null) return null;
+    if (id == 'cpu' || id == 'ram') return 'pc';
+    if (id.startsWith('gpu:')) return 'gpu';
+    return id;
+  }
 
   void _restore() {
     final view = widget.data['view'] as Map?;
@@ -71,7 +96,9 @@ class _SystemMapViewState extends State<SystemMapView> {
         transform.cast<num>().map((n) => n.toDouble()).toList(),
       );
     }
-    _selectedId = widget.requestedNode ?? view['selected'] as String?;
+    _selectedId = _canonicalNodeId(
+      widget.requestedNode ?? view['selected'] as String?,
+    );
     _restored = true;
   }
 
@@ -79,7 +106,7 @@ class _SystemMapViewState extends State<SystemMapView> {
   void initState() {
     super.initState();
     _restore();
-    _selectedId = widget.requestedNode ?? _selectedId;
+    _selectedId = _canonicalNodeId(widget.requestedNode ?? _selectedId);
   }
 
   @override
@@ -87,7 +114,7 @@ class _SystemMapViewState extends State<SystemMapView> {
     super.didUpdateWidget(oldWidget);
     _restore();
     if (widget.requestedNode != oldWidget.requestedNode) {
-      _selectedId = widget.requestedNode;
+      _selectedId = _canonicalNodeId(widget.requestedNode);
     }
   }
 
@@ -103,10 +130,84 @@ class _SystemMapViewState extends State<SystemMapView> {
   }
 
   bool get busy => widget.busy || _working;
-  List<Map<String, dynamic>> get nodes =>
+  List<Map<String, dynamic>> get _rawNodes =>
       (widget.data['nodes'] as List? ?? []).cast<Map<String, dynamic>>();
+
+  /// Summarize Column 0 hardware nodes (pc, cpu, ram, gpu, gpu:*) onto two
+  /// cards: CPU & RAM ('pc') and GPU ('gpu').
+  List<Map<String, dynamic>> get nodes {
+    final raw = _rawNodes;
+    final cpuNode = raw.where((n) => n['id'] == 'cpu').firstOrNull;
+    final ramNode = raw.where((n) => n['id'] == 'ram').firstOrNull;
+    final extraGpus = raw
+        .where((n) => (n['id'] as String).startsWith('gpu:'))
+        .toList();
+    final result = <Map<String, dynamic>>[];
+    for (final n in raw) {
+      final id = n['id'] as String;
+      if (id == 'cpu' || id == 'ram' || id.startsWith('gpu:')) continue;
+      if (id == 'pc') {
+        final cpuRamParts = [
+          if (cpuNode != null && '${cpuNode['detail'] ?? ''}'.isNotEmpty)
+            '${widget.tr('CPU threads')}: ${cpuNode['detail']}',
+          if (ramNode != null && '${ramNode['detail'] ?? ''}'.isNotEmpty)
+            '${widget.tr('RAM')}: ${ramNode['detail']}',
+        ];
+        result.add({
+          ...n,
+          'label': 'CPU & RAM',
+          'info': cpuRamParts.isNotEmpty
+              ? cpuRamParts.join(' · ')
+              : '${n['info'] ?? ''}',
+        });
+      } else if (id == 'gpu' && n['kind'] == 'hardware') {
+        final gpuNames = [
+          '${n['detail'] ?? ''}',
+          for (final g in extraGpus) '${g['detail'] ?? ''}',
+        ].where((s) => s.trim().isNotEmpty).toList();
+        final gpuInfos = [
+          '${n['info'] ?? ''}',
+          for (final g in extraGpus) '${g['info'] ?? ''}',
+        ].where((s) => s.trim().isNotEmpty).toList();
+        result.add({
+          ...n,
+          'label': 'GPU',
+          'detail': gpuNames.join(' · '),
+          'info': gpuInfos.join(' · '),
+        });
+      } else {
+        result.add(n);
+      }
+    }
+    return result;
+  }
+
   Map<String, dynamic>? get selected =>
       nodes.where((n) => n['id'] == _selectedId).firstOrNull;
+
+  List<int> _shownColumnsFor(MapViewSize viewSize) => [
+    for (var col = 0; col < systemMapColumns.length; col++)
+      if (!_hiddenColumns.contains(col) &&
+          (viewSize.allowsSystem(col) || _forcedColumns.contains(col)))
+        col,
+  ];
+
+  void _toggleColumn(int col, bool on, MapViewSize viewSize) {
+    setState(() {
+      if (on) {
+        _hiddenColumns.remove(col);
+        if (!viewSize.allowsSystem(col)) _forcedColumns.add(col);
+      } else {
+        _forcedColumns.remove(col);
+        if (viewSize.allowsSystem(col)) _hiddenColumns.add(col);
+      }
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && mapUserZoomed[widget.controller] != true) {
+        mapFit[widget.controller]?.call();
+      }
+    });
+  }
 
   Future<void> _forgetDisk(Map<String, dynamic> node) async {
     setState(() => _working = true);
@@ -472,25 +573,52 @@ class _SystemMapViewState extends State<SystemMapView> {
     if (widget.suspended) return const SizedBox.shrink();
     final node = selected;
     final helpers = widget.data['helpers'] as List? ?? [];
+    final activeSmartHelpers = widget.smartHelpers.isNotEmpty
+        ? widget.smartHelpers
+        : [
+            for (final h in helpers)
+              if (h is Map) h.cast<String, dynamic>(),
+          ];
     final findings =
         (widget.data['analysis'] as Map?)?['findings'] as List? ?? [];
     final checked = widget.data['checked_at'] as num?;
     final counts = <String, int>{};
+    final rawNodeIds = _rawNodes.map((n) => n['id']).toSet();
     final nodeIds = nodes.map((n) => n['id']).toSet();
     for (final finding in [
       ...(widget.data['health'] as List? ?? []),
       ...findings,
     ]) {
-      final id = nodeIds.contains(finding['node'])
+      final rawId = rawNodeIds.contains(finding['node'])
           ? finding['node'] as String
           : 'pc';
+      final id = _canonicalNodeId(rawId) ?? 'pc';
       counts[id] = (counts[id] ?? 0) + 1;
+    }
+    final seenEdges = <String>{};
+    final mappedEdges = <Map<String, dynamic>>[];
+    for (final e
+        in (widget.data['edges'] as List? ?? []).cast<Map<String, dynamic>>()) {
+      final src = _canonicalNodeId(e['source'] as String?);
+      final dst = _canonicalNodeId(e['target'] as String?);
+      if (src == null ||
+          dst == null ||
+          src == dst ||
+          (src == 'pc' && dst == 'gpu') ||
+          !nodeIds.contains(src) ||
+          !nodeIds.contains(dst)) {
+        continue;
+      }
+      if (seenEdges.add('$src|$dst')) {
+        mappedEdges.add({...e, 'source': src, 'target': dst});
+      }
     }
     final graph = {
       ...widget.data,
       'nodes': [
         for (final n in nodes) {...n, 'badges': counts[n['id']] ?? 0},
       ],
+      'edges': mappedEdges,
     };
     final helper = helpers.where((h) => h['command'] == _helper).firstOrNull;
     final viewSize = mapViewSizeFor(
@@ -498,14 +626,16 @@ class _SystemMapViewState extends State<SystemMapView> {
       displayWidth: mapDisplayWidthOf(context),
     );
     final smallView = viewSize == MapViewSize.small;
-    if (_wasSmallView != smallView) {
-      _wasSmallView = smallView;
+    if (_lastViewSize != viewSize) {
+      _lastViewSize = viewSize;
+      _forcedColumns.removeWhere(viewSize.allowsSystem);
       if (smallView && (widget.data['view'] as Map?)?['transform'] == null) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) mapFit[widget.controller]?.call();
         });
       }
     }
+    final shownColumns = _shownColumnsFor(viewSize);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -578,6 +708,15 @@ class _SystemMapViewState extends State<SystemMapView> {
                       tooltip: widget.tr('Help'),
                       icon: const Icon(Icons.help_outline),
                     ),
+                    for (var col = 0; col < systemMapColumns.length; col++)
+                      FilterChip(
+                        key: ValueKey('system-column-$col'),
+                        visualDensity: VisualDensity.compact,
+                        label: Text(widget.tr(systemMapColumns[col])),
+                        selected: shownColumns.contains(col),
+                        onSelected: (value) =>
+                            _toggleColumn(col, value, viewSize),
+                      ),
                   ],
                 ),
               ),
@@ -592,13 +731,7 @@ class _SystemMapViewState extends State<SystemMapView> {
         Expanded(
           child: _focusColumn != null
               ? MapFocus(
-                  title: const [
-                    'This PC',
-                    'Disks and home',
-                    'Programs',
-                    'Tools',
-                    'Folders',
-                  ][_focusColumn!],
+                  title: systemMapColumns[_focusColumn!],
                   tr: widget.tr,
                   onBack: () => setState(() => _focusColumn = null),
                   child: ListView(
@@ -629,26 +762,21 @@ class _SystemMapViewState extends State<SystemMapView> {
                     Expanded(
                       child: AgentMap(
                         graph: graph,
-                        groups: MapGroup.fromGraph(graph, const [
-                          'This PC',
-                          'Disks and home',
-                          'Programs',
-                          'Tools',
-                          'Folders',
-                        ]),
+                        shownColumns: shownColumns,
+                        groups: MapGroup.fromGraph(graph, systemMapColumns),
                         onExpandGroup: (col) =>
                             setState(() => _focusColumn = col),
                         focusedNode: _selectedId,
                         tr: widget.tr,
                         onAgent: (_) {},
                         controller: widget.controller,
-                        columns: const [
-                          'This PC',
-                          'Disks and home',
-                          'Programs',
-                          'Tools',
-                          'Folders',
-                        ],
+                        columns: systemMapColumns,
+                        smartCards: activeSmartHelpers.isNotEmpty,
+                        smartHelpers: activeSmartHelpers,
+                        client: _client,
+                        onSmartProvider: widget.onSmartProvider,
+                        onSmartTask: widget.onSmartTask,
+                        onSmartApplied: widget.onSmartApplied ?? widget.onSaved,
                         onNode: (n) {
                           setState(() {
                             _selectedId = n['id'] as String;
@@ -826,7 +954,11 @@ class _SystemMapViewState extends State<SystemMapView> {
                               Text(widget.tr(note as String)),
                             for (final finding
                                 in widget.data['health'] as List? ?? [])
-                              if (node == null || finding['node'] == node['id'])
+                              if (node == null ||
+                                  _canonicalNodeId(
+                                        finding['node'] as String?,
+                                      ) ==
+                                      node['id'])
                                 ListTile(
                                   title: Text(finding['title'] as String),
                                   subtitle: Text(finding['text'] as String),
@@ -961,8 +1093,9 @@ class _SystemMapViewState extends State<SystemMapView> {
                               ),
                             for (final f in findings)
                               if (node == null ||
-                                  !nodeIds.contains(f['node']) ||
-                                  f['node'] == node['id'])
+                                  !rawNodeIds.contains(f['node']) ||
+                                  _canonicalNodeId(f['node'] as String?) ==
+                                      node['id'])
                                 ListTile(
                                   title: Text(f['title'] as String),
                                   subtitle: Text(f['detail'] as String),

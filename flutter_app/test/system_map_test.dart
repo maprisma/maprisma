@@ -240,4 +240,201 @@ void main() {
       expect(tester.getSize(find.byType(InteractiveViewer)).width, 1000 - 340);
     },
   );
+
+  testWidgets(
+    'System Map summarizes CPU/RAM and GPU onto two cards and supports dynamic 3/4/5 column views, filters, and Ask AI',
+    (tester) async {
+      final backend = MapBackend();
+      final controller = TransformationController();
+      addTearDown(controller.dispose);
+      final hwData = {
+        'nodes': [
+          {
+            'id': 'pc',
+            'label': 'This PC',
+            'detail': 'Linux x86_64 · 16 CPU · 31 GiB RAM',
+            'column': 0,
+            'kind': 'pc',
+            'status': 'available',
+            'path': '/home/uwe',
+            'info': '',
+          },
+          {
+            'id': 'cpu',
+            'label': 'CPU threads',
+            'detail': '16',
+            'column': 0,
+            'kind': 'hardware',
+            'status': 'available',
+            'path': '',
+            'info': '',
+          },
+          {
+            'id': 'ram',
+            'label': 'RAM',
+            'detail': '31 GiB',
+            'column': 0,
+            'kind': 'hardware',
+            'status': 'available',
+            'path': '',
+            'info': '',
+          },
+          {
+            'id': 'gpu',
+            'label': 'GPU',
+            'detail': 'AMD Radeon RX 7900 XTX',
+            'column': 0,
+            'kind': 'hardware',
+            'status': 'available',
+            'path': '',
+            'info': '24 GiB · ROCm, Vulkan',
+          },
+          {
+            'id': 'gpu:1',
+            'label': 'GPU 2',
+            'detail': 'AMD Radeon Graphics',
+            'column': 0,
+            'kind': 'hardware',
+            'status': 'available',
+            'path': '',
+            'info': '2 GiB · Vulkan',
+          },
+          {
+            'id': 'disk:home',
+            'label': '/home',
+            'detail': '500 GiB free',
+            'column': 1,
+            'kind': 'disk',
+            'status': 'available',
+            'path': '/home',
+            'info': '',
+          },
+          {
+            'id': 'runtime:ollama',
+            'label': 'Ollama',
+            'detail': 'running',
+            'column': 2,
+            'kind': 'runtime',
+            'status': 'running',
+            'path': '/usr/bin/ollama',
+            'info': '',
+          },
+          {
+            'id': 'tool:uv',
+            'label': 'uv',
+            'detail': '0.5.0',
+            'column': 3,
+            'kind': 'tool',
+            'status': 'available',
+            'path': '/usr/bin/uv',
+            'info': '',
+          },
+          {
+            'id': 'folder:models',
+            'label': 'Models folder',
+            'detail': '/mnt/Data/models',
+            'column': 4,
+            'kind': 'folder',
+            'status': 'available',
+            'path': '/mnt/Data/models',
+            'info': '',
+          },
+        ],
+        'edges': [
+          {'source': 'pc', 'target': 'disk:home', 'kind': 'hosts'},
+          {'source': 'gpu', 'target': 'runtime:ollama', 'kind': 'accelerates'},
+        ],
+        'notes': [],
+        'health': [
+          {
+            'id': 'gpu-stack',
+            'status': 'warn',
+            'node': 'gpu',
+            'title': 'GPU stack check',
+            'text': 'Check ROCm permissions',
+          },
+        ],
+        'helpers': [
+          {'command': 'fixture', 'name': 'Fixture helper', 'check': true},
+        ],
+        'limited': false,
+        'search_done': false,
+      };
+
+      Widget buildView() => MaterialApp(
+        home: Scaffold(
+          body: SystemMapView(
+            data: hwData,
+            backend: backend,
+            tr: (k) => k,
+            busy: false,
+            onRefresh: (_) async {},
+            onOperation: (_, _, _) async => null,
+            onSaved: (_) async {},
+            onSession: (_) {},
+            onShowAI: (_) {},
+            controller: controller,
+            smartHelpers: const [
+              {'id': 'local:qwen', 'label': 'Local Qwen', 'kind': 'local'},
+            ],
+          ),
+        ),
+      );
+
+      // Small view (< 1150 px): 3 columns shown by default (0: This PC, 1: Disks and home, 4: Folders).
+      tester.view.physicalSize = const Size(1000, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(buildView());
+      await tester.pump();
+
+      // Hardware nodes are summarized onto two cards: CPU & RAM and GPU.
+      expect(find.text('CPU & RAM'), findsOneWidget);
+      expect(find.text('Linux x86_64 · 16 CPU · 31 GiB RAM'), findsOneWidget);
+      expect(find.text('CPU threads: 16 · RAM: 31 GiB'), findsOneWidget);
+      expect(
+        find.text('AMD Radeon RX 7900 XTX · AMD Radeon Graphics'),
+        findsOneWidget,
+      );
+      expect(
+        find.text('24 GiB · ROCm, Vulkan · 2 GiB · Vulkan'),
+        findsOneWidget,
+      );
+
+      // In Small view: This PC (col 0), Disks and home (col 1), Folders (col 4) are shown;
+      // Programs (col 2) and Tools (col 3) are hidden by default.
+      expect(find.text('/home'), findsOneWidget);
+      expect(find.text('Models folder'), findsOneWidget);
+      expect(find.text('Ollama'), findsNothing);
+      expect(find.text('uv'), findsNothing);
+
+      // Ask AI smart cards are rendered under each shown column header.
+      expect(find.byKey(const ValueKey('system-smart-card-0')), findsOneWidget);
+      expect(find.byKey(const ValueKey('system-smart-card-1')), findsOneWidget);
+      expect(find.byKey(const ValueKey('system-smart-card-4')), findsOneWidget);
+
+      // Medium view (1400 px): 4 columns shown by default (adds Programs, col 2).
+      tester.view.physicalSize = const Size(1400, 1000);
+      await tester.pumpWidget(buildView());
+      await tester.pump();
+      expect(find.text('Ollama'), findsOneWidget);
+      expect(find.text('uv'), findsNothing);
+
+      // Max view (1700 px): all 5 columns shown by default (adds Tools, col 3).
+      tester.view.physicalSize = const Size(1700, 1000);
+      await tester.pumpWidget(buildView());
+      await tester.pump();
+      expect(find.text('Ollama'), findsOneWidget);
+      expect(find.text('uv'), findsOneWidget);
+
+      // Filter chip toggles a column off and back on.
+      await tester.tap(find.byKey(const ValueKey('system-column-3')));
+      await tester.pump();
+      expect(find.text('uv'), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('system-column-3')));
+      await tester.pump();
+      expect(find.text('uv'), findsOneWidget);
+    },
+  );
 }
