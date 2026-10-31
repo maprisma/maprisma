@@ -192,7 +192,7 @@ A parameter written `name?` may be left out.
 | `map.smart_connect` | preview | `agent`: string, `candidate`: string, `proposal`: string | `plan` As connections.preview: a plan for ConnectionReview and connections.apply, with its other fields. Refused until the model is on this PC. |
 | `map.smart_helpers` | read | — | `helpers` Who can answer a smart card now; nothing is sent. |
 | `map.smart_plan` | preview | `agents`: ["string"], `candidate`: string, `proposal`: string, `values`: object | `plan` An approved MCP candidate as the app's normal preview: a plan for ConnectionReview, then connections.apply. agents and values come from the user; a secret goes no further than the preview. |
-| `map.smart_review` | read | `candidate`: string, `proposal`: string | `fit`, `runtime`, `size`, `subtitle`, `title` The facts for the review of one candidate; for a model removal or an agent action its normal preview; for a folder move a task whose result is the plan. |
+| `map.smart_review` | read | `candidate`: string, `proposal`: string | `fit`, `runtime`, `size`, `subtitle`, `title` The facts for the review of one candidate; for a model removal or an agent action its normal preview; for a folder move a task whose result is the plan. For a task after a web look-up: {preview, name, prompt, topic} for system.help_apply. |
 | `map.smart_run` | change | `candidate`: string, `proposal`: string | `focus`, `task` After the user's OK: starts it, once. A candidate that is too large is refused; a removal, a folder move or an agent action needs its review first. An agent action answers like agents.action_apply. |
 | `map.snapshot` | read | `force?`: ?, `poll?`: ? | ? |
 | `map.usage` | read | `commands`: ? | ? |

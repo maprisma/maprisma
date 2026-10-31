@@ -23,6 +23,11 @@ the GUI names a candidate and never holds what runs; tokens only on the click on
 
 Not yet in the MCP column: skills, and updating or removing a server from the PC. The helper says so.
 
+## Web look-up
+When a column cannot do a request but the web can tell how, the helper asks for a look-up (`action: lookup`). An
+online agent runs once more with only its web tools (`[research]`); the card shows the answer and https sources. One
+click on Ask, at most two runs. A local helper has no web: the card says so.
+
 ## Routes
 `map.smart_ask` answers for `column: mcp`. New `map.smart_plan {proposal, candidate, agents, values}` (preview): the
 plan for ConnectionReview, then `connections.apply`. An MCP candidate has `kind` (`mcp_add`, `mcp_connect`,

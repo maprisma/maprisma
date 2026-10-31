@@ -108,17 +108,29 @@ class MapLayout {
   }) {
     _columns = columns;
     // The shown columns sit in the middle of a wider window and grow to fill
-    // the free space (column width 266..420, gap roughly 3.5% in 36..96).
+    // the free space (column width 266..560, gap at least 3.5% of the width).
     final count = columns?.length ?? 4;
     final minNatural = 32.0 + count * 266.0 + math.max(0, count - 1) * 36.0;
     if (count == 0 || viewportWidth <= minNatural) {
       columnGap = 36.0;
       columnWidth = 266.0;
     } else {
-      columnGap = (viewportWidth * 0.035).floorToDouble().clamp(36.0, 96.0);
-      columnWidth = ((viewportWidth - 32.0 - (count - 1) * columnGap) / count)
+      var gap = (viewportWidth * 0.035).floorToDouble().clamp(36.0, 96.0);
+      columnWidth = ((viewportWidth - 32.0 - (count - 1) * gap) / count)
           .floorToDouble()
-          .clamp(266.0, 420.0);
+          .clamp(266.0, 560.0);
+      // Fewer columns: what the cards leave goes into the gaps, so that the
+      // lines between them stay readable.
+      if (count > 1) {
+        final free =
+            viewportWidth - 32.0 - count * columnWidth - (count - 1) * gap;
+        if (free > 0) {
+          gap = math
+              .min(gap + free / (count - 1), math.max(gap, viewportWidth * 0.3))
+              .floorToDouble();
+        }
+      }
+      columnGap = gap;
     }
     boxWidth = columnWidth - 24.0;
     final natural =

@@ -804,6 +804,25 @@ class SettingsView extends StatelessWidget {
                         onUpdate({'map_layers': next.toList()});
                       },
               ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: DropdownButtonFormField<String>(
+                key: const ValueKey('map-lights'),
+                initialValue: settings['map_animations'] as String? ?? 'all',
+                decoration: InputDecoration(labelText: tr('Map lights')),
+                items: [
+                  for (final e in const {
+                    'all': 'All lights',
+                    'agents': 'Agent lights',
+                    'off': 'Lights off',
+                  }.entries)
+                    DropdownMenuItem(value: e.key, child: Text(tr(e.value))),
+                ],
+                onChanged: busy
+                    ? null
+                    : (mode) => onUpdate({'map_animations': mode}),
+              ),
+            ),
             const SizedBox(height: 24),
             ..._changeRows(context),
           ],

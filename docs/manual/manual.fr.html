@@ -226,7 +226,7 @@
   moins de 1600 pixels), elle ajoute <b>Modèles</b> ; dans une fenêtre plus large,
   les quatre colonnes s'affichent. Une colonne que la vue laisse de côté s'active quand même avec son
   bouton au-dessus de la carte, et la carte se réorganise ; le filtre masque des colonnes dans chaque
-  vue. Les colonnes affichées sont centrées et ajustent leur largeur (de 266 à 420 pixels) et leur
+  vue. Les colonnes affichées sont centrées et ajustent leur largeur (de 266 à 560 pixels) et leur
   espacement à l'espace libre, et la carte s'adapte à la largeur de la fenêtre jusqu'à ce que tu
   zoomes (<kbd>Ctrl</kbd>+<kbd>0</kbd> l'adapte à nouveau).</p>
 
@@ -330,6 +330,7 @@
   <p>Dans la colonne <b>Modèles</b>, l'assistant peut aussi retirer un modèle d'un LLM local : tu vois d'abord la revue normale, et les fichiers vont à la Corbeille quand c'est possible. Il peut aussi déplacer un dossier de modèles vers un autre disque, avec le même aperçu et la même annulation que sur la Carte du système. Il faut pour cela que la Carte du système ait examiné ce PC, et chaque dossier a sa propre revue.</p>
   <p>Dans la colonne <b>Agents</b>, l'assistant peut installer, mettre à jour ou retirer un agent, là où la page Agents le propose. Tu vois la revue normale ; l'étape s'exécute ensuite dans un terminal que tu peux suivre. Il ne démarre pas d'agents et ne change pas leurs réglages.</p>
   <p>Dans la colonne <b>Fournisseurs</b>, l'assistant peut installer ou mettre à jour un LLM local, et le démarrer ou l'arrêter, là où l'app le propose ; la revue normale de l'app s'ouvre. Il ne peut pas désinstaller un fournisseur ni se connecter à un fournisseur en ligne.</p>
+  <p>Quand une colonne ne peut pas faire quelque chose mais que le web peut l'expliquer, un assistant en ligne cherche sur le web et la carte montre sa réponse avec ses sources ; un assistant local ne peut pas chercher sur le web et le dit. Après une telle réponse, <b>Le faire avec …</b> montre la consigne, puis l'agent travaille dans un terminal et demande avant chaque étape qui modifie des fichiers.</p>
 </section>
 
 <!-- ============================== 4 Agents ============================== -->
@@ -1078,7 +1079,7 @@
 <p>Sélectionnez une boîte pour voir les poignées orange. Glissez une poignée vers un autre fournisseur ou modèle compatible, ou vers un espace vide pour déconnecter. La poignée de modèle du fournisseur change tous ses utilisateurs configurés, ou les déconnecte et décharge si possible. Un moteur occupé refuse le déchargement. Les fournisseurs en ligne utilisent la commande enregistrée de connexion ou déconnexion dans un terminal après vérification.</p>
 <p>Le survol éclaire les voisins. Maj-clic ajoute des boîtes, avec au plus un agent. Épingler conserve la mise en évidence. Repliez une carte avec sa flèche, déplacez son en-tête ou utilisez son menu. Glissez la poignée d’ordre ou choisissez Monter / Descendre. Disposition et épingles sont enregistrées séparément des connexions ; les cartes de tâches conservent sélection et zoom.</p>
 <p>Au clavier, ouvrez Actions, choisissez Connecter ou Déplacer la connexion puis activez la destination. Déconnecter supprime la connexion en cours ; Annuler ou Échap abandonne. Flèches, menus de déplacement, Épingler et options d’ordre remplacent les glissements. Détails dans le menu de chaque carte (et le symbole Détails sur sa boîte) affiche les détails et actions de gestion existants. Les boîtes d’agents affichent leur batterie de limites ou le coût du jour et l’encadré d’utilisation dans le titre, et des symboles compacts en pied : sous-agents avec leur nombre, trafic réseau avec le débit entrant et sortant actuel dans son infobulle (ouvre une fenêtre réseau avec totaux, destinations et programmes), utilisation, Démarrer ou Console, un bouton rouge Arrêter uniquement pendant que l’agent tourne (arrête l’instance de terminal de l’application ou l’instance externe) et Détails.</p>
-<p>Toutes les lumières, Lumières des agents et Lumières éteintes règlent l’activité estimée. Elles s’arrêtent sans ligne active, lorsque la carte est cachée, sans focus ou en mouvement réduit. Les lignes en échec montrent des indications limitées avec Réparer ou Déconnecter. Annuler restaure configuration et métadonnées d’échec ; chargement, déchargement et connexion ne sont pas inversés. Une opération partielle conserve la sauvegarde et l’annulation.</p>
+<p>Réglages › <b>Carte</b>: Toutes les lumières, Lumières des agents et Lumières éteintes règlent l’activité estimée. Elles s’arrêtent sans ligne active, lorsque la carte est cachée, sans focus ou en mouvement réduit. Les lignes en échec montrent des indications limitées avec Réparer ou Déconnecter. Annuler restaure configuration et métadonnées d’échec ; chargement, déchargement et connexion ne sont pas inversés. Une opération partielle conserve la sauvegarde et l’annulation.</p>
 </section>
 
 <section class="chapter" id="task-cards">

@@ -255,7 +255,7 @@
   1600 pixels) it adds <b>Models</b>; in a larger window all four columns show. A
   column the view leaves out can still be turned on with its button above the map, and the map
   rearranges to fit it; the filter hides columns in every view. The shown columns are centred and adjust their width
-  (266 to 420 pixels) and gap to the free space, and the map fits the window's width until you zoom
+  (266 to 560 pixels) and gap to the free space, and the map fits the window's width until you zoom
   (<kbd>Ctrl</kbd>+<kbd>0</kbd> fits it again).</p>
 
   <h2 id="map">Working with the map</h2>
@@ -359,6 +359,7 @@
   <p>In the <b>Models</b> column the helper can also remove a model of a local LLM: you see the normal removal review first, and files go to Trash where that is possible. It can also move a model folder to another disk, with the same preview and Undo as on the System Map. This needs the System Map to have looked at this PC, and each folder gets its own review.</p>
   <p>In the <b>Agents</b> column the helper can install, update or remove an agent, where the Agents page offers that. You see its normal review; the step then runs in a terminal you can watch. It does not start agents or change their settings.</p>
   <p>In the <b>Providers</b> column the helper can install or update a local LLM, and start or stop it, where the app offers that; the app's normal review opens for the step. It cannot uninstall a provider or sign in to an online one.</p>
+  <p>When a column cannot do something but the web can tell how, an online helper searches the web and the card shows its answer with sources; a local helper cannot search the web and says so. After such an answer, <b>Do it with …</b> shows the prompt, and the agent then works in a terminal and asks before each step that changes files.</p>
 </section>
 
 <!-- ============================== 4 Agents ============================== -->
@@ -1103,7 +1104,7 @@
 <p>Select a box to reveal orange connection hooks. Drag a hook to another compatible provider or model, or to empty space to disconnect. A provider’s model hook switches all configured users together, or disconnects them and unloads where supported. Busy runtimes refuse unloading. Online provider lines use the agent’s registered sign-in or sign-out command in a reviewed terminal.</p>
 <p>Hover highlights neighbours. Shift-click adds boxes, with at most one agent selected. Pin keeps a box highlighted. Fold a card with its arrow, drag its header to move it, or use the card menu. Drag a box’s reorder handle or choose Move up / Move down. Layout and pins are saved separately from connections; task cards retain selection and zoom.</p>
 <p>Keyboard users can open Actions on a box, choose Connect or Move connection, and activate the destination box. Disconnect removes the pending connection; Cancel or Esc cancels. Card arrows and movement menus, Pin and reorder menu items provide alternatives to dragging. Details in every card's menu (and the Details symbol on its box) shows existing details and management actions. Agent boxes show their limit battery or today's cost badge and usage box in the title, and compact symbols in the footer: subagents with their count, network traffic with the current in and out rate in its tooltip (opening a network dialog with totals, destinations and programs), usage, Start or Console, a red Stop button only while the agent runs (stopping the app's terminal instance or the external instance), and Details.</p>
-<p>All lights, Agent lights and Lights off control estimated activity. Lights stop when no line is active, the map is hidden, the window loses focus, or reduced motion is enabled. Failed lines open bounded hints with Repair or Disconnect. Undo restores configuration and failed-link metadata; runtime load/unload and sign-in/sign-out actions are not reversed. A partial model operation keeps the configuration backup and offers Undo.</p>
+<p>Settings › <b>Map</b>: All lights, Agent lights and Lights off control estimated activity. Lights stop when no line is active, the map is hidden, the window loses focus, or reduced motion is enabled. Failed lines open bounded hints with Repair or Disconnect. Undo restores configuration and failed-link metadata; runtime load/unload and sign-in/sign-out actions are not reversed. A partial model operation keeps the configuration backup and offers Undo.</p>
 </section>
 
 <section class="chapter" id="task-cards">

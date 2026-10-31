@@ -104,6 +104,10 @@ class MapLegend extends StatelessWidget {
                 _line(colors.error, 2),
                 'Red: this connection has a problem.',
               ),
+              _row(
+                const Icon(Icons.circle, color: Colors.orange, size: 13),
+                'Round hook on a selected box\'s line: drag it to another box, or click it, then Disconnect.',
+              ),
               _heading(context, 'Symbols on a box'),
               _row(
                 const Icon(Icons.account_tree_outlined, size: 18),

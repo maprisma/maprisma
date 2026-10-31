@@ -223,7 +223,7 @@
   menos de 1600 píxeles) añade <b>Modelos</b>; en una ventana mayor se muestran
   las cuatro columnas. Una columna que la vista deja fuera se puede activar con su botón sobre el mapa,
   y el mapa se reorganiza; el filtro oculta columnas en todas las vistas. Las columnas
-  mostradas se centran y ajustan su ancho (de 266 a 420 píxeles) y separación al espacio libre, y el
+  mostradas se centran y ajustan su ancho (de 266 a 560 píxeles) y separación al espacio libre, y el
   mapa se ajusta al ancho de la ventana hasta que haces zoom (<kbd>Ctrl</kbd>+<kbd>0</kbd> vuelve a
   ajustarlo).</p>
 
@@ -327,6 +327,7 @@
   <p>En la columna <b>Modelos</b> el ayudante también puede quitar un modelo de un LLM local: primero ves la revisión normal, y los archivos van a la Papelera cuando es posible. También puede mover una carpeta de modelos a otro disco, con la misma vista previa y Deshacer que en el Mapa del sistema. Para ello el Mapa del sistema debe haber examinado este PC, y cada carpeta tiene su propia revisión.</p>
   <p>En la columna <b>Agentes</b> el ayudante puede instalar, actualizar o quitar un agente, donde la página de Agentes lo ofrece. Ves su revisión normal; el paso se ejecuta luego en una terminal que puedes observar. No inicia agentes ni cambia sus ajustes.</p>
   <p>En la columna <b>Proveedores</b> el ayudante puede instalar o actualizar un LLM local, e iniciarlo o detenerlo, donde la app lo ofrece; se abre la revisión normal de la app. No puede desinstalar un proveedor ni iniciar sesión en uno en línea.</p>
+  <p>Cuando una columna no puede hacer algo pero la web puede explicarlo, un ayudante en línea busca en la web y la tarjeta muestra su respuesta con fuentes; un ayudante local no puede buscar en la web y lo dice. Tras esa respuesta, <b>Hacerlo con …</b> muestra la instrucción, y el agente trabaja en una terminal y pregunta antes de cada paso que cambie archivos.</p>
 </section>
 
 <!-- ============================== 4 Agents ============================== -->
@@ -1069,7 +1070,7 @@
 <p>Selecciona un cuadro para mostrar los tiradores naranjas. Arrastra un tirador a otro proveedor o modelo compatible, o al espacio vacío para desconectar. El tirador de modelo del proveedor cambia todos sus usuarios configurados, o los desconecta y descarga si es compatible. Un sistema ocupado rechaza la descarga. Las líneas de proveedores en línea usan el comando registrado de inicio o cierre de sesión en un terminal revisado.</p>
 <p>Al pasar el puntero se resaltan los vecinos. Mayús-clic amplía la selección, con un agente como máximo. Fijar mantiene el resaltado. Pliega una tarjeta con la flecha, mueve su cabecera o usa su menú. Arrastra el tirador de orden o elige Mover arriba / Mover abajo. Diseño y elementos fijados se guardan separados de las conexiones; las tarjetas de tareas conservan selección y zoom.</p>
 <p>Con el teclado, abre Acciones, elige Conectar o Mover conexión y activa el destino. Desconectar elimina la conexión pendiente; Cancelar o Esc cancela. Flechas, menús de movimiento, Fijar y opciones de orden sustituyen los arrastres. Detalles en el menú de cada tarjeta (y el símbolo Detalles en su caja) muestra los detalles y acciones de gestión existentes. Las cajas de agentes muestran su batería de límites o el coste de hoy y el recuadro de uso en el título, y símbolos compactos en el pie: subagentes con su número, tráfico de red con la tasa actual de entrada y salida en su descripción emergente (abre un diálogo de red con totales, destinos y programas), uso, Iniciar o Consola, un botón rojo Detener solo mientras el agente está en marcha (detiene la instancia del terminal de la aplicación o la externa) y Detalles.</p>
-<p>Todas las luces, Luces de agentes y Luces apagadas controlan la actividad estimada. Se detienen sin líneas activas, con el mapa oculto, sin foco o con movimiento reducido. Las líneas fallidas muestran indicaciones limitadas con Reparar o Desconectar. Deshacer restaura configuración y metadatos de fallos; no revierte carga, descarga ni inicio o cierre de sesión. Los fallos parciales conservan la copia de seguridad y Deshacer.</p>
+<p>Ajustes › <b>Mapa</b>: Todas las luces, Luces de agentes y Luces apagadas controlan la actividad estimada. Se detienen sin líneas activas, con el mapa oculto, sin foco o con movimiento reducido. Las líneas fallidas muestran indicaciones limitadas con Reparar o Desconectar. Deshacer restaura configuración y metadatos de fallos; no revierte carga, descarga ni inicio o cierre de sesión. Los fallos parciales conservan la copia de seguridad y Deshacer.</p>
 </section>
 
 <section class="chapter" id="task-cards">

@@ -3233,5 +3233,11 @@
  "Start.": "Starten.",
  "Its terminal in this app.": "Zijn terminal in deze app.",
  "Red stop: stops it, shown only while it runs.": "Rode stop: stopt het, alleen zichtbaar terwijl het draait.",
- "Drag to change the order in its card.": "Sleep om de volgorde in zijn kaart te wijzigen."
+ "Drag to change the order in its card.": "Sleep om de volgorde in zijn kaart te wijzigen.",
+ "This needs a web search, which a local helper cannot do. Choose Claude Code or Codex above and ask again.": "Hiervoor is een zoekopdracht op het web nodig, wat een lokale helper niet kan. Kies hierboven Claude Code of Codex en vraag het opnieuw.",
+ "The local helper did not answer: its local LLM is probably not running. Start it on the map, or choose another helper above.": "De lokale helper antwoordde niet: zijn lokale LLM draait waarschijnlijk niet. Start het op de kaart of kies hierboven een andere helper.",
+ "Round hook on a selected box's line: drag it to another box, or click it, then Disconnect.": "Ronde haak op de lijn van een geselecteerd vak: sleep hem naar een ander vak, of klik erop en dan Loskoppelen.",
+ "Map lights": "Kaartlichten",
+ "Nothing to change: it is already set up that way.": "Niets te wijzigen: het staat al zo ingesteld.",
+ "CPU & RAM": "CPU & RAM"
 }

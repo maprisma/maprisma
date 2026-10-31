@@ -448,6 +448,7 @@ KEYS = (
     'GGUF folders may contain speech or vision models. Check the model type before connecting a language model server.',
     'The selected AI agent and, for an online model, its service receive this PC overview, including folder paths. Its use may consume your plan or tokens.',
 
+    'CPU & RAM',
     'CPU threads',
     'RAM',
     'GPU',
@@ -579,6 +580,8 @@ KEYS = (
     "Its terminal in this app.",
     "Red stop: stops it, shown only while it runs.",
     "Drag to change the order in its card.",
+    "Round hook on a selected box's line: drag it to another box, or click it, then Disconnect.",
+    "Map lights",
     "Connect it to these agents", "No MCP server was found for this search.",
     "This column does not take requests yet.",
     "Additional usage", "On: beyond the plan's limits it can cost extra money.",

@@ -41,7 +41,6 @@ class MapEditor extends StatefulWidget {
     this.onMenu,
     this.animate = 'all',
     this.lightFps = 20,
-    this.onAnimationChanged,
     this.selection,
     this.onSubagents,
     this.controls,
@@ -50,6 +49,7 @@ class MapEditor extends StatefulWidget {
     this.smartCards = false,
     this.smartAskColumns,
     this.onSmartProvider,
+    this.onSmartTask,
     this.smartHelpers = const [],
     this.client,
     this.onSmartApplied,
@@ -62,7 +62,8 @@ class MapEditor extends StatefulWidget {
   final Set<String>? smartAskColumns;
 
   /// A provider step the helper proposed and the user chose.
-  final void Function(String step, String key)? onSmartProvider;
+  final void Function(String step, String key, String name)? onSmartProvider;
+  final ValueChanged<Map<String, dynamic>>? onSmartTask;
   final List<Map<String, dynamic>> smartHelpers;
   final CoreClient? client;
   final ValueChanged<Map<String, dynamic>>? onSmartApplied;
@@ -80,7 +81,6 @@ class MapEditor extends StatefulWidget {
   final void Function(BuildContext, Map<String, dynamic>)? onMenu;
   final String animate;
   final int lightFps;
-  final ValueChanged<String>? onAnimationChanged;
 
   /// The map_layers setting and its change: the filter above the map, and
   /// the three map views. Null: no filter.
@@ -1024,27 +1024,6 @@ class _MapEditorState extends State<MapEditor>
                                 col < mapColumnLayers.length;
                                 col++
                               ) ...[_columnChip(col), const SizedBox(width: 6)],
-                            const SizedBox(width: 2),
-                            DropdownButton<String>(
-                              value: widget.animate,
-                              onChanged: (v) =>
-                                  widget.onAnimationChanged?.call(v!),
-                              items: [
-                                for (final mode in ['all', 'agents', 'off'])
-                                  DropdownMenuItem(
-                                    value: mode,
-                                    child: Text(
-                                      widget.tr(
-                                        {
-                                          'all': 'All lights',
-                                          'agents': 'Agent lights',
-                                          'off': 'Lights off',
-                                        }[mode]!,
-                                      ),
-                                    ),
-                                  ),
-                              ],
-                            ),
                           ],
                         ),
                       ),
@@ -1366,6 +1345,7 @@ class _MapEditorState extends State<MapEditor>
                                       width: layout.columnWidth,
                                       column: mapSmartColumns[col].$1,
                                       onProvider: widget.onSmartProvider,
+                                      onTask: widget.onSmartTask,
                                       takesRequests:
                                           widget.smartAskColumns?.contains(
                                             mapSmartColumns[col].$1,

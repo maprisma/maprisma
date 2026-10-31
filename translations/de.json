@@ -3233,5 +3233,11 @@
  "Start.": "Starten.",
  "Its terminal in this app.": "Sein Terminal in dieser App.",
  "Red stop: stops it, shown only while it runs.": "Roter Stopp: stoppt es, nur sichtbar, solange es läuft.",
- "Drag to change the order in its card.": "Ziehen ändert die Reihenfolge in seiner Karte."
+ "Drag to change the order in its card.": "Ziehen ändert die Reihenfolge in seiner Karte.",
+ "This needs a web search, which a local helper cannot do. Choose Claude Code or Codex above and ask again.": "Dafür braucht es eine Websuche, die ein lokaler Helfer nicht kann. Wähle oben Claude Code oder Codex und frage noch einmal.",
+ "The local helper did not answer: its local LLM is probably not running. Start it on the map, or choose another helper above.": "Der lokale Helfer hat nicht geantwortet: Sein lokales LLM läuft wahrscheinlich nicht. Starte es auf der Karte oder wähle oben einen anderen Helfer.",
+ "Round hook on a selected box's line: drag it to another box, or click it, then Disconnect.": "Runder Haken an der Linie eines ausgewählten Felds: auf ein anderes Feld ziehen oder anklicken, dann Trennen.",
+ "Map lights": "Kartenlichter",
+ "Nothing to change: it is already set up that way.": "Nichts zu ändern: Es ist schon so eingerichtet.",
+ "CPU & RAM": "CPU & RAM"
 }

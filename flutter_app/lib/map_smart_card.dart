@@ -167,6 +167,7 @@ class MapSmartCard extends StatefulWidget {
     super.key,
     this.takesRequests = true,
     this.onProvider,
+    this.onTask,
     required this.column,
     required this.title,
     required this.open,
@@ -185,7 +186,10 @@ class MapSmartCard extends StatefulWidget {
   final bool takesRequests;
 
   /// A provider step the user chose: (install, update, start or stop, key).
-  final void Function(String step, String key)? onProvider;
+  final void Function(String step, String key, String name)? onProvider;
+
+  /// A reviewed task for an agent in a terminal (system.help_apply).
+  final ValueChanged<Map<String, dynamic>>? onTask;
   final String column;
   final String title;
   final bool open;
@@ -423,6 +427,36 @@ class _MapSmartCardState extends State<MapSmartCard> {
     } catch (_) {
       if (!mounted || token != _runToken) return;
       _activeTask = null;
+      setState(() {
+        _errorText = widget.tr('The action could not be completed.');
+        _step = _SmartStep.error;
+      });
+    }
+  }
+
+  /// The helper that gave this reply, also after the menu changed.
+  String get _replyHelperName =>
+      widget.helpers
+              .where((h) => h['command'] == _reply['helper'])
+              .firstOrNull?['name']
+          as String? ??
+      '';
+
+  /// The look-up's answer as a task: the app shows the prompt, the agent then
+  /// works in a terminal and asks before each step.
+  Future<void> _doIt(Map candidate) async {
+    final client = widget.client;
+    final proposal = _reply['proposal'] as String?;
+    if (client == null || proposal == null) return;
+    try {
+      final plan = await client.mapSmartReview(
+        proposal: proposal,
+        candidate: '${candidate['id']}',
+      );
+      if (!mounted) return;
+      widget.onTask?.call(plan);
+    } catch (_) {
+      if (!mounted) return;
       setState(() {
         _errorText = widget.tr('The action could not be completed.');
         _step = _SmartStep.error;
@@ -779,6 +813,11 @@ class _MapSmartCardState extends State<MapSmartCard> {
         }
       }
       widget.onApplied?.call(result);
+      final done = _activeCandidate;
+      if (done?['kind'] != null) {
+        _nextOrClose(done!);
+        return;
+      }
       setState(() => _step = _SmartStep.idle);
       _close();
     } catch (_) {
@@ -1007,7 +1046,23 @@ class _MapSmartCardState extends State<MapSmartCard> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(hint, style: const TextStyle(fontSize: 12)),
+        SelectableText(hint, style: const TextStyle(fontSize: 12)),
+        for (final c in (_reply['candidates'] as List? ?? const []).cast<Map>())
+          if (c['kind'] == 'agent_task' && _reply['proposal'] is String) ...[
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: FilledButton(
+                key: const ValueKey('smart-do-it'),
+                onPressed: () => _doIt(c),
+                child: Text(
+                  widget
+                      .tr('Do it with {0}…')
+                      .replaceAll('{0}', _replyHelperName),
+                ),
+              ),
+            ),
+          ],
         if (targetCol != null &&
             targetTitle != null &&
             targetCol != widget.column) ...[
@@ -1108,7 +1163,10 @@ class _MapSmartCardState extends State<MapSmartCard> {
                     ),
                     if ('${c['subtitle'] ?? ''}'.isNotEmpty)
                       Text(
-                        '${c['subtitle']}',
+                        c['kind'] == 'agent_action' ||
+                                c['kind'] == 'provider_action'
+                            ? widget.tr('${c['subtitle']}')
+                            : '${c['subtitle']}',
                         style: TextStyle(
                           fontSize: 11,
                           color: colors.onSurfaceVariant,
@@ -1146,6 +1204,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
                               widget.onProvider?.call(
                                 '${c['step']}',
                                 '${c['key']}',
+                                '${c['title']}',
                               );
                             } else if ('${c['kind'] ?? ''}'.startsWith(
                               'mcp_',

@@ -1740,8 +1740,40 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     }
   }
 
+  /// A task from Ask AI: the prompt to read, then the agent in a terminal.
+  Future<void> _smartTask(Map<String, dynamic> plan) async {
+    final yes = await showDialog<bool>(
+      context: _navigator.currentContext!,
+      builder: (context) => AlertDialog(
+        title: Text(tr('Do it with {0}…').replaceAll('{0}', '${plan['name']}')),
+        content: SizedBox(
+          width: 760,
+          child: SingleChildScrollView(
+            child: SelectableText(plan['prompt'] as String),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(tr('Cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(tr('Start')),
+          ),
+        ],
+      ),
+    );
+    if (yes != true || !mounted) return;
+    try {
+      _systemSession(await _client.systemHelpApply(preview: plan['preview']));
+    } catch (_) {
+      _actionFailed();
+    }
+  }
+
   /// A provider step from Ask AI: the app's own page, with its own review.
-  void _smartProvider(String step, String key) {
+  void _smartProvider(String step, String key, String name) {
     final found = _updates.where((u) => u['key'] == key).firstOrNull;
     switch (step) {
       case 'install':
@@ -1752,7 +1784,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         unawaited(
           _mapRuntimeControl({
             'id': 'runtime:$key',
-            'label': key,
+            'label': name,
             'status': step == 'stop' ? 'running' : 'stopped',
           }),
         );
@@ -4569,10 +4601,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                                                           as String? ??
                                                       'all')
                                                 : 'off',
-                                            onAnimationChanged: (mode) =>
-                                                _updateSettings({
-                                                  'map_animations': mode,
-                                                }),
                                             controller: _aiTransform,
                                             layers:
                                                 (_snapshot!['settings']['map_layers']
@@ -4610,6 +4638,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                                               'models',
                                             },
                                             onSmartProvider: _smartProvider,
+                                            onSmartTask: _smartTask,
                                             smartCards:
                                                 _smartHelpers.isNotEmpty,
                                             smartHelpers: _smartHelpers,

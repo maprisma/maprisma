@@ -168,6 +168,18 @@ void main() {
     expect(next['card_order'], containsAll(['3:model:', '0:mcp:', id]));
   });
 
+  test('two columns use the whole of a wide window', () {
+    final l = MapLayout(
+      fixtureGraph(),
+      {},
+      columns: const [0, 1],
+      viewportWidth: 1896,
+    );
+    expect(l.columnWidth, 560);
+    expect(l.columnGap, greaterThan(400));
+    expect(l.size.width, greaterThan(1650));
+  });
+
   test('the shown columns sit in the middle of the window', () {
     final l = MapLayout(
       twoColumns(),
@@ -177,8 +189,8 @@ void main() {
     );
     final left = l.columnX(1), right = 1000 - (l.columnX(2) + l.columnWidth);
     expect(left, closeTo(right, 2));
-    expect(l.columnWidth, inInclusiveRange(266, 420));
-    expect(l.columnGap, inInclusiveRange(36, 96));
+    expect(l.columnWidth, inInclusiveRange(266, 560));
+    expect(l.columnGap, greaterThanOrEqualTo(36));
     expect(l.boxes['agent:a']!.width, l.columnWidth - 24);
     expect(l.size.width, lessThanOrEqualTo(1000));
 

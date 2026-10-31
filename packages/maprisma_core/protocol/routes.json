@@ -982,7 +982,7 @@
   "map.smart_review": {
    "area": "map",
    "kind": "read",
-   "note": "The facts for the review of one candidate; for a model removal or an agent action its normal preview; for a folder move a task whose result is the plan.",
+   "note": "The facts for the review of one candidate; for a model removal or an agent action its normal preview; for a folder move a task whose result is the plan. For a task after a web look-up: {preview, name, prompt, topic} for system.help_apply.",
    "params": {
     "candidate": "string",
     "proposal": "string"

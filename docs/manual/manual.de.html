@@ -229,7 +229,7 @@
   unter 1600 Pixeln) kommen <b>Modelle</b> hinzu; in einem größeren Fenster zeigen
   sich alle vier Spalten. Eine Spalte, die die Ansicht auslässt, lässt sich mit ihrem Knopf über der
   Karte trotzdem einschalten, und die Karte ordnet sich neu an; der Filter blendet Spalten in jeder Ansicht aus. Die
-  gezeigten Spalten sind zentriert und passen ihre Breite (266 bis 420 Pixel) und den Abstand an den
+  gezeigten Spalten sind zentriert und passen ihre Breite (266 bis 560 Pixel) und den Abstand an den
   freien Platz an, und die Karte passt sich an die Fensterbreite an, bis du zoomst
   (<kbd>Strg</kbd>+<kbd>0</kbd> passt sie wieder an).</p>
 
@@ -330,6 +330,7 @@
   <p>In der Spalte <b>Modelle</b> kann der Helfer auch ein Modell eines lokalen LLMs entfernen: Du siehst zuerst die normale Prüfung, und Dateien wandern in den Papierkorb, wo das möglich ist. Er kann auch einen Modellordner auf einen anderen Datenträger verschieben, mit derselben Vorschau und demselben Rückgängig wie auf der Systemkarte. Dafür muss die Systemkarte diesen PC schon untersucht haben, und jeder Ordner bekommt seine eigene Prüfung.</p>
   <p>In der Spalte <b>Agenten</b> kann der Helfer einen Agenten installieren, aktualisieren oder entfernen, wo die Agenten-Seite das anbietet. Du siehst die normale Prüfung; der Schritt läuft dann in einem Terminal, das du beobachten kannst. Er startet keine Agenten und ändert nicht ihre Einstellungen.</p>
   <p>In der Spalte <b>Anbieter</b> kann der Helfer ein lokales LLM installieren oder aktualisieren und es starten oder stoppen, wo die App das anbietet; für den Schritt öffnet sich die normale Prüfung der App. Einen Anbieter deinstallieren oder sich bei einem Online-Anbieter anmelden kann er nicht.</p>
+  <p>Kann eine Spalte etwas nicht, das Web aber erklären, sucht ein Online-Helfer im Web und die Karte zeigt seine Antwort mit Quellen; ein lokaler Helfer kann nicht im Web suchen und sagt das. Nach so einer Antwort zeigt <b>Mit … erledigen</b> die Anweisung; der Agent arbeitet dann in einem Terminal und fragt vor jedem Schritt, der Dateien ändert.</p>
 </section>
 
 <!-- ============================== 4 Agents ============================== -->
@@ -1077,7 +1078,7 @@
 <p>Wähle einen Kasten, um orange Verbindungshaken zu zeigen. Ziehe einen Haken zu einem passenden Anbieter oder Modell oder auf leere Fläche zum Trennen. Ein Modellhaken des Anbieters schaltet alle konfigurierten Nutzer gemeinsam um oder trennt sie und entlädt, sofern unterstützt. Beschäftigte Laufzeitsysteme verweigern das Entladen. Online-Verbindungen verwenden den registrierten An- oder Abmeldebefehl im bestätigten Terminal.</p>
 <p>Der Mauszeiger hebt Nachbarn hervor. Umschalt-Klick ergänzt die Auswahl, mit höchstens einem Agenten. Anheften hält einen Kasten hervorgehoben. Klappe Karten mit dem Pfeil ein, verschiebe ihre Kopfzeile oder nutze das Kartenmenü. Ziehe den Sortiergriff oder wähle Nach oben / Nach unten. Layout und Pins werden getrennt von Verbindungen gespeichert; Aufgabenkarten erhalten Auswahl und Zoom.</p>
 <p>Mit der Tastatur: Aktionen am Kasten öffnen, Verbinden oder Verbindung verschieben wählen und den Zielkasten aktivieren. Trennen entfernt die vorgemerkte Verbindung; Abbrechen oder Esc verwirft sie. Pfeile, Bewegungsmenüs, Anheften und Sortiermenüs ersetzen Ziehgesten. Details im Menü jeder Karte (und das Details-Symbol am Kasten) zeigt die bestehenden Details und Verwaltungsaktionen. Agentenkästen zeigen ihre Limit-Batterie oder die heutigen Kosten und die Nutzungsbox im Titel sowie kompakte Symbole in der Fußzeile: Subagenten mit ihrer Anzahl, Netzwerkverkehr mit der aktuellen Ein- und Ausgangsrate im Tooltip (öffnet einen Netzwerkdialog mit Summen, Zielen und Programmen), Nutzung, Starten oder Konsole, einen roten Stopp-Knopf nur solange der Agent läuft (stoppt die Terminal-Instanz der App oder die externe Instanz) und Details.</p>
-<p>Alle Lichter, Agentenlichter und Lichter aus steuern geschätzte Aktivität. Lichter stoppen ohne aktive Linie, bei verborgener Karte, Fokusverlust oder reduzierter Bewegung. Fehlerlinien zeigen begrenzte Hinweise mit Reparieren oder Trennen. Rückgängig stellt Konfiguration und Fehlermetadaten wieder her; Laden, Entladen und An-/Abmelden werden nicht rückgängig gemacht. Teilfehler behalten die Sicherung und Rückgängig.</p>
+<p>Einstellungen › <b>Karte</b>: Alle Lichter, Agentenlichter und Lichter aus steuern geschätzte Aktivität. Lichter stoppen ohne aktive Linie, bei verborgener Karte, Fokusverlust oder reduzierter Bewegung. Fehlerlinien zeigen begrenzte Hinweise mit Reparieren oder Trennen. Rückgängig stellt Konfiguration und Fehlermetadaten wieder her; Laden, Entladen und An-/Abmelden werden nicht rückgängig gemacht. Teilfehler behalten die Sicherung und Rückgängig.</p>
 </section>
 
 <section class="chapter" id="task-cards">

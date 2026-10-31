@@ -102,6 +102,133 @@ Future<void> mount(
 }
 
 void main() {
+  testWidgets('connecting a server: Review sends its agent', (tester) async {
+    final calls = <String, Map<String, dynamic>>{};
+    final client = CoreClient(
+      _FakeSmartTransport((method, params) async {
+        calls[method] = params;
+        if (method == 'map.smart_ask') return {'task': 'ask'};
+        if (method == 'map.smart_plan') {
+          return {
+            'plan': 'plan-1',
+            'files': const [],
+            'links_add': const [],
+            'links_remove': const [],
+          };
+        }
+        return {
+          'state': 'done',
+          'result': {
+            'status': 'proposal',
+            'proposal': 'p',
+            'candidates': [
+              {
+                'id': 'c1',
+                'kind': 'mcp_connect',
+                'agents': ['codex'],
+                'title': 'pdfcraft',
+                'subtitle': 'Codex',
+                'fit': 'ok',
+                'size': 0,
+              },
+            ],
+          },
+        };
+      }),
+    );
+    tester.view.physicalSize = const Size(500, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MapSmartCard(
+            column: 'mcp',
+            title: 'MCP',
+            open: true,
+            enabled: true,
+            onToggle: () {},
+            tr: (s) => s,
+            client: client,
+            helpers: const [
+              {'command': 'claude', 'name': 'Claude Code', 'local': false},
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.enterText(find.byType(TextField), 'connect pdfcraft to codex');
+    await tester.tap(find.widgetWithText(FilledButton, 'Ask'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.byKey(const ValueKey('smart-review-c1')));
+    await tester.pump();
+    await tester.pump();
+    expect(calls['map.smart_plan']?['agents'], ['codex']);
+    expect(find.byType(ConnectionReview), findsOneWidget);
+  });
+
+  testWidgets('after a web answer the button hands the prompt to the app', (
+    tester,
+  ) async {
+    final plans = <Map<String, dynamic>>[];
+    final client = CoreClient(
+      _FakeSmartTransport((method, params) async {
+        if (method == 'map.smart_ask') return {'task': 'ask'};
+        if (method == 'map.smart_review') {
+          return {'preview': 'x', 'name': 'Claude Code', 'prompt': 'do it'};
+        }
+        return {
+          'state': 'done',
+          'result': {
+            'status': 'redirect',
+            'instead': {'hint': 'Download it.', 'column': null},
+            'helper': 'claude',
+            'proposal': 'p',
+            'candidates': [
+              {'id': 'task', 'kind': 'agent_task', 'title': 'claude'},
+            ],
+          },
+        };
+      }),
+    );
+    tester.view.physicalSize = const Size(500, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MapSmartCard(
+            column: 'mcp',
+            title: 'MCP',
+            open: true,
+            enabled: true,
+            onToggle: () {},
+            tr: (s) => s,
+            client: client,
+            onTask: plans.add,
+            helpers: const [
+              {'command': 'claude', 'name': 'Claude Code', 'local': false},
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.enterText(find.byType(TextField), 'update craft');
+    await tester.tap(find.widgetWithText(FilledButton, 'Ask'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('Do it with Claude Code…'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('smart-do-it')));
+    await tester.pump();
+    await tester.pump();
+    expect(plans.single['prompt'], 'do it');
+  });
+
   testWidgets('a provider step opens the app page for it', (tester) async {
     final chosen = <String>[];
     var closed = false;
@@ -144,7 +271,7 @@ void main() {
             onToggle: () => closed = true,
             tr: (s) => s,
             client: client,
-            onProvider: (step, key) => chosen.add('$step $key'),
+            onProvider: (step, key, name) => chosen.add('$step $key $name'),
             helpers: const [
               {'command': 'claude', 'name': 'Claude Code', 'local': false},
             ],
@@ -159,7 +286,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     await tester.tap(find.byKey(const ValueKey('smart-review-c1')));
     await tester.pump();
-    expect(chosen, ['install ollama']);
+    expect(chosen, ['install ollama Ollama']);
     expect(closed, isTrue);
   });
 
@@ -2469,10 +2596,6 @@ void main() {
         size: const Size(1500, 500),
       );
       await tester.pump();
-      expect(
-        tester.getTopLeft(find.byType(MapZoomControl)).dx,
-        greaterThan(tester.getTopRight(find.byType(DropdownButton<String>)).dx),
-      );
       expect(tester.getTopRight(find.byType(MapZoomControl)).dx, 1500 - 12);
       final mouse = TestPointer(1, PointerDeviceKind.mouse);
       final middle = tester.getCenter(find.byType(InteractiveViewer));

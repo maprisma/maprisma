@@ -1623,6 +1623,7 @@ final class CoreService {
         switch (topic) {
           'fix' => 'smart-fix',
           'mcp-update' => 'mcp-update',
+          'smart-card' => 'smart-card',
           _ => 'setup-help',
         },
         command,
@@ -2889,16 +2890,17 @@ final class CoreService {
           'settings_path': identity.settingsPath,
           if (column == 'providers')
             'providers': [
-              for (final rt in reads.inventory.collect(agents).runtimes)
+              for (final rt
+                  in (reads.providersSnapshot()['local'] as List).cast<Map>())
                 {
-                  'key': rt.key,
-                  'name': rt.name,
-                  'installed': rt.installed,
-                  'running': rt.running,
-                  'install': !rt.installed,
-                  'update': lastUpdates.any((u) => u['key'] == rt.key),
-                  'start': rt.installed && !rt.running,
-                  'stop': rt.installed && rt.running,
+                  'key': rt['key'],
+                  'name': rt['name'],
+                  'installed': rt['installed'],
+                  'running': rt['running'],
+                  'install': rt['installable'] == true,
+                  'update': lastUpdates.any((u) => u['key'] == rt['key']),
+                  'start': rt['can_control'] == true && rt['running'] != true,
+                  'stop': rt['can_control'] == true && rt['running'] == true,
                 },
             ],
           if (column == 'agents')
@@ -2982,6 +2984,26 @@ final class CoreService {
     }
     final candidate = smartProposals.candidate(params);
     final action = candidate['action'] as Map;
+    if (action['kind'] == 'agent_task') {
+      final task = action['command'] as String;
+      final argv = taskArgv(
+        addons.adapters.where((a) => a.command == task).firstOrNull,
+        task,
+        action['prompt'] as String,
+        identity.environment,
+        identity.home,
+      );
+      if (method != 'map.smart_review' || argv == null || argv.isEmpty) {
+        throw const FormatException('Guarded helper unavailable');
+      }
+      return helpPreviews.keep(
+        task,
+        _nameOf(task),
+        action['prompt'] as String,
+        argv,
+        'smart-card',
+      );
+    }
     if (action['kind'] == 'agent_action') {
       if (method == 'map.smart_review') {
         final review = dispatch('agents.action_preview', {
