@@ -46,7 +46,7 @@ MAP_SCAN_SETTINGS = (
 PROTOCOL = 1
 MAX_REQUEST = 64 * 1024
 MAP_REUSE = 5.0                 # seconds a self-built map serves previews and task focus
-UI_SETTINGS = frozenset(("flutter_theme_mode", "map_light_fps", "flutter_map_layout", "map_animations", "language", "look", "agent_folder", "map_layers", "subagents_minutes", "subagents_kept", "addons_online", "map_scan_interval", "map_scan_pause_unfocused", "map_scan_targets", "providers_with_agents", "ai_checks_agent", "warn_notify",
+UI_SETTINGS = frozenset(("flutter_theme_mode", "map_light_fps", "flutter_map_layout", "map_animations", "language", "look", "agent_folder", "map_layers", "system_map_columns", "subagents_minutes", "subagents_kept", "addons_online", "map_scan_interval", "map_scan_pause_unfocused", "map_scan_targets", "providers_with_agents", "ai_checks_agent", "warn_notify",
                          "cost_currency", "cost_limit", "warn_yellow", "warn_red", "terminal_tabs",
                          "usage_box", "usage_box_items", "usage_box_size",
                          "ai_local_helper", "ai_checks", "window_mode", "corners"))
@@ -540,6 +540,8 @@ class Service:
             if "map_layers" in values and (values["map_layers"] is None or
                     set(values["map_layers"]) - set(settings_schema.MAP_LAYERS)):
                 raise ValueError("Unknown map layer")
+            if "system_map_columns" in values and values["system_map_columns"] is None:
+                raise ValueError("Unknown system map column")
             ai_core.update_settings(self.settings_path, **values)
             if "language" in values:
                 i18n._lang = None  # invalidate the existing translation module's settings cache

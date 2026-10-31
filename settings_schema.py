@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from typing import Any, Callable
 
 MAP_LAYERS = ("agents", "online", "local", "models", "mcp", "skills")
+SYSTEM_MAP_COLUMNS = ("pc", "disks", "programs", "tools", "folders")
 MAP_SCAN_INTERVALS = (0, 6, 15, 30, 60, 120, 300)  # 0: startup/manual Refresh only
 MAP_SCAN_TARGETS = ('activity', 'agents', 'inventory')
 MAP_ANIMATIONS = ("all", "agents", "off")
@@ -89,6 +90,9 @@ SCHEMA: dict[str, Setting] = {
     "flutter_map_layout": Setting({}, lambda v: __import__("flutter_map_editor").valid_layout(v),
                                   "Flutter map card positions/order/folds and node pins (bounded schema)"),
     "map_layers": Setting(list(MAP_LAYERS), _texts, "the map's Show switches of the full-size window"),
+    "system_map_columns": Setting(list(SYSTEM_MAP_COLUMNS),
+                                  lambda v: _texts(v) and set(v) <= set(SYSTEM_MAP_COLUMNS),
+                                  "the System Map's column filters"),
     "map_scan_interval": Setting(6, lambda v: type(v) is int and v in MAP_SCAN_INTERVALS,
                                  "Automatic map scan interval in seconds; 0: manual only"),
     "map_scan_pause_unfocused": Setting(True, _bool, "Pause automatic map scans while the window is unfocused"),

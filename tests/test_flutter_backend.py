@@ -133,15 +133,18 @@ class FlutterBackendTest(unittest.TestCase):
         ai_core.update_settings(self.settings, agent_projects={'test-agent': str(self.project)})
         original = self.settings.read_bytes()
         for values in ({'addons_enabled': ['unverified']}, {'language': 'unknown'},
-                       {'map_layers': ['made-up-layer']}, {'agent_folder': 'relative'},
+                       {'map_layers': ['made-up-layer']}, {'system_map_columns': ['made-up-col']},
+                       {'system_map_columns': None}, {'agent_folder': 'relative'},
                        {'language': 'de', 'look': 'made-up-look'}):
             with self.assertRaises(ValueError):
                 self.service.dispatch('settings.update', {'values': values})
             self.assertEqual(self.settings.read_bytes(), original)
         settings = self.service.dispatch('settings.update', {'values': {
-            'language': 'de', 'agent_folder': str(self.project), 'map_layers': ['agents']}})
+            'language': 'de', 'agent_folder': str(self.project), 'map_layers': ['agents'],
+            'system_map_columns': ['pc', 'folders']}})
         self.assertEqual(settings['language'], 'de')
         self.assertEqual(settings['agent_folder'], str(self.project))
+        self.assertEqual(settings['system_map_columns'], ['pc', 'folders'])
         self.assertEqual(ai_core.load_settings(self.settings)['agent_projects'], {'test-agent': str(self.project)})
         self.service.dispatch('settings.update', {'values': {'agent_folder': None}})
         self.assertIsNone(self.service.settings()['agent_folder'])

@@ -15,6 +15,7 @@ const uiSettings = {
   'look',
   'agent_folder',
   'map_layers',
+  'system_map_columns',
   'subagents_minutes',
   'subagents_kept',
   'addons_online',
@@ -39,6 +40,7 @@ const uiSettings = {
 };
 const languages = {'en', 'de', 'fr', 'es', 'it', 'pt', 'nl', 'pl'};
 const mapLayers = ['agents', 'online', 'local', 'models', 'mcp', 'skills'];
+const systemMapColumns = ['pc', 'disks', 'programs', 'tools', 'folders'];
 const settingsMaxBytes = 256 * 1024;
 bool texts(dynamic v) => v is List && v.every((e) => e is String);
 bool subset(dynamic v, List<String> choices) =>
@@ -177,6 +179,8 @@ final class SettingsStore {
         return v is int && [0, 6, 15, 30, 60, 120, 300].contains(v);
       case 'map_scan_targets':
         return subset(v, ['activity', 'agents', 'inventory']);
+      case 'system_map_columns':
+        return subset(v, systemMapColumns);
       case 'usage_box_items':
         return subset(v, ['rate', 'context', 'used']);
       case 'usage_box_size':
@@ -249,6 +253,10 @@ final class SettingsStore {
     if (values.containsKey('map_layers') &&
         !subset(values['map_layers'], mapLayers)) {
       throw const FormatException('Unknown map layer');
+    }
+    if (values.containsKey('system_map_columns') &&
+        !subset(values['system_map_columns'], systemMapColumns)) {
+      throw const FormatException('Unknown system map column');
     }
     if (values['agent_folder'] != null) {
       var folder = values['agent_folder'] as String;

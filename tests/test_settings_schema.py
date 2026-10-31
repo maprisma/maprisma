@@ -48,17 +48,22 @@ class SchemaTest(unittest.TestCase):
         self.assertEqual(direct, [])
 
     def test_a_value_of_the_wrong_shape_counts_as_not_set(self):
-        self.write({"map_zoom": "big", "terminal_tabs": "yes", "window_size": [800], "map_animations": "wild"})
+        self.write({"map_zoom": "big", "terminal_tabs": "yes", "window_size": [800], "map_animations": "wild",
+                    "system_map_columns": ["pc", "bogus"]})
         self.assertEqual(ai_core.setting("map_zoom", self.path), 1.0)
         self.assertIs(ai_core.setting("terminal_tabs", self.path), True)
         self.assertIsNone(ai_core.setting("window_size", self.path))
         self.assertEqual(ai_core.setting("map_animations", self.path), "all")
+        self.assertEqual(ai_core.setting("system_map_columns", self.path),
+                         ["pc", "disks", "programs", "tools", "folders"])
 
     def test_stored_values_win(self):
-        self.write({"map_zoom": 1.5, "terminal_tabs": False, "window_size": [1200, 800]})
+        self.write({"map_zoom": 1.5, "terminal_tabs": False, "window_size": [1200, 800],
+                    "system_map_columns": ["pc", "folders"]})
         self.assertEqual(ai_core.setting("map_zoom", self.path), 1.5)
         self.assertIs(ai_core.setting("terminal_tabs", self.path), False)
         self.assertEqual(ai_core.setting("window_size", self.path), [1200, 800])
+        self.assertEqual(ai_core.setting("system_map_columns", self.path), ["pc", "folders"])
 
     def test_defaults_are_fresh_copies(self):
         first = ai_core.setting("details_open", self.path)

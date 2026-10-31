@@ -47,6 +47,10 @@
                 "agents",
                 "skills"
               ],
+              "system_map_columns": [
+                "pc",
+                "folders"
+              ],
               "map_scan_targets": [
                 "activity"
               ],
@@ -187,6 +191,24 @@
           "params": {
             "values": {
               "map_layers": [
+                "bad"
+              ]
+            }
+          }
+        },
+        {
+          "method": "settings.update",
+          "params": {
+            "values": {
+              "system_map_columns": null
+            }
+          }
+        },
+        {
+          "method": "settings.update",
+          "params": {
+            "values": {
+              "system_map_columns": [
                 "bad"
               ]
             }

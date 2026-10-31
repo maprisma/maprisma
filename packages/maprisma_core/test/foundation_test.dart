@@ -183,6 +183,19 @@ void main() {
     'defaults; strict atomic validation; nullable deletion; unknown keys retained',
     () {
       expect(core.settings.snapshot()['map_light_fps'], 20);
+      expect(core.settings.snapshot()['system_map_columns'], [
+        'pc',
+        'disks',
+        'programs',
+        'tools',
+        'folders',
+      ]);
+      core.dispatch('settings.update', {
+        'values': {
+          'system_map_columns': ['pc', 'folders'],
+        },
+      });
+      expect(core.settings.snapshot()['system_map_columns'], ['pc', 'folders']);
       core.settings.posix.atomicWrite(
         core.identity.settingsPath,
         utf8.encode(
@@ -239,6 +252,14 @@ void main() {
         },
         {
           'values': {'map_layers': null},
+        },
+        {
+          'values': {'system_map_columns': null},
+        },
+        {
+          'values': {
+            'system_map_columns': ['bogus'],
+          },
         },
         {
           'values': {'agent_folder': 'relative'},
