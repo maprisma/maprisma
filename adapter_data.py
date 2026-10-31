@@ -87,7 +87,8 @@ MCP = {"path": STR, "format": STR, "key": STR, "shape": STR, "in_app": STR, "def
 LOCAL_LLM = {"files": STRS, "hooks": BOOL}             # the files connect.plan edits, by the local_llm_* hooks
 LOGIN_STATUS = {"argv": STRS, "no": STR, "yes": STR}     # a command whose output says signed in or not
 ACCESS = {"how": STR, "login": STR, "files": STRS, "env": STRS, "local_ok": BOOL, "logins": TABLES, "key": TABLE,
-          "logout": STRS, "per_token": BOOL}   # per_token: every sign-in is an API key (no plans with limits)
+          "logout": STRS, "per_token": BOOL,   # per_token: every sign-in is an API key (no plans with limits)
+          "extra_file": STR, "extra_key": STR, "extra_url": STR}   # paid usage beyond the plan: where to read or check it
 LOGIN = {"label": STR, "argv": STRS, "note": STR}
 CONFIGURE = {"label": STR, "argv": STRS, "note": STR}    # its own setup command, in a terminal (Configure…)
 KEY = {"var": STR, "url": STR, "stdin": STRS, "env_file": STR}
@@ -341,6 +342,8 @@ def _access(facts: dict):
         return Access(_(facts["how"]), facts.get("login", ""), tuple(facts.get("files", ())),
                       tuple(facts.get("env", ())), local_ok=facts.get("local_ok", False),
                       per_token=facts.get("per_token", False),
+                      extra_file=facts.get("extra_file", ""), extra_key=facts.get("extra_key", ""),
+                      extra_url=facts.get("extra_url", ""),
                       logins=tuple(Login(_(login["label"]), tuple(login["argv"]),
                                          _(login["note"]) if login.get("note") else "")
                                    for login in facts.get("logins", ())),

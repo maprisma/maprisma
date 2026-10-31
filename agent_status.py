@@ -443,6 +443,9 @@ class Access:
     per_token: bool = False  # every sign-in is an API key: paid per token, no plan with limits
     logins: tuple = ()       # signin.Login: the agent's own sign-ins the app can start in a terminal
     key: object = None       # signin.KeyStep: how an API key gets where the agent reads it
+    extra_file: str = ""     # paid usage beyond the plan: a JSON file (~/...) ...
+    extra_key: str = ""      # ... with a true/false value at this dotted path
+    extra_url: str = ""      # the page where the user checks or changes it
 
 
 def access_table() -> dict:

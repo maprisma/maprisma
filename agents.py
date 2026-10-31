@@ -16,7 +16,9 @@ command on PATH says nothing about whether the agent is installed.
 """
 
 import json
+import os
 import re
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -189,6 +191,18 @@ def package_version(name: str, db: Path = PACMAN_DB) -> str | None:
     return None
 
 
+def on_system_path(command: str, bin_dir: Path = BIN_DIR, mise_dir: Path = MISE_DIR) -> bool:
+    """A program of a distribution package or another installer: on PATH, but not
+    mise's shims and wrappers or ~/.local/bin, which can be stubs that install the
+    agent at its first start (detect reads those itself)."""
+    skipped = {bin_dir, BIN_DIR}
+    mises = (mise_dir, MISE_DIR)
+    folders = [f for f in os.environ.get("PATH", "").split(":") if f]
+    kept = [f for f in folders if Path(f) not in skipped
+            and not any(Path(f) == m or m in Path(f).parents for m in mises)]
+    return shutil.which(command, path=":".join(kept)) is not None if kept else False
+
+
 def detect(command: str, bin_dir: Path = BIN_DIR, mise_dir: Path = MISE_DIR,
            db: Path = PACMAN_DB) -> tuple[bool, str, str]:
     """(installed, version, source) for one agent."""
@@ -205,7 +219,13 @@ def detect(command: str, bin_dir: Path = BIN_DIR, mise_dir: Path = MISE_DIR,
         if inst is not None and inst.installed_folder() is not None:
             version = inst.current_version().lstrip("v")
             return True, version.split("-")[0] if h.short_version else version, "own"
-        return (True, "", "own") if own_install(command, bin_dir) else (False, "", "")
+        if own_install(command, bin_dir):
+            return True, "", "own"
+        # Its recipe may install through mise first (Antigravity CLI).
+        folder = mise_install(SPECS.get(command, command), mise_dir)
+        if folder is not None:
+            return True, mise_version(folder), "mise"
+        return (True, "", "system") if on_system_path(command, bin_dir, mise_dir) else (False, "", "")
     if h is not None and h.package:
         version = package_version(h.package, db)
         if version is not None:
@@ -219,6 +239,8 @@ def detect(command: str, bin_dir: Path = BIN_DIR, mise_dir: Path = MISE_DIR,
         return True, mise_version(folder) if folder is not None else "", "own"
     if folder is not None:
         return True, mise_version(folder), "mise"
+    if (h is None or h.own_install_counts) and on_system_path(command, bin_dir, mise_dir):
+        return True, "", "system"
     return False, "", ""
 
 

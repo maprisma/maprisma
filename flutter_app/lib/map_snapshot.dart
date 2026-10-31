@@ -37,6 +37,18 @@ Object mapGeometry(Map<String, dynamic> graph) => [
 /// Working/activity flags drive the separate light layer.
 Object mapAppearance(Map<String, dynamic> graph) => [
   graph['nodes'],
+  graph['agent_badges'],
+  graph['usage_boxes'],
+  graph['usage_box_size'],
+  {
+    for (final entry in (graph['traffic'] as Map? ?? {}).entries)
+      if (((entry.value as Map?)?['connections'] as num? ?? 0) > 0)
+        entry.key: [
+          (entry.value as Map)['connections'],
+          (entry.value as Map)['rate_in'],
+          (entry.value as Map)['rate_out'],
+        ],
+  },
   [
     for (final edge in graph['edges'] as List? ?? [])
       {

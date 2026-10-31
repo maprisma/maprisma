@@ -103,6 +103,7 @@ final class ReadService {
       return {
         'command': agent.command,
         ...details.read(agent.adapter).toJson(),
+        'extra_usage': details.extraUsage(agent.adapter),
         'actions': details.actions(agent),
       };
     }

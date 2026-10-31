@@ -67,6 +67,13 @@ ThemeData appTheme(
     extensions: [Corners(radius ?? 12)],
     cardTheme: shape == null ? null : CardThemeData(shape: shape),
     dialogTheme: shape == null ? null : DialogThemeData(shape: shape),
+    // Material's default is the inverted surface: a white bar on a dark app.
+    snackBarTheme: SnackBarThemeData(
+      backgroundColor: colors.surfaceContainerHigh,
+      contentTextStyle: TextStyle(color: colors.onSurface),
+      actionTextColor: colors.primary,
+      closeIconColor: colors.onSurfaceVariant,
+    ),
   );
 }
 

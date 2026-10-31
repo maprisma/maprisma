@@ -26,7 +26,8 @@ interrupted=False
 installed=False
 installed_runtime=False
 catalog_loads=0
-settings={'map_scan_interval':6,'map_light_fps':20,'flutter_theme_mode':'system','map_layers':['agents'],'language':'en'}
+settings={'map_scan_interval':6,'map_light_fps':20,'flutter_theme_mode':'system','map_layers':['agents','online','local','models','mcp','skills'],'language':'en'}
+if Path('window_popup').exists():settings['window_mode']='popup'
 addon={'id':'fixture-addon','name':'Fixture adapter','version':'1.0','summary':'Summary',
  'kind':'agent','state':'verified','enabled':False,'supported':True,'verified':True,'provides':['test']}
 new_addon={**addon,'id':'catalog-addon','name':'Catalog adapter','version':'2.0','provides':['new']}
@@ -54,7 +55,9 @@ for line in sys.stdin:
  elif m=='app.theme':r={'theme':json.loads(Path('theme.json').read_text()) if Path('theme.json').exists() else {}}
  elif m=='addons.list':r={'addons':[addon]+([new_addon] if installed else [])}
  elif m=='system.cached':r={'nodes':[],'edges':[],'notes':[],'helpers':[]}
- elif m=='map.snapshot':r={'nodes':nodes,'edges':[{'source':'agent:test','target':'mcp:known-server','kind':'mcp'}] if connected else [],'activity':{},'pending':Path('pending').exists()}
+ elif m=='map.snapshot':r={'nodes':[({**n,'status':'running'} if n['id']=='agent:test' and Path('agent_running').exists() else n) for n in nodes],'edges':[{'source':'agent:test','target':'mcp:known-server','kind':'mcp'}] if connected else [],'activity':{},'pending':Path('pending').exists()}
+ elif m=='agents.traffic':r={'available':True,'agents':{}}
+ elif m=='agents.halt_preview':r={'instances':[{'label':'PID 42','preview':'halt-42'}]}
  elif m=='system.refresh':tasks['system']={'nodes':[],'edges':[],'notes':[],'helpers':[]};r={'task':'system'}
  elif m=='setup.detect':tasks['detect']={'installed':['fixture-addon']};r={'task':'detect'}
  elif m=='providers.snapshot':r={'local':[runtime],'online':[],'folders':[]}
@@ -193,7 +196,7 @@ Future<Directory> mountApp(
   final backend = await tester.runAsync(
     () => PythonTransport.start(dir.path).then(Backend.fromTransport),
   );
-  tester.view.physicalSize = const Size(1400, 900);
+  tester.view.physicalSize = const Size(1600, 900);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
@@ -1262,6 +1265,7 @@ void main() {
       tester,
       beforeStart: (d) {
         File('${d.path}/omarchy').writeAsStringSync('');
+        File('${d.path}/window_popup').writeAsStringSync('');
       },
     );
     await settleService(tester);
@@ -1275,6 +1279,19 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await settleService(tester);
     expect(calls, contains('hide'));
+    expect(tester.takeException(), isNull);
+    await unmountApp(tester);
+  });
+
+  testWidgets('Omarchy by default: an ordinary window', (tester) async {
+    final dir = await mountApp(
+      tester,
+      beforeStart: (d) {
+        File('${d.path}/omarchy').writeAsStringSync('');
+      },
+    );
+    await settleService(tester);
+    expect(requests(dir).where((q) => q['method'] == 'window.popup'), isEmpty);
     expect(tester.takeException(), isNull);
     await unmountApp(tester);
   });
@@ -1448,4 +1465,79 @@ void main() {
     expect(tester.takeException(), isNull);
     await unmountApp(tester);
   });
+
+  testWidgets('Back, Esc and Backspace lead from details to the map', (
+    tester,
+  ) async {
+    await mountApp(tester);
+    await settleService(tester);
+    final details = find.byKey(const ValueKey('details-agent:test'));
+    final stepsBack = <Future<void> Function()>[
+      () => tester.tap(find.text('Back')),
+      () => tester.sendKeyEvent(LogicalKeyboardKey.escape),
+      () => tester.sendKeyEvent(LogicalKeyboardKey.backspace),
+    ];
+    for (final back in stepsBack) {
+      await tester.tap(details);
+      await settleService(tester);
+      expect(find.text('Back'), findsOneWidget);
+      await back();
+      await settleService(tester);
+      expect(find.text('Select an agent'), findsNothing);
+      expect(details, findsOneWidget);
+    }
+    await unmountApp(tester);
+  });
+
+  testWidgets(
+    'agent card controls show Usage, Details in menu, and red Stop only while running',
+    (tester) async {
+      final dir = await mountApp(tester);
+      await settleService(tester);
+
+      // When idle, Stop is not shown; Details and Usage symbols are shown.
+      expect(find.byKey(const ValueKey('stop-agent-test')), findsNothing);
+      expect(find.byKey(const ValueKey('details-agent:test')), findsOneWidget);
+      expect(find.byKey(const ValueKey('usage-agent-test')), findsOneWidget);
+
+      // Usage symbol opens the agent's usage dialog.
+      await tester.tap(find.byKey(const ValueKey('usage-agent-test')));
+      await settleService(tester);
+      expect(find.text('Usage · Test agent'), findsOneWidget);
+      await tester.tap(find.widgetWithText(TextButton, 'Close'));
+      await settleService(tester);
+
+      // Card menu uses "Details" instead of "Open".
+      await tester.tap(
+        find.descendant(
+          of: find
+              .ancestor(
+                of: find.text('Test agent'),
+                matching: find.byType(Card),
+              )
+              .first,
+          matching: find.byType(PopupMenuButton<String>),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Details'), findsOneWidget);
+      expect(find.text('Open'), findsNothing);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+
+      // When the agent runs, the red Stop symbol appears and stops the external instance.
+      File('${dir.path}/agent_running').writeAsStringSync('1');
+      await tester.tap(find.byTooltip('Refresh'));
+      await settleService(tester);
+      expect(find.byKey(const ValueKey('stop-agent-test')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('stop-agent-test')));
+      await settleService(tester);
+      expect(find.text('Stop external instance'), findsOneWidget);
+      expect(find.text('PID 42'), findsOneWidget);
+      await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+      await settleService(tester);
+      expect(tester.takeException(), isNull);
+      await unmountApp(tester);
+    },
+  );
 }

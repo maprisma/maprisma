@@ -69,7 +69,10 @@
   "local_ok": true,
   "per_token": false,
   "logins": [],
-  "key": null
+  "key": null,
+  "extra_file": "",
+  "extra_key": "",
+  "extra_url": ""
  },
  "security": null,
  "sessions": null,

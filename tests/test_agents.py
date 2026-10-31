@@ -2,6 +2,7 @@ import os
 import sys
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -56,6 +57,21 @@ class AgentsTest(unittest.TestCase):
 
     def test_fallback_without_menu(self):
         self.assertEqual(agents.catalog(self.menu.with_name("missing")), agents.FALLBACK)
+
+    def test_system_package_is_found_on_path(self):
+        system = self.bin.parent / "usr-bin"
+        system.mkdir()
+        program = system / "claude"
+        program.write_text("#!/bin/sh\n")
+        program.chmod(0o755)
+        shims = self.mise / "shims"
+        shims.mkdir()
+        (shims / "codex").write_text("#!/bin/sh\n")
+        (shims / "codex").chmod(0o755)
+        (self.bin / "claude").unlink()
+        with unittest.mock.patch.dict(os.environ, {"PATH": f"{shims}:{system}"}):
+            self.assertEqual(agents.detect("claude", self.bin, self.mise, self.db), (True, "", "system"))
+            self.assertEqual(agents.detect("codex", self.bin, self.mise, self.db), (False, "", ""))
 
     def test_wrapper_alone_is_not_installed(self):
         self.assertFalse(self.listed()["claude"].installed)

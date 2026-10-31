@@ -203,7 +203,10 @@
     "--with-api-key"
    ],
    "env_file": ""
-  }
+  },
+  "extra_file": "",
+  "extra_key": "",
+  "extra_url": ""
  },
  "security": {
   "settings": [

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import 'agent_map.dart';
 import 'map_groups.dart';
+import 'map_zoom.dart';
 import 'backend.dart';
 import 'window_popup.dart';
 import 'providers_view.dart';
@@ -58,6 +59,9 @@ class _SystemMapViewState extends State<SystemMapView> {
   int? _focusColumn;
   String? _error;
   bool _restored = false;
+  bool _showSidebar = false;
+  bool? _wasSmallView;
+
   void _restore() {
     final view = widget.data['view'] as Map?;
     if (_restored || view == null) return;
@@ -489,53 +493,96 @@ class _SystemMapViewState extends State<SystemMapView> {
       ],
     };
     final helper = helpers.where((h) => h['command'] == _helper).firstOrNull;
+    final viewSize = mapViewSizeFor(
+      windowWidth: MediaQuery.sizeOf(context).width,
+      displayWidth: mapDisplayWidthOf(context),
+    );
+    final smallView = viewSize == MapViewSize.small;
+    if (_wasSmallView != smallView) {
+      _wasSmallView = smallView;
+      if (smallView && (widget.data['view'] as Map?)?['transform'] == null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) mapFit[widget.controller]?.call();
+        });
+      }
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
           padding: const EdgeInsets.all(12),
-          child: Wrap(
-            spacing: 12,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
+          child: Row(
             children: [
-              if (widget.onGroups != null)
-                TextButton(
-                  onPressed: busy ? null : widget.onGroups,
-                  child: Text(widget.tr('Add-ons')),
+              Expanded(
+                child: Wrap(
+                  spacing: 12,
+                  runSpacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    if (widget.onGroups != null)
+                      TextButton(
+                        onPressed: busy ? null : widget.onGroups,
+                        child: Text(widget.tr('Add-ons')),
+                      ),
+                    Text(
+                      widget.tr('System Map'),
+                      style: Theme.of(context).textTheme.headlineSmall,
+                    ),
+                    if (checked != null)
+                      Text(
+                        '${widget.tr('Last checked')}: ${DateTime.fromMillisecondsSinceEpoch((checked * 1000).toInt()).toLocal()}',
+                      ),
+                    OutlinedButton(
+                      onPressed: busy ? null : () => widget.onRefresh(true),
+                      child: Text(
+                        widget.tr(
+                          widget.data['search_done'] == true
+                              ? 'Refresh'
+                              : 'Look at this PC',
+                        ),
+                      ),
+                    ),
+                    OutlinedButton(
+                      onPressed: busy ? null : _scanFolder,
+                      child: Text(widget.tr('Choose folder…')),
+                    ),
+                    if (widget.onUndo != null)
+                      TextButton(
+                        onPressed: busy ? null : widget.onUndo,
+                        child: Text(widget.tr('Undo')),
+                      ),
+                    if (smallView)
+                      Tooltip(
+                        message: widget.tr(
+                          _showSidebar ? 'Hide details' : 'Show details',
+                        ),
+                        child: OutlinedButton.icon(
+                          key: const ValueKey('system-sidebar-toggle'),
+                          onPressed: () {
+                            setState(() => _showSidebar = !_showSidebar);
+                            WidgetsBinding.instance.addPostFrameCallback((_) {
+                              if (mounted) mapFit[widget.controller]?.call();
+                            });
+                          },
+                          icon: Icon(
+                            _showSidebar
+                                ? Icons.view_sidebar
+                                : Icons.view_sidebar_outlined,
+                            size: 18,
+                          ),
+                          label: Text(widget.tr('Sidebar')),
+                        ),
+                      ),
+                    IconButton(
+                      onPressed: busy ? null : _helpSheet,
+                      tooltip: widget.tr('Help'),
+                      icon: const Icon(Icons.help_outline),
+                    ),
+                  ],
                 ),
-              Text(
-                widget.tr('System Map'),
-                style: Theme.of(context).textTheme.headlineSmall,
               ),
-              if (checked != null)
-                Text(
-                  '${widget.tr('Last checked')}: ${DateTime.fromMillisecondsSinceEpoch((checked * 1000).toInt()).toLocal()}',
-                ),
-              OutlinedButton(
-                onPressed: busy ? null : () => widget.onRefresh(true),
-                child: Text(
-                  widget.tr(
-                    widget.data['search_done'] == true
-                        ? 'Refresh'
-                        : 'Look at this PC',
-                  ),
-                ),
-              ),
-              OutlinedButton(
-                onPressed: busy ? null : _scanFolder,
-                child: Text(widget.tr('Choose folder…')),
-              ),
-              if (widget.onUndo != null)
-                TextButton(
-                  onPressed: busy ? null : widget.onUndo,
-                  child: Text(widget.tr('Undo')),
-                ),
-              IconButton(
-                onPressed: busy ? null : _helpSheet,
-                tooltip: widget.tr('Help'),
-                icon: const Icon(Icons.help_outline),
-              ),
+              const SizedBox(width: 8),
+              MapZoomControl(controller: widget.controller, tr: widget.tr),
             ],
           ),
         ),
@@ -606,6 +653,7 @@ class _SystemMapViewState extends State<SystemMapView> {
                           setState(() {
                             _selectedId = n['id'] as String;
                             _models = null;
+                            if (smallView) _showSidebar = true;
                           });
                           _saveView();
                         },
@@ -613,317 +661,325 @@ class _SystemMapViewState extends State<SystemMapView> {
                         onNodeDrop: _drop,
                       ),
                     ),
-                    SizedBox(
-                      width: 340,
-                      child: ListView(
-                        padding: const EdgeInsets.all(16),
-                        children: [
-                          if (widget.data['search_done'] != true)
-                            Text(
-                              widget.tr(
-                                'Only this PC is inspected. Nothing is sent and no detected program is run. You can skip the disk search.',
+                    if (!smallView || _showSidebar)
+                      SizedBox(
+                        width: 340,
+                        child: ListView(
+                          padding: const EdgeInsets.all(16),
+                          children: [
+                            if (widget.data['search_done'] != true)
+                              Text(
+                                widget.tr(
+                                  'Only this PC is inspected. Nothing is sent and no detected program is run. You can skip the disk search.',
+                                ),
                               ),
-                            ),
-                          Text(
-                            widget.tr('What we found'),
-                            style: Theme.of(context).textTheme.titleLarge,
-                          ),
-                          Text('${nodes.length} ${widget.tr('Components')}'),
-                          if (node != null) ...[
-                            const Divider(),
                             Text(
-                              widget.tr(node['label'] as String),
+                              widget.tr('What we found'),
                               style: Theme.of(context).textTheme.titleLarge,
                             ),
-                            SelectableText(
-                              (node['launch_path'] ?? node['path']) as String,
-                            ),
-                            Text(node['detail'] as String),
-                            Text(
-                              node['kind'] == 'runtime' &&
-                                      RegExp(
-                                        r'^\d+$',
-                                      ).hasMatch(node['info'] as String)
-                                  ? '${node['info']} ${widget.tr('Models')}'
-                                  : node['info'] as String,
-                            ),
-                            if ((node['fstab'] as String? ?? '')
-                                .isNotEmpty) ...[
+                            Text('${nodes.length} ${widget.tr('Components')}'),
+                            if (node != null) ...[
+                              const Divider(),
                               Text(
-                                widget.tr(
-                                  'Mount configuration suggestion: review before adding it to fstab.',
-                                ),
+                                widget.tr(node['label'] as String),
+                                style: Theme.of(context).textTheme.titleLarge,
                               ),
-                              SelectableText(node['fstab'] as String),
-                            ],
-                            if (node['size'] != null)
+                              SelectableText(
+                                (node['launch_path'] ?? node['path']) as String,
+                              ),
+                              Text(node['detail'] as String),
                               Text(
-                                '${node['size_partial'] == true ? '≥ ' : ''}${modelSize(node['size'] as num)}',
+                                node['kind'] == 'runtime' &&
+                                        RegExp(
+                                          r'^\d+$',
+                                        ).hasMatch(node['info'] as String)
+                                    ? '${node['info']} ${widget.tr('Models')}'
+                                    : node['info'] as String,
                               ),
-                            if (node['status'] == 'missing')
-                              Text(
-                                widget.tr(
-                                  'A model folder is unavailable. Check its mount before downloading again.',
-                                ),
-                              ),
-                            if (node['status'] == 'missing' &&
-                                node['kind'] == 'disk')
-                              Tooltip(
-                                message: widget.tr(
-                                  'Remove this missing disk from the saved map only. Files and settings are kept.',
-                                ),
-                                child: OutlinedButton(
-                                  onPressed: busy
-                                      ? null
-                                      : () => _forgetDisk(node),
-                                  child: Text(widget.tr('Forget this disk')),
-                                ),
-                              ),
-                            if (node['status'] != 'missing' &&
-                                (node['found'] != null ||
-                                    node['kind'] == 'tool')) ...[
-                              if (node['kind'] == 'runtime' ||
-                                  node['kind'] == 'tool')
-                                OutlinedButton(
-                                  onPressed: busy ? null : () => _check(node),
-                                  child: Text(widget.tr('Check program')),
-                                ),
-                              if (node['kind'] == 'models')
-                                FilledButton(
-                                  onPressed: busy
-                                      ? null
-                                      : () => _reconnect(node, null),
-                                  child: Text(widget.tr('Reuse model folder')),
-                                ),
-                              if (node['kind'] == 'runtime' &&
-                                  node['found'] != null) ...[
-                                DropdownButtonFormField<String>(
-                                  key: ValueKey(node['id']),
-                                  initialValue: _models,
-                                  isExpanded: true,
-                                  decoration: InputDecoration(
-                                    labelText: widget.tr('Models folder'),
+                              if ((node['fstab'] as String? ?? '')
+                                  .isNotEmpty) ...[
+                                Text(
+                                  widget.tr(
+                                    'Mount configuration suggestion: review before adding it to fstab.',
                                   ),
-                                  items: [
-                                    for (final model in nodes.where(
-                                      (n) =>
-                                          n['found'] != null &&
-                                          n['kind'] != 'runtime' &&
-                                          n['status'] != 'missing' &&
-                                          (n['provider'] == '' ||
-                                              n['provider'] ==
-                                                  node['provider']),
-                                    ))
-                                      DropdownMenuItem(
-                                        value: model['id'] as String,
-                                        child: Text(
-                                          model['path'] as String,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-                                  ],
-                                  onChanged: busy
-                                      ? null
-                                      : (v) => setState(() => _models = v),
                                 ),
-                                FilledButton(
-                                  onPressed: busy || _models == null
-                                      ? null
-                                      : () => _reconnect(
-                                          node,
-                                          nodes.firstWhere(
-                                            (n) => n['id'] == _models,
+                                SelectableText(node['fstab'] as String),
+                              ],
+                              if (node['size'] != null)
+                                Text(
+                                  '${node['size_partial'] == true ? '≥ ' : ''}${modelSize(node['size'] as num)}',
+                                ),
+                              if (node['status'] == 'missing')
+                                Text(
+                                  widget.tr(
+                                    'A model folder is unavailable. Check its mount before downloading again.',
+                                  ),
+                                ),
+                              if (node['status'] == 'missing' &&
+                                  node['kind'] == 'disk')
+                                Tooltip(
+                                  message: widget.tr(
+                                    'Remove this missing disk from the saved map only. Files and settings are kept.',
+                                  ),
+                                  child: OutlinedButton(
+                                    onPressed: busy
+                                        ? null
+                                        : () => _forgetDisk(node),
+                                    child: Text(widget.tr('Forget this disk')),
+                                  ),
+                                ),
+                              if (node['status'] != 'missing' &&
+                                  (node['found'] != null ||
+                                      node['kind'] == 'tool')) ...[
+                                if (node['kind'] == 'runtime' ||
+                                    node['kind'] == 'tool')
+                                  OutlinedButton(
+                                    onPressed: busy ? null : () => _check(node),
+                                    child: Text(widget.tr('Check program')),
+                                  ),
+                                if (node['kind'] == 'models')
+                                  FilledButton(
+                                    onPressed: busy
+                                        ? null
+                                        : () => _reconnect(node, null),
+                                    child: Text(
+                                      widget.tr('Reuse model folder'),
+                                    ),
+                                  ),
+                                if (node['kind'] == 'runtime' &&
+                                    node['found'] != null) ...[
+                                  DropdownButtonFormField<String>(
+                                    key: ValueKey(node['id']),
+                                    initialValue: _models,
+                                    isExpanded: true,
+                                    decoration: InputDecoration(
+                                      labelText: widget.tr('Models folder'),
+                                    ),
+                                    items: [
+                                      for (final model in nodes.where(
+                                        (n) =>
+                                            n['found'] != null &&
+                                            n['kind'] != 'runtime' &&
+                                            n['status'] != 'missing' &&
+                                            (n['provider'] == '' ||
+                                                n['provider'] ==
+                                                    node['provider']),
+                                      ))
+                                        DropdownMenuItem(
+                                          value: model['id'] as String,
+                                          child: Text(
+                                            model['path'] as String,
+                                            overflow: TextOverflow.ellipsis,
                                           ),
                                         ),
-                                  child: Text(widget.tr('Reconnect')),
-                                ),
+                                    ],
+                                    onChanged: busy
+                                        ? null
+                                        : (v) => setState(() => _models = v),
+                                  ),
+                                  FilledButton(
+                                    onPressed: busy || _models == null
+                                        ? null
+                                        : () => _reconnect(
+                                            node,
+                                            nodes.firstWhere(
+                                              (n) => n['id'] == _models,
+                                            ),
+                                          ),
+                                    child: Text(widget.tr('Reconnect')),
+                                  ),
+                                ],
                               ],
-                            ],
-                            if (node['kind'] == 'runtime' ||
-                                node['kind'] == 'agent' ||
-                                node['kind'] == 'models' ||
-                                node['kind'] == 'folder')
-                              TextButton(
-                                onPressed: busy
-                                    ? null
-                                    : () => widget.onShowAI(node),
-                                child: Text(widget.tr('Show on AI Map')),
-                              ),
-                            if (node['stack'] != null) ...[
-                              const Divider(),
-                              Text(widget.tr('GPU stacks')),
-                              for (final part in node['stack']['torch'] as List)
-                                Text(
-                                  '${part['where']} · ${part['backend']} ${part['version']}',
-                                ),
-                              for (final missing
-                                  in node['stack']['missing'] as List)
-                                OutlinedButton(
+                              if (node['kind'] == 'runtime' ||
+                                  node['kind'] == 'agent' ||
+                                  node['kind'] == 'models' ||
+                                  node['kind'] == 'folder')
+                                TextButton(
                                   onPressed: busy
                                       ? null
-                                      : () => _stack(missing as String),
-                                  child: Text(
-                                    '${widget.tr('Install')} $missing',
+                                      : () => widget.onShowAI(node),
+                                  child: Text(widget.tr('Show on AI Map')),
+                                ),
+                              if (node['stack'] != null) ...[
+                                const Divider(),
+                                Text(widget.tr('GPU stacks')),
+                                for (final part
+                                    in node['stack']['torch'] as List)
+                                  Text(
+                                    '${part['where']} · ${part['backend']} ${part['version']}',
                                   ),
-                                ),
-                            ],
-                          ],
-                          const Divider(),
-                          for (final note
-                              in widget.data['notes'] as List? ?? [])
-                            Text(widget.tr(note as String)),
-                          for (final finding
-                              in widget.data['health'] as List? ?? [])
-                            if (node == null || finding['node'] == node['id'])
-                              ListTile(
-                                title: Text(finding['title'] as String),
-                                subtitle: Text(finding['text'] as String),
-                                trailing:
-                                    widget.onHealthAction != null &&
-                                        (finding['action'] as List? ?? [])
-                                            .isNotEmpty
-                                    ? IconButton(
-                                        tooltip: widget.tr('Continue'),
-                                        onPressed: busy
-                                            ? null
-                                            : () => widget.onHealthAction!(
-                                                finding['action'] as List,
-                                              ),
-                                        icon: const Icon(Icons.arrow_forward),
-                                      )
-                                    : null,
-                              ),
-                          for (final scan
-                              in widget.data['scan_limits'] as List? ?? []) ...[
-                            if ((scan['limits'] as List? ?? []).isNotEmpty)
-                              Text(scan['path'] as String),
-                            for (final reason in scan['limits'] as List? ?? [])
-                              Text(
-                                widget
-                                    .tr(
-                                      const {
-                                            'depth':
-                                                'Folders deeper than {0} levels were skipped.',
-                                            'entries':
-                                                'The scan stopped at its entry limit. Choose a smaller folder.',
-                                            'time':
-                                                'The scan stopped at its time limit. Choose a smaller folder.',
-                                            'results':
-                                                'The scan stopped at its result limit. Choose a smaller folder.',
-                                            'response':
-                                                'The scan stopped at its response size limit. Choose a smaller folder.',
-                                          }[reason] ??
-                                          'Scan limit reached. Choose a smaller folder to find more.',
-                                    )
-                                    .replaceAll('{0}', '${scan['depth']}'),
-                              ),
-                            if ((scan['notices'] as List? ?? []).contains(
-                              'ownership',
-                            ))
-                              Text(
-                                widget.tr(
-                                  'Folders owned by another user were skipped; they may contain AI installations.',
-                                ),
-                              ),
-                            if ((scan['notices'] as List? ?? []).contains(
-                              'filesystem',
-                            ))
-                              Text(
-                                widget.tr(
-                                  'Other filesystems or nested subvolumes were skipped. Scan them from their own mount point.',
-                                ),
-                              ),
-                            if ((scan['foreign'] as List? ?? []).isNotEmpty)
-                              Text(
-                                widget.tr(
-                                  'AI candidates found but owned by another user:',
-                                ),
-                              ),
-                            for (final path in scan['foreign'] as List? ?? [])
-                              SelectableText(path as String),
-                          ],
-                          if (nodes.any((n) => n['kind'] == 'models'))
-                            Text(
-                              widget.tr(
-                                'GGUF folders may contain speech or vision models. Check the model type before connecting a language model server.',
-                              ),
-                            ),
-                          const Divider(),
-                          Text(
-                            widget.tr('AI help'),
-                            style: Theme.of(context).textTheme.titleLarge,
-                          ),
-                          Text(widget.tr(aiHelpHint)),
-                          if (helpers.isNotEmpty) ...[
-                            DropdownButtonFormField<String>(
-                              initialValue: _helper,
-                              decoration: InputDecoration(
-                                labelText: widget.tr('AI help'),
-                              ),
-                              items: [
-                                for (final h in helpers)
-                                  DropdownMenuItem(
-                                    value: h['command'] as String,
-                                    child: Text(h['name'] as String),
+                                for (final missing
+                                    in node['stack']['missing'] as List)
+                                  OutlinedButton(
+                                    onPressed: busy
+                                        ? null
+                                        : () => _stack(missing as String),
+                                    child: Text(
+                                      '${widget.tr('Install')} $missing',
+                                    ),
                                   ),
                               ],
-                              onChanged: busy
-                                  ? null
-                                  : (v) => setState(() => _helper = v),
-                            ),
-                            FilledButton(
-                              onPressed:
-                                  busy ||
-                                      _helper == null ||
-                                      helper?['check'] != true
-                                  ? null
-                                  : () => _help('check'),
-                              child: Text(
-                                widget.tr('Check this system with AI'),
-                              ),
-                            ),
-                            OutlinedButton(
-                              onPressed:
-                                  busy ||
-                                      _helper == null ||
-                                      helper?['task'] == false
-                                  ? null
-                                  : () => _help('simplify'),
-                              child: Text(widget.tr('Ask AI for a plan')),
-                            ),
-                          ] else
-                            Text(
-                              widget.tr(
-                                'Enable an installed AI agent add-on to offer guarded AI help here.',
-                              ),
-                            ),
-                          if (widget.data['analysis'] != null)
-                            Text(
-                              '${widget.tr('Setup analysis')} · ${widget.data['analysis']['agent']} · ${widget.data['analysis']['when']}',
-                            ),
-                          if (widget.data['analysis'] != null)
-                            Text(widget.data['analysis']['summary'] as String),
-                          for (final f in findings)
-                            if (node == null ||
-                                !nodeIds.contains(f['node']) ||
-                                f['node'] == node['id'])
-                              ListTile(
-                                title: Text(f['title'] as String),
-                                subtitle: Text(f['detail'] as String),
-                                trailing: IconButton(
-                                  tooltip: widget.tr('Fix it with AI'),
-                                  onPressed:
-                                      busy ||
-                                          _helper == null ||
-                                          helper?['task'] == false
-                                      ? null
-                                      : () => _help('fix', f['id'] as String),
-                                  icon: const Icon(Icons.auto_fix_high),
+                            ],
+                            const Divider(),
+                            for (final note
+                                in widget.data['notes'] as List? ?? [])
+                              Text(widget.tr(note as String)),
+                            for (final finding
+                                in widget.data['health'] as List? ?? [])
+                              if (node == null || finding['node'] == node['id'])
+                                ListTile(
+                                  title: Text(finding['title'] as String),
+                                  subtitle: Text(finding['text'] as String),
+                                  trailing:
+                                      widget.onHealthAction != null &&
+                                          (finding['action'] as List? ?? [])
+                                              .isNotEmpty
+                                      ? IconButton(
+                                          tooltip: widget.tr('Continue'),
+                                          onPressed: busy
+                                              ? null
+                                              : () => widget.onHealthAction!(
+                                                  finding['action'] as List,
+                                                ),
+                                          icon: const Icon(Icons.arrow_forward),
+                                        )
+                                      : null,
+                                ),
+                            for (final scan
+                                in widget.data['scan_limits'] as List? ??
+                                    []) ...[
+                              if ((scan['limits'] as List? ?? []).isNotEmpty)
+                                Text(scan['path'] as String),
+                              for (final reason
+                                  in scan['limits'] as List? ?? [])
+                                Text(
+                                  widget
+                                      .tr(
+                                        const {
+                                              'depth':
+                                                  'Folders deeper than {0} levels were skipped.',
+                                              'entries':
+                                                  'The scan stopped at its entry limit. Choose a smaller folder.',
+                                              'time':
+                                                  'The scan stopped at its time limit. Choose a smaller folder.',
+                                              'results':
+                                                  'The scan stopped at its result limit. Choose a smaller folder.',
+                                              'response':
+                                                  'The scan stopped at its response size limit. Choose a smaller folder.',
+                                            }[reason] ??
+                                            'Scan limit reached. Choose a smaller folder to find more.',
+                                      )
+                                      .replaceAll('{0}', '${scan['depth']}'),
+                                ),
+                              if ((scan['notices'] as List? ?? []).contains(
+                                'ownership',
+                              ))
+                                Text(
+                                  widget.tr(
+                                    'Folders owned by another user were skipped; they may contain AI installations.',
+                                  ),
+                                ),
+                              if ((scan['notices'] as List? ?? []).contains(
+                                'filesystem',
+                              ))
+                                Text(
+                                  widget.tr(
+                                    'Other filesystems or nested subvolumes were skipped. Scan them from their own mount point.',
+                                  ),
+                                ),
+                              if ((scan['foreign'] as List? ?? []).isNotEmpty)
+                                Text(
+                                  widget.tr(
+                                    'AI candidates found but owned by another user:',
+                                  ),
+                                ),
+                              for (final path in scan['foreign'] as List? ?? [])
+                                SelectableText(path as String),
+                            ],
+                            if (nodes.any((n) => n['kind'] == 'models'))
+                              Text(
+                                widget.tr(
+                                  'GGUF folders may contain speech or vision models. Check the model type before connecting a language model server.',
                                 ),
                               ),
-                        ],
+                            const Divider(),
+                            Text(
+                              widget.tr('AI help'),
+                              style: Theme.of(context).textTheme.titleLarge,
+                            ),
+                            Text(widget.tr(aiHelpHint)),
+                            if (helpers.isNotEmpty) ...[
+                              DropdownButtonFormField<String>(
+                                initialValue: _helper,
+                                decoration: InputDecoration(
+                                  labelText: widget.tr('AI help'),
+                                ),
+                                items: [
+                                  for (final h in helpers)
+                                    DropdownMenuItem(
+                                      value: h['command'] as String,
+                                      child: Text(h['name'] as String),
+                                    ),
+                                ],
+                                onChanged: busy
+                                    ? null
+                                    : (v) => setState(() => _helper = v),
+                              ),
+                              FilledButton(
+                                onPressed:
+                                    busy ||
+                                        _helper == null ||
+                                        helper?['check'] != true
+                                    ? null
+                                    : () => _help('check'),
+                                child: Text(
+                                  widget.tr('Check this system with AI'),
+                                ),
+                              ),
+                              OutlinedButton(
+                                onPressed:
+                                    busy ||
+                                        _helper == null ||
+                                        helper?['task'] == false
+                                    ? null
+                                    : () => _help('simplify'),
+                                child: Text(widget.tr('Ask AI for a plan')),
+                              ),
+                            ] else
+                              Text(
+                                widget.tr(
+                                  'Enable an installed AI agent add-on to offer guarded AI help here.',
+                                ),
+                              ),
+                            if (widget.data['analysis'] != null)
+                              Text(
+                                '${widget.tr('Setup analysis')} · ${widget.data['analysis']['agent']} · ${widget.data['analysis']['when']}',
+                              ),
+                            if (widget.data['analysis'] != null)
+                              Text(
+                                widget.data['analysis']['summary'] as String,
+                              ),
+                            for (final f in findings)
+                              if (node == null ||
+                                  !nodeIds.contains(f['node']) ||
+                                  f['node'] == node['id'])
+                                ListTile(
+                                  title: Text(f['title'] as String),
+                                  subtitle: Text(f['detail'] as String),
+                                  trailing: IconButton(
+                                    tooltip: widget.tr('Fix it with AI'),
+                                    onPressed:
+                                        busy ||
+                                            _helper == null ||
+                                            helper?['task'] == false
+                                        ? null
+                                        : () => _help('fix', f['id'] as String),
+                                    icon: const Icon(Icons.auto_fix_high),
+                                  ),
+                                ),
+                          ],
+                        ),
                       ),
-                    ),
                   ],
                 ),
         ),

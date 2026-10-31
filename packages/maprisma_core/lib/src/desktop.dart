@@ -158,9 +158,27 @@ final class GenericDesktop implements Desktop {
     }
     for (final (program, follow) in terminals) {
       final found = whichIn(program, path);
+      // It exits with an error when it finds no terminal entry, and a
+      // detached start would hide that: then the next one on the list.
+      if (found != null &&
+          program == 'xdg-terminal-exec' &&
+          !_resolves(found)) {
+        continue;
+      }
       if (found != null) return [found, ...follow];
     }
     return null;
+  }
+
+  bool _resolves(String launcher) {
+    try {
+      return Process.runSync(launcher, [
+            '--print-id',
+          ], environment: environment).exitCode ==
+          0;
+    } on ProcessException {
+      return false;
+    }
   }
 
   @override

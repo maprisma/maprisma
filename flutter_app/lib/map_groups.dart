@@ -54,6 +54,7 @@ class MapGroupCard extends StatelessWidget {
             ? _DashedBorder(colors.outline, corners(context))
             : null,
         child: Card(
+          margin: EdgeInsets.zero,
           color: group.dummy
               ? colors.surfaceContainerLowest
               : colors.surfaceContainerHigh,
@@ -206,6 +207,109 @@ class MapFocus extends StatelessWidget {
                 ),
               ),
             ),
+    );
+  }
+}
+
+/// The badge in an agent's box (map.badges): what is left of its plan
+/// limits as a small battery, or today's cost for one paid per token; green,
+/// yellow or red at Settings › Costs' levels, the details in the tooltip.
+class AgentBadge extends StatelessWidget {
+  const AgentBadge({super.key, required this.badge});
+  final Map badge;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final colour = switch ('${badge['colour']}') {
+      'red' => scheme.error,
+      'yellow' => Colors.amber.shade700,
+      _ => Colors.green,
+    };
+    final Widget child;
+    if (badge['kind'] == 'battery') {
+      final left = (badge['left'] as num? ?? 0).toDouble().clamp(0.0, 1.0);
+      child = Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            key: const ValueKey('agent-battery'),
+            width: 22,
+            height: 10,
+            padding: const EdgeInsets.all(1),
+            decoration: BoxDecoration(
+              border: Border.all(color: colour, width: 1),
+              borderRadius: BorderRadius.circular(2),
+            ),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: FractionallySizedBox(
+                widthFactor: left,
+                heightFactor: 1,
+                child: ColoredBox(color: colour),
+              ),
+            ),
+          ),
+          Container(width: 2, height: 4, color: colour),
+        ],
+      );
+    } else {
+      child = Text(
+        '${badge['label']}',
+        key: const ValueKey('agent-cost'),
+        style: TextStyle(
+          fontSize: 11,
+          color: colour,
+          fontWeight: FontWeight.w600,
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Tooltip(message: '${badge['tip']}', child: child),
+    );
+  }
+}
+
+/// The usage statistics box of a working agent (map.usage): tokens per
+/// second of its latest reply, its context size and the share in use
+/// (yellow from 75 %, red over 90 %), in the chosen text size.
+class UsageBoxLabel extends StatelessWidget {
+  const UsageBoxLabel({super.key, required this.box, required this.size});
+  final Map box;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final parts = (box['parts'] as List? ?? const []).cast<List>();
+    return Padding(
+      key: const ValueKey('usage-box'),
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Tooltip(
+        message: '${box['model'] ?? ''}',
+        child: Text.rich(
+          TextSpan(
+            children: [
+              for (var i = 0; i < parts.length; i++)
+                TextSpan(
+                  text: '${i > 0 ? ' · ' : ''}${parts[i][0]}',
+                  style: TextStyle(
+                    color: switch ('${parts[i][1]}') {
+                      'red' => scheme.error,
+                      'yellow' => Colors.amber.shade700,
+                      _ => scheme.onSurfaceVariant,
+                    },
+                  ),
+                ),
+            ],
+          ),
+          style: TextStyle(fontSize: size * 1.33),
+          maxLines: 1,
+          overflow: TextOverflow.fade,
+          softWrap: false,
+        ),
+      ),
     );
   }
 }

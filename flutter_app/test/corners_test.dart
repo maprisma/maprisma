@@ -39,4 +39,15 @@ void main() {
     await tester.pumpAndSettle(); // the theme's change is animated
     expect(seen, 12);
   });
+
+  test('the bar with Undo stays dark in the dark theme', () {
+    final theme = appTheme(Brightness.dark);
+    final background = theme.snackBarTheme.backgroundColor!;
+    expect(background, theme.colorScheme.surfaceContainerHigh);
+    expect(background.computeLuminance(), lessThan(.2));
+    expect(
+      theme.snackBarTheme.contentTextStyle!.color,
+      theme.colorScheme.onSurface,
+    );
+  });
 }

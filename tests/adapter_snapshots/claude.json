@@ -210,7 +210,10 @@
     "note": ""
    }
   ],
-  "key": null
+  "key": null,
+  "extra_file": "~/.claude.json",
+  "extra_key": "oauthAccount.hasExtraUsageEnabled",
+  "extra_url": "https://claude.ai/settings/usage"
  },
  "security": {
   "settings": [

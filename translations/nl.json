@@ -3202,5 +3202,16 @@
  "Connect it to an agent now? (Optional)": "Nu met een agent verbinden? (Optioneel)",
  "This column does not take requests yet.": "Deze kolom neemt nog geen verzoeken aan.",
  "No model was found for this search.": "Geen model gevonden voor deze zoekopdracht.",
- "This helper is not available.": "Deze helper is niet beschikbaar."
+ "This helper is not available.": "Deze helper is niet beschikbaar.",
+ "Zoom in": "Inzoomen",
+ "Zoom out": "Uitzoomen",
+ "Fit to window": "Aan venster aanpassen",
+ "Needs a wider window": "Vereist een breder venster",
+ "Automatic: a normal window": "Automatisch: een normaal venster",
+ "Full screen": "Volledig scherm",
+ "Exit full screen": "Volledig scherm verlaten",
+ "Additional usage": "Extra gebruik",
+ "On: beyond the plan's limits it can cost extra money.": "Aan: boven de limieten van het abonnement kan het extra geld kosten.",
+ "Off: it stops at the plan's limits.": "Uit: het stopt bij de limieten van het abonnement.",
+ "Not known on this PC. Check with the provider whether it can bill beyond the plan.": "Niet bekend op deze pc. Controleer bij de aanbieder of er boven het abonnement kan worden gefactureerd."
 }

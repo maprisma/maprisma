@@ -102,8 +102,33 @@ class MapLayout {
     Map<String, dynamic> saved, {
     double? top,
     bool smartCards = false,
+    List<int>? columns,
+    double viewportWidth = 0,
+    double? centerWidth,
   }) {
-    final startTop = top ?? (smartCards ? 156.0 : 144.0);
+    _columns = columns;
+    // The shown columns sit in the middle of a wider window and grow to fill
+    // the free space (column width 266..420, gap roughly 3.5% in 36..96).
+    final count = columns?.length ?? 4;
+    final minNatural = 32.0 + count * 266.0 + math.max(0, count - 1) * 36.0;
+    if (count == 0 || viewportWidth <= minNatural) {
+      columnGap = 36.0;
+      columnWidth = 266.0;
+    } else {
+      columnGap = (viewportWidth * 0.035).floorToDouble().clamp(36.0, 96.0);
+      columnWidth = ((viewportWidth - 32.0 - (count - 1) * columnGap) / count)
+          .floorToDouble()
+          .clamp(266.0, 420.0);
+    }
+    boxWidth = columnWidth - 24.0;
+    final natural =
+        32.0 + count * columnWidth + math.max(0, count - 1) * columnGap;
+    final span = centerWidth ?? viewportWidth;
+    _inset = count == 0 || span <= natural
+        ? 0
+        : ((span - natural) / 2).floorToDouble();
+    _sized = count > 0 && (viewportWidth >= minNatural || _inset > 0);
+    final startTop = top ?? (smartCards ? 156.0 : 106.0);
     _geometry = mapGeometry(graph);
     for (final node
         in (graph['nodes'] as List? ?? []).cast<Map<String, dynamic>>()) {
@@ -134,9 +159,9 @@ class MapLayout {
       ids.sort((a, b) => (rank[a] ?? 10000).compareTo(rank[b] ?? 10000));
       final column = nodes[ids.first]!['column'] as int;
       final folded = (saved['collapsed'] as List? ?? []).contains(id);
-      final origin = Offset(16 + column * 302, heights[column] ?? startTop);
-      final height = folded ? 38.0 : 48 + ids.length * mapRowStep;
-      final rect = origin & Size(266, height);
+      final origin = Offset(columnX(column), heights[column] ?? startTop);
+      final height = folded ? 38.0 : 32 + ids.length * mapRowStep;
+      final rect = origin & Size(columnWidth, height);
       final first = nodes[ids.first]!;
       const labels = {
         'agent': 'Agents',
@@ -162,7 +187,7 @@ class MapLayout {
           boxes[ids[i]] = Rect.fromLTWH(
             origin.dx + 12,
             origin.dy + 38 + i * mapRowStep,
-            mapBoxWidth,
+            boxWidth,
             mapBoxHeight,
           );
         }
@@ -222,10 +247,29 @@ class MapLayout {
   final boxes = <String, Rect>{}, cards = <String, MapCardLayout>{};
   final curves = <MapCurve>[];
   final allEdges = <Map<String, dynamic>>[];
+
+  /// The columns shown, in order (null: all); hidden ones leave no gap.
+  List<int>? _columns;
+  late final double columnWidth, columnGap, boxWidth;
+  double _inset = 0;
+  bool _sized = false;
+  double columnX(int column) {
+    final slot = _columns?.indexOf(column) ?? -1;
+    return _inset + 16 + (slot < 0 ? column : slot) * (columnWidth + columnGap);
+  }
+
   Size get size => Size(
     math.max(
-      1250,
-      cards.values.fold<double>(0, (v, c) => math.max(v, c.rect.right)) + 48,
+      switch (_columns) {
+        [] => 0,
+        null || [_, _, _, _] when !_sized => 1250,
+        final shown =>
+          columnX(shown == null ? 3 : shown.last) +
+              columnWidth +
+              (_sized ? 16 : 48),
+      },
+      cards.values.fold<double>(0, (v, c) => math.max(v, c.rect.right)) +
+          (_sized ? 16 : 48),
     ),
     math.max(
       650,
@@ -384,6 +428,9 @@ Map<String, dynamic> reorderMapCard(
     for (final e in saved.entries)
       if (e.key != 'cards') e.key: e.value,
     'card_order': [
+      // A hidden column's cards are not in the layout: keep their order.
+      for (final c in saved['card_order'] as List? ?? const [])
+        if (!layout.cards.containsKey(c)) c,
       for (final c in layout.cards.values)
         if (c.column != card.column) c.id,
       ...colCards,

@@ -555,6 +555,16 @@ KEYS = (
     'Subagent tracking is not available for this agent yet.',
     'No recent subagents observed',
     'Configuration values stay private.', 'No changes to apply', 'Restored files',
+    # The map's column filter and zoom, the window setting.
+    "Zoom in", "Zoom out", "Fit to window",
+    "Automatic: a normal window",
+    "Additional usage", "On: beyond the plan's limits it can cost extra money.",
+    "Off: it stops at the plan's limits.",
+    "Not known on this PC. Check with the provider whether it can bill beyond the plan.",
+    "Sidebar", "Show details", "Hide details",
+    "Network", "Network · {0}", "Network: ↓ {0} ↑ {1}. Click for its network statistics.",
+    "Counted since", "In", "Out", "Where it goes", "Online API", "Local network", "Internet",
+    "No connections yet.", "No program has moved data yet.",
     # The smart cards.
     "Ask",
     "Ask AI · {0}",

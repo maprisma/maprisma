@@ -1,14 +1,18 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:maprisma/agent_map.dart';
+import 'package:maprisma/agent_usage.dart';
 import 'package:maprisma/backend.dart';
 import 'package:maprisma/connections_view.dart' show ConnectionReview;
 import 'package:maprisma/map_editor.dart';
+import 'package:maprisma/map_zoom.dart';
 import 'package:maprisma/map_groups.dart';
 import 'package:maprisma/map_lights.dart';
 import 'package:maprisma/map_smart_card.dart';
 import 'package:maprisma/task_card.dart' show TaskReview;
 import 'package:maprisma/window_popup.dart' show popupSize;
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -302,7 +306,7 @@ void main() {
       expect(dropLine, findsOneWidget);
       final lineRect = tester.getRect(dropLine);
       expect(lineRect.left, 16);
-      expect(lineRect.width, 266);
+      expect(lineRect.width, 328);
       expect(lineRect.height, 2);
       await gesture.up();
       await tester.pumpAndSettle();
@@ -411,6 +415,7 @@ void main() {
         controller: controller,
         size: popup,
       );
+      await tester.pump(); // the map has fitted the window
       expect(find.byType(MapSmartCard), findsNWidgets(4));
       for (final (col, _) in mapSmartColumns) {
         final card = tester.widget<MapSmartCard>(
@@ -459,9 +464,10 @@ void main() {
       expect(agentsRect.right, lessThanOrEqualTo(popup.width));
       expect(agentsRect.bottom, lessThanOrEqualTo(popup.height));
 
-      // At scale 0.8 in the 1100 × 760 Omarchy popup, the Models column (board left 922)
-      // is already fully in view: opening it keeps board left at 922 and does not touch
-      // the transform or any node position.
+      // At scale 0.8 in the 1100 × 760 Omarchy popup, the 4 columns are centred
+      // in 1100 / 0.8 = 1375 px (Models column board left 1007) and already fully
+      // in view: opening it keeps board left at 1007 and does not touch the
+      // transform or any node position.
       controller.value = Matrix4.diagonal3Values(0.8, 0.8, 1);
       await tester.pump();
       final scaledNodes = nodeRects();
@@ -499,7 +505,7 @@ void main() {
                   .first,
             )
             .left,
-        922,
+        1007,
       );
       expect(nodeRects(), scaledNodes);
       expect(controller.value, scaledMatrix);
@@ -1514,4 +1520,950 @@ void main() {
       expect(find.text('Qwen 2.5 Coder 7B is ready.'), findsOneWidget);
     },
   );
+
+  group('the map fits the window', () {
+    double scaleOf(TransformationController c) => c.value.entry(0, 0);
+
+    testWidgets('narrow window zooms out, wider window follows', (
+      tester,
+    ) async {
+      final controller = TransformationController();
+      addTearDown(controller.dispose);
+      const narrow = Size(500, 800);
+      await mount(tester, edits: [], controller: controller, size: narrow);
+      await tester.pump();
+      final small = scaleOf(controller);
+      expect(small, lessThan(1));
+
+      tester.view.physicalSize = const Size(700, 800);
+      await mount(
+        tester,
+        edits: [],
+        controller: controller,
+        size: const Size(700, 800),
+      );
+      await tester.pump();
+      expect(scaleOf(controller), greaterThan(small));
+    });
+
+    testWidgets('a zoom by the user stays until Ctrl+0', (tester) async {
+      final controller = TransformationController();
+      addTearDown(controller.dispose);
+      await mount(
+        tester,
+        edits: [],
+        controller: controller,
+        size: const Size(500, 800),
+      );
+      await tester.pump();
+      controller.value = Matrix4.diagonal3Values(1.5, 1.5, 1);
+      await mount(
+        tester,
+        edits: [],
+        controller: controller,
+        size: const Size(700, 800),
+      );
+      await tester.pump();
+      expect(scaleOf(controller), 1.5);
+
+      zoomMap(controller, 0);
+      await tester.pump();
+      expect(scaleOf(controller), lessThan(1));
+    });
+  });
+
+  group('map columns and zoom', () {
+    Future<List<List<String>>> columns(
+      WidgetTester tester, {
+      required Size size,
+      List<String> layers = const [
+        'agents',
+        'online',
+        'local',
+        'models',
+        'mcp',
+        'skills',
+      ],
+    }) async {
+      final changed = <List<String>>[];
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: MapEditor(
+              graph: fixtureGraph(),
+              saved: const {},
+              onEdit: (_) async {},
+              tr: (s) => s,
+              layers: layers,
+              onLayers: changed.add,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      return changed;
+    }
+
+    FilterChip chip(WidgetTester tester, int col) =>
+        tester.widget<FilterChip>(find.byKey(ValueKey('map-column-$col')));
+
+    testWidgets('additional usage: on, off and not known', (tester) async {
+      Future<void> show(Map<String, dynamic>? extra) => tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: AgentUsage(
+                tr: (s) => s,
+                info: {
+                  'model': '',
+                  'plan': 'Max 5x',
+                  'providers': const [],
+                  'limits': const [],
+                  'extra_usage': extra,
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+      await show({'on': true, 'url': 'https://example.test/usage'});
+      expect(find.byIcon(Icons.warning_amber), findsOneWidget);
+      expect(find.textContaining('it can cost extra'), findsOneWidget);
+      expect(find.textContaining('https://example.test/usage'), findsOneWidget);
+      await show({'on': false, 'url': ''});
+      expect(find.textContaining('it stops at'), findsOneWidget);
+      await show(null);
+      expect(find.textContaining('Not known on this PC'), findsOneWidget);
+    });
+
+    test('the display width on Linux is already logical', () {
+      const screen = Size(1920, 1080);
+      expect(displayWidthIn(screen, 2, TargetPlatform.linux), 1920);
+      expect(
+        displayWidthIn(const Size(3840, 2160), 2, TargetPlatform.macOS),
+        1920,
+      );
+      expect(
+        mapViewSizeFor(windowWidth: 941, displayWidth: 1920),
+        MapViewSize.small,
+      );
+    });
+
+    testWidgets('every symbol fits the narrowest card on Linux', (
+      tester,
+    ) async {
+      Widget symbol(IconData icon) => IconButton(
+        padding: EdgeInsets.zero,
+        visualDensity: VisualDensity.compact,
+        constraints: const BoxConstraints(minWidth: 26, minHeight: 24),
+        onPressed: () {},
+        icon: Icon(icon, size: 16),
+      );
+      tester.view.physicalSize = const Size(640, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: MapEditor(
+              graph: {
+                ...fixtureGraph(),
+                'activity': {
+                  'a': {
+                    'subagents_supported': true,
+                    'active_subagents': 2,
+                    'children': [{}, {}, {}],
+                  },
+                },
+                'traffic': {
+                  'a': {'connections': 7, 'rate_in': 1, 'rate_out': 1},
+                },
+              },
+              saved: const {},
+              onEdit: (_) async {},
+              tr: (s) => s,
+              onSubagents: (_) {},
+              controls: (_) => Row(
+                children: [
+                  for (final icon in [
+                    Icons.info_outline,
+                    Icons.bar_chart_outlined,
+                    Icons.play_arrow,
+                    Icons.terminal,
+                    Icons.stop,
+                  ])
+                    symbol(icon),
+                ],
+              ),
+              layers: const ['agents', 'online', 'local'],
+              onLayers: (_) {},
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
+
+    testWidgets('many connections get a page instead of a long menu', (
+      tester,
+    ) async {
+      final graph = fixtureGraph();
+      final nodes = graph['nodes'] as List;
+      final edges = graph['edges'] as List;
+      for (var i = 0; i < 5; i++) {
+        nodes.add({
+          'id': 'mcp:$i',
+          'kind': 'mcp',
+          'column': 0,
+          'label': 'server $i',
+          'detail': '',
+        });
+        edges.add({'source': 'agent:a', 'target': 'mcp:$i', 'kind': 'mcp'});
+      }
+      await mount(tester, edits: [], graph: graph);
+      await tester.tap(
+        find.descendant(
+          of: find
+              .ancestor(of: find.text('agent:a'), matching: find.byType(Card))
+              .first,
+          matching: find.byType(PopupMenuButton<String>),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Move connection:'), findsNothing);
+      await tester.tap(find.text('Move connection…'));
+      await tester.pumpAndSettle();
+      expect(
+        find.widgetWithText(SimpleDialogOption, 'server 4'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('a narrow window shows agents and providers only', (
+      tester,
+    ) async {
+      await columns(tester, size: const Size(1036, 900));
+      expect(find.text('agent:a'), findsWidgets);
+      expect(find.text('runtime:r'), findsWidgets);
+      expect(find.text('mcp:c'), findsNothing);
+      expect(find.text('model:r:m'), findsNothing);
+      expect(chip(tester, 0).onSelected, isNotNull);
+      expect(chip(tester, 3).selected, isFalse);
+    });
+
+    testWidgets('a wide window shows every column the filter keeps', (
+      tester,
+    ) async {
+      await columns(tester, size: const Size(1600, 900));
+      expect(find.text('mcp:c'), findsWidgets);
+      expect(find.text('model:r:m'), findsWidgets);
+      await columns(
+        tester,
+        size: const Size(1600, 900),
+        layers: const ['agents', 'online', 'local', 'mcp', 'skills'],
+      );
+      await tester.pump();
+      expect(find.text('model:r:m'), findsNothing);
+      expect(find.text('mcp:c'), findsWidgets);
+    });
+
+    testWidgets('the filter turns a whole column off', (tester) async {
+      final changed = await columns(tester, size: const Size(1600, 900));
+      await tester.tap(find.byKey(const ValueKey('map-column-2')));
+      // Models need a provider, so they go with it.
+      expect(changed.single.toSet(), {'agents', 'mcp', 'skills'});
+    });
+
+    testWidgets('with agents and providers off a narrow window stays empty', (
+      tester,
+    ) async {
+      await columns(
+        tester,
+        size: const Size(1036, 900),
+        layers: const ['models', 'mcp', 'skills'],
+      );
+      expect(find.text('mcp:c'), findsNothing);
+      expect(find.text('model:r:m'), findsNothing);
+    });
+
+    testWidgets('a column that needs another brings it along', (tester) async {
+      final changed = await columns(
+        tester,
+        size: const Size(1600, 900),
+        layers: const ['online', 'local', 'models'],
+      );
+      await tester.tap(find.byKey(const ValueKey('map-column-0')));
+      expect(changed.single.toSet(), containsAll(['mcp', 'skills', 'agents']));
+    });
+
+    testWidgets(
+      'small, medium and max views follow screen share or window width, and full screen gives max view',
+      (tester) async {
+        // Fallback window widths when display size is unknown or smaller:
+        // small (< 1150): Agents, Providers; medium (< 1600): + Models; max (>= 1600): all four.
+        expect(
+          mapViewSizeFor(windowWidth: 1149, displayWidth: 0),
+          MapViewSize.small,
+        );
+        expect(
+          mapViewSizeFor(windowWidth: 1150, displayWidth: 0),
+          MapViewSize.medium,
+        );
+        expect(
+          mapViewSizeFor(windowWidth: 1599, displayWidth: 0),
+          MapViewSize.medium,
+        );
+        expect(
+          mapViewSizeFor(windowWidth: 1600, displayWidth: 0),
+          MapViewSize.max,
+        );
+        // Window share of display: <= 55 % small, <= 80 % medium, > 80 % max.
+        expect(
+          mapViewSizeFor(windowWidth: 1100, displayWidth: 2000),
+          MapViewSize.small,
+        );
+        expect(
+          mapViewSizeFor(windowWidth: 1101, displayWidth: 2000),
+          MapViewSize.medium,
+        );
+        expect(
+          mapViewSizeFor(windowWidth: 1600, displayWidth: 2000),
+          MapViewSize.medium,
+        );
+        expect(
+          mapViewSizeFor(windowWidth: 1601, displayWidth: 2000),
+          MapViewSize.max,
+        );
+
+        // Medium view (1300 px): Agents, Providers and Models shown; MCP/skills greyed with tooltip.
+        await columns(tester, size: const Size(1300, 900));
+        expect(find.text('agent:a'), findsWidgets);
+        expect(find.text('runtime:r'), findsWidgets);
+        expect(find.text('model:r:m'), findsWidgets);
+        expect(find.text('mcp:c'), findsNothing);
+        expect(chip(tester, 0).selected, isFalse);
+        expect(chip(tester, 3).selected, isTrue);
+
+        // A column the view leaves out can be turned on, and off again.
+        await columns(tester, size: const Size(1036, 900));
+        expect(find.text('model:r:m'), findsNothing);
+        await tester.tap(find.byKey(const ValueKey('map-column-3')));
+        await tester.pump();
+        await tester.pump();
+        expect(find.text('model:r:m'), findsWidgets);
+        expect(chip(tester, 3).selected, isTrue);
+        await tester.tap(find.byKey(const ValueKey('map-column-0')));
+        await tester.pump();
+        await tester.pump();
+        expect(find.text('mcp:c'), findsWidgets);
+        await tester.tap(find.byKey(const ValueKey('map-column-3')));
+        await tester.pump();
+        await tester.pump();
+        expect(find.text('model:r:m'), findsNothing);
+        expect(find.text('mcp:c'), findsWidgets);
+      },
+    );
+
+    testWidgets('a connection move is cancelled when its column is hidden', (
+      tester,
+    ) async {
+      final edits = <Map<String, dynamic>>[];
+      var layers = const [
+        'agents',
+        'online',
+        'local',
+        'models',
+        'mcp',
+        'skills',
+      ];
+      late StateSetter rebuild;
+      tester.view.physicalSize = const Size(1600, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: StatefulBuilder(
+              builder: (context, setState) {
+                rebuild = setState;
+                return MapEditor(
+                  graph: fixtureGraph(),
+                  saved: const {},
+                  onEdit: (e) async => edits.add(e),
+                  tr: (s) => s,
+                  layers: layers,
+                  onLayers: (next) => setState(() => layers = next),
+                );
+              },
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.tap(find.text('agent:a'));
+      await tester.pumpAndSettle();
+      final hooks = find.byTooltip(
+        'Move this connection to another compatible box, or to empty space to disconnect.',
+      );
+      // Second hook on agent:a is the default model connection to model:r:m.
+      await tester.tap(hooks.last);
+      await tester.pump();
+      expect(find.text('Disconnect'), findsOneWidget);
+
+      // Hide the Models column while the connection move is active:
+      // the move is cancelled and tapping another node does not emit an edit.
+      rebuild(
+        () => layers = const ['agents', 'online', 'local', 'mcp', 'skills'],
+      );
+      await tester.pump();
+      expect(find.text('Disconnect'), findsNothing);
+      expect(find.text('Cancel'), findsNothing);
+      await tester.tap(find.text('runtime:s'));
+      await tester.pump();
+      expect(edits, isEmpty);
+    });
+
+    testWidgets(
+      'agent cards show badges, compact symbols, traffic dialog, Details, and red Stop only while running',
+      (tester) async {
+        final base = fixtureGraph();
+        final nodes = [
+          for (final n in (base['nodes'] as List).cast<Map<String, dynamic>>())
+            if (n['id'] == 'agent:a')
+              {...n, 'status': 'running', 'running_in_app': true}
+            else if (n['id'] == 'agent:b')
+              {...n, 'status': 'idle', 'running_in_app': false}
+            else
+              n,
+        ];
+        final graph = <String, dynamic>{
+          ...base,
+          'nodes': nodes,
+          'agent_badges': {
+            'agent:a': {
+              'kind': 'cost',
+              'label': '80%',
+              'colour': 'yellow',
+              'tip': 'Limit',
+            },
+          },
+          'usage_boxes': {
+            'agent:a': {
+              'model': 'claude',
+              'parts': [
+                [r'$1.20', 'green'],
+              ],
+            },
+          },
+          'activity': {
+            'a': {
+              'working': true,
+              'active_subagents': 1,
+              'subagents_supported': true,
+              'children': [
+                {'id': 'sub1'},
+                {'id': 'sub2'},
+              ],
+            },
+          },
+          'traffic': {
+            'a': {
+              'connections': 3,
+              'rate_in': 2048,
+              'rate_out': 512,
+              'received': 10240,
+              'sent': 4096,
+              'places': [
+                {
+                  'name': 'Anthropic API',
+                  'kind': 'api',
+                  'received': 8192,
+                  'sent': 2048,
+                  'connections': 2,
+                },
+              ],
+              'programs': [
+                {'name': 'claude', 'received': 8192, 'sent': 2048},
+              ],
+            },
+          },
+        };
+        final subagents = <String>[], opened = <Map<String, dynamic>>[];
+        tester.view.physicalSize = const Size(1100, 900);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: MapEditor(
+                graph: graph,
+                saved: const {},
+                onEdit: (_) async {},
+                tr: (s) => s,
+                onSubagents: subagents.add,
+                onOpen: opened.add,
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+        expect(tester.takeException(), isNull);
+
+        // Title shows limit badge and usage box.
+        expect(find.byType(AgentBadge), findsOneWidget);
+        expect(find.text('80%'), findsOneWidget);
+        expect(find.byType(UsageBoxLabel), findsOneWidget);
+        expect(find.text(r'$1.20'), findsOneWidget);
+
+        // Subagents compact symbol + count shown on agent:a only.
+        expect(find.byKey(const ValueKey('subagents-a')), findsOneWidget);
+        expect(find.byKey(const ValueKey('subagents-b')), findsNothing);
+        expect(find.byIcon(Icons.account_tree_outlined), findsOneWidget);
+        await tester.tap(find.byKey(const ValueKey('subagents-a')));
+        await tester.pump();
+        expect(subagents, ['a']);
+
+        // Details symbol replaces open_in_new.
+        expect(find.byIcon(Icons.open_in_new), findsNothing);
+        expect(find.byIcon(Icons.info_outline), findsWidgets);
+        await tester.tap(find.byKey(const ValueKey('details-agent:a')));
+        await tester.pump();
+        expect(opened.single['id'], 'agent:a');
+
+        // Network traffic symbol shows current in/out rate in tooltip and opens dialog.
+        expect(find.byKey(const ValueKey('traffic-a')), findsOneWidget);
+        expect(find.byKey(const ValueKey('traffic-b')), findsNothing);
+        expect(
+          find.byTooltip(
+            'Network: ↓ 2.0 KB/s ↑ 512 B/s. Click for its network statistics.',
+          ),
+          findsOneWidget,
+        );
+        await tester.tap(find.byKey(const ValueKey('traffic-a')));
+        await tester.pumpAndSettle();
+        expect(find.byType(AgentTrafficDialog), findsOneWidget);
+        expect(find.text('In: 10.0 KB (2.0 KB/s)'), findsOneWidget);
+        expect(find.text('Out: 4.0 KB (512 B/s)'), findsOneWidget);
+        expect(
+          find.text('Anthropic API · Online API · ↓ 8.0 KB ↑ 2.0 KB (2)'),
+          findsOneWidget,
+        );
+        expect(find.text('claude · ↓ 8.0 KB ↑ 2.0 KB'), findsOneWidget);
+        await tester.tap(find.text('Close'));
+        await tester.pumpAndSettle();
+      },
+    );
+
+    testWidgets('+ back to 100 % is a zoom, not a fit', (tester) async {
+      final controller = TransformationController();
+      addTearDown(controller.dispose);
+      await mount(
+        tester,
+        edits: [],
+        controller: controller,
+        size: const Size(1000, 800),
+      );
+      await tester.pump();
+      controller.value = Matrix4.diagonal3Values(.8, .8, 1);
+      zoomMap(controller, 1.25);
+      await tester.pump();
+      await tester.pump();
+      expect(controller.value.entry(0, 0), closeTo(1, .001));
+    });
+
+    testWidgets('the wheel scrolls, the buttons zoom', (tester) async {
+      final controller = TransformationController();
+      addTearDown(controller.dispose);
+      await mount(
+        tester,
+        edits: [],
+        controller: controller,
+        size: const Size(1500, 500),
+      );
+      await tester.pump();
+      expect(
+        tester.getTopLeft(find.byType(MapZoomControl)).dx,
+        greaterThan(tester.getTopRight(find.byType(DropdownButton<String>)).dx),
+      );
+      expect(tester.getTopRight(find.byType(MapZoomControl)).dx, 1500 - 12);
+      final mouse = TestPointer(1, PointerDeviceKind.mouse);
+      final middle = tester.getCenter(find.byType(InteractiveViewer));
+      await tester.sendEventToBinding(mouse.hover(middle));
+      await tester.sendEventToBinding(mouse.scroll(const Offset(0, 120)));
+      await tester.pump();
+      expect(controller.value.entry(0, 0), 1);
+      expect(controller.value.getTranslation().y, -120); // it scrolled
+      await tester.tap(find.byKey(const ValueKey('map-zoom-in')));
+      await tester.pump();
+      expect(controller.value.entry(0, 0), 1.25);
+      await tester.tap(find.byKey(const ValueKey('map-zoom-fit')));
+      await tester.pump();
+      await tester.pump();
+      expect(controller.value.entry(0, 0), 1);
+    });
+
+    testWidgets(
+      'column cards align at 266 px with 12 px vertical gaps, and narrow bar neither overflows nor jumps the board',
+      (tester) async {
+        for (final smart in [false, true]) {
+          tester.view.physicalSize = const Size(1500, 1000);
+          tester.view.devicePixelRatio = 1;
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          final g = fixtureGraph();
+          await tester.pumpWidget(
+            MaterialApp(
+              home: Scaffold(
+                body: MapEditor(
+                  graph: g,
+                  saved: const {},
+                  onEdit: (_) async {},
+                  tr: (s) => s,
+                  smartCards: smart,
+                  groups: MapGroup.fromGraph(g, const [
+                    'MCP servers and skills',
+                    'Agents',
+                    'Providers',
+                    'Models',
+                  ]),
+                ),
+              ),
+            ),
+          );
+          await tester.pump();
+          final groupCards = find.byType(MapGroupCard);
+          expect(groupCards, findsNWidgets(4));
+          for (var col = 0; col < 4; col++) {
+            final groupPos = tester.widget<Positioned>(
+              find
+                  .ancestor(
+                    of: groupCards.at(col),
+                    matching: find.byType(Positioned),
+                  )
+                  .first,
+            );
+            expect(groupPos.left, 16.0 + col * 380);
+            expect(groupPos.top, 8);
+            expect(groupPos.width, 328);
+            expect(groupPos.height, 86);
+            expect(
+              tester
+                  .getSize(
+                    find.descendant(
+                      of: groupCards.at(col),
+                      matching: find.byType(Card),
+                    ),
+                  )
+                  .width,
+              328,
+            );
+          }
+          final agentsHeader = tester.widget<Positioned>(
+            find
+                .ancestor(
+                  of: find.text('Agents').last,
+                  matching: find.byType(Positioned),
+                )
+                .first,
+          );
+          expect(agentsHeader.left, 396);
+          expect(agentsHeader.width, 328);
+          if (smart) {
+            final smartPos = tester.widget<Positioned>(
+              find
+                  .ancestor(
+                    of: find.byKey(const ValueKey('smart-card-agents')),
+                    matching: find.byType(Positioned),
+                  )
+                  .first,
+            );
+            expect(smartPos.left, 396);
+            expect(smartPos.top, 106); // 8 + 86 + 12
+            expect(smartPos.width, 328);
+            expect(agentsHeader.top, 156); // 106 + 38 + 12
+          } else {
+            expect(agentsHeader.top, 106); // 8 + 86 + 12
+          }
+        }
+
+        // Scroll is preserved when a column change refits without manual zoom,
+        // and user zoom survives remounting (e.g. opening Settings and back)
+        // while re-clamping when zoomed out or when content shrinks.
+        final controller = TransformationController();
+        addTearDown(controller.dispose);
+        var showMap = true;
+        var layers = const [
+          'agents',
+          'online',
+          'local',
+          'models',
+          'mcp',
+          'skills',
+        ];
+        late StateSetter rebuild;
+        tester.view.physicalSize = const Size(1500, 500);
+        tester.view.devicePixelRatio = 1;
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: StatefulBuilder(
+                builder: (context, setState) {
+                  rebuild = setState;
+                  if (!showMap) return const SizedBox.shrink();
+                  return MapEditor(
+                    graph: fixtureGraph(),
+                    saved: const {},
+                    onEdit: (_) async {},
+                    tr: (s) => s,
+                    controller: controller,
+                    layers: layers,
+                    onLayers: (next) => setState(() => layers = next),
+                  );
+                },
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+        final mouse = TestPointer(2, PointerDeviceKind.mouse);
+        await tester.sendEventToBinding(
+          mouse.hover(tester.getCenter(find.byType(InteractiveViewer))),
+        );
+        await tester.sendEventToBinding(mouse.scroll(const Offset(0, 120)));
+        await tester.pump();
+        expect(controller.value.getTranslation().y, -120);
+        rebuild(
+          () => layers = const ['agents', 'online', 'local', 'mcp', 'skills'],
+        );
+        await tester.pump();
+        await tester.pump();
+        expect(controller.value.getTranslation().y, -120);
+
+        // User zooms to 125 %, opens another view (unmounts MapEditor), and
+        // returns: the 125 % zoom stays until Fit / Ctrl+0 (including when
+        // zoomMap is called while unmounted).
+        zoomMap(controller, 1.25);
+        await tester.pump();
+        expect(controller.value.entry(0, 0), 1.25);
+        rebuild(() => showMap = false);
+        await tester.pump();
+        rebuild(() => showMap = true);
+        await tester.pump();
+        await tester.pump();
+        expect(controller.value.entry(0, 0), 1.25);
+        rebuild(() => showMap = false);
+        await tester.pump();
+        zoomMap(controller, 0);
+        rebuild(() => showMap = true);
+        await tester.pump();
+        await tester.pump();
+        expect(controller.value.entry(0, 0), 1);
+        zoomMap(controller, 1.25);
+        await tester.pump();
+
+        // When scrolled far down at high zoom, zooming out re-clamps y.
+        await tester.sendEventToBinding(mouse.scroll(const Offset(0, 2000)));
+        await tester.pump();
+        final deepY = controller.value.getTranslation().y;
+        zoomMap(controller, .5);
+        await tester.pump();
+        expect(controller.value.getTranslation().y, greaterThan(deepY));
+        zoomMap(controller, 0);
+        await tester.pump();
+        await tester.pump();
+
+        // At 500 px wide, starting a connection move shows Cancel + Disconnect
+        // without overflowing or shifting the board vertically, and keeps
+        // MapZoomControl inside the window at the right edge.
+        tester.view.physicalSize = const Size(500, 700);
+        await tester.pump();
+        await tester.pump();
+        final zoomRect = tester.getRect(find.byType(MapZoomControl));
+        expect(zoomRect.left, greaterThanOrEqualTo(0));
+        expect(zoomRect.right, 500 - 12);
+        final boardTopBefore = tester
+            .getTopLeft(find.byType(InteractiveViewer))
+            .dy;
+        await tester.tap(find.text('agent:a'));
+        await tester.pumpAndSettle();
+        final hook = find
+            .byTooltip(
+              'Move this connection to another compatible box, or to empty space to disconnect.',
+            )
+            .first;
+        await tester.tap(hook);
+        await tester.pump();
+        expect(find.text('Cancel'), findsOneWidget);
+        expect(find.text('Disconnect'), findsOneWidget);
+        expect(tester.getRect(find.byType(MapZoomControl)).right, 500 - 12);
+        expect(
+          tester.getTopLeft(find.byType(InteractiveViewer)).dy,
+          boardTopBefore,
+        );
+        expect(tester.takeException(), isNull);
+
+        // Scrolling the mouse wheel over an open overflowing smart card
+        // scrolls the card itself without scrolling the map underneath.
+        await mount(
+          tester,
+          edits: [],
+          smartCards: true,
+          controller: controller,
+          size: const Size(1500, 500),
+        );
+        await tester.pump();
+        zoomMap(controller, 0);
+        await tester.pump();
+        await tester.pump();
+        await tester.tap(find.byKey(const ValueKey('smart-card-agents')));
+        await tester.pumpAndSettle();
+        await tester.enterText(
+          find.byType(TextField),
+          List.generate(20, (i) => 'line $i').join('\n'),
+        );
+        await tester.pump();
+        final beforeScroll = controller.value.clone();
+        final cardScroll = tester.state<ScrollableState>(
+          find
+              .descendant(
+                of: find.byKey(const ValueKey('smart-card-agents')),
+                matching: find.byType(Scrollable),
+              )
+              .first,
+        );
+        cardScroll.position.jumpTo(20);
+        await tester.pump();
+        await tester.sendEventToBinding(
+          mouse.hover(tester.getCenter(find.byType(TextField))),
+        );
+        await tester.sendEventToBinding(mouse.scroll(const Offset(0, -10)));
+        await tester.pump();
+        expect(controller.value, beforeScroll);
+
+        // Narrowing hides the Models smart card without closing or disposing it.
+        var smartLayers = const [
+          'agents',
+          'online',
+          'local',
+          'models',
+          'mcp',
+          'skills',
+        ];
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: StatefulBuilder(
+                builder: (context, setState) => MapEditor(
+                  graph: fixtureGraph(),
+                  saved: const {},
+                  onEdit: (_) async {},
+                  tr: (s) => s,
+                  smartCards: true,
+                  layers: smartLayers,
+                  onLayers: (next) => setState(() => smartLayers = next),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+        await tester.tap(find.byKey(const ValueKey('smart-card-models')));
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byType(TextField), 'keep this prompt');
+        await tester.pump();
+        tester.view.physicalSize = const Size(1000, 700);
+        await tester.pump();
+        expect(find.byKey(const ValueKey('smart-card-models')), findsNothing);
+        final hiddenModelsCard = find.byKey(
+          const ValueKey('smart-card-models'),
+          skipOffstage: false,
+        );
+        expect(tester.widget<MapSmartCard>(hiddenModelsCard).open, isTrue);
+        expect(
+          Focus.maybeOf(tester.element(hiddenModelsCard))?.canRequestFocus,
+          isFalse,
+        );
+        // Moving to Models turns its column on in any window and opens it.
+        await tester.tap(find.byKey(const ValueKey('smart-card-agents')));
+        await tester.pumpAndSettle();
+        tester
+            .widget<MapSmartCard>(
+              find.byKey(const ValueKey('smart-card-agents')),
+            )
+            .onMoveToColumn!('models', 'moved request');
+        await tester.pumpAndSettle();
+        expect(
+          tester
+              .widget<MapSmartCard>(
+                find.byKey(const ValueKey('smart-card-models')),
+              )
+              .open,
+          isTrue,
+        );
+        tester.view.physicalSize = const Size(1500, 700);
+        await tester.pump();
+        await tester.tap(find.byKey(const ValueKey('map-column-3')));
+        await tester.pump();
+        expect(find.byKey(const ValueKey('smart-card-models')), findsNothing);
+        tester
+            .widget<MapSmartCard>(
+              find.byKey(const ValueKey('smart-card-agents')),
+            )
+            .onMoveToColumn!('models', 'keep this prompt');
+        await tester.pumpAndSettle();
+        expect(
+          tester
+              .widget<MapSmartCard>(
+                find.byKey(const ValueKey('smart-card-models')),
+              )
+              .open,
+          isTrue,
+        );
+        expect(find.text('keep this prompt'), findsOneWidget);
+
+        // AgentMap (System Map path) saves the post-scroll and post-zoom
+        // transform via onViewChanged and re-clamps when zooming out.
+        final sysController = TransformationController();
+        addTearDown(sysController.dispose);
+        final savedMatrices = <Matrix4>[];
+        tester.view.physicalSize = const Size(660, 500);
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: AgentMap(
+                graph: fixtureGraph(),
+                onAgent: (_) {},
+                tr: (s) => s,
+                controller: sysController,
+                onViewChanged: () =>
+                    savedMatrices.add(sysController.value.clone()),
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+        await tester.sendEventToBinding(
+          mouse.hover(tester.getCenter(find.byType(InteractiveViewer))),
+        );
+        await tester.sendEventToBinding(mouse.scroll(const Offset(800, 0)));
+        await tester.pump();
+        expect(sysController.value.getTranslation().x, lessThan(-500));
+        expect(savedMatrices.last, sysController.value);
+        savedMatrices.clear();
+        zoomMap(sysController, .3);
+        await tester.pump();
+        expect(sysController.value.getTranslation().x, 0);
+        expect(savedMatrices.last, sysController.value);
+      },
+    );
+  });
 }

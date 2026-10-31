@@ -36,6 +36,7 @@ shape = "antigravity"
 [access]
 how = "A Google account (free tier or Google AI plan), or a Gemini API key from aistudio.google.com"
 login = "agy"
+files = [".gemini/antigravity-cli/history.jsonl"]  # its sign-in is in the keyring; only a used agent has this
 env = ["GEMINI_API_KEY"]
 
 [[access.logins]]

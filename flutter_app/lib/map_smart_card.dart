@@ -108,6 +108,7 @@ class MapSmartCard extends StatefulWidget {
     required this.column,
     required this.title,
     required this.open,
+    this.enabled = true,
     required this.onToggle,
     required this.tr,
     this.helpers = const [],
@@ -115,11 +116,13 @@ class MapSmartCard extends StatefulWidget {
     this.initialPrompt,
     this.onMoveToColumn,
     this.onApplied,
+    this.width = 266,
   });
 
   final String column;
   final String title;
   final bool open;
+  final bool enabled;
   final VoidCallback onToggle;
   final String Function(String) tr;
   final List<Map<String, dynamic>> helpers;
@@ -127,6 +130,7 @@ class MapSmartCard extends StatefulWidget {
   final String? initialPrompt;
   final void Function(String column, String request)? onMoveToColumn;
   final ValueChanged<Map<String, dynamic>>? onApplied;
+  final double width;
 
   @override
   State<MapSmartCard> createState() => _MapSmartCardState();
@@ -192,10 +196,13 @@ class _MapSmartCardState extends State<MapSmartCard> {
       _prompt.text = widget.initialPrompt!;
       _step = _SmartStep.idle;
     }
+    if (oldWidget.enabled && !widget.enabled && _step == _SmartStep.working) {
+      _abortWorking();
+    }
     if (!oldWidget.open && widget.open) {
       _focusOpenCard();
-    } else if (oldWidget.open && !widget.open && _step == _SmartStep.working) {
-      _abortWorking();
+    } else if (oldWidget.open && !widget.open) {
+      if (_step == _SmartStep.redirect) _step = _SmartStep.idle;
     }
   }
 
@@ -735,7 +742,6 @@ class _MapSmartCardState extends State<MapSmartCard> {
                 final req = (targetReq != null && targetReq.isNotEmpty)
                     ? targetReq
                     : _prompt.text.trim();
-                _step = _SmartStep.idle;
                 widget.onMoveToColumn?.call(targetCol, req);
               },
               child: Text(
@@ -991,7 +997,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
     final helper = _activeHelper;
     if (!widget.open) {
       return SizedBox(
-        width: 266,
+        width: widget.width,
         height: 38,
         child: Semantics(
           button: true,
@@ -1074,9 +1080,9 @@ class _MapSmartCardState extends State<MapSmartCard> {
         onPanUpdate: (_) {},
         onPanEnd: (_) {},
         child: ConstrainedBox(
-          constraints: const BoxConstraints(
-            minWidth: 266,
-            maxWidth: 266,
+          constraints: BoxConstraints(
+            minWidth: widget.width,
+            maxWidth: widget.width,
             minHeight: 38,
             maxHeight: 320,
           ),

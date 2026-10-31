@@ -1,17 +1,33 @@
+import 'dart:async' show FutureOr, unawaited;
+
+import 'package:flutter/foundation.dart' show listEquals;
+import 'package:flutter/gestures.dart' show GestureBinding, PointerScrollEvent;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'core_client.g.dart';
 import 'map_groups.dart';
 import 'map_layout.dart';
+import 'map_zoom.dart';
 import 'map_lights.dart';
 import 'map_smart_card.dart';
 import 'map_static_cache.dart';
 import 'app_theme.dart' show corners;
 import 'map_snapshot.dart';
 
+/// The map's columns: the map_layers each stands for, and its filter label.
+const mapColumnLayers = [
+  ['mcp', 'skills'],
+  ['agents'],
+  ['online', 'local'],
+  ['models'],
+];
+const mapColumnNames = ['MCP servers', 'Agents', 'Providers', 'Models'];
+
 /// The editable canvas keeps its topology separate from gesture and ticker state.
 class MapEditor extends StatefulWidget {
   const MapEditor({
+    this.layers,
+    this.onLayers,
     super.key,
     required this.graph,
     required this.saved,
@@ -57,15 +73,239 @@ class MapEditor extends StatefulWidget {
   final String animate;
   final int lightFps;
   final ValueChanged<String>? onAnimationChanged;
+
+  /// The map_layers setting and its change: the filter above the map, and
+  /// the three map views. Null: no filter.
+  final List<String>? layers;
+  final FutureOr<void> Function(List<String>)? onLayers;
   @override
   State<MapEditor> createState() => _MapEditorState();
 }
+
+class _FitState {
+  /// Columns the user turned on although the window's view leaves them out.
+  final forced = <int>{};
+  double? scale;
+  Size? fittedTo;
+  (Size, Size)? clampedTo;
+}
+
+final _fitStates = Expando<_FitState>('mapFitState');
 
 class _MapEditorState extends State<MapEditor>
     with SingleTickerProviderStateMixin {
   final _board = GlobalKey(), _viewport = GlobalKey();
   final _ownTransform = TransformationController();
   TransformationController get _transform => widget.controller ?? _ownTransform;
+
+  /// The map fits the window's width (window resized by hand or by tiling)
+  /// until the user zooms; Ctrl+0 fits it to the window again.
+  /// Stored on the controller so opening another view and coming back keeps
+  /// the user's zoom.
+  _FitState get _fitState => _fitStates[_transform] ??= _FitState();
+  bool get _userZoomed => mapUserZoomed[_transform] == true;
+  set _userZoomed(bool value) => mapUserZoomed[_transform] = value;
+  bool _fitting = false;
+
+  List<int> _shownColumns = const [0, 1, 2, 3];
+  MapViewSize _view = MapViewSize.max;
+
+  /// The map's width on screen and in scene coordinates: the shown columns
+  /// grow to fill the free space and are centred in it. Only with the column
+  /// filter (the app's own map).
+  double _viewportWidth = 0;
+  double _centerIn = 0;
+
+  bool _allowed(MapViewSize view, int col) =>
+      view.allows(col) || _fitState.forced.contains(col);
+
+  List<int> _columnsFor(MapViewSize view) {
+    final layers = widget.layers;
+    if (layers == null) return const [0, 1, 2, 3];
+    return [
+      for (var col = 0; col < mapColumnLayers.length; col++)
+        if (_allowed(view, col) && mapColumnLayers[col].any(layers.contains))
+          col,
+    ];
+  }
+
+  Map<String, dynamic> get _shownGraph {
+    final graph = widget.graph;
+    if (_shownColumns.length == mapColumnLayers.length) return graph;
+    final nodes = [
+      for (final n in graph['nodes'] as List? ?? const [])
+        if (_shownColumns.contains((n as Map)['column'])) n,
+    ];
+    final ids = {for (final n in nodes) n['id']};
+    return {
+      ...graph,
+      'nodes': nodes,
+      'edges': [
+        for (final e in graph['edges'] as List? ?? const [])
+          if (ids.contains((e as Map)['source']) && ids.contains(e['target']))
+            e,
+      ],
+    };
+  }
+
+  void _toggleColumn(int col, bool on) {
+    // The core shows MCP servers and skills only with agents, and models
+    // only with a provider: those columns go and come with them.
+    const needs = {0: 1, 3: 2}, needed = {1: 0, 2: 3};
+    final forced = _fitState.forced;
+    final next = {...?(_pendingLayers ?? widget.layers)};
+    if (on && !_view.allows(col)) forced.add(col);
+    if (!on && forced.remove(col) && !_view.allows(col)) {
+      // Back to what the window's view shows; the filter stays as it was.
+      setState(() {
+        _pendingSmartMove = null;
+        if (_openSmartColumn == col) _openSmartColumn = null;
+      });
+      return;
+    }
+    if (on) {
+      next.addAll(mapColumnLayers[col]);
+      if (needs[col] case final other?) next.addAll(mapColumnLayers[other]);
+    } else {
+      next.removeAll(mapColumnLayers[col]);
+      if (needed[col] case final other?) {
+        next.removeAll(mapColumnLayers[other]);
+        forced.remove(other);
+      }
+      _pendingSmartMove = null;
+      if (_openSmartColumn == col ||
+          (needed[col] != null && _openSmartColumn == needed[col])) {
+        _openSmartColumn = null;
+      }
+    }
+    final updated = next.toList();
+    setState(() => _pendingLayers = updated);
+    final res = widget.onLayers?.call(updated);
+    if (res is Future) {
+      unawaited(
+        res.whenComplete(() {
+          if (mounted && _pendingLayers == updated) {
+            setState(() {
+              _pendingLayers = null;
+              _pendingSmartMove = null;
+            });
+          }
+        }),
+      );
+    }
+  }
+
+  void _fit(Size content) {
+    final box = _viewport.currentContext?.findRenderObject() as RenderBox?;
+    if (!mounted || box == null || !box.hasSize || content.width <= 0) return;
+    final currentScale = _transform.value.entry(0, 0);
+    final vw = box.size.width;
+    final centerWidth = _userZoomed && currentScale > 0
+        ? vw / currentScale
+        : vw;
+    if ((vw - _viewportWidth).abs() > .5 ||
+        (centerWidth - _centerIn).abs() > .5) {
+      setState(() {
+        _viewportWidth = vw;
+        _centerIn = centerWidth;
+        _layout = null;
+        _staticRevision++;
+      });
+      return; // the next frame fits the new layout
+    }
+    final state = _fitState;
+    if (!_userZoomed) {
+      final target = Size(box.size.width, content.width);
+      if (target != state.fittedTo) {
+        state.fittedTo = target;
+        final scale = (box.size.width / content.width).clamp(.3, 1.0);
+        state.scale = scale;
+        _fitting = true;
+        final now = _transform.value.getTranslation();
+        _transform.value = Matrix4.diagonal3Values(scale, scale, 1)
+          ..setTranslationRaw(now.x, now.y, now.z);
+        _fitting = false;
+      }
+    }
+    final clampTarget = (box.size, content);
+    if (state.clampedTo != clampTarget) {
+      state.clampedTo = clampTarget;
+      _fitting = true;
+      scrollMap(_transform, Offset.zero, viewport: box.size, content: content);
+      _fitting = false;
+    }
+    if (_pendingSmartPan case final col?) {
+      _pendingSmartPan = null;
+      if (_openSmartColumn == col) _panSmartCardIntoView(col);
+    }
+  }
+
+  void _fitAgain() {
+    final state = _fitState;
+    _userZoomed = false;
+    state.fittedTo = null;
+    state.clampedTo = null;
+    _fitting = true;
+    _transform.value = Matrix4.identity();
+    _fitting = false;
+    final box = _viewport.currentContext?.findRenderObject() as RenderBox?;
+    if (box != null &&
+        box.hasSize &&
+        ((box.size.width - _viewportWidth).abs() > .5 ||
+            (box.size.width - _centerIn).abs() > .5)) {
+      setState(() {
+        _viewportWidth = box.size.width;
+        _centerIn = box.size.width;
+        _layout = null;
+        _staticRevision++;
+      });
+    }
+    final layout = _layout ??= MapLayout(
+      _shownGraph,
+      _saved,
+      smartCards: widget.smartCards,
+      columns: _shownColumns,
+      viewportWidth: _viewportWidth,
+      centerWidth: _centerIn,
+    );
+    _fit(layout.size);
+  }
+
+  void _zoomChanged() {
+    final state = _fitState;
+    final fitted = state.scale;
+    if (_fitting || fitted == null) return;
+    final scale = _transform.value.entry(0, 0);
+    if ((scale - fitted).abs() > .001) {
+      _userZoomed = true;
+    }
+    final box = _viewport.currentContext?.findRenderObject() as RenderBox?;
+    if (box != null && box.hasSize) {
+      final vw = box.size.width;
+      final centerWidth = _userZoomed && scale > 0 ? vw / scale : vw;
+      if ((vw - _viewportWidth).abs() > .5 ||
+          (centerWidth - _centerIn).abs() > .5) {
+        setState(() {
+          _viewportWidth = vw;
+          _centerIn = centerWidth;
+          _layout = null;
+          _staticRevision++;
+        });
+      }
+      final content = (_layout ??= MapLayout(
+        _shownGraph,
+        _saved,
+        smartCards: widget.smartCards,
+        columns: _shownColumns,
+        viewportWidth: _viewportWidth,
+        centerWidth: _centerIn,
+      )).size;
+      _fitting = true;
+      scrollMap(_transform, Offset.zero, viewport: box.size, content: content);
+      _fitting = false;
+    }
+  }
+
   late final MapLightClock _phase;
   final _localSelection = <String>{};
   Set<String> get _selected => widget.selection ?? _localSelection;
@@ -77,6 +317,9 @@ class _MapEditorState extends State<MapEditor>
   Offset? _cursor;
   double? _draggingCardY;
   int? _openSmartColumn;
+  List<String>? _pendingLayers;
+  (int, String, String)? _pendingSmartMove;
+  int? _pendingSmartPan;
   final _smartPrompts = <String, String>{};
   double _reorderDistance = 0;
   int _staticRevision = 0;
@@ -85,11 +328,29 @@ class _MapEditorState extends State<MapEditor>
     super.initState();
     _saved = widget.saved;
     _phase = MapLightClock(this);
+    _fitState
+      ..fittedTo = null
+      ..clampedTo = null;
+    _transform.addListener(_zoomChanged);
+    mapFit[_transform] = _fitAgain;
   }
 
   @override
   void didUpdateWidget(covariant MapEditor old) {
     super.didUpdateWidget(old);
+    if (old.controller != widget.controller) {
+      final prev = old.controller ?? _ownTransform;
+      prev.removeListener(_zoomChanged);
+      if (mapFit[prev] == _fitAgain) mapFit[prev] = null;
+      _fitState
+        ..fittedTo = null
+        ..clampedTo = null;
+      _transform.addListener(_zoomChanged);
+      mapFit[_transform] = _fitAgain;
+    }
+    if (!listEquals(old.layers, widget.layers)) {
+      _pendingLayers = null;
+    }
     final savedChanged = !sameMapJson(old.saved, widget.saved);
     final graphChanged = !sameMapJson(old.graph, widget.graph);
     final smartChanged = old.smartCards != widget.smartCards;
@@ -98,9 +359,7 @@ class _MapEditorState extends State<MapEditor>
       _layout = null;
       if (!widget.smartCards) _openSmartColumn = null;
     }
-    if (graphChanged &&
-        _layout != null &&
-        !_layout!.updateGraph(widget.graph)) {
+    if (graphChanged && _layout != null && !_layout!.updateGraph(_shownGraph)) {
       _layout = null;
     }
     if (savedChanged ||
@@ -123,6 +382,8 @@ class _MapEditorState extends State<MapEditor>
   @override
   void dispose() {
     _phase.dispose();
+    _transform.removeListener(_zoomChanged);
+    if (mapFit[_transform] == _fitAgain) mapFit[_transform] = null;
     _ownTransform.dispose();
     super.dispose();
   }
@@ -178,7 +439,14 @@ class _MapEditorState extends State<MapEditor>
   void _drop(String? target) {
     final source = _source, moving = _moving;
     if (source == null) return;
-    if (target != null && !_layout!.targetOk(source, target, moving: moving)) {
+    final layout = _layout;
+    if (layout == null ||
+        !layout.boxes.containsKey(source) ||
+        (moving != null && !layout.boxes.containsKey(moving['target']))) {
+      _cancel();
+      return;
+    }
+    if (target != null && !layout.targetOk(source, target, moving: moving)) {
       _cancel();
       return;
     }
@@ -225,35 +493,87 @@ class _MapEditorState extends State<MapEditor>
     _save({..._saved, 'collapsed': folded.toList()});
   }
 
+  void _panSmartCardIntoView(int col) {
+    final layout = _layout ??= MapLayout(
+      _shownGraph,
+      _saved,
+      smartCards: widget.smartCards,
+      columns: _shownColumns,
+      viewportWidth: _viewportWidth,
+      centerWidth: _centerIn,
+    );
+    final box = _viewport.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return;
+    final visible = Rect.fromPoints(
+      _transform.toScene(Offset.zero),
+      _transform.toScene(Offset(box.size.width, box.size.height)),
+    );
+    final left = layout.columnX(col);
+    final card = Rect.fromLTWH(left, 106, layout.columnWidth, 320);
+    final dx = card.right > visible.right
+        ? visible.right - 16 - card.right
+        : card.left < visible.left
+        ? visible.left + 16 - card.left
+        : 0.0;
+    final dy = card.bottom > visible.bottom
+        ? visible.bottom - 16 - card.bottom
+        : card.top < visible.top
+        ? visible.top + 16 - card.top
+        : 0.0;
+    if (dx != 0 || dy != 0) {
+      _transform.value = _transform.value.clone()
+        ..translateByDouble(dx, dy, 0, 1);
+    }
+  }
+
   void _toggleSmartCard(int col) {
     setState(() {
+      _pendingSmartMove = null;
       if (_openSmartColumn == col) {
         _openSmartColumn = null;
         return;
       }
+      if (!_shownColumns.contains(col)) return;
       _openSmartColumn = col;
-      final box = _viewport.currentContext?.findRenderObject() as RenderBox?;
-      if (box == null || !box.hasSize) return;
-      final visible = Rect.fromPoints(
-        _transform.toScene(Offset.zero),
-        _transform.toScene(Offset(box.size.width, box.size.height)),
-      );
-      final card = Rect.fromLTWH(16.0 + col * 302, 106, 266, 320);
-      final dx = card.right > visible.right
-          ? visible.right - 16 - card.right
-          : card.left < visible.left
-          ? visible.left + 16 - card.left
-          : 0.0;
-      final dy = card.bottom > visible.bottom
-          ? visible.bottom - 16 - card.bottom
-          : card.top < visible.top
-          ? visible.top + 16 - card.top
-          : 0.0;
-      if (dx != 0 || dy != 0) {
-        _transform.value = _transform.value.clone()
-          ..translateByDouble(dx, dy, 0, 1);
-      }
+      _panSmartCardIntoView(col);
     });
+  }
+
+  Widget _columnChip(int col) {
+    final layers = _pendingLayers ?? widget.layers!;
+    final on = mapColumnLayers[col].any(layers.contains);
+    return FilterChip(
+      key: ValueKey('map-column-$col'),
+      visualDensity: VisualDensity.compact,
+      label: Text(widget.tr(mapColumnNames[col])),
+      selected: on && _allowed(_view, col),
+      onSelected: (value) => _toggleColumn(col, value),
+    );
+  }
+
+  List<Map<String, dynamic>> _movable(String id, MapLayout layout) => [
+    for (final e in layout.allEdges)
+      if (layout.movable(e) && (e['source'] == id || e['target'] == id)) e,
+  ];
+
+  String _moveLabel(Map<String, dynamic> edge, MapLayout layout) =>
+      '${widget.tr('Move connection')}: ${layout.nodes[edge['target']]?['label']}';
+
+  Future<void> _chooseMove(String id, MapLayout layout) async {
+    final edge = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: Text(widget.tr('Move connection')),
+        children: [
+          for (final e in _movable(id, layout))
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(context, e),
+              child: Text('${layout.nodes[e['target']]?['label']}'),
+            ),
+        ],
+      ),
+    );
+    if (edge != null && mounted) _begin(edge['source'] as String, edge: edge);
   }
 
   Widget _node(String id, MapLayout layout, Set<String> lit) {
@@ -265,6 +585,15 @@ class _MapEditorState extends State<MapEditor>
     final command = id.startsWith('agent:') ? id.substring(6) : '';
     final activity = (widget.graph['activity'] as Map?)?[command] as Map?;
     final children = activity?['children'] as List? ?? [];
+    final hasSubagents =
+        node['kind'] == 'agent' &&
+        widget.onSubagents != null &&
+        activity?['subagents_supported'] == true &&
+        children.isNotEmpty;
+    final traffic = node['kind'] == 'agent'
+        ? ((widget.graph['traffic'] as Map?)?[command] as Map?)
+        : null;
+    final hasTraffic = ((traffic?['connections'] as num?)?.toInt() ?? 0) > 0;
 
     return Positioned.fromRect(
       rect: rect,
@@ -339,6 +668,20 @@ class _MapEditorState extends State<MapEditor>
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
+                          if ((widget.graph['agent_badges'] as Map?)?[id]
+                              case final Map badge)
+                            AgentBadge(badge: badge),
+                          if ((widget.graph['usage_boxes'] as Map?)?[id]
+                              case final Map box)
+                            Flexible(
+                              child: UsageBoxLabel(
+                                box: box,
+                                size:
+                                    (widget.graph['usage_box_size'] as int? ??
+                                            7)
+                                        .toDouble(),
+                              ),
+                            ),
                           PopupMenuButton<String>(
                             tooltip: widget.tr('Actions'),
                             onSelected: (action) {
@@ -373,6 +716,8 @@ class _MapEditorState extends State<MapEditor>
                                   widget.onOpen?.call(node);
                                 case 'actions':
                                   widget.onMenu?.call(context, node);
+                                case 'move':
+                                  _chooseMove(id, layout);
                                 default:
                                   final edge = layout.allEdges.firstWhere(
                                     (e) => edgeKey(e) == action,
@@ -404,24 +749,28 @@ class _MapEditorState extends State<MapEditor>
                                 ),
                               PopupMenuItem(
                                 value: 'open',
-                                child: Text(widget.tr('Open')),
+                                child: Text(widget.tr('Details')),
                               ),
                               if (widget.onMenu != null)
                                 PopupMenuItem(
                                   value: 'actions',
                                   child: Text(widget.tr('Actions')),
                                 ),
-                              for (final edge in layout.allEdges.where(
-                                (e) =>
-                                    layout.movable(e) &&
-                                    (e['source'] == id || e['target'] == id),
-                              ))
+                              // Many connections get a page of their own, or
+                              // the menu would fill the screen.
+                              if (_movable(id, layout).length > 3)
                                 PopupMenuItem(
-                                  value: edgeKey(edge),
+                                  value: 'move',
                                   child: Text(
-                                    '${widget.tr('Move connection')}: ${layout.nodes[edge['target']]?['label']}',
+                                    '${widget.tr('Move connection')}…',
                                   ),
-                                ),
+                                )
+                              else
+                                for (final edge in _movable(id, layout))
+                                  PopupMenuItem(
+                                    value: edgeKey(edge),
+                                    child: Text(_moveLabel(edge, layout)),
+                                  ),
                             ],
                           ),
                         ],
@@ -432,28 +781,85 @@ class _MapEditorState extends State<MapEditor>
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(fontSize: 12),
                       ),
-                      if (widget.onSubagents != null &&
-                          activity?['subagents_supported'] == true &&
-                          children.isNotEmpty)
+                      if (hasSubagents ||
+                          hasTraffic ||
+                          widget.controls != null ||
+                          widget.onOpen != null)
                         SizedBox(
-                          height: 22,
-                          child: TextButton(
-                            onPressed: () => widget.onSubagents!(command),
-                            child: Text(
-                              '${widget.tr('Subagents')}: ${activity?['active_subagents']} / ${children.length}',
-                            ),
-                          ),
-                        ),
-                      if (widget.controls != null) widget.controls!(node),
-                      if (widget.onOpen != null && widget.controls == null)
-                        SizedBox(
-                          height: 24,
-                          child: TextButton(
-                            style: TextButton.styleFrom(
-                              padding: EdgeInsets.zero,
-                            ),
-                            onPressed: () => widget.onOpen!(node),
-                            child: Text(widget.tr('Open')),
+                          height: 26,
+                          child: Row(
+                            children: [
+                              if (hasSubagents)
+                                Tooltip(
+                                  message:
+                                      '${widget.tr('Subagents')}: ${activity?['active_subagents']} / ${children.length}',
+                                  child: InkWell(
+                                    key: ValueKey('subagents-$command'),
+                                    borderRadius: BorderRadius.circular(4),
+                                    onTap: () => widget.onSubagents!(command),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 4,
+                                        vertical: 2,
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Icon(
+                                            Icons.account_tree_outlined,
+                                            size: 14,
+                                          ),
+                                          const SizedBox(width: 2),
+                                          Text(
+                                            '${children.length}',
+                                            style: const TextStyle(
+                                              fontSize: 11,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              if (hasTraffic)
+                                IconButton(
+                                  key: ValueKey('traffic-$command'),
+                                  padding: EdgeInsets.zero,
+                                  visualDensity: VisualDensity.compact,
+                                  constraints: const BoxConstraints(
+                                    minWidth: 26,
+                                    minHeight: 24,
+                                  ),
+                                  tooltip: trafficTooltip(traffic!, widget.tr),
+                                  onPressed: () => showDialog<void>(
+                                    context: context,
+                                    builder: (_) => AgentTrafficDialog(
+                                      label: widget.tr(node['label'] as String),
+                                      traffic: traffic,
+                                      tr: widget.tr,
+                                    ),
+                                  ),
+                                  icon: const Icon(Icons.swap_vert, size: 16),
+                                ),
+                              if (widget.controls != null)
+                                Expanded(child: widget.controls!(node))
+                              else if (widget.onOpen != null)
+                                IconButton(
+                                  key: ValueKey('details-$id'),
+                                  padding: EdgeInsets.zero,
+                                  visualDensity: VisualDensity.compact,
+                                  constraints: const BoxConstraints(
+                                    minWidth: 26,
+                                    minHeight: 24,
+                                  ),
+                                  tooltip: widget.tr('Details'),
+                                  onPressed: () => widget.onOpen!(node),
+                                  icon: const Icon(
+                                    Icons.info_outline,
+                                    size: 16,
+                                  ),
+                                ),
+                            ],
                           ),
                         ),
                     ],
@@ -469,11 +875,75 @@ class _MapEditorState extends State<MapEditor>
 
   @override
   Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) => _buildEditor(context, constraints),
+    );
+  }
+
+  Widget _buildEditor(BuildContext context, BoxConstraints constraints) {
+    final vw = constraints.maxWidth.isFinite && constraints.maxWidth > 0
+        ? constraints.maxWidth
+        : MediaQuery.sizeOf(context).width;
+    final currentScale = _transform.value.entry(0, 0);
+    final centerWidth = _userZoomed && currentScale > 0
+        ? vw / currentScale
+        : vw;
+    if ((vw - _viewportWidth).abs() > .5 ||
+        (centerWidth - _centerIn).abs() > .5) {
+      _viewportWidth = vw;
+      _centerIn = centerWidth;
+      _layout = null;
+      _staticRevision++;
+    }
+    // A new window size: fit again, and show the columns that fit.
+    _view = widget.layers == null
+        ? MapViewSize.max
+        : mapViewSizeFor(
+            windowWidth: MediaQuery.sizeOf(context).width,
+            displayWidth: mapDisplayWidthOf(context),
+          );
+    final shown = _columnsFor(_view);
+    if (!listEquals(shown, _shownColumns)) {
+      _shownColumns = shown;
+      _layout = null;
+      _staticRevision++;
+    }
+    if (_pendingSmartMove case (
+      final col,
+      final targetCol,
+      final request,
+    ) when _shownColumns.contains(col)) {
+      _pendingSmartMove = null;
+      _smartPrompts[targetCol] = request;
+      _openSmartColumn = col;
+      _pendingSmartPan = col;
+    } else if (_pendingSmartMove case (
+      final col,
+      _,
+      _,
+    ) when !_allowed(_view, col)) {
+      _pendingSmartMove = null;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _fit(_layout?.size ?? Size.zero);
+    });
     final layout = _layout ??= MapLayout(
-      widget.graph,
+      _shownGraph,
       _saved,
       smartCards: widget.smartCards,
+      columns: _shownColumns,
+      viewportWidth: _viewportWidth,
+      centerWidth: _centerIn,
     );
+    if (_source != null &&
+        (!layout.boxes.containsKey(_source) ||
+            (_moving != null &&
+                !layout.boxes.containsKey(_moving!['target'])))) {
+      _pointerDrawing = false;
+      _source = null;
+      _moving = null;
+      _cursor = null;
+    }
     final colors = Theme.of(context).colorScheme;
     final active =
         widget.animate != 'off' &&
@@ -494,6 +964,7 @@ class _MapEditorState extends State<MapEditor>
       ...(_saved['pins'] as List? ?? []).cast<String>(),
       ?_hover,
     };
+    seed.retainWhere(layout.nodes.containsKey); // a hidden column has no lines
     final lit = {...seed};
     for (final e in layout.allEdges) {
       if (seed.contains(e['source']) || seed.contains(e['target'])) {
@@ -514,324 +985,549 @@ class _MapEditorState extends State<MapEditor>
       child: Column(
         children: [
           SizedBox(
-            height: 42,
-            child: Row(
-              children: [
-                if (_source != null) ...[
-                  TextButton(
-                    onPressed: _cancel,
-                    child: Text(widget.tr('Cancel')),
-                  ),
-                  if (_moving != null)
-                    TextButton(
-                      onPressed: () => _drop(null),
-                      child: Text(widget.tr('Disconnect')),
-                    ),
-                ],
-                const Spacer(),
-                DropdownButton<String>(
-                  value: widget.animate,
-                  onChanged: (v) => widget.onAnimationChanged?.call(v!),
-                  items: [
-                    for (final mode in ['all', 'agents', 'off'])
-                      DropdownMenuItem(
-                        value: mode,
-                        child: Text(
-                          widget.tr(
-                            {
-                              'all': 'All lights',
-                              'agents': 'Agent lights',
-                              'off': 'Lights off',
-                            }[mode]!,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: InteractiveViewer(
-              key: _viewport,
-              transformationController: _transform,
-              constrained: false,
-              minScale: .3,
-              maxScale: 2,
-              boundaryMargin: const EdgeInsets.all(120),
-              child: SizedBox(
-                key: _board,
-                width: layout.size.width,
-                height: layout.size.height,
-                child: Stack(
-                  children: [
-                    Positioned.fill(
-                      child: MapStaticCache(
-                        enabled: flowing,
-                        contentKey: _staticRevision,
-                        controller: _transform,
-                        child: Stack(
+            height: 48,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            Positioned.fill(
-                              child: GestureDetector(
-                                behavior: HitTestBehavior.opaque,
-                                onTapUp: (d) {
-                                  if (_source != null) {
-                                    _drop(null);
-                                    return;
-                                  }
-                                  final line = layout.lineAt(d.localPosition);
-                                  if (line != null &&
-                                      line.edge['hints'] is List &&
-                                      (line.edge['hints'] as List).isNotEmpty) {
-                                    widget.onEdit({'failure': line.edge});
-                                  } else {
-                                    _renderChange(() => _selected.clear());
-                                  }
-                                },
-                                child: RepaintBoundary(
-                                  child: CustomPaint(
-                                    painter: _MapPaint(
-                                      layout,
-                                      colors,
-                                      lit,
-                                      _source,
-                                      _cursor,
+                            if (_source != null) ...[
+                              TextButton(
+                                onPressed: _cancel,
+                                child: Text(widget.tr('Cancel')),
+                              ),
+                              if (_moving != null)
+                                TextButton(
+                                  onPressed: () => _drop(null),
+                                  child: Text(widget.tr('Disconnect')),
+                                ),
+                              const SizedBox(width: 6),
+                            ],
+                            if (widget.onLayers != null)
+                              for (
+                                var col = 0;
+                                col < mapColumnLayers.length;
+                                col++
+                              ) ...[_columnChip(col), const SizedBox(width: 6)],
+                            const SizedBox(width: 2),
+                            DropdownButton<String>(
+                              value: widget.animate,
+                              onChanged: (v) =>
+                                  widget.onAnimationChanged?.call(v!),
+                              items: [
+                                for (final mode in ['all', 'agents', 'off'])
+                                  DropdownMenuItem(
+                                    value: mode,
+                                    child: Text(
+                                      widget.tr(
+                                        {
+                                          'all': 'All lights',
+                                          'agents': 'Agent lights',
+                                          'off': 'Lights off',
+                                        }[mode]!,
+                                      ),
                                     ),
                                   ),
-                                ),
-                              ),
+                              ],
                             ),
-                            if (widget.groups != null)
-                              for (var i = 0; i < widget.groups!.length; i++)
-                                Positioned(
-                                  left: 16 + i * 302,
-                                  top: 0,
-                                  width: 266,
-                                  height: 98,
-                                  child: MapGroupCard(
-                                    group: widget.groups![i],
-                                    tr: widget.tr,
-                                    onExpand: () =>
-                                        widget.onExpandGroup?.call(i),
-                                  ),
-                                ),
-                            for (final card in layout.cards.values)
-                              Positioned(
-                                left: card.rect.left,
-                                top: card.rect.top,
-                                width: card.rect.width,
-                                height: 36,
-                                child: GestureDetector(
-                                  behavior: HitTestBehavior.opaque,
-                                  onVerticalDragStart: (d) => _renderChange(() {
-                                    _draggingCard = card.id;
-                                    _draggingCardY = _local(
-                                      d.globalPosition,
-                                    ).dy;
-                                  }),
-                                  onVerticalDragUpdate: (d) => _renderChange(
-                                    () => _draggingCardY = _local(
-                                      d.globalPosition,
-                                    ).dy,
-                                  ),
-                                  onVerticalDragEnd: (_) {
-                                    final y = _draggingCardY;
-                                    _draggingCard = null;
-                                    _draggingCardY = null;
-                                    if (y == null) return;
-                                    _save(
-                                      reorderMapCard(
-                                        _saved,
-                                        layout,
-                                        card.id,
-                                        layout.cardDrop(card.id, y).$1,
-                                      ),
-                                    );
-                                  },
-                                  onVerticalDragCancel: () => _renderChange(() {
-                                    _draggingCard = null;
-                                    _draggingCardY = null;
-                                  }),
-                                  child: Row(
-                                    children: [
-                                      IconButton(
-                                        tooltip: widget.tr(
-                                          card.folded ? 'Expand' : 'Collapse',
-                                        ),
-                                        onPressed: () => _fold(card.id),
-                                        icon: Icon(
-                                          card.folded
-                                              ? Icons.chevron_right
-                                              : Icons.expand_more,
-                                          size: 18,
-                                        ),
-                                      ),
-                                      Expanded(
-                                        child: Text(
-                                          widget.tr(card.label),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-                                      PopupMenuButton<String>(
-                                        tooltip: widget.tr('Move card'),
-                                        onSelected: (direction) {
-                                          final colCards = [
-                                            for (final c in layout.cards.values)
-                                              if (c.column == card.column) c.id,
-                                          ];
-                                          final index = colCards.indexOf(
-                                            card.id,
-                                          );
-                                          _save(
-                                            reorderMapCard(
-                                              _saved,
-                                              layout,
-                                              card.id,
-                                              index +
-                                                  (direction == 'before'
-                                                      ? -1
-                                                      : 1),
-                                            ),
-                                          );
-                                        },
-                                        itemBuilder: (_) => [
-                                          for (final d in ['before', 'after'])
-                                            PopupMenuItem(
-                                              value: d,
-                                              child: Text(
-                                                widget.tr(
-                                                  d == 'before'
-                                                      ? 'Earlier card'
-                                                      : 'Later card',
-                                                ),
-                                              ),
-                                            ),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            if (_draggingCard != null &&
-                                _draggingCardY != null &&
-                                layout.cards.containsKey(_draggingCard))
-                              Positioned.fromRect(
-                                rect: layout
-                                    .cardDrop(_draggingCard!, _draggingCardY!)
-                                    .$2,
-                                child: IgnorePointer(
-                                  child: ColoredBox(
-                                    key: const ValueKey('card-drop-line'),
-                                    color: colors.primary,
-                                  ),
-                                ),
-                              ),
-                            for (final id in layout.boxes.keys)
-                              _node(id, layout, lit),
                           ],
                         ),
                       ),
                     ),
-                    if (flowing)
-                      Positioned.fill(
-                        child: MapLightLayer(
-                          layout: layout,
-                          clock: _phase,
-                          color: colors.primary,
-                          mode: widget.animate,
-                          style: widget.lightStyle,
-                        ),
-                      ),
-                    for (final curve in layout.curves.where(
-                      (c) =>
-                          layout.movable(c.edge) &&
-                          (_selected.contains(c.edge['source']) ||
-                              _selected.contains(c.edge['target'])),
-                    ))
-                      Positioned(
-                        left: curve.hook.dx - 12,
-                        top: curve.hook.dy - 12,
-                        width: 24,
-                        height: 24,
-                        child: GestureDetector(
-                          onPanStart: (d) => _begin(
-                            curve.edge['source'] as String,
-                            edge: curve.edge,
-                            global: d.globalPosition,
-                            pointer: true,
-                          ),
-                          onPanUpdate: (d) => _renderChange(
-                            () => _cursor = _local(d.globalPosition),
-                          ),
-                          onPanEnd: (_) => _drop(
-                            _cursor == null ? null : layout.nodeAt(_cursor!),
-                          ),
-                          onPanCancel: () {
-                            if (_pointerDrawing) _cancel();
-                          },
-                          child: IconButton(
-                            padding: EdgeInsets.zero,
-                            tooltip: widget.tr(
-                              'Move this connection to another compatible box, or to empty space to disconnect.',
-                            ),
-                            onPressed: () => _begin(
-                              curve.edge['source'] as String,
-                              edge: curve.edge,
-                            ),
-                            icon: const Icon(
-                              Icons.circle,
-                              color: Colors.orange,
-                              size: 13,
-                            ),
-                          ),
-                        ),
-                      ),
-                    if (widget.smartCards)
-                      for (final col in [
-                        for (var i = 0; i < mapSmartColumns.length; i++)
-                          if (i != _openSmartColumn) i,
-                        ?_openSmartColumn,
-                      ])
-                        Positioned(
-                          key: ValueKey(
-                            'smart-card-slot-${mapSmartColumns[col].$1}',
-                          ),
-                          left: 16.0 + col * 302,
-                          top: 106,
-                          width: 266,
-                          child: MapSmartCard(
-                            key: ValueKey(
-                              'smart-card-${mapSmartColumns[col].$1}',
-                            ),
-                            column: mapSmartColumns[col].$1,
-                            title: mapSmartColumns[col].$2,
-                            open: _openSmartColumn == col,
-                            onToggle: () => _toggleSmartCard(col),
-                            tr: widget.tr,
-                            helpers: widget.smartHelpers,
-                            client: widget.client,
-                            initialPrompt:
-                                _smartPrompts[mapSmartColumns[col].$1],
-                            onMoveToColumn: (targetCol, request) {
-                              final index = mapSmartColumns.indexWhere(
-                                (c) => c.$1 == targetCol,
-                              );
-                              if (index < 0) return;
-                              _smartPrompts[targetCol] = request;
-                              _toggleSmartCard(index);
-                            },
-                            onApplied: widget.onSmartApplied,
-                          ),
-                        ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(width: 8),
+                  MapZoomControl(controller: _transform, tr: widget.tr),
+                ],
               ),
+            ),
+          ),
+          Expanded(
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: Listener(
+                    onPointerSignal: (event) {
+                      final box = _viewport.currentContext?.findRenderObject();
+                      if (event is PointerScrollEvent && box is RenderBox) {
+                        GestureBinding.instance.pointerSignalResolver.register(
+                          event,
+                          (e) => scrollMap(
+                            _transform,
+                            (e as PointerScrollEvent).scrollDelta,
+                            viewport: box.size,
+                            content: layout.size,
+                          ),
+                        );
+                      }
+                    },
+                    child: InteractiveViewer(
+                      key: _viewport,
+                      transformationController: _transform,
+                      constrained: false,
+                      scaleEnabled:
+                          false, // the wheel scrolls; zoom has its control
+                      minScale: .3,
+                      maxScale: 2,
+                      boundaryMargin: const EdgeInsets.fromLTRB(0, 0, 120, 120),
+                      child: SizedBox(
+                        key: _board,
+                        width: layout.size.width,
+                        height: layout.size.height,
+                        child: Stack(
+                          children: [
+                            Positioned.fill(
+                              child: MapStaticCache(
+                                enabled: flowing,
+                                contentKey: _staticRevision,
+                                controller: _transform,
+                                child: Stack(
+                                  children: [
+                                    Positioned.fill(
+                                      child: GestureDetector(
+                                        behavior: HitTestBehavior.opaque,
+                                        onTapUp: (d) {
+                                          if (_source != null) {
+                                            _drop(null);
+                                            return;
+                                          }
+                                          final line = layout.lineAt(
+                                            d.localPosition,
+                                          );
+                                          if (line != null &&
+                                              line.edge['hints'] is List &&
+                                              (line.edge['hints'] as List)
+                                                  .isNotEmpty) {
+                                            widget.onEdit({
+                                              'failure': line.edge,
+                                            });
+                                          } else {
+                                            _renderChange(
+                                              () => _selected.clear(),
+                                            );
+                                          }
+                                        },
+                                        child: RepaintBoundary(
+                                          child: CustomPaint(
+                                            painter: _MapPaint(
+                                              layout,
+                                              colors,
+                                              lit,
+                                              _source,
+                                              _cursor,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    if (widget.groups != null)
+                                      for (
+                                        var i = 0;
+                                        i < widget.groups!.length;
+                                        i++
+                                      )
+                                        if (_shownColumns.contains(i))
+                                          Positioned(
+                                            left: layout.columnX(i),
+                                            top: 8,
+                                            width: layout.columnWidth,
+                                            height: 86,
+                                            child: MapGroupCard(
+                                              group: widget.groups![i],
+                                              tr: widget.tr,
+                                              onExpand: () =>
+                                                  widget.onExpandGroup?.call(i),
+                                            ),
+                                          ),
+                                    for (final card in layout.cards.values)
+                                      Positioned(
+                                        left: card.rect.left,
+                                        top: card.rect.top,
+                                        width: card.rect.width,
+                                        height: 36,
+                                        child: GestureDetector(
+                                          behavior: HitTestBehavior.opaque,
+                                          onVerticalDragStart: (d) =>
+                                              _renderChange(() {
+                                                _draggingCard = card.id;
+                                                _draggingCardY = _local(
+                                                  d.globalPosition,
+                                                ).dy;
+                                              }),
+                                          onVerticalDragUpdate: (d) =>
+                                              _renderChange(
+                                                () => _draggingCardY = _local(
+                                                  d.globalPosition,
+                                                ).dy,
+                                              ),
+                                          onVerticalDragEnd: (_) {
+                                            final y = _draggingCardY;
+                                            _draggingCard = null;
+                                            _draggingCardY = null;
+                                            if (y == null) return;
+                                            _save(
+                                              reorderMapCard(
+                                                _saved,
+                                                layout,
+                                                card.id,
+                                                layout.cardDrop(card.id, y).$1,
+                                              ),
+                                            );
+                                          },
+                                          onVerticalDragCancel: () =>
+                                              _renderChange(() {
+                                                _draggingCard = null;
+                                                _draggingCardY = null;
+                                              }),
+                                          child: Row(
+                                            children: [
+                                              IconButton(
+                                                tooltip: widget.tr(
+                                                  card.folded
+                                                      ? 'Expand'
+                                                      : 'Collapse',
+                                                ),
+                                                onPressed: () => _fold(card.id),
+                                                icon: Icon(
+                                                  card.folded
+                                                      ? Icons.chevron_right
+                                                      : Icons.expand_more,
+                                                  size: 18,
+                                                ),
+                                              ),
+                                              Expanded(
+                                                child: Text(
+                                                  widget.tr(card.label),
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                              PopupMenuButton<String>(
+                                                tooltip: widget.tr('Move card'),
+                                                onSelected: (direction) {
+                                                  final colCards = [
+                                                    for (final c
+                                                        in layout.cards.values)
+                                                      if (c.column ==
+                                                          card.column)
+                                                        c.id,
+                                                  ];
+                                                  final index = colCards
+                                                      .indexOf(card.id);
+                                                  _save(
+                                                    reorderMapCard(
+                                                      _saved,
+                                                      layout,
+                                                      card.id,
+                                                      index +
+                                                          (direction == 'before'
+                                                              ? -1
+                                                              : 1),
+                                                    ),
+                                                  );
+                                                },
+                                                itemBuilder: (_) => [
+                                                  for (final d in [
+                                                    'before',
+                                                    'after',
+                                                  ])
+                                                    PopupMenuItem(
+                                                      value: d,
+                                                      child: Text(
+                                                        widget.tr(
+                                                          d == 'before'
+                                                              ? 'Earlier card'
+                                                              : 'Later card',
+                                                        ),
+                                                      ),
+                                                    ),
+                                                ],
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    if (_draggingCard != null &&
+                                        _draggingCardY != null &&
+                                        layout.cards.containsKey(_draggingCard))
+                                      Positioned.fromRect(
+                                        rect: layout
+                                            .cardDrop(
+                                              _draggingCard!,
+                                              _draggingCardY!,
+                                            )
+                                            .$2,
+                                        child: IgnorePointer(
+                                          child: ColoredBox(
+                                            key: const ValueKey(
+                                              'card-drop-line',
+                                            ),
+                                            color: colors.primary,
+                                          ),
+                                        ),
+                                      ),
+                                    for (final id in layout.boxes.keys)
+                                      _node(id, layout, lit),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            if (flowing)
+                              Positioned.fill(
+                                child: MapLightLayer(
+                                  layout: layout,
+                                  clock: _phase,
+                                  color: colors.primary,
+                                  mode: widget.animate,
+                                  style: widget.lightStyle,
+                                ),
+                              ),
+                            for (final curve in layout.curves.where(
+                              (c) =>
+                                  layout.movable(c.edge) &&
+                                  (_selected.contains(c.edge['source']) ||
+                                      _selected.contains(c.edge['target'])),
+                            ))
+                              Positioned(
+                                left: curve.hook.dx - 12,
+                                top: curve.hook.dy - 12,
+                                width: 24,
+                                height: 24,
+                                child: GestureDetector(
+                                  onPanStart: (d) => _begin(
+                                    curve.edge['source'] as String,
+                                    edge: curve.edge,
+                                    global: d.globalPosition,
+                                    pointer: true,
+                                  ),
+                                  onPanUpdate: (d) => _renderChange(
+                                    () => _cursor = _local(d.globalPosition),
+                                  ),
+                                  onPanEnd: (_) => _drop(
+                                    _cursor == null
+                                        ? null
+                                        : layout.nodeAt(_cursor!),
+                                  ),
+                                  onPanCancel: () {
+                                    if (_pointerDrawing) _cancel();
+                                  },
+                                  child: IconButton(
+                                    padding: EdgeInsets.zero,
+                                    tooltip: widget.tr(
+                                      'Move this connection to another compatible box, or to empty space to disconnect.',
+                                    ),
+                                    onPressed: () => _begin(
+                                      curve.edge['source'] as String,
+                                      edge: curve.edge,
+                                    ),
+                                    icon: const Icon(
+                                      Icons.circle,
+                                      color: Colors.orange,
+                                      size: 13,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            if (widget.smartCards)
+                              for (final col in [
+                                for (var i = 0; i < mapSmartColumns.length; i++)
+                                  if (i != _openSmartColumn) i,
+                                ?_openSmartColumn,
+                              ])
+                                Positioned(
+                                  key: ValueKey(
+                                    'smart-card-slot-${mapSmartColumns[col].$1}',
+                                  ),
+                                  left: layout.columnX(col),
+                                  top: 106,
+                                  width: layout.columnWidth,
+                                  child: Visibility(
+                                    visible: _shownColumns.contains(col),
+                                    maintainState: true,
+                                    child: MapSmartCard(
+                                      key: ValueKey(
+                                        'smart-card-${mapSmartColumns[col].$1}',
+                                      ),
+                                      width: layout.columnWidth,
+                                      column: mapSmartColumns[col].$1,
+                                      title: mapSmartColumns[col].$2,
+                                      open: _openSmartColumn == col,
+                                      enabled:
+                                          widget.layers == null ||
+                                          mapColumnLayers[col].any(
+                                            widget.layers!.contains,
+                                          ),
+                                      onToggle: () => _toggleSmartCard(col),
+                                      tr: widget.tr,
+                                      helpers: widget.smartHelpers,
+                                      client: widget.client,
+                                      initialPrompt:
+                                          _smartPrompts[mapSmartColumns[col]
+                                              .$1],
+                                      onMoveToColumn: (targetCol, request) {
+                                        final index = mapSmartColumns
+                                            .indexWhere(
+                                              (c) => c.$1 == targetCol,
+                                            );
+                                        if (index < 0) return;
+                                        if (!_view.allows(index)) {
+                                          _fitState.forced.add(index);
+                                        }
+                                        if (!_shownColumns.contains(index)) {
+                                          _pendingSmartMove = (
+                                            index,
+                                            targetCol,
+                                            request,
+                                          );
+                                          _toggleColumn(index, true);
+                                          return;
+                                        }
+                                        _smartPrompts[targetCol] = request;
+                                        _toggleSmartCard(index);
+                                      },
+                                      onApplied: widget.onSmartApplied,
+                                    ),
+                                  ),
+                                ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+String trafficSizeText(num bytes) {
+  final b = bytes < 0 ? 0 : bytes;
+  if (b < 1024) return '${b.round()} B';
+  if (b < 1024 * 1024) return '${(b / 1024).toStringAsFixed(1)} KB';
+  if (b < 1024 * 1024 * 1024) {
+    return '${(b / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+  return '${(b / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
+}
+
+String trafficRateText(num bytesPerSecond) =>
+    '${trafficSizeText(bytesPerSecond)}/s';
+
+String trafficTooltip(Map traffic, String Function(String) tr) =>
+    tr('Network: ↓ {0} ↑ {1}. Click for its network statistics.')
+        .replaceAll('{0}', trafficRateText(traffic['rate_in'] as num? ?? 0))
+        .replaceAll('{1}', trafficRateText(traffic['rate_out'] as num? ?? 0));
+
+class AgentTrafficDialog extends StatelessWidget {
+  const AgentTrafficDialog({
+    super.key,
+    required this.label,
+    required this.traffic,
+    required this.tr,
+  });
+
+  final String label;
+  final Map traffic;
+  final String Function(String) tr;
+
+  @override
+  Widget build(BuildContext context) {
+    final since = '${traffic['since'] ?? ''}'.trim();
+    final received = traffic['received'] as num? ?? 0;
+    final sent = traffic['sent'] as num? ?? 0;
+    final connections = (traffic['connections'] as num? ?? 0).toInt();
+    final rateIn = traffic['rate_in'] as num? ?? 0;
+    final rateOut = traffic['rate_out'] as num? ?? 0;
+    final places = (traffic['places'] as List? ?? const []).cast<Map>();
+    final programs = (traffic['programs'] as List? ?? const []).cast<Map>();
+    String placeKind(String? kind) => switch (kind) {
+      'api' => tr('Online API'),
+      'local' || 'local-llm' => tr('This PC'),
+      'lan' => tr('Local network'),
+      _ => tr('Internet'),
+    };
+    return AlertDialog(
+      title: Text(tr('Network · {0}').replaceAll('{0}', label)),
+      content: SizedBox(
+        width: 440,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (since.isNotEmpty) ...[
+                Text(
+                  '${tr('Counted since')}: $since',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 8),
+              ],
+              Wrap(
+                spacing: 12,
+                runSpacing: 6,
+                children: [
+                  Text(
+                    '${tr('In')}: ${trafficSizeText(received)} (${trafficRateText(rateIn)})',
+                  ),
+                  Text(
+                    '${tr('Out')}: ${trafficSizeText(sent)} (${trafficRateText(rateOut)})',
+                  ),
+                  Text('${tr('Connections')}: $connections'),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                tr('Where it goes'),
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 4),
+              if (places.isEmpty)
+                Text(tr('No connections yet.'))
+              else
+                for (final place in places)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    child: Text(
+                      '${place['name']} · ${placeKind(place['kind'] as String?)} · ↓ ${trafficSizeText(place['received'] as num? ?? 0)} ↑ ${trafficSizeText(place['sent'] as num? ?? 0)} (${place['connections']})',
+                    ),
+                  ),
+              const SizedBox(height: 12),
+              Text(
+                tr('Programs'),
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 4),
+              if (programs.isEmpty)
+                Text(tr('No program has moved data yet.'))
+              else
+                for (final prog in programs)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    child: Text(
+                      '${prog['name']} · ↓ ${trafficSizeText(prog['received'] as num? ?? 0)} ↑ ${trafficSizeText(prog['sent'] as num? ?? 0)}',
+                    ),
+                  ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(tr('Close')),
+        ),
+      ],
     );
   }
 }

@@ -3202,5 +3202,16 @@
  "Connect it to an agent now? (Optional)": "¿Conectarlo ahora a un agente? (Opcional)",
  "This column does not take requests yet.": "Esta columna aún no acepta peticiones.",
  "No model was found for this search.": "No se encontró ningún modelo para esta búsqueda.",
- "This helper is not available.": "Este ayudante no está disponible."
+ "This helper is not available.": "Este ayudante no está disponible.",
+ "Zoom in": "Acercar",
+ "Zoom out": "Alejar",
+ "Fit to window": "Ajustar a la ventana",
+ "Needs a wider window": "Necesita una ventana más ancha",
+ "Automatic: a normal window": "Automático: una ventana normal",
+ "Full screen": "Pantalla completa",
+ "Exit full screen": "Salir de pantalla completa",
+ "Additional usage": "Uso adicional",
+ "On: beyond the plan's limits it can cost extra money.": "Activado: más allá de los límites del plan puede costar dinero extra.",
+ "Off: it stops at the plan's limits.": "Desactivado: se detiene en los límites del plan.",
+ "Not known on this PC. Check with the provider whether it can bill beyond the plan.": "No se sabe en este PC. Comprueba con el proveedor si puede cobrar más allá del plan."
 }

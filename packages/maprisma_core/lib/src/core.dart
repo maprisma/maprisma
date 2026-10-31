@@ -4,6 +4,7 @@ import 'desktop.dart';
 import 'identity.dart';
 import 'posix_ffi.dart';
 import 'protocol.dart';
+import 'traffic.dart';
 import 'provider_scans.dart' show ProviderScans, RuntimeRecord;
 import 'provider_watch.dart';
 import 'read_service.dart';
@@ -165,6 +166,7 @@ const portedRoutes = {
   'found.unpack',
   'found.update_preview',
   'agents.costs',
+  'agents.traffic',
   'map.badges',
   'agents.projects',
   'gpu.snapshot',
@@ -2547,6 +2549,51 @@ final class CoreService {
     );
   }
 
+  final _traffic = TrafficMeter();
+  final _trafficClock = Stopwatch()..start();
+  double? _trafficAt, _llmPortsAt;
+  var _trafficRead = true;
+  var _llmPorts = <int, String>{};
+
+  /// agents.traffic: a new sample at most every 3 s (only while the app asks).
+  Map<String, dynamic> _trafficSnapshot() {
+    final now = _trafficClock.elapsedMilliseconds / 1000;
+    final at = _trafficAt;
+    if (at == null || now - at >= trafficEvery.inSeconds) {
+      _trafficAt = now;
+      final text = readSs(whichIn('ss', identity.environment['PATH']));
+      _trafficRead = text != null;
+      if (text != null) {
+        _traffic.names.refreshKnown();
+        final scans = ProviderScans(reads.files);
+        final llmsAt = _llmPortsAt;
+        if (llmsAt == null || now - llmsAt >= 60) {
+          _llmPortsAt = now;
+          _llmPorts = {
+            for (final rt in scans.scan())
+              if (rt.running &&
+                  int.tryParse(rt.address.split(':').last) != null)
+                int.parse(rt.address.split(':').last): rt.name,
+          };
+        }
+        final installed = {
+          for (final a in reads.catalog.scan())
+            if (a.installed) a.command,
+        };
+        final owners = agentProcesses(agentInstancePids(scans, installed), [
+          for (final x in scans.processes()) (x.pid, x.comm, x.argv),
+        ], (pid) => parentOf(pid, Posix()));
+        _traffic.update(parseSs(text), owners, _llmPorts, now: now);
+      }
+    }
+    return {
+      'available': _trafficRead,
+      'agents': {
+        for (final e in _traffic.stats.entries) e.key: e.value.toJson(),
+      },
+    };
+  }
+
   EngineSlots _engineSlots() {
     final scans = ProviderScans(reads.files);
     return EngineSlots(
@@ -3700,6 +3747,10 @@ final class CoreService {
         },
         'rate_due': rateDue,
       };
+    }
+    if (method == 'agents.traffic') {
+      if (params.isNotEmpty) throw const FormatException('Invalid request');
+      return _trafficSnapshot();
     }
     if (method == 'agents.costs' || method == 'costs.rate') {
       return costsRoute(method, params);

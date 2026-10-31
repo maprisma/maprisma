@@ -8,10 +8,9 @@ import 'package:flutter/services.dart';
 /// The popup's size on first show (logical pixels; kept inside the monitor).
 const popupSize = (width: 1100, height: 760);
 
-/// The window mode in effect: `window_mode` is auto, popup or window; auto
-/// is a popup on Omarchy only.
-bool popupWanted(String? mode, String desktop) =>
-    mode == 'popup' || (mode ?? 'auto') == 'auto' && desktop == 'omarchy';
+/// The window mode in effect: `window_mode` is auto, popup or window; only
+/// popup floats, auto is an ordinary window that the desktop tiles.
+bool popupWanted(String? mode, String desktop) => mode == 'popup';
 
 /// While a dialog of another window runs (the file chooser), the popup loses
 /// the focus on purpose and must stay open.

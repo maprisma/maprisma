@@ -1,9 +1,12 @@
 import 'dart:convert';
 import 'dart:async';
+import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show mapEquals;
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:window_manager/window_manager.dart';
@@ -17,8 +20,12 @@ import 'agent_terminal.dart';
 import 'agent_map.dart';
 import 'agent_list_view.dart';
 import 'agent_details_view.dart';
+import 'agent_usage.dart';
+import 'cost_card.dart';
 import 'settings_view.dart';
 import 'app_theme.dart';
+import 'map_zoom.dart';
+import 'test_shots.dart';
 import 'window_popup.dart';
 import 'project_start_menu.dart';
 import 'addon_details.dart';
@@ -70,6 +77,66 @@ class MaprismaApp extends StatefulWidget {
 
 class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   final _navigator = GlobalKey<NavigatorState>();
+
+  /// F9 in a recorded test: only with MAPRISMA_RECORD_PROTOCOL (test_shots.dart).
+  /// English only: this is a test tool, not part of the app's interface.
+  final _shots = TestShots.fromEnvironment(Platform.environment);
+  final _shotArea = GlobalKey();
+  bool _shooting = false;
+
+  bool _shotKey(KeyEvent event) {
+    if (event is! KeyDownEvent || event.logicalKey != LogicalKeyboardKey.f9) {
+      return false;
+    }
+    unawaited(_takeShot());
+    return true;
+  }
+
+  Future<void> _takeShot() async {
+    final shots = _shots, context = _navigator.currentContext;
+    final area = _shotArea.currentContext?.findRenderObject();
+    if (shots == null || context == null || _shooting) return;
+    if (area is! RenderRepaintBoundary) return;
+    _shooting = true;
+    try {
+      final time = DateTime.now();
+      final ratio = MediaQuery.devicePixelRatioOf(context);
+      final image = await area.toImage(pixelRatio: ratio);
+      final data = await image.toByteData(format: ui.ImageByteFormat.png);
+      image.dispose();
+      if (data == null) return;
+      final path = await shots.save(data.buffer.asUint8List(), time);
+      if (!context.mounted) return;
+      final field = TextEditingController();
+      final note = await showDialog<String>(
+        context: context,
+        builder: (dialog) => AlertDialog(
+          title: const Text('Screenshot saved'),
+          content: TextField(
+            controller: field,
+            autofocus: true,
+            decoration: const InputDecoration(
+              labelText: 'What is wrong? (optional)',
+            ),
+            onSubmitted: (text) => Navigator.pop(dialog, text),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialog, field.text),
+              child: const Text('Done'),
+            ),
+          ],
+        ),
+      );
+      field.dispose();
+      await shots.record(path, note ?? '', time);
+    } catch (_) {
+      // A test tool must never disturb the app.
+    } finally {
+      _shooting = false;
+    }
+  }
+
   final _terminals = <AgentTerminal>[];
   final _startMenu = ProjectStartMenuController();
   AgentTerminal? _visibleTerminal;
@@ -500,6 +567,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   void initState() {
     super.initState();
     windowManager.addListener(this);
+    if (_shots != null) HardwareKeyboard.instance.addHandler(_shotKey);
     windowChannel.setMethodCallHandler((call) async {
       if (call.method == 'shown') _placePopup();
     });
@@ -709,20 +777,26 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       final found = await _client.desktopSnapshot();
       if (!mounted) return;
       _desktopName = '${found['name']}';
+      // Omarchy names the window itself; Maprisma's header is enough.
+      if (_desktopName == 'omarchy') unawaited(_hideTitleBar());
       if (_popup) unawaited(_placePopup());
     } catch (_) {
       // A normal window.
     }
   }
 
-  Future<void> _placePopup() async {
-    if (!_popup || !(_backend?.isConnected ?? false)) return;
-    // No GTK title bar on the popup: Hyprland draws its border.
+  Future<void> _hideTitleBar() async {
     try {
       await windowManager.setTitleBarStyle(TitleBarStyle.hidden);
     } catch (_) {
       // The window plugin is missing (tests): the bar stays.
     }
+  }
+
+  Future<void> _placePopup() async {
+    if (!_popup || !(_backend?.isConnected ?? false)) return;
+    // No GTK title bar on the popup: Hyprland draws its border.
+    await _hideTitleBar();
     // Just shown: Hyprland may not list the window for a moment.
     for (var i = 0; i < 10; i++) {
       try {
@@ -890,14 +964,19 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     _refresh();
   }
 
+  int _settingsRevision = 0;
+
   Future<void> _updateSettings(Map<String, dynamic> values) async {
+    final revision = ++_settingsRevision;
     setState(() => _busy = true);
     try {
       await _client.settingsUpdate(values: values);
+      if (!mounted || revision != _settingsRevision) return;
+      setState(() => (_snapshot?['settings'] as Map?)?.addAll(values));
       await _refresh();
       if (values.containsKey('ai_checks')) unawaited(_checkMcp());
     } catch (_) {
-      _actionFailed();
+      if (revision == _settingsRevision) _actionFailed();
     }
   }
 
@@ -923,6 +1002,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
           'agent_badges': {..._agentBadges, ..._gpuBadges},
           'usage_boxes': _usageBoxes,
           'usage_box_size': _usageBoxSize,
+          'traffic': _agentTraffic,
         };
 
   Map<int, int> get _groupAvailable => {
@@ -1361,6 +1441,85 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   Timer? _usageTimer;
   bool _usageAsking = false;
 
+  /// Network traffic of agents on the map (agents.traffic, polled while the
+  /// map is shown; the core samples at most every 3 s).
+  Map<String, dynamic> _agentTraffic = {};
+  bool _trafficAsking = false;
+
+  Future<void> _loadTraffic() async {
+    if (_backend?.isConnected != true || _trafficAsking) return;
+    if (!_showMap ||
+        _showSystemMap ||
+        _showSettings ||
+        _showGuide ||
+        _showProviders ||
+        _showConnections ||
+        _visibleTerminal != null) {
+      return;
+    }
+    _trafficAsking = true;
+    try {
+      final found = await _client.agentsTraffic();
+      if (mounted) {
+        final next =
+            (found['agents'] as Map?)?.cast<String, dynamic>() ?? const {};
+        if (!sameMapJson(_agentTraffic, next)) {
+          setState(() => _agentTraffic = next);
+        }
+      }
+    } catch (_) {
+      // Shown at the next check.
+    } finally {
+      _trafficAsking = false;
+    }
+  }
+
+  Future<void> _openAgentUsage(String command, String label) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    Map<String, dynamic>? info;
+    try {
+      info = await _client.agentsDetails(command: command);
+    } catch (_) {
+      _actionFailed();
+      return;
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+    if (!mounted) return;
+    unawaited(_refreshUsage(command));
+    await showDialog<void>(
+      context: _navigator.currentContext!,
+      builder: (context) => AlertDialog(
+        title: Text('${tr('Usage')} · $label'),
+        content: SizedBox(
+          width: 680,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (_backend != null)
+                  CostCard(
+                    command: command,
+                    call: (method, params) => _backend!.call(method, params),
+                    tr: tr,
+                  ),
+                AgentUsage(info: info!, tr: tr),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(tr('Close')),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _loadUsageBoxes() async {
     if (_backend?.isConnected != true || _usageAsking) return;
     final activity = _graph?['activity'] as Map? ?? const {};
@@ -1392,7 +1551,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   /// box (gpu.snapshot, read only: sysfs, their processes, their own APIs).
   Map<String, dynamic> _gpuBadges = {};
 
-  Future<void> _loadGpu() async {
+  Future<void> _loadGpu({bool retry = true}) async {
     if (_backend?.isConnected != true) return;
     try {
       final found = await _quietTask('gpu.snapshot', {});
@@ -1402,8 +1561,25 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         );
       }
     } catch (_) {
-      // Shown next time.
+      // The core is often busy right after the start: once more soon, not
+      // only at the next minute.
+      if (retry) {
+        await Future<void>.delayed(const Duration(seconds: 8));
+        if (mounted) await _loadGpu(retry: false);
+      }
     }
+  }
+
+  /// The batteries on the cards read the agents' usage records, which are old
+  /// until refreshed: once at the start, one agent after the other. This asks
+  /// each provider for its limits; no model runs, so no tokens are used.
+  Future<void> _refreshAllUsage() async {
+    await Future<void>.delayed(const Duration(seconds: 3));
+    for (final agent in _catalog.where((a) => a['installed'] == true)) {
+      if (!mounted) return;
+      await _refreshUsage(agent['command'] as String);
+    }
+    if (mounted) await _loadBadges();
   }
 
   Future<void> _loadBadges() async {
@@ -1411,7 +1587,10 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     try {
       final found = await _client.mapBadges();
       if (!mounted) return;
-      setState(() => _agentBadges = found['badges'] as Map<String, dynamic>);
+      final badges = found['badges'] as Map<String, dynamic>;
+      if (!sameMapJson(_agentBadges, badges)) {
+        setState(() => _agentBadges = badges);
+      }
       if (found['rate_due'] == true && !_rateAsked) {
         _rateAsked = true;
         await _quietTask('costs.rate', {});
@@ -1780,11 +1959,14 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       _card == null &&
       _browser == null &&
       _visibleTerminal == null &&
-      (_showSettings ||
-          _showProviders ||
-          _showConnections ||
-          _showGuide ||
-          _showSystemMap);
+      (_pageOpen || !_showMap);
+
+  bool get _pageOpen =>
+      _showSettings ||
+      _showProviders ||
+      _showConnections ||
+      _showGuide ||
+      _showSystemMap;
 
   /// Esc on the main page in popup mode closes the popup (Backspace never).
   bool get _canCloseTopLevel =>
@@ -1797,7 +1979,13 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   void _backOrClose() =>
       _canGoBack ? _goBack() : unawaited(windowManager.hide());
 
+  /// A page back to what lay under it; an agent's details or the list back
+  /// to the map, the main page.
   void _goBack() => setState(() {
+    if (!_pageOpen) {
+      _selected = null;
+      _showMap = true;
+    }
     _showSettings = false;
     _showProviders = false;
     _showConnections = false;
@@ -1805,19 +1993,10 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     _showSystemMap = false;
   });
 
-  /// Ctrl+Plus / Ctrl+Minus / Ctrl+0: the map in view zoomed in, out, back
-  /// to 100 % (within the map's own 30–200 %).
-  void _zoom(double factor) {
-    final controller = _showSystemMap ? _systemTransform : _aiTransform;
-    if (factor == 0) {
-      controller.value = Matrix4.identity();
-      return;
-    }
-    final scale = controller.value.entry(0, 0); // x scale (no rotation)
-    final next = (scale * factor).clamp(0.3, 2.0);
-    controller.value = controller.value.clone()
-      ..scaleByDouble(next / scale, next / scale, 1, 1);
-  }
+  /// Ctrl+Plus / Ctrl+Minus / Ctrl+0: the map in view zoomed in, out, or fit
+  /// to the window (within the map's own 30–200 %).
+  void _zoom(double factor) =>
+      zoomMap(_showSystemMap ? _systemTransform : _aiTransform, factor);
 
   Future<void> _checkHealth() async {
     try {
@@ -2902,29 +3081,54 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     final terminals = _terminals
         .where((t) => t.command == command && !t.ended)
         .toList();
+    final activity = (_graph?['activity'] as Map?)?[command] as Map?;
+    final agentRunning =
+        terminals.isNotEmpty ||
+        node['status'] == 'running' ||
+        activity?['working'] == true ||
+        ((activity?['instances'] as num?)?.toInt() ?? 0) > 0;
+    const compact = BoxConstraints(minWidth: 26, minHeight: 24);
     return SizedBox(
       height: 26,
       child: Row(
         children: [
           IconButton(
+            key: ValueKey('details-${node['id']}'),
             padding: EdgeInsets.zero,
-            tooltip: tr('Open'),
+            visualDensity: VisualDensity.compact,
+            constraints: compact,
+            tooltip: tr('Details'),
             onPressed: () => _aiNode(node),
-            icon: const Icon(Icons.open_in_new, size: 16),
+            icon: const Icon(Icons.info_outline, size: 16),
           ),
           if (node['kind'] == 'runtime')
             IconButton(
               padding: EdgeInsets.zero,
+              visualDensity: VisualDensity.compact,
+              constraints: compact,
               tooltip: tr(node['status'] == 'running' ? 'Stop' : 'Start'),
               onPressed: () => _mapRuntimeControl(node),
               icon: Icon(
                 node['status'] == 'running' ? Icons.stop : Icons.play_arrow,
-                size: 18,
+                size: 16,
               ),
             ),
           if (node['kind'] == 'agent') ...[
             IconButton(
+              key: ValueKey('usage-agent-$command'),
               padding: EdgeInsets.zero,
+              visualDensity: VisualDensity.compact,
+              constraints: compact,
+              tooltip: tr('Usage'),
+              onPressed: () =>
+                  _openAgentUsage(command, tr(node['label'] as String)),
+              icon: const Icon(Icons.bar_chart_outlined, size: 16),
+            ),
+            IconButton(
+              key: ValueKey('start-agent-$command'),
+              padding: EdgeInsets.zero,
+              visualDensity: VisualDensity.compact,
+              constraints: compact,
               tooltip: tr('Start'),
               onPressed: () {
                 final projects =
@@ -2937,29 +3141,35 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                   });
                 }
               },
-              icon: const Icon(Icons.play_arrow, size: 18),
+              icon: const Icon(Icons.play_arrow, size: 16),
             ),
-            if (terminals.isNotEmpty) ...[
+            if (terminals.isNotEmpty)
               IconButton(
+                key: ValueKey('console-agent-$command'),
                 padding: EdgeInsets.zero,
+                visualDensity: VisualDensity.compact,
+                constraints: compact,
                 tooltip: tr('Console'),
                 onPressed: () =>
                     setState(() => _visibleTerminal = terminals.first),
-                icon: const Icon(Icons.terminal, size: 16),
+                icon: const Icon(Icons.terminal, size: 15),
               ),
+            if (agentRunning)
               IconButton(
+                key: ValueKey('stop-agent-$command'),
                 padding: EdgeInsets.zero,
+                visualDensity: VisualDensity.compact,
+                constraints: compact,
                 tooltip: tr('Stop'),
-                onPressed: () => _stopTerminal(terminals.first),
-                icon: const Icon(Icons.stop, size: 16),
+                onPressed: () => terminals.isNotEmpty
+                    ? _stopTerminal(terminals.first)
+                    : _haltMapAgent(command),
+                icon: Icon(
+                  Icons.stop,
+                  size: 16,
+                  color: Theme.of(context).colorScheme.error,
+                ),
               ),
-            ],
-            IconButton(
-              padding: EdgeInsets.zero,
-              tooltip: tr('Stop external instance'),
-              onPressed: () => _haltMapAgent(command),
-              icon: const Icon(Icons.stop_circle_outlined, size: 16),
-            ),
           ],
         ],
       ),
@@ -3519,6 +3729,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
 
   Future<void> _refresh({bool? refreshMap}) async {
     if (!mounted) return;
+    final settingsRevision = _settingsRevision;
     setState(() => _busy = true);
     try {
       final snapshot = await _client.appSnapshot();
@@ -3576,7 +3787,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         'assets/translations/$language.json',
       );
       final strings = Map<String, String>.from(jsonDecode(raw) as Map);
-      if (!mounted) return;
+      if (!mounted || settingsRevision != _settingsRevision) return;
       setState(() {
         _snapshot = snapshot;
         if (connections != null) _connections = connections;
@@ -3614,10 +3825,10 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         if (!_welcome) _quietCatalog = _quietAddonCatalog();
         unawaited(_lookForNewApps());
         // Settings › Costs: a desktop notification when a plan limit turns red.
-        _usageTimer ??= Timer.periodic(
-          const Duration(seconds: 2),
-          (_) => unawaited(_loadUsageBoxes()),
-        );
+        _usageTimer ??= Timer.periodic(const Duration(seconds: 2), (_) {
+          unawaited(_loadUsageBoxes());
+          unawaited(_loadTraffic());
+        });
         _limitsTimer ??= Timer.periodic(const Duration(minutes: 1), (_) {
           if (_backend?.isConnected == true) {
             unawaited(_loadBadges());
@@ -3627,7 +3838,9 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         });
         unawaited(_loadBadges());
         unawaited(_loadGpu());
+        unawaited(_refreshAllUsage());
       }
+      unawaited(_loadTraffic());
       unawaited(_loadAddonHints());
       unawaited(_loadFoundHints());
     } catch (_) {
@@ -3652,6 +3865,15 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       _windowRounding,
     ),
   );
+
+  /// The window's title bar is GTK's, not Flutter's: it takes the app's
+  /// light or dark (COSMIC gives GTK apps no dark theme of their own).
+  bool? _titleBarDark;
+  void _followTitleBar(bool dark) {
+    if (_titleBarDark == dark) return;
+    _titleBarDark = dark;
+    windowChannel.invokeMethod('titlebar', dark).catchError((_) => null);
+  }
 
   /// Hyprland's window rounding (window.rounding; the core reads it at most
   /// every 30 s), for Settings › Corners "Like windows".
@@ -3683,6 +3905,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     _startMenu.dispose();
     _aiTransform.dispose();
     _systemTransform.dispose();
+    if (_shots != null) HardwareKeyboard.instance.removeHandler(_shotKey);
     for (final terminal in _terminals) {
       terminal.dispose();
     }
@@ -3773,6 +3996,12 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     theme: _theme(Brightness.light),
     darkTheme: _theme(Brightness.dark),
     themeMode: appThemeMode(_themePreference, _desktopTheme),
+    builder: (context, child) {
+      _followTitleBar(Theme.of(context).brightness == Brightness.dark);
+      return _shots == null
+          ? child!
+          : RepaintBoundary(key: _shotArea, child: child);
+    },
     // Esc on the window's page: back from a page (the route's own dismiss
     // action would take it first); dialogs are routes of their own and keep
     // Esc as dismiss.
@@ -4322,6 +4551,14 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                                                   'map_animations': mode,
                                                 }),
                                             controller: _aiTransform,
+                                            layers:
+                                                (_snapshot!['settings']['map_layers']
+                                                        as List?)
+                                                    ?.cast<String>(),
+                                            onLayers: (layers) =>
+                                                _updateSettings({
+                                                  'map_layers': layers,
+                                                }),
                                             focusedNode: _aiFocus,
                                             onNode: _aiNode,
                                             tr: tr,
@@ -4421,7 +4658,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     busy: _busy,
     info: _agentInfo,
     tr: tr,
-    onBack: () => setState(() => _selected = null),
+    onBack: _goBack,
     onStart: _start,
     startMenu: _startMenu,
     onProjectAction: _projectAction,
@@ -4447,7 +4684,7 @@ class _RefreshIntent extends Intent {
 class _ZoomIntent extends Intent {
   const _ZoomIntent(this.factor);
 
-  /// 1.25 in, 0.8 out, 0 back to 100 %.
+  /// 1.25 in, 0.8 out, 0 fit to window.
   final double factor;
 }
 

@@ -549,11 +549,13 @@ class Service:
                 raise ValueError("Expected an agent")
             agent = self.agent(params["command"])
             import agent_details
+            import agent_status
             info = agent_details.details_for(agent.command)
             # Explicit DTO: do not serialize an adapter object or arbitrary hook data.
             return {
                 "command": agent.command, "plan": info.plan, "model": info.model,
                 "actions": self.action_choices(agent),
+                "extra_usage": agent_details.extra_usage(agent_status.access_table().get(agent.command)),
                 "providers": [{"name": p.name, "local": p.local, "active": p.active}
                               for p in info.providers],
                 "limits": [{"label": limit.label, "percent": limit.percent,

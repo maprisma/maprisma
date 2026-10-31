@@ -1,11 +1,11 @@
 import 'package:maprisma/window_popup.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// window_mode: auto is a popup on Omarchy only; popup and window force it.
+/// window_mode: only popup floats; auto is an ordinary window everywhere.
 void main() {
   test('which window mode applies', () {
-    expect(popupWanted(null, 'omarchy'), isTrue);
-    expect(popupWanted('auto', 'omarchy'), isTrue);
+    expect(popupWanted(null, 'omarchy'), isFalse);
+    expect(popupWanted('auto', 'omarchy'), isFalse);
     expect(popupWanted('auto', 'generic'), isFalse);
     expect(popupWanted('window', 'omarchy'), isFalse);
     expect(popupWanted('popup', 'generic'), isTrue);

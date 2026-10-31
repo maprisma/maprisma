@@ -28,7 +28,9 @@
   is its own GTK source. Maprisma only still recognises what the GTK app left on a user's PC (its install
   marker `.ai-agents-map`, units "installed by AI Agents Map", `# Connected by Asterism`) and copies the
   Asterism folders once (`legacy_move.dart`).
-- **Before a commit:** `python3 -m unittest discover -s tests -q` and `tools/typecheck.sh` (0 errors).
+- **Before a commit:** `tools/test-changed` (the checks and tests of what changed; `--list` shows what it picks).
+  **Before publishing or a release build:** the complete suites (see Suites below). Uwe, 2026-10-31: complete
+  runs before every commit take far too long.
 - The core names no agent and no local LLM: their facts live in `adapters/` and `provider_*.py`.
 - New UI texts in all 8 languages (`translations/*.json`); feature changes also in the manual (`docs/manual/`).
   Preserve source translation order and whitespace; append new keys instead of reserializing the file.
@@ -51,7 +53,7 @@ Two agents work on this repo, each a whole task at a time, each reviewing the ot
   changes incompatibly.
 - **A task:** `docs/tasks/<nr>-<name>.md` (goal, routes, UI, acceptance; template in `docs/tasks/README.md`).
   The author works on branch `task/<nr>-<name>` in their own worktree and commits in this order: `protocol:`
-  (routes.json + docs), `core:`, `gui:`, each with the suites green (below).
+  (routes.json + docs), `core:`, `gui:`, each with `tools/test-changed` green.
 - **Worktrees:** Claude `/mnt/Data/Projects/maprisma-claude`, Antigravity `/mnt/Data/Projects/maprisma-agy`
   (`git worktree`s of this repo). Never edit the other agent's worktree or `main`; Uwe merges. To review, check
   the task branch out detached in your own worktree (`git checkout --detach task/<nr>-<name>`): a branch can be
@@ -61,6 +63,7 @@ Two agents work on this repo, each a whole task at a time, each reviewing the ot
   (template in `docs/reviews/README.md`): findings most severe first, each with file:line, what goes wrong and
   when. A round with no finding says **CLEAN**. The author fixes, answers under each finding and asks for the
   next round until CLEAN. A change to `routes.json` always needs this review.
-- **Suites (author, before asking for review):** `MAPRISMA_PUB_OFFLINE=1 tools/flutter-dev check`,
+- **Before asking for review (author):** `tools/test-changed --base main`, the whole branch's changes.
+- **Suites (complete, before publishing or a release build):** `MAPRISMA_PUB_OFFLINE=1 tools/flutter-dev check`,
   `python3 -m unittest discover -s tests -q`, `UV_OFFLINE=1 tools/typecheck.sh`.
 - Neither agent pushes, publishes or signs. Signing add-ons is Uwe's.

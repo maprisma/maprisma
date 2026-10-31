@@ -43,6 +43,7 @@ A parameter written `name?` may be left out.
 | `agents.projects` | read | `command`: string | `card` |
 | `agents.security` | read | `command`: ? | ? |
 | `agents.security_preview` | preview | — | ? |
+| `agents.traffic` | read | — | `agents`, `available` Each agent's TCP traffic while the app is open (ss -tinpeHn, UDP not counted): poll every few seconds, a new sample at most every 3 s. available is false when ss is missing. Per command: since, received, sent, connections, rate_in, rate_out (bytes/s), places [{name, kind (api, local-llm, local, lan, web), received, sent, connections}], programs [{name, received, sent}], history [[time, in, out]]. |
 | `agents.usage_refresh` | change | `command`: ? | ? |
 
 ## app

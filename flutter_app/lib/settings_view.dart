@@ -397,7 +397,7 @@ class SettingsView extends StatelessWidget {
               decoration: InputDecoration(labelText: tr('Window')),
               items: [
                 for (final (value, label) in const [
-                  ('auto', 'Automatic: a popup under the bar on Omarchy'),
+                  ('auto', 'Automatic: a normal window'),
                   ('popup', 'A popup under the bar'),
                   ('window', 'A normal window'),
                 ])

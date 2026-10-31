@@ -84,7 +84,10 @@
     "note": "Type /login in it."
    }
   ],
-  "key": null
+  "key": null,
+  "extra_file": "",
+  "extra_key": "",
+  "extra_url": ""
  },
  "security": {
   "settings": [

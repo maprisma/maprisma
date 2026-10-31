@@ -223,6 +223,26 @@ final class AgentCatalog {
     return same(list, fallback) ? null : list;
   }
 
+  /// A program of a distribution package or another installer: on PATH, but
+  /// not mise's shims and wrappers or ~/.local/bin, which can be stubs that
+  /// install the agent at its first start (the checks above read those).
+  bool onSystemPath(String command) {
+    final env = files.identity.environment;
+    final data = env['MISE_DATA_DIR'] ?? '';
+    final mise = data.startsWith('/')
+        ? data
+        : files.expand('~/.local/share/mise');
+    final own = files.expand('~/.local/bin');
+    final folders = (env['PATH'] ?? '')
+        .split(':')
+        .where(
+          (f) =>
+              !p.equals(f, own) && !p.equals(f, mise) && !p.isWithin(mise, f),
+        )
+        .join(':');
+    return whichIn(command, folders) != null;
+  }
+
   /// Python agents.detect(): (installed, version, source) for one agent.
   (bool, String, String) detect(String command, Adapter? a) {
     if (a != null &&
@@ -235,7 +255,11 @@ final class AgentCatalog {
           'own',
         );
       }
-      return ownInstall(command) ? (true, '', 'own') : (false, '', '');
+      if (ownInstall(command)) return (true, '', 'own');
+      // Its recipe may install through mise first (Antigravity CLI).
+      final folder = miseInstall(a.facts['spec'] as String? ?? command);
+      if (folder != null) return (true, miseVersion(folder), 'mise');
+      return onSystemPath(command) ? (true, '', 'system') : (false, '', '');
     }
     final package = a?.facts['package'] as String?;
     if (package != null) {
@@ -250,7 +274,10 @@ final class AgentCatalog {
       return (true, folder == null ? '' : miseVersion(folder), 'own');
     }
     if (folder != null) return (true, miseVersion(folder), 'mise');
-    return (false, '', '');
+    final counts = a == null || (a.facts['own_install_counts'] ?? true) == true;
+    return counts && onSystemPath(command)
+        ? (true, '', 'system')
+        : (false, '', '');
   }
 
   /// The app's own version-folder install (install_ctl): `current` of

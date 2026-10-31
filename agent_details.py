@@ -138,6 +138,19 @@ def read_json(path: Path) -> dict:
     return data if isinstance(data, dict) else {}
 
 
+def extra_usage(access) -> dict:
+    """Paid usage beyond the plan (access.extra_*): on, off, or None when this PC cannot tell; only
+    that one value of the file is used."""
+    if access is None:
+        return {"on": None, "url": ""}
+    value = None
+    if access.extra_file and access.extra_key:
+        value = read_json(Path(access.extra_file.replace("~", str(HOME), 1)))
+        for part in access.extra_key.split("."):
+            value = value.get(part) if isinstance(value, dict) else None
+    return {"on": value if isinstance(value, bool) else None, "url": access.extra_url}
+
+
 def read_toml(path: Path) -> dict:
     text = _read(path)
     try:

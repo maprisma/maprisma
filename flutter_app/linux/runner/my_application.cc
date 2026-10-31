@@ -24,6 +24,24 @@ static void notify_shown(MyApplication* self) {
   }
 }
 
+// "titlebar": GTK draws the title bar, so it takes the app's light or dark.
+static void window_call_cb(FlMethodChannel* channel, FlMethodCall* call,
+                           gpointer user_data) {
+  g_autoptr(FlMethodResponse) response = nullptr;
+  if (g_strcmp0(fl_method_call_get_name(call), "titlebar") == 0) {
+    FlValue* args = fl_method_call_get_args(call);
+    if (args != nullptr && fl_value_get_type(args) == FL_VALUE_TYPE_BOOL) {
+      g_object_set(gtk_settings_get_default(),
+                   "gtk-application-prefer-dark-theme", fl_value_get_bool(args),
+                   nullptr);
+    }
+    response = FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr));
+  } else {
+    response = FL_METHOD_RESPONSE(fl_method_not_implemented_response_new());
+  }
+  fl_method_call_respond(call, response, nullptr);
+}
+
 // Called when first Flutter frame received.
 static void first_frame_cb(MyApplication* self, FlView* view) {
   gtk_widget_show(gtk_widget_get_toplevel(GTK_WIDGET(view)));
@@ -118,6 +136,8 @@ static void my_application_activate(GApplication* application) {
   self->window_channel = fl_method_channel_new(
       fl_engine_get_binary_messenger(fl_view_get_engine(view)),
       "maprisma/window", FL_METHOD_CODEC(codec));
+  fl_method_channel_set_method_call_handler(self->window_channel,
+                                            window_call_cb, self, nullptr);
 
   gtk_widget_grab_focus(GTK_WIDGET(view));
 }

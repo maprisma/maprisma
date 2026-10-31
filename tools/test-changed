@@ -1,0 +1,294 @@
+#!/usr/bin/env python3
+"""Run the checks and tests of what changed; the complete suites stay for publishing (AGENTS.md).
+
+    tools/test-changed                 uncommitted changes and new files
+    tools/test-changed --base main     everything on this branch since main (before a review)
+    tools/test-changed --list          only say what would run
+    tools/test-changed --files a b     these files instead of git's list
+
+What runs, from the import graphs of the repo (when in doubt it runs more):
+    core Dart file     all of the core's Dart tests (seconds), the parity tests of the modules that
+                       import it directly, the protocol test, and the Flutter tests that reach the core
+    core.dart          the same, plus the worker tests (it routes every request)
+    Python file        the tests that import it directly, the parity tests of the modules that do
+    Flutter file       the widget tests that depend on it
+    a test             that test
+    shared files       routes.json, adapters, translations, dependencies: everything
+    anything unknown   everything
+    docs               nothing
+Dart format and analyze run for the touched package, the typecheck when Python changed.
+
+What this cannot see: effects two or more imports away in Python and parity tests, and effects through a
+running process or data file that no import shows. The complete suites before publishing are there for those.
+"""
+import argparse
+import ast
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+CORE = 'packages/maprisma_core'
+APP = 'flutter_app'
+EVERYTHING = (
+    f'{CORE}/protocol/', f'{CORE}/pubspec', f'{CORE}/bin/', f'{APP}/pubspec',
+    'adapters/', 'translations/', 'templates/', 'tests/data/', 'tests/core-fixtures/',
+    'tests/adapter_snapshots/', 'tests/isolate.py',
+)
+NOTHING = (
+    'docs/', 'dist/', 'LICENSE', 'tools/test-session.sh', 'tools/vm-',
+    'AGENTS.md', 'README.md', '.gitignore',
+    f'{APP}/linux/', f'{APP}/assets/',
+)
+# Parity tests whose module has another name than the test: what no name or import shows.
+ALSO = {
+    'plan_worker': {'test_dart_worker_parity'}, 'flutter_worker': {'test_dart_worker_parity'},
+    'flutter_snapshot_worker': {'test_dart_worker_parity'},
+    'model_moves': {'test_dart_system_moves_parity'}, 'agent_badges': {'test_dart_badges_parity'},
+    'first_agent': {'test_dart_setup_guide_parity'}, 'llm_tuning': {'test_dart_tuning_tips_parity'},
+    'read_service': {'test_dart_item_details_parity', 'test_dart_foundation_reference'},
+    'agent_details': {'test_dart_item_details_parity', 'test_dart_foundation_reference'},
+    'mcp_plans': {'test_dart_item_details_parity', 'test_dart_foundation_reference'},
+    'skill_plans': {'test_dart_item_details_parity', 'test_dart_foundation_reference'},
+    'found_scan': {'test_dart_found_look_parity'},
+    'mcp_scan': {'test_dart_found_scan_parity', 'test_dart_found_look_parity'},
+}
+_DART_IMPORT = re.compile(r"^\s*(?:import|export|part)\s+'([^']+)'", re.MULTILINE)
+
+
+def changed_files(base: str | None) -> list[str]:
+    def git(*args):
+        return subprocess.run(['git', *args], cwd=ROOT, capture_output=True, text=True, check=True).stdout.split('\n')
+    names = git('diff', '--name-only', f'{base}...HEAD') if base else []
+    names += git('diff', '--name-only', 'HEAD')
+    names += git('ls-files', '--others', '--exclude-standard')
+    return sorted({n for n in names if n})
+
+
+def dart_graph(package: str, name: str) -> dict[str, set[str]]:
+    """Dart file (repo path) -> the files it imports, within the package."""
+    root = ROOT / package
+    graph: dict[str, set[str]] = {}
+    for folder in ('lib', 'test', 'bin', 'tool'):
+        for path in sorted((root / folder).rglob('*.dart')):
+            own = str(path.relative_to(ROOT))
+            graph[own] = set()
+            for target in _DART_IMPORT.findall(path.read_text(errors='replace')):
+                if target.startswith(f'package:{name}/'):
+                    found = root / 'lib' / target.split('/', 1)[1]
+                elif ':' in target:
+                    continue
+                else:
+                    found = (path.parent / target).resolve()
+                graph[own].add(str(found.relative_to(ROOT)) if found.is_relative_to(ROOT) else str(found))
+    return graph
+
+
+def python_graph() -> dict[str, set[str]]:
+    """Python module name (reference modules and tests) -> the modules it imports."""
+    files = [*ROOT.glob('*.py'), *(ROOT / 'tests').glob('*.py')]
+    known = {f.stem for f in files}
+    graph: dict[str, set[str]] = {}
+    for path in files:
+        names: set[str] = set()
+        try:
+            tree = ast.parse(path.read_text(errors='replace'))
+        except SyntaxError:
+            tree = ast.parse('')
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                names.update(a.name.split('.')[0] for a in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                names.add(node.module.split('.')[0])
+        graph[path.stem] = names & known
+    return graph
+
+
+def dependents(graph: dict, start: set) -> set:
+    """start and everything that imports it, directly or through others."""
+    seen = set(start)
+    grew = True
+    while grew:
+        grew = False
+        for item, imports in graph.items():
+            if item not in seen and imports & seen:
+                seen.add(item)
+                grew = True
+    return seen
+
+
+def importers(graph: dict, start: set) -> set:
+    """start and what imports it directly."""
+    return set(start) | {item for item, imports in graph.items() if imports & start}
+
+
+def _token(stem: str) -> str:
+    return stem.split('_')[0].rstrip('s')
+
+
+def parity_tests(modules: set[str], changed: set[str]) -> set[str]:
+    """test_dart_<name>_parity: its module depends on the change, or (a test without a module of its
+    name, such as agent_halt) its first word is that of a changed file."""
+    names = {p.stem for p in (ROOT / 'tests').glob('test_dart_*_parity.py')}
+    words = {_token(s) for s in changed}
+    known = modules | changed
+    every_module = {p.stem for p in ROOT.glob('*.py')} | {p.stem for p in (ROOT / CORE / 'lib/src').glob('*.dart')}
+    picked = set()
+    for test in names:
+        name = test.removeprefix('test_dart_').removesuffix('_parity')
+        if name in known or (name not in every_module and _token(name) in words):
+            picked.add(test)
+    for stem in known:
+        picked |= ALSO.get(stem, set())
+    return picked
+
+
+def select(files: list[str]) -> dict:
+    """What to run for these repo paths."""
+    run = {'everything': False, 'core': False, 'app_tests': set(), 'python': set(), 'analyze_app': False,
+           'typecheck': False, 'format': [], 'notes': []}
+    core_graph = dart_graph(CORE, 'maprisma_core')
+    app_graph = dart_graph(APP, 'maprisma')
+    py_graph = python_graph()
+    core_changed, app_changed, py_changed = set(), set(), set()
+    for name in files:
+        if name.startswith(EVERYTHING) or name.endswith('.g.dart'):
+            run['everything'] = True
+        elif name.startswith(f'{CORE}/') and name.endswith('.dart'):
+            core_changed.add(name)
+            run['format'].append(name)
+        elif name.startswith(f'{APP}/') and name.endswith('.dart'):
+            app_changed.add(name)
+            run['format'].append(name)
+        elif name.endswith('.py') and name.startswith('tests/test_'):
+            py_changed.add(Path(name).stem)
+            run['typecheck'] = True
+        elif name.endswith('.py') and '/' not in name:
+            py_changed.add(Path(name).stem)
+            run['typecheck'] = True
+        elif name == 'docs/protocol.md':
+            run['python'].add('test_protocol')
+        elif name == 'tools/flutter-assets.py':
+            run['python'] |= {'test_i18n'}
+        elif name.startswith('data/user-manual') or name.startswith('docs/manual/'):
+            run['python'] |= {'test_manual', 'test_manual_translations'}
+        elif name.startswith('packaging/'):
+            run['python'].add('test_packaging')
+        elif name == 'tools/test-changed':
+            run['python'].add('test_test_changed')
+        elif name == 'tools/build-adapter-addons.py':
+            run['python'].add('test_adapter_addons')
+        elif name == 'tools/build-flutter-preview.py':
+            run['python'].add('test_flutter_review_recheck')
+        elif name.startswith(NOTHING):
+            if name.startswith(f'{APP}/linux/'):
+                if name == f'{APP}/linux/CMakeLists.txt':
+                    run['python'].add('test_flutter_review_recheck')
+                run['notes'].append('The runner changed: no test covers it, run tools/flutter-dev build.')
+        else:
+            run['notes'].append(f'{name}: not known here, so everything runs.')
+            run['everything'] = True
+    if core_changed:
+        run['core'] = True
+        modules = {Path(f).stem for f in importers(core_graph, core_changed)}
+        run['python'] |= parity_tests(modules, {Path(f).stem for f in core_changed})
+        if f'{CORE}/lib/src/core.dart' in core_changed:
+            run['python'].add('test_dart_worker_parity')
+        run['python'].add('test_protocol')
+        run['analyze_app'] = True
+        # The app's tests that reach the core, directly or through test/support.
+        direct = {f for f in app_graph if f.startswith(f'{APP}/test/')
+                  and 'package:maprisma_core/' in (ROOT / f).read_text(errors='replace')}
+        direct |= {f for f in app_graph if f.startswith(f'{APP}/test/support/')}
+        run['app_tests'] |= {f for f in dependents(app_graph, direct) if f.endswith('_test.dart')}
+    if py_changed:
+        modules = importers(py_graph, py_changed)
+        run['python'] |= {m for m in modules if m.startswith('test_')}
+        non_test = {m for m in modules if not m.startswith('test_')}
+        if non_test:
+            stripped = {m.removeprefix('flutter_').removeprefix('plugin_') for m in non_test}
+            tokens = {_token(s) for s in stripped}
+            dart_matches = {f for f in core_graph if f.startswith(f'{CORE}/lib/src/')
+                            and (Path(f).stem in stripped or _token(Path(f).stem) in tokens)}
+            dart_mods = {Path(f).stem for f in importers(core_graph, dart_matches)}
+            run['python'] |= parity_tests(non_test | stripped | dart_mods,
+                                          (py_changed & non_test) | stripped | {Path(f).stem for f in dart_matches})
+    if app_changed:
+        run['analyze_app'] = True
+        run['python'].add('test_protocol')
+        run['app_tests'] |= {f for f in dependents(app_graph, app_changed) if f.endswith('_test.dart')}
+    run['python'] = {m for m in run['python'] if (ROOT / 'tests' / f'{m}.py').exists()}
+    run['app_tests'] = {f for f in run['app_tests'] if (ROOT / f).exists()}
+    run['notes'] = sorted(set(run['notes']))
+    return run
+
+
+def show(run: dict) -> None:
+    if run['everything']:
+        print('everything: the complete suites')
+    if run['format']:
+        print(f"format: {len(run['format'])} Dart files")
+    if run['core']:
+        print('core: dart analyze, dart test')
+    if run['analyze_app']:
+        print('app: flutter analyze')
+    for test in sorted(run['app_tests']):
+        print(f'flutter test {test}')
+    for test in sorted(run['python']):
+        print(f'python {test}')
+    if run['typecheck']:
+        print('typecheck')
+    for note in run['notes']:
+        print(f'note: {note}')
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description='Run the checks and tests of what changed.')
+    parser.add_argument('--base', help='also take the commits of this branch since this ref')
+    parser.add_argument('--list', action='store_true', help='only say what would run')
+    parser.add_argument('--files', nargs='+', help='these repo paths instead of git\'s list')
+    args = parser.parse_args()
+    files = args.files or changed_files(args.base)
+    if not files:
+        print('Nothing changed.')
+        return 0
+    run = select(files)
+    show(run)
+    if args.list:
+        return 0
+    sys.path.insert(0, str(ROOT / 'tools'))
+    from dart_sdk import resolve_dart
+    dart = str(resolve_dart())
+    steps: list[tuple[list[str], Path]] = []
+    if run['everything']:
+        steps = [(['tools/flutter-dev', 'check'], ROOT),
+                 ([sys.executable, '-m', 'unittest', 'discover', '-s', 'tests', '-q'], ROOT),
+                 (['tools/typecheck.sh'], ROOT)]
+    else:
+        existing = [f for f in run['format'] if (ROOT / f).exists()]
+        if existing:
+            steps.append(([dart, 'format', '--output=none', '--set-exit-if-changed', *existing], ROOT))
+        if run['core']:
+            steps += [([dart, 'analyze', '--fatal-infos'], ROOT / CORE), ([dart, 'test'], ROOT / CORE)]
+        if run['analyze_app']:
+            steps.append((['flutter', '--suppress-analytics', '--no-version-check', 'analyze', '--no-pub'], ROOT / APP))
+        if run['app_tests']:
+            tests = [str(Path(t).relative_to(APP)) for t in sorted(run['app_tests'])]
+            steps.append((['flutter', '--suppress-analytics', '--no-version-check', 'test', '--no-pub',
+                           '--timeout', '60s', *tests], ROOT / APP))
+        if run['python']:
+            steps.append(([sys.executable, '-m', 'unittest', '-q', *sorted(run['python'])], ROOT / 'tests'))
+        if run['typecheck']:
+            steps.append((['tools/typecheck.sh'], ROOT))
+    for argv, folder in steps:
+        print('==', ' '.join(argv[:4]), flush=True)
+        if subprocess.run(argv, cwd=folder, check=False).returncode != 0:
+            print(f'FAILED: {" ".join(argv[:4])}', file=sys.stderr)
+            return 1
+    print('All passed.')
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

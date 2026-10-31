@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:maprisma/map_layout.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -94,8 +96,24 @@ void main() {
         },
       });
       // Old free card coordinates in `cards` are ignored; cards stay in their column.
-      expect(l.cards['0:mcp:']!.rect.topLeft, const Offset(16, 144));
-      expect(l.cards['1:agent:']!.rect.topLeft, const Offset(318, 144));
+      expect(
+        l.cards['0:mcp:']!.rect,
+        const Rect.fromLTWH(16, 106, 266, 32 + 146),
+      );
+      expect(
+        l.cards['1:agent:']!.rect,
+        const Rect.fromLTWH(318, 106, 266, 32 + 2 * 146),
+      );
+      expect(l.boxes['mcp:c']!.left - l.cards['0:mcp:']!.rect.left, 12);
+      expect(l.cards['0:mcp:']!.rect.right - l.boxes['mcp:c']!.right, 12);
+      expect(l.cards['0:mcp:']!.rect.bottom - l.boxes['mcp:c']!.bottom, 12);
+      expect(l.cards['1:agent:']!.rect.bottom - l.boxes['agent:b']!.bottom, 12);
+      expect(
+        MapLayout(graph, {
+          'collapsed': ['0:mcp:'],
+        }).cards['0:mcp:']!.rect.height,
+        38,
+      );
       final saved = reorderMapBox(
         l.cards.isEmpty ? {} : {'cards': {}},
         l,
@@ -120,4 +138,60 @@ void main() {
       expect((fixtureGraph()['nodes'] as List).length, 7);
     },
   );
+
+  Map<String, dynamic> twoColumns() {
+    final graph = fixtureGraph();
+    final nodes = [
+      for (final n in graph['nodes'] as List)
+        if ((n as Map)['column'] == 1 || n['column'] == 2) n,
+    ];
+    final ids = {for (final n in nodes) n['id']};
+    return {
+      ...graph,
+      'nodes': nodes,
+      'edges': [
+        for (final e in graph['edges'] as List)
+          if (ids.contains((e as Map)['source']) && ids.contains(e['target']))
+            e,
+      ],
+    };
+  }
+
+  test('a hidden column keeps its card order', () {
+    final graph = twoColumns();
+    final saved = {
+      'card_order': ['3:model:', '0:mcp:'],
+    };
+    final shown = MapLayout(graph, saved, columns: const [1, 2]);
+    final id = shown.cards.keys.first;
+    final next = reorderMapCard(saved, shown, id, 0);
+    expect(next['card_order'], containsAll(['3:model:', '0:mcp:', id]));
+  });
+
+  test('the shown columns sit in the middle of the window', () {
+    final l = MapLayout(
+      twoColumns(),
+      const {},
+      columns: const [1, 2],
+      viewportWidth: 1000,
+    );
+    final left = l.columnX(1), right = 1000 - (l.columnX(2) + l.columnWidth);
+    expect(left, closeTo(right, 2));
+    expect(l.columnWidth, inInclusiveRange(266, 420));
+    expect(l.columnGap, inInclusiveRange(36, 96));
+    expect(l.boxes['agent:a']!.width, l.columnWidth - 24);
+    expect(l.size.width, lessThanOrEqualTo(1000));
+
+    final empty = MapLayout(
+      const {'nodes': [], 'edges': []},
+      const {},
+      columns: const [0, 1, 2, 3],
+      viewportWidth: 1500,
+    );
+    expect(
+      empty.size.width,
+      greaterThanOrEqualTo(empty.columnX(3) + empty.columnWidth + 16),
+    );
+    expect(empty.size.width, lessThanOrEqualTo(1500));
+  });
 }

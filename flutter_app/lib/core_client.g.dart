@@ -123,6 +123,10 @@ class CoreClient {
     Map<String, dynamic> params = const {},
   ]) => transport.call('agents.security_preview', params);
 
+  Future<Map<String, dynamic>> agentsTraffic([
+    Map<String, dynamic> params = const {},
+  ]) => transport.call('agents.traffic', params);
+
   Future<Map<String, dynamic>> agentsUsageRefresh({required Object? command}) =>
       transport.call('agents.usage_refresh', {'command': command});
 

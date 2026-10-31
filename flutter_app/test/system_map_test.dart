@@ -1,4 +1,5 @@
 import 'package:maprisma/backend.dart';
+import 'package:maprisma/map_zoom.dart';
 import 'package:maprisma/system_map_view.dart';
 import 'package:maprisma/map_welcome.dart';
 import 'package:flutter/material.dart';
@@ -184,6 +185,59 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(LinearProgressIndicator), findsNothing);
       expect(backend.calls, ['system.help_preview']);
+    },
+  );
+
+  testWidgets(
+    'System Map puts zoom control in header, folds side panel in small view, and has full screen button',
+    (tester) async {
+      final backend = MapBackend();
+      final controller = TransformationController();
+      addTearDown(controller.dispose);
+      tester.view.physicalSize = const Size(1000, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SystemMapView(
+              data: data(),
+              backend: backend,
+              tr: (k) => k,
+              busy: false,
+              onRefresh: (_) async {},
+              onOperation: (_, _, _) async => null,
+              onSaved: (_) async {},
+              onSession: (_) {},
+              onShowAI: (_) {},
+              controller: controller,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      // Zoom control is in the header row above the map, not overlapping column headers.
+      expect(find.byType(MapZoomControl), findsOneWidget);
+      expect(
+        tester.getBottomRight(find.byType(MapZoomControl)).dy,
+        lessThanOrEqualTo(tester.getTopLeft(find.byType(InteractiveViewer)).dy),
+      );
+
+      // In small view (< 1150 px), the 340 px side panel is folded away and the map uses the full width.
+      expect(find.text('What we found'), findsNothing);
+      expect(
+        find.byKey(const ValueKey('system-sidebar-toggle')),
+        findsOneWidget,
+      );
+      expect(tester.getSize(find.byType(InteractiveViewer)).width, 1000);
+
+      // Tapping the Sidebar button unfolds the 340 px side panel.
+      await tester.tap(find.byKey(const ValueKey('system-sidebar-toggle')));
+      await tester.pump();
+      expect(find.text('What we found'), findsOneWidget);
+      expect(tester.getSize(find.byType(InteractiveViewer)).width, 1000 - 340);
     },
   );
 }

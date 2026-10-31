@@ -198,6 +198,14 @@ def maximize(app_id: str) -> bool:
 
 # --- terminals ------------------------------------------------------------------------------------
 
+def _resolves(launcher: str) -> bool:
+    try:
+        return subprocess.run([launcher, "--print-id"], stdin=subprocess.DEVNULL, capture_output=True,
+                              check=False).returncode == 0
+    except OSError:
+        return False
+
+
 def terminal() -> list | None:
     """The terminal to start programs in: [program, argument before argv…], or None."""
     own = os.environ.get("TERMINAL", "")
@@ -206,6 +214,10 @@ def terminal() -> list | None:
         return [shutil.which(own), *known]
     for program, follow in TERMINALS:
         path = shutil.which(program)
+        # It exits with an error when it finds no terminal entry, and a detached
+        # start would hide that: then the next one on the list.
+        if path and program == "xdg-terminal-exec" and not _resolves(path):
+            continue
         if path:
             return [path, *follow]
     return None

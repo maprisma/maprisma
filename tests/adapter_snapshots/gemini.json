@@ -87,7 +87,10 @@
    "url": "https://aistudio.google.com/apikey",
    "stdin": [],
    "env_file": "~/.gemini/.env"
-  }
+  },
+  "extra_file": "",
+  "extra_key": "",
+  "extra_url": ""
  },
  "security": null,
  "sessions": {

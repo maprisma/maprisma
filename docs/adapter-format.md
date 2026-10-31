@@ -120,6 +120,9 @@ how = "A Claude Pro or Max subscription (claude.ai), or an API key from console.
 login = "claude auth login"
 files = [".claude/.credentials.json"]  # only whether one exists is checked, never read
 env = ["ANTHROPIC_API_KEY"]
+extra_file = "~/.claude.json"          # optional: a JSON file with a true/false value ...
+extra_key = "oauthAccount.hasExtraUsageEnabled"  # ... at this dotted path: paid usage beyond the plan on?
+extra_url = "https://claude.ai/settings/usage"   # optional: the page where the user checks or changes it
 
 [[access.logins]]
 label = "Claude subscription"

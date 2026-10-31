@@ -1,13 +1,20 @@
+import 'dart:async' show FutureOr;
 import 'dart:math' as math;
 
+import 'package:flutter/gestures.dart' show GestureBinding, PointerScrollEvent;
 import 'package:flutter/material.dart';
 import 'core_client.g.dart';
 import 'map_groups.dart';
 import 'app_theme.dart' show corners;
 import 'map_editor.dart';
+import 'map_zoom.dart';
+
+export 'map_groups.dart' show AgentBadge, UsageBoxLabel;
 
 class AgentMap extends StatelessWidget {
   const AgentMap({
+    this.layers,
+    this.onLayers,
     super.key,
     required this.graph,
     required this.onAgent,
@@ -72,6 +79,8 @@ class AgentMap extends StatelessWidget {
   final ValueChanged<int>? onExpandGroup;
   final void Function(BuildContext, Map<String, dynamic>)? onNodeMenu;
   final void Function(Map<String, dynamic>, Map<String, dynamic>)? onNodeDrop;
+  final List<String>? layers;
+  final FutureOr<void> Function(List<String>)? onLayers;
 
   Widget _title(Map<String, dynamic> node) {
     final command = (node['id'] as String).replaceFirst('agent:', '');
@@ -191,6 +200,8 @@ class AgentMap extends StatelessWidget {
   Widget build(BuildContext context) {
     if (!readOnly && onEdit != null) {
       return MapEditor(
+        layers: layers,
+        onLayers: onLayers,
         graph: graph,
         saved: savedLayout,
         onLayout: onLayout,
@@ -217,16 +228,10 @@ class AgentMap extends StatelessWidget {
     final groups = readOnly ? null : this.groups;
     final nodes = (graph['nodes'] as List).cast<Map<String, dynamic>>();
     final edges = (graph['edges'] as List).cast<Map<String, dynamic>>();
-    final positions = <String, Offset>{};
     final counts = <int, int>{};
     for (final node in nodes) {
       final col = node['column'] as int;
-      final row = counts[col] ?? 0;
-      positions[node['id'] as String] = Offset(
-        24 + col * 290,
-        (groups == null ? 64 : 128) + row * 106,
-      );
-      counts[col] = row + 1;
+      counts[col] = (counts[col] ?? 0) + 1;
     }
     final height = math
         .max(
@@ -235,150 +240,271 @@ class AgentMap extends StatelessWidget {
         )
         .toDouble();
     final colors = Theme.of(context).colorScheme;
-    final canvas = SizedBox(
-      width: (columns.length * 290 + 20).toDouble(),
-      height: height,
-      child: Stack(
-        children: [
-          Positioned.fill(
-            child: CustomPaint(
-              painter: _Connections(
-                positions,
-                edges,
-                colors.outlineVariant,
-                anchors,
-                colors.primary,
+
+    Widget buildCanvas({
+      required double colWidth,
+      required double colGap,
+      required double boxWidth,
+      required double inset,
+      required Size canvasSize,
+    }) {
+      final step = colWidth + colGap;
+      final positions = <String, Offset>{};
+      final rowCounts = <int, int>{};
+      for (final node in nodes) {
+        final col = node['column'] as int;
+        final row = rowCounts[col] ?? 0;
+        positions[node['id'] as String] = Offset(
+          inset + 24 + col * step,
+          (groups == null ? 64 : 128) + row * 106,
+        );
+        rowCounts[col] = row + 1;
+      }
+      return SizedBox(
+        width: canvasSize.width,
+        height: canvasSize.height,
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: CustomPaint(
+                painter: _Connections(
+                  positions,
+                  edges,
+                  colors.outlineVariant,
+                  anchors,
+                  colors.primary,
+                  boxWidth: boxWidth,
+                ),
               ),
             ),
-          ),
-          for (var col = 0; col < columns.length; col++)
-            Positioned(
-              left: 24 + col * 290,
-              top: 16,
-              width: 250,
-              height: groups == null ? 40 : 98,
-              child: groups == null
-                  ? Text(
-                      tr(columns[col]),
-                      style: TextStyle(
-                        color: colors.onSurfaceVariant,
-                        fontWeight: FontWeight.w600,
+            for (var col = 0; col < columns.length; col++)
+              Positioned(
+                left: inset + 24 + col * step,
+                top: 16,
+                width: colWidth,
+                height: groups == null ? 40 : 98,
+                child: groups == null
+                    ? Text(
+                        tr(columns[col]),
+                        style: TextStyle(
+                          color: colors.onSurfaceVariant,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      )
+                    : MapGroupCard(
+                        group: groups[col],
+                        tr: tr,
+                        onExpand: () => onExpandGroup?.call(col),
                       ),
-                    )
-                  : MapGroupCard(
-                      group: groups[col],
-                      tr: tr,
-                      onExpand: () => onExpandGroup?.call(col),
-                    ),
-            ),
-          for (final node in nodes)
-            Positioned(
-              left: positions[node['id']]!.dx,
-              top: positions[node['id']]!.dy,
-              width: 242,
-              height: 82,
-              child: _interactiveNode(
-                context,
-                node,
-                Semantics(
-                  button:
-                      !readOnly && (onNode != null || node['kind'] == 'agent'),
-                  label: node['label'] as String,
-                  child: Card(
-                    shape: focusedNode == node['id']
-                        ? RoundedRectangleBorder(
-                            side: BorderSide(color: colors.primary, width: 2),
-                            borderRadius: BorderRadius.circular(
-                              corners(context),
-                            ),
-                          )
-                        : null,
-                    color: node['status'] == 'running'
-                        ? colors.secondaryContainer
-                        : node['status'] == 'missing'
-                        ? colors.surfaceContainerLowest
-                        : colors.surfaceContainer,
-                    clipBehavior: Clip.antiAlias,
-                    child: InkWell(
-                      onSecondaryTap: readOnly || onNodeMenu == null
-                          ? null
-                          : () => onNodeMenu!(context, node),
-                      onTap: readOnly
-                          ? null
-                          : onNode != null
-                          ? () => onNode!(node)
-                          : node['kind'] == 'agent'
-                          ? () => onAgent(
-                              (node['id'] as String).substring('agent:'.length),
+              ),
+            for (final node in nodes)
+              Positioned(
+                left: positions[node['id']]!.dx,
+                top: positions[node['id']]!.dy,
+                width: boxWidth,
+                height: 82,
+                child: _interactiveNode(
+                  context,
+                  node,
+                  Semantics(
+                    button:
+                        !readOnly &&
+                        (onNode != null || node['kind'] == 'agent'),
+                    label: node['label'] as String,
+                    child: Card(
+                      shape: focusedNode == node['id']
+                          ? RoundedRectangleBorder(
+                              side: BorderSide(color: colors.primary, width: 2),
+                              borderRadius: BorderRadius.circular(
+                                corners(context),
+                              ),
                             )
                           : null,
-                      // The Actions button keeps its place in the title row
-                      // but takes a 44 × 44 corner of the box (tap targets).
-                      child: Stack(
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.all(12),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Row(
-                                  children: [
-                                    Expanded(child: _title(node)),
-                                    if (!readOnly && onNodeMenu != null)
-                                      const SizedBox(width: 28, height: 28),
-                                  ],
+                      color: node['status'] == 'running'
+                          ? colors.secondaryContainer
+                          : node['status'] == 'missing'
+                          ? colors.surfaceContainerLowest
+                          : colors.surfaceContainer,
+                      clipBehavior: Clip.antiAlias,
+                      child: InkWell(
+                        onSecondaryTap: readOnly || onNodeMenu == null
+                            ? null
+                            : () => onNodeMenu!(context, node),
+                        onTap: readOnly
+                            ? null
+                            : onNode != null
+                            ? () => onNode!(node)
+                            : node['kind'] == 'agent'
+                            ? () => onAgent(
+                                (node['id'] as String).substring(
+                                  'agent:'.length,
                                 ),
-                                Text(
-                                  node['detail'] as String,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: colors.onSurfaceVariant,
+                              )
+                            : null,
+                        // The Actions button keeps its place in the title row
+                        // but takes a 44 × 44 corner of the box (tap targets).
+                        child: Stack(
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Expanded(child: _title(node)),
+                                      if (!readOnly && onNodeMenu != null)
+                                        const SizedBox(width: 28, height: 28),
+                                    ],
                                   ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          if (!readOnly && onNodeMenu != null)
-                            Positioned(
-                              top: 11,
-                              right: 4,
-                              width: 44,
-                              height: 44,
-                              child: IconButton(
-                                padding: EdgeInsets.zero,
-                                tooltip: tr('Actions'),
-                                onPressed: () => onNodeMenu!(context, node),
-                                icon: const Icon(Icons.more_vert, size: 18),
+                                  Text(
+                                    node['detail'] as String,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: colors.onSurfaceVariant,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                        ],
+                            if (!readOnly && onNodeMenu != null)
+                              Positioned(
+                                top: 11,
+                                right: 4,
+                                width: 44,
+                                height: 44,
+                                child: IconButton(
+                                  padding: EdgeInsets.zero,
+                                  tooltip: tr('Actions'),
+                                  onPressed: () => onNodeMenu!(context, node),
+                                  icon: const Icon(Icons.more_vert, size: 18),
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
-        ],
-      ),
-    );
+          ],
+        ),
+      );
+    }
+
     if (readOnly) {
+      final canvasSize = Size((columns.length * 290 + 20).toDouble(), height);
       return FittedBox(
         fit: BoxFit.scaleDown,
         alignment: Alignment.centerRight,
-        child: canvas,
+        child: buildCanvas(
+          colWidth: 250,
+          colGap: 40,
+          boxWidth: 242,
+          inset: 0,
+          canvasSize: canvasSize,
+        ),
       );
     }
-    return InteractiveViewer(
-      transformationController: controller,
-      onInteractionEnd: (_) => onViewChanged?.call(),
-      constrained: false,
-      minScale: 0.3,
-      maxScale: 2,
-      boundaryMargin: const EdgeInsets.all(120),
-      child: canvas,
+
+    return LayoutBuilder(
+      builder: (context, box) {
+        final colCount = columns.length;
+        final width = box.maxWidth.isFinite ? box.maxWidth : 0.0;
+        final minNatural =
+            48.0 + colCount * 250.0 + math.max(0, colCount - 1) * 40.0;
+        final double colWidth, colGap, boxWidth, inset;
+        if (colCount == 0 || width <= minNatural) {
+          colWidth = 250;
+          colGap = 40;
+          boxWidth = 242;
+          inset = 0;
+        } else {
+          colGap = (width * 0.035).floorToDouble().clamp(36.0, 96.0);
+          colWidth = ((width - 48.0 - (colCount - 1) * colGap) / colCount)
+              .floorToDouble()
+              .clamp(250.0, 420.0);
+          boxWidth = colWidth - 8;
+          final natural = 48.0 + colCount * colWidth + (colCount - 1) * colGap;
+          inset = width > natural ? ((width - natural) / 2).floorToDouble() : 0;
+        }
+        final naturalWidth = colCount == 0
+            ? 20.0
+            : inset * 2 + 48.0 + colCount * colWidth + (colCount - 1) * colGap;
+        final canvasSize = Size(naturalWidth, height);
+        final canvas = buildCanvas(
+          colWidth: colWidth,
+          colGap: colGap,
+          boxWidth: boxWidth,
+          inset: inset,
+          canvasSize: canvasSize,
+        );
+        final viewer = InteractiveViewer(
+          transformationController: controller,
+          onInteractionEnd: (_) => onViewChanged?.call(),
+          constrained: false,
+          scaleEnabled: false, // the wheel scrolls; zoom has its control
+          minScale: 0.3,
+          maxScale: 2,
+          boundaryMargin: const EdgeInsets.fromLTRB(0, 0, 120, 120),
+          child: canvas,
+        );
+        final zoom = controller;
+        if (zoom == null) {
+          return viewer;
+        }
+        void clampAndSave() {
+          if (!context.mounted) return; // the map was closed
+          scrollMap(
+            zoom,
+            Offset.zero,
+            viewport: box.biggest,
+            content: canvasSize,
+          );
+          onViewChanged?.call();
+        }
+
+        void fitToWindow() {
+          if (!context.mounted) return;
+          final w = box.biggest.width;
+          final scale = w > 0 && canvasSize.width > 0
+              ? (w / canvasSize.width).clamp(0.3, 1.0)
+              : 1.0;
+          zoom.value = Matrix4.diagonal3Values(scale, scale, 1);
+          clampAndSave();
+        }
+
+        mapClamp[zoom] = clampAndSave;
+        mapFit[zoom] = fitToWindow;
+        return Stack(
+          children: [
+            Positioned.fill(
+              child: Listener(
+                onPointerSignal: (event) {
+                  if (event is PointerScrollEvent) {
+                    GestureBinding.instance.pointerSignalResolver.register(
+                      event,
+                      (e) {
+                        scrollMap(
+                          zoom,
+                          (e as PointerScrollEvent).scrollDelta,
+                          viewport: box.biggest,
+                          content: canvasSize,
+                        );
+                        onViewChanged?.call();
+                      },
+                    );
+                  }
+                },
+                child: viewer,
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -389,13 +515,15 @@ class _Connections extends CustomPainter {
     this.edges,
     this.color,
     this.anchors,
-    this.anchorColor,
-  );
+    this.anchorColor, {
+    this.boxWidth = 242,
+  });
   final Set<String> anchors;
   final Color anchorColor;
   final Map<String, Offset> positions;
   final List<Map<String, dynamic>> edges;
   final Color color;
+  final double boxWidth;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -410,7 +538,7 @@ class _Connections extends CustomPainter {
     for (final id in anchors) {
       final position = positions[id];
       if (position == null) continue;
-      final start = position + const Offset(242, 41);
+      final start = position + Offset(boxWidth, 41);
       final middle = (start.dx + size.width) / 2;
       canvas.drawPath(
         Path()
@@ -431,8 +559,8 @@ class _Connections extends CustomPainter {
       final target = positions[edge['target']];
       if (source == null || target == null) continue;
       final forward = source.dx <= target.dx;
-      final start = source + Offset(forward ? 242 : 0, 41);
-      final end = target + Offset(forward ? 0 : 242, 41);
+      final start = source + Offset(forward ? boxWidth : 0, 41);
+      final end = target + Offset(forward ? 0 : boxWidth, 41);
       final middle = (start.dx + end.dx) / 2;
       canvas.drawPath(
         Path()
@@ -449,108 +577,6 @@ class _Connections extends CustomPainter {
       edges != oldDelegate.edges ||
       color != oldDelegate.color ||
       anchors != oldDelegate.anchors ||
-      anchorColor != oldDelegate.anchorColor;
-}
-
-/// The badge in an agent's box (map.badges): what is left of its plan
-/// limits as a small battery, or today's cost for one paid per token; green,
-/// yellow or red at Settings › Costs' levels, the details in the tooltip.
-class AgentBadge extends StatelessWidget {
-  const AgentBadge({super.key, required this.badge});
-  final Map badge;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final colour = switch ('${badge['colour']}') {
-      'red' => scheme.error,
-      'yellow' => Colors.amber.shade700,
-      _ => Colors.green,
-    };
-    final Widget child;
-    if (badge['kind'] == 'battery') {
-      final left = (badge['left'] as num? ?? 0).toDouble().clamp(0.0, 1.0);
-      child = Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            key: const ValueKey('agent-battery'),
-            width: 22,
-            height: 10,
-            padding: const EdgeInsets.all(1),
-            decoration: BoxDecoration(
-              border: Border.all(color: colour, width: 1),
-              borderRadius: BorderRadius.circular(2),
-            ),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: FractionallySizedBox(
-                widthFactor: left,
-                heightFactor: 1,
-                child: ColoredBox(color: colour),
-              ),
-            ),
-          ),
-          Container(width: 2, height: 4, color: colour),
-        ],
-      );
-    } else {
-      child = Text(
-        '${badge['label']}',
-        key: const ValueKey('agent-cost'),
-        style: TextStyle(
-          fontSize: 11,
-          color: colour,
-          fontWeight: FontWeight.w600,
-        ),
-      );
-    }
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      child: Tooltip(message: '${badge['tip']}', child: child),
-    );
-  }
-}
-
-/// The usage statistics box of a working agent (map.usage): tokens per
-/// second of its latest reply, its context size and the share in use
-/// (yellow from 75 %, red over 90 %), in the chosen text size.
-class UsageBoxLabel extends StatelessWidget {
-  const UsageBoxLabel({super.key, required this.box, required this.size});
-  final Map box;
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final parts = (box['parts'] as List? ?? const []).cast<List>();
-    return Padding(
-      key: const ValueKey('usage-box'),
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      child: Tooltip(
-        message: '${box['model'] ?? ''}',
-        child: Text.rich(
-          TextSpan(
-            children: [
-              for (var i = 0; i < parts.length; i++)
-                TextSpan(
-                  text: '${i > 0 ? ' · ' : ''}${parts[i][0]}',
-                  style: TextStyle(
-                    color: switch ('${parts[i][1]}') {
-                      'red' => scheme.error,
-                      'yellow' => Colors.amber.shade700,
-                      _ => scheme.onSurfaceVariant,
-                    },
-                  ),
-                ),
-            ],
-          ),
-          style: TextStyle(fontSize: size * 1.33),
-          maxLines: 1,
-          overflow: TextOverflow.fade,
-          softWrap: false,
-        ),
-      ),
-    );
-  }
+      anchorColor != oldDelegate.anchorColor ||
+      boxWidth != oldDelegate.boxWidth;
 }

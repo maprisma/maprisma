@@ -470,6 +470,17 @@ final class DetailReaders {
   }
 
   /// agent_details.usage_record: the desktop's usage record of an agent.
+  /// Paid usage beyond the plan (access.extra_*): on, off, or null when this
+  /// PC cannot tell; only that one value of the file is used.
+  Map<String, dynamic> extraUsage(Adapter adapter) {
+    final access = adapter.table('access');
+    final path = access['extra_file'], key = access['extra_key'];
+    final on = path is String && key is String
+        ? dig(files.json(path, limit: 8 * 1024 * 1024), key)
+        : null;
+    return {'on': on is bool ? on : null, 'url': access['extra_url'] ?? ''};
+  }
+
   Map<String, dynamic> usageRecord(String command) {
     if (!RegExp(r'^[a-z0-9-]{1,64}$').hasMatch(command)) return {};
     final path = desktop.name == 'omarchy'

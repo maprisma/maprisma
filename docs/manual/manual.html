@@ -184,7 +184,8 @@
       it elsewhere: a bar shows where it lands, and the order is kept.</li>
     <li><b>GPU</b> — GPU memory and GPU activity: how the graphics card is used right now, in a card that
       folds (folded, its line keeps the numbers).</li>
-    <li><b>Show</b> toggles — shorten the map to the categories you are working on.</li>
+    <li><b>Column filters and zoom</b> — filter the map's columns (<b>MCP servers</b>, <b>Agents</b>,
+      <b>Providers</b>, <b>Models</b>) and zoom or fit to the window above the map.</li>
     <li><b>The map</b> — MCP servers and skills ← agents → LLM providers → models, across the whole width,
       under its heading <b>MAP</b>.</li>
     <li><b>▶</b> on an agent's box starts it in a terminal in the window; while it runs there, the button
@@ -218,6 +219,7 @@
       start or stop, details, uninstall or remove, move a model.</li>
     <li>A yellow <b>↑ version</b> on a card means an update is waiting; its menu has <b>Update</b>.</li>
     <li>A red <b>!</b> on a card means an open problem there; hover it for what it is.</li>
+    <li>An agent's details show <b>Additional usage</b> under its plan: whether it can cost extra money beyond the plan's limits. Claude Code tells this on your PC (and the page to change it); for other agents the app says it does not know, so check with the provider.</li>
     <li>A small battery on an online agent's card shows what is left of its limits (a session, a week):
       the tightest one counts, yellow at a quarter or less, red under a tenth; hover it for each limit
       and when it resets. On a running local LLM's card the battery is the GPU memory still free, with
@@ -245,13 +247,16 @@
   connects it: Setup only has cards for what is set up.</p>
 
   <h2 id="views">Choosing what the map shows</h2>
-  <p>The map shows everything that is set up. The <b>Show</b> toggles below the GPU card leave whole
-  categories out of it — for example all skills, or the local LLMs and their models — and are
-  remembered.</p>
-  <p>In a narrow window (half the screen or less) the map chooses them itself, and a line beside the
-  toggles says so: agents and providers (who works through what). A toggle clicked there stays
-  until the window is full size again and is not remembered; the full-size window keeps your own
-  choice. More categories switched on do not squeeze the boxes: the map scrolls sideways.</p>
+  <p>The map shows everything that is set up. The <b>MCP servers</b>, <b>Agents</b>,
+  <b>Providers</b> and <b>Models</b> filter buttons above the map (and Settings › <b>Map</b>)
+  leave whole columns out of it and are remembered.</p>
+  <p>In a small window (up to 55&nbsp;% of the screen, or below 1150 pixels) the map shows
+  <b>Agents</b> and <b>Providers</b>; in a medium window (up to 80&nbsp;% of the screen, or below
+  1600 pixels) it adds <b>Models</b>; in a larger window all four columns show. A
+  column the view leaves out can still be turned on with its button above the map, and the map
+  rearranges to fit it; the filter hides columns in every view. The shown columns are centred and adjust their width
+  (266 to 420 pixels) and gap to the free space, and the map fits the window's width until you zoom
+  (<kbd>Ctrl</kbd>+<kbd>0</kbd> fits it again).</p>
 
   <h2 id="map">Working with the map</h2>
   <ul>
@@ -296,7 +301,10 @@
       set up and signed in, and runs the checks of a start again (new apps, add-ons, updates, open problems).</li>
     <li>Until the first line is drawn, a card above the map shows how, in three steps; <b>Watch how</b>
       plays the animation from Help. It goes for good after the first connection, or with ×.</li>
-    <li>Zoom with <b>− 100&nbsp;% +</b>, <kbd>Ctrl</kbd>+scroll or <kbd>Ctrl</kbd>+<kbd>+</kbd> / <kbd>−</kbd> / <kbd>0</kbd>.</li>
+    <li>Filter the map's columns with the <b>MCP servers</b>, <b>Agents</b>, <b>Providers</b> and
+      <b>Models</b> buttons above the map. The mouse wheel scrolls the map; zoom with the
+      <b>− 100&nbsp;% +</b> and <b>Fit to window</b> buttons at the top right or
+      <kbd>Ctrl</kbd>+<kbd>+</kbd> / <kbd>−</kbd> / <kbd>0</kbd>.</li>
     <li>The boxes sit in one card per category (agents, online providers, local LLMs, a card per
       model folder, MCP servers, skills). Drag a card by its header to change the order in its column, and
       a box inside its card to change the order.</li>
@@ -312,8 +320,10 @@
       PC</a>). MCP servers reached at a web address have a card of their own, <b>Online MCP servers</b>,
       beside <b>Local MCP servers</b>; both fold like any other card.</li>
   </ul>
-  <div class="tip"><p><b>Tip</b> In a narrow window (below about 1300 pixels, such as half the
-  screen) the map scrolls sideways.</p></div>
+  <div class="tip"><p><b>Tip</b> The map fits the window's width until you zoom (<kbd>Ctrl</kbd>+<kbd>0</kbd>
+  fits it again). Up to 55&nbsp;% of the screen (below 1150 pixels) it shows <b>Agents</b> and
+  <b>Providers</b>; up to 80&nbsp;% (below 1600 pixels) it adds <b>Models</b>; above that, all
+  four columns. The buttons above the map turn on any column in any view.</p></div>
 
   <h2 id="health">Open problems</h2>
   <p>When something needs fixing, a red <b>!</b> appears among the header's symbols; its tooltip
@@ -878,7 +888,7 @@
 <p>Settings also offers <b>Start local LLMs with their agents</b>: when an agent connected to a local LLM starts, its LLM starts too, and when the last such agent closes, the LLM stops and its GPU memory is free again (a user service does this, also with the window closed). <b>Agent for AI checks</b> chooses which installed agent is offered first for AI help and the Smart Check on the System Map; its tokens are used for them. It lists the agents the System Map found able to do that.</p>
 
 <h2 id="popup-flutter">The popup under the bar on Omarchy</h2>
-<p>On Omarchy the Flutter app opens as a popup: a floating window at the top right under the bar, without a title bar, like the plugins' popups. <kbd>Esc</kbd> on the main page or a click elsewhere closes it; starting the app again (or the bar icon, which runs <code>maprisma --toggle</code>) brings it back where it was, with everything as you left it. A file chooser the app opens does not close it. Settings › <b>Window</b> chooses <b>Automatic: a popup under the bar on Omarchy</b> (the default), <b>A popup under the bar</b> or <b>A normal window</b>; a change applies the next time the window opens. On other desktops the app is a normal window.</p>
+<p>The Flutter app opens as a normal window that the desktop tiles (without the GTK title bar on Omarchy). Settings › <b>Window</b> chooses <b>Automatic: a normal window</b> (the default), <b>A popup under the bar</b> or <b>A normal window</b>; a change applies the next time the window opens. As a popup on Omarchy, it sits as a floating window at the top right under the bar, like the plugins' popups: <kbd>Esc</kbd> on the main page or a click elsewhere closes it, and starting the app again (or the bar icon, which runs <code>maprisma --toggle</code>) brings it back where it was, with everything as you left it. A file chooser the app opens does not close it.</p>
 
 <h2 id="omarchy-data-flutter">Usage figures and corners from Omarchy in the Flutter preview</h2>
 <p>When an agent's details open in the Flutter preview and Omarchy collects that agent's usage (plan, limits and when they reset), the app asks Omarchy for fresh figures in the background if the last ones are older than ten minutes or older than the agent's last sign-in, then shows them; at most once every ten minutes per agent. Settings › <b>Corners</b> sets the corners of the window's cards, dialogs and the map's boxes: <b>Like windows</b> follows Hyprland's window rounding (with the number of pixels shown), <b>Rounded</b> or <b>Square</b>.</p>
@@ -1088,7 +1098,7 @@
 <p>Drag an agent box to a provider, MCP server or skill set, or draw in the opposite direction. Click an agent and then a model of a connected provider to choose that model. Drawing a provider to its own model opens an agent selection; local providers that support loading can also load without choosing an agent. Every configuration edit opens Preview, then Apply, progress and a result with Undo. Cancel writes nothing.</p>
 <p>Select a box to reveal orange connection hooks. Drag a hook to another compatible provider or model, or to empty space to disconnect. A provider’s model hook switches all configured users together, or disconnects them and unloads where supported. Busy runtimes refuse unloading. Online provider lines use the agent’s registered sign-in or sign-out command in a reviewed terminal.</p>
 <p>Hover highlights neighbours. Shift-click adds boxes, with at most one agent selected. Pin keeps a box highlighted. Fold a card with its arrow, drag its header to move it, or use the card menu. Drag a box’s reorder handle or choose Move up / Move down. Layout and pins are saved separately from connections; task cards retain selection and zoom.</p>
-<p>Keyboard users can open Actions on a box, choose Connect or Move connection, and activate the destination box. Disconnect removes the pending connection; Cancel or Esc cancels. Card arrows and movement menus, Pin and reorder menu items provide alternatives to dragging. Open shows existing details and management actions. Agent buttons start in the saved default folder, show or stop an owned console, or offer a reviewed external instance to stop.</p>
+<p>Keyboard users can open Actions on a box, choose Connect or Move connection, and activate the destination box. Disconnect removes the pending connection; Cancel or Esc cancels. Card arrows and movement menus, Pin and reorder menu items provide alternatives to dragging. Details in every card's menu (and the Details symbol on its box) shows existing details and management actions. Agent boxes show their limit battery or today's cost badge and usage box in the title, and compact symbols in the footer: subagents with their count, network traffic with the current in and out rate in its tooltip (opening a network dialog with totals, destinations and programs), usage, Start or Console, a red Stop button only while the agent runs (stopping the app's terminal instance or the external instance), and Details.</p>
 <p>All lights, Agent lights and Lights off control estimated activity. Lights stop when no line is active, the map is hidden, the window loses focus, or reduced motion is enabled. Failed lines open bounded hints with Repair or Disconnect. Undo restores configuration and failed-link metadata; runtime load/unload and sign-in/sign-out actions are not reversed. A partial model operation keeps the configuration backup and offers Undo.</p>
 </section>
 
@@ -1101,7 +1111,7 @@
 <section class="chapter" id="system-map">
 <h1>System Map</h1>
 <h2 id="system-map-start">First use and separate mounts</h2>
-<p>Flutter development preview: switch between AI Map and System Map. Each keeps its zoom and selection. Mount existing data disks before choosing Look at this PC. The bounded search reads local metadata, never runs detected programs and sends nothing. Skip keeps disk search off. Hardware, disks, agents, runtimes, supporting tools and folders appear together. Missing disks remain visible.</p>
+<p>Flutter development preview: switch between AI Map and System Map. Each keeps its zoom and selection; the zoom control sits in the System Map's header row. In a small window the side panel folds away behind the <b>Sidebar</b> button and the map fits its width; in medium and large windows the side panel stays open and the columns adjust to the space. Mount existing data disks before choosing Look at this PC. The bounded search reads local metadata, never runs detected programs and sends nothing. Skip keeps disk search off. Hardware, disks, agents, runtimes, supporting tools and folders appear together. Missing disks remain visible.</p>
 <h2 id="system-map-refresh">Saved map and refresh</h2>
 <p>The private saved map opens immediately. Startup and visits refresh status without repeating the full search or size measurements. Refresh explicitly searches mounted disks and measures folder sizes. After the first search, newly mounted disks are searched once. While this page is visible, mount checks run no faster than every 15 seconds and respect the background interval, Manual-only and focus pause settings. Tools may need an explicitly confirmed version check.</p>
 <p>For a disk that is permanently gone, select its grey node and Forget this disk. Confirmation removes only its saved map entries, not files or settings. Configured folders can appear again on refresh. Runtime discoveries show the launch path (including current) and the resolved build separately. Sizes follow known wrapper targets; unattributable program sizes are hidden. With an explicit settings profile, system-map.json is kept beside settings.json. The default map uses the application cache folder. New durable Undo journals always live in model-moves/ beside settings.json; existing journals in the old default cache location remain readable. Keep legacy journals until their moves are undone.</p>
@@ -1375,8 +1385,8 @@
   <table class="faq">
     <thead><tr><th>Problem</th><th>What to do</th></tr></thead>
     <tbody>
-      <tr><td>The map is cramped or cut off.</td><td>The window is narrower than about 1300 pixels. Make the window wider, or zoom out (<kbd>Ctrl</kbd>+<kbd>−</kbd>).</td></tr>
-      <tr><td>A box I expect is not on the map.</td><td>The map shows only what is set up: check <b>Setup</b> (an add-on switched off, an MCP server no agent uses) and the <b>Show</b> toggles.</td></tr>
+      <tr><td>The map is cramped or cut off.</td><td>Up to 55&nbsp;% of the screen (below 1150 pixels) the map shows <b>Agents</b> and <b>Providers</b>; up to 80&nbsp;% (below 1600 pixels) it adds <b>Models</b>; widen the window or turn on more columns with the buttons above the map, or use <b>Fit to window</b> (<kbd>Ctrl</kbd>+<kbd>0</kbd>).</td></tr>
+      <tr><td>A box I expect is not on the map.</td><td>The map shows only what is set up: check <b>Setup</b> (an add-on switched off, an MCP server no agent uses) and the column filter buttons above the map.</td></tr>
       <tr><td><b>Start here</b> is missing or does nothing.</td><td>Install VTE for GTK&nbsp;4 (<code>vte4</code>), or use <b>Start in terminal</b>.</td></tr>
       <tr><td>A line is dotted red.</td><td>Click it for hints, fix what it says, then <b>Test again</b>. See <a href="#failed">When a connection fails</a>.</td></tr>
       <tr><td>The local LLM does not start with the agent.</td><td>Check Settings › <b>Start local LLMs with their agents</b>, and that the agent is connected on the map. <code>systemctl --user status ai-agents-map-providers</code> shows the watcher.</td></tr>
@@ -1398,8 +1408,8 @@
       <tr><th scope="row"><kbd>F1</kbd></th><td>Help</td></tr>
       <tr><th scope="row"><kbd>Ctrl</kbd>+<kbd>,</kbd></th><td>Settings</td></tr>
       <tr><th scope="row"><kbd>F5</kbd></th><td>Refresh (the map and Setup)</td></tr>
-      <tr><th scope="row"><kbd>Ctrl</kbd>+<kbd>+</kbd> / <kbd>Ctrl</kbd>+<kbd>−</kbd> / <kbd>Ctrl</kbd>+<kbd>0</kbd></th><td>Zoom the map in, out, back to 100&nbsp;%</td></tr>
-      <tr><th scope="row"><kbd>Ctrl</kbd>+scroll</th><td>Zoom the map</td></tr>
+      <tr><th scope="row"><kbd>Ctrl</kbd>+<kbd>+</kbd> / <kbd>Ctrl</kbd>+<kbd>−</kbd> / <kbd>Ctrl</kbd>+<kbd>0</kbd></th><td>Zoom the map in, out, or fit to window</td></tr>
+      <tr><th scope="row">Mouse wheel</th><td>Scroll the map</td></tr>
       <tr><th scope="row"><kbd>Shift</kbd>+click</th><td>Add to or remove from the selection</td></tr>
       <tr><th scope="row"><kbd>Esc</kbd></th><td>Clear the selection; go back from a page</td></tr>
       <tr><th scope="row"><kbd>Backspace</kbd></th><td>Go back from a page</td></tr>

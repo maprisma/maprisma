@@ -5,6 +5,31 @@ class AgentUsage extends StatelessWidget {
   final Map<String, dynamic> info;
   final String Function(String) tr;
 
+  /// Costs beyond the plan: what the agent says, or at least where to look.
+  Widget _extraUsage() {
+    final extra = info['extra_usage'] as Map? ?? const {};
+    final on = extra['on'] as bool?;
+    final url = '${extra['url'] ?? ''}';
+    return ListTile(
+      key: const ValueKey('agent-extra-usage'),
+      leading: on == true
+          ? Icon(Icons.warning_amber, color: Colors.amber.shade700)
+          : null,
+      title: Text(tr('Additional usage')),
+      subtitle: SelectableText(
+        [
+          tr(switch (on) {
+            true => 'On: beyond the plan\'s limits it can cost extra money.',
+            false => 'Off: it stops at the plan\'s limits.',
+            null =>
+              'Not known on this PC. Check with the provider whether it can bill beyond the plan.',
+          }),
+          if (url.isNotEmpty) url,
+        ].join('\n'),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -19,6 +44,7 @@ class AgentUsage extends StatelessWidget {
           title: Text(tr('Plan')),
           subtitle: Text(info['plan'] as String),
         ),
+      if ((info['plan'] as String).isNotEmpty) _extraUsage(),
       if ((info['providers'] as List).isNotEmpty)
         Card(
           child: Padding(
