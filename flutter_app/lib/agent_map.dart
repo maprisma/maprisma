@@ -17,6 +17,7 @@ class AgentMap extends StatelessWidget {
     this.layers,
     this.onLayers,
     this.shownColumns,
+    this.onShowColumn,
     super.key,
     required this.graph,
     required this.onAgent,
@@ -57,6 +58,9 @@ class AgentMap extends StatelessWidget {
 
   final Object? staticState;
   final List<int>? shownColumns;
+
+  /// Show a hidden column: Ask AI moved a request to it.
+  final ValueChanged<int>? onShowColumn;
   final bool smartCards;
   final Set<String>? smartAskColumns;
   final void Function(String step, String key, String name)? onSmartProvider;
@@ -302,15 +306,8 @@ class AgentMap extends StatelessWidget {
         );
         rowCounts[col] = row + 1;
       }
-      const systemSmartKeys = [
-        'providers',
-        'models',
-        'agents',
-        'mcp',
-        'models',
-      ];
       String smartKeyFor(int col) => columns.length == 5
-          ? systemSmartKeys[col]
+          ? _systemSmartKeys[col]
           : mapSmartColumns[col % mapSmartColumns.length].$1;
       return SizedBox(
         width: canvasSize.width,
@@ -483,6 +480,9 @@ class AgentMap extends StatelessWidget {
                     onTask: onSmartTask,
                     onApplied: onSmartApplied,
                     initialPrompt: smartPrompts?[col],
+                    columnNames: columns.length == 5
+                        ? _systemColumnNames
+                        : null,
                     onMoveToColumn: (targetCol, request) =>
                         onSmartMove?.call(col, targetCol, request),
                   ),
@@ -512,10 +512,23 @@ class AgentMap extends StatelessWidget {
       height: height,
       controller: controller,
       onViewChanged: onViewChanged,
+      onShowColumn: onShowColumn,
       buildCanvas: buildCanvas,
     );
   }
 }
+
+/// The Ask AI column behind each System Map column.
+const _systemSmartKeys = ['providers', 'models', 'agents', 'mcp', 'models'];
+
+/// Ask AI's columns by the System Map's names, and the column each moves to.
+const _systemColumnNames = {
+  'providers': 'This PC',
+  'models': 'Folders',
+  'agents': 'Programs',
+  'mcp': 'Tools',
+};
+const _systemColumnOf = {'providers': 0, 'models': 4, 'agents': 2, 'mcp': 3};
 
 class _InteractiveBoard extends StatefulWidget {
   const _InteractiveBoard({
@@ -523,12 +536,14 @@ class _InteractiveBoard extends StatefulWidget {
     required this.height,
     required this.controller,
     required this.onViewChanged,
+    required this.onShowColumn,
     required this.buildCanvas,
   });
   final List<int> shownCols;
   final double height;
   final TransformationController? controller;
   final VoidCallback? onViewChanged;
+  final ValueChanged<int>? onShowColumn;
   final Widget Function({
     required double colWidth,
     required double colGap,
@@ -557,9 +572,12 @@ class _InteractiveBoardState extends State<_InteractiveBoard> {
   }
 
   void _moveSmart(int fromCol, String targetKey, String request) {
-    const keyToSystemCol = {'providers': 0, 'models': 4, 'agents': 2, 'mcp': 3};
-    final targetCol = keyToSystemCol[targetKey] ?? 0;
-    if (!widget.shownCols.contains(targetCol)) return;
+    final targetCol = _systemColumnOf[targetKey];
+    if (targetCol == null) return;
+    if (!widget.shownCols.contains(targetCol)) {
+      if (widget.onShowColumn == null) return;
+      widget.onShowColumn!(targetCol);
+    }
     setState(() {
       _smartPrompts[targetCol] = request;
       _openSmartColumn = targetCol;

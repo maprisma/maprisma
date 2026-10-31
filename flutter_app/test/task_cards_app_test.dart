@@ -1461,6 +1461,25 @@ void main() {
     await unmountApp(tester);
   });
 
+  testWidgets('AI Map leads back from the agent list on Help', (tester) async {
+    await mountApp(tester);
+    await settleService(tester);
+    final map = find.byKey(const ValueKey('details-agent:test'));
+    expect(map, findsOneWidget);
+    await openFromHelp(tester, 'Agents');
+    expect(find.text('Select an agent'), findsOneWidget);
+    expect(map, findsNothing);
+    await tester.tap(find.text('AI Map'));
+    await settleService(tester);
+    expect(find.text('Select an agent'), findsNothing);
+    expect(map, findsOneWidget);
+    // Tapping the map it already shows changes nothing.
+    await tester.tap(find.text('AI Map'));
+    await settleService(tester);
+    expect(map, findsOneWidget);
+    await unmountApp(tester);
+  });
+
   testWidgets('Back, Esc and Backspace lead from details to the map', (
     tester,
   ) async {

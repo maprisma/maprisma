@@ -437,4 +437,105 @@ void main() {
       expect(find.text('uv'), findsOneWidget);
     },
   );
+
+  testWidgets('Move to opens a hidden System Map column under its own name', (
+    tester,
+  ) async {
+    final asks = <String>[];
+    final controller = TransformationController();
+    addTearDown(controller.dispose);
+    tester.view.physicalSize = const Size(1000, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SystemMapView(
+            data: const {
+              'nodes': [
+                {
+                  'id': 'pc',
+                  'label': 'This PC',
+                  'detail': 'Linux',
+                  'column': 0,
+                  'kind': 'pc',
+                },
+              ],
+              'edges': [],
+              'limited': false,
+              'search_done': false,
+            },
+            backend: _RedirectBackend(asks),
+            tr: (k) => k,
+            busy: false,
+            onRefresh: (_) async {},
+            onOperation: (_, _, _) async => null,
+            onSaved: (_) async {},
+            onSession: (_) {},
+            onShowAI: (_) {},
+            controller: controller,
+            smartHelpers: const [
+              {'command': 'claude', 'name': 'Claude Code', 'local': false},
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(find.byKey(const ValueKey('system-smart-card-2')), findsNothing);
+
+    final card = find.byKey(const ValueKey('system-smart-card-0'));
+    await tester.tap(card);
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.descendant(of: card, matching: find.byType(TextField)),
+      'install codex',
+    );
+    await tester.tap(find.text('Ask'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Move to Programs'));
+    await tester.pumpAndSettle();
+
+    final target = find.byKey(const ValueKey('system-smart-card-2'));
+    expect(target, findsOneWidget);
+    expect(
+      find.descendant(of: target, matching: find.text('install codex')),
+      findsOneWidget,
+    );
+    expect(asks, ['install codex']); // moved, not asked again
+  });
+}
+
+/// Ask AI answers that another column does this.
+class _RedirectBackend extends MapBackend {
+  _RedirectBackend(this.asks);
+  final List<String> asks;
+  @override
+  Future<Map<String, dynamic>> call(
+    String method, [
+    Map<String, dynamic> params = const {},
+  ]) async {
+    if (method == 'map.smart_ask') {
+      asks.add(params['request'] as String);
+      return {'task': 't'};
+    }
+    if (method == 'tasks.status') {
+      return {
+        'state': 'done',
+        'result': {
+          'helper': 'Claude Code',
+          'local': false,
+          'status': 'redirect',
+          'instead': {
+            'hint': 'Programs do this.',
+            'column': 'agents',
+            'request': 'install codex',
+          },
+        },
+      };
+    }
+    return super.call(method, params);
+  }
 }

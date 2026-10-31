@@ -4080,10 +4080,19 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                     ),
                     ButtonSegment(value: true, label: Text(tr('System Map'))),
                   ],
-                  selected: {_showSystemMap},
+                  // Neither on a page or the agent list, so AI Map can be
+                  // tapped to go back: a selected segment takes no tap.
+                  emptySelectionAllowed: true,
+                  selected: {
+                    if (_showSystemMap)
+                      true
+                    else if (_showMap && !_pageOpen && _visibleTerminal == null)
+                      false,
+                  },
                   onSelectionChanged: _navigationBlocked
                       ? null
                       : (choice) {
+                          if (choice.isEmpty) return; // the current map again
                           if (choice.single) {
                             _openSystem();
                           } else {

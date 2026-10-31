@@ -763,6 +763,8 @@ class _SystemMapViewState extends State<SystemMapView> {
                       child: AgentMap(
                         graph: graph,
                         shownColumns: shownColumns,
+                        onShowColumn: (col) =>
+                            _toggleColumn(col, true, viewSize),
                         groups: MapGroup.fromGraph(graph, systemMapColumns),
                         onExpandGroup: (col) =>
                             setState(() => _focusColumn = col),

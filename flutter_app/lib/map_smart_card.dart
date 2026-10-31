@@ -178,6 +178,7 @@ class MapSmartCard extends StatefulWidget {
     this.client,
     this.initialPrompt,
     this.onMoveToColumn,
+    this.columnNames,
     this.onApplied,
     this.width = 266,
   });
@@ -200,6 +201,9 @@ class MapSmartCard extends StatefulWidget {
   final CoreClient? client;
   final String? initialPrompt;
   final void Function(String column, String request)? onMoveToColumn;
+
+  /// What this map calls a column, when not the AI Map's name: for Move to.
+  final Map<String, String>? columnNames;
   final ValueChanged<Map<String, dynamic>>? onApplied;
   final double width;
 
@@ -1037,10 +1041,9 @@ class _MapSmartCardState extends State<MapSmartCard> {
         (_reply['instead'] as Map?)?.cast<String, dynamic>() ?? const {};
     final hint = '${instead['hint'] ?? ''}';
     final targetCol = instead['column'] as String?;
-    final targetTitle = mapSmartColumns
-        .where((c) => c.$1 == targetCol)
-        .firstOrNull
-        ?.$2;
+    final targetTitle =
+        widget.columnNames?[targetCol] ??
+        mapSmartColumns.where((c) => c.$1 == targetCol).firstOrNull?.$2;
     final targetReq = instead['request'] as String?;
     return Column(
       mainAxisSize: MainAxisSize.min,
