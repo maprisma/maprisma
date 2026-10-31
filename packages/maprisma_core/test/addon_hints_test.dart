@@ -73,9 +73,11 @@ void main() {
     );
     expect([for (final l in lines) l['kind']], ['off', 'new', 'updates']);
     expect(lines[0]['text'], 'Amp is on this PC but not on the map');
+    expect(lines[0]['column'], 'agents');
     expect(lines[1]['text'], 'Goose, Jan are on this PC but not on the map');
     expect(lines[1]['ids'], ['agent-goose', 'llm-jan']);
-    expect(lines[1]['column'], 1);
+    expect(lines[1]['column'], 'agents');
+    expect(lines[2]['column'], 'agents');
     expect(lines[2]['text'], 'Add-on updates ready: On');
     expect((lines[2]['updates'] as List).single, {
       'id': 'agent-on',

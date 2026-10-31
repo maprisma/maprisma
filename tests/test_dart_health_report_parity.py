@@ -140,18 +140,29 @@ class DartHealthReportParityTest(unittest.TestCase):
         for python, dart in results:
             for py, da in zip(python, dart):
                 self.assertEqual(py, da)
+                for area in da['areas']:
+                    for f in area['findings']:
+                        self.assertIn(f['column'], {'mcp', 'agents', 'providers', 'models'})
+                for use in da['uses']:
+                    for s in use['steps']:
+                        self.assertIn(s['column'], {'mcp', 'agents', 'providers', 'models'})
         full = results[0][0][0]
-        titles = [f['title'] for a in full['areas'] for f in a['findings']]
-        self.assertIn('AMD Radeon RX 7900 XT with 24 GB video memory', titles)
-        self.assertIn('Little free space for models: 15 GB', titles)
-        self.assertIn('Claude Code: Not signed in', titles)
-        self.assertIn('2 model folders no agent uses', titles)
-        self.assertIn('A connection does not work: Pi → jan', titles)
+        by_title = {f['title']: f['column'] for a in full['areas'] for f in a['findings']}
+        self.assertEqual(by_title['AMD Radeon RX 7900 XT with 24 GB video memory'], 'models')
+        self.assertEqual(by_title['Little free space for models: 15 GB'], 'models')
+        self.assertEqual(by_title['Claude Code: Not signed in'], 'agents')
+        self.assertEqual(by_title['Ollama: No agent connected'], 'providers')
+        self.assertEqual(by_title['llama.cpp runs, but no agent uses it now'], 'providers')
+        self.assertEqual(by_title['2 model folders no agent uses'], 'models')
+        self.assertEqual(by_title["1 model is in more than one local LLM's folder"], 'models')
+        self.assertEqual(by_title['A connection does not work: Pi → jan'], 'providers')
+        self.assertEqual(by_title['A connection does not work: ghost → x'], 'mcp')
         self.assertEqual({u['key']: u['level'] for u in full['uses']}['images'], 'ready')
         empty = results[0][0][1]
         self.assertEqual(empty['level'], 'warn')             # no agent installed
         self.assertTrue(empty['summary'].startswith('1 thing to fix'))
         self.assertEqual([f['action'] for f in empty['areas'][2]['findings']], [['install', 'llamacpp']])
+        self.assertEqual([f['column'] for f in empty['areas'][2]['findings']], ['providers'])
 
 
 if __name__ == '__main__':

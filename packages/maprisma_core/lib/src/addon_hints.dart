@@ -65,7 +65,7 @@ List<Map<String, dynamic>> addonHints(
               .replaceAll('{0}', _listed(names, 1))
               .replaceAll('{1}', _listed(names, 3)),
       'ids': [for (final r in e.value) r['id']],
-      'column': e.value.first['kind'] == 'agent' ? 1 : 2,
+      'column': e.value.first['kind'] == 'agent' ? 'agents' : 'providers',
     });
   }
   final updates = [
@@ -75,6 +75,7 @@ List<Map<String, dynamic>> addonHints(
   if (updates.isNotEmpty) {
     lines.add({
       'kind': 'updates',
+      'column': updates.first['kind'] == 'provider' ? 'providers' : 'agents',
       'text': tr('Add-on updates ready: {0}').replaceAll(
         '{0}',
         _listed([for (final r in updates) '${r['name']}'], 3),

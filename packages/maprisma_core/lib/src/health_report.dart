@@ -179,7 +179,14 @@ Map<String, dynamic> finding(
   String title, [
   String text = '',
   List<String> action = const [],
-]) => {'level': level, 'title': title, 'text': text, 'action': action};
+  String column = 'agents',
+]) => {
+  'level': level,
+  'title': title,
+  'text': text,
+  'action': action,
+  'column': column,
+};
 
 final class HealthReport {
   HealthReport({
@@ -256,6 +263,8 @@ final class HealthReport {
           tr(
             'Local models run on the processor: fine for small ones (up to about 4 GB), slow for bigger ones. Online models (Claude, Codex, Gemini) are not affected.',
           ),
+          const [],
+          'models',
         ),
       );
     } else if (vram < 8 * gib) {
@@ -266,6 +275,8 @@ final class HealthReport {
           f('Good for small local models (model files up to about {0}).', [
             fitsText(vram),
           ]),
+          const [],
+          'models',
         ),
       );
     } else {
@@ -276,6 +287,8 @@ final class HealthReport {
           f('Local models with files up to about {0} run fully on the card.', [
             fitsText(vram),
           ]),
+          const [],
+          'models',
         ),
       );
     }
@@ -288,8 +301,16 @@ final class HealthReport {
                 tr(
                   'Agents, a browser and a local model together get tight; close what you do not need.',
                 ),
+                const [],
+                'models',
               )
-            : finding('ok', f('{0} memory', [gbText(ram)])),
+            : finding(
+                'ok',
+                f('{0} memory', [gbText(ram)]),
+                '',
+                const [],
+                'models',
+              ),
       );
     }
     final free = (pc['free'] as Map? ?? const {}).cast<String, dynamic>();
@@ -305,6 +326,7 @@ final class HealthReport {
               where,
             ]),
             ['reorganize'],
+            'models',
           ),
         );
       } else if (bytes < 60 * gib) {
@@ -313,11 +335,19 @@ final class HealthReport {
             'hint',
             f('{0} free for models', [gbText(bytes)]),
             f('In {0}: room for a few more models.', [where]),
+            const [],
+            'models',
           ),
         );
       } else {
         pcArea.add(
-          finding('ok', f('{0} free for models', [gbText(bytes)]), where),
+          finding(
+            'ok',
+            f('{0} free for models', [gbText(bytes)]),
+            where,
+            const [],
+            'models',
+          ),
         );
       }
     }
@@ -411,6 +441,7 @@ final class HealthReport {
             'Optional: a local LLM (llama.cpp or Ollama) runs models on this PC, private and without costs. Right-click llama.cpp on the map → Install.',
           ),
           ['install', firstLocalLlm()],
+          'providers',
         ),
       );
     }
@@ -430,6 +461,7 @@ final class HealthReport {
                 ? '${first['step']}'
                 : '${first['detail']}',
             ['runtime', key],
+            'providers',
           ),
         );
       } else if (rtModels.isEmpty) {
@@ -444,6 +476,7 @@ final class HealthReport {
                   )
                 : '',
             ['models', key, ''],
+            'models',
           ),
         );
       } else {
@@ -453,6 +486,8 @@ final class HealthReport {
             name,
             n('1 model', '{0} models', rtModels.length) +
                 (rt['running'] == true ? ' · ${tr('running')}' : ''),
+            const [],
+            'providers',
           ),
         );
       }
@@ -467,6 +502,7 @@ final class HealthReport {
               'It may hold video memory. With “Start local LLMs with their agents” on, it starts and stops with them.',
             ),
             ['runtime', key],
+            'providers',
           ),
         );
       }
@@ -484,6 +520,7 @@ final class HealthReport {
             ]),
             '${hint['text']}',
             ['runtime', '${need['key']}'],
+            'providers',
           ),
         );
       }
@@ -514,6 +551,7 @@ final class HealthReport {
             idle.map((x) => x.replaceFirst(home, '~')).join(', '),
           ]),
           ['reorganize'],
+          'models',
         ),
       );
     }
@@ -546,6 +584,7 @@ final class HealthReport {
             'Reorganize puts them into one shared folder (no second copy, Undo possible).',
           ),
           ['reorganize'],
+          'models',
         ),
       );
     }
@@ -565,6 +604,10 @@ final class HealthReport {
           target = at < 0 ? '' : key.substring(at + 1);
       String last(String x) =>
           x.contains(':') ? x.substring(x.indexOf(':') + 1) : x;
+      final linkCol =
+          target.startsWith('runtime:') || target.startsWith('provider:')
+          ? 'providers'
+          : 'mcp';
       tools.add(
         finding(
           'warn',
@@ -574,6 +617,7 @@ final class HealthReport {
           ]),
           tr('Click its dotted red line on the map for what to do.'),
           ['link', source, target],
+          linkCol,
         ),
       );
     }
@@ -592,6 +636,8 @@ final class HealthReport {
             ]..sort(pyCompare)).join(', '),
             200,
           ),
+          const [],
+          'mcp',
         ),
       );
     } else {
@@ -603,6 +649,7 @@ final class HealthReport {
             'MCP servers give agents tools: files, a browser, your apps. Add MCP server finds them on this PC and on the web.',
           ),
           ['addmcp', ''],
+          'mcp',
         ),
       );
     }
@@ -618,6 +665,8 @@ final class HealthReport {
           f('{0}: draw a line to an agent to use it.', [
             _cut((unused..sort(pyCompare)).join(', '), 200),
           ]),
+          const [],
+          'mcp',
         ),
       );
     }
@@ -632,6 +681,8 @@ final class HealthReport {
             }.toList()..sort(pyCompare)).join(', '),
             200,
           ),
+          const [],
+          'mcp',
         ),
       );
     } else {
@@ -643,6 +694,7 @@ final class HealthReport {
             'Skills teach agents a task step by step (a PDF, a release, your house style).',
           ),
           ['addskills'],
+          'mcp',
         ),
       );
     }
@@ -710,6 +762,7 @@ final class HealthReport {
             'A small local model (2–4 GB) answers simple questions without internet or costs.',
           ),
           ['install', firstLocalLlm()],
+          'providers',
         ),
       );
     }
@@ -747,6 +800,7 @@ final class HealthReport {
             [fitsText(vram)],
           ),
           ['models', '${rt['key']}', 'coder'],
+          'models',
         ),
       );
     }
@@ -757,6 +811,7 @@ final class HealthReport {
           tr('Add skills'),
           tr('Ready-made workflows (tests, reviews, releases).'),
           ['addskills'],
+          'mcp',
         ),
       );
     }
@@ -784,6 +839,7 @@ final class HealthReport {
             'An MCP server for images lets agents edit pictures: Add MCP server, search “image”.',
           ),
           ['addmcp', 'image'],
+          'mcp',
         ),
       );
     }
@@ -796,6 +852,7 @@ final class HealthReport {
             'A vision model (names with VL, or Gemma) lets local agents read screenshots and photos.',
           ),
           ['models', '${rts.first['key']}', 'vl'],
+          'models',
         ),
       );
     }
@@ -824,6 +881,7 @@ final class HealthReport {
           rts.isNotEmpty
               ? ['models', '${rts.first['key']}', 'whisper']
               : const [],
+          'models',
         ),
       );
     }
@@ -849,6 +907,7 @@ final class HealthReport {
             'Agents with online models search the web themselves; local ones need a search or browser MCP server.',
           ),
           ['addmcp', 'search'],
+          'mcp',
         ),
       );
     } else if (webTools.isEmpty && localAgents.isNotEmpty) {
@@ -860,6 +919,7 @@ final class HealthReport {
             'A search or browser MCP server lets agents on local models look things up too.',
           ),
           ['addmcp', 'search'],
+          'mcp',
         ),
       );
     }

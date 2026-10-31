@@ -446,6 +446,7 @@ final class CoreService {
           for (final u in open)
             {
               ...mcp_updates.foundJson(u),
+              'column': 'mcp',
               'on_pc': mcp_updates.onPc(u, home, images),
               'text': i18n
                   .text(
@@ -944,6 +945,7 @@ final class CoreService {
           if (newMcp.isNotEmpty || newSkills.isNotEmpty)
             {
               'kind': 'found',
+              'column': 'mcp',
               'text': i18n
                   .text('New on this PC: {0}')
                   .replaceAll(
@@ -961,6 +963,7 @@ final class CoreService {
           if (versions.isNotEmpty)
             {
               'kind': 'versions',
+              'column': 'mcp',
               'text': i18n
                   .text(
                     'New version found: {0} · Add MCP server › Look inside… to use it',
@@ -2713,9 +2716,12 @@ final class CoreService {
         (result) {
           lastUpdates = [
             for (final u in result['updates'] as List)
-              Map<String, dynamic>.from(u as Map),
+              {
+                ...Map<String, dynamic>.from(u as Map),
+                'column': u['kind'] == 'agent' ? 'agents' : 'providers',
+              },
           ];
-          return result;
+          return {'updates': lastUpdates};
         },
       );
     }
