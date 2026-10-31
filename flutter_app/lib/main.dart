@@ -4591,6 +4591,19 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                                             smartHelpers: _smartHelpers,
                                             client: _maybeClient,
                                             onSmartApplied: (result) {
+                                              if (result['session'] != null) {
+                                                final terminal = AgentTerminal(
+                                                  _backend!,
+                                                  result['session'] as String,
+                                                  result['command'] as String,
+                                                  result['path'] as String,
+                                                  tr: tr,
+                                                );
+                                                setState(() {
+                                                  _terminals.add(terminal);
+                                                  _visibleTerminal = terminal;
+                                                });
+                                              }
                                               if (result['move_undo']
                                                   is String) {
                                                 _moveUndo =

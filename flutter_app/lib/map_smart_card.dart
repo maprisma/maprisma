@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'app_theme.dart' show corners;
 import 'connections_view.dart' show ConnectionReview;
+import 'agent_action_dialog.dart';
 import 'model_removal_dialog.dart';
 import 'core_client.g.dart';
 import 'providers_view.dart' show modelSize;
@@ -630,6 +631,13 @@ class _MapSmartCardState extends State<MapSmartCard> {
         candidate: '${candidate['id']}',
       );
       if (!mounted || token != _runToken) return;
+      if (candidate['kind'] == 'agent_action') {
+        // It runs in a terminal, not as a task: the app shows that terminal.
+        widget.onApplied?.call(started);
+        setState(() => _step = _SmartStep.idle);
+        _close();
+        return;
+      }
       final taskId = started['task'] as String?;
       if (taskId == null || taskId.isEmpty) {
         setState(() {
@@ -1405,7 +1413,15 @@ class _MapSmartCardState extends State<MapSmartCard> {
                 if (_step == _SmartStep.review)
                   SizedBox(
                     height: 240,
-                    child: _activeCandidate?['kind'] == 'model_move'
+                    child: _activeCandidate?['kind'] == 'agent_action'
+                        ? AgentActionReview(
+                            plan: _reviewData,
+                            tr: widget.tr,
+                            onConfirm: _confirmReview,
+                            onCancel: () =>
+                                setState(() => _step = _SmartStep.proposal),
+                          )
+                        : _activeCandidate?['kind'] == 'model_move'
                         ? SmartMoveReview(
                             plan: _reviewData,
                             title: '${_activeCandidate?['title'] ?? ''}',

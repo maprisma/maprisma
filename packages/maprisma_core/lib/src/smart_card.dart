@@ -182,6 +182,80 @@ String smartMcpPicksPrompt(Map facts, List<Map> servers) {
       'An empty "picks" list is right when none fits.';
 }
 
+/// The Agents column: one fixed step, nothing to search.
+String smartAgentsPrompt(Map facts) {
+  return '$_rules ${_language(facts)}\n\n'
+      'Column: Agents. Agents and what can be done with each: '
+      '${jsonEncode(facts['agents'])}.\n'
+      '${_request(facts)}\n'
+      'Choose one:\n'
+      '{"action": "install", "agent": "<command>"}\n'
+      '{"action": "update", "agent": "<command>"}\n'
+      '{"action": "remove", "agent": "<command>"}\n'
+      'only when that action is true for that agent above.\n'
+      '{"action": "clarify", "question": "<one short question>", "choices": ["<2 to 4 short answers>"]}\n'
+      'when you cannot tell which agent is meant.\n'
+      '{"action": "redirect", "hint": "<what works instead, one sentence>", "column": "<mcp, providers or models, or null>", "request": "<the request for that column, or null>"}\n'
+      'for anything else: this column cannot manage models, providers, MCP servers or skills, and cannot run an agent or change its settings.';
+}
+
+/// The Agents column: one answer of the agent.
+Future<Map<String, dynamic>> smartAgents(Map facts, SmartAgent agent) async {
+  final agents = [for (final a in facts['agents'] as List) a as Map];
+  final answer = firstJson(await agent(smartAgentsPrompt(facts)), 'action');
+  final action = answer['action'];
+  if (action == 'clarify' || action == 'redirect') {
+    final first = smartChecked(answer, const {});
+    if (action == 'clarify') {
+      return {
+        'status': 'clarify',
+        'question': first['question'],
+        'choices': first['choices'],
+      };
+    }
+    return {
+      'status': 'redirect',
+      'instead': {
+        'hint': first['hint'],
+        'column': answer['column'] == 'models' ? 'models' : first['column'],
+        'request': first['request'],
+      },
+    };
+  }
+  const names = {
+    'install': 'install',
+    'update': 'update',
+    'remove': 'uninstall',
+  };
+  final step = names[action];
+  final found = agents
+      .where((a) => a['command'] == answer['agent'] && a[action] == true)
+      .firstOrNull;
+  if (step == null || found == null) {
+    throw const FormatException('not possible for this agent');
+  }
+  return {
+    'status': 'proposal',
+    'summary': '',
+    'candidates': [
+      {
+        'id': 'c1',
+        'kind': 'agent_action',
+        'title': _line(found['name']),
+        'subtitle': action,
+        'reason': '',
+        'fit': 'ok',
+        'size': 0,
+        'action': {
+          'kind': 'agent_action',
+          'command': found['command'],
+          'step': step,
+        },
+      },
+    ],
+  };
+}
+
 /// The first answer in the MCP column, checked against what is really here.
 Map<String, dynamic> smartMcpChecked(
   Map answer,
@@ -777,6 +851,20 @@ Future<Map<String, dynamic>> smartAsk(
         facts,
         smartAgent(data, adapter, env, home, plugin),
         mcpSearch ?? (_) async => const [],
+      );
+      return {...answer, ...found};
+    } on Object catch (error) {
+      return {...answer, 'status': 'error', 'summary': _line(errorText(error))};
+    }
+  }
+  if (column == 'agents') {
+    if (adapter == null) {
+      return {...answer, 'status': 'error', 'summary': smartNoHelper};
+    }
+    try {
+      final found = await smartAgents(
+        facts,
+        smartAgent(data, adapter, env, home, plugin),
       );
       return {...answer, ...found};
     } on Object catch (error) {

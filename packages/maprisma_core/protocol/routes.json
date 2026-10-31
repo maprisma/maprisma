@@ -982,7 +982,7 @@
   "map.smart_review": {
    "area": "map",
    "kind": "read",
-   "note": "The facts for the review of one candidate; for a model removal the preview of models.remove_preview; for a folder move a task whose result is the plan.",
+   "note": "The facts for the review of one candidate; for a model removal or an agent action its normal preview; for a folder move a task whose result is the plan.",
    "params": {
     "candidate": "string",
     "proposal": "string"
@@ -999,7 +999,7 @@
   "map.smart_run": {
    "area": "map",
    "kind": "change",
-   "note": "After the user's OK: starts it, once. A candidate that is too large is refused; a removal needs its review first.",
+   "note": "After the user's OK: starts it, once. A candidate that is too large is refused; a removal, a folder move or an agent action needs its review first. An agent action answers like agents.action_apply.",
    "params": {
     "candidate": "string",
     "proposal": "string"

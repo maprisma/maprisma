@@ -386,9 +386,69 @@ void main() {
     expect(smartModelsPrompt(base), contains('"move"'));
   });
 
+  group('the Agents column', () {
+    final facts = {
+      'request': 'update codex',
+      'agents': [
+        {
+          'command': 'codex',
+          'name': 'Codex',
+          'install': false,
+          'update': true,
+          'remove': true,
+        },
+        {
+          'command': 'amp',
+          'name': 'Amp',
+          'install': true,
+          'update': false,
+          'remove': false,
+        },
+      ],
+    };
+    Future<Map<String, dynamic>> ask(String reply) =>
+        smartAgents(facts, answers([reply], []));
+
+    test('an action the agent offers passes, kept for the core', () async {
+      final found = await ask('{"action": "update", "agent": "codex"}');
+      final candidate = (found['candidates'] as List).single as Map;
+      expect(candidate['kind'], 'agent_action');
+      expect(candidate['action'], {
+        'kind': 'agent_action',
+        'command': 'codex',
+        'step': 'update',
+      });
+      final removal = await ask('{"action": "remove", "agent": "codex"}');
+      expect(
+        (((removal['candidates'] as List).single as Map)['action']
+            as Map)['step'],
+        'uninstall',
+      );
+    });
+
+    test('anything else is refused', () async {
+      for (final reply in [
+        '{"action": "update", "agent": "amp"}',
+        '{"action": "install", "agent": "codex"}',
+        '{"action": "remove", "agent": "nobody"}',
+        '{"action": "run", "agent": "codex"}',
+      ]) {
+        await expectLater(ask(reply), throwsFormatException);
+      }
+    });
+
+    test('a request of another column is sent back', () async {
+      final found = await ask(
+        '{"action": "redirect", "hint": "Models column.", "column": "models", "request": "x"}',
+      );
+      expect(found['status'], 'redirect');
+      expect((found['instead'] as Map)['column'], 'models');
+    });
+  });
+
   test('a column not built yet asks no agent', () async {
     final result = await smartAsk(
-      {'column': 'agents', 'command': 'claude'},
+      {'column': 'providers', 'command': 'claude'},
       null,
       const {},
       '/nowhere',

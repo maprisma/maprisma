@@ -2887,6 +2887,22 @@ final class CoreService {
           'answer': ?answer,
           'language': i18n.language,
           'settings_path': identity.settingsPath,
+          if (column == 'agents')
+            'agents': [
+              for (final a in agents)
+                () {
+                  final can = reads.details.actions(a);
+                  return {
+                    'command': a.command,
+                    'name': a.name,
+                    'installed': a.installed,
+                    'version': a.version,
+                    'install': !a.installed && can['install'] == true,
+                    'update': can['update'] == true,
+                    'remove': can['uninstall'] == true,
+                  };
+                }(),
+            ],
           if (column == 'models') ..._moveFacts(),
           if (column == 'mcp')
             ...() {
@@ -2952,6 +2968,21 @@ final class CoreService {
     }
     final candidate = smartProposals.candidate(params);
     final action = candidate['action'] as Map;
+    if (action['kind'] == 'agent_action') {
+      if (method == 'map.smart_review') {
+        final review = dispatch('agents.action_preview', {
+          'command': action['command'],
+          'action': action['step'],
+        });
+        candidate['preview'] = review['preview'];
+        return review;
+      }
+      final preview = candidate.remove('preview');
+      if (method != 'map.smart_run' || preview == null) {
+        throw const FormatException('Review it first');
+      }
+      return dispatch('agents.action_apply', {'preview': preview});
+    }
     if (action['kind'] == 'model_remove') {
       if (method == 'map.smart_review') {
         final review = dispatch('models.remove_preview', {

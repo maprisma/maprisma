@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:maprisma/agent_action_dialog.dart';
 import 'package:maprisma/agent_map.dart';
 import 'package:maprisma/agent_usage.dart';
 import 'package:maprisma/backend.dart';
@@ -101,6 +102,89 @@ Future<void> mount(
 }
 
 void main() {
+  testWidgets('an agent action: normal review, then the terminal result', (
+    tester,
+  ) async {
+    final applied = <Map<String, dynamic>>[];
+    var closed = false;
+    final client = CoreClient(
+      _FakeSmartTransport((method, params) async {
+        if (method == 'map.smart_ask') return {'task': 'ask'};
+        if (method == 'map.smart_review') {
+          return {
+            'preview': 'p1',
+            'runnable': true,
+            'action': 'update',
+            'name': 'Codex',
+            'commands': const ['codex update'],
+            'data': const [],
+            'note': '',
+            'url': '',
+          };
+        }
+        if (method == 'map.smart_run') {
+          return {'session': 's1', 'command': 'codex', 'path': '/x'};
+        }
+        return {
+          'state': 'done',
+          'result': {
+            'status': 'proposal',
+            'proposal': 'p',
+            'candidates': [
+              {
+                'id': 'c1',
+                'kind': 'agent_action',
+                'title': 'Codex',
+                'subtitle': 'update',
+                'fit': 'ok',
+                'size': 0,
+              },
+            ],
+          },
+        };
+      }),
+    );
+    tester.view.physicalSize = const Size(500, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MapSmartCard(
+            column: 'agents',
+            title: 'Agents',
+            open: true,
+            enabled: true,
+            onToggle: () => closed = true,
+            tr: (s) => s,
+            client: client,
+            onApplied: applied.add,
+            helpers: const [
+              {'command': 'claude', 'name': 'Claude Code', 'local': false},
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.enterText(find.byType(TextField), 'update codex');
+    await tester.tap(find.widgetWithText(FilledButton, 'Ask'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.byKey(const ValueKey('smart-review-c1')));
+    await tester.pump();
+    await tester.pump();
+    final review = tester.widget<AgentActionReview>(
+      find.byType(AgentActionReview),
+    );
+    review.onConfirm();
+    await tester.pump();
+    await tester.pump();
+    expect(applied.single['session'], 's1');
+    expect(closed, isTrue);
+  });
+
   testWidgets('a folder move: preview task, review, run, then closed', (
     tester,
   ) async {
