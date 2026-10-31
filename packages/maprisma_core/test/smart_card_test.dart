@@ -410,7 +410,7 @@ void main() {
         smartAgents(facts, answers([reply], []));
 
     test('an action the agent offers passes, kept for the core', () async {
-      final found = await ask('{"action": "update", "agent": "codex"}');
+      final found = await ask('{"action": "update", "agents": ["codex"]}');
       final candidate = (found['candidates'] as List).single as Map;
       expect(candidate['kind'], 'agent_action');
       expect(candidate['action'], {
@@ -418,7 +418,7 @@ void main() {
         'command': 'codex',
         'step': 'update',
       });
-      final removal = await ask('{"action": "remove", "agent": "codex"}');
+      final removal = await ask('{"action": "remove", "agents": ["codex"]}');
       expect(
         (((removal['candidates'] as List).single as Map)['action']
             as Map)['step'],
@@ -426,12 +426,29 @@ void main() {
       );
     });
 
+    test('one request can name several, each its own candidate', () async {
+      final both = {
+        ...facts,
+        'agents': [
+          for (final a in facts['agents'] as List)
+            {...a as Map, 'update': true},
+        ],
+      };
+      final found = await smartAgents(
+        both,
+        answers([
+          '{"action": "update", "agents": ["codex", "amp", "nobody"]}',
+        ], []),
+      );
+      expect(found['candidates'], hasLength(2));
+    });
+
     test('anything else is refused', () async {
       for (final reply in [
-        '{"action": "update", "agent": "amp"}',
-        '{"action": "install", "agent": "codex"}',
-        '{"action": "remove", "agent": "nobody"}',
-        '{"action": "run", "agent": "codex"}',
+        '{"action": "update", "agents": ["amp"]}',
+        '{"action": "install", "agents": ["codex"]}',
+        '{"action": "remove", "agents": ["nobody"]}',
+        '{"action": "run", "agents": ["codex"]}',
       ]) {
         await expectLater(ask(reply), throwsFormatException);
       }

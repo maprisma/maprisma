@@ -615,6 +615,23 @@ class _MapSmartCardState extends State<MapSmartCard> {
     }
   }
 
+  /// The others of the proposal stay to choose, one by one.
+  void _nextOrClose(Map<String, dynamic> candidate) {
+    final left = [
+      for (final c in _reply['candidates'] as List? ?? const [])
+        if ((c as Map)['id'] != candidate['id']) c,
+    ];
+    if (left.isEmpty) {
+      setState(() => _step = _SmartStep.idle);
+      _close();
+      return;
+    }
+    setState(() {
+      _reply = {..._reply, 'candidates': left};
+      _step = _SmartStep.proposal;
+    });
+  }
+
   Future<void> _confirmReview() async {
     final client = widget.client;
     final proposal = _activeProposal;
@@ -638,8 +655,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
       if (candidate['kind'] == 'agent_action') {
         // It runs in a terminal, not as a task: the app shows that terminal.
         widget.onApplied?.call(started);
-        setState(() => _step = _SmartStep.idle);
-        _close();
+        _nextOrClose(candidate);
         return;
       }
       final taskId = started['task'] as String?;
@@ -669,20 +685,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
           }
           widget.onApplied?.call(result);
           if (candidate['kind'] != null) {
-            // The others of the proposal stay to choose, one by one.
-            final left = [
-              for (final c in _reply['candidates'] as List? ?? const [])
-                if ((c as Map)['id'] != candidate['id']) c,
-            ];
-            if (left.isNotEmpty) {
-              setState(() {
-                _reply = {..._reply, 'candidates': left};
-                _step = _SmartStep.proposal;
-              });
-              return;
-            }
-            setState(() => _step = _SmartStep.idle);
-            _close();
+            _nextOrClose(candidate);
             return;
           }
           setState(() => _step = _SmartStep.done);

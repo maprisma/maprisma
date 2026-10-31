@@ -189,10 +189,10 @@ String smartAgentsPrompt(Map facts) {
       '${jsonEncode(facts['agents'])}.\n'
       '${_request(facts)}\n'
       'Choose one:\n'
-      '{"action": "install", "agent": "<command>"}\n'
-      '{"action": "update", "agent": "<command>"}\n'
-      '{"action": "remove", "agent": "<command>"}\n'
-      'only when that action is true for that agent above.\n'
+      '{"action": "install", "agents": ["<commands>"]}\n'
+      '{"action": "update", "agents": ["<commands>"]}\n'
+      '{"action": "remove", "agents": ["<commands>"]}\n'
+      'naming only agents for which that action is true above.\n'
       '{"action": "clarify", "question": "<one short question>", "choices": ["<2 to 4 short answers>"]}\n'
       'when you cannot tell which agent is meant.\n'
       '{"action": "redirect", "hint": "<what works instead, one sentence>", "column": "<mcp, providers or models, or null>", "request": "<the request for that column, or null>"}\n'
@@ -228,30 +228,34 @@ Future<Map<String, dynamic>> smartAgents(Map facts, SmartAgent agent) async {
     'remove': 'uninstall',
   };
   final step = names[action];
-  final found = agents
-      .where((a) => a['command'] == answer['agent'] && a[action] == true)
-      .firstOrNull;
-  if (step == null || found == null) {
+  final raw = answer['agents'];
+  final named = raw is List ? raw : const [];
+  final found = [
+    for (final a in agents)
+      if (named.contains(a['command']) && a[action] == true) a,
+  ];
+  if (step == null || found.isEmpty) {
     throw const FormatException('not possible for this agent');
   }
   return {
     'status': 'proposal',
     'summary': '',
     'candidates': [
-      {
-        'id': 'c1',
-        'kind': 'agent_action',
-        'title': _line(found['name']),
-        'subtitle': action,
-        'reason': '',
-        'fit': 'ok',
-        'size': 0,
-        'action': {
+      for (final (i, a) in found.indexed)
+        {
+          'id': 'c${i + 1}',
           'kind': 'agent_action',
-          'command': found['command'],
-          'step': step,
+          'title': _line(a['name']),
+          'subtitle': action,
+          'reason': '',
+          'fit': 'ok',
+          'size': 0,
+          'action': {
+            'kind': 'agent_action',
+            'command': a['command'],
+            'step': step,
+          },
         },
-      },
     ],
   };
 }
