@@ -2887,6 +2887,20 @@ final class CoreService {
           'answer': ?answer,
           'language': i18n.language,
           'settings_path': identity.settingsPath,
+          if (column == 'providers')
+            'providers': [
+              for (final rt in reads.inventory.collect(agents).runtimes)
+                {
+                  'key': rt.key,
+                  'name': rt.name,
+                  'installed': rt.installed,
+                  'running': rt.running,
+                  'install': !rt.installed,
+                  'update': lastUpdates.any((u) => u['key'] == rt.key),
+                  'start': rt.installed && !rt.running,
+                  'stop': rt.installed && rt.running,
+                },
+            ],
           if (column == 'agents')
             'agents': [
               for (final a in agents)

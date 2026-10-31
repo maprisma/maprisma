@@ -256,6 +256,75 @@ Future<Map<String, dynamic>> smartAgents(Map facts, SmartAgent agent) async {
   };
 }
 
+/// The Providers column: one fixed step, nothing to search.
+String smartProvidersPrompt(Map facts) {
+  return '$_rules ${_language(facts)}\n\n'
+      'Column: Providers. Local LLM programs and what can be done with each: '
+      '${jsonEncode(facts['providers'])}.\n'
+      '${_request(facts)}\n'
+      'Choose one:\n'
+      '{"action": "install", "provider": "<key>"}\n'
+      '{"action": "update", "provider": "<key>"}\n'
+      '{"action": "start", "provider": "<key>"}\n'
+      '{"action": "stop", "provider": "<key>"}\n'
+      'only when that action is true for that provider above.\n'
+      '{"action": "clarify", "question": "<one short question>", "choices": ["<2 to 4 short answers>"]}\n'
+      'when you cannot tell which provider is meant.\n'
+      '{"action": "redirect", "hint": "<what works instead, one sentence>", "column": "<mcp, agents or models, or null>", "request": "<the request for that column, or null>"}\n'
+      'for anything else: this column cannot manage models, agents, MCP servers or skills, and cannot uninstall a provider or sign in to an online one.';
+}
+
+/// The Providers column: one answer. Each action has its own page with its
+/// review, so the GUI opens that page for the checked provider.
+Future<Map<String, dynamic>> smartProviders(Map facts, SmartAgent agent) async {
+  final providers = [for (final p in facts['providers'] as List) p as Map];
+  final answer = firstJson(await agent(smartProvidersPrompt(facts)), 'action');
+  final action = answer['action'];
+  if (action == 'clarify' || action == 'redirect') {
+    final first = smartChecked(answer, const {});
+    if (action == 'clarify') {
+      return {
+        'status': 'clarify',
+        'question': first['question'],
+        'choices': first['choices'],
+      };
+    }
+    return {
+      'status': 'redirect',
+      'instead': {
+        'hint': first['hint'],
+        'column': answer['column'] == 'models' ? 'models' : first['column'],
+        'request': first['request'],
+      },
+    };
+  }
+  final found = providers
+      .where((p) => p['key'] == answer['provider'] && p[action] == true)
+      .firstOrNull;
+  if (!const {'install', 'update', 'start', 'stop'}.contains(action) ||
+      found == null) {
+    throw const FormatException('not possible for this provider');
+  }
+  return {
+    'status': 'proposal',
+    'summary': '',
+    'candidates': [
+      {
+        'id': 'c1',
+        'kind': 'provider_action',
+        'title': _line(found['name']),
+        'subtitle': action,
+        'reason': '',
+        'fit': 'ok',
+        'size': 0,
+        'key': found['key'],
+        'step': action,
+        'action': {'kind': 'provider_action'},
+      },
+    ],
+  };
+}
+
 /// The first answer in the MCP column, checked against what is really here.
 Map<String, dynamic> smartMcpChecked(
   Map answer,
@@ -863,6 +932,20 @@ Future<Map<String, dynamic>> smartAsk(
     }
     try {
       final found = await smartAgents(
+        facts,
+        smartAgent(data, adapter, env, home, plugin),
+      );
+      return {...answer, ...found};
+    } on Object catch (error) {
+      return {...answer, 'status': 'error', 'summary': _line(errorText(error))};
+    }
+  }
+  if (column == 'providers') {
+    if (adapter == null) {
+      return {...answer, 'status': 'error', 'summary': smartNoHelper};
+    }
+    try {
+      final found = await smartProviders(
         facts,
         smartAgent(data, adapter, env, home, plugin),
       );

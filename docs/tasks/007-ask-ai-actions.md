@@ -19,7 +19,7 @@ the GUI names a candidate and never holds what runs; tokens only on the click on
 | MCP servers and skills | add an MCP server from the registry, connect a server to an agent, disconnect it | this step |
 | Models | search and download, remove, move a model folder to a disk | done |
 | Agents | install, update, remove | done |
-| Providers | install, update, remove | later |
+| Providers | install, update, start, stop | done; remove needs an uninstall first, none exists |
 
 Not yet in the MCP column: skills, and updating or removing a server from the PC. The helper says so.
 
@@ -29,8 +29,8 @@ plan for ConnectionReview, then `connections.apply`. An MCP candidate has `kind`
 `mcp_disconnect`), `agents`, and `needs` (fields the user fills in; secrets never reach the agent).
 
 ## UI
-The card's proposal step opens a form for `mcp_add` (agents to connect, needed fields), then the normal review. Agents
-and Providers say up front that they do not take requests yet.
+The card's proposal step opens a form for `mcp_add` (agents to connect, needed fields), then the normal review. A
+provider step opens the app's own page with its review.
 
 ## Acceptance
 Unit tests: only a listed action passes, unknown servers and agents are refused, the pick comes from the real search,

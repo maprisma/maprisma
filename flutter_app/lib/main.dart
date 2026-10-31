@@ -1740,6 +1740,27 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     }
   }
 
+  /// A provider step from Ask AI: the app's own page, with its own review.
+  void _smartProvider(String step, String key) {
+    final found = _updates.where((u) => u['key'] == key).firstOrNull;
+    switch (step) {
+      case 'install':
+        unawaited(_installProgram('runtime', key));
+      case 'update' when found != null:
+        unawaited(_runUpdate(found));
+      case 'start' || 'stop':
+        unawaited(
+          _mapRuntimeControl({
+            'id': 'runtime:$key',
+            'label': key,
+            'status': step == 'stop' ? 'running' : 'stopped',
+          }),
+        );
+      default:
+        _actionFailed();
+    }
+  }
+
   /// Update: its own command in a terminal, or the app's install review.
   Future<void> _runUpdate(Map<String, dynamic> update) async {
     if ((update['command'] as List? ?? const []).isEmpty) {
@@ -4584,8 +4605,11 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                                             ),
                                             smartAskColumns: const {
                                               'mcp',
+                                              'agents',
+                                              'providers',
                                               'models',
                                             },
+                                            onSmartProvider: _smartProvider,
                                             smartCards:
                                                 _smartHelpers.isNotEmpty,
                                             smartHelpers: _smartHelpers,

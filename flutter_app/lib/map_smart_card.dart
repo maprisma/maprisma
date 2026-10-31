@@ -166,6 +166,7 @@ class MapSmartCard extends StatefulWidget {
   const MapSmartCard({
     super.key,
     this.takesRequests = true,
+    this.onProvider,
     required this.column,
     required this.title,
     required this.open,
@@ -182,6 +183,9 @@ class MapSmartCard extends StatefulWidget {
 
   /// A column whose helper is not built yet says so before anyone types.
   final bool takesRequests;
+
+  /// A provider step the user chose: (install, update, start or stop, key).
+  final void Function(String step, String key)? onProvider;
   final String column;
   final String title;
   final bool open;
@@ -1132,10 +1136,22 @@ class _MapSmartCardState extends State<MapSmartCard> {
                         alignment: Alignment.centerRight,
                         child: FilledButton.tonal(
                           key: ValueKey('smart-review-${c['id']}'),
-                          onPressed: () =>
-                              '${c['kind'] ?? ''}'.startsWith('mcp_')
-                              ? _openMcp(proposal, c)
-                              : _openReview(proposal, c),
+                          onPressed: () {
+                            if (c['kind'] == 'provider_action') {
+                              // Its own page has the review.
+                              _close();
+                              widget.onProvider?.call(
+                                '${c['step']}',
+                                '${c['key']}',
+                              );
+                            } else if ('${c['kind'] ?? ''}'.startsWith(
+                              'mcp_',
+                            )) {
+                              _openMcp(proposal, c);
+                            } else {
+                              _openReview(proposal, c);
+                            }
+                          },
                           child: Text(widget.tr('Review')),
                         ),
                       ),

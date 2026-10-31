@@ -446,9 +446,54 @@ void main() {
     });
   });
 
-  test('a column not built yet asks no agent', () async {
+  group('the Providers column', () {
+    final facts = {
+      'request': 'install ollama',
+      'providers': [
+        {
+          'key': 'ollama',
+          'name': 'Ollama',
+          'install': true,
+          'update': false,
+          'start': false,
+          'stop': false,
+        },
+        {
+          'key': 'llamacpp',
+          'name': 'llama.cpp',
+          'install': false,
+          'update': true,
+          'start': false,
+          'stop': true,
+        },
+      ],
+    };
+    Future<Map<String, dynamic>> ask(String reply) =>
+        smartProviders(facts, answers([reply], []));
+
+    test('an action the provider offers names it for the app', () async {
+      final found = await ask('{"action": "stop", "provider": "llamacpp"}');
+      final candidate = (found['candidates'] as List).single as Map;
+      expect(candidate['kind'], 'provider_action');
+      expect(candidate['key'], 'llamacpp');
+      expect(candidate['step'], 'stop');
+    });
+
+    test('anything else is refused', () async {
+      for (final reply in [
+        '{"action": "start", "provider": "ollama"}',
+        '{"action": "install", "provider": "llamacpp"}',
+        '{"action": "uninstall", "provider": "llamacpp"}',
+        '{"action": "update", "provider": "nobody"}',
+      ]) {
+        await expectLater(ask(reply), throwsFormatException);
+      }
+    });
+  });
+
+  test('an unknown column asks no agent', () async {
     final result = await smartAsk(
-      {'column': 'providers', 'command': 'claude'},
+      {'column': 'other', 'command': 'claude'},
       null,
       const {},
       '/nowhere',

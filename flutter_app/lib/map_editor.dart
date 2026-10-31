@@ -49,6 +49,7 @@ class MapEditor extends StatefulWidget {
     this.lightStyle = defaultMapLightStyle,
     this.smartCards = false,
     this.smartAskColumns,
+    this.onSmartProvider,
     this.smartHelpers = const [],
     this.client,
     this.onSmartApplied,
@@ -59,6 +60,9 @@ class MapEditor extends StatefulWidget {
 
   /// The columns whose helper takes requests; null: all.
   final Set<String>? smartAskColumns;
+
+  /// A provider step the helper proposed and the user chose.
+  final void Function(String step, String key)? onSmartProvider;
   final List<Map<String, dynamic>> smartHelpers;
   final CoreClient? client;
   final ValueChanged<Map<String, dynamic>>? onSmartApplied;
@@ -1361,6 +1365,7 @@ class _MapEditorState extends State<MapEditor>
                                       ),
                                       width: layout.columnWidth,
                                       column: mapSmartColumns[col].$1,
+                                      onProvider: widget.onSmartProvider,
                                       takesRequests:
                                           widget.smartAskColumns?.contains(
                                             mapSmartColumns[col].$1,

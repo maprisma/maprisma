@@ -102,6 +102,67 @@ Future<void> mount(
 }
 
 void main() {
+  testWidgets('a provider step opens the app page for it', (tester) async {
+    final chosen = <String>[];
+    var closed = false;
+    final client = CoreClient(
+      _FakeSmartTransport((method, params) async {
+        if (method == 'map.smart_ask') return {'task': 'ask'};
+        return {
+          'state': 'done',
+          'result': {
+            'status': 'proposal',
+            'proposal': 'p',
+            'candidates': [
+              {
+                'id': 'c1',
+                'kind': 'provider_action',
+                'title': 'Ollama',
+                'subtitle': 'install',
+                'fit': 'ok',
+                'size': 0,
+                'key': 'ollama',
+                'step': 'install',
+              },
+            ],
+          },
+        };
+      }),
+    );
+    tester.view.physicalSize = const Size(500, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MapSmartCard(
+            column: 'providers',
+            title: 'Providers',
+            open: true,
+            enabled: true,
+            onToggle: () => closed = true,
+            tr: (s) => s,
+            client: client,
+            onProvider: (step, key) => chosen.add('$step $key'),
+            helpers: const [
+              {'command': 'claude', 'name': 'Claude Code', 'local': false},
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.enterText(find.byType(TextField), 'install ollama');
+    await tester.tap(find.widgetWithText(FilledButton, 'Ask'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.byKey(const ValueKey('smart-review-c1')));
+    await tester.pump();
+    expect(chosen, ['install ollama']);
+    expect(closed, isTrue);
+  });
+
   testWidgets('an agent action: normal review, then the terminal result', (
     tester,
   ) async {

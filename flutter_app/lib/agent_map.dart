@@ -41,6 +41,7 @@ class AgentMap extends StatelessWidget {
     this.onNodeMenu,
     this.smartCards = false,
     this.smartAskColumns,
+    this.onSmartProvider,
     this.smartHelpers = const [],
     this.client,
     this.onSmartApplied,
@@ -55,6 +56,7 @@ class AgentMap extends StatelessWidget {
   final Object? staticState;
   final bool smartCards;
   final Set<String>? smartAskColumns;
+  final void Function(String step, String key)? onSmartProvider;
   final List<Map<String, dynamic>> smartHelpers;
   final CoreClient? client;
   final ValueChanged<Map<String, dynamic>>? onSmartApplied;
@@ -223,6 +225,7 @@ class AgentMap extends StatelessWidget {
         onAnimationChanged: onAnimationChanged,
         smartCards: smartCards,
         smartAskColumns: smartAskColumns,
+        onSmartProvider: onSmartProvider,
         smartHelpers: smartHelpers,
         client: client,
         onSmartApplied: onSmartApplied,
