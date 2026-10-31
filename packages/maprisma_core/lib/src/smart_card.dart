@@ -5,6 +5,7 @@ import 'desktop.dart' show whichIn;
 import 'health_report.dart' show pcInfo;
 import 'installers.dart' show koboldConfigName;
 import 'local_helper.dart';
+import 'mcp_catalog.dart' show secretInArgs;
 import 'map_graph.dart' show graphModelKey;
 import 'model_downloads.dart' show ModelFiles;
 import 'model_hub.dart';
@@ -34,6 +35,7 @@ const smartProposalMinutes = 30;
 /// Texts of the core; the core words them when it hands a result over.
 const smartNotYet = 'This column does not take requests yet.',
     smartNoModel = 'No model was found for this search.',
+    smartNoServer = 'No MCP server was found for this search.',
     smartNoHelper = 'This helper is not available.';
 
 /// What one line of an answer may be, for the card.
@@ -83,6 +85,8 @@ String smartModelsPrompt(Map facts) {
       'Choose one:\n'
       '{"action": "search", "query": "<words for a Hugging Face GGUF search, at most 80 characters>", "runtime": "<key of a runner listed above>"}\n'
       'when the request is to find or add a model for a runner.\n'
+      '{"action": "remove", "runtime": "<key of a runner listed above>", "model": "<exact name in its models>"}\n'
+      'when the request is to remove a model that is listed above.\n'
       '{"action": "clarify", "question": "<one short question>", "choices": ["<2 to 4 short answers>"]}\n'
       'when you cannot tell what is meant, for example which runner, or whether "image" means understanding or generating images.\n'
       '{"action": "redirect", "hint": "<what works instead, one sentence>", "column": "<agents, providers or mcp, or null>", "request": "<the request for that column, or null>"}\n'
@@ -100,6 +104,220 @@ String smartPicksPrompt(Map facts, List<Map> repos) {
       'Pick at most $smartMaxPicks that fit the request, best first, using the exact "repo" value:\n'
       '{"summary": "<one sentence>", "picks": [{"repo": "<repo>", "reason": "<why, one short sentence>"}]}\n'
       'An empty "picks" list is right when none fits.';
+}
+
+/// A server's first way to run that can work here: runnable, and no secret
+/// that would land on the command line.
+Map<String, dynamic>? smartMcpOption(Map server) {
+  for (final option in (server['options'] as List? ?? const []).cast<Map>()) {
+    if (option['runnable'] != true) continue;
+    final entry = option['entry'] as Map;
+    final secrets = [
+      for (final n in option['needs'] as List)
+        if ((n as Map)['secret'] == true) n['name'] as String,
+    ];
+    if (secretInArgs(entry, secrets).isNotEmpty) continue;
+    return Map<String, dynamic>.from(option);
+  }
+  return null;
+}
+
+/// The short name a registry server gets on this PC: "io.github.a/b-c" -> "b-c".
+String smartMcpName(String name) {
+  final short = name
+      .split('/')
+      .last
+      .replaceAll(RegExp(r'[^A-Za-z0-9._-]+'), '-');
+  return short.length > 60 ? short.substring(0, 60) : short;
+}
+
+/// The MCP facts the agent gets: names only, no paths or settings.
+String _mcpFacts(Map facts) =>
+    'Agents here: ${jsonEncode(facts['agents'])}.\n'
+    'MCP servers here, with the agents that use each: ${jsonEncode(facts['mcp'])}.\n';
+
+/// The first step in the MCP column: a fixed list of actions.
+String smartMcpPrompt(Map facts) {
+  return '$_rules ${_language(facts)}\n\n'
+      'Column: MCP servers and skills.\n${_mcpFacts(facts)}'
+      '${_request(facts)}\n'
+      'Choose one:\n'
+      '{"action": "search", "query": "<words for a search in the MCP registry, at most 80 characters>", "agents": ["<commands of the agents that should use it>"]}\n'
+      'when the request is to find or add a new MCP server.\n'
+      '{"action": "connect", "server": "<exact name listed above>", "agents": ["<commands>"]}\n'
+      'when an agent should use a server that is already here.\n'
+      '{"action": "disconnect", "server": "<exact name listed above>", "agents": ["<commands>"]}\n'
+      'when an agent should stop using a server.\n'
+      '{"action": "clarify", "question": "<one short question>", "choices": ["<2 to 4 short answers>"]}\n'
+      'when you cannot tell what is meant, for example which agents.\n'
+      '{"action": "redirect", "hint": "<what works instead, one sentence>", "column": "<agents, providers or models, or null>", "request": "<the request for that column, or null>"}\n'
+      'for anything else: this column cannot manage models, agents, providers or skills, cannot update or install programs, and cannot delete a server from the PC.';
+}
+
+/// The second step: the agent picks from real registry results.
+String smartMcpPicksPrompt(Map facts, List<Map> servers) {
+  return '$_rules ${_language(facts)}\n\n'
+      '${_request(facts)}'
+      'Registry results: ${jsonEncode([
+        for (final s in servers) {'name': s['name'], 'title': s['title'], 'description': s['description']},
+      ])}\n\n'
+      'Pick at most $smartMaxPicks that fit the request, best first, using the exact "name" value:\n'
+      '{"summary": "<one sentence>", "picks": [{"name": "<name>", "reason": "<why, one short sentence>"}]}\n'
+      'An empty "picks" list is right when none fits.';
+}
+
+/// The first answer in the MCP column, checked against what is really here.
+Map<String, dynamic> smartMcpChecked(
+  Map answer,
+  Set<String> agents,
+  Set<String> servers,
+) {
+  final action = answer['action'];
+  if (action == 'clarify' || action == 'redirect') {
+    final checked = smartChecked(answer, const {});
+    return action == 'redirect' && answer['column'] == 'models'
+        ? {...checked, 'column': 'models'}
+        : checked;
+  }
+  final raw = answer['agents'];
+  final chosen = [
+    for (final a in raw is List ? raw : const [])
+      if (agents.contains(a)) a as String,
+  ];
+  final unique = {...chosen}.toList();
+  if (action == 'search') {
+    final query = _line(answer['query'], 80);
+    if (query.isEmpty) throw const FormatException('no search');
+    return {'action': action, 'query': query, 'agents': unique};
+  }
+  if (action == 'connect' || action == 'disconnect') {
+    final server = answer['server'];
+    if (!servers.contains(server) || unique.isEmpty) {
+      throw const FormatException('no server');
+    }
+    return {'action': action, 'server': server, 'agents': unique};
+  }
+  throw const FormatException('unknown action');
+}
+
+/// The MCP column: at most two answers of the agent.
+Future<Map<String, dynamic>> smartMcp(
+  Map facts,
+  SmartAgent agent,
+  Future<List<Map<String, dynamic>>> Function(String) search,
+) async {
+  final agents = [for (final a in facts['agents'] as List) a as Map];
+  final used = Map<String, dynamic>.from(facts['mcp'] as Map);
+  final names = {for (final a in agents) '${a['command']}': '${a['name']}'};
+  final first = smartMcpChecked(
+    firstJson(await agent(smartMcpPrompt(facts)), 'action'),
+    names.keys.toSet(),
+    used.keys.toSet(),
+  );
+  final action = first['action'];
+  if (action == 'clarify') {
+    return {
+      'status': 'clarify',
+      'question': first['question'],
+      'choices': first['choices'],
+    };
+  }
+  if (action == 'redirect') {
+    return {
+      'status': 'redirect',
+      'instead': {
+        'hint': first['hint'],
+        'column': first['column'],
+        'request': first['request'],
+      },
+    };
+  }
+  if (action == 'connect' || action == 'disconnect') {
+    final remove = action == 'disconnect';
+    final server = first['server'] as String;
+    final using = (used[server] as List? ?? const []).toSet();
+    return {
+      'status': 'proposal',
+      'summary': '',
+      'candidates': [
+        for (final (i, command) in (first['agents'] as List).indexed)
+          if (using.contains(command) == remove)
+            {
+              'id': 'c${i + 1}',
+              'kind': remove ? 'mcp_disconnect' : 'mcp_connect',
+              'title': server,
+              'subtitle': names[command],
+              'reason': '',
+              'fit': 'ok',
+              'size': 0,
+              'action': {
+                'kind': remove ? 'mcp_disconnect' : 'mcp_connect',
+                'server': server,
+                'agent': command,
+              },
+            },
+      ],
+    };
+  }
+  final servers = [
+    for (final s in await search(first['query'] as String))
+      if (smartMcpOption(s) != null) s,
+  ];
+  if (servers.isEmpty) {
+    return {
+      'status': 'redirect',
+      'instead': {'hint': smartNoServer, 'column': null, 'request': null},
+    };
+  }
+  final answer = firstJson(
+    await agent(smartMcpPicksPrompt(facts, servers)),
+    'picks',
+  );
+  final byName = {for (final s in servers) '${s['name']}': s};
+  final candidates = <Map<String, dynamic>>[];
+  final picks = answer['picks'];
+  for (final pick in picks is List ? picks : const []) {
+    if (pick is! Map || candidates.length >= smartMaxPicks) continue;
+    final server = byName.remove(pick['name']);
+    if (server == null) continue;
+    final option = smartMcpOption(server)!;
+    candidates.add({
+      'id': 'c${candidates.length + 1}',
+      'kind': 'mcp_add',
+      'title': _line(server['title']).isNotEmpty
+          ? _line(server['title'])
+          : _line(server['name']),
+      'subtitle': _line(server['name']),
+      'reason': _line(pick['reason']),
+      'fit': 'ok',
+      'size': 0,
+      'agents': first['agents'],
+      'needs': [
+        for (final n in (option['needs'] as List).cast<Map>())
+          if (n['required'] == true)
+            {
+              'name': n['name'],
+              'description': _line(n['description']),
+              'secret': n['secret'] == true,
+              'value': n['secret'] == true ? '' : n['value'],
+              'hint': _line(n['hint']),
+            },
+      ],
+      'action': {'kind': 'mcp_add', 'server': server},
+    });
+  }
+  if (candidates.isEmpty) {
+    return {
+      'status': 'redirect',
+      'instead': {'hint': smartNoServer, 'column': null, 'request': null},
+    };
+  }
+  return {
+    'status': 'proposal',
+    'summary': _line(answer['summary']),
+    'agents': agents,
+    'candidates': candidates,
+  };
 }
 
 /// The first answer, checked: a known action or an error.
@@ -125,6 +343,15 @@ Map<String, dynamic> smartChecked(Map answer, Set<String> runtimes) {
           : null,
       'request': _line(answer['request'], 500),
     };
+  }
+  if (action == 'remove') {
+    final model = answer['model'];
+    if (model is! String ||
+        model.isEmpty ||
+        !runtimes.contains(answer['runtime'])) {
+      throw const FormatException('no model');
+    }
+    return {'action': action, 'runtime': answer['runtime'], 'model': model};
   }
   if (action == 'search') {
     final query = _line(answer['query'], 80);
@@ -283,6 +510,35 @@ Future<Map<String, dynamic>> smartModels(
       },
     };
   }
+  if (first['action'] == 'remove') {
+    final runtime = runtimes.firstWhere((r) => r['key'] == first['runtime']);
+    if (!(runtime['models'] as List? ?? const []).contains(first['model'])) {
+      return {
+        'status': 'redirect',
+        'instead': {'hint': smartNoModel, 'column': null, 'request': null},
+      };
+    }
+    return {
+      'status': 'proposal',
+      'summary': '',
+      'candidates': [
+        {
+          'id': 'c1',
+          'kind': 'model_remove',
+          'title': _line(first['model']),
+          'subtitle': _line(runtime['name']),
+          'reason': '',
+          'fit': 'ok',
+          'size': 0,
+          'action': {
+            'kind': 'model_remove',
+            'key': runtime['key'],
+            'model': first['model'],
+          },
+        },
+      ],
+    };
+  }
   final repos = await search(first['query'] as String);
   if (repos.isEmpty) {
     return {
@@ -433,6 +689,7 @@ Future<Map<String, dynamic>> smartAsk(
   String home,
   String plugin, {
   ModelHub? hub,
+  Future<List<Map<String, dynamic>>> Function(String)? mcpSearch,
 }) async {
   final local = data['helper'] != null;
   final answer = <String, dynamic>{
@@ -441,6 +698,21 @@ Future<Map<String, dynamic>> smartAsk(
   };
   final facts = {...data};
   final column = data['column'];
+  if (column == 'mcp') {
+    if (adapter == null) {
+      return {...answer, 'status': 'error', 'summary': smartNoHelper};
+    }
+    try {
+      final found = await smartMcp(
+        facts,
+        smartAgent(data, adapter, env, home, plugin),
+        mcpSearch ?? (_) async => const [],
+      );
+      return {...answer, ...found};
+    } on Object catch (error) {
+      return {...answer, 'status': 'error', 'summary': _line(errorText(error))};
+    }
+  }
   if (column != 'models') {
     // Not built yet: no agent is asked, so no tokens are spent.
     return {
@@ -493,7 +765,7 @@ Map<String, dynamic> smartWorded(
   Map<String, dynamic> result,
   String Function(String) tr,
 ) {
-  const own = {smartNotYet, smartNoModel, smartNoHelper};
+  const own = {smartNotYet, smartNoModel, smartNoServer, smartNoHelper};
   final instead = result['instead'];
   return {
     ...result,

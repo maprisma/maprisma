@@ -368,6 +368,18 @@ class CoreClient {
     Map<String, dynamic> params = const {},
   ]) => transport.call('map.smart_helpers', params);
 
+  Future<Map<String, dynamic>> mapSmartPlan({
+    required Object? agents,
+    required String candidate,
+    required String proposal,
+    required Object? values,
+  }) => transport.call('map.smart_plan', {
+    'agents': agents,
+    'candidate': candidate,
+    'proposal': proposal,
+    'values': values,
+  });
+
   Future<Map<String, dynamic>> mapSmartReview({
     required String candidate,
     required String proposal,

@@ -85,6 +85,7 @@ const portedRoutes = {
   'map.smart_review',
   'map.smart_run',
   'map.smart_connect',
+  'map.smart_plan',
   'addons.list',
   'addons.set_enabled',
   'addons.catalog',
@@ -2886,6 +2887,29 @@ final class CoreService {
           'answer': ?answer,
           'language': i18n.language,
           'settings_path': identity.settingsPath,
+          if (column == 'mcp')
+            ...() {
+              final inventory = reads.inventory.collect(agents);
+              final installed = agents.where((a) => a.installed).toList();
+              return {
+                'agents': [
+                  for (final a in installed)
+                    {'command': a.command, 'name': a.name},
+                ],
+                'mcp': {
+                  for (final name in {
+                    for (final a in installed)
+                      ...?inventory.agentMcp[a.command],
+                  })
+                    name: [
+                      for (final a in installed)
+                        if (inventory.agentMcp[a.command]?.contains(name) ==
+                            true)
+                          a.command,
+                    ],
+                },
+              };
+            }(),
           'runtimes': [
             for (final rt in reads.inventory.collect(agents).runtimes)
               if (rt.installed && _takesDownloads(rt, engines))
@@ -2914,6 +2938,7 @@ final class CoreService {
         (result) => smartProposals.keep(smartWorded(result, i18n.text)),
       );
     }
+    if (method == 'map.smart_plan') return _smartPlan(params);
     final fields = {
       'proposal',
       'candidate',
@@ -2926,6 +2951,22 @@ final class CoreService {
     }
     final candidate = smartProposals.candidate(params);
     final action = candidate['action'] as Map;
+    if (action['kind'] == 'model_remove') {
+      if (method == 'map.smart_review') {
+        final review = dispatch('models.remove_preview', {
+          'key': action['key'],
+          'model': action['model'],
+        });
+        candidate['removal'] = review['removal'];
+        return review;
+      }
+      if (method != 'map.smart_run' || candidate['removal'] == null) {
+        throw const FormatException('Review it first');
+      }
+      final removal = candidate.remove('removal');
+      return dispatch('models.remove_apply', {'removal': removal});
+    }
+    if (action['kind'] != null) throw const FormatException('Invalid request');
     if (method == 'map.smart_review') {
       return {
         'title': candidate['title'],
@@ -2969,6 +3010,52 @@ final class CoreService {
       'model': model,
       'use_now': false,
     });
+  }
+
+  /// map.smart_plan: an approved MCP candidate as the app's normal preview;
+  /// the agents and values come from the user, the rest from the checked
+  /// proposal.
+  Map<String, dynamic> _smartPlan(Map<String, dynamic> params) {
+    final agents = params['agents'], values = params['values'];
+    if (params.length != 4 ||
+        params['proposal'] is! String ||
+        params['candidate'] is! String ||
+        agents is! List ||
+        agents.isEmpty ||
+        agents.any((a) => a is! String) ||
+        values is! Map) {
+      throw const FormatException('Invalid request');
+    }
+    final candidate = smartProposals.candidate(params);
+    final action = candidate['action'] as Map;
+    final kind = action['kind'];
+    if (kind == 'mcp_add') {
+      final server = Map<String, dynamic>.from(action['server'] as Map);
+      final option = smartMcpOption(server);
+      if (option == null) throw const FormatException('Show the server again');
+      final shown = mcpOptions.server({
+        ...server,
+        'options': [option],
+      });
+      return dispatch('mcp.option_preview', {
+        'option': (shown['options'] as List).single['option'],
+        'name': smartMcpName('${server['name']}'),
+        'values': values,
+        'agents': agents,
+      });
+    }
+    if (kind == 'mcp_connect' || kind == 'mcp_disconnect') {
+      if (agents.length != 1 || agents.single != action['agent']) {
+        throw const FormatException('Invalid request');
+      }
+      return dispatch('connections.preview', {
+        'kind': 'mcp',
+        'command': action['agent'],
+        'item': action['server'],
+        'remove': kind == 'mcp_disconnect',
+      });
+    }
+    throw const FormatException('Invalid request');
   }
 
   /// A local LLM a model can be downloaded for: Ollama pulls, the others need

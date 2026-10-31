@@ -8,6 +8,7 @@ import 'package:maprisma/connections_view.dart' show ConnectionReview;
 import 'package:maprisma/map_editor.dart';
 import 'package:maprisma/map_zoom.dart';
 import 'package:maprisma/map_groups.dart';
+import 'package:maprisma/map_legend.dart';
 import 'package:maprisma/map_lights.dart';
 import 'package:maprisma/map_smart_card.dart';
 import 'package:maprisma/task_card.dart' show TaskReview;
@@ -100,6 +101,155 @@ Future<void> mount(
 }
 
 void main() {
+  testWidgets('the legend explains the marks', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: MapLegendButton(tr: (s) => s)),
+      ),
+    );
+    await tester.tap(find.byKey(const ValueKey('map-legend')));
+    await tester.pumpAndSettle();
+    expect(find.text('What the marks mean'), findsOneWidget);
+    expect(find.byKey(const ValueKey('agent-battery')), findsNWidgets(3));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('MCP: proposal, agents and fields, then the normal review', (
+    tester,
+  ) async {
+    final calls = <String, Map<String, dynamic>>{};
+    final client = CoreClient(
+      _FakeSmartTransport((method, params) async {
+        calls[method] = params;
+        return switch (method) {
+          'map.smart_ask' => {'task': 't'},
+          'tasks.status' => {
+            'state': 'done',
+            'result': {
+              'status': 'proposal',
+              'summary': 'One fits',
+              'proposal': 'p',
+              'agents': [
+                {'command': 'claude', 'name': 'Claude Code'},
+                {'command': 'codex', 'name': 'Codex'},
+              ],
+              'candidates': [
+                {
+                  'id': 'c1',
+                  'kind': 'mcp_add',
+                  'title': 'GitHub',
+                  'subtitle': 'io.github/gh',
+                  'reason': 'official',
+                  'fit': 'ok',
+                  'size': 0,
+                  'agents': ['claude'],
+                  'needs': [
+                    {
+                      'name': 'TOKEN',
+                      'description': 'A token',
+                      'secret': true,
+                      'value': '',
+                      'hint': '',
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+          'map.smart_plan' => {
+            'plan': 'plan-1',
+            'files': const [],
+            'links_add': const [],
+            'links_remove': const [],
+          },
+          _ => const <String, dynamic>{},
+        };
+      }),
+    );
+    tester.view.physicalSize = const Size(400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MapSmartCard(
+            column: 'mcp',
+            title: 'MCP servers and skills',
+            open: true,
+            enabled: true,
+            onToggle: () {},
+            tr: (s) => s,
+            client: client,
+            helpers: const [
+              {'command': 'claude', 'name': 'Claude Code', 'local': false},
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.enterText(find.byType(TextField), 'a github server');
+    await tester.tap(find.widgetWithText(FilledButton, 'Ask'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.byKey(const ValueKey('smart-review-c1')));
+    await tester.pump();
+    final review = find.byKey(const ValueKey('smart-mcp-review'));
+    expect(tester.widget<FilledButton>(review).onPressed, isNull);
+    await tester.enterText(
+      find.byKey(const ValueKey('smart-mcp-need-TOKEN')),
+      's3cret',
+    );
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('smart-mcp-agent-codex')),
+    );
+    await tester.tap(find.byKey(const ValueKey('smart-mcp-agent-codex')));
+    await tester.pump();
+    await tester.ensureVisible(review);
+    await tester.pump();
+    expect(tester.widget<FilledButton>(review).onPressed, isNotNull);
+    await tester.tap(review);
+    await tester.pump();
+    await tester.pump();
+    expect(calls['map.smart_plan'], {
+      'proposal': 'p',
+      'candidate': 'c1',
+      'agents': ['claude', 'codex'],
+      'values': {'TOKEN': 's3cret'},
+    });
+    expect(find.byType(ConnectionReview), findsOneWidget);
+  });
+
+  testWidgets('a column without a helper yet says so before anyone types', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MapSmartCard(
+            column: 'agents',
+            takesRequests: false,
+            title: 'Agents',
+            open: true,
+            enabled: true,
+            onToggle: () {},
+            tr: (s) => s,
+            helpers: const [
+              {'command': 'claude', 'name': 'Claude Code', 'local': false},
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(find.byType(TextField), findsNothing);
+    expect(
+      find.text('This column does not take requests yet.'),
+      findsOneWidget,
+    );
+  });
+
   testWidgets(
     'drawing from a box emits one reviewed edit, invalid drop does nothing',
     (tester) async {

@@ -1175,6 +1175,14 @@ Future<int> runWorker(List<String> args) async {
           identity.environment,
           identity.home,
           identity.shortName,
+          mcpSearch: (query) async {
+            final found = await searchPage(
+              query,
+              '${identity.home}/.cache/maprisma/mcp-registry.json',
+              identity.environment['PATH'],
+            );
+            return (found['servers'] as List).cast<Map<String, dynamic>>();
+          },
         ),
       });
       return 0;

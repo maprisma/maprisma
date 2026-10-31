@@ -917,7 +917,7 @@
   "map.smart_ask": {
    "area": "map",
    "kind": "read",
-   "note": "column: mcp, agents, providers, models. Spends the user's tokens: only on their click. tasks.status result: status proposal, clarify, redirect or error; helper, local, summary, question, choices, instead {hint, column, request}, limits {gpu_name, vram, ram, free_disk}, proposal, candidates [{id, title, subtitle, reason, fit (ok, tight, too_large), size}].",
+   "note": "column: mcp, agents, providers, models. Spends the user's tokens: only on their click. tasks.status result: status proposal, clarify, redirect or error; helper, local, summary, question, choices, instead {hint, column, request}, limits {gpu_name, vram, ram, free_disk}, proposal, candidates [{id, title, subtitle, reason, fit (ok, tight, too_large), size}, and for the MCP column kind (mcp_add, mcp_connect, mcp_disconnect), agents, needs [{name, description, secret, value, hint}]].",
    "optional": [
     "answer"
    ],
@@ -962,10 +962,27 @@
    },
    "source": "manual"
   },
+  "map.smart_plan": {
+   "area": "map",
+   "kind": "preview",
+   "note": "An approved MCP candidate as the app's normal preview: a plan for ConnectionReview, then connections.apply. agents and values come from the user; a secret goes no further than the preview.",
+   "params": {
+    "agents": [
+     "string"
+    ],
+    "candidate": "string",
+    "proposal": "string",
+    "values": "object"
+   },
+   "result": {
+    "plan": "string"
+   },
+   "source": "manual"
+  },
   "map.smart_review": {
    "area": "map",
    "kind": "read",
-   "note": "The facts for the review of one candidate.",
+   "note": "The facts for the review of one candidate; for a model removal the preview of models.remove_preview.",
    "params": {
     "candidate": "string",
     "proposal": "string"
@@ -982,7 +999,7 @@
   "map.smart_run": {
    "area": "map",
    "kind": "change",
-   "note": "After the user's OK: starts it, once. A candidate that is too large is refused.",
+   "note": "After the user's OK: starts it, once. A candidate that is too large is refused; a removal needs its review first.",
    "params": {
     "candidate": "string",
     "proposal": "string"

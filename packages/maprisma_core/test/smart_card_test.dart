@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:maprisma_core/maprisma_core.dart';
 import 'package:maprisma_core/src/adapters.dart';
@@ -202,6 +203,153 @@ void main() {
       smartWorded({'summary': 'by the agent'}, tr)['summary'],
       'by the agent',
     );
+  });
+
+  group('the MCP column', () {
+    final facts = {
+      'request': 'a github server for claude',
+      'agents': [
+        {'command': 'claude', 'name': 'Claude Code'},
+        {'command': 'codex', 'name': 'Codex'},
+      ],
+      'mcp': {
+        'pdfcraft': ['claude'],
+      },
+    };
+    Map server(String name, {bool secretInArgs = false}) => {
+      'name': name,
+      'title': 'GitHub',
+      'description': 'Issues and pull requests',
+      'options': [
+        {
+          'kind': 'npm',
+          'label': 'npx',
+          'runnable': true,
+          'entry': {
+            'command': 'npx',
+            'args': [if (secretInArgs) '{TOKEN}'],
+            'env': {'TOKEN': ''},
+            'url': '',
+            'headers': {},
+          },
+          'needs': [
+            {
+              'name': 'TOKEN',
+              'description': 'A token',
+              'required': true,
+              'secret': true,
+              'value': 'must-not-show',
+              'hint': '',
+            },
+          ],
+        },
+      ],
+    };
+
+    test('only a listed action, server and agent pass', () {
+      Map check(Map answer) =>
+          smartMcpChecked(answer, {'claude', 'codex'}, {'pdfcraft'});
+      expect(
+        check({
+          'action': 'connect',
+          'server': 'pdfcraft',
+          'agents': ['codex', 'nobody', 'codex'],
+        })['agents'],
+        ['codex'],
+      );
+      for (final bad in [
+        {'action': 'run', 'command': 'rm -rf ~'},
+        {'action': 'delete', 'server': 'pdfcraft'},
+        {
+          'action': 'connect',
+          'server': 'unknown',
+          'agents': ['codex'],
+        },
+        {
+          'action': 'disconnect',
+          'server': 'pdfcraft',
+          'agents': ['nobody'],
+        },
+      ]) {
+        expect(() => check(bad), throwsFormatException);
+      }
+    });
+
+    test('a request of another column is sent back, with no search', () async {
+      var searched = false;
+      final result = await smartMcp(
+        facts,
+        answers([
+          '{"action": "redirect", "hint": "Models live in the Models column.", "column": "models", "request": "find a model"}',
+        ], []),
+        (_) async {
+          searched = true;
+          return [];
+        },
+      );
+      expect(result['status'], 'redirect');
+      expect((result['instead'] as Map)['column'], 'models');
+      expect(searched, isFalse);
+    });
+
+    test('a pick comes from the real search; the action stays with the core, '
+        'and no secret is in a candidate', () async {
+      final prompts = <String>[];
+      final result = await smartMcp(
+        facts,
+        answers([
+          '{"action": "search", "query": "github", "agents": ["claude", "nobody"]}',
+          '{"summary": "One fits", "picks": [{"name": "made/up", "reason": "x"}, {"name": "io.github/gh", "reason": "official"}]}',
+        ], prompts),
+        (query) async => [
+          Map<String, dynamic>.from(server('io.github/gh')),
+          Map<String, dynamic>.from(server('bad/args', secretInArgs: true)),
+        ],
+      );
+      expect(result['status'], 'proposal');
+      final candidates = result['candidates'] as List;
+      expect(candidates, hasLength(1));
+      final first = candidates.single as Map;
+      expect(first['kind'], 'mcp_add');
+      expect(first['agents'], ['claude']);
+      expect(jsonEncode(first['needs']), isNot(contains('must-not-show')));
+      expect(prompts.last, isNot(contains('bad/args')));
+      expect(prompts.join(), isNot(contains('must-not-show')));
+      final shown = SmartProposals(() => 'h').keep(result);
+      expect((shown['candidates'] as List).single, isNot(contains('action')));
+    });
+
+    test('connecting what is connected already proposes nothing to do', () async {
+      final result = await smartMcp(
+        facts,
+        answers([
+          '{"action": "disconnect", "server": "pdfcraft", "agents": ["claude", "codex"]}',
+        ], []),
+        (_) async => [],
+      );
+      final candidates = result['candidates'] as List;
+      expect(candidates, hasLength(1));
+      expect((candidates.single as Map)['subtitle'], 'Claude Code');
+      expect((candidates.single as Map)['kind'], 'mcp_disconnect');
+    });
+  });
+
+  test('removing: only a model that is really there', () async {
+    final base = facts();
+    (base['runtimes'] as List).first['models'] = ['here:latest'];
+    Future<Map<String, dynamic>> ask(String model) => smartModels(
+      base,
+      answers([
+        '{"action": "remove", "runtime": "ollama", "model": "$model"}',
+      ], []),
+      (_) async => [],
+      (_, _) async => [],
+    );
+    final found = await ask('here:latest');
+    final candidate = (found['candidates'] as List).single as Map;
+    expect(candidate['kind'], 'model_remove');
+    expect((candidate['action'] as Map)['model'], 'here:latest');
+    expect((await ask('made-up'))['status'], 'redirect');
   });
 
   test('a column not built yet asks no agent', () async {

@@ -131,7 +131,7 @@ def kind(method: str, handles: dict) -> str:
     if method in handles:
         return 'handle'
     leaf = method.split('.', 1)[1]
-    if leaf == 'preview' or leaf.endswith('_preview') or leaf == 'smart_connect':
+    if leaf == 'preview' or leaf.endswith('_preview') or leaf == 'smart_plan' or leaf == 'smart_connect':
         return 'preview'
     return 'change' if CHANGE.search(leaf) else 'read'
 

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'app_theme.dart' show corners;
 import 'connections_view.dart' show ConnectionReview;
+import 'model_removal_dialog.dart';
 import 'core_client.g.dart';
 import 'providers_view.dart' show modelSize;
 import 'task_card.dart' show TaskReview;
@@ -99,12 +100,14 @@ enum _SmartStep {
   running,
   done,
   connectReview,
+  mcpForm,
   error,
 }
 
 class MapSmartCard extends StatefulWidget {
   const MapSmartCard({
     super.key,
+    this.takesRequests = true,
     required this.column,
     required this.title,
     required this.open,
@@ -119,6 +122,8 @@ class MapSmartCard extends StatefulWidget {
     this.width = 266,
   });
 
+  /// A column whose helper is not built yet says so before anyone types.
+  final bool takesRequests;
   final String column;
   final String title;
   final bool open;
@@ -148,6 +153,8 @@ class _MapSmartCardState extends State<MapSmartCard> {
   Map<String, dynamic> _reply = const {};
   String? _activeProposal;
   Map<String, dynamic>? _activeCandidate;
+  Set<String> _mcpAgents = {};
+  final _mcpFields = <String, TextEditingController>{};
   Map<String, dynamic> _reviewData = const {};
   Map<String, dynamic> _connectPlan = const {};
   double? _runFraction;
@@ -361,6 +368,142 @@ class _MapSmartCardState extends State<MapSmartCard> {
     }
   }
 
+  /// An MCP candidate: the form when something is to choose or fill in, else
+  /// the normal review at once.
+  void _openMcp(String proposal, Map<String, dynamic> candidate) {
+    _activeProposal = proposal;
+    _activeCandidate = candidate;
+    if (candidate['kind'] != 'mcp_add') {
+      unawaited(
+        _planMcp([
+          for (final a in candidate['agents'] as List? ?? const []) '$a',
+        ]),
+      );
+      return;
+    }
+    for (final field in _mcpFields.values) {
+      field.dispose();
+    }
+    _mcpFields.clear();
+    for (final need in (candidate['needs'] as List? ?? const []).cast<Map>()) {
+      _mcpFields['${need['name']}'] = TextEditingController(
+        text: '${need['value'] ?? ''}',
+      );
+    }
+    setState(() {
+      _mcpAgents = {
+        for (final a in candidate['agents'] as List? ?? const []) '$a',
+      };
+      _step = _SmartStep.mcpForm;
+    });
+  }
+
+  Future<void> _planMcp(List<String> agents) async {
+    final client = widget.client;
+    final proposal = _activeProposal;
+    final candidate = _activeCandidate;
+    if (client == null || proposal == null || candidate == null) return;
+    final token = ++_runToken;
+    try {
+      final plan = await client.mapSmartPlan(
+        proposal: proposal,
+        candidate: '${candidate['id']}',
+        agents: agents,
+        values: {for (final e in _mcpFields.entries) e.key: e.value.text},
+      );
+      if (!mounted || token != _runToken) return;
+      setState(() {
+        _connectPlan = plan;
+        _step = _SmartStep.connectReview;
+      });
+    } catch (_) {
+      if (!mounted || token != _runToken) return;
+      setState(() {
+        _errorText = widget.tr('The action could not be completed.');
+        _step = _SmartStep.error;
+      });
+    }
+  }
+
+  Widget _buildMcpForm(ColorScheme colors) {
+    final candidate = _activeCandidate ?? const {};
+    final agents = (_reply['agents'] as List? ?? const []).cast<Map>();
+    final needs = (candidate['needs'] as List? ?? const []).cast<Map>();
+    final ready =
+        _mcpAgents.isNotEmpty &&
+        _mcpFields.values.every((f) => f.text.trim().isNotEmpty);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          '${candidate['title'] ?? ''}',
+          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          widget.tr('Connect it to these agents'),
+          style: const TextStyle(fontSize: 11),
+        ),
+        const SizedBox(height: 4),
+        Wrap(
+          spacing: 6,
+          runSpacing: 4,
+          children: [
+            for (final agent in agents)
+              FilterChip(
+                key: ValueKey('smart-mcp-agent-${agent['command']}'),
+                visualDensity: VisualDensity.compact,
+                label: Text('${agent['name']}'),
+                selected: _mcpAgents.contains('${agent['command']}'),
+                onSelected: (on) => setState(() {
+                  on
+                      ? _mcpAgents.add('${agent['command']}')
+                      : _mcpAgents.remove('${agent['command']}');
+                }),
+              ),
+          ],
+        ),
+        for (final need in needs) ...[
+          const SizedBox(height: 8),
+          TextField(
+            key: ValueKey('smart-mcp-need-${need['name']}'),
+            controller: _mcpFields['${need['name']}'],
+            obscureText: need['secret'] == true,
+            onChanged: (_) => setState(() {}),
+            style: const TextStyle(fontSize: 13),
+            decoration: InputDecoration(
+              isDense: true,
+              labelText: '${need['name']}',
+              helperText: '${need['description'] ?? ''}'.isEmpty
+                  ? null
+                  : '${need['description']}',
+              helperMaxLines: 2,
+              border: const OutlineInputBorder(),
+            ),
+          ),
+        ],
+        const SizedBox(height: 8),
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          spacing: 8,
+          runSpacing: 6,
+          children: [
+            TextButton(
+              onPressed: () => setState(() => _step = _SmartStep.proposal),
+              child: Text(widget.tr('← Back')),
+            ),
+            FilledButton(
+              key: const ValueKey('smart-mcp-review'),
+              onPressed: ready ? () => _planMcp(_mcpAgents.toList()) : null,
+              child: Text(widget.tr('Review')),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
   Future<void> _openReview(
     String proposal,
     Map<String, dynamic> candidate,
@@ -435,6 +578,11 @@ class _MapSmartCardState extends State<MapSmartCard> {
             return;
           }
           widget.onApplied?.call(result);
+          if (candidate['kind'] == 'model_remove') {
+            setState(() => _step = _SmartStep.idle);
+            _close();
+            return;
+          }
           setState(() => _step = _SmartStep.done);
           return;
         }
@@ -541,6 +689,9 @@ class _MapSmartCardState extends State<MapSmartCard> {
   void dispose() {
     _runToken++;
     _prompt.dispose();
+    for (final field in _mcpFields.values) {
+      field.dispose();
+    }
     _barFocus.dispose();
     _cardFocus.dispose();
     _fieldFocus.dispose();
@@ -608,7 +759,28 @@ class _MapSmartCardState extends State<MapSmartCard> {
     ];
   }
 
-  Widget _buildIdle(ColorScheme colors) => Column(
+  Widget _buildIdle(ColorScheme colors) => !widget.takesRequests
+      ? Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              widget.tr('This column does not take requests yet.'),
+              style: const TextStyle(fontSize: 12),
+            ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: _close,
+                child: Text(widget.tr('Close')),
+              ),
+            ),
+          ],
+        )
+      : _buildAsk(colors);
+
+  Widget _buildAsk(ColorScheme colors) => Column(
     mainAxisSize: MainAxisSize.min,
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
@@ -862,7 +1034,10 @@ class _MapSmartCardState extends State<MapSmartCard> {
                         alignment: Alignment.centerRight,
                         child: FilledButton.tonal(
                           key: ValueKey('smart-review-${c['id']}'),
-                          onPressed: () => _openReview(proposal, c),
+                          onPressed: () =>
+                              '${c['kind'] ?? ''}'.startsWith('mcp_')
+                              ? _openMcp(proposal, c)
+                              : _openReview(proposal, c),
                           child: Text(widget.tr('Review')),
                         ),
                       ),
@@ -1140,13 +1315,21 @@ class _MapSmartCardState extends State<MapSmartCard> {
                 if (_step == _SmartStep.review)
                   SizedBox(
                     height: 240,
-                    child: SmartModelDownloadReview(
-                      review: _reviewData,
-                      tr: widget.tr,
-                      onConfirm: _confirmReview,
-                      onCancel: () =>
-                          setState(() => _step = _SmartStep.proposal),
-                    ),
+                    child: _reviewData['removal'] != null
+                        ? ModelRemovalReview(
+                            preview: _reviewData,
+                            tr: widget.tr,
+                            onConfirm: _confirmReview,
+                            onCancel: () =>
+                                setState(() => _step = _SmartStep.proposal),
+                          )
+                        : SmartModelDownloadReview(
+                            review: _reviewData,
+                            tr: widget.tr,
+                            onConfirm: _confirmReview,
+                            onCancel: () =>
+                                setState(() => _step = _SmartStep.proposal),
+                          ),
                   )
                 else if (_step == _SmartStep.connectReview)
                   SizedBox(
@@ -1155,7 +1338,11 @@ class _MapSmartCardState extends State<MapSmartCard> {
                       plan: _connectPlan,
                       tr: widget.tr,
                       onConfirm: _applyConnect,
-                      onCancel: () => setState(() => _step = _SmartStep.done),
+                      onCancel: () => setState(
+                        () => _step = _activeCandidate?['kind'] == null
+                            ? _SmartStep.done
+                            : _SmartStep.proposal,
+                      ),
                     ),
                   )
                 else
@@ -1168,6 +1355,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
                         _SmartStep.clarify => _buildClarify(colors),
                         _SmartStep.redirect => _buildRedirect(),
                         _SmartStep.proposal => _buildProposal(colors),
+                        _SmartStep.mcpForm => _buildMcpForm(colors),
                         _SmartStep.running => _buildRunning(),
                         _SmartStep.done => _buildDone(),
                         _SmartStep.error => _buildError(colors),

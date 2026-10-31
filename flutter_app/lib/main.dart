@@ -29,6 +29,7 @@ import 'test_shots.dart';
 import 'window_popup.dart';
 import 'project_start_menu.dart';
 import 'addon_details.dart';
+import 'map_legend.dart';
 import 'map_groups.dart';
 import 'map_welcome.dart';
 import 'map_addons_focus.dart';
@@ -4085,6 +4086,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                   ),
                   onPressed: _navigationBlocked ? null : _openProblems,
                 ),
+              MapLegendButton(tr: tr),
               IconButton(
                 key: const ValueKey('help-open'),
                 tooltip: tr('Help (F1)'),
@@ -4580,6 +4582,10 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                                             onExpandGroup: (col) => setState(
                                               () => _focusCategory = col,
                                             ),
+                                            smartAskColumns: const {
+                                              'mcp',
+                                              'models',
+                                            },
                                             smartCards:
                                                 _smartHelpers.isNotEmpty,
                                             smartHelpers: _smartHelpers,
