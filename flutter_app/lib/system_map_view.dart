@@ -1,4 +1,7 @@
+import 'dart:async' show FutureOr;
+
 import 'package:file_selector/file_selector.dart';
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 
 import 'agent_map.dart';
@@ -28,6 +31,8 @@ class SystemMapView extends StatefulWidget {
     required this.onSession,
     required this.onShowAI,
     required this.controller,
+    this.columns,
+    this.onColumns,
     this.suspended = false,
     this.onUndo,
     this.onGroups,
@@ -49,6 +54,8 @@ class SystemMapView extends StatefulWidget {
   final ValueChanged<Map<String, dynamic>> onSession;
   final ValueChanged<Map<String, dynamic>> onShowAI;
   final TransformationController controller;
+  final List<String>? columns;
+  final FutureOr<void> Function(List<String>)? onColumns;
   final Future<void> Function()? onUndo;
   final VoidCallback? onGroups;
   final ValueChanged<List<dynamic>>? onHealthAction;
@@ -68,6 +75,7 @@ const systemMapColumns = [
   'Tools',
   'Folders',
 ];
+const systemMapColumnKeys = ['pc', 'disks', 'programs', 'tools', 'folders'];
 
 class _SystemMapViewState extends State<SystemMapView> {
   String? _selectedId, _helper, _models;
@@ -78,7 +86,9 @@ class _SystemMapViewState extends State<SystemMapView> {
   bool _showSidebar = false;
   MapViewSize? _lastViewSize;
   final _forcedColumns = <int>{};
-  final _hiddenColumns = <int>{};
+  late Set<String> _enabledColumns = {
+    ...(widget.columns ?? systemMapColumnKeys),
+  };
 
   static String? _canonicalNodeId(String? id) {
     if (id == null) return null;
@@ -113,6 +123,9 @@ class _SystemMapViewState extends State<SystemMapView> {
   void didUpdateWidget(SystemMapView oldWidget) {
     super.didUpdateWidget(oldWidget);
     _restore();
+    if (!listEquals(oldWidget.columns, widget.columns)) {
+      _enabledColumns = {...(widget.columns ?? systemMapColumnKeys)};
+    }
     if (widget.requestedNode != oldWidget.requestedNode) {
       _selectedId = _canonicalNodeId(widget.requestedNode);
     }
@@ -187,21 +200,30 @@ class _SystemMapViewState extends State<SystemMapView> {
 
   List<int> _shownColumnsFor(MapViewSize viewSize) => [
     for (var col = 0; col < systemMapColumns.length; col++)
-      if (!_hiddenColumns.contains(col) &&
+      if (_enabledColumns.contains(systemMapColumnKeys[col]) &&
           (viewSize.allowsSystem(col) || _forcedColumns.contains(col)))
         col,
   ];
 
   void _toggleColumn(int col, bool on, MapViewSize viewSize) {
+    final key = systemMapColumnKeys[col];
+    var changed = false;
     setState(() {
       if (on) {
-        _hiddenColumns.remove(col);
+        changed = _enabledColumns.add(key);
         if (!viewSize.allowsSystem(col)) _forcedColumns.add(col);
-      } else {
-        _forcedColumns.remove(col);
-        if (viewSize.allowsSystem(col)) _hiddenColumns.add(col);
+      } else if (_forcedColumns.remove(col) && !viewSize.allowsSystem(col)) {
+        // Back to what the window's view shows; the saved filter stays as it was.
+      } else if (viewSize.allowsSystem(col)) {
+        changed = _enabledColumns.remove(key);
       }
     });
+    if (changed) {
+      widget.onColumns?.call([
+        for (final k in systemMapColumnKeys)
+          if (_enabledColumns.contains(k)) k,
+      ]);
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && mapUserZoomed[widget.controller] != true) {
         mapFit[widget.controller]?.call();

@@ -361,13 +361,22 @@ void main() {
         'search_done': false,
       };
 
-      Widget buildView() => MaterialApp(
+      final savedColumns = <List<String>>[];
+      var currentColumns = List<String>.from(systemMapColumnKeys);
+
+      Widget buildView({Key? key}) => MaterialApp(
+        key: key,
         home: Scaffold(
           body: SystemMapView(
             data: hwData,
             backend: backend,
             tr: (k) => k,
             busy: false,
+            columns: currentColumns,
+            onColumns: (cols) {
+              savedColumns.add(cols);
+              currentColumns = cols;
+            },
             onRefresh: (_) async {},
             onOperation: (_, _, _) async => null,
             onSaved: (_) async {},
@@ -409,6 +418,16 @@ void main() {
       expect(find.text('Ollama'), findsNothing);
       expect(find.text('uv'), findsNothing);
 
+      // Forcing a view-hidden column on and off in Small view uses _forcedColumns and does not save to settings.
+      await tester.tap(find.byKey(const ValueKey('system-column-2')));
+      await tester.pump();
+      expect(find.text('Ollama'), findsOneWidget);
+      expect(savedColumns, isEmpty);
+      await tester.tap(find.byKey(const ValueKey('system-column-2')));
+      await tester.pump();
+      expect(find.text('Ollama'), findsNothing);
+      expect(savedColumns, isEmpty);
+
       // Ask AI smart cards are rendered under each shown column header.
       expect(find.byKey(const ValueKey('system-smart-card-0')), findsOneWidget);
       expect(find.byKey(const ValueKey('system-smart-card-1')), findsOneWidget);
@@ -428,13 +447,31 @@ void main() {
       expect(find.text('Ollama'), findsOneWidget);
       expect(find.text('uv'), findsOneWidget);
 
-      // Filter chip toggles a column off and back on.
+      // Filter chip toggles a column off and saves through settings.
       await tester.tap(find.byKey(const ValueKey('system-column-3')));
       await tester.pump();
       expect(find.text('uv'), findsNothing);
+      expect(savedColumns, [
+        ['pc', 'disks', 'programs', 'folders'],
+      ]);
+
+      // Restoring a fresh SystemMapView (app restart) preserves the saved column filter.
+      await tester.pumpWidget(buildView(key: const ValueKey('restarted')));
+      await tester.pump();
+      expect(find.text('Ollama'), findsOneWidget);
+      expect(find.text('uv'), findsNothing);
+
+      // Toggling the filter chip back on restores the column and saves through settings.
       await tester.tap(find.byKey(const ValueKey('system-column-3')));
       await tester.pump();
       expect(find.text('uv'), findsOneWidget);
+      expect(savedColumns.last, [
+        'pc',
+        'disks',
+        'programs',
+        'tools',
+        'folders',
+      ]);
     },
   );
 

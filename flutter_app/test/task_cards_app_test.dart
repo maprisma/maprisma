@@ -26,7 +26,7 @@ interrupted=False
 installed=False
 installed_runtime=False
 catalog_loads=0
-settings={'map_scan_interval':6,'map_light_fps':20,'flutter_theme_mode':'system','map_layers':['agents','online','local','models','mcp','skills'],'language':'en'}
+settings={'map_scan_interval':6,'map_light_fps':20,'flutter_theme_mode':'system','map_layers':['agents','online','local','models','mcp','skills'],'system_map_columns':['pc','disks','programs','tools','folders'],'language':'en'}
 if Path('window_popup').exists():settings['window_mode']='popup'
 addon={'id':'fixture-addon','name':'Fixture adapter','version':'1.0','summary':'Summary',
  'kind':'agent','state':'verified','enabled':False,'supported':True,'verified':True,'provides':['test']}

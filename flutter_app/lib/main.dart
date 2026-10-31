@@ -4246,6 +4246,12 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                               tr: tr,
                               busy: _busy || _systemRefreshing,
                               controller: _systemTransform,
+                              columns:
+                                  (_snapshot?['settings']['system_map_columns']
+                                          as List?)
+                                      ?.cast<String>(),
+                              onColumns: (cols) =>
+                                  _updateSettings({'system_map_columns': cols}),
                               onRefresh: (search) => _refreshSystem(search),
                               onOperation: (method, params, title) =>
                                   _addonOperation(method, params),
