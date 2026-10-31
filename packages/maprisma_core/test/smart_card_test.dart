@@ -356,24 +356,27 @@ void main() {
     final base = {
       ...facts(),
       'folders': [
-        {'id': 'models:1', 'label': 'Models'},
+        {'id': 'f1', 'label': 'ollama', 'node': 'folder:/secret/path/ollama'},
       ],
       'disks': [
-        {'id': 'disk:/mnt/Data', 'label': 'Data'},
+        {'id': 'd1', 'label': 'Data', 'node': 'disk:/mnt/Data'},
       ],
     };
     Future<Map<String, dynamic>> ask(String disk) => smartModels(
       base,
-      answers([
-        '{"action": "move", "folder": "models:1", "disk": "$disk"}',
-      ], []),
+      answers(['{"action": "move", "folder": "f1", "disk": "$disk"}'], []),
       (_) async => [],
       (_, _) async => [],
     );
-    final found = await ask('disk:/mnt/Data');
+    final found = await ask('d1');
     final candidate = (found['candidates'] as List).single as Map;
     expect(candidate['kind'], 'model_move');
     expect(candidate['subtitle'], '→ Data');
+    expect(
+      (candidate['action'] as Map)['source'],
+      'folder:/secret/path/ollama',
+    );
+    expect(smartModelsPrompt(base), isNot(contains('/secret/path')));
     expect(ask('/etc'), throwsFormatException);
     expect(smartModelsPrompt(facts()), isNot(contains('"move"')));
     expect(smartModelsPrompt(base), contains('"move"'));

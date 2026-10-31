@@ -82,7 +82,11 @@ String _moveChoice(Map facts) {
   if (folders is! List || disks is! List || folders.isEmpty || disks.isEmpty) {
     return '';
   }
-  return 'Model folders: ${jsonEncode(folders)}. Disks: ${jsonEncode(disks)}.\n'
+  List<Map> named(List items) => [
+    for (final n in items) {'id': (n as Map)['id'], 'label': n['label']},
+  ];
+  return 'Model folders: ${jsonEncode(named(folders))}. '
+      'Disks: ${jsonEncode(named(disks))}.\n'
       '{"action": "move", "folder": "<id of a model folder>", "disk": "<id of a disk>"}\n'
       'when the request is to move or reorganise model folders; one folder for one request.\n';
 }
@@ -547,9 +551,10 @@ Future<Map<String, dynamic>> smartModels(
     };
   }
   if (first['action'] == 'move') {
-    String label(String key, dynamic id) =>
-        '${[for (final n in facts[key] as List)
-          if ((n as Map)['id'] == id) n['label']].first}';
+    Map named(String key, dynamic id) =>
+        (facts[key] as List).cast<Map>().firstWhere((n) => n['id'] == id);
+    final folder = named('folders', first['folder']);
+    final disk = named('disks', first['disk']);
     return {
       'status': 'proposal',
       'summary': '',
@@ -557,15 +562,15 @@ Future<Map<String, dynamic>> smartModels(
         {
           'id': 'c1',
           'kind': 'model_move',
-          'title': _line(label('folders', first['folder'])),
-          'subtitle': '→ ${_line(label('disks', first['disk']))}',
+          'title': _line(folder['label']),
+          'subtitle': '→ ${_line(disk['label'])}',
           'reason': '',
           'fit': 'ok',
           'size': 0,
           'action': {
             'kind': 'model_move',
-            'source': first['folder'],
-            'target': first['disk'],
+            'source': folder['node'],
+            'target': disk['node'],
           },
         },
       ],

@@ -2887,24 +2887,7 @@ final class CoreService {
           'answer': ?answer,
           'language': i18n.language,
           'settings_path': identity.settingsPath,
-          if (column == 'models')
-            ...() {
-              final nodes = (systemMapLast?['nodes'] as List? ?? const [])
-                  .cast<Map>();
-              List<Map> kind(Set<String> kinds) => [
-                for (final n in nodes)
-                  if (kinds.contains(n['kind']) && n['status'] != 'missing')
-                    {
-                      'id': n['id'],
-                      'label': n['label'],
-                      if (n['size'] != null) 'size': n['size'],
-                    },
-              ];
-              return {
-                'folders': kind(const {'models', 'folder'}),
-                'disks': kind(const {'disk'}),
-              };
-            }(),
+          if (column == 'models') ..._moveFacts(),
           if (column == 'mcp')
             ...() {
               final inventory = reads.inventory.collect(agents);
@@ -3044,6 +3027,35 @@ final class CoreService {
       'model': model,
       'use_now': false,
     });
+  }
+
+  /// What the Models helper may move: only model folders, to known disks,
+  /// the saved System Map when this run has none yet. The agent sees short
+  /// names and neutral ids, never a path; `node` stays in the core.
+  Map<String, dynamic> _moveFacts() {
+    if (systemMapLast == null) {
+      final saved = loadMapCache(systemMapPath, Posix());
+      if (saved.isNotEmpty) systemMapLast = saved;
+    }
+    final nodes = (systemMapLast?['nodes'] as List? ?? const []).cast<Map>();
+    List<Map> short(String prefix, bool Function(Map) wanted) => [
+      for (final (i, n)
+          in nodes.where((n) => n['status'] != 'missing' && wanted(n)).indexed)
+        {
+          'id': '$prefix${i + 1}',
+          'label': p.basename('${n['path']}'),
+          'node': n['id'],
+        },
+    ];
+    return {
+      'folders': short(
+        'f',
+        (n) =>
+            n['kind'] == 'models' ||
+            n['kind'] == 'folder' && n['label'] == 'Models folder',
+      ),
+      'disks': short('d', (n) => n['kind'] == 'disk'),
+    };
   }
 
   /// map.smart_plan: an approved MCP candidate as the app's normal preview;
