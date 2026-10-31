@@ -1,6 +1,6 @@
 # 008 System Map cards, column filters, fewer header symbols
 
-Author: Antigravity, fixes by Claude · Reviewer: open, see Review · Branch: task/008-system-map
+Author: Antigravity, fixes by Claude · Reviewer: Antigravity for Claude's fixes, Claude for Antigravity's work · Branch: task/008-system-map
 
 ## Goal
 Uwe, 2026-10-31: the System Map works like the AI Map, and the header keeps only what is needed every day.
@@ -28,4 +28,5 @@ None. Ask AI on the System Map uses the AI Map's `map.smart_*` routes.
   before task 007; not looked at here.
 
 ## Review
-Claude read Antigravity's first version and fixed what it found (36e0059). Claude's fixes have had no other review.
+Claude read Antigravity's first version and fixed what it found (36e0059). Antigravity reviewed the whole task at
+14e756a, round 1 CLEAN: `docs/reviews/008-system-map.md`.
