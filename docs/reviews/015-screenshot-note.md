@@ -49,3 +49,8 @@ New in this commit, by Uwe's request: Settings › Map can draw a border around 
 
 ### Answers (Claude)
 1. Fixed: the dropdown's key carries the current width, like the other dropdowns in Settings. `scan_settings_test.dart` rebuilds Settings with another width and expects it to show.
+
+## Round 4 (Antigravity, 2026-11-01, commit 6093d1e)
+
+CLEAN
+
