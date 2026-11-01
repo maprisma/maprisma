@@ -4203,23 +4203,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                                     ),
                                     () => setState(() => _showGuide = false),
                                   )
-                                : _visibleTerminal != null
-                                ? AgentTerminalView(
-                                    session: _visibleTerminal!,
-                                    tr: tr,
-                                    onBack: () {
-                                      final fromGuide = _guideTerminals.remove(
-                                        _visibleTerminal,
-                                      );
-                                      setState(() => _visibleTerminal = null);
-                                      if (fromGuide) {
-                                        _guideReturn = true;
-                                        _backToGuideIfFromIt();
-                                      }
-                                    },
-                                    onStop: () =>
-                                        _stopTerminal(_visibleTerminal!),
-                                  )
                                 : _showConnections
                                 ? _viewHost(
                                     'Connections',
@@ -4505,6 +4488,50 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                                   ),
                           ),
                         if (_card != null) _host(_card!, _closeCard),
+                        if (_visibleTerminal != null &&
+                            _card == null &&
+                            _browser == null)
+                          Stack(
+                            key: const ValueKey('terminal-overlay'),
+                            fit: StackFit.expand,
+                            children: [
+                              const ModalBarrier(
+                                color: Colors.black54,
+                                dismissible: false,
+                              ),
+                              Center(
+                                child: FractionallySizedBox(
+                                  widthFactor: 0.8,
+                                  heightFactor: 0.85,
+                                  child: Card(
+                                    clipBehavior: Clip.antiAlias,
+                                    elevation: 8,
+                                    child: AgentTerminalView(
+                                      session: _visibleTerminal!,
+                                      tr: tr,
+                                      onBack: () {
+                                        final fromGuide = _guideTerminals
+                                            .remove(_visibleTerminal);
+                                        setState(() => _visibleTerminal = null);
+                                        if (fromGuide) {
+                                          _guideReturn = true;
+                                          _backToGuideIfFromIt();
+                                        }
+                                      },
+                                      onStop: () =>
+                                          _stopTerminal(_visibleTerminal!),
+                                      onScreenshot:
+                                          (_snapshot?['settings']
+                                                  as Map?)?['screenshot_key'] ==
+                                              false
+                                          ? null
+                                          : _takeShot,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                       ],
                     );
                   },

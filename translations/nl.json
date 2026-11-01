@@ -3248,5 +3248,7 @@
  "Nothing new found.": "Niets nieuws gevonden.",
  "F9 saves a screenshot": "F9 slaat een schermafbeelding op",
  "A picture of this window goes to Pictures/Maprisma. Not while a terminal is showing: programs there may use F9.": "Een afbeelding van dit venster gaat naar Pictures/Maprisma. Niet zolang een terminal zichtbaar is: programma’s daar kunnen F9 zelf gebruiken.",
- "Screenshot saved: {0}": "Schermafbeelding opgeslagen: {0}"
+ "Screenshot saved: {0}": "Schermafbeelding opgeslagen: {0}",
+ "A picture of this window goes to Pictures/Maprisma. In a terminal, use the camera symbol below it: programs there may use F9.": "Een afbeelding van dit venster gaat naar Pictures/Maprisma. Gebruik in een terminal het camerasymbool eronder: programma’s daar kunnen F9 zelf gebruiken.",
+ "Save a screenshot": "Schermafbeelding opslaan"
 }

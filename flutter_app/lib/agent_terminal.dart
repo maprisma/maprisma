@@ -132,12 +132,16 @@ class AgentTerminalView extends StatelessWidget {
     required this.tr,
     required this.onBack,
     required this.onStop,
+    this.onScreenshot,
   });
 
   final AgentTerminal session;
   final String Function(String) tr;
   final VoidCallback onBack;
   final VoidCallback onStop;
+
+  /// F9 belongs to the program in the terminal: the footer's symbol instead.
+  final VoidCallback? onScreenshot;
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
@@ -190,6 +194,16 @@ class AgentTerminalView extends StatelessWidget {
             ),
           ),
         ),
+        if (onScreenshot != null)
+          Align(
+            alignment: Alignment.centerRight,
+            child: IconButton(
+              key: const ValueKey('terminal-screenshot'),
+              tooltip: tr('Save a screenshot'),
+              onPressed: onScreenshot,
+              icon: const Icon(Icons.photo_camera_outlined),
+            ),
+          ),
       ],
     ),
   );

@@ -3248,5 +3248,7 @@
  "Nothing new found.": "No se ha encontrado nada nuevo.",
  "F9 saves a screenshot": "F9 guarda una captura de pantalla",
  "A picture of this window goes to Pictures/Maprisma. Not while a terminal is showing: programs there may use F9.": "Una imagen de esta ventana va a Pictures/Maprisma. No mientras se muestra un terminal: los programas allí pueden usar F9.",
- "Screenshot saved: {0}": "Captura guardada: {0}"
+ "Screenshot saved: {0}": "Captura guardada: {0}",
+ "A picture of this window goes to Pictures/Maprisma. In a terminal, use the camera symbol below it: programs there may use F9.": "Una imagen de esta ventana va a Pictures/Maprisma. En un terminal, usa el símbolo de la cámara debajo: los programas allí pueden usar F9.",
+ "Save a screenshot": "Guardar una captura"
 }

@@ -110,7 +110,8 @@ KEYS = (
     "Update",
     # Status in the smart cards (health.report).
     "F9 saves a screenshot",
-    "A picture of this window goes to Pictures/Maprisma. Not while a terminal is showing: programs there may use F9.",
+    "A picture of this window goes to Pictures/Maprisma. In a terminal, use the camera symbol below it: programs there may use F9.",
+    "Save a screenshot",
     "Screenshot saved: {0}",
     "Check again",
     "Nothing to fix.",
