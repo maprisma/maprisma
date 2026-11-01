@@ -3239,5 +3239,8 @@
  "Round hook on a selected box's line: drag it to another box, or click it, then Disconnect.": "Runder Haken an der Linie eines ausgewählten Felds: auf ein anderes Feld ziehen oder anklicken, dann Trennen.",
  "Map lights": "Kartenlichter",
  "Nothing to change: it is already set up that way.": "Nichts zu ändern: Es ist schon so eingerichtet.",
- "CPU & RAM": "CPU & RAM"
+ "CPU & RAM": "CPU & RAM",
+ "No AI helper is set up yet.": "Noch kein KI-Helfer eingerichtet.",
+ "{0}: {1} to fix": "{0}: {1} zu beheben",
+ "{0}: all fine": "{0}: alles in Ordnung"
 }

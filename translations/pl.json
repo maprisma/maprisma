@@ -3320,5 +3320,8 @@
  "Round hook on a selected box's line: drag it to another box, or click it, then Disconnect.": "Okrągły uchwyt na linii zaznaczonego pola: przeciągnij go na inne pole albo kliknij, a potem Odłącz.",
  "Map lights": "Światła mapy",
  "Nothing to change: it is already set up that way.": "Nie ma nic do zmiany: jest już tak ustawione.",
- "CPU & RAM": "CPU i RAM"
+ "CPU & RAM": "CPU i RAM",
+ "No AI helper is set up yet.": "Nie skonfigurowano jeszcze pomocnika AI.",
+ "{0}: {1} to fix": "{0}: {1} do naprawienia",
+ "{0}: all fine": "{0}: wszystko w porządku"
 }

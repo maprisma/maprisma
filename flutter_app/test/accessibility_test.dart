@@ -1,6 +1,5 @@
 import 'package:maprisma/agent_map.dart';
 import 'package:maprisma/map_smart_card.dart';
-import 'package:maprisma/open_problems_view.dart';
 import 'package:maprisma/settings_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -9,7 +8,7 @@ import 'support/a11y.dart';
 
 /// Accessibility: every control a screen reader reaches has a label, tap
 /// targets are large enough and text has enough contrast, in light and dark,
-/// on the map, Settings and Open problems.
+/// on the map, Settings and the smart cards.
 void main() {
   final views = <String, Widget Function()>{
     'map': () => AgentMap(
@@ -61,41 +60,51 @@ void main() {
       onBack: () {},
       onUpdate: (_) async {},
     ),
-    'open problems': () => OpenProblemsView(
-      report: const {
-        'warn': 1,
-        'hint': 0,
-        'open_text': '1 open problem',
-        'areas': [
-          {
-            'key': 'agents',
-            'title': 'Agents',
-            'findings': [
+    'smart card status': () => Center(
+      child: MapSmartCard(
+        column: 'agents',
+        title: 'AI Agents',
+        open: true,
+        statusTrigger: 1,
+        onToggle: () {},
+        tr: (key) => key,
+        status: SmartStatusData(
+          report: const {
+            'warn': 1,
+            'hint': 0,
+            'open_text': '1 open problem',
+            'areas': [
               {
-                'level': 'warn',
-                'title': 'Pi: Not signed in',
-                'text': '',
-                'action': ['details', 'pi'],
+                'key': 'agents',
+                'title': 'Agents',
+                'findings': [
+                  {
+                    'level': 'warn',
+                    'column': 'agents',
+                    'title': 'Pi: Not signed in',
+                    'text': '',
+                    'action': ['details', 'pi'],
+                  },
+                ],
               },
             ],
+            'uses': [],
           },
-        ],
-        'uses': [],
-      },
-      tr: (key) => key,
-      onAction: (_) {},
-      mcpUpdates: const [
-        {
-          'name': 'fetch',
-          'text': 'MCP server fetch 1.5.0 is available (you have 1.4.2)',
-          'notes': 'Faster.',
-          'on_pc': false,
-        },
-      ],
-      mcpTaskAgent: 'Claude Code',
-      onMcpUpdate: (_, _) {},
-      onCheckAgain: () {},
-      onClose: () {},
+          mcpUpdates: const [
+            {
+              'name': 'fetch',
+              'column': 'mcp',
+              'text': 'MCP server fetch 1.5.0 is available (you have 1.4.2)',
+              'notes': 'Faster.',
+              'on_pc': false,
+            },
+          ],
+          mcpTaskAgent: 'Claude Code',
+          onAction: (_) {},
+          onMcpUpdate: (_, _) {},
+          onCheckAgain: () {},
+        ),
+      ),
     ),
     'smart card collapsed': () => Center(
       child: MapSmartCard(

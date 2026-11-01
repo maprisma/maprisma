@@ -48,6 +48,8 @@ class AgentMap extends StatelessWidget {
     this.smartHelpers = const [],
     this.client,
     this.onSmartApplied,
+    this.smartStatus,
+    this.smartStatusTarget,
     this.columns = const [
       'MCP servers and skills',
       'Agents',
@@ -68,6 +70,8 @@ class AgentMap extends StatelessWidget {
   final List<Map<String, dynamic>> smartHelpers;
   final CoreClient? client;
   final ValueChanged<Map<String, dynamic>>? onSmartApplied;
+  final SmartStatusData? smartStatus;
+  final (int, String)? smartStatusTarget;
   final Set<String>? selection;
   final Widget Function(Map<String, dynamic>)? controls;
   final Future<void> Function(Map<String, dynamic>)? onEdit;
@@ -236,6 +240,8 @@ class AgentMap extends StatelessWidget {
         smartHelpers: smartHelpers,
         client: client,
         onSmartApplied: onSmartApplied,
+        smartStatus: smartStatus,
+        smartStatusTarget: smartStatusTarget,
       );
     }
     final groups = readOnly ? null : this.groups;
@@ -479,6 +485,7 @@ class AgentMap extends StatelessWidget {
                     onProvider: onSmartProvider,
                     onTask: onSmartTask,
                     onApplied: onSmartApplied,
+                    status: smartStatus,
                     initialPrompt: smartPrompts?[col],
                     columnNames: columns.length == 5
                         ? _systemColumnNames

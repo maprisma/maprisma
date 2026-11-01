@@ -42,7 +42,9 @@ import 'interrupted_jobs.dart';
 import 'help_view.dart';
 import 'item_details_view.dart';
 import 'map_layout.dart' show withAgentLinks;
-import 'open_problems_view.dart';
+import 'map_editor.dart' show mapColumnLayers;
+import 'map_smart_card.dart'
+    show SmartStatusData, SmartStatusIcon, mapSmartColumns;
 import 'agent_action_dialog.dart';
 import 'providers_view.dart';
 import 'system_map_view.dart';
@@ -2061,55 +2063,84 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     }
   }
 
+  int _smartStatusSeq = 0;
+  (int, String)? _smartStatusTarget;
+
+  SmartStatusData get _smartStatusData => SmartStatusData(
+    report: _healthReport,
+    updates: _updates,
+    addonHints: [..._foundHints, ..._addonHints],
+    mcpUpdates: _mcpUpdates,
+    mcpTaskAgent: _mcpChecks?['task_agent'] as String?,
+    onAction: _healthAction,
+    onUpdate: _runUpdate,
+    onAddonHint: (line, action) {
+      switch (action) {
+        case 'update_all':
+          _updateAllAddons(line);
+        case 'mcp' || 'skills':
+          setState(() {
+            _showConnections = true;
+            _showFound = true;
+            _showProviders = false;
+            _showSystemMap = false;
+          });
+        default:
+          final col = line['column'];
+          final cat = col is int
+              ? col
+              : col == 'providers'
+              ? 2
+              : col == 'mcp'
+              ? 0
+              : col == 'models'
+              ? 3
+              : 1;
+          setState(() => _focusCategory = cat);
+      }
+    },
+    onMcpUpdate: _mcpUpdateAction,
+    onCheckAgain: () async {
+      await Future.wait([_checkHealth(), _checkUpdates(), _checkMcp()]);
+    },
+  );
+
   Future<void> _openProblems() async {
-    final report = _healthReport;
-    if (report == null || _busy) return;
-    await _cardReview(
-      tr('Open problems'),
-      const {},
-      (yes, no) => OpenProblemsView(
-        report: report,
-        tr: tr,
-        onAction: (action) {
-          _cancelReview?.call();
-          _healthAction(action);
-        },
-        updates: _updates,
-        onUpdate: (update) {
-          _cancelReview?.call();
-          _runUpdate(update);
-        },
-        mcpUpdates: _mcpUpdates,
-        mcpTaskAgent: _mcpChecks?['task_agent'] as String?,
-        onMcpUpdate: (update, action) {
-          _cancelReview?.call();
-          _mcpUpdateAction(update, action);
-        },
-        addonHints: [..._foundHints, ..._addonHints],
-        onAddonHint: (line, action) {
-          _cancelReview?.call();
-          switch (action) {
-            case 'update_all':
-              _updateAllAddons(line);
-            case 'mcp' || 'skills':
-              setState(() {
-                _showConnections = true;
-                _showFound = true;
-                _showProviders = false;
-                _showSystemMap = false;
-              });
-            default:
-              setState(() => _focusCategory = line['column'] as int? ?? 1);
-          }
-        },
-        onCheckAgain: () async {
-          _cancelReview?.call();
-          await Future.wait([_checkHealth(), _checkUpdates(), _checkMcp()]);
-          if (mounted) await _openProblems();
-        },
-        onClose: no,
-      ),
-    );
+    if (_busy) return;
+    final targetCol = _smartStatusData.firstConcernedColumn;
+    final colIndex = mapSmartColumns.indexWhere((c) => c.$1 == targetCol);
+    final rawLayers = (_snapshot?['settings'] as Map?)?['map_layers'] as List?;
+    List<String>? updatedLayers;
+    if (colIndex >= 0 && rawLayers != null) {
+      const needs = {0: 1, 3: 2};
+      final current = rawLayers.cast<String>();
+      final needed = <String>[
+        ...mapColumnLayers[colIndex],
+        if (needs[colIndex] case final other?) ...mapColumnLayers[other],
+      ];
+      if (needed.any((l) => !current.contains(l))) {
+        updatedLayers = {...current, ...needed}.toList();
+      }
+    }
+    setState(() {
+      _card = null;
+      _browser = null;
+      _focusCategory = null;
+      _showSystemMap = false;
+      _showMap = true;
+      _showGuide = false;
+      _showSettings = false;
+      _showProviders = false;
+      _showConnections = false;
+      _visibleTerminal = null;
+      if (updatedLayers != null && _snapshot?['settings'] is Map) {
+        (_snapshot!['settings'] as Map)['map_layers'] = updatedLayers;
+      }
+      _smartStatusTarget = (++_smartStatusSeq, targetCol);
+    });
+    if (updatedLayers != null) {
+      unawaited(_updateSettings({'map_layers': updatedLayers}));
+    }
   }
 
   /// ai_popup.health_action: each finding opens where it is fixed.
@@ -4007,12 +4038,12 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       // Esc (Flutter's dismiss key) and Backspace: back from a page; only
       // when nothing nearer took the key.
       DismissIntent: _BackAction<DismissIntent>(
-        () => _canGoBack || _canCloseTopLevel,
-        _backOrClose,
+        () => (_card?.closable ?? false) || _canGoBack || _canCloseTopLevel,
+        () => (_card?.closable ?? false) ? _closeCard() : _backOrClose(),
       ),
       _EscIntent: _BackAction<_EscIntent>(
-        () => _canGoBack || _canCloseTopLevel,
-        _backOrClose,
+        () => (_card?.closable ?? false) || _canGoBack || _canCloseTopLevel,
+        () => (_card?.closable ?? false) ? _closeCard() : _backOrClose(),
       ),
       _BackIntent: _BackAction<_BackIntent>(() => _canGoBack, _goBack),
     },
@@ -4112,15 +4143,17 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                         },
                 ),
               ),
-              if (_healthCount > 0)
+              if (_healthReport != null || _healthCount > 0)
                 IconButton(
                   key: const ValueKey('problems-open'),
-                  tooltip: '${_healthReport?['summary'] ?? ''}',
-                  icon: Icon(
-                    Icons.priority_high,
-                    color: (_healthReport?['warn'] as int? ?? 0) > 0
-                        ? Theme.of(context).colorScheme.error
-                        : null,
+                  tooltip: switch ('${_healthReport?['summary'] ?? ''}'
+                      .trim()) {
+                    '' => tr('Everything set up and working'),
+                    final s => s,
+                  },
+                  icon: SmartStatusIcon(
+                    level: _smartStatusData.overallLevel,
+                    size: 18,
                   ),
                   onPressed: _navigationBlocked ? null : _openProblems,
                 ),
@@ -4189,6 +4222,9 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                   onSkip: () => setState(() => _skipWelcomeSearch = true),
                   onSystem: () => _openSystem(),
                   onAgents: () => _openGroups(),
+                  uses: (_healthReport?['uses'] as List? ?? const [])
+                      .cast<Map<String, dynamic>>(),
+                  onAction: _healthAction,
                 ),
               if (_terminals.isNotEmpty &&
                   (_snapshot?['settings'] as Map?)?['terminal_tabs'] != false)
@@ -4579,9 +4615,11 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                                             },
                                             onSmartProvider: _smartProvider,
                                             onSmartTask: _smartTask,
-                                            smartCards:
-                                                _smartHelpers.isNotEmpty,
+                                            smartCards: true,
                                             smartHelpers: _smartHelpers,
+                                            smartStatus: _smartStatusData,
+                                            smartStatusTarget:
+                                                _smartStatusTarget,
                                             client: _maybeClient,
                                             onSmartApplied: (result) {
                                               if (result['session'] != null) {

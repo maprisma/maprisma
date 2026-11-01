@@ -3239,5 +3239,8 @@
  "Round hook on a selected box's line: drag it to another box, or click it, then Disconnect.": "Ronde haak op de lijn van een geselecteerd vak: sleep hem naar een ander vak, of klik erop en dan Loskoppelen.",
  "Map lights": "Kaartlichten",
  "Nothing to change: it is already set up that way.": "Niets te wijzigen: het staat al zo ingesteld.",
- "CPU & RAM": "CPU & RAM"
+ "CPU & RAM": "CPU & RAM",
+ "No AI helper is set up yet.": "Er is nog geen AI-helper ingesteld.",
+ "{0}: {1} to fix": "{0}: {1} op te lossen",
+ "{0}: all fine": "{0}: alles in orde"
 }

@@ -9,6 +9,7 @@ import 'package:maprisma/main.dart';
 import 'package:maprisma/connections_view.dart';
 import 'package:maprisma/task_card.dart';
 import 'package:maprisma/map_addons_focus.dart';
+import 'package:maprisma/map_smart_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -112,9 +113,9 @@ for line in sys.stdin:
  elif m=='models.tuning_preview':r={'plan':'opaque-tune','empty':False,'files':[{'path':'~/.config/x.ini','added':1,'removed':0}],'links_add':[],'links_remove':[],'item':'Fixture provider','notes':[],'focus':['runtime:fixture']}
  elif m=='models.slots_preview':r={'plan':'opaque-slots','empty':False,'files':[{'path':'~/.config/llama.cpp/server.env','added':1,'removed':0}],'links_add':[],'links_remove':[],'notes':['Fixture provider keeps 2 models loaded at once'],'warnings':['Too big together.'],'reload':True,'focus':['runtime:fixture']}
  elif m=='models.slots_reload':r={'ok':True}
- elif m=='updates.check':tasks['up']={'updates':[{'kind':'agent','key':'test','name':'Test agent','current':'1.0','available':'1.1','command':['mise','upgrade','test'],'page':False}]};r={'task':'up'}
+ elif m=='updates.check':tasks['up']={'updates':[{'kind':'agent','column':'agents','key':'test','name':'Test agent','current':'1.0','available':'1.1','command':['mise','upgrade','test'],'page':False}]};r={'task':'up'}
  elif m=='updates.run':r=({'started':True} if p.get('running_ok') else {'started':False,'running':1,'here':0})
- elif m=='checks.mcp_check':tasks['mcpc']={'on':True,'summary':'1 update','servers':2,'agent':'Test agent','task_agent':'Test agent','due':False,'updates':[{'name':'fetch','app':'@acme/fetch-mcp','current':'1.4.2','latest':'1.5.0','url':'https://www.npmjs.com/package/@acme/fetch-mcp','notes':'Faster.','source':'npm','program':'','on_pc':False,'text':'MCP server fetch 1.5.0 is available (you have 1.4.2)'}]};r={'task':'mcpc'}
+ elif m=='checks.mcp_check':tasks['mcpc']={'on':True,'summary':'1 update','servers':2,'agent':'Test agent','task_agent':'Test agent','due':False,'updates':[{'name':'fetch','column':'mcp','app':'@acme/fetch-mcp','current':'1.4.2','latest':'1.5.0','url':'https://www.npmjs.com/package/@acme/fetch-mcp','notes':'Faster.','source':'npm','program':'','on_pc':False,'text':'MCP server fetch 1.5.0 is available (you have 1.4.2)'}]};r={'task':'mcpc'}
  elif m=='checks.mcp_release':r={'opened':True}
  elif m=='changes.undo' and Path('slow').exists():
   # Answered only once 'release' exists: the app stays busy meanwhile.
@@ -129,13 +130,13 @@ for line in sys.stdin:
  elif m=='map.badges':r={'badges':{},'rate_due':False}
  elif m in ('agents.projects','agents.costs'):r={'card':None}
  elif m=='found.scan':tasks['found']={'mcp':[],'versions':[],'not_looked':[],'skills':[]};r={'task':'found'}
- elif m=='found.hints':r={'lines':[{'kind':'found','text':'New on this PC: wordcraft','mcp':True,'skills':False}]}
+ elif m=='found.hints':r={'lines':[{'kind':'found','column':'mcp','text':'New on this PC: wordcraft','mcp':True,'skills':False}]}
  elif m=='found.list':r=({'checked':True,'set_up':1,'not_looked':[],'items':[{'name':'wordcraft','where':'~/.local/bin/wordcraft-cli','command':['/h/.local/bin/wordcraft-cli','mcp','--headless'],'sure':True,'version':'','new':True,'ready':True},{'name':'vectorcraft','where':'vectorcraft.AppImage','command':['/h/Applications/vectorcraft-1.2.0/usr/bin/vectorcraft-cli','mcp'],'sure':True,'version':'1.2.0','new':False,'ready':False,'program':'/h/Applications/vectorcraft-1.2.0/usr/bin/vectorcraft-cli','unpack_text':'Unpacks vectorcraft.AppImage into ~/Applications/vectorcraft-1.2.0 first (the server lives inside it).'}],'updates':[{'name':'gridcraft','from':'0.7.0','to':'0.8.0','program':'/h/Applications/gridcraft-0.8.0/usr/bin/gridcraft-cli','ready':True,'used_by':'Update · used by Claude Code'}],'not_looked_text':'1 AppImage not looked into yet (wordcraft.AppImage).','looking_text':'Looking inside 1 AppImages…'} if p['kind']=='mcp' else {'checked':True,'items':[]})
  elif m=='found.seen':r={'ok':True}
  elif m=='found.update_preview':r={'plan':'opaque-update','empty':False,'files':[{'path':'~/.claude.json','added':1,'removed':1}],'links_add':[['~/.local/bin/gridcraft','/h/Applications/gridcraft-0.8.0/usr/bin/gridcraft-cli']],'links_remove':[['~/.local/bin/gridcraft','/h/Applications/gridcraft-0.7.0/usr/bin/gridcraft-cli']],'retire':['~/Applications/gridcraft-0.7.0'],'notes':['The old version is kept with the backup for 7 days: Undo brings everything back.'],'kind':'mcp','focus':['mcp:gridcraft']}
  elif m in ('found.look_inside','found.unpack'):tasks[m]={'ok':True};r={'task':m}
- elif m=='addons.hints':r={'lines':[{'kind':'new','text':'Goose is on this PC but not on the map','ids':['agent-goose'],'column':1},{'kind':'updates','text':'Add-on updates ready: Catalog adapter','updates':[{'id':'catalog-addon','name':'Catalog adapter','version':'2.1','current':'2.0','preview':'catalog-1'}]}]}
- elif m=='health.report':tasks['hr']={'warn':1,'hint':0,'level':'warn','summary':'1 thing to fix','open_text':'1 open problem','areas':[{'key':'agents','title':'Agents','icon':'','findings':[{'level':'warn','title':'Test agent: Not signed in','text':'','action':['details','test']}]}],'uses':[]};r={'task':'hr'}
+ elif m=='addons.hints':r={'lines':[{'kind':'new','text':'Goose is on this PC but not on the map','ids':['agent-goose'],'column':'agents'},{'kind':'updates','column':'agents','text':'Add-on updates ready: Catalog adapter','updates':[{'id':'catalog-addon','name':'Catalog adapter','version':'2.1','current':'2.0','preview':'catalog-1'}]}]}
+ elif m=='health.report':tasks['hr']=(json.loads(Path('health.json').read_text()) if Path('health.json').exists() else {'warn':1,'hint':0,'level':'warn','summary':'1 thing to fix','open_text':'1 open problem','areas':[{'key':'agents','title':'Agents','icon':'','findings':[{'level':'warn','column':'agents','title':'Test agent: Not signed in','text':'','action':['details','test']}]}],'uses':[{'key':'coding','title':'Vibe coding','icon':'','blurb':'Describe what you want.','have':['Test agent'],'steps':[{'level':'hint','column':'mcp','title':'Add skills','text':'Ready-made workflows.','action':['addskills']}],'level':'almost'}]});r={'task':'hr'}
  elif m=='agents.health':r={'state':'warn','summary':'Works, one thing to look at: No model chosen','checks':[{'state':'warn','title':'No model chosen','detail':'','step':'Select it on the map.','command':'','sign_in':''}]}
  elif m=='help.snapshot':r={'manual':True}
  elif m=='help.open_manual':r={'opened':True}
@@ -715,7 +716,7 @@ void main() {
     );
     await tester.tap(find.byKey(const ValueKey('problems-open')));
     await settleService(tester);
-    expect(find.text('1 open problem'), findsOneWidget);
+    expect(find.text('Test agent: Not signed in'), findsOneWidget);
     expect(
       find.text('Test agent 1.1 is available (you have 1.0)'),
       findsOneWidget,
@@ -734,9 +735,12 @@ void main() {
       requests(dir).lastWhere((q) => q['method'] == 'updates.run')['params'],
       {'key': 'test', 'running_ok': true},
     );
-    await tester.tap(find.byKey(const ValueKey('problems-open')));
-    await settleService(tester);
-    await tester.tap(find.widgetWithText(OutlinedButton, 'Details'));
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(const ValueKey('smart-card-agents')),
+        matching: find.widgetWithText(OutlinedButton, 'Details'),
+      ),
+    );
     await settleService(tester);
     expect(
       requests(dir).lastWhere((q) => q['method'] == 'agents.health')['params'],
@@ -1303,7 +1307,7 @@ void main() {
     await unmountApp(tester);
   });
 
-  testWidgets('the daily AI checks\' MCP updates in Open problems', (
+  testWidgets('the daily AI checks\' MCP updates in the MCP smart card', (
     tester,
   ) async {
     final dir = await mountApp(tester);
@@ -1314,7 +1318,7 @@ void main() {
       ).firstWhere((q) => q['method'] == 'checks.mcp_check')['params'],
       {'force': false},
     ); // the daily check, asked quietly at start
-    await tester.tap(find.byKey(const ValueKey('problems-open')));
+    await tester.tap(find.byKey(const ValueKey('smart-status-mcp')));
     await settleService(tester);
     expect(
       find.text('MCP server fetch 1.5.0 is available (you have 1.4.2)'),
@@ -1329,8 +1333,6 @@ void main() {
       ).lastWhere((q) => q['method'] == 'checks.mcp_release')['params'],
       {'name': 'fetch'},
     );
-    await tester.tap(find.byKey(const ValueKey('problems-open')));
-    await settleService(tester);
     await tester.tap(find.byKey(const ValueKey('mcp-task-fetch')));
     await settleService(tester);
     expect(find.textContaining('pinned to 1.4.2'), findsOneWidget);
@@ -1349,7 +1351,7 @@ void main() {
   ) async {
     final dir = await mountApp(tester);
     await settleService(tester);
-    await tester.tap(find.byKey(const ValueKey('problems-open')));
+    await tester.tap(find.byKey(const ValueKey('smart-status-mcp')));
     await settleService(tester);
     expect(find.text('New on this PC: wordcraft'), findsOneWidget);
     await tester.tap(find.widgetWithText(OutlinedButton, 'Add MCP server…'));
@@ -1420,7 +1422,7 @@ void main() {
   ) async {
     final dir = await mountApp(tester);
     await settleService(tester);
-    await tester.tap(find.byKey(const ValueKey('problems-open')));
+    await tester.tap(find.byKey(const ValueKey('smart-status-mcp')));
     await settleService(tester);
     await tester.tap(find.widgetWithText(OutlinedButton, 'Add MCP server…'));
     await settleService(tester);
@@ -1554,4 +1556,162 @@ void main() {
       await unmountApp(tester);
     },
   );
+
+  testWidgets(
+    'every finding from health.report appears in its column\'s smart card',
+    (tester) async {
+      await mountApp(
+        tester,
+        beforeStart: (d) {
+          File('${d.path}/health.json').writeAsStringSync(
+            jsonEncode({
+              'warn': 1,
+              'hint': 3,
+              'level': 'warn',
+              'summary': '1 thing to fix · 3 tips',
+              'open_text': '1 open problem',
+              'areas': [
+                {
+                  'key': 'connections',
+                  'title': 'MCP servers and skills',
+                  'icon': '',
+                  'findings': [
+                    {
+                      'level': 'hint',
+                      'column': 'mcp',
+                      'title': 'MCP finding in column 0',
+                      'text': '',
+                      'action': ['addmcp'],
+                    },
+                  ],
+                },
+                {
+                  'key': 'agents',
+                  'title': 'Agents',
+                  'icon': '',
+                  'findings': [
+                    {
+                      'level': 'warn',
+                      'column': 'agents',
+                      'title': 'Agent finding in column 1',
+                      'text': '',
+                      'action': ['details', 'test'],
+                    },
+                  ],
+                },
+                {
+                  'key': 'local',
+                  'title': 'Local LLMs',
+                  'icon': '',
+                  'findings': [
+                    {
+                      'level': 'hint',
+                      'column': 'providers',
+                      'title': 'Provider finding in column 2',
+                      'text': '',
+                      'action': ['runtime', 'fixture'],
+                    },
+                    {
+                      'level': 'hint',
+                      'column': 'models',
+                      'title': 'Model finding in column 3',
+                      'text': '',
+                      'action': ['models', 'fixture'],
+                    },
+                  ],
+                },
+              ],
+              'uses': [],
+            }),
+          );
+        },
+      );
+      await settleService(tester);
+
+      for (final (col, expected) in const [
+        ('mcp', 'MCP finding in column 0'),
+        ('agents', 'Agent finding in column 1'),
+        ('providers', 'Provider finding in column 2'),
+        ('models', 'Model finding in column 3'),
+      ]) {
+        await tester.tap(find.byKey(ValueKey('smart-status-$col')));
+        await settleService(tester);
+        expect(find.text(expected), findsOneWidget);
+      }
+      expect(tester.takeException(), isNull);
+      await unmountApp(tester);
+    },
+  );
+
+  testWidgets(
+    'a hidden column with a red problem turns the header symbol red, and clicking it reveals and opens that column\'s smart card on status',
+    (tester) async {
+      await mountApp(
+        tester,
+        beforeStart: (d) {
+          File('${d.path}/health.json').writeAsStringSync(
+            jsonEncode({
+              'warn': 1,
+              'hint': 0,
+              'level': 'warn',
+              'summary': '1 thing to fix',
+              'open_text': '1 open problem',
+              'areas': [
+                {
+                  'key': 'local',
+                  'title': 'Local LLMs',
+                  'icon': '',
+                  'findings': [
+                    {
+                      'level': 'warn',
+                      'column': 'models',
+                      'title': 'Hidden model problem',
+                      'text': 'Fix model folder.',
+                      'action': ['models', 'fixture'],
+                    },
+                  ],
+                },
+              ],
+              'uses': [],
+            }),
+          );
+        },
+      );
+      await settleService(tester);
+
+      // Hide Models column (column 3) via the filter chip.
+      await tester.tap(find.byKey(const ValueKey('map-column-3')));
+      await settleService(tester);
+      expect(find.byKey(const ValueKey('smart-card-models')), findsNothing);
+
+      // Header status icon still has level 2 (red warn) because of the hidden column.
+      final headerIcon = tester.widget<SmartStatusIcon>(
+        find.descendant(
+          of: find.byKey(const ValueKey('problems-open')),
+          matching: find.byType(SmartStatusIcon),
+        ),
+      );
+      expect(headerIcon.level, 'warn');
+
+      // Clicking the header symbol reveals Models and opens its smart card on the status list.
+      await tester.tap(find.byKey(const ValueKey('problems-open')));
+      await settleService(tester);
+      expect(find.byKey(const ValueKey('smart-card-models')), findsOneWidget);
+      expect(find.text('Hidden model problem'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await unmountApp(tester);
+    },
+  );
+
+  testWidgets('the use cases appear on the welcome page', (tester) async {
+    await mountApp(tester, welcome: true);
+    await settleService(tester);
+    expect(find.text('What you can do with it'), findsOneWidget);
+    expect(find.byKey(const ValueKey('use-coding')), findsOneWidget);
+    expect(find.text('Vibe coding'), findsOneWidget);
+    expect(find.text('Almost'), findsOneWidget);
+    expect(find.text('✓ Test agent'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await unmountApp(tester);
+  });
 }

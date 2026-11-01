@@ -3239,5 +3239,8 @@
  "Round hook on a selected box's line: drag it to another box, or click it, then Disconnect.": "Gancio rotondo sulla linea di un riquadro selezionato: trascinalo su un altro riquadro, o cliccalo e poi Scollega.",
  "Map lights": "Luci della mappa",
  "Nothing to change: it is already set up that way.": "Niente da cambiare: è già impostato così.",
- "CPU & RAM": "CPU e RAM"
+ "CPU & RAM": "CPU e RAM",
+ "No AI helper is set up yet.": "Nessun assistente IA è ancora configurato.",
+ "{0}: {1} to fix": "{0}: {1} da sistemare",
+ "{0}: all fine": "{0}: tutto a posto"
 }

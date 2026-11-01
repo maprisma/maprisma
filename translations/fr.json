@@ -3239,5 +3239,8 @@
  "Round hook on a selected box's line: drag it to another box, or click it, then Disconnect.": "Crochet rond sur la ligne d'une boîte sélectionnée : glisse-le vers une autre boîte, ou clique dessus puis Déconnecter.",
  "Map lights": "Lumières de la carte",
  "Nothing to change: it is already set up that way.": "Rien à changer : c'est déjà configuré ainsi.",
- "CPU & RAM": "CPU et RAM"
+ "CPU & RAM": "CPU et RAM",
+ "No AI helper is set up yet.": "Aucun assistant IA n'est encore configuré.",
+ "{0}: {1} to fix": "{0} : {1} à corriger",
+ "{0}: all fine": "{0} : tout va bien"
 }

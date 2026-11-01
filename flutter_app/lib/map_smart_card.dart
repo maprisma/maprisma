@@ -148,8 +148,163 @@ class SmartMoveReview extends StatelessWidget {
   );
 }
 
+const smartActionLabels = {
+  'details': 'Details',
+  'runtime': 'Details',
+  'models': 'Models…',
+  'install': 'Install…',
+  'link': 'Map',
+  'firstagent': 'Get started',
+  'addmcp': 'Add MCP server',
+  'addskills': 'Add skills',
+  'reorganize': 'Tidy up…',
+};
+
+/// A column's or header's state: check mark in green circle ('ok'),
+/// '!' in yellow triangle ('hint'), '!' in red circle ('warn').
+class SmartStatusIcon extends StatelessWidget {
+  const SmartStatusIcon({super.key, required this.level, this.size = 16});
+  final String level;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return switch (level) {
+      'warn' => Icon(Icons.error, size: size, color: colors.error),
+      'hint' => Icon(Icons.warning, size: size, color: Colors.amber.shade800),
+      _ => Icon(Icons.check_circle, size: size, color: Colors.green),
+    };
+  }
+}
+
+class SmartStatusData {
+  const SmartStatusData({
+    this.report,
+    this.findings = const [],
+    this.updates = const [],
+    this.addonHints = const [],
+    this.mcpUpdates = const [],
+    this.mcpTaskAgent,
+    this.onAction,
+    this.onUpdate,
+    this.onAddonHint,
+    this.onMcpUpdate,
+    this.onCheckAgain,
+  });
+
+  final Map<String, dynamic>? report;
+  final List<Map<String, dynamic>> findings;
+  final List<Map<String, dynamic>> updates;
+  final List<Map<String, dynamic>> addonHints;
+  final List<Map<String, dynamic>> mcpUpdates;
+  final String? mcpTaskAgent;
+  final void Function(List<String> action)? onAction;
+  final ValueChanged<Map<String, dynamic>>? onUpdate;
+  final void Function(Map<String, dynamic> line, String action)? onAddonHint;
+  final void Function(Map<String, dynamic> update, String action)? onMcpUpdate;
+  final VoidCallback? onCheckAgain;
+
+  List<Map<String, dynamic>> get _allFindings => [
+    ...findings,
+    for (final a in report?['areas'] as List? ?? const [])
+      for (final f in (a as Map)['findings'] as List? ?? const [])
+        Map<String, dynamic>.from(f as Map),
+  ];
+
+  static String _findingColumn(Map<String, dynamic> f) {
+    final col = f['column'];
+    if (col is String && col.isNotEmpty) return col;
+    return 'agents';
+  }
+
+  static String _updateColumn(Map<String, dynamic> u) {
+    final col = u['column'];
+    if (col is String && col.isNotEmpty) return col;
+    return u['kind'] == 'agent' ? 'agents' : 'providers';
+  }
+
+  static String _addonHintColumn(Map<String, dynamic> h) {
+    final col = h['column'];
+    if (col is String && col.isNotEmpty) return col;
+    if (h['kind'] == 'found' || h['kind'] == 'versions') return 'mcp';
+    if (col == 2) return 'providers';
+    return 'agents';
+  }
+
+  static String _mcpUpdateColumn(Map<String, dynamic> u) {
+    final col = u['column'];
+    if (col is String && col.isNotEmpty) return col;
+    return 'mcp';
+  }
+
+  List<Map<String, dynamic>> findingsFor(String column) {
+    final all = _allFindings;
+    return [
+      for (final f in all)
+        if (_findingColumn(f) == column && f['level'] == 'warn') f,
+      for (final f in all)
+        if (_findingColumn(f) == column && f['level'] == 'hint') f,
+    ];
+  }
+
+  List<Map<String, dynamic>> updatesFor(String column) => [
+    for (final u in updates)
+      if (_updateColumn(u) == column) u,
+  ];
+
+  List<Map<String, dynamic>> addonHintsFor(String column) => [
+    for (final h in addonHints)
+      if (_addonHintColumn(h) == column) h,
+  ];
+
+  List<Map<String, dynamic>> mcpUpdatesFor(String column) => [
+    for (final u in mcpUpdates)
+      if (_mcpUpdateColumn(u) == column) u,
+  ];
+
+  String columnLevel(String column) {
+    final colFindings = findingsFor(column);
+    if (colFindings.any((f) => f['level'] == 'warn')) return 'warn';
+    if (colFindings.isNotEmpty ||
+        updatesFor(column).isNotEmpty ||
+        addonHintsFor(column).isNotEmpty ||
+        mcpUpdatesFor(column).isNotEmpty) {
+      return 'hint';
+    }
+    return 'ok';
+  }
+
+  int columnCount(String column) =>
+      findingsFor(column).length +
+      updatesFor(column).length +
+      addonHintsFor(column).length +
+      mcpUpdatesFor(column).length;
+
+  String get overallLevel {
+    var hasHint = false;
+    for (final (col, _) in mapSmartColumns) {
+      final l = columnLevel(col);
+      if (l == 'warn') return 'warn';
+      if (l == 'hint') hasHint = true;
+    }
+    return hasHint ? 'hint' : 'ok';
+  }
+
+  String get firstConcernedColumn {
+    for (final (col, _) in mapSmartColumns) {
+      if (columnLevel(col) == 'warn') return col;
+    }
+    for (final (col, _) in mapSmartColumns) {
+      if (columnLevel(col) == 'hint') return col;
+    }
+    return 'agents';
+  }
+}
+
 enum _SmartStep {
   idle,
+  status,
   working,
   clarify,
   redirect,
@@ -180,6 +335,8 @@ class MapSmartCard extends StatefulWidget {
     this.onMoveToColumn,
     this.columnNames,
     this.onApplied,
+    this.status,
+    this.statusTrigger = 0,
     this.width = 266,
   });
 
@@ -205,6 +362,8 @@ class MapSmartCard extends StatefulWidget {
   /// What this map calls a column, when not the AI Map's name: for Move to.
   final Map<String, String>? columnNames;
   final ValueChanged<Map<String, dynamic>>? onApplied;
+  final SmartStatusData? status;
+  final int statusTrigger;
   final double width;
 
   @override
@@ -245,7 +404,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
   void _focusOpenCard() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !widget.open) return;
-      if (_step == _SmartStep.idle) {
+      if (_step == _SmartStep.idle && widget.helpers.isNotEmpty) {
         _fieldFocus.requestFocus();
       } else if (!_cardFocus.hasFocus) {
         _cardFocus.requestFocus();
@@ -258,6 +417,9 @@ class _MapSmartCardState extends State<MapSmartCard> {
     super.initState();
     if (widget.initialPrompt != null && widget.initialPrompt!.isNotEmpty) {
       _prompt.text = widget.initialPrompt!;
+    }
+    if (widget.statusTrigger > 0) {
+      _step = _SmartStep.status;
     }
     if (widget.open) {
       _focusOpenCard();
@@ -273,6 +435,10 @@ class _MapSmartCardState extends State<MapSmartCard> {
       _prompt.text = widget.initialPrompt!;
       _step = _SmartStep.idle;
     }
+    if (widget.statusTrigger != oldWidget.statusTrigger &&
+        widget.statusTrigger > 0) {
+      _step = _SmartStep.status;
+    }
     if (oldWidget.enabled && !widget.enabled && _step == _SmartStep.working) {
       _abortWorking();
     }
@@ -281,6 +447,36 @@ class _MapSmartCardState extends State<MapSmartCard> {
     } else if (oldWidget.open && !widget.open) {
       if (_step == _SmartStep.redirect) _step = _SmartStep.idle;
     }
+  }
+
+  void _openOnStatus() {
+    if (!widget.open) {
+      setState(() => _step = _SmartStep.status);
+      widget.onToggle();
+      return;
+    }
+    if (_step == _SmartStep.status) {
+      _close();
+      return;
+    }
+    setState(() => _step = _SmartStep.status);
+    _focusOpenCard();
+  }
+
+  void _openOnPrompt() {
+    if (!widget.open) {
+      if (_step == _SmartStep.status) {
+        setState(() => _step = _SmartStep.idle);
+      }
+      widget.onToggle();
+      return;
+    }
+    if (_step == _SmartStep.status) {
+      setState(() => _step = _SmartStep.idle);
+      _focusOpenCard();
+      return;
+    }
+    _close();
   }
 
   void _abortWorking() {
@@ -928,36 +1124,356 @@ class _MapSmartCardState extends State<MapSmartCard> {
         )
       : _buildAsk(colors);
 
-  Widget _buildAsk(ColorScheme colors) => Column(
-    mainAxisSize: MainAxisSize.min,
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      ..._buildHelperLine(colors),
-      TextField(
-        controller: _prompt,
-        focusNode: _fieldFocus,
-        autofocus: true,
-        minLines: 2,
-        maxLines: 3,
-        style: const TextStyle(fontSize: 13),
-        decoration: InputDecoration(
-          isDense: true,
-          hintText: widget.tr(_columnHint(widget.column)),
-          border: const OutlineInputBorder(),
-        ),
-      ),
-      const SizedBox(height: 8),
-      Wrap(
-        alignment: WrapAlignment.end,
-        spacing: 8,
-        runSpacing: 6,
+  Widget _buildAsk(ColorScheme colors) {
+    if (widget.helpers.isEmpty) {
+      final onFirstAgent = widget.status?.onAction;
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          TextButton(onPressed: _close, child: Text(widget.tr('Close'))),
-          FilledButton(onPressed: () => _ask(), child: Text(widget.tr('Ask'))),
+          Text(
+            widget.tr('No AI helper is set up yet.'),
+            style: const TextStyle(fontSize: 12),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            alignment: WrapAlignment.end,
+            spacing: 8,
+            runSpacing: 6,
+            children: [
+              TextButton(onPressed: _close, child: Text(widget.tr('Close'))),
+              if (onFirstAgent != null)
+                OutlinedButton(
+                  key: const ValueKey('smart-no-helper-action'),
+                  style: _statusButtonStyle,
+                  onPressed: () {
+                    _close();
+                    onFirstAgent(const ['firstagent']);
+                  },
+                  child: Text(widget.tr('Get started')),
+                ),
+            ],
+          ),
+        ],
+      );
+    }
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ..._buildHelperLine(colors),
+        TextField(
+          controller: _prompt,
+          focusNode: _fieldFocus,
+          autofocus: true,
+          minLines: 2,
+          maxLines: 3,
+          style: const TextStyle(fontSize: 13),
+          decoration: InputDecoration(
+            isDense: true,
+            hintText: widget.tr(_columnHint(widget.column)),
+            border: const OutlineInputBorder(),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          alignment: WrapAlignment.end,
+          spacing: 8,
+          runSpacing: 6,
+          children: [
+            TextButton(onPressed: _close, child: Text(widget.tr('Close'))),
+            FilledButton(
+              onPressed: () => _ask(),
+              child: Text(widget.tr('Ask')),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  static final _statusButtonStyle = OutlinedButton.styleFrom(
+    visualDensity: VisualDensity.compact,
+    minimumSize: const Size(48, 28),
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+    textStyle: const TextStyle(fontSize: 12),
+  );
+
+  Widget _buildStatusFinding(Map<String, dynamic> f) {
+    final level = '${f['level'] ?? 'hint'}';
+    final title = '${f['title'] ?? ''}';
+    final text = '${f['text'] ?? ''}';
+    final action = [for (final x in f['action'] as List? ?? const []) '$x'];
+    final label = action.isEmpty ? null : smartActionLabels[action.first];
+    final onAction = widget.status?.onAction;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 2, right: 6),
+                child: SmartStatusIcon(level: level, size: 15),
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    if (text.isNotEmpty)
+                      Text(text, style: const TextStyle(fontSize: 11)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Wrap(
+            spacing: 6,
+            runSpacing: 4,
+            children: [
+              if (label != null && onAction != null)
+                OutlinedButton(
+                  style: _statusButtonStyle,
+                  onPressed: () {
+                    _close();
+                    onAction(action);
+                  },
+                  child: Text(widget.tr(label)),
+                ),
+              if (widget.takesRequests)
+                OutlinedButton(
+                  key: ValueKey('smart-ask-finding-$title'),
+                  style: _statusButtonStyle,
+                  onPressed: () {
+                    setState(() {
+                      _prompt.text = text.isEmpty ? title : '$title — $text';
+                      _step = _SmartStep.idle;
+                    });
+                    _focusOpenCard();
+                  },
+                  child: Text(widget.tr('Ask AI')),
+                ),
+            ],
+          ),
         ],
       ),
-    ],
-  );
+    );
+  }
+
+  Widget _buildStatusAddonHint(Map<String, dynamic> h) {
+    final onAddonHint = widget.status?.onAddonHint;
+    final buttons = <(String, String)>[
+      if (h['kind'] == 'updates') ('update_all', 'Update all'),
+      if (h['kind'] == 'found' || h['kind'] == 'versions') ...[
+        if (h['mcp'] == true) ('mcp', 'Add MCP server…'),
+        if (h['skills'] == true) ('skills', 'Add skills…'),
+      ] else
+        ('addons', h['kind'] == 'new' ? 'Get add-ons' : 'Add-ons'),
+    ];
+    return Padding(
+      key: ValueKey('addon-hint-${h['kind']}'),
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 2, right: 6),
+                child: Icon(
+                  h['kind'] == 'updates'
+                      ? Icons.upgrade
+                      : h['kind'] == 'found' || h['kind'] == 'versions'
+                      ? Icons.new_releases
+                      : Icons.extension,
+                  size: 15,
+                ),
+              ),
+              Expanded(
+                child: Text(
+                  '${h['text']}',
+                  style: const TextStyle(fontSize: 12),
+                ),
+              ),
+            ],
+          ),
+          if (onAddonHint != null && buttons.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              children: [
+                for (final (action, label) in buttons)
+                  OutlinedButton(
+                    style: _statusButtonStyle,
+                    onPressed: () {
+                      _close();
+                      onAddonHint(h, action);
+                    },
+                    child: Text(widget.tr(label)),
+                  ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusUpdate(Map<String, dynamic> u) {
+    final onUpdate = widget.status?.onUpdate;
+    return Padding(
+      key: ValueKey('update-${u['key']}'),
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Padding(
+                padding: EdgeInsets.only(top: 2, right: 6),
+                child: Icon(Icons.upgrade, size: 15),
+              ),
+              Expanded(
+                child: Text(
+                  widget
+                      .tr('{0} {1} is available (you have {2})')
+                      .replaceAll('{0}', '${u['name']}')
+                      .replaceAll('{1}', '${u['available']}')
+                      .replaceAll('{2}', '${u['current']}'),
+                  style: const TextStyle(fontSize: 12),
+                ),
+              ),
+            ],
+          ),
+          if (onUpdate != null) ...[
+            const SizedBox(height: 4),
+            OutlinedButton(
+              style: _statusButtonStyle,
+              onPressed: () => onUpdate(u),
+              child: Text(widget.tr('Update')),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusMcpUpdate(Map<String, dynamic> u) {
+    final onMcpUpdate = widget.status?.onMcpUpdate;
+    final taskAgent = widget.status?.mcpTaskAgent;
+    final notes = '${u['notes'] ?? ''}';
+    final buttons = <(String, String)>[
+      if (u['on_pc'] == true)
+        ('use', widget.tr('Use it…'))
+      else ...[
+        ('release', widget.tr('Release page')),
+        if (taskAgent != null)
+          ('task', widget.tr('Do it with {0}…').replaceAll('{0}', taskAgent)),
+      ],
+    ];
+    return Padding(
+      key: ValueKey('mcp-update-${u['name']}'),
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Padding(
+                padding: EdgeInsets.only(top: 2, right: 6),
+                child: Icon(Icons.upgrade, size: 15),
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('${u['text']}', style: const TextStyle(fontSize: 12)),
+                    if (notes.isNotEmpty)
+                      Text(notes, style: const TextStyle(fontSize: 11)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (onMcpUpdate != null && buttons.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              children: [
+                for (final (action, label) in buttons)
+                  OutlinedButton(
+                    key: ValueKey('mcp-$action-${u['name']}'),
+                    style: _statusButtonStyle,
+                    onPressed: () {
+                      if (action == 'use') _close();
+                      onMcpUpdate(u, action);
+                    },
+                    child: Text(label),
+                  ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatus() {
+    final status = widget.status;
+    final findings = status?.findingsFor(widget.column) ?? const [];
+    final addonHints = status?.addonHintsFor(widget.column) ?? const [];
+    final updates = status?.updatesFor(widget.column) ?? const [];
+    final mcpUpdates = status?.mcpUpdatesFor(widget.column) ?? const [];
+    final empty =
+        findings.isEmpty &&
+        addonHints.isEmpty &&
+        updates.isEmpty &&
+        mcpUpdates.isEmpty;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (empty)
+          Text(
+            widget.tr('Nothing to fix.'),
+            style: const TextStyle(fontSize: 12),
+          ),
+        for (final f in findings) _buildStatusFinding(f),
+        for (final h in addonHints) _buildStatusAddonHint(h),
+        for (final u in updates) _buildStatusUpdate(u),
+        for (final u in mcpUpdates) _buildStatusMcpUpdate(u),
+        const SizedBox(height: 4),
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          spacing: 8,
+          runSpacing: 6,
+          children: [
+            TextButton(
+              key: const ValueKey('health-again'),
+              onPressed: status?.onCheckAgain,
+              child: Text(widget.tr('Check again')),
+            ),
+            TextButton(onPressed: _close, child: Text(widget.tr('Close'))),
+          ],
+        ),
+      ],
+    );
+  }
 
   Widget _buildWorking() {
     final helperName = '${_activeHelper?['name'] ?? ''}';
@@ -1349,69 +1865,108 @@ class _MapSmartCardState extends State<MapSmartCard> {
     final colors = Theme.of(context).colorScheme;
     final radius = BorderRadius.circular(corners(context));
     final helper = _activeHelper;
+    final statusCount = widget.status?.columnCount(widget.column) ?? 0;
+    final statusLevel = widget.status?.columnLevel(widget.column) ?? 'ok';
+    final statusLabel = statusCount > 0
+        ? widget
+              .tr('{0}: {1} to fix')
+              .replaceAll('{0}', widget.tr(widget.title))
+              .replaceAll('{1}', '$statusCount')
+        : widget.tr('{0}: all fine').replaceAll('{0}', widget.tr(widget.title));
     if (!widget.open) {
       return SizedBox(
         width: widget.width,
         height: 38,
-        child: Semantics(
-          button: true,
-          toggled: false,
-          label:
-              '${widget.tr('Ask AI…')} · ${widget.tr(widget.title)}${helper == null ? '' : ' · ${helper['name']}'}',
-          child: Material(
-            color: colors.surfaceContainerHigh,
-            shape: RoundedRectangleBorder(
-              borderRadius: radius,
-              side: BorderSide(color: colors.outlineVariant),
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: InkWell(
-              focusNode: _barFocus,
-              onTap: widget.onToggle,
-              borderRadius: radius,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                child: Row(
-                  children: [
-                    const SizedBox(
-                      key: ValueKey('smart-status-slot'),
-                      width: 16,
-                      height: 16,
-                    ),
-                    Icon(Icons.auto_awesome, size: 15, color: colors.primary),
-                    const SizedBox(width: 6),
-                    Text(
-                      widget.tr('Ask AI…'),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
+        child: Material(
+          color: colors.surfaceContainerHigh,
+          shape: RoundedRectangleBorder(
+            borderRadius: radius,
+            side: BorderSide(color: colors.outlineVariant),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Row(
+            children: [
+              Semantics(
+                button: true,
+                label: statusLabel,
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: GestureDetector(
+                    key: ValueKey('smart-status-${widget.column}'),
+                    behavior: HitTestBehavior.opaque,
+                    onTap: _openOnStatus,
+                    child: SizedBox(
+                      width: 30,
+                      height: 38,
+                      child: Center(
+                        child: SizedBox(
+                          key: const ValueKey('smart-status-slot'),
+                          width: 16,
+                          height: 16,
+                          child: SmartStatusIcon(level: statusLevel),
+                        ),
                       ),
                     ),
-                    if (helper != null)
-                      Expanded(
-                        child: Text(
-                          ' · ${helper['name']}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: colors.onSurfaceVariant,
-                          ),
-                        ),
-                      )
-                    else
-                      const Spacer(),
-                    Icon(
-                      Icons.expand_more,
-                      size: 18,
-                      color: colors.onSurfaceVariant,
-                    ),
-                  ],
+                  ),
                 ),
               ),
-            ),
+              Expanded(
+                child: Semantics(
+                  button: true,
+                  toggled: false,
+                  label:
+                      '${widget.tr('Ask AI…')} · ${widget.tr(widget.title)}${helper == null ? '' : ' · ${helper['name']}'}',
+                  child: InkWell(
+                    focusNode: _barFocus,
+                    onTap: _openOnPrompt,
+                    child: SizedBox(
+                      height: 38,
+                      child: Padding(
+                        padding: const EdgeInsets.only(left: 2, right: 10),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.auto_awesome,
+                              size: 15,
+                              color: colors.primary,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              widget.tr('Ask AI…'),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            if (helper != null)
+                              Expanded(
+                                child: Text(
+                                  ' · ${helper['name']}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: colors.onSurfaceVariant,
+                                  ),
+                                ),
+                              )
+                            else
+                              const Spacer(),
+                            Icon(
+                              Icons.expand_more,
+                              size: 18,
+                              color: colors.onSurfaceVariant,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       );
@@ -1438,7 +1993,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
             minWidth: widget.width,
             maxWidth: widget.width,
             minHeight: 38,
-            maxHeight: 320,
+            maxHeight: _step == _SmartStep.status ? 440 : 320,
           ),
           child: Card(
             margin: EdgeInsets.zero,
@@ -1455,38 +2010,81 @@ class _MapSmartCardState extends State<MapSmartCard> {
               children: [
                 SizedBox(
                   height: 38,
-                  child: InkWell(
-                    onTap: _close,
-                    child: Padding(
-                      padding: const EdgeInsets.only(left: 10, right: 4),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.auto_awesome,
-                            size: 15,
-                            color: colors.primary,
-                          ),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              widget
-                                  .tr('Ask AI · {0}')
-                                  .replaceAll('{0}', widget.tr(widget.title)),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
+                  child: Padding(
+                    padding: const EdgeInsets.only(right: 4),
+                    child: Row(
+                      children: [
+                        Semantics(
+                          button: true,
+                          label: statusLabel,
+                          child: MouseRegion(
+                            cursor: SystemMouseCursors.click,
+                            child: GestureDetector(
+                              key: ValueKey('smart-status-${widget.column}'),
+                              behavior: HitTestBehavior.opaque,
+                              onTap: _openOnStatus,
+                              child: SizedBox(
+                                width: 30,
+                                height: 38,
+                                child: Center(
+                                  child: SizedBox(
+                                    key: const ValueKey('smart-status-slot'),
+                                    width: 16,
+                                    height: 16,
+                                    child: SmartStatusIcon(level: statusLevel),
+                                  ),
+                                ),
                               ),
                             ),
                           ),
-                          IconButton(
-                            tooltip: widget.tr('Collapse'),
-                            onPressed: _close,
-                            icon: const Icon(Icons.expand_less, size: 18),
+                        ),
+                        Expanded(
+                          child: InkWell(
+                            onTap: _step == _SmartStep.status
+                                ? _openOnPrompt
+                                : _close,
+                            child: SizedBox(
+                              height: 38,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 4,
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.auto_awesome,
+                                      size: 15,
+                                      color: colors.primary,
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Expanded(
+                                      child: Text(
+                                        widget
+                                            .tr('Ask AI · {0}')
+                                            .replaceAll(
+                                              '{0}',
+                                              widget.tr(widget.title),
+                                            ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
                           ),
-                        ],
-                      ),
+                        ),
+                        IconButton(
+                          tooltip: widget.tr('Collapse'),
+                          onPressed: _close,
+                          icon: const Icon(Icons.expand_less, size: 18),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -1547,6 +2145,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
                     child: SingleChildScrollView(
                       padding: const EdgeInsets.all(10),
                       child: switch (_step) {
+                        _SmartStep.status => _buildStatus(),
                         _SmartStep.idle => _buildIdle(colors),
                         _SmartStep.working => _buildWorking(),
                         _SmartStep.clarify => _buildClarify(colors),

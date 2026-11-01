@@ -55,7 +55,11 @@ Future<void> mount(
   String mode = 'all',
   Set<String>? selection,
   bool smartCards = false,
-  List<Map<String, dynamic>> smartHelpers = const [],
+  List<Map<String, dynamic>> smartHelpers = const [
+    {'command': 'local-helper', 'name': 'Local helper', 'local': true},
+  ],
+  SmartStatusData? smartStatus,
+  (int, String)? smartStatusTarget,
   CoreClient? client,
   ValueChanged<Map<String, dynamic>>? onSmartApplied,
   TransformationController? controller,
@@ -83,6 +87,8 @@ Future<void> mount(
             selection: selection,
             smartCards: smartCards,
             smartHelpers: smartHelpers,
+            smartStatus: smartStatus,
+            smartStatusTarget: smartStatusTarget,
             client: client,
             onSmartApplied: onSmartApplied,
             controller: controller,
@@ -2870,6 +2876,13 @@ void main() {
                   onEdit: (_) async {},
                   tr: (s) => s,
                   smartCards: true,
+                  smartHelpers: const [
+                    {
+                      'command': 'local-helper',
+                      'name': 'Local helper',
+                      'local': true,
+                    },
+                  ],
                   layers: smartLayers,
                   onLayers: (next) => setState(() => smartLayers = next),
                 ),
@@ -2965,6 +2978,87 @@ void main() {
         await tester.pump();
         expect(sysController.value.getTranslation().x, 0);
         expect(savedMatrices.last, sysController.value);
+      },
+    );
+
+    testWidgets(
+      'smart card status symbol opens column status list, Ask AI switches to prompt, and no-helper state shows Get started',
+      (tester) async {
+        final actions = <List<String>>[];
+        final status = SmartStatusData(
+          report: const {
+            'warn': 1,
+            'hint': 1,
+            'areas': [
+              {
+                'key': 'agents',
+                'title': 'Agents',
+                'findings': [
+                  {
+                    'level': 'warn',
+                    'column': 'agents',
+                    'title': 'Pi: Not signed in',
+                    'text': 'Sign in: pi login',
+                    'action': ['details', 'pi'],
+                  },
+                ],
+              },
+              {
+                'key': 'local',
+                'title': 'Local LLMs',
+                'findings': [
+                  {
+                    'level': 'hint',
+                    'column': 'models',
+                    'title': 'llama.cpp has no models yet',
+                    'text': 'Download a model.',
+                    'action': ['models', 'llamacpp'],
+                  },
+                ],
+              },
+            ],
+            'uses': [],
+          },
+          onAction: actions.add,
+        );
+        await mount(
+          tester,
+          edits: [],
+          smartCards: true,
+          smartHelpers: const [],
+          smartStatus: status,
+        );
+        await tester.pump();
+
+        // Clicking the status symbol on Agents opens the card on its status list.
+        await tester.tap(find.byKey(const ValueKey('smart-status-agents')));
+        await tester.pumpAndSettle();
+        expect(find.text('Pi: Not signed in'), findsOneWidget);
+        expect(find.text('llama.cpp has no models yet'), findsNothing);
+        await tester.tap(find.widgetWithText(OutlinedButton, 'Details'));
+        await tester.pump();
+        expect(actions.single, ['details', 'pi']);
+
+        // Re-open Agents on status and click Ask AI on the finding: switches to prompt.
+        await tester.tap(find.byKey(const ValueKey('smart-status-agents')));
+        await tester.pumpAndSettle();
+        await tester.tap(
+          find.byKey(const ValueKey('smart-ask-finding-Pi: Not signed in')),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('No AI helper is set up yet.'), findsOneWidget);
+        expect(find.byType(TextField), findsNothing);
+        await tester.tap(find.widgetWithText(OutlinedButton, 'Get started'));
+        await tester.pump();
+        expect(actions.last, ['firstagent']);
+
+        // Clicking the status symbol on MCP (no open items) shows the one-line Nothing to fix.
+        await tester.tap(find.byKey(const ValueKey('smart-status-mcp')));
+        await tester.pumpAndSettle();
+        expect(find.text('Nothing to fix.'), findsOneWidget);
+        await tester.tap(find.text('Ask AI · MCP servers and skills'));
+        await tester.pumpAndSettle();
+        expect(find.text('No AI helper is set up yet.'), findsOneWidget);
       },
     );
   });

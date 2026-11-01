@@ -109,12 +109,9 @@ KEYS = (
     # Updates of agents and local LLMs (updates.check).
     "{0} {1} is available (you have {2})",
     "Update",
-    "Updates and suggestions",
-    # Open problems (health.report).
-    "Open problems",
+    # Status in the smart cards (health.report).
     "Check again",
     "Nothing to fix.",
-    "Each one opens where it is fixed.",
     "Ready",
     "Almost",
     "Not yet",
@@ -593,6 +590,7 @@ KEYS = (
     "No connections yet.", "No program has moved data yet.",
     # The smart cards.
     "Ask",
+    "Ask AI",
     "Ask AI · {0}",
     "Ask AI…",
     "Ask for this column…",
@@ -604,6 +602,7 @@ KEYS = (
     "Fits in VRAM",
     "Local, no tokens",
     "Move to {0}",
+    "No AI helper is set up yet.",
     "PC: {0} RAM · {1} free",
     "PC: {0} VRAM · {1} RAM · {2} free",
     "Review",
@@ -616,6 +615,8 @@ KEYS = (
     "Uses plan/tokens",
     "{0} is checking {1}…",
     "{0} is ready.",
+    "{0}: {1} to fix",
+    "{0}: all fine",
     "← Back",
 )
 

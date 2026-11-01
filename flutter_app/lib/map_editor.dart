@@ -53,6 +53,8 @@ class MapEditor extends StatefulWidget {
     this.smartHelpers = const [],
     this.client,
     this.onSmartApplied,
+    this.smartStatus,
+    this.smartStatusTarget,
   });
   final Object? staticState;
   final MapLightStyle lightStyle;
@@ -67,6 +69,8 @@ class MapEditor extends StatefulWidget {
   final List<Map<String, dynamic>> smartHelpers;
   final CoreClient? client;
   final ValueChanged<Map<String, dynamic>>? onSmartApplied;
+  final SmartStatusData? smartStatus;
+  final (int, String)? smartStatusTarget;
   final Set<String>? selection;
   final ValueChanged<String>? onSubagents;
   final Widget Function(Map<String, dynamic>)? controls;
@@ -96,6 +100,7 @@ class _FitState {
   double? scale;
   Size? fittedTo;
   (Size, Size)? clampedTo;
+  int handledStatusToken = 0;
 }
 
 final _fitStates = Expando<_FitState>('mapFitState');
@@ -328,6 +333,7 @@ class _MapEditorState extends State<MapEditor>
   List<String>? _pendingLayers;
   (int, String, String)? _pendingSmartMove;
   int? _pendingSmartPan;
+  final _smartStatusTokens = <String, int>{};
   final _smartPrompts = <String, String>{};
   double _reorderDistance = 0;
   int _staticRevision = 0;
@@ -910,6 +916,27 @@ class _MapEditorState extends State<MapEditor>
             windowWidth: MediaQuery.sizeOf(context).width,
             displayWidth: mapDisplayWidthOf(context),
           );
+    if (widget.smartStatusTarget case (
+      final token,
+      final targetCol,
+    ) when token != _fitState.handledStatusToken) {
+      _fitState.handledStatusToken = token;
+      final index = mapSmartColumns.indexWhere((c) => c.$1 == targetCol);
+      if (index >= 0) {
+        _smartStatusTokens[targetCol] = token;
+        if (!_view.allows(index)) {
+          _fitState.forced.add(index);
+        }
+        final shownAfterForce = _columnsFor(_view);
+        if (!shownAfterForce.contains(index)) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _toggleColumn(index, true);
+          });
+        }
+        _openSmartColumn = index;
+        _pendingSmartPan = index;
+      }
+    }
     final shown = _columnsFor(_view);
     if (!listEquals(shown, _shownColumns)) {
       _shownColumns = shown;
@@ -1387,6 +1414,11 @@ class _MapEditorState extends State<MapEditor>
                                         _toggleSmartCard(index);
                                       },
                                       onApplied: widget.onSmartApplied,
+                                      status: widget.smartStatus,
+                                      statusTrigger:
+                                          _smartStatusTokens[mapSmartColumns[col]
+                                              .$1] ??
+                                          0,
                                     ),
                                   ),
                                 ),
