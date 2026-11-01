@@ -70,7 +70,7 @@ them first, keeps a backup and offers Undo.
 | `[sessions]`, `usage` | Usage and tokens, Projects |
 | `[models]` | the online models the map can switch it to |
 | `[research]`, `[rewrite]`, `[ask]` | web look-ups, skill rewrites, AI Playground (each command starts with the agent itself; placeholders are arguments of their own) |
-| `web_search`, `chat_app`, `herdr` | Open problems, the terminal, herdr's live state |
+| `web_search`, `chat_app`, `herdr` | the smart cards' status, the terminal, herdr's live state |
 
 `hooks.py` holds functions with fixed names (`adapter_data.HOOKS`), used where `agent.toml` says
 `"hook"`. An agent whose settings a reader of the app knows needs no `hooks.py` (most built-in ones).

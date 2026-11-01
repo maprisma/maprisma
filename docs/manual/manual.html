@@ -89,8 +89,7 @@
       with the agents that use them.</li>
     <li><b>MCP servers and skills</b> — found on your computer or on the web, with recommended
       servers and a search of the official MCP registry.</li>
-    <li><b>Open problems</b> — a ! in the header when something needs fixing, each problem with the way to
-      where it is fixed, and what your setup is good for.</li>
+    <li><b>Column status</b> — a symbol on each column's Ask AI bar, each problem with the way to where it is fixed; what your setup is good for is on the welcome page.</li>
   </ul>
 
   <h2 id="key-ideas">Key ideas</h2>
@@ -325,27 +324,9 @@
   <b>Providers</b>; up to 80&nbsp;% (below 1600 pixels) it adds <b>Models</b>; above that, all
   four columns. The buttons above the map turn on any column in any view.</p></div>
 
-  <h2 id="health">Open problems</h2>
-  <p>When something needs fixing, a red <b>!</b> appears among the header's symbols; its tooltip
-  says how many, for example <i>2 open problems · 4 suggestions</i>. A click opens <b>Open problems</b>:
-  one line each — an agent not signed in, a local LLM without models, a connection that does not
-  work, little free space for models — with a button to where it is fixed (the agent's or local
-  LLM's details, the map with that line lit, Setup, Tidy up). The same problems show as a red
-  <b>!</b> on their cards on Setup. Tips and what works are on the cards and details pages
-  themselves, and what the setup is good for is on Setup (<b>What you can do with this</b>). The
-  check only reads; it never changes, starts or sends anything, and it shows nothing while the map is
-  still empty.</p>
-
-  <h2 id="hints">Updates and suggestions</h2>
-  <p>Below the problems on the same page, <b>Updates and suggestions</b> lists what there is to say:
-  new programs or skills found on this PC, what is on this PC but not on the map, and updates for
-  installed agents and local LLMs, each with its button (<b>Add MCP server…</b>, <b>Setup</b>,
-  <b>Update</b>). With only these and no problem, the header's <b>!</b> shows in the accent colour.
-  Updates are checked in the background when the window opens, at most every six hours. Nothing is
-  installed by the check itself; an update starts only when you click <b>Update</b>.</p>
-  <p>With Settings › <b>Daily AI checks</b> on, the MCP server updates an agent found on the web are
-  listed here too, with <b>Release page</b> and <b>Do it with …</b>; once the new version is on this
-  PC, the line offers <b>Use it…</b> instead (see <a href="#smart-updates">Updates found</a>).</p>
+  <h2 id="health">Column status</h2>
+  <p>Every column's <b>Ask AI…</b> bar shows that column's state at its left, and the header shows the worst state of all columns, also of a hidden one: a green check mark when all is fine, a yellow triangle for tips, updates or suggestions, a red <b>!</b> when something needs fixing. A click on the symbol opens the column's list, worst first: an agent not signed in, a local LLM without models, a connection that does not work, little free space for models, each with a button to where it is fixed. <b>Ask AI</b> on a line puts it into the prompt; only <b>Ask</b> sends it. A click on the header's symbol goes to the first column concerned. The check only reads; it never changes, starts or sends anything.</p>
+  <p>The list also shows new programs or skills found on this PC, what is on this PC but not on the map, and updates for installed agents, local LLMs and MCP servers, each with its button. Updates are checked in the background when the window opens, at most every six hours. An update starts only when you click <b>Update</b> (see <a href="#smart-updates">Updates found</a>). What your setup is good for is on the welcome page, under <b>What you can do with it</b>.</p>
 
   <h2 id="smart-card">Smart cards on the map</h2>
   <p>In the Flutter preview, a collapsed <b>Ask AI…</b> bar sits at the top of every map column, with a status symbol at its left: a green check mark when all is fine, a yellow triangle for tips, updates or suggestions, or a red <b>!</b> when something in that column needs fixing. The header bar shows the overall status across all four columns (even hidden ones) and opens the first column that needs attention. Clicking a column’s status symbol opens its status list: each finding for that column with the button that opens where it is fixed and <b>Ask AI</b> to pre-fill the prompt, newer versions of installed agents and local LLMs (<b>Update</b> runs <code>mise upgrade</code> or the agent’s own updater in a terminal, or opens the install review; checked at most every six hours), MCP server updates from the daily AI checks, and <b>Check again</b>. On the welcome page, <b>What you can do with it</b> shows the use cases (everyday help, vibe coding, images, voice, research and writing) as <b>Ready</b>, <b>Almost</b> or <b>Not yet</b>, with what is there for each and the next step.</p>
@@ -627,7 +608,7 @@
   the memory now — <b>Free GPU memory, then start</b>, <b>Start anyway</b> or <b>Cancel</b>.</p>
 
   <h2 id="slots-flutter">Models at once in the Flutter preview</h2>
-  <p>In the Flutter preview, after a change of an agent’s local LLM or model is applied, the app looks at how many different models each local LLM’s agents now use. Where it may set the number — llama.cpp’s and Ollama’s settings files of the app’s own installs, LM Studio’s one-or-many setting — a second <b>Preview</b> shows the change, with what it means and any warning; <b>Apply</b> writes it with a backup, and <b>Undo</b> takes it back. A number fixed in your own start script is left as it is. When the models are too many for what is kept loaded, or too big together for the graphics card, Open problems says so as well.</p>
+  <p>In the Flutter preview, after a change of an agent’s local LLM or model is applied, the app looks at how many different models each local LLM’s agents now use. Where it may set the number — llama.cpp’s and Ollama’s settings files of the app’s own installs, LM Studio’s one-or-many setting — a second <b>Preview</b> shows the change, with what it means and any warning; <b>Apply</b> writes it with a backup, and <b>Undo</b> takes it back. A number fixed in your own start script is left as it is. When the models are too many for what is kept loaded, or too big together for the graphics card, The MCP column’s status says so as well.</p>
 
   <h2 id="outside-use">Used by other apps</h2>
   <p>Local LLMs are not only used by agents. A plugin such as Video Trans, a chat app or your own
@@ -780,7 +761,7 @@
   <p>Add skills selects an existing folder containing skill folders, each with SKILL.md. Choose the parent skill-set folder, then the agents. Preview shows links or adapter settings before Apply. Original files stay in place; links follow later edits, and skills can include scripts agents may run. Native folders already read automatically need no new link. Discovery checks at most 200 entries per directory, one category level deep, with 1,000 entries in total; choose a smaller folder if needed. A preview supports up to 32 agents and 200 links. Undo removes added links or restores settings while preserving later changes. Online catalogs, downloading skills and MCP tool checks are not part of these local forms.</p>
 
   <h2 id="found-flutter">Found on this PC in the Flutter preview</h2>
-  <p>In the Flutter preview, the app looks at start, in the background and without running anything, for programs on this PC that offer an MCP server (their files hold the protocol’s own words; how to start them comes from their own usage text) and for skill sets that apps brought along. Big programs are read once and remembered. Open problems says <b>New on this PC</b> for what was not shown yet; <b>Add MCP server…</b> or <b>Add skills…</b>, or <b>Found on this PC</b> in Connections, lists them, the new ones with a ★. <b>Add…</b> opens the form filled in with the name and the start command, or the folder, to check and change before the preview. AppImages are never run by the look itself. <b>Look inside…</b> unpacks only each one’s programs, closed in by bubblewrap (no network, no home folder, only a temporary folder writable), reads them and deletes them again; what was found is remembered. Adding a server that lives in an AppImage first asks to unpack the whole AppImage into <code>~/Applications/&lt;app&gt;-&lt;version&gt;/</code> (<b>Unpack</b>), the same way. A newer AppImage of an app looked into or unpacked before is only named (<b>New version found</b>): a file with a newer name is no proof of an update, so it is looked into like any other.</p>
+  <p>In the Flutter preview, the app looks at start, in the background and without running anything, for programs on this PC that offer an MCP server (their files hold the protocol’s own words; how to start them comes from their own usage text) and for skill sets that apps brought along. Big programs are read once and remembered. The MCP column’s status says <b>New on this PC</b> for what was not shown yet; <b>Add MCP server…</b> or <b>Add skills…</b>, or <b>Found on this PC</b> in Connections, lists them, the new ones with a ★. <b>Add…</b> opens the form filled in with the name and the start command, or the folder, to check and change before the preview. AppImages are never run by the look itself. <b>Look inside…</b> unpacks only each one’s programs, closed in by bubblewrap (no network, no home folder, only a temporary folder writable), reads them and deletes them again; what was found is remembered. Adding a server that lives in an AppImage first asks to unpack the whole AppImage into <code>~/Applications/&lt;app&gt;-&lt;version&gt;/</code> (<b>Unpack</b>), the same way. A newer AppImage of an app looked into or unpacked before is only named (<b>New version found</b>): a file with a newer name is no proof of an update, so it is looked into like any other.</p>
   <p>When an app is found in a newer version while agents, the list of MCP servers or a link in <code>~/.local/bin</code> still start the older one, the list shows it with its versions and who uses it. <b>Update…</b> (after unpacking the newer AppImage, if it is one) previews one change for all of it: each entry gets the new program (arguments into the old folder move along), the links point into the new folder, and the old folder goes into the backup. It is kept there for 7 days; Undo brings everything back.</p>
 
   <h2 id="failed">When a connection fails</h2>
@@ -998,7 +979,7 @@
   <h2 id="smart-summary">PC setup summary</h2>
   <p><b>Check now</b> gives the agent a short text about the setup — the graphics card and memory, the
   agents with their models, the local LLMs, the MCP servers with their versions, the skills and what
-  <a href="#health">Open problems</a> found — and lets it look things up on the web. No keys, headers or
+  <a href="#health">Column status</a> found — and lets it look things up on the web. No keys, headers or
   settings values are in it. It takes a minute or more in the background; the line under the button
   says how many tokens the last check used. The answer is a short summary and a list of findings:
   <b>!</b> problems, <b>·</b> tips and <b>✓</b> what is good. Answers that do not hold up are left out.</p>
@@ -1056,7 +1037,7 @@
   be the helper; Pi is the first.</p>
 
   <h2 id="ai-checks-flutter">AI checks and the local helper in the Flutter preview</h2>
-  <p>In the Flutter preview, Settings › <b>AI features</b> has <b>Daily AI checks</b> (off by default) and, below it, the result of the last check with <b>Check now</b>, which asks at once, also while the daily checks are off. The check runs in the background when the window opens and is looked at every hour; the agent for AI checks is asked at most once a day (after a failed look-up, again after six hours). What it finds is listed in Open problems under <b>Updates and suggestions</b>: <b>Release page</b> opens the release in the browser, <b>Do it with …</b> first shows the task as it will be sent and starts it in a terminal tab only after <b>Continue</b>, and <b>Use it…</b> opens what was found on this PC when the newer version is already here. Checked are only servers whose version the app can tell (see <a href="#smart-updates">Updates found</a>); other servers are not sent.</p>
+  <p>In the Flutter preview, Settings › <b>AI features</b> has <b>Daily AI checks</b> (off by default) and, below it, the result of the last check with <b>Check now</b>, which asks at once, also while the daily checks are off. The check runs in the background when the window opens and is looked at every hour; the agent for AI checks is asked at most once a day (after a failed look-up, again after six hours). What it finds is listed in the MCP column’s status: <b>Release page</b> opens the release in the browser, <b>Do it with …</b> first shows the task as it will be sent and starts it in a terminal tab only after <b>Continue</b>, and <b>Use it…</b> opens what was found on this PC when the newer version is already here. Checked are only servers whose version the app can tell (see <a href="#smart-updates">Updates found</a>); other servers are not sent.</p>
   <p>The local helper is chosen in Settings › <b>AI features</b> › <b>Local helper</b>; the suggestion for your graphics card is marked <b>(suggested)</b>. Once chosen, it is offered first under <b>Ask</b> on a local LLM's Performance card.</p>
 
   <h2 id="smart-protocol">Protocol</h2>
