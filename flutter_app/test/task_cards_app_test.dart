@@ -1703,6 +1703,16 @@ void main() {
     },
   );
 
+  testWidgets('the use cases stay reachable in Help', (tester) async {
+    await mountApp(tester);
+    await settleService(tester);
+    await openFromHelp(tester, 'What you can do with it');
+    expect(find.byKey(const ValueKey('use-coding')), findsOneWidget);
+    expect(find.text('Vibe coding'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await unmountApp(tester);
+  });
+
   testWidgets('the use cases appear on the welcome page', (tester) async {
     await mountApp(tester, welcome: true);
     await settleService(tester);

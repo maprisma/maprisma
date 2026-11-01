@@ -2168,6 +2168,39 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     }
   }
 
+  List<Map<String, dynamic>> get _uses =>
+      (_healthReport?['uses'] as List? ?? const [])
+          .cast<Map<String, dynamic>>();
+
+  /// Help's use cases: the welcome page's, also after it has gone.
+  Future<void> _openUses() async {
+    await _cardReview(
+      tr('What you can do with it'),
+      const {},
+      (yes, no) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              child: UseCaseCards(
+                uses: _uses,
+                tr: tr,
+                onAction: (action) {
+                  _cancelReview?.call();
+                  _healthAction(action);
+                },
+              ),
+            ),
+          ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(onPressed: no, child: Text(tr('Close'))),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// Help (F1): the user manual and where to start.
   Future<void> _openHelp() async {
     if (_busy) return;
@@ -2192,6 +2225,12 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
             (await _client.helpOpenManual())['opened'] == true,
         tabs: [
           ('Your first agent', Icons.rocket_launch_outlined, after(_openGuide)),
+          if (_uses.isNotEmpty)
+            (
+              'What you can do with it',
+              Icons.lightbulb_outline,
+              after(_openUses),
+            ),
           (
             'Agents',
             Icons.list,
@@ -4213,8 +4252,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                   onSkip: () => setState(() => _skipWelcomeSearch = true),
                   onSystem: () => _openSystem(),
                   onAgents: () => _openGroups(),
-                  uses: (_healthReport?['uses'] as List? ?? const [])
-                      .cast<Map<String, dynamic>>(),
+                  uses: _uses,
                   onAction: _healthAction,
                 ),
               if (_terminals.isNotEmpty &&
