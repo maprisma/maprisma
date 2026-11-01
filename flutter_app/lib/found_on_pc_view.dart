@@ -81,7 +81,9 @@ class _FoundOnPcViewState extends State<FoundOnPcView> {
     final tr = widget.tr;
     final found = [
       for (final n in _found)
-        if (n['kind'] == 'runtime' || n['kind'] == 'models') n,
+        if (n['status'] == 'found' &&
+            (n['kind'] == 'runtime' || n['kind'] == 'models'))
+          n,
     ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,

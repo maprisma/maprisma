@@ -24,6 +24,45 @@ void main() {
     return calls;
   }
 
+  testWidgets('what is already connected is no find, but still a folder', (
+    tester,
+  ) async {
+    await mount(tester, [
+      {
+        'id': 'folder:/data/models',
+        'kind': 'models',
+        'label': 'In use',
+        'path': '/data/models',
+        'found': 'a',
+        'status': 'present',
+        'provider': '',
+      },
+      {
+        'id': 'runtime:ollama',
+        'kind': 'runtime',
+        'label': 'Connected',
+        'path': '/data/ollama',
+        'found': 'b',
+        'status': 'running',
+        'provider': 'ollama',
+      },
+      {
+        'id': 'found:llm',
+        'kind': 'runtime',
+        'label': 'New',
+        'path': '/data/llm',
+        'found': 'c',
+        'status': 'found',
+        'provider': 'ollama',
+      },
+    ]);
+    expect(find.text('In use'), findsNothing);
+    expect(find.text('Connected'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('found-folder-found:llm')));
+    await tester.pumpAndSettle();
+    expect(find.text('/data/models'), findsWidgets);
+  });
+
   testWidgets('a found model folder can be reused, a runtime reconnected', (
     tester,
   ) async {
@@ -34,6 +73,7 @@ void main() {
         'label': 'Models',
         'path': '/data/models',
         'found': 'a',
+        'status': 'found',
         'provider': '',
       },
       {
@@ -42,6 +82,7 @@ void main() {
         'label': 'Ollama',
         'path': '/data/ollama',
         'found': 'b',
+        'status': 'found',
         'provider': 'ollama',
       },
       {

@@ -59,7 +59,10 @@ for line in sys.stdin:
  elif m=='map.snapshot':r={'nodes':[({**n,'status':'running'} if n['id']=='agent:test' and Path('agent_running').exists() else n) for n in nodes],'edges':[{'source':'agent:test','target':'mcp:known-server','kind':'mcp'}] if connected else [],'activity':{},'pending':Path('pending').exists()}
  elif m=='agents.traffic':r={'available':True,'agents':{}}
  elif m=='agents.halt_preview':r={'instances':[{'label':'PID 42','preview':'halt-42'}]}
- elif m=='system.refresh':tasks['system']={'nodes':[],'edges':[],'notes':[],'helpers':[]};r={'task':'system'}
+ elif m=='system.refresh':
+  tasks['system']={'nodes':[{'id':'found:/data/models','kind':'models','label':'Models','path':'/data/models','found':'a','status':'found','provider':''}] if Path('found_on_pc').exists() else [],'edges':[],'notes':[],'helpers':[],'search_done':Path('found_on_pc').exists()};r={'task':'system'}
+ elif m=='existing.preview':r={'plan':'opaque-existing','files':[],'notes':[],'empty':False}
+ elif m=='existing.apply':tasks['existing']={'ok':True};r={'task':'existing'}
  elif m=='setup.detect':tasks['detect']={'installed':['fixture-addon']};r={'task':'detect'}
  elif m=='providers.snapshot':r={'local':[runtime],'online':[],'folders':[]}
  elif m=='connections.snapshot':r={'agents':[{'command':'test','name':'Test agent','mcp':True,'skills':False}],
@@ -234,6 +237,35 @@ Future<void> openFromHelp(WidgetTester tester, String tab) async {
 }
 
 void main() {
+  testWidgets('What we found stays until a preview is applied', (tester) async {
+    final dir = await mountApp(
+      tester,
+      beforeStart: (dir) =>
+          File('${dir.path}/found_on_pc').writeAsStringSync(''),
+    );
+    await tester.tap(find.byKey(const ValueKey('help-open')));
+    await settleService(tester);
+    await tester.tap(find.text('Find existing AI').first);
+    await settleService(tester);
+    final reuse = find.byKey(const ValueKey('found-reuse-found:/data/models'));
+    await tester.tap(reuse);
+    await settleService(tester);
+    await tester.tap(find.text('Cancel').last);
+    await settleService(tester);
+    expect(reuse, findsOneWidget);
+    await tester.tap(reuse);
+    await settleService(tester);
+    await tester.tap(find.text('Apply'));
+    await settleService(tester);
+    expect(reuse, findsNothing);
+    expect(
+      requests(dir).lastWhere((q) => q['method'] == 'existing.apply')['params'],
+      containsPair('plan', 'opaque-existing'),
+    );
+    await settleService(tester);
+    await unmountApp(tester);
+  });
+
   testWidgets(
     'search/files do no inventory refresh; model load scans once; idle surfaces keep updates',
     (tester) async {

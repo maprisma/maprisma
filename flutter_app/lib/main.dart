@@ -214,6 +214,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   TaskCardSpec? _card;
   final _viewBodyKeys = <String, GlobalKey>{};
   VoidCallback? _cancelReview;
+  bool _reconnecting = false;
   String? _view;
   String? _connectionCommand;
   Map<String, dynamic>? _browser;
@@ -2428,20 +2429,20 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         nodes: (_system['nodes'] as List? ?? const [])
             .cast<Map<String, dynamic>>(),
         tr: tr,
-        onReconnect: (source, target) {
-          _cancelReview?.call();
-          unawaited(_reconnect(source, target));
-        },
+        onReconnect: (source, target) => unawaited(_reconnect(source, target)),
         onClose: no,
       ),
     );
   }
 
   /// A found local LLM or model folder comes to the map, after its preview.
+  /// What we found stays open until the preview is applied.
   Future<void> _reconnect(
     Map<String, dynamic> source,
     Map<String, dynamic>? target,
   ) async {
+    if (_reconnecting) return;
+    _reconnecting = true;
     try {
       final plan = await _client.existingPreview(
         found: source['found'],
@@ -2451,6 +2452,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
           !await confirmExisting(_navigator.currentContext!, plan, tr)) {
         return;
       }
+      _cancelReview?.call();
       final result = await _addonOperation('existing.apply', {
         'plan': plan['plan'],
       });
@@ -2459,6 +2461,8 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       await _refreshSystem(false, quiet: true);
     } catch (_) {
       if (mounted) _actionFailed();
+    } finally {
+      _reconnecting = false;
     }
   }
 
