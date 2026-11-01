@@ -40,7 +40,7 @@ KEYS = (
     "Do it with {0}…",
     # The local helper.
     "Local helper",
-    "An agent with a model of your local LLM answers the AI help that needs no web (Smart Check, which MCP server fits, help with local LLMs) on this PC, without tokens. Suggested: the largest chat model your graphics card holds.",
+    "An agent with a model of your local LLM answers the AI help that needs no web (which MCP server fits, help with local LLMs) on this PC, without tokens. Suggested: the largest chat model your graphics card holds.",
     "None set up",
     "Off",
     "(suggested)",
@@ -122,6 +122,7 @@ KEYS = (
     "Add MCP server",
     "Tidy up…",
     "What you can do with it",
+    "Nothing new found.",
     "Everything set up and working",
     # Health of an agent or a local LLM (agents.health, providers.health).
     "Health",

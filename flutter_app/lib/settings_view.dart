@@ -31,7 +31,7 @@ class SettingsView extends StatelessWidget {
   final Future<void> Function(Map<String, dynamic>) onUpdate;
   final VoidCallback onBack;
 
-  /// The installed agents that can do the System Map's checks (command, name).
+  /// The installed agents that can do the checks (command, name).
   final List<Map> checkers;
 
   /// helper.snapshot: the local helper's candidates, suggestion and choice.
@@ -196,7 +196,7 @@ class SettingsView extends StatelessWidget {
         decoration: InputDecoration(
           labelText: tr('Local helper'),
           helperText: tr(
-            'An agent with a model of your local LLM answers the AI help that needs no web (Smart Check, which MCP server fits, help with local LLMs) on this PC, without tokens. Suggested: the largest chat model your graphics card holds.',
+            'An agent with a model of your local LLM answers the AI help that needs no web (which MCP server fits, help with local LLMs) on this PC, without tokens. Suggested: the largest chat model your graphics card holds.',
           ),
           helperMaxLines: 4,
         ),

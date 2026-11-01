@@ -3243,5 +3243,7 @@
  "No AI helper is set up yet.": "Noch kein KI-Helfer eingerichtet.",
  "{0}: {1} to fix": "{0}: {1} zu beheben",
  "{0}: all fine": "{0}: alles in Ordnung",
- "Offered first for AI help; its tokens are used for it.": "Wird für KI-Hilfe zuerst angeboten; seine Tokens werden dafür verwendet."
+ "Offered first for AI help; its tokens are used for it.": "Wird für KI-Hilfe zuerst angeboten; seine Tokens werden dafür verwendet.",
+ "An agent with a model of your local LLM answers the AI help that needs no web (which MCP server fits, help with local LLMs) on this PC, without tokens. Suggested: the largest chat model your graphics card holds.": "Ein Agent mit einem Modell deines lokalen LLMs beantwortet die KI-Hilfe, die kein Web braucht (welcher MCP-Server passt, Hilfe zu lokalen LLMs), auf diesem PC, ohne Tokens. Empfohlen: das größte Chatmodell, das deine Grafikkarte fasst.",
+ "Nothing new found.": "Nichts Neues gefunden."
 }

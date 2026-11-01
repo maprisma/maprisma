@@ -157,7 +157,6 @@ const smartActionLabels = {
   'firstagent': 'Get started',
   'addmcp': 'Add MCP server',
   'addskills': 'Add skills',
-  'reorganize': 'Tidy up…',
 };
 
 /// A column's or header's state: check mark in green circle ('ok'),
@@ -919,6 +918,10 @@ class _MapSmartCardState extends State<MapSmartCard> {
           final result =
               (status['result'] as Map?)?.cast<String, dynamic>() ?? const {};
           if (result['ok'] == false) {
+            // A move that could not be rolled back all the way can be undone.
+            if (result['move_undo'] is String) {
+              widget.onApplied?.call({'move_undo': result['move_undo']});
+            }
             setState(() {
               _errorText =
                   '${result['message'] ?? widget.tr('The action could not be completed.')}';

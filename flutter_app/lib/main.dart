@@ -39,6 +39,7 @@ import 'agent_security_view.dart';
 import 'api_key_review.dart';
 import 'performance_view.dart';
 import 'interrupted_jobs.dart';
+import 'found_on_pc_view.dart';
 import 'help_view.dart';
 import 'item_details_view.dart';
 import 'map_layout.dart' show withAgentLinks;
@@ -403,6 +404,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
           'addons.catalog',
           'guide.snapshot',
           'system.refresh',
+          'system.move_undo',
           'existing.scan',
         ].contains(operation) &&
         value != null &&
@@ -1280,6 +1282,8 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         title: tr(
           (method.startsWith('existing.') || method == 'system.refresh')
               ? 'Find existing AI'
+              : method == 'system.move_undo'
+              ? 'Undo'
               : method == 'guide.snapshot'
               ? 'Your first agent'
               : method.startsWith('installers.')
@@ -2105,17 +2109,19 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         _openGuide();
       case 'install':
         _installProgram('runtime', action[1]);
-      case 'runtime' || 'models' || 'reorganize':
+      case 'runtime' || 'models':
         setState(() {
           _showProviders = true;
           _showConnections = false;
         });
+        unawaited(_refresh());
       case 'addmcp' || 'addskills':
         setState(() {
           _showConnections = true;
           _showFound = true;
           _showProviders = false;
         });
+        unawaited(_refresh());
       default:
         setState(() {
           _showMap = true;
@@ -2409,7 +2415,51 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       _visibleTerminal = null;
     });
     await _refreshSystem(true);
-    if (mounted) await _refresh();
+    if (!mounted) return;
+    await _refresh();
+    if (mounted && _system['search_done'] == true) await _openFound();
+  }
+
+  Future<void> _openFound() async {
+    await _cardReview(
+      tr('What we found'),
+      const {},
+      (yes, no) => FoundOnPcView(
+        nodes: (_system['nodes'] as List? ?? const [])
+            .cast<Map<String, dynamic>>(),
+        tr: tr,
+        onReconnect: (source, target) {
+          _cancelReview?.call();
+          unawaited(_reconnect(source, target));
+        },
+        onClose: no,
+      ),
+    );
+  }
+
+  /// A found local LLM or model folder comes to the map, after its preview.
+  Future<void> _reconnect(
+    Map<String, dynamic> source,
+    Map<String, dynamic>? target,
+  ) async {
+    try {
+      final plan = await _client.existingPreview(
+        found: source['found'],
+        models: target?['found'],
+      );
+      if (!mounted ||
+          !await confirmExisting(_navigator.currentContext!, plan, tr)) {
+        return;
+      }
+      final result = await _addonOperation('existing.apply', {
+        'plan': plan['plan'],
+      });
+      if (result == null || !mounted) return;
+      await _reloadSystem();
+      await _refreshSystem(false, quiet: true);
+    } catch (_) {
+      if (mounted) _actionFailed();
+    }
   }
 
   void _systemSession(Map<String, dynamic> result) {
@@ -2436,7 +2486,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       unawaited(_itemDetails(node));
       return;
     }
-    _healthAction(const ['runtime']);
+    if (node['kind'] != 'cloud') _healthAction(const ['runtime']);
   }
 
   /// An MCP server's or a skill set's box: its details (details.mcp /
@@ -3974,7 +4024,9 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                   key: const ValueKey('move-undo'),
                   tooltip: tr('Undo'),
                   icon: const Icon(Icons.undo),
-                  onPressed: _navigationBlocked ? null : _undoMove,
+                  onPressed: _navigationBlocked || _card != null
+                      ? null
+                      : _undoMove,
                 ),
               if (_healthReport != null || _healthCount > 0)
                 IconButton(
@@ -4384,6 +4436,12 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                                                   () => _moveUndo =
                                                       result['move_undo']
                                                           as String,
+                                                );
+                                                unawaited(
+                                                  _refreshSystem(
+                                                    false,
+                                                    quiet: true,
+                                                  ),
                                                 );
                                               }
                                               if (result['undo'] is String) {

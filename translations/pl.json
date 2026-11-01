@@ -3324,5 +3324,7 @@
  "No AI helper is set up yet.": "Nie skonfigurowano jeszcze pomocnika AI.",
  "{0}: {1} to fix": "{0}: {1} do naprawienia",
  "{0}: all fine": "{0}: wszystko w porządku",
- "Offered first for AI help; its tokens are used for it.": "Proponowany jako pierwszy do pomocy AI; zużywane są na to jego tokeny."
+ "Offered first for AI help; its tokens are used for it.": "Proponowany jako pierwszy do pomocy AI; zużywane są na to jego tokeny.",
+ "An agent with a model of your local LLM answers the AI help that needs no web (which MCP server fits, help with local LLMs) on this PC, without tokens. Suggested: the largest chat model your graphics card holds.": "Agent z modelem twojego lokalnego LLM odpowiada na pomoc AI, która nie wymaga sieci (który serwer MCP pasuje, pomoc z lokalnymi LLM), na tym komputerze, bez tokenów. Sugerowany: największy model czatu, który zmieści twoja karta graficzna.",
+ "Nothing new found.": "Nie znaleziono niczego nowego."
 }
