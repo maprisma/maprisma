@@ -1,24 +1,16 @@
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'agent_map.dart';
 import 'app_theme.dart' show corners;
-import 'task_focus.dart';
-
-enum TaskCardWidth { half, full }
+import 'overlay_window.dart';
 
 class TaskCardSpec {
   const TaskCardSpec({
     required this.title,
     required this.child,
-    this.width = TaskCardWidth.half,
-    this.focus = const {},
     this.closable = true,
   });
   final String title;
   final Widget child;
-  final TaskCardWidth width;
-  final Set<String> focus;
   final bool closable;
 }
 
@@ -26,29 +18,54 @@ class TaskHost extends StatelessWidget {
   const TaskHost({
     super.key,
     required this.spec,
-    required this.graph,
     required this.tr,
     required this.onClose,
+    this.overlay = false,
   });
   final TaskCardSpec spec;
-  final Map<String, dynamic> graph;
   final String Function(String) tr;
   final VoidCallback onClose;
 
-  static bool usesHalfCard(
-    TaskCardWidth width,
-    double availableWidth,
-    bool hasFocusNodes,
-  ) => width == TaskCardWidth.half && availableWidth >= 900 && hasFocusNodes;
+  /// An action in the window over the page; otherwise the whole page.
+  final bool overlay;
 
   @override
   Widget build(BuildContext context) {
-    final focused = focusGraph(graph, spec.focus, const [
-      'MCP servers and skills',
-      'Agents',
-      'Providers',
-      'Models',
-    ]);
+    final colors = Theme.of(context).colorScheme;
+    final card = Material(
+      key: const ValueKey('task-card'),
+      color: colors.surfaceContainer,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(corners(context)),
+        side: BorderSide(color: colors.outlineVariant),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    spec.title,
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: spec.closable ? onClose : null,
+                  icon: const Icon(Icons.arrow_back),
+                  label: Text(tr('Back')),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          Expanded(child: spec.child),
+        ],
+      ),
+    );
     return CallbackShortcuts(
       bindings: {
         const SingleActivator(LogicalKeyboardKey.escape): () {
@@ -57,100 +74,15 @@ class TaskHost extends StatelessWidget {
       },
       child: Focus(
         autofocus: true,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final half = usesHalfCard(
-              spec.width,
-              constraints.maxWidth,
-              (focused.graph['nodes'] as List).isNotEmpty,
-            );
-            final colors = Theme.of(context).colorScheme;
-            final card = Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Positioned.fill(
-                  child: Material(
-                    key: const ValueKey('task-card'),
-                    color: colors.surfaceContainer,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(corners(context)),
-                      side: BorderSide(color: colors.outlineVariant),
-                    ),
-                    clipBehavior: Clip.antiAlias,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  spec.title,
-                                  style: Theme.of(context).textTheme.titleLarge,
-                                ),
-                              ),
-                              TextButton.icon(
-                                onPressed: spec.closable ? onClose : null,
-                                icon: const Icon(Icons.arrow_back),
-                                label: Text(tr('Back')),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const Divider(height: 1),
-                        Expanded(child: spec.child),
-                      ],
-                    ),
-                  ),
+        child: overlay
+            ? OverlayWindow(key: const ValueKey('overlay-task'), child: card)
+            : Padding(
+                padding: const EdgeInsets.all(12),
+                child: SizedBox.expand(
+                  key: const ValueKey('full-task'),
+                  child: card,
                 ),
-                if (half)
-                  Positioned(
-                    left: -4,
-                    top: 0,
-                    bottom: 0,
-                    child: Center(
-                      child: Container(
-                        width: 8,
-                        height: 8,
-                        decoration: BoxDecoration(
-                          color: colors.primary,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            );
-            return Padding(
-              padding: const EdgeInsets.all(12),
-              child: half
-                  ? Row(
-                      key: const ValueKey('half-task'),
-                      children: [
-                        Expanded(
-                          child: AgentMap(
-                            graph: focused.graph,
-                            columns: focused.columns,
-                            tr: tr,
-                            onAgent: (_) {},
-                            readOnly: true,
-                            anchors: spec.focus,
-                          ),
-                        ),
-                        SizedBox(
-                          width: math.max(460, (constraints.maxWidth - 24) / 2),
-                          child: card,
-                        ),
-                      ],
-                    )
-                  : SizedBox.expand(
-                      key: const ValueKey('full-task'),
-                      child: card,
-                    ),
-            );
-          },
-        ),
+              ),
       ),
     );
   }
@@ -193,14 +125,18 @@ class RetainedTaskView extends StatelessWidget {
     super.key,
     required this.visible,
     required this.child,
+    this.focusable = true,
   });
   final bool visible;
   final Widget child;
+
+  /// False under an overlay card: seen, but the keyboard stays with the card.
+  final bool focusable;
   @override
   Widget build(BuildContext context) => Offstage(
     offstage: !visible,
     child: ExcludeFocus(
-      excluding: !visible,
+      excluding: !visible || !focusable,
       child: TickerMode(enabled: visible, child: child),
     ),
   );

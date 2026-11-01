@@ -374,7 +374,7 @@ final class SetupChecks {
           tr('No model chosen'),
           '',
           tr(
-            'Select the agent on the map and click a model of a local LLM it is connected to.',
+            'Draw a line on the map from the agent to a model of a local LLM it is connected to.',
           ),
         ),
       );

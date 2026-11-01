@@ -20,7 +20,6 @@ class AgentMap extends StatelessWidget {
     required this.graph,
     required this.onAgent,
     required this.tr,
-    this.readOnly = false,
     this.onEdit,
     this.selection,
     this.controls,
@@ -29,7 +28,6 @@ class AgentMap extends StatelessWidget {
     this.onLayout,
     this.animate = 'all',
     this.lightFps = 20,
-    this.anchors = const {},
     this.onSubagents,
     this.onNode,
     this.controller,
@@ -72,8 +70,6 @@ class AgentMap extends StatelessWidget {
   final ValueChanged<Map<String, dynamic>>? onLayout;
   final String animate;
   final int lightFps;
-  final bool readOnly;
-  final Set<String> anchors;
   final Map<String, dynamic> graph;
   final ValueChanged<String> onAgent;
   final String Function(String) tr;
@@ -119,7 +115,7 @@ class AgentMap extends StatelessWidget {
             message:
                 '${tr('Subagents')}: ${activity?['active_subagents']} / ${children.length}',
             child: TextButton(
-              onPressed: readOnly || onSubagents == null
+              onPressed: onSubagents == null
                   ? null
                   : () => onSubagents!(command),
               style: TextButton.styleFrom(
@@ -145,7 +141,7 @@ class AgentMap extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (!readOnly && onEdit != null) {
+    if (onEdit != null) {
       return MapEditor(
         layers: layers,
         onLayers: onLayers,
@@ -176,7 +172,7 @@ class AgentMap extends StatelessWidget {
         smartStatusTarget: smartStatusTarget,
       );
     }
-    final groups = readOnly ? null : this.groups;
+    final groups = this.groups;
     final allNodes = (graph['nodes'] as List).cast<Map<String, dynamic>>();
     final allEdges = (graph['edges'] as List).cast<Map<String, dynamic>>();
     final shownCols = [for (var i = 0; i < columns.length; i++) i];
@@ -199,7 +195,7 @@ class AgentMap extends StatelessWidget {
     final startTop = groups == null ? 64.0 : (smartCards ? 156.0 : 106.0);
     final height = math
         .max(
-          readOnly ? 0 : 650,
+          650,
           (counts.values.fold<int>(0, math.max) * 106) +
               (groups == null ? 170 : (smartCards ? 220 : 210)),
         )
@@ -241,8 +237,6 @@ class AgentMap extends StatelessWidget {
                   positions,
                   edges,
                   colors.outlineVariant,
-                  anchors,
-                  colors.primary,
                   boxWidth: boxWidth,
                 ),
               ),
@@ -274,8 +268,7 @@ class AgentMap extends StatelessWidget {
                 width: boxWidth,
                 height: 88,
                 child: Semantics(
-                  button:
-                      !readOnly && (onNode != null || node['kind'] == 'agent'),
+                  button: onNode != null || node['kind'] == 'agent',
                   label: node['label'] as String,
                   child: Card(
                     shape: focusedNode == node['id']
@@ -293,12 +286,10 @@ class AgentMap extends StatelessWidget {
                         : colors.surfaceContainer,
                     clipBehavior: Clip.antiAlias,
                     child: InkWell(
-                      onSecondaryTap: readOnly || onNodeMenu == null
+                      onSecondaryTap: onNodeMenu == null
                           ? null
                           : () => onNodeMenu!(context, node),
-                      onTap: readOnly
-                          ? null
-                          : onNode != null
+                      onTap: onNode != null
                           ? () => onNode!(node)
                           : node['kind'] == 'agent'
                           ? () => onAgent(
@@ -321,7 +312,7 @@ class AgentMap extends StatelessWidget {
                                 Row(
                                   children: [
                                     Expanded(child: _title(node)),
-                                    if (!readOnly && onNodeMenu != null)
+                                    if (onNodeMenu != null)
                                       const SizedBox(width: 28, height: 28),
                                   ],
                                 ),
@@ -338,7 +329,7 @@ class AgentMap extends StatelessWidget {
                               ],
                             ),
                           ),
-                          if (!readOnly && onNodeMenu != null)
+                          if (onNodeMenu != null)
                             Positioned(
                               top: 11,
                               right: 4,
@@ -358,21 +349,6 @@ class AgentMap extends StatelessWidget {
                 ),
               ),
           ],
-        ),
-      );
-    }
-
-    if (readOnly) {
-      final canvasSize = Size((shownCols.length * 290 + 20).toDouble(), height);
-      return FittedBox(
-        fit: BoxFit.scaleDown,
-        alignment: Alignment.centerRight,
-        child: buildCanvas(
-          colWidth: 250,
-          colGap: 40,
-          boxWidth: 242,
-          inset: 0,
-          canvasSize: canvasSize,
         ),
       );
     }
@@ -515,16 +491,7 @@ class _InteractiveBoardState extends State<_InteractiveBoard> {
 }
 
 class _Connections extends CustomPainter {
-  _Connections(
-    this.positions,
-    this.edges,
-    this.color,
-    this.anchors,
-    this.anchorColor, {
-    this.boxWidth = 242,
-  });
-  final Set<String> anchors;
-  final Color anchorColor;
+  _Connections(this.positions, this.edges, this.color, {this.boxWidth = 242});
   final Map<String, Offset> positions;
   final List<Map<String, dynamic>> edges;
   final Color color;
@@ -536,29 +503,6 @@ class _Connections extends CustomPainter {
       ..color = color
       ..strokeWidth = 1.5
       ..style = PaintingStyle.stroke;
-    final anchorPaint = Paint()
-      ..color = anchorColor
-      ..strokeWidth = 2
-      ..style = PaintingStyle.stroke;
-    for (final id in anchors) {
-      final position = positions[id];
-      if (position == null) continue;
-      final start = position + Offset(boxWidth, 41);
-      final middle = (start.dx + size.width) / 2;
-      canvas.drawPath(
-        Path()
-          ..moveTo(start.dx, start.dy)
-          ..cubicTo(
-            middle,
-            start.dy,
-            middle,
-            size.height / 2,
-            size.width,
-            size.height / 2,
-          ),
-        anchorPaint,
-      );
-    }
     for (final edge in edges) {
       final source = positions[edge['source']];
       final target = positions[edge['target']];
@@ -581,7 +525,5 @@ class _Connections extends CustomPainter {
       positions != oldDelegate.positions ||
       edges != oldDelegate.edges ||
       color != oldDelegate.color ||
-      anchors != oldDelegate.anchors ||
-      anchorColor != oldDelegate.anchorColor ||
       boxWidth != oldDelegate.boxWidth;
 }

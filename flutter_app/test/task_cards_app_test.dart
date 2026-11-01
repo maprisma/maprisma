@@ -3,12 +3,12 @@ import 'support/python_transport.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'package:maprisma/backend.dart';
+import 'package:maprisma/first_agent_view.dart';
 import 'package:maprisma/overlay_window.dart';
 import 'package:maprisma/agent_map.dart';
 import 'package:maprisma/settings_view.dart';
 import 'package:maprisma/main.dart';
 import 'package:maprisma/connections_view.dart';
-import 'package:maprisma/task_card.dart';
 import 'package:maprisma/test_shots.dart';
 import 'package:maprisma/map_addons_focus.dart';
 import 'package:maprisma/map_smart_card.dart';
@@ -120,6 +120,7 @@ for line in sys.stdin:
  elif m=='models.tuning':tasks['tune']={'runtime':'Fixture provider','key':'fixture','gpu':'GPU','vram':8<<30,'stacks':[],'build':'','builds':[],'devices':'','settings':{'*':{}},'tuning':{'mode':['a|b','A mode']},'per_model':False,'models':[],'loaded':[],'vram_used':0,'helpers':[{'command':'test','name':'Test agent'}]};r={'task':'tune'}
  elif m=='models.tuning_ask':tasks['ask']={'summary':'One thing.','agent':p['command'],'suggestions':[{'kind':'setting','title':'Use b','why':'Faster.','model':'*','key':'mode','value':'b'}]};r={'task':'ask'}
  elif m=='models.tuning_preview':r={'plan':'opaque-tune','empty':False,'files':[{'path':'~/.config/x.ini','added':1,'removed':0}],'links_add':[],'links_remove':[],'item':'Fixture provider','notes':[],'focus':['runtime:fixture']}
+ elif m=='models.slots_preview' and Path('no-slots').exists():r={'empty':True}
  elif m=='models.slots_preview':r={'plan':'opaque-slots','empty':False,'files':[{'path':'~/.config/llama.cpp/server.env','added':1,'removed':0}],'links_add':[],'links_remove':[],'notes':['Fixture provider keeps 2 models loaded at once'],'warnings':['Too big together.'],'reload':True,'focus':['runtime:fixture']}
  elif m=='models.slots_reload':r={'ok':True}
  elif m=='updates.check':tasks['up']={'updates':[{'kind':'agent','column':'agents','key':'test','name':'Test agent','current':'1.0','available':'1.1','command':['mise','upgrade','test'],'page':False}]};r={'task':'up'}
@@ -244,6 +245,64 @@ Future<void> openFromHelp(WidgetTester tester, String tab) async {
 }
 
 void main() {
+  testWidgets('leaving Providers and models brings the map up to date', (
+    tester,
+  ) async {
+    final dir = await mountApp(tester);
+    await openFromHelp(tester, 'Providers and models');
+    var before = forcedScans(dir);
+    await tester.tap(find.text('Back').last);
+    await settleService(tester);
+    expect(forcedScans(dir), before, reason: 'nothing changed');
+
+    await openFromHelp(tester, 'Providers and models');
+    await tester.tap(find.text('Models (1)'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Load'));
+    await settleService(tester);
+    before = forcedScans(dir);
+    await tester.tap(find.widgetWithText(TextButton, 'Close'));
+    await settleService(tester);
+    expect(forcedScans(dir), before, reason: 'still on the page');
+    await tester.tap(find.text('Back').last);
+    await settleService(tester);
+    expect(forcedScans(dir), before + 1);
+    await unmountApp(tester);
+  });
+
+  testWidgets('leaving the guide leaves it; a page from a box returns there', (
+    tester,
+  ) async {
+    await mountApp(tester);
+    await openFromHelp(tester, 'Your first agent');
+    await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
+    await settleService(tester);
+    expect(find.byType(FirstAgentView), findsNothing);
+    expect(tester.takeException(), isNull);
+    await unmountApp(tester);
+  });
+
+  testWidgets('a window blocks the header; Esc leads out of it', (
+    tester,
+  ) async {
+    await mountApp(tester);
+    await tester.tap(find.byKey(const ValueKey('help-open')));
+    await settleService(tester);
+    expect(find.byType(OverlayWindow), findsOneWidget);
+    for (final key in ['problems-open', 'map-legend']) {
+      expect(
+        tester.widget<IconButton>(find.byKey(ValueKey(key))).onPressed,
+        isNull,
+      );
+    }
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.f5);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.f5);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await settleService(tester);
+    expect(find.byType(OverlayWindow), findsNothing);
+    await unmountApp(tester);
+  });
+
   testWidgets('an open terminal keeps the keyboard and the app its keys', (
     tester,
   ) async {
@@ -333,7 +392,7 @@ void main() {
   });
 
   testWidgets(
-    'search/files do no inventory refresh; model load scans once; idle surfaces keep updates',
+    'search/files do no inventory refresh; idle surfaces keep updates',
     (tester) async {
       final dir = await mountApp(tester);
       final baseline = forcedScans(dir);
@@ -345,13 +404,15 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Load'));
       await settleService(tester);
-      expect(forcedScans(dir), baseline + 1);
+      // The page keeps its data; leaving it brings the map up to date.
+      expect(forcedScans(dir), baseline);
       expect(find.text('Succeeded'), findsOneWidget);
       expect(
         tester
             .widget<IconButton>(find.widgetWithIcon(IconButton, Icons.refresh))
             .onPressed,
-        isNotNull,
+        isNull,
+        reason: 'the result window is modal',
       );
       final liveBefore = requests(
         dir,
@@ -405,10 +466,16 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(SwitchListTile, 'Test agent'));
       await settleService(tester);
-      expect(find.byType(ConnectionsView), findsNothing);
-      expect(find.byType(ConnectionsView, skipOffstage: false), findsOneWidget);
-      await tester.tap(find.text('Cancel'));
+      expect(find.byType(OverlayWindow), findsOneWidget);
+      expect(find.byType(ConnectionsView), findsOneWidget);
+      await tester.tap(
+        find.descendant(
+          of: find.byType(OverlayWindow),
+          matching: find.text('Cancel'),
+        ),
+      );
       await settleService(tester);
+      expect(find.byType(OverlayWindow), findsNothing);
       expect(
         tester.widget<EditableText>(find.byType(EditableText)).controller.text,
         'Known',
@@ -419,10 +486,14 @@ void main() {
       await tester.tap(find.widgetWithText(FilledButton, 'Apply'));
       await settleService(tester);
       expect(find.text('Succeeded'), findsOneWidget);
-      expect(find.widgetWithText(TextButton, 'Undo'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(OverlayWindow),
+          matching: find.widgetWithText(TextButton, 'Undo'),
+        ),
+        findsOneWidget,
+      );
       expect(forcedScans(dir), scans + 1);
-      final host = tester.widget<TaskHost>(find.byType(TaskHost).last);
-      expect((host.graph['edges'] as List), isNotEmpty);
       await tester.tap(find.widgetWithText(TextButton, 'Close'));
       await tester.pumpAndSettle();
       expect(
@@ -459,8 +530,13 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Get add-on'));
       await settleService(tester);
-      expect(find.byType(MapAddonsFocus), findsNothing);
-      await tester.tap(find.text('Cancel'));
+      expect(find.byType(OverlayWindow), findsOneWidget);
+      await tester.tap(
+        find.descendant(
+          of: find.byType(OverlayWindow),
+          matching: find.text('Cancel'),
+        ),
+      );
       await settleService(tester);
       final focus = tester.widget<MapAddonsFocus>(find.byType(MapAddonsFocus));
       expect(focus.welcome, isTrue);
@@ -569,7 +645,12 @@ void main() {
         'new-server',
       );
       expect(find.text('Agents: Test agent'), findsOneWidget);
-      await tester.tap(find.text('Cancel'));
+      await tester.tap(
+        find.descendant(
+          of: find.byType(OverlayWindow),
+          matching: find.text('Cancel'),
+        ),
+      );
       await settleService(tester);
       expect(
         requests(dir).where((q) => q['method'] == 'connections.apply'),
@@ -616,46 +697,65 @@ void main() {
       await unmountApp(tester);
     },
   );
-  testWidgets(
-    'hook to empty opens removal review; Cancel leaves the connection',
-    (tester) async {
-      final dir = await mountApp(tester);
-      final from = tester.getCenter(find.text('Test agent')),
-          to = tester.getCenter(find.text('Known server'));
-      await tester.dragFrom(from, to - from);
-      await settleService(tester);
-      await tester.tap(find.text('Apply'));
-      await settleService(tester);
-      await tester.tap(find.widgetWithText(TextButton, 'Close'));
-      await settleService(tester);
-      await tester.tap(find.text('Test agent'));
-      await tester.pumpAndSettle();
-      await tester.drag(
-        find.byTooltip(
-          'Move this connection to another compatible box, or to empty space to disconnect.',
-        ),
-        const Offset(0, 240),
-      );
-      await settleService(tester);
-      expect(find.byType(ConnectionReview), findsOneWidget);
-      final move = requests(
-        dir,
-      ).singleWhere((q) => q['method'] == 'connections.move_preview');
-      expect(move['params'], {
-        'agent': 'agent:test',
-        'old': 'mcp:known-server',
-        'new': null,
-      });
-      await tester.tap(find.text('Cancel'));
-      await settleService(tester);
-      expect(
-        requests(dir).where((q) => q['method'] == 'connections.apply').length,
-        1,
-      );
-      expect(tester.takeException(), isNull);
-      await unmountApp(tester);
-    },
-  );
+  testWidgets('hook to empty opens removal review; Cancel leaves the connection', (
+    tester,
+  ) async {
+    final dir = await mountApp(tester);
+    final from = tester.getCenter(find.text('Test agent')),
+        to = tester.getCenter(find.text('Known server'));
+    await tester.dragFrom(from, to - from);
+    await settleService(tester);
+    await tester.tap(find.text('Apply'));
+    await settleService(tester);
+    await tester.tap(find.widgetWithText(TextButton, 'Close'));
+    await settleService(tester);
+    await tester.tap(find.text('Test agent'));
+    await tester.pumpAndSettle();
+    await tester.drag(
+      find.byTooltip(
+        'Move this connection to another compatible box, or to empty space to disconnect.',
+      ),
+      const Offset(0, 240),
+    );
+    await settleService(tester);
+    final dialog = find.byKey(const ValueKey('disconnect-dialog'));
+    expect(dialog, findsOneWidget);
+    expect(find.byType(ConnectionReview), findsNothing);
+    final move = requests(
+      dir,
+    ).singleWhere((q) => q['method'] == 'connections.move_preview');
+    expect(move['params'], {
+      'agent': 'agent:test',
+      'old': 'mcp:known-server',
+      'new': null,
+    });
+    await tester.tap(
+      find.descendant(of: dialog, matching: find.text('Cancel')),
+    );
+    await settleService(tester);
+    expect(
+      requests(dir).where((q) => q['method'] == 'connections.apply').length,
+      1,
+    );
+    await tester.drag(
+      find.byTooltip(
+        'Move this connection to another compatible box, or to empty space to disconnect.',
+      ),
+      const Offset(0, 240),
+    );
+    await settleService(tester);
+    File('${dir.path}/no-slots').writeAsStringSync('');
+    await tester.tap(find.descendant(of: dialog, matching: find.text('Apply')));
+    await settleService(tester);
+    expect(
+      requests(dir).where((q) => q['method'] == 'connections.apply').length,
+      2,
+    );
+    expect(find.text('Succeeded'), findsOneWidget);
+    expect(find.widgetWithText(SnackBarAction, 'Undo'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await unmountApp(tester);
+  });
   for (final pending in [false, true]) {
     testWidgets(
       'live scans retain equal snapshots and map widgets (pending=$pending)',
@@ -1169,6 +1269,8 @@ void main() {
     );
     await settleService(tester);
     expect(find.text('Add-ons updated: Catalog adapter'), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await settleService(tester);
     await tester.tap(find.byKey(const ValueKey('problems-open')));
     await settleService(tester);
     await tester.tap(find.widgetWithText(OutlinedButton, 'Get add-ons'));
@@ -1184,7 +1286,7 @@ void main() {
     final semantics = tester.ensureSemantics();
     await mountApp(tester);
     await settleService(tester);
-    Future<void> check() async {
+    Future<void> check({bool overlay = false}) async {
       await expectLater(tester, meetsGuideline(labeledTapTargetGuideline));
       // Each text measured on its own. The header's AI Map is left out: the
       // guideline reads 2.34 whatever its colour, so it samples it wrongly.
@@ -1192,12 +1294,21 @@ void main() {
         tester,
         meetsGuideline(
           CustomMinimumContrastGuideline(
-            finder: find.byWidgetPredicate(
-              (w) =>
-                  w is Text &&
-                  (w.data ?? 'rich').trim().isNotEmpty &&
-                  w.data != 'AI Map',
-            ),
+            finder: () {
+              final texts = find.byWidgetPredicate(
+                (w) =>
+                    w is Text &&
+                    (w.data ?? 'rich').trim().isNotEmpty &&
+                    w.data != 'AI Map',
+              );
+              // What the barrier dims behind the window is not to be read.
+              return overlay
+                  ? find.descendant(
+                      of: find.byType(OverlayWindow),
+                      matching: texts,
+                    )
+                  : texts;
+            }(),
           ),
         ),
       );
@@ -1214,7 +1325,7 @@ void main() {
     await check(); // Settings
     await tester.tap(find.byKey(const ValueKey('help-open')));
     await settleService(tester);
-    await check(); // Help
+    await check(overlay: true); // Help
     await tester.sendKeyEvent(LogicalKeyboardKey.escape); // Esc closes it
     await settleService(tester);
     expect(find.byKey(const ValueKey('help-manual')), findsNothing);

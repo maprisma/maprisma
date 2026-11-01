@@ -641,7 +641,7 @@ def agent_checks(agent, info, record: dict, inventory, hints: dict, logged_in: b
         pass                                  # said above, with what to do
     elif local_names:
         checks.append(Check("warn", _("No model chosen"), "",
-                            _("Select the agent on the map and click a model of a local LLM it is connected to.")))
+                            _("Draw a line on the map from the agent to a model of a local LLM it is connected to.")))
     else:
         checks.append(Check("info", _("Model"), _("the agent's own default")))
 

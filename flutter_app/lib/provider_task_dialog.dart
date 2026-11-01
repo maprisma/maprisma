@@ -14,10 +14,8 @@ class TaskProgress extends StatefulWidget {
     required this.tr,
     this.existingTask,
     required this.onComplete,
-    this.onFocus,
   });
   final ValueChanged<Map<String, dynamic>?> onComplete;
-  final ValueChanged<Set<String>>? onFocus;
   final Backend backend;
   final String operation;
   final Map<String, dynamic> params;
@@ -54,9 +52,6 @@ class _TaskProgressState extends State<TaskProgress> {
         );
         _task = started['task'] as String;
         if (!mounted) return;
-        widget.onFocus?.call(
-          (started['focus'] as List? ?? []).cast<String>().toSet(),
-        );
       }
       while (mounted && !_cancelling) {
         Map<String, dynamic> status;

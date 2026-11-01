@@ -40,7 +40,6 @@ for line in sys.stdin:
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
-      Set<String> focus = {};
       Map<String, dynamic>? result;
       late TaskProgress progress;
       final taskKey = GlobalKey();
@@ -56,30 +55,16 @@ for line in sys.stdin:
                   params: const {'key': 'test'},
                   title: 'Load',
                   tr: (s) => s,
-                  onFocus: (ids) => setState(() => focus = ids),
                   onComplete: (value) => setState(() => result = value),
                 );
                 return TaskHost(
                   spec: TaskCardSpec(
                     title: 'Load',
-                    focus: focus,
                     closable: result != null,
                     child: result == null
                         ? progress
                         : Text('starts: ${result!['starts']}'),
                   ),
-                  graph: const {
-                    'nodes': [
-                      {
-                        'id': 'runtime:test',
-                        'column': 2,
-                        'kind': 'runtime',
-                        'label': 'Test runtime',
-                        'detail': '',
-                      },
-                    ],
-                    'edges': [],
-                  },
                   tr: (s) => s,
                   onClose: () {},
                 );
@@ -91,9 +76,6 @@ for line in sys.stdin:
       await tester.runAsync(
         () => Future<void>.delayed(const Duration(milliseconds: 120)),
       );
-      await tester.pump();
-      expect(find.byKey(const ValueKey('half-task')), findsOneWidget);
-      tester.view.physicalSize = const Size(800, 800);
       await tester.pump();
       expect(find.byKey(const ValueKey('full-task')), findsOneWidget);
       // Polling delays run in fake time; subprocess IO runs in real time.

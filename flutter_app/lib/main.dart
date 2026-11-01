@@ -100,6 +100,9 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
 
   bool _helperLoaded = false;
 
+  /// Something changed while the map was out of sight.
+  bool _mapStale = false;
+
   /// Only after the saved choice was read; a save never disturbs the map.
   void _smartHelperChanged() {
     if (!_helperLoaded) return;
@@ -235,7 +238,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   bool _windowFocused = true;
   DateTime? _nextMapScan;
 
-  double _mapAreaWidth = 0;
   TaskCardSpec? _card;
   final _viewBodyKeys = <String, GlobalKey>{};
   VoidCallback? _cancelReview;
@@ -279,9 +281,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     }
   }
 
-  Set<String> _focusOf(Map<String, dynamic> reply) =>
-      (reply['focus'] as List? ?? []).cast<String>().toSet();
-
   void _closeCard() {
     if (_card?.closable != true) return;
     final cancel = _cancelReview;
@@ -292,7 +291,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
 
   Future<bool> _cardReview(
     String title,
-    Map<String, dynamic> plan,
     Widget Function(VoidCallback, VoidCallback) build,
   ) async {
     final answer = Completer<bool>();
@@ -305,7 +303,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         setState(
           () => _card = TaskCardSpec(
             title: title,
-            focus: _focusOf(plan),
             closable: false,
             child: const Center(child: CircularProgressIndicator()),
           ),
@@ -316,12 +313,13 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       answer.complete(value);
     }
 
+    // A window takes over: an older message's Undo would run behind it.
+    ScaffoldMessenger.of(_navigator.currentContext!).clearSnackBars();
     setState(() {
       _busy = true;
       _cancelReview = () => finish(false);
       _card = TaskCardSpec(
         title: title,
-        focus: _focusOf(plan),
         child: build(() => finish(true), () => finish(false)),
       );
     });
@@ -335,8 +333,10 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       _card?.closable == false ||
       smartWindowsShown.value > 0;
 
-  /// The app's keys do nothing behind an open terminal window.
-  bool get _keysBlocked => _navigationBlocked || _visibleTerminal != null;
+  /// Every window is modal: Esc or its own buttons lead out of it. What opens
+  /// from inside one is not blocked, only the header and the app's keys.
+  bool get _keysBlocked =>
+      _navigationBlocked || _card != null || _visibleTerminal != null;
 
   bool get _hasTaskView =>
       _showGuide ||
@@ -347,12 +347,9 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
           _visibleTerminal == null &&
           _focusCategory != null);
 
-  bool _halfTaskMapVisible(TaskCardWidth width, Set<String> focus) =>
-      TaskHost.usesHalfCard(
-        width,
-        _mapAreaWidth,
-        (_graph?['nodes'] as List? ?? []).any((n) => focus.contains(n['id'])),
-      );
+  /// The map is what lies under any window, so a change shows at once.
+  bool get _mapOnScreen =>
+      _showMap && !_showSettings && !_hasTaskView && _visibleTerminal == null;
 
   static const _dataTasks = {
     'models.search',
@@ -372,25 +369,13 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     required String operation,
     Map<String, dynamic> params = const {},
     String? existingTask,
-    Set<String> focus = const {},
-    TaskCardWidth width = TaskCardWidth.half,
+    bool quiet = false,
   }) async {
     final result = Completer<Map<String, dynamic>?>();
-    if (operation.startsWith('system.') ||
-        operation.startsWith('existing.') ||
-        operation.startsWith('models.') && operation != 'models.remove' ||
-        operation == 'guide.snapshot' ||
-        operation == 'addons.catalog') {
-      width = TaskCardWidth.full;
-    }
-    final prior = _card;
-    final effectiveFocus = focus.isEmpty ? prior?.focus ?? focus : focus;
     setState(() {
       _taskActive = true;
       _card = TaskCardSpec(
         title: title,
-        width: width,
-        focus: effectiveFocus,
         closable: false,
         child: TaskProgress(
           key: GlobalKey(),
@@ -400,18 +385,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
           existingTask: existingTask,
           title: title,
           tr: tr,
-          onFocus: (ids) {
-            if (!mounted || _card == null) return;
-            setState(
-              () => _card = TaskCardSpec(
-                title: title,
-                width: width,
-                focus: ids,
-                closable: false,
-                child: _card!.child,
-              ),
-            );
-          },
           onComplete: (value) {
             if (!result.isCompleted) result.complete(value);
           },
@@ -419,10 +392,12 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       );
     });
     final value = await result.future;
-    final resultFocus = _card?.focus ?? effectiveFocus;
     if (!mounted) return value;
     if (!_dataTasks.contains(operation)) {
-      await _refresh(refreshMap: _halfTaskMapVisible(width, resultFocus));
+      _mapStale = true;
+      await _refresh(
+        refreshMap: operation == 'connections.apply' || _mapOnScreen,
+      );
     }
     if (!mounted) return value;
     if (value?['undo'] is String) _connectionUndo = value!['undo'] as String;
@@ -431,37 +406,34 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     }
     setState(() => _taskActive = false);
     // Data-selection tasks return straight to the retained browser/overview.
-    if (const [
-          'models.search',
-          'models.files',
-          'addons.catalog',
-          'guide.snapshot',
-          'system.refresh',
-          'system.move_undo',
-          'existing.scan',
-        ].contains(operation) &&
+    if ((quiet ||
+            const [
+              'models.search',
+              'models.files',
+              'addons.catalog',
+              'guide.snapshot',
+              'system.refresh',
+              'system.move_undo',
+              'existing.scan',
+            ].contains(operation)) &&
         value != null &&
         value['ok'] != false) {
       setState(() => _card = null);
     } else {
-      _taskResult(title, value, resultFocus, width: width);
+      _taskResult(title, value);
     }
     return value?['ok'] == false ? null : value;
   }
 
   void _taskResult(
     String title,
-    Map<String, dynamic>? value,
-    Set<String> focus, {
+    Map<String, dynamic>? value, {
     Future<void> Function()? undo,
-    TaskCardWidth width = TaskCardWidth.half,
   }) {
     if (!mounted) return;
     setState(
       () => _card = TaskCardSpec(
         title: title,
-        width: width,
-        focus: focus,
         child: TaskReview(
           content: Text(
             tr(
@@ -481,8 +453,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
               TextButton.icon(
                 onPressed: () => _undoTask(
                   title,
-                  focus,
-                  width,
                   undo ??
                       () async {
                         if (value?['move_undo'] != null) {
@@ -493,7 +463,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                             title: tr('Undo'),
                             operation: 'system.move_undo',
                             existingTask: started['task'] as String,
-                            width: TaskCardWidth.full,
                           );
                           if (restored?['ok'] != true) {
                             throw StateError('Undo failed');
@@ -515,20 +484,13 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     );
   }
 
-  Future<void> _undoTask(
-    String title,
-    Set<String> focus,
-    TaskCardWidth width,
-    Future<void> Function() undo,
-  ) async {
+  Future<void> _undoTask(String title, Future<void> Function() undo) async {
     if (_busy || _taskActive) return;
     setState(() {
       _busy = true;
       _taskActive = true;
       _card = TaskCardSpec(
         title: title,
-        focus: focus,
-        width: width,
         closable: false,
         child: const Center(child: CircularProgressIndicator()),
       );
@@ -536,7 +498,8 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     var ok = false;
     try {
       await undo();
-      await _refresh(refreshMap: _halfTaskMapVisible(width, focus));
+      _mapStale = true;
+      await _refresh(refreshMap: _mapOnScreen);
       ok = true;
     } catch (_) {
       // Keep failures in the same result card, without consuming another action.
@@ -546,42 +509,25 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
           _busy = false;
           _taskActive = false;
         });
-        _taskResult(
-          title,
-          {'ok': ok},
-          focus,
-          width: width,
-          undo: ok ? null : undo,
-        );
+        _taskResult(title, {'ok': ok}, undo: ok ? null : undo);
       }
     }
   }
 
-  Widget _viewHost(
-    String title,
-    Widget child,
-    VoidCallback close, {
-    Set<String> focus = const {},
-    TaskCardWidth width = TaskCardWidth.full,
-  }) => _host(
+  Widget _viewHost(String title, Widget child, VoidCallback close) => _host(
     TaskCardSpec(
       title: tr(title),
+      closable: !_navigationBlocked,
       child: KeyedSubtree(
         key: _viewBodyKeys.putIfAbsent(title, () => GlobalKey()),
         child: child,
       ),
-      width: width,
-      focus: focus,
     ),
     close,
   );
 
-  Widget _host(TaskCardSpec spec, VoidCallback close) => TaskHost(
-    spec: spec,
-    graph: _graph ?? const {'nodes': [], 'edges': []},
-    tr: tr,
-    onClose: close,
-  );
+  Widget _host(TaskCardSpec spec, VoidCallback close, {bool overlay = false}) =>
+      TaskHost(spec: spec, tr: tr, onClose: close, overlay: overlay);
 
   String tr(String key) => _strings[key] ?? key;
 
@@ -757,11 +703,18 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     try {
       if (_backend?.isConnected ?? false) await terminal.stop();
       if (!mounted) return;
+      final shown = _visibleTerminal == terminal;
+      final fromGuide = _guideTerminals.remove(terminal);
+      _mapStale = true;
       setState(() {
         _terminals.remove(terminal);
-        if (_visibleTerminal == terminal) _visibleTerminal = null;
+        if (shown) _visibleTerminal = null;
       });
       terminal.dispose();
+      if (shown && fromGuide) {
+        _guideReturn = true;
+        _backToGuideIfFromIt();
+      }
     } catch (_) {
       _actionFailed();
     }
@@ -770,9 +723,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   Future<void> _retry() {
     if (!(_backend?.isConnected ?? false)) return _connect();
     if (_card != null) {
-      return _refresh(
-        refreshMap: _halfTaskMapVisible(_card!.width, _card!.focus),
-      );
+      return _refresh(refreshMap: _mapOnScreen);
     }
     return _refresh();
   }
@@ -1067,6 +1018,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
             setState(() => _busy = true);
             try {
               await undo();
+              _mapStale = true;
             } catch (_) {
               _actionFailed();
             } finally {
@@ -1246,7 +1198,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       if (!mounted) return;
       final yes = await _cardReview(
         tr('Remove'),
-        plan,
         (yes, no) => AddonRemovalReview(
           plan: plan,
           tr: tr,
@@ -1257,11 +1208,11 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       if (yes != true || !mounted) return;
       setState(() => _busy = true);
       final result = await _client.addonsRemoveApply(preview: plan['preview']);
+      _mapStale = true;
       _addonEntries = null;
       _taskResult(
         tr('Remove'),
         result,
-        _focusOf(plan),
         undo: () async {
           await _client.addonsRemoveUndo(undo: result['undo']);
         },
@@ -1280,6 +1231,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         _addons.where((i) => i['id'] == id).firstOrNull?['enabled'] == true;
     setState(() => _busy = true);
     try {
+      _mapStale = true;
       await _client.addonsSetEnabled(id: id, enabled: on);
       if (!mounted) return;
       setState(() {
@@ -1387,7 +1339,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     (String, String, String)? change;
     await _cardReview(
       '${tr('Performance')} · ${runtime['name']}',
-      {'focus': runtime['focus'] ?? const []},
       (yes, no) => PerformanceView(
         facts: facts,
         tr: tr,
@@ -1687,7 +1638,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     if (updates.isEmpty || _busy || _agentsRunning) return;
     final yes = await _cardReview(
       tr('Update all'),
-      line,
       (yes, no) => TaskReview(
         title: Text(
           tr('Update all'),
@@ -1779,6 +1729,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     );
     if (yes != true || !mounted) return;
     try {
+      _mapStale = true;
       _systemSession(await _client.systemHelpApply(preview: plan['preview']));
     } catch (_) {
       _actionFailed();
@@ -1934,6 +1885,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         ),
       );
       if (yes != true || !mounted) return;
+      _mapStale = true;
       _systemSession(await _client.systemHelpApply(preview: plan['preview']));
     } catch (_) {
       _actionFailed();
@@ -1961,6 +1913,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     setState(() => _busy = true);
     try {
       final done = await _client.changesUndo(id: id);
+      _mapStale = true;
       final restored = (done['restored'] as List).cast<String>();
       ScaffoldMessenger.of(_navigator.currentContext!).showSnackBar(
         SnackBar(
@@ -2043,16 +1996,20 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
 
   /// A page back to what lay under it; an agent's details or the list back
   /// to the map, the main page.
-  void _goBack() => setState(() {
-    if (!_pageOpen) {
-      _selected = null;
-      _showMap = true;
-    }
-    _showSettings = false;
-    _showProviders = false;
-    _showConnections = false;
-    _showGuide = false;
-  });
+  void _goBack() {
+    if (_showGuide) _guideReturn = false;
+    setState(() {
+      if (!_pageOpen) {
+        _selected = null;
+        _showMap = true;
+      }
+      _showSettings = false;
+      _showProviders = false;
+      _showConnections = false;
+      _showGuide = false;
+    });
+    _backToGuideIfFromIt();
+  }
 
   /// Ctrl+Plus / Ctrl+Minus / Ctrl+0: the map in view zoomed in, out, or fit
   /// to the window (within the map's own 30–200 %).
@@ -2175,7 +2132,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   Future<void> _openUses() async {
     await _cardReview(
       tr('What you can do with it'),
-      const {},
       (yes, no) => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -2222,7 +2178,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     };
     await _cardReview(
       tr('Help'),
-      const {},
       (yes, no) => HelpView(
         manual: manual,
         tr: tr,
@@ -2365,7 +2320,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       await _runTask(
         operation: job['kind'] == 'pull' ? 'models.pull' : 'models.download',
         existingTask: started['task'] as String,
-        focus: (started['focus'] as List? ?? const []).cast<String>().toSet(),
         title: '${job['title']}',
       );
       await _refresh();
@@ -2440,6 +2394,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   /// to the map.
   Future<void> _openExisting() async {
     if (!mounted) return;
+    _guideReturn = false;
     setState(() {
       _card = null;
       _browser = null;
@@ -2459,7 +2414,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   Future<void> _openFound() async {
     await _cardReview(
       tr('What we found'),
-      const {},
       (yes, no) => FoundOnPcView(
         nodes: (_system['nodes'] as List? ?? const [])
             .cast<Map<String, dynamic>>(),
@@ -2542,9 +2496,10 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       return;
     }
     if (!mounted) return;
-    await _cardReview('${details['title']}', {
-      'focus': [id],
-    }, (yes, no) => ItemDetailsView(details: details, tr: tr, onClose: no));
+    await _cardReview(
+      '${details['title']}',
+      (yes, no) => ItemDetailsView(details: details, tr: tr, onClose: no),
+    );
   }
 
   Future<void> _loadAddonCatalog() async {
@@ -2569,8 +2524,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         _card = TaskCardSpec(
           title: prior.title,
           child: prior.child,
-          focus: prior.focus,
-          width: prior.width,
           closable: false,
         );
       }
@@ -2634,7 +2587,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     if (!mounted) return;
     final confirmed = await _cardReview(
       tr('Add-ons'),
-      preview,
       (yes, no) => AddonInstallReview(
         item: preview,
         tr: tr,
@@ -2669,7 +2621,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     if (_busy) return;
     final confirmed = await _cardReview(
       tr('Add-ons'),
-      entry,
       (yes, no) =>
           AddonInstallReview(item: entry, tr: tr, onConfirm: yes, onCancel: no),
     );
@@ -2752,9 +2703,20 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     if (mounted) await _openGuide();
   }
 
+  /// A step that ended on the guide has nothing to return from.
+  Future<void> _guideStep(Future<void> step) async {
+    await step;
+    if (_showGuide) _guideReturn = false;
+  }
+
+  void _leaveGuide() => setState(() {
+    _showGuide = false;
+    _guideReturn = false;
+  });
+
   void _guideAction(String command, String action) {
     _connectionCommand = command.isEmpty ? null : command;
-    _guideReturn = action != 'addons' && action != 'existing';
+    _guideReturn = _showGuide && action != 'addons' && action != 'existing';
     if (action == 'addons') {
       _openGroups();
       return;
@@ -2764,21 +2726,28 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       return;
     }
     if (['install', 'login', 'verify'].contains(action)) {
-      _agentAction(command, action);
+      unawaited(_guideStep(_agentAction(command, action)));
       return;
     }
     // The agent the app installs itself has no checksummed release to take
     // here: its recipe (an installer step shows what to do).
     if (action == 'install-agent') {
-      _agentAction(command, 'install');
+      unawaited(_guideStep(_agentAction(command, 'install')));
       return;
     }
     if (action == 'install-node') {
-      _agentAction('node', 'install', kind: 'tool');
+      unawaited(_guideStep(_agentAction('node', 'install', kind: 'tool')));
       return;
     }
     if (action == 'install-tool' || action == 'install-runtime') {
-      _installProgram(action == 'install-tool' ? 'tool' : 'runtime', command);
+      unawaited(
+        _guideStep(
+          _installProgram(
+            action == 'install-tool' ? 'tool' : 'runtime',
+            command,
+          ),
+        ),
+      );
       return;
     }
     setState(() {
@@ -2830,7 +2799,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       final title = tr('Install {0}').replaceAll('{0}', '${preview['name']}');
       if (!await _cardReview(
             title,
-            preview,
             (yes, no) => InstallerReview(
               preview: preview,
               choice: choice,
@@ -2887,7 +2855,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     (String, dynamic)? change;
     await _cardReview(
       tr('Security settings'),
-      report,
       (yes, no) => AgentSecurityView(
         report: report,
         tr: tr,
@@ -2921,7 +2888,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     final name = '${preview['name']}';
     final confirmed = await _cardReview(
       tr('API key for {0}').replaceAll('{0}', name),
-      preview,
       (yes, no) => ApiKeyReview(
         preview: preview,
         controller: field,
@@ -2997,7 +2963,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         int? index;
         final chosen = await _cardReview(
           tr('Sign in…'),
-          plan,
           (yes, no) => TaskReview(
             content: Column(
               children: [
@@ -3024,7 +2989,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       if (!mounted ||
           !await _cardReview(
             tr(actionLabel(action)),
-            plan,
             (yes, no) => AgentActionReview(
               plan: plan,
               tr: tr,
@@ -3035,8 +2999,9 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         return;
       }
       final result = await _client.agentsActionApply(preview: plan['preview']);
+      _mapStale = true;
       if (!mounted) return;
-      _taskResult(tr(actionLabel(action)), result, _focusOf(plan));
+      _taskResult(tr(actionLabel(action)), result);
       if (result['session'] != null) {
         final terminal = AgentTerminal(
           _backend!,
@@ -3192,9 +3157,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     final action = node['status'] == 'running' ? 'Stop' : 'Start';
     final yes = await _cardReview(
       tr(action),
-      {
-        'focus': [node['id']],
-      },
       (confirm, cancel) => TaskReview(
         content: Text('${tr(action)} ${node['label']}?'),
         actions: [
@@ -3223,9 +3185,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       String? token;
       final yes = await _cardReview(
         tr('Stop external instance'),
-        {
-          'focus': ['agent:$command'],
-        },
         (confirm, cancel) => TaskReview(
           content: Column(
             children: [
@@ -3269,9 +3228,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       var repair = false;
       final chosen = await _cardReview(
         tr('Connection'),
-        {
-          'focus': [edge['source'], edge['target']],
-        },
         (yes, no) => TaskReview(
           content: Column(
             children: [
@@ -3300,11 +3256,19 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
           'target': edge['target'],
         }, method: 'connections.repair_preview');
       }
-      return _mapEdit({'source': edge['source'], 'target': null, 'edge': edge});
+      // Disconnect was the answer: no second question.
+      setState(() => _card = null);
+      return _mapEdit({
+        'source': edge['source'],
+        'target': null,
+        'edge': edge,
+        'confirmed': true,
+      });
     }
     final source = nodes[edit['source']], target = nodes[edit['target']];
     if (source == null) return;
     if (edge != null) {
+      final confirmed = edit['confirmed'] == true;
       final old = nodes[edge['target']];
       if (source['kind'] == 'agent' && old?['kind'] == 'cloud') {
         await _agentAction((source['id'] as String).substring(6), 'logout');
@@ -3312,11 +3276,14 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       }
       if (['runtime', 'cloud'].contains(source['kind']) &&
           old?['kind'] == 'model') {
-        await _connectionPreview({
-          'provider': source['id'],
-          'old': old!['id'],
-          'new': target?['id'],
-        }, method: 'models.switch_preview');
+        await _connectionPreview(
+          {'provider': source['id'], 'old': old!['id'], 'new': target?['id']},
+          method: 'models.switch_preview',
+          plainDisconnect: target == null
+              ? '${source['label']} → ${old['label']}'
+              : null,
+          confirmed: confirmed,
+        );
         return;
       }
       if (source['kind'] == 'agent' && old?['kind'] == 'model') {
@@ -3332,13 +3299,17 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
           'source': source['id'],
           'target': null,
           'edge': {'source': source['id'], 'target': provider['source']},
+          'confirmed': confirmed,
         });
       }
-      await _connectionPreview({
-        'agent': source['id'],
-        'old': edge['target'],
-        'new': target?['id'],
-      }, method: 'connections.move_preview');
+      await _connectionPreview(
+        {'agent': source['id'], 'old': edge['target'], 'new': target?['id']},
+        method: 'connections.move_preview',
+        plainDisconnect: target == null
+            ? '${source['label']} → ${old?['label'] ?? edge['target']}'
+            : null,
+        confirmed: confirmed,
+      );
       return;
     }
     if (target == null) return;
@@ -3369,9 +3340,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
             .toList();
         final chosen = await _cardReview(
           tr('Agents'),
-          {
-            'focus': [provider['source'], item['id']],
-          },
           (yes, no) => StatefulBuilder(
             builder: (context, update) => TaskReview(
               content: SingleChildScrollView(
@@ -3436,6 +3404,8 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     Map<String, dynamic> params, {
     bool author = false,
     String? method,
+    String? plainDisconnect,
+    bool confirmed = false,
   }) async {
     setState(() => _busy = true);
     var applied = false;
@@ -3459,12 +3429,23 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
               useNow: params['use_now'] as bool?,
             );
       if (!mounted) return;
-      final apply = await _cardReview(
-        tr('Preview'),
-        plan,
-        (yes, no) =>
-            ConnectionReview(plan: plan, tr: tr, onConfirm: yes, onCancel: no),
-      );
+      // A line taken away with nothing to warn about needs only a yes.
+      final quiet =
+          plainDisconnect != null &&
+          plan['empty'] != true &&
+          (plan['notes'] as List? ?? const []).isEmpty &&
+          (plan['contexts'] as List? ?? const []).isEmpty;
+      final apply = quiet
+          ? confirmed || await _askDisconnect(plainDisconnect, plan)
+          : await _cardReview(
+              tr('Preview'),
+              (yes, no) => ConnectionReview(
+                plan: plan,
+                tr: tr,
+                onConfirm: yes,
+                onCancel: no,
+              ),
+            );
       if (apply) {
         setState(() => _taskActive = true);
         var result = await _client.connectionsApply(
@@ -3477,17 +3458,17 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
             params: const {},
             existingTask: result['task'] as String,
             title: tr('Apply'),
+            quiet: quiet,
           );
           if (finished == null) return;
           result = finished;
         }
         if (!queued) {
           _connectionUndo = result['undo'] as String?;
-          await _refresh(
-            refreshMap: _halfTaskMapVisible(TaskCardWidth.half, _focusOf(plan)),
-          );
-          _taskResult(tr('Apply'), result, _focusOf(plan));
+          await _refresh(refreshMap: true);
+          if (!quiet) _taskResult(tr('Apply'), result);
         }
+        if (quiet && mounted) _appliedMessage();
         applied = true;
         if ((result['context_failures'] as num? ?? 0) > 0 && mounted) {
           ScaffoldMessenger.of(_navigator.currentContext!).showSnackBar(
@@ -3549,12 +3530,12 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     };
     final apply = await _cardReview(
       tr('Preview'),
-      shown,
       (yes, no) =>
           ConnectionReview(plan: shown, tr: tr, onConfirm: yes, onCancel: no),
     );
     if (!apply || !mounted) return;
     setState(() => _busy = true);
+    _mapStale = true;
     try {
       var result = await _client.connectionsApply(plan: plan['plan'] as String);
       if (result['task'] != null && mounted) {
@@ -3588,6 +3569,58 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     await _refreshSystem(false, quiet: true);
   }
 
+  Future<bool> _askDisconnect(String line, Map<String, dynamic> plan) async {
+    final yes = await _review(
+      () => showDialog<bool>(
+        context: _navigator.currentContext!,
+        builder: (context) => AlertDialog(
+          key: const ValueKey('disconnect-dialog'),
+          title: Text(tr('Disconnect')),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(line),
+              for (final action in plan['model_actions'] as List? ?? const [])
+                Text(
+                  '${tr(action['operation'] == 'model.load' ? 'Load' : 'Unload')}: ${action['model']}',
+                ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(tr('Cancel')),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(tr('Apply')),
+            ),
+          ],
+        ),
+      ),
+    );
+    return yes == true;
+  }
+
+  void _appliedMessage() {
+    final messenger = ScaffoldMessenger.of(_navigator.currentContext!);
+    messenger.clearSnackBars();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(tr('Succeeded')),
+        action: _connectionUndo == null
+            ? null
+            : SnackBarAction(
+                label: tr('Undo'),
+                onPressed: () {
+                  if (!_keysBlocked) unawaited(_undoConnection());
+                },
+              ),
+      ),
+    );
+  }
+
   Future<bool> _undoConnection({bool refresh = true}) async {
     final token = _connectionUndo;
     if (token == null) return false;
@@ -3595,6 +3628,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     try {
       final result = await _client.connectionsUndo(undo: token);
       _connectionUndo = null;
+      _mapStale = true;
       if (mounted) {
         ScaffoldMessenger.of(_navigator.currentContext!).showSnackBar(
           SnackBar(
@@ -3619,7 +3653,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       if (!mounted ||
           !await _cardReview(
             tr('Remove model'),
-            preview,
             (yes, no) => ModelRemovalReview(
               preview: preview,
               tr: tr,
@@ -3723,6 +3756,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       if (enabled == null) {
         await _client.setupLater();
       } else {
+        _mapStale = true;
         await _client.setupApply(enabled: enabled);
       }
       if (!mounted) return;
@@ -3781,7 +3815,10 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
           (refreshMap ?? (mapVisible && _card == null && _browser == null))
           ? await _freshMap()
           : _graph;
-      if (graph != _graph) _nextMapScan = null;
+      if (graph != _graph) {
+        _nextMapScan = null;
+        _mapStale = false;
+      }
       final selected = _selected;
       final info = selected == null
           ? null
@@ -3939,638 +3976,659 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   }
 
   @override
-  Widget build(BuildContext context) => MaterialApp(
-    title: 'Maprisma',
-    navigatorKey: _navigator,
-    // F1 opens Help, as in the GTK app.
-    shortcuts: {
-      ...WidgetsApp.defaultShortcuts,
-      const SingleActivator(LogicalKeyboardKey.f1): const _HelpIntent(),
-      const SingleActivator(LogicalKeyboardKey.comma, control: true):
-          const _SettingsIntent(),
-      const SingleActivator(LogicalKeyboardKey.f5): const _RefreshIntent(),
-      const SingleActivator(LogicalKeyboardKey.equal, control: true):
-          const _ZoomIntent(1.25),
-      const SingleActivator(LogicalKeyboardKey.add, control: true):
-          const _ZoomIntent(1.25),
-      const SingleActivator(LogicalKeyboardKey.numpadAdd, control: true):
-          const _ZoomIntent(1.25),
-      const SingleActivator(LogicalKeyboardKey.minus, control: true):
-          const _ZoomIntent(0.8),
-      const SingleActivator(LogicalKeyboardKey.numpadSubtract, control: true):
-          const _ZoomIntent(0.8),
-      const SingleActivator(LogicalKeyboardKey.digit0, control: true):
-          const _ZoomIntent(0),
-      const SingleActivator(LogicalKeyboardKey.numpad0, control: true):
-          const _ZoomIntent(0),
-      const SingleActivator(LogicalKeyboardKey.backspace): const _BackIntent(),
-    },
-    actions: {
-      ...WidgetsApp.defaultActions,
-      _HelpIntent: CallbackAction<_HelpIntent>(
-        onInvoke: (_) {
-          if (!_keysBlocked && _snapshot != null) _openHelp();
-          return null;
-        },
-      ),
-      _SettingsIntent: CallbackAction<_SettingsIntent>(
-        onInvoke: (_) {
-          if (!_keysBlocked && _snapshot != null && !_showSettings) {
-            _toggleSettings();
-          }
-          return null;
-        },
-      ),
-      _RefreshIntent: CallbackAction<_RefreshIntent>(
-        onInvoke: (_) {
-          if (!_keysBlocked) _retry();
-          return null;
-        },
-      ),
-      _ZoomIntent: CallbackAction<_ZoomIntent>(
-        onInvoke: (intent) {
-          if (_showMap && _visibleTerminal == null) _zoom(intent.factor);
-          return null;
-        },
-      ),
-      // Esc (Flutter's dismiss key) and Backspace: back from a page; only
-      // when nothing nearer took the key.
-      DismissIntent: _BackAction<DismissIntent>(
-        () => (_card?.closable ?? false) || _canGoBack || _canCloseTopLevel,
-        () => (_card?.closable ?? false) ? _closeCard() : _backOrClose(),
-      ),
-      _EscIntent: _BackAction<_EscIntent>(
-        () => (_card?.closable ?? false) || _canGoBack || _canCloseTopLevel,
-        () => (_card?.closable ?? false) ? _closeCard() : _backOrClose(),
-      ),
-      _BackIntent: _BackAction<_BackIntent>(() => _canGoBack, _goBack),
-    },
-    debugShowCheckedModeBanner: false,
-    locale: _locale,
-    supportedLocales: const [
-      Locale('en'),
-      Locale('de'),
-      Locale('es'),
-      Locale('fr'),
-      Locale('it'),
-      Locale('nl'),
-      Locale('pl'),
-      Locale('pt'),
-    ],
-    localizationsDelegates: GlobalMaterialLocalizations.delegates,
-    theme: _theme(Brightness.light),
-    darkTheme: _theme(Brightness.dark),
-    themeMode: appThemeMode(_themePreference, _desktopTheme),
-    builder: (context, child) {
-      _followTitleBar(Theme.of(context).brightness == Brightness.dark);
-      return RepaintBoundary(key: _shotArea, child: child);
-    },
-    // Esc on the window's page: back from a page (the route's own dismiss
-    // action would take it first); dialogs are routes of their own and keep
-    // Esc as dismiss.
-    home: Shortcuts(
-      shortcuts: const {
-        SingleActivator(LogicalKeyboardKey.escape): _EscIntent(),
+  Widget build(BuildContext context) {
+    // One scan when the map is back and nothing else is running.
+    if (_mapStale && _mapOnScreen && _browser == null && !_keysBlocked) {
+      _mapStale = false;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(_refresh(refreshMap: true));
+      });
+    }
+    return MaterialApp(
+      title: 'Maprisma',
+      navigatorKey: _navigator,
+      // F1 opens Help, as in the GTK app.
+      shortcuts: {
+        ...WidgetsApp.defaultShortcuts,
+        const SingleActivator(LogicalKeyboardKey.f1): const _HelpIntent(),
+        const SingleActivator(LogicalKeyboardKey.comma, control: true):
+            const _SettingsIntent(),
+        const SingleActivator(LogicalKeyboardKey.f5): const _RefreshIntent(),
+        const SingleActivator(LogicalKeyboardKey.equal, control: true):
+            const _ZoomIntent(1.25),
+        const SingleActivator(LogicalKeyboardKey.add, control: true):
+            const _ZoomIntent(1.25),
+        const SingleActivator(LogicalKeyboardKey.numpadAdd, control: true):
+            const _ZoomIntent(1.25),
+        const SingleActivator(LogicalKeyboardKey.minus, control: true):
+            const _ZoomIntent(0.8),
+        const SingleActivator(LogicalKeyboardKey.numpadSubtract, control: true):
+            const _ZoomIntent(0.8),
+        const SingleActivator(LogicalKeyboardKey.digit0, control: true):
+            const _ZoomIntent(0),
+        const SingleActivator(LogicalKeyboardKey.numpad0, control: true):
+            const _ZoomIntent(0),
+        const SingleActivator(LogicalKeyboardKey.backspace):
+            const _BackIntent(),
       },
-      // The page holds the focus when nothing in it does, so its keys
-      // pass through here (not part of Tab's order).
-      child: Focus(
-        autofocus: true,
-        skipTraversal: true,
-        child: Scaffold(
-          appBar: AppBar(
-            title: const Text('Maprisma'),
-            actions: [
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: TextButton(
-                  key: const ValueKey('ai-map-open'),
-                  // From a page or the agent list, back to the map.
-                  onPressed: _navigationBlocked
-                      ? null
-                      : () {
-                          setState(() {
-                            _card = null;
-                            _browser = null;
-                            _showMap = true;
-                            _showGuide = false;
-                            _showSettings = false;
-                            _showProviders = false;
-                            _showConnections = false;
-                            _visibleTerminal = null;
-                          });
-                          _refresh();
-                        },
-                  child: Text(tr('AI Map')),
-                ),
-              ),
-              if (_moveUndo != null)
-                IconButton(
-                  key: const ValueKey('move-undo'),
-                  tooltip: tr('Undo'),
-                  icon: const Icon(Icons.undo),
-                  onPressed: _navigationBlocked || _card != null
-                      ? null
-                      : _undoMove,
-                ),
-              if (_healthReport != null || _healthCount > 0)
-                IconButton(
-                  key: const ValueKey('problems-open'),
-                  tooltip: switch ('${_healthReport?['summary'] ?? ''}'
-                      .trim()) {
-                    '' => tr('Everything set up and working'),
-                    final s => s,
-                  },
-                  icon: SmartStatusIcon(
-                    level: _smartStatusData.overallLevel,
-                    size: 18,
-                  ),
-                  onPressed: _navigationBlocked ? null : _openProblems,
-                ),
-              MapLegendButton(tr: tr),
-              IconButton(
-                key: const ValueKey('help-open'),
-                tooltip: tr('Help (F1)'),
-                icon: const Icon(Icons.help_outline),
-                onPressed: _navigationBlocked || _snapshot == null
-                    ? null
-                    : _openHelp,
-              ),
-              IconButton(
-                tooltip: tr('Settings'),
-                icon: const Icon(Icons.settings_outlined),
-                onPressed: _navigationBlocked || _snapshot == null
-                    ? null
-                    : _toggleSettings,
-              ),
-              IconButton(
-                tooltip: tr('Refresh'),
-                onPressed: _navigationBlocked ? null : _retry,
-                icon: const Icon(Icons.refresh),
-              ),
-            ],
-          ),
-          body: Column(
-            children: [
-              if (_busy && _taskActive && _card == null && _reviewDepth == 0)
-                const LinearProgressIndicator(),
-              if (_snapshot?['migration_error'] != null)
+      actions: {
+        ...WidgetsApp.defaultActions,
+        _HelpIntent: CallbackAction<_HelpIntent>(
+          onInvoke: (_) {
+            if (!_keysBlocked && _snapshot != null) _openHelp();
+            return null;
+          },
+        ),
+        _SettingsIntent: CallbackAction<_SettingsIntent>(
+          onInvoke: (_) {
+            if (!_keysBlocked && _snapshot != null && !_showSettings) {
+              _toggleSettings();
+            }
+            return null;
+          },
+        ),
+        _RefreshIntent: CallbackAction<_RefreshIntent>(
+          onInvoke: (_) {
+            if (!_keysBlocked) _retry();
+            return null;
+          },
+        ),
+        _ZoomIntent: CallbackAction<_ZoomIntent>(
+          onInvoke: (intent) {
+            if (_mapOnScreen && !_keysBlocked) _zoom(intent.factor);
+            return null;
+          },
+        ),
+        // Esc (Flutter's dismiss key) and Backspace: back from a page; only
+        // when nothing nearer took the key.
+        DismissIntent: _BackAction<DismissIntent>(
+          () => (_card?.closable ?? false) || _canGoBack || _canCloseTopLevel,
+          () => (_card?.closable ?? false) ? _closeCard() : _backOrClose(),
+        ),
+        _EscIntent: _BackAction<_EscIntent>(
+          () => (_card?.closable ?? false) || _canGoBack || _canCloseTopLevel,
+          () => (_card?.closable ?? false) ? _closeCard() : _backOrClose(),
+        ),
+        _BackIntent: _BackAction<_BackIntent>(() => _canGoBack, _goBack),
+      },
+      debugShowCheckedModeBanner: false,
+      locale: _locale,
+      supportedLocales: const [
+        Locale('en'),
+        Locale('de'),
+        Locale('es'),
+        Locale('fr'),
+        Locale('it'),
+        Locale('nl'),
+        Locale('pl'),
+        Locale('pt'),
+      ],
+      localizationsDelegates: GlobalMaterialLocalizations.delegates,
+      theme: _theme(Brightness.light),
+      darkTheme: _theme(Brightness.dark),
+      themeMode: appThemeMode(_themePreference, _desktopTheme),
+      builder: (context, child) {
+        _followTitleBar(Theme.of(context).brightness == Brightness.dark);
+        return RepaintBoundary(key: _shotArea, child: child);
+      },
+      // Esc on the window's page: back from a page (the route's own dismiss
+      // action would take it first); dialogs are routes of their own and keep
+      // Esc as dismiss.
+      home: Shortcuts(
+        shortcuts: const {
+          SingleActivator(LogicalKeyboardKey.escape): _EscIntent(),
+        },
+        // The page holds the focus when nothing in it does, so its keys
+        // pass through here (not part of Tab's order).
+        child: Focus(
+          autofocus: true,
+          skipTraversal: true,
+          child: Scaffold(
+            appBar: AppBar(
+              title: const Text('Maprisma'),
+              actions: [
                 Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        tr(
-                          'Your Asterism settings could not be copied. Maprisma starts with its default settings.',
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: TextButton(
+                    key: const ValueKey('ai-map-open'),
+                    // From a page or the agent list, back to the map.
+                    onPressed: _keysBlocked
+                        ? null
+                        : () {
+                            setState(() {
+                              _card = null;
+                              _browser = null;
+                              _showMap = true;
+                              _showGuide = false;
+                              _showSettings = false;
+                              _showProviders = false;
+                              _showConnections = false;
+                              _visibleTerminal = null;
+                            });
+                            _refresh();
+                          },
+                    child: Text(tr('AI Map')),
+                  ),
+                ),
+                if (_moveUndo != null)
+                  IconButton(
+                    key: const ValueKey('move-undo'),
+                    tooltip: tr('Undo'),
+                    icon: const Icon(Icons.undo),
+                    onPressed: _keysBlocked ? null : _undoMove,
+                  ),
+                if (_healthReport != null || _healthCount > 0)
+                  IconButton(
+                    key: const ValueKey('problems-open'),
+                    tooltip: switch ('${_healthReport?['summary'] ?? ''}'
+                        .trim()) {
+                      '' => tr('Everything set up and working'),
+                      final s => s,
+                    },
+                    icon: SmartStatusIcon(
+                      level: _smartStatusData.overallLevel,
+                      size: 18,
+                    ),
+                    onPressed: _keysBlocked ? null : _openProblems,
+                  ),
+                MapLegendButton(tr: tr, enabled: !_keysBlocked),
+                IconButton(
+                  key: const ValueKey('help-open'),
+                  tooltip: tr('Help (F1)'),
+                  icon: const Icon(Icons.help_outline),
+                  onPressed: _keysBlocked || _snapshot == null
+                      ? null
+                      : _openHelp,
+                ),
+                IconButton(
+                  tooltip: tr('Settings'),
+                  icon: const Icon(Icons.settings_outlined),
+                  onPressed: _keysBlocked || _snapshot == null
+                      ? null
+                      : _toggleSettings,
+                ),
+                IconButton(
+                  tooltip: tr('Refresh'),
+                  onPressed: _keysBlocked ? null : _retry,
+                  icon: const Icon(Icons.refresh),
+                ),
+              ],
+            ),
+            body: Column(
+              children: [
+                if (_busy && _taskActive && _card == null && _reviewDepth == 0)
+                  const LinearProgressIndicator(),
+                if (_snapshot?['migration_error'] != null)
+                  Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          tr(
+                            'Your Asterism settings could not be copied. Maprisma starts with its default settings.',
+                          ),
                         ),
+                        const SizedBox(height: 8),
+                        SelectableText(_snapshot!['migration_error'] as String),
+                      ],
+                    ),
+                  ),
+                if (_failed)
+                  MaterialBanner(
+                    content: Text(
+                      tr('The application service could not be reached.'),
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: _busy ? null : _retry,
+                        child: Text(tr('Refresh')),
                       ),
-                      const SizedBox(height: 8),
-                      SelectableText(_snapshot!['migration_error'] as String),
                     ],
                   ),
-                ),
-              if (_failed)
-                MaterialBanner(
-                  content: Text(
-                    tr('The application service could not be reached.'),
+                if (_welcome)
+                  MapWelcome(
+                    tr: tr,
+                    busy: _keysBlocked,
+                    skipSearch: _skipWelcomeSearch,
+                    searched: _system['search_done'] == true,
+                    onLook: _openExisting,
+                    onSkip: () => setState(() => _skipWelcomeSearch = true),
+                    onAgents: () => _openGroups(),
+                    uses: _uses,
+                    onAction: _healthAction,
                   ),
-                  actions: [
-                    TextButton(
-                      onPressed: _busy ? null : _retry,
-                      child: Text(tr('Refresh')),
-                    ),
-                  ],
-                ),
-              if (_welcome)
-                MapWelcome(
-                  tr: tr,
-                  busy: _busy,
-                  skipSearch: _skipWelcomeSearch,
-                  searched: _system['search_done'] == true,
-                  onLook: _openExisting,
-                  onSkip: () => setState(() => _skipWelcomeSearch = true),
-                  onAgents: () => _openGroups(),
-                  uses: _uses,
-                  onAction: _healthAction,
-                ),
-              if (_terminals.isNotEmpty &&
-                  (_snapshot?['settings'] as Map?)?['terminal_tabs'] != false)
-                TerminalTabs(
-                  tabs: [
-                    for (final terminal in _terminals)
-                      (
-                        _catalog
-                                    .where(
-                                      (a) => a['command'] == terminal.command,
-                                    )
-                                    .firstOrNull?['name']
-                                as String? ??
-                            terminal.command,
-                        terminal.ended
-                            ? 'ended'
-                            : ((_graph?['activity'] as Map?)?[terminal.command]
-                                      as Map?)?['working'] ==
-                                  true
-                            ? 'working'
-                            : 'running',
-                      ),
-                  ],
-                  current: _visibleTerminal == null
-                      ? null
-                      : _terminals.indexOf(_visibleTerminal!),
-                  tr: tr,
-                  onSelect: (i) {
-                    setState(() => _visibleTerminal = _terminals[i]);
-                    // The click took the keyboard to the tab.
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      if (_visibleTerminal != null) {
-                        _terminalKeys.requestFocus();
-                      }
-                    });
-                  },
-                ),
-              Expanded(
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    _mapAreaWidth = constraints.maxWidth;
-                    return Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        if (_browser != null)
-                          Offstage(
-                            key: const ValueKey('browser-slot'),
-                            offstage: _card != null,
-                            child: _viewHost(
-                              'Download model',
-                              ModelBrowser(
-                                hosted: true,
-                                runtime: _browser!,
-                                tr: tr,
-                                onOperation: _providerOperation,
-                                onClose: () => setState(() => _browser = null),
+                if (_terminals.isNotEmpty &&
+                    (_snapshot?['settings'] as Map?)?['terminal_tabs'] != false)
+                  TerminalTabs(
+                    tabs: [
+                      for (final terminal in _terminals)
+                        (
+                          _catalog
+                                      .where(
+                                        (a) => a['command'] == terminal.command,
+                                      )
+                                      .firstOrNull?['name']
+                                  as String? ??
+                              terminal.command,
+                          terminal.ended
+                              ? 'ended'
+                              : ((_graph?['activity']
+                                            as Map?)?[terminal.command]
+                                        as Map?)?['working'] ==
+                                    true
+                              ? 'working'
+                              : 'running',
+                        ),
+                    ],
+                    current: _visibleTerminal == null
+                        ? null
+                        : _terminals.indexOf(_visibleTerminal!),
+                    tr: tr,
+                    onSelect: (i) {
+                      // Tabs switch terminals, not what another window shows.
+                      if (_navigationBlocked || _card != null) return;
+                      setState(() => _visibleTerminal = _terminals[i]);
+                      // The click took the keyboard to the tab.
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (_visibleTerminal != null) {
+                          _terminalKeys.requestFocus();
+                        }
+                      });
+                    },
+                  ),
+                Expanded(
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      return Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          if (_browser != null)
+                            ExcludeFocus(
+                              key: const ValueKey('browser-slot'),
+                              excluding: _card != null,
+                              child: _viewHost(
+                                'Download model',
+                                ModelBrowser(
+                                  hosted: true,
+                                  runtime: _browser!,
+                                  tr: tr,
+                                  onOperation: _providerOperation,
+                                  onClose: () =>
+                                      setState(() => _browser = null),
+                                ),
+                                () => setState(() => _browser = null),
                               ),
-                              () => setState(() => _browser = null),
                             ),
-                          ),
-                        if (_hasTaskView || (_card == null && _browser == null))
-                          RetainedTaskView(
-                            key: const ValueKey('view-slot'),
-                            visible: _card == null && _browser == null,
-                            child: _showGuide
-                                ? _viewHost(
-                                    'Your first agent',
-                                    FirstAgentView(
-                                      hosted: true,
-                                      data: _guide,
-                                      busy: _busy,
-                                      tr: tr,
-                                      onChoose: _chooseGuide,
-                                      onAction: _guideAction,
-                                      onStarter: _downloadStarter,
-                                      onBack: () =>
-                                          setState(() => _showGuide = false),
-                                      onRefresh: _openGuide,
-                                    ),
-                                    () => setState(() => _showGuide = false),
-                                  )
-                                : _showConnections
-                                ? _viewHost(
-                                    'Connections',
-                                    ConnectionsView(
-                                      hosted: true,
-                                      data: _connections,
-                                      busy: _busy,
-                                      tr: tr,
-                                      onPreview: _connectionPreview,
-                                      onAuthorPreview: (params) =>
-                                          _connectionPreview(
+                          if (_hasTaskView || _browser == null)
+                            RetainedTaskView(
+                              key: const ValueKey('view-slot'),
+                              visible: _browser == null,
+                              focusable:
+                                  _card == null && _visibleTerminal == null,
+                              child: _showGuide
+                                  ? _viewHost(
+                                      'Your first agent',
+                                      FirstAgentView(
+                                        hosted: true,
+                                        data: _guide,
+                                        busy: _busy,
+                                        tr: tr,
+                                        onChoose: _chooseGuide,
+                                        onAction: _guideAction,
+                                        onStarter: _downloadStarter,
+                                        onBack: _leaveGuide,
+                                        onRefresh: _openGuide,
+                                      ),
+                                      _leaveGuide,
+                                    )
+                                  : _showConnections
+                                  ? _viewHost(
+                                      'Connections',
+                                      ConnectionsView(
+                                        hosted: true,
+                                        data: _connections,
+                                        busy: _busy,
+                                        tr: tr,
+                                        onPreview: _connectionPreview,
+                                        onAuthorPreview: (params) =>
+                                            _connectionPreview(
+                                              params,
+                                              author: true,
+                                            ),
+                                        onCatalogTask: _quietTask,
+                                        onCall: (method, params) =>
+                                            _backend!.call(method, params),
+                                        onSkillPreview: (params) =>
+                                            _connectionPreview(
+                                              params,
+                                              method: 'skills.web_preview',
+                                            ),
+                                        onCatalogPreview: (params) =>
+                                            _connectionPreview(
+                                              params,
+                                              method: 'mcp.option_preview',
+                                            ),
+                                        showFound: _showFound,
+                                        onFoundChanged: _loadFoundHints,
+                                        onUpdatePreview: (params) async {
+                                          await _connectionPreview(
                                             params,
-                                            author: true,
-                                          ),
-                                      onCatalogTask: _quietTask,
-                                      onCall: (method, params) =>
-                                          _backend!.call(method, params),
-                                      onSkillPreview: (params) =>
-                                          _connectionPreview(
-                                            params,
-                                            method: 'skills.web_preview',
-                                          ),
-                                      onCatalogPreview: (params) =>
-                                          _connectionPreview(
-                                            params,
-                                            method: 'mcp.option_preview',
-                                          ),
-                                      showFound: _showFound,
-                                      onFoundChanged: _loadFoundHints,
-                                      onUpdatePreview: (params) async {
-                                        await _connectionPreview(
-                                          params,
-                                          method: 'found.update_preview',
-                                        );
-                                        await _lookForNewApps();
-                                      },
-                                      onBack: () {
+                                            method: 'found.update_preview',
+                                          );
+                                          await _lookForNewApps();
+                                        },
+                                        onBack: () {
+                                          setState(() {
+                                            _showConnections = false;
+                                            _showFound = false;
+                                          });
+                                          _backToGuideIfFromIt();
+                                        },
+                                        onUndo: _connectionUndo == null
+                                            ? null
+                                            : _undoConnection,
+                                      ),
+                                      () {
                                         setState(() {
                                           _showConnections = false;
                                           _showFound = false;
                                         });
                                         _backToGuideIfFromIt();
                                       },
-                                      onUndo: _connectionUndo == null
-                                          ? null
-                                          : _undoConnection,
-                                    ),
-                                    () {
-                                      setState(() {
-                                        _showConnections = false;
-                                        _showFound = false;
-                                      });
-                                      _backToGuideIfFromIt();
-                                    },
-                                    width: TaskCardWidth.half,
-                                    focus: _focusOf(_connections),
-                                  )
-                                : _showProviders
-                                ? _viewHost(
-                                    'Providers and models',
-                                    ProvidersView(
-                                      hosted: true,
-                                      data: _providers,
-                                      busy: _busy,
-                                      tr: tr,
-                                      onInstall: (key) =>
-                                          _installProgram('runtime', key),
-                                      onOperation: _providerOperation,
-                                      onConfirm: (title, runtime) => _cardReview(
-                                        title,
-                                        runtime,
-                                        (yes, no) => TaskReview(
-                                          content: Text(
-                                            tr(
-                                              'This can interrupt agents using this provider.',
+                                    )
+                                  : _showProviders
+                                  ? _viewHost(
+                                      'Providers and models',
+                                      ProvidersView(
+                                        hosted: true,
+                                        data: _providers,
+                                        busy: _busy,
+                                        tr: tr,
+                                        onInstall: (key) =>
+                                            _installProgram('runtime', key),
+                                        onOperation: _providerOperation,
+                                        onConfirm: (title, runtime) => _cardReview(
+                                          title,
+                                          (yes, no) => TaskReview(
+                                            content: Text(
+                                              tr(
+                                                'This can interrupt agents using this provider.',
+                                              ),
                                             ),
+                                            actions: [
+                                              TextButton(
+                                                onPressed: no,
+                                                child: Text(tr('Cancel')),
+                                              ),
+                                              FilledButton(
+                                                onPressed: yes,
+                                                child: Text(tr('Continue')),
+                                              ),
+                                            ],
                                           ),
-                                          actions: [
-                                            TextButton(
-                                              onPressed: no,
-                                              child: Text(tr('Cancel')),
-                                            ),
-                                            FilledButton(
-                                              onPressed: yes,
-                                              child: Text(tr('Continue')),
-                                            ),
-                                          ],
                                         ),
+                                        onRemove: _removeModel,
+                                        onPerformance: _performance,
+                                        onCall: (method, params) =>
+                                            _backend!.call(method, params),
+                                        onBrowse: (runtime) =>
+                                            setState(() => _browser = runtime),
+                                        onDiscover: _openExisting,
+                                        onBack: () {
+                                          setState(
+                                            () => _showProviders = false,
+                                          );
+                                          _backToGuideIfFromIt();
+                                        },
                                       ),
-                                      onRemove: _removeModel,
-                                      onPerformance: _performance,
-                                      onCall: (method, params) =>
-                                          _backend!.call(method, params),
-                                      onBrowse: (runtime) =>
-                                          setState(() => _browser = runtime),
-                                      onDiscover: _openExisting,
-                                      onBack: () {
+                                      () {
                                         setState(() => _showProviders = false);
                                         _backToGuideIfFromIt();
                                       },
-                                    ),
-                                    () {
-                                      setState(() => _showProviders = false);
-                                      _backToGuideIfFromIt();
-                                    },
-                                    width: TaskCardWidth.full,
-                                  )
-                                : _showSettings && _snapshot != null
-                                ? SettingsView(
-                                    settings: {
-                                      ...(_snapshot!['settings']
-                                          as Map<String, dynamic>),
-                                      'flutter_map_layout': ?_mapLayoutOverride,
-                                    },
-                                    onMapLayout: (change) {
-                                      if (!mounted) return;
-                                      final latest =
-                                          _mapLayoutOverride ??
-                                          (_snapshot!['settings']['flutter_map_layout']
-                                                  as Map<String, dynamic>? ??
-                                              const {});
-                                      setState(
-                                        () => _saveMapLayout(change(latest)),
-                                      );
-                                    },
-                                    busy: _busy,
-                                    tr: tr,
-                                    onUpdate: _updateSettings,
-                                    desktopTheme: _desktopTheme,
-                                    checkers: [
-                                      for (final h
-                                          in (_system['helpers'] as List? ??
-                                              []))
-                                        if (h is Map && h['check'] == true) h,
-                                    ],
-                                    helpers: _helpers,
-                                    mcpChecks: _mcpChecks,
-                                    mcpChecking: _mcpChecking,
-                                    onCheckMcp: () => _checkMcp(force: true),
-                                    changes: _changes,
-                                    windowRounding: _windowRounding,
-                                    onUndoChange: _undoChange,
-                                    unitName: _shortName == null
-                                        ? ''
-                                        : '$_shortName-providers.service',
-                                    onBack: () =>
-                                        setState(() => _showSettings = false),
-                                  )
-                                : _showMap && _graph != null
-                                ? AnimatedSwitcher(
-                                    duration: const Duration(milliseconds: 200),
-                                    child: _focusCategory == null
-                                        ? AgentMap(
-                                            key: const ValueKey('ai-map'),
-                                            graph: _mapGraph,
-                                            onEdit: _mapEdit,
-                                            lightFps:
-                                                _snapshot!['settings']['map_light_fps']
-                                                    as int? ??
-                                                20,
-                                            selection: _mapSelection,
-                                            controls: _mapControls,
-                                            staticState: (
-                                              _snapshot,
-                                              _busy,
-                                              _strings,
-                                              _terminals
-                                                  .map(
-                                                    (t) => '${t.id}:${t.ended}',
-                                                  )
-                                                  .join(','),
-                                            ),
-                                            savedLayout:
-                                                _mapLayoutOverride ??
-                                                (_snapshot!['settings']['flutter_map_layout']
-                                                        as Map<
-                                                          String,
-                                                          dynamic
-                                                        >? ??
-                                                    {}),
-                                            onLayout: _saveMapLayout,
-                                            animate: _windowFocused
-                                                ? (_snapshot!['settings']['map_animations']
-                                                          as String? ??
-                                                      'all')
-                                                : 'off',
-                                            controller: _aiTransform,
-                                            layers:
-                                                (_snapshot!['settings']['map_layers']
-                                                        as List?)
-                                                    ?.cast<String>(),
-                                            onLayers: (layers) =>
-                                                _updateSettings({
-                                                  'map_layers': layers,
-                                                }),
-                                            focusedNode: _aiFocus,
-                                            onNode: _aiNode,
-                                            tr: tr,
-                                            onAgent: _selectAgent,
-                                            onSubagents: _openSubagents,
-                                            onNodeMenu: _nodeMenu,
-                                            groups: MapGroup.fromGraph(
-                                              _mapGraph,
+                                    )
+                                  : _showSettings && _snapshot != null
+                                  ? SettingsView(
+                                      settings: {
+                                        ...(_snapshot!['settings']
+                                            as Map<String, dynamic>),
+                                        'flutter_map_layout':
+                                            ?_mapLayoutOverride,
+                                      },
+                                      onMapLayout: (change) {
+                                        if (!mounted) return;
+                                        final latest =
+                                            _mapLayoutOverride ??
+                                            (_snapshot!['settings']['flutter_map_layout']
+                                                    as Map<String, dynamic>? ??
+                                                const {});
+                                        setState(
+                                          () => _saveMapLayout(change(latest)),
+                                        );
+                                      },
+                                      busy: _busy,
+                                      tr: tr,
+                                      onUpdate: _updateSettings,
+                                      desktopTheme: _desktopTheme,
+                                      checkers: [
+                                        for (final h
+                                            in (_system['helpers'] as List? ??
+                                                []))
+                                          if (h is Map && h['check'] == true) h,
+                                      ],
+                                      helpers: _helpers,
+                                      mcpChecks: _mcpChecks,
+                                      mcpChecking: _mcpChecking,
+                                      onCheckMcp: () => _checkMcp(force: true),
+                                      changes: _changes,
+                                      windowRounding: _windowRounding,
+                                      onUndoChange: _undoChange,
+                                      unitName: _shortName == null
+                                          ? ''
+                                          : '$_shortName-providers.service',
+                                      onBack: () =>
+                                          setState(() => _showSettings = false),
+                                    )
+                                  : _showMap && _graph != null
+                                  ? AnimatedSwitcher(
+                                      duration: const Duration(
+                                        milliseconds: 200,
+                                      ),
+                                      child: _focusCategory == null
+                                          ? AgentMap(
+                                              key: const ValueKey('ai-map'),
+                                              graph: _mapGraph,
+                                              onEdit: _mapEdit,
+                                              lightFps:
+                                                  _snapshot!['settings']['map_light_fps']
+                                                      as int? ??
+                                                  20,
+                                              selection: _mapSelection,
+                                              controls: _mapControls,
+                                              staticState: (
+                                                _snapshot,
+                                                _busy,
+                                                _strings,
+                                                _terminals
+                                                    .map(
+                                                      (t) =>
+                                                          '${t.id}:${t.ended}',
+                                                    )
+                                                    .join(','),
+                                              ),
+                                              savedLayout:
+                                                  _mapLayoutOverride ??
+                                                  (_snapshot!['settings']['flutter_map_layout']
+                                                          as Map<
+                                                            String,
+                                                            dynamic
+                                                          >? ??
+                                                      {}),
+                                              onLayout: _saveMapLayout,
+                                              animate: _windowFocused
+                                                  ? (_snapshot!['settings']['map_animations']
+                                                            as String? ??
+                                                        'all')
+                                                  : 'off',
+                                              controller: _aiTransform,
+                                              layers:
+                                                  (_snapshot!['settings']['map_layers']
+                                                          as List?)
+                                                      ?.cast<String>(),
+                                              onLayers: (layers) =>
+                                                  _updateSettings({
+                                                    'map_layers': layers,
+                                                  }),
+                                              focusedNode: _aiFocus,
+                                              onNode: _aiNode,
+                                              tr: tr,
+                                              onAgent: _selectAgent,
+                                              onSubagents: _openSubagents,
+                                              onNodeMenu: _nodeMenu,
+                                              groups: MapGroup.fromGraph(
+                                                _mapGraph,
+                                                const [
+                                                  'MCP servers and skills',
+                                                  'Agents',
+                                                  'Providers',
+                                                  'Models',
+                                                ],
+                                                found: _groupFound,
+                                                available: _groupAvailable,
+                                              ),
+                                              onExpandGroup: (col) => setState(
+                                                () => _focusCategory = col,
+                                              ),
+                                              smartAskColumns: const {
+                                                'mcp',
+                                                'agents',
+                                                'providers',
+                                                'models',
+                                              },
+                                              onSmartProvider: _smartProvider,
+                                              onSmartTask: _smartTask,
+                                              smartCards: true,
+                                              smartHelpers: _smartHelpers,
+                                              smartStatus: _smartStatusData,
+                                              smartStatusTarget:
+                                                  _smartStatusTarget,
+                                              client: _maybeClient,
+                                              onSmartApplied: (result) {
+                                                if (result['session'] != null) {
+                                                  final terminal =
+                                                      AgentTerminal(
+                                                        _backend!,
+                                                        result['session']
+                                                            as String,
+                                                        result['command']
+                                                            as String,
+                                                        result['path']
+                                                            as String,
+                                                        tr: tr,
+                                                      );
+                                                  setState(() {
+                                                    _terminals.add(terminal);
+                                                    _visibleTerminal = terminal;
+                                                  });
+                                                }
+                                                if (result['move_undo']
+                                                    is String) {
+                                                  setState(
+                                                    () => _moveUndo =
+                                                        result['move_undo']
+                                                            as String,
+                                                  );
+                                                  unawaited(
+                                                    _refreshSystem(
+                                                      false,
+                                                      quiet: true,
+                                                    ),
+                                                  );
+                                                }
+                                                if (result['undo'] is String) {
+                                                  _connectionUndo =
+                                                      result['undo'] as String;
+                                                  _appliedMessage();
+                                                }
+                                                unawaited(_refresh());
+                                              },
+                                            )
+                                          : _viewHost(
                                               const [
                                                 'MCP servers and skills',
                                                 'Agents',
                                                 'Providers',
                                                 'Models',
-                                              ],
-                                              found: _groupFound,
-                                              available: _groupAvailable,
+                                              ][_focusCategory!],
+                                              _groupFocus(),
+                                              () => setState(
+                                                () => _focusCategory = null,
+                                              ),
                                             ),
-                                            onExpandGroup: (col) => setState(
-                                              () => _focusCategory = col,
+                                    )
+                                  : LayoutBuilder(
+                                      builder: (context, constraints) {
+                                        if (constraints.maxWidth < 800) {
+                                          return _selected == null
+                                              ? _agents()
+                                              : _details();
+                                        }
+                                        return Row(
+                                          children: [
+                                            SizedBox(
+                                              width: 310,
+                                              child: _agents(),
                                             ),
-                                            smartAskColumns: const {
-                                              'mcp',
-                                              'agents',
-                                              'providers',
-                                              'models',
-                                            },
-                                            onSmartProvider: _smartProvider,
-                                            onSmartTask: _smartTask,
-                                            smartCards: true,
-                                            smartHelpers: _smartHelpers,
-                                            smartStatus: _smartStatusData,
-                                            smartStatusTarget:
-                                                _smartStatusTarget,
-                                            client: _maybeClient,
-                                            onSmartApplied: (result) {
-                                              if (result['session'] != null) {
-                                                final terminal = AgentTerminal(
-                                                  _backend!,
-                                                  result['session'] as String,
-                                                  result['command'] as String,
-                                                  result['path'] as String,
-                                                  tr: tr,
-                                                );
-                                                setState(() {
-                                                  _terminals.add(terminal);
-                                                  _visibleTerminal = terminal;
-                                                });
-                                              }
-                                              if (result['move_undo']
-                                                  is String) {
-                                                setState(
-                                                  () => _moveUndo =
-                                                      result['move_undo']
-                                                          as String,
-                                                );
-                                                unawaited(
-                                                  _refreshSystem(
-                                                    false,
-                                                    quiet: true,
-                                                  ),
-                                                );
-                                              }
-                                              if (result['undo'] is String) {
-                                                _connectionUndo =
-                                                    result['undo'] as String;
-                                              }
-                                              unawaited(_refresh());
-                                            },
-                                          )
-                                        : _viewHost(
-                                            const [
-                                              'MCP servers and skills',
-                                              'Agents',
-                                              'Providers',
-                                              'Models',
-                                            ][_focusCategory!],
-                                            _groupFocus(),
-                                            () => setState(
-                                              () => _focusCategory = null,
-                                            ),
-                                          ),
-                                  )
-                                : LayoutBuilder(
-                                    builder: (context, constraints) {
-                                      if (constraints.maxWidth < 800) {
-                                        return _selected == null
-                                            ? _agents()
-                                            : _details();
-                                      }
-                                      return Row(
-                                        children: [
-                                          SizedBox(
-                                            width: 310,
-                                            child: _agents(),
-                                          ),
-                                          const VerticalDivider(width: 1),
-                                          Expanded(child: _details()),
-                                        ],
-                                      );
-                                    },
-                                  ),
-                          ),
-                        if (_card != null) _host(_card!, _closeCard),
-                        if (_visibleTerminal != null &&
-                            _card == null &&
-                            _browser == null)
-                          OverlayWindow(
-                            key: const ValueKey('terminal-overlay'),
-                            child: AgentTerminalView(
-                              session: _visibleTerminal!,
-                              keys: _terminalKeys,
-                              tr: tr,
-                              onBack: () {
-                                final fromGuide = _guideTerminals.remove(
-                                  _visibleTerminal,
-                                );
-                                setState(() => _visibleTerminal = null);
-                                if (fromGuide) {
-                                  _guideReturn = true;
-                                  _backToGuideIfFromIt();
-                                }
-                              },
-                              onStop: () => _stopTerminal(_visibleTerminal!),
-                              onScreenshot:
-                                  (_snapshot?['settings']
-                                          as Map?)?['screenshot_key'] ==
-                                      false
-                                  ? null
-                                  : _takeShot,
+                                            const VerticalDivider(width: 1),
+                                            Expanded(child: _details()),
+                                          ],
+                                        );
+                                      },
+                                    ),
                             ),
-                          ),
-                      ],
-                    );
-                  },
+                          if (_card != null)
+                            _host(_card!, _closeCard, overlay: true),
+                          if (_visibleTerminal != null &&
+                              _card == null &&
+                              _browser == null)
+                            OverlayWindow(
+                              key: const ValueKey('terminal-overlay'),
+                              child: AgentTerminalView(
+                                session: _visibleTerminal!,
+                                keys: _terminalKeys,
+                                tr: tr,
+                                onBack: () {
+                                  final fromGuide = _guideTerminals.remove(
+                                    _visibleTerminal,
+                                  );
+                                  _mapStale = true;
+                                  setState(() => _visibleTerminal = null);
+                                  if (fromGuide) {
+                                    _guideReturn = true;
+                                    _backToGuideIfFromIt();
+                                  }
+                                },
+                                onStop: () => _stopTerminal(_visibleTerminal!),
+                                onScreenshot:
+                                    (_snapshot?['settings']
+                                            as Map?)?['screenshot_key'] ==
+                                        false
+                                    ? null
+                                    : _takeShot,
+                              ),
+                            ),
+                        ],
+                      );
+                    },
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
-    ),
-  );
+    );
+  }
 
   List<Map<String, dynamic>> get _catalog =>
       (_snapshot?['agents'] as List? ?? []).cast<Map<String, dynamic>>();

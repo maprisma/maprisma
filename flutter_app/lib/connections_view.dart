@@ -540,6 +540,8 @@ class ConnectionReview extends StatelessWidget {
               ),
             if (plan['agents'] != null)
               Text('${tr('Agents')}: ${(plan['agents'] as List).join(', ')}'),
+            for (final line in plan['disconnects'] as List? ?? [])
+              Text('${tr('Disconnect')} $line'),
             if (plan['item'] != null && plan['command'] != null)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 12),

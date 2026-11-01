@@ -67,12 +67,7 @@ void main() {
           MaterialApp(
             home: Scaffold(
               body: TaskHost(
-                spec: TaskCardSpec(
-                  title: entry.key,
-                  child: entry.value,
-                  width: TaskCardWidth.full,
-                ),
-                graph: const {'nodes': [], 'edges': []},
+                spec: TaskCardSpec(title: entry.key, child: entry.value),
                 tr: (s) => s,
                 onClose: () {},
               ),
@@ -105,7 +100,6 @@ void main() {
             body: TaskHost(
               spec: TaskCardSpec(
                 title: 'Download model · Fixture',
-                width: TaskCardWidth.full,
                 child: ModelBrowser(
                   hosted: true,
                   runtime: const {
@@ -118,7 +112,6 @@ void main() {
                   onClose: () {},
                 ),
               ),
-              graph: const {'nodes': [], 'edges': []},
               tr: (s) => s,
               onClose: () {},
             ),

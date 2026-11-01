@@ -635,6 +635,39 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+  testWidgets('a click on a line shows its hook; empty space hides it', (
+    tester,
+  ) async {
+    await mount(tester, edits: []);
+    final hooks = find.byTooltip(
+      'Move this connection to another compatible box, or to empty space to disconnect.',
+    );
+    await tester.tap(find.text('agent:a'));
+    await tester.pumpAndSettle();
+    final onLine = tester.getCenter(hooks.first);
+    await tester.tap(find.text('agent:a'));
+    await tester.pumpAndSettle();
+    expect(hooks, findsNothing);
+    await tester.tapAt(onLine);
+    await tester.pumpAndSettle();
+    expect(hooks, findsOneWidget);
+    await tester.tapAt(onLine + const Offset(0, 300));
+    await tester.pumpAndSettle();
+    expect(hooks, findsNothing);
+
+    // Drawing from a box ends the click; the line's own hook can be dragged.
+    await tester.tapAt(onLine);
+    await tester.pumpAndSettle();
+    final edits = find.text('agent:a');
+    final gesture = await tester.startGesture(tester.getCenter(edits));
+    await gesture.moveBy(const Offset(40, 0));
+    await tester.pump();
+    await gesture.moveBy(const Offset(40, 0));
+    await tester.pump();
+    expect(hooks, findsNothing);
+    await gesture.up();
+    await tester.pumpAndSettle();
+  });
   testWidgets(
     'selected line hook removes on empty and Escape cancels keyboard move',
     (tester) async {
@@ -677,6 +710,87 @@ void main() {
     expect(saved.last['column_widths'], isEmpty);
   });
 
+  testWidgets('a selection grays out the rest, but not what is pinned', (
+    tester,
+  ) async {
+    await mount(tester, edits: []);
+    double shade(String label) => tester
+        .widget<Opacity>(
+          find
+              .ancestor(of: find.text(label), matching: find.byType(Opacity))
+              .first,
+        )
+        .opacity;
+    await tester.tap(find.byKey(const ValueKey('pin-agent:b')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('agent:a'));
+    await tester.pumpAndSettle();
+    expect(shade('agent:a'), 1);
+    expect(shade('agent:b'), 1);
+    // A selected box stands out from what is merely lit.
+    double outline(String label) =>
+        ((tester
+                        .widget<Card>(
+                          find
+                              .ancestor(
+                                of: find.text(label),
+                                matching: find.byType(Card),
+                              )
+                              .first,
+                        )
+                        .shape
+                    as RoundedRectangleBorder)
+                .side)
+            .width;
+    expect(outline('agent:a'), 3);
+    expect(outline('agent:b'), 1);
+
+    // A pin lights itself, not its neighbours.
+    await tester.tap(find.byKey(const ValueKey('pin-agent:b')));
+    await tester.tap(find.byKey(const ValueKey('pin-agent:a')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('agent:b'));
+    await tester.pumpAndSettle();
+    expect(shade('agent:a'), 1);
+    expect(shade('runtime:r'), lessThan(1));
+    // A faded box still hides the lines passing under it.
+    final faded = find.byKey(const ValueKey('box-backing-runtime:r'));
+    expect(tester.widget<Card>(faded).color?.a, 1);
+    expect(
+      find.descendant(
+        of: find.ancestor(of: faded, matching: find.byType(Stack)).first,
+        matching: find.byWidgetPredicate((w) => w is Opacity && w.opacity < 1),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byWidgetPredicate((w) => w is Opacity && w.opacity < 1),
+      findsWidgets,
+    );
+    // A second click ends it, and a pin keeps its light.
+    await tester.tap(find.text('agent:b'));
+    await tester.pumpAndSettle();
+    expect(
+      find.byWidgetPredicate((w) => w is Opacity && w.opacity < 1),
+      findsNothing,
+    );
+    await tester.tap(find.text('agent:b'));
+    await tester.pumpAndSettle();
+    expect(
+      find.byWidgetPredicate((w) => w is Opacity && w.opacity < 1),
+      findsWidgets,
+    );
+
+    // A click on empty map ends the selection.
+    final board = tester.getTopLeft(find.byType(InteractiveViewer));
+    await tester.tapAt(board + const Offset(6, 600));
+    await tester.pumpAndSettle();
+    expect(
+      find.byWidgetPredicate((w) => w is Opacity && w.opacity < 1),
+      findsNothing,
+    );
+  });
+
   testWidgets(
     'fold and keyboard reorder save only layout; pin survives remount',
     (tester) async {
@@ -716,7 +830,7 @@ void main() {
     },
   );
   testWidgets(
-    'one agent selected with Shift; selecting model requests model edit',
+    'one agent selected with Shift; a click on a model only selects it',
     (tester) async {
       final edits = <Map<String, dynamic>>[], selection = <String>{};
       await mount(tester, edits: edits, selection: selection);
@@ -728,6 +842,16 @@ void main() {
       await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
       expect(selection, {'agent:b'});
       await tester.tap(find.text('agent:a'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('model:r:n'));
+      await tester.pump();
+      expect(edits, isEmpty);
+      expect(selection, {'model:r:n'});
+
+      // Connecting stays a deliberate step.
+      await tester.tap(find.byTooltip('Actions').at(1));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Connect'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('model:r:n'));
       await tester.pump();
