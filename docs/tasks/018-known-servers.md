@@ -5,7 +5,7 @@ Author: Claude · Reviewer: Antigravity · Branch: task/018-known-servers
 Uwe, 2026-11-01, screenshot notes after disconnecting all servers: where is the card to reconnect them; why can skills not be disconnected, at least a better answer; why is there a line that cannot be disconnected.
 
 ## Known servers
-`mcp_library.py` promises a server stays after its last agent, and the inventory lists it, but the map drew only servers with agents. Both graphs now add a faded box for a known server without agents; drawing a line sets it up from the library. Ask AI's facts list these servers too, so it can connect them.
+`mcp_library.py` promises a server stays after its last agent, and the inventory lists it, but the map drew only servers with agents. This reverses the older rule "no MCP server no agent uses" in `tests/test_inventory_graph.py`. Both graphs now add a faded box for a known server without agents; drawing a line sets it up from the library. Ask AI's facts list these servers too, so it can connect them.
 
 ## Skills in Ask AI
 `disconnect` takes `skills` beside `servers`, in the one candidate with one preview and Undo. Facts name the agents that can leave each folder.
