@@ -383,6 +383,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
   final _mcpFields = <String, TextEditingController>{};
   Map<String, dynamic> _reviewData = const {};
   Map<String, dynamic> _connectPlan = const {};
+  bool _applyingConnect = false;
   double? _runFraction;
   String _runText = '';
   String _errorText = '';
@@ -452,6 +453,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
   bool get _atWork =>
       _step == _SmartStep.working ||
       _step == _SmartStep.running ||
+      _applyingConnect ||
       _activeTask != null;
 
   void _openOnStatus() {
@@ -851,6 +853,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
       });
     } catch (_) {
       if (!mounted || token != _runToken) return;
+      _activeTask = null;
       setState(() {
         _errorText = widget.tr('The action could not be completed.');
         _step = _SmartStep.error;
@@ -993,8 +996,9 @@ class _MapSmartCardState extends State<MapSmartCard> {
   Future<void> _applyConnect() async {
     final client = widget.client;
     final planToken = _connectPlan['plan'] as String?;
-    if (client == null || planToken == null) return;
+    if (client == null || planToken == null || _applyingConnect) return;
     final token = ++_runToken;
+    _applyingConnect = true;
     try {
       var result = await client.connectionsApply(plan: planToken);
       if (!mounted || token != _runToken) return;
@@ -1031,10 +1035,13 @@ class _MapSmartCardState extends State<MapSmartCard> {
       _close();
     } catch (_) {
       if (!mounted || token != _runToken) return;
+      _activeTask = null;
       setState(() {
         _errorText = widget.tr('The action could not be completed.');
         _step = _SmartStep.error;
       });
+    } finally {
+      _applyingConnect = false;
     }
   }
 
@@ -2120,11 +2127,15 @@ class _MapSmartCardState extends State<MapSmartCard> {
                       plan: _connectPlan,
                       tr: widget.tr,
                       onConfirm: _applyConnect,
-                      onCancel: () => setState(
-                        () => _step = _activeCandidate?['kind'] == null
-                            ? _SmartStep.done
-                            : _SmartStep.proposal,
-                      ),
+                      onCancel: () {
+                        // An apply under way finishes: it has no way back.
+                        if (_applyingConnect) return;
+                        setState(
+                          () => _step = _activeCandidate?['kind'] == null
+                              ? _SmartStep.done
+                              : _SmartStep.proposal,
+                        );
+                      },
                     ),
                   )
                 else

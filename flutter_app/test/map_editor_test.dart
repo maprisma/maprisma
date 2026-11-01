@@ -1129,7 +1129,7 @@ void main() {
       expect(tester.widget<MapSmartCard>(agentsCard).open, isFalse);
       expect(
         focusInside(
-          find.descendant(of: agentsCard, matching: find.byType(InkWell)),
+          find.descendant(of: agentsCard, matching: find.byType(InkWell)).last,
         ),
         isTrue,
       );
@@ -1150,7 +1150,7 @@ void main() {
       expect(tester.widget<MapSmartCard>(agentsCard).open, isFalse);
       expect(
         focusInside(
-          find.descendant(of: agentsCard, matching: find.byType(InkWell)),
+          find.descendant(of: agentsCard, matching: find.byType(InkWell)).last,
         ),
         isTrue,
       );
