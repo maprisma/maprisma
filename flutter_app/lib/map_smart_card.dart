@@ -775,7 +775,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
           spacing: 6,
           runSpacing: 4,
           children: [
-            for (final agent in agents)
+            for (final agent in agents.where((a) => a['mcp'] != false))
               FilterChip(
                 key: ValueKey('smart-mcp-agent-${agent['command']}'),
                 visualDensity: VisualDensity.compact,

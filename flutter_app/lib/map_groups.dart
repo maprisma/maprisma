@@ -25,7 +25,9 @@ class MapGroup {
       MapGroup(
         i,
         columns[i],
-        (graph['nodes'] as List? ?? []).where((n) => n['column'] == i).length,
+        (graph['nodes'] as List? ?? [])
+            .where((n) => n['column'] == i && n['dim'] != true)
+            .length,
         found[i] ?? 0,
         available[i] ?? found[i] ?? 0,
       ),

@@ -602,8 +602,12 @@ class _MapEditorState extends State<MapEditor>
       if (layout.movable(e) && (e['source'] == id || e['target'] == id)) e,
   ];
 
-  String _moveLabel(Map<String, dynamic> edge, MapLayout layout) =>
-      '${widget.tr('Move connection')}: ${layout.nodes[edge['target']]?['label']}';
+  String _moveLabel(String id, Map<String, dynamic> edge, MapLayout layout) =>
+      '${widget.tr('Move connection')}: ${_otherEnd(id, edge, layout)}';
+
+  /// The box a line leads to from the box whose menu is open.
+  String _otherEnd(String id, Map edge, MapLayout layout) =>
+      '${layout.nodes[edge[edge['target'] == id ? 'source' : 'target']]?['label']}';
 
   Future<void> _chooseMove(String id, MapLayout layout) async {
     final edge = await showDialog<Map<String, dynamic>>(
@@ -614,7 +618,7 @@ class _MapEditorState extends State<MapEditor>
           for (final e in _movable(id, layout))
             SimpleDialogOption(
               onPressed: () => Navigator.pop(context, e),
-              child: Text('${layout.nodes[e['target']]?['label']}'),
+              child: Text(_otherEnd(id, e, layout)),
             ),
         ],
       ),
@@ -805,6 +809,8 @@ class _MapEditorState extends State<MapEditor>
                                               );
                                             case 'move':
                                               _chooseMove(id, layout);
+                                            case 'forget':
+                                              widget.onEdit({'forget': id});
                                             default:
                                               final edge = layout.allEdges
                                                   .firstWhere(
@@ -843,6 +849,12 @@ class _MapEditorState extends State<MapEditor>
                                             ),
                                           // Many connections get a page of their own, or
                                           // the menu would fill the screen.
+                                          if (node['kind'] == 'mcp' &&
+                                              node['dim'] == true)
+                                            PopupMenuItem(
+                                              value: 'forget',
+                                              child: Text(widget.tr('Remove')),
+                                            ),
                                           if (_movable(id, layout).length > 3)
                                             PopupMenuItem(
                                               value: 'move',
@@ -858,7 +870,7 @@ class _MapEditorState extends State<MapEditor>
                                               PopupMenuItem(
                                                 value: edgeKey(edge),
                                                 child: Text(
-                                                  _moveLabel(edge, layout),
+                                                  _moveLabel(id, edge, layout),
                                                 ),
                                               ),
                                         ],
@@ -1435,7 +1447,9 @@ class _MapEditorState extends State<MapEditor>
                                         id,
                                         layout,
                                         lit,
-                                        dimmed: dimming && !lit.contains(id),
+                                        dimmed:
+                                            dimming && !lit.contains(id) ||
+                                            layout.nodes[id]?['dim'] == true,
                                       ),
                                   ],
                                 ),

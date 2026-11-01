@@ -635,6 +635,19 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+  test('the column counts what is on, not what only stays known', () {
+    final groups = MapGroup.fromGraph(
+      {
+        'nodes': [
+          {'id': 'mcp:a', 'column': 0},
+          {'id': 'mcp:b', 'column': 0, 'dim': true},
+        ],
+      },
+      ['MCP servers and skills'],
+    );
+    expect(groups.single.count, 1);
+  });
+
   testWidgets('a line that is not ours has no hook and says why', (
     tester,
   ) async {

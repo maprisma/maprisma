@@ -935,6 +935,8 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     setState(() => _busy = true);
     try {
       await _client.settingsUpdate(values: values);
+      // The map's reasons are in the language they were made in.
+      if (values.containsKey('language')) _mapStale = true;
       if (!mounted || revision != _settingsRevision) return;
       setState(() => (_snapshot?['settings'] as Map?)?.addAll(values));
       await _refresh();
@@ -3217,16 +3219,14 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   }
 
   Future<void> _mapEdit(Map<String, dynamic> edit) async {
-    if (_busy) return;
     final nodes = {
       for (final n in (_mapGraph['nodes'] as List).cast<Map<String, dynamic>>())
         n['id'] as String: n,
     };
     if (edit['fixed'] case final Map fixed) {
-      // A line that is true but not this app's to take away says why.
-      final messenger = ScaffoldMessenger.of(_navigator.currentContext!);
-      messenger.clearSnackBars();
-      messenger.showSnackBar(
+      // A line that is true but not this app's to take away says why. It
+      // waits its turn: an Undo on the screen must not go.
+      ScaffoldMessenger.of(_navigator.currentContext!).showSnackBar(
         SnackBar(
           content: Text(
             '${nodes[fixed['source']]?['label']}: ${fixed['fixed']}',
@@ -3234,6 +3234,12 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         ),
       );
       return;
+    }
+    if (_busy) return;
+    if (edit['forget'] case final String id) {
+      return _connectionPreview({
+        'name': id.substring('mcp:'.length),
+      }, method: 'connections.forget_preview');
     }
     Map<String, dynamic>? edge = edit['edge'] as Map<String, dynamic>?;
     if (edit['failure'] != null) {
@@ -3250,7 +3256,8 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
           ),
           actions: [
             TextButton(onPressed: no, child: Text(tr('Cancel'))),
-            TextButton(onPressed: yes, child: Text(tr('Disconnect'))),
+            if ('${edge['fixed'] ?? ''}'.isEmpty)
+              TextButton(onPressed: yes, child: Text(tr('Disconnect'))),
             FilledButton(
               onPressed: () {
                 repair = true;

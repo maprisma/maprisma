@@ -183,6 +183,10 @@ class CoreClient {
     'name': ?name,
   });
 
+  Future<Map<String, dynamic>> connectionsForgetPreview({
+    required String name,
+  }) => transport.call('connections.forget_preview', {'name': name});
+
   Future<Map<String, dynamic>> connectionsMovePreview({
     required String agent,
     required Object? newValue,

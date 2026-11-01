@@ -77,6 +77,7 @@ A parameter written `name?` may be left out.
 |---|---|---|---|
 | `connections.apply` | handle (plan) | `plan`: string | `ok`, `task`, `undo` |
 | `connections.author_preview` | preview | `agents`: ["string"], `entry?`: object, `folder?`: string, `kind`: string, `name?`: string | `agents`, `contexts`, `empty`, `files`, `focus`, `item`, `kind`, `links_add`, `links_remove`, `notes`, `plan` |
+| `connections.forget_preview` | preview | `name`: string | `plan` A known server no agent uses leaves mcp-servers.json; applied through connections.apply, with Undo. |
 | `connections.move_preview` | preview | `agent`: string, `new`: null|string, `old`: string | `agents`, `contexts`, `empty`, `files`, `focus`, `links_add`, `links_remove`, `model_actions`, `notes`, `plan` |
 | `connections.preview` | preview | `command`: string, `item`: string, `kind`: string, `model?`: string, `remove`: bool, `use_now?`: bool | `command`, `contexts`, `empty`, `files`, `focus`, `item`, `kind`, `links_add`, `links_remove`, `plan`, `remove` |
 | `connections.repair_preview` | preview | `agent`: string, `target`: string | `command`, `contexts`, `empty`, `files`, `focus`, `item`, `kind`, `links_add`, `links_remove`, `plan`, `remove` |
@@ -194,7 +195,7 @@ A parameter written `name?` may be left out.
 | `map.smart_plan` | preview | `agents`: ["string"], `candidate`: string, `proposal`: string, `values`: object | `plan` An approved MCP candidate as the app's normal preview: a plan for ConnectionReview, then connections.apply. agents and values come from the user; a secret goes no further than the preview. |
 | `map.smart_review` | read | `candidate`: string, `proposal`: string | `fit`, `runtime`, `size`, `subtitle`, `title` The facts for the review of one candidate; for a model removal or an agent action its normal preview; for a folder move a task whose result is the plan. For a task after a web look-up: {preview, name, prompt, topic} for system.help_apply. |
 | `map.smart_run` | change | `candidate`: string, `proposal`: string | `focus`, `task` After the user's OK: starts it, once. A candidate that is too large is refused; a removal, a folder move or an agent action needs its review first. An agent action answers like agents.action_apply. |
-| `map.snapshot` | read | `force?`: ?, `poll?`: ? | ? |
+| `map.snapshot` | read | `force?`: ?, `poll?`: ? | `edges`, `nodes`, `pending` nodes: dim marks a known server without agents. edges: fixed says why a line cannot be taken away here. |
 | `map.usage` | read | `commands`: ? | ? |
 
 ## mcp
