@@ -91,6 +91,8 @@
   "Save a screenshot": "Schermafbeelding opslaan",
   "Screenshot saved: {0}": "Schermafbeelding opgeslagen: {0}",
   "What is wrong? (optional)": "Wat klopt er niet? (optioneel)",
+  "Screenshots go to": "Schermafbeeldingen opslaan in",
+  "A picture of this window is saved, with a note if you like. In a terminal, use the camera symbol below it: programs there may use F9.": "Een afbeelding van dit venster wordt opgeslagen, desgewenst met een notitie. Gebruik in een terminal het camerasymbool eronder: programma’s kunnen F9 zelf gebruiken.",
   "Check again": "Opnieuw controleren",
   "Nothing to fix.": "Niets op te lossen.",
   "Ready": "Klaar",

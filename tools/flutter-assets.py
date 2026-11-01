@@ -114,6 +114,8 @@ KEYS = (
     "Save a screenshot",
     "Screenshot saved: {0}",
     "What is wrong? (optional)",
+    "Screenshots go to",
+    "A picture of this window is saved, with a note if you like. In a terminal, use the camera symbol below it: programs there may use F9.",
     "Check again",
     "Nothing to fix.",
     "Ready",

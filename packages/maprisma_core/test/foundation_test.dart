@@ -201,6 +201,11 @@ void main() {
         'values': {'screenshot_key': false},
       });
       expect(core.settings.snapshot()['screenshot_key'], isFalse);
+      expect(core.settings.snapshot()['screenshot_folder'], isNull);
+      core.dispatch('settings.update', {
+        'values': {'screenshot_folder': '/data/shots'},
+      });
+      expect(core.settings.snapshot()['screenshot_folder'], '/data/shots');
       core.settings.posix.atomicWrite(
         core.identity.settingsPath,
         utf8.encode(

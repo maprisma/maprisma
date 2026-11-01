@@ -124,8 +124,10 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       image.dispose();
       if (data == null) return;
       final png = data.buffer.asUint8List();
+      final folder = (_snapshot?['settings'] as Map?)?['screenshot_folder'];
       final path =
-          await (shots?.save(png, time) ?? _windowShots.save(png, time));
+          await (shots?.save(png, time) ??
+              _windowShots.saveTo(folder as String?, png, time));
       if (!context.mounted) return;
       final note = await showDialog<String>(
         context: context,

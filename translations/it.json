@@ -3251,5 +3251,7 @@
  "Screenshot saved: {0}": "Screenshot salvato: {0}",
  "A picture of this window goes to Pictures/Maprisma. In a terminal, use the camera symbol below it: programs there may use F9.": "Un’immagine di questa finestra va in Pictures/Maprisma. In un terminale usa il simbolo della fotocamera sotto: i programmi lì possono usare F9.",
  "Save a screenshot": "Salva uno screenshot",
- "What is wrong? (optional)": "Cosa non va? (facoltativo)"
+ "What is wrong? (optional)": "Cosa non va? (facoltativo)",
+ "Screenshots go to": "Salva gli screenshot in",
+ "A picture of this window is saved, with a note if you like. In a terminal, use the camera symbol below it: programs there may use F9.": "Viene salvata un’immagine di questa finestra, con una nota se vuoi. In un terminale usa il simbolo della fotocamera sotto: i programmi possono usare F9."
 }

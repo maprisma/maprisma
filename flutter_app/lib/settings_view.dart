@@ -623,13 +623,47 @@ class SettingsView extends StatelessWidget {
               title: Text(tr('F9 saves a screenshot')),
               subtitle: Text(
                 tr(
-                  'A picture of this window goes to Pictures/Maprisma. In a terminal, use the camera symbol below it: programs there may use F9.',
+                  'A picture of this window is saved, with a note if you like. In a terminal, use the camera symbol below it: programs there may use F9.',
                 ),
               ),
               value: settings['screenshot_key'] as bool? ?? true,
               onChanged: busy
                   ? null
                   : (value) => onUpdate({'screenshot_key': value}),
+            ),
+            ListTile(
+              key: const ValueKey('screenshot-folder'),
+              title: Text(tr('Screenshots go to')),
+              subtitle: Text(
+                settings['screenshot_folder'] as String? ??
+                    '~/Pictures/Maprisma',
+              ),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (settings['screenshot_folder'] != null)
+                    TextButton(
+                      onPressed: busy
+                          ? null
+                          : () => onUpdate({'screenshot_folder': null}),
+                      child: Text(tr('Default')),
+                    ),
+                  IconButton(
+                    tooltip: tr('Choose folder…'),
+                    icon: const Icon(Icons.folder_open),
+                    onPressed: busy
+                        ? null
+                        : () async {
+                            final chosen = await PopupGuard.around(
+                              getDirectoryPath,
+                            );
+                            if (chosen != null) {
+                              await onUpdate({'screenshot_folder': chosen});
+                            }
+                          },
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 24),
             Text(

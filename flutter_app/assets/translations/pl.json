@@ -91,6 +91,8 @@
   "Save a screenshot": "Zapisz zrzut ekranu",
   "Screenshot saved: {0}": "Zapisano zrzut ekranu: {0}",
   "What is wrong? (optional)": "Co jest nie tak? (opcjonalnie)",
+  "Screenshots go to": "Zapisuj zrzuty w",
+  "A picture of this window is saved, with a note if you like. In a terminal, use the camera symbol below it: programs there may use F9.": "Obraz tego okna zostaje zapisany, jeśli chcesz, z notatką. W terminalu użyj symbolu aparatu pod nim: programy mogą używać F9.",
   "Check again": "Sprawdź ponownie",
   "Nothing to fix.": "Nic do naprawy.",
   "Ready": "Gotowe",

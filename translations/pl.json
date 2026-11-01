@@ -3332,5 +3332,7 @@
  "Screenshot saved: {0}": "Zapisano zrzut ekranu: {0}",
  "A picture of this window goes to Pictures/Maprisma. In a terminal, use the camera symbol below it: programs there may use F9.": "Obraz tego okna trafia do Pictures/Maprisma. W terminalu użyj symbolu aparatu pod nim: programy w nim mogą używać F9.",
  "Save a screenshot": "Zapisz zrzut ekranu",
- "What is wrong? (optional)": "Co jest nie tak? (opcjonalnie)"
+ "What is wrong? (optional)": "Co jest nie tak? (opcjonalnie)",
+ "Screenshots go to": "Zapisuj zrzuty w",
+ "A picture of this window is saved, with a note if you like. In a terminal, use the camera symbol below it: programs there may use F9.": "Obraz tego okna zostaje zapisany, jeśli chcesz, z notatką. W terminalu użyj symbolu aparatu pod nim: programy mogą używać F9."
 }

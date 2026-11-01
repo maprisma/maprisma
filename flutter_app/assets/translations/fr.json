@@ -91,6 +91,8 @@
   "Save a screenshot": "Enregistrer une capture",
   "Screenshot saved: {0}": "Capture enregistrée : {0}",
   "What is wrong? (optional)": "Qu’est-ce qui ne va pas ? (facultatif)",
+  "Screenshots go to": "Enregistrer les captures dans",
+  "A picture of this window is saved, with a note if you like. In a terminal, use the camera symbol below it: programs there may use F9.": "Une image de cette fenêtre est enregistrée, avec une note si tu veux. Dans un terminal, utilise le symbole d’appareil photo en dessous : les programmes peuvent utiliser F9.",
   "Check again": "Vérifier à nouveau",
   "Nothing to fix.": "Rien à corriger.",
   "Ready": "Prêt",

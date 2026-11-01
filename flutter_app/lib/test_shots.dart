@@ -31,6 +31,17 @@ final class WindowShots {
     return path;
   }
 
+  /// Into the folder chosen in Settings; a folder that cannot be written
+  /// loses no picture, it goes to the default one.
+  Future<String> saveTo(String? chosen, Uint8List png, DateTime time) async {
+    if (chosen == null) return save(png, time);
+    try {
+      return await WindowShots(chosen).save(png, time);
+    } on FileSystemException {
+      return save(png, time);
+    }
+  }
+
   /// The note goes next to its picture, with the same name; no note, no file.
   Future<void> note(String picture, String text) async {
     if (text.trim().isEmpty) return;

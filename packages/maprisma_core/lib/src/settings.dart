@@ -31,6 +31,7 @@ const uiSettings = {
   'warn_red',
   'terminal_tabs',
   'screenshot_key',
+  'screenshot_folder',
   'usage_box',
   'usage_box_items',
   'usage_box_size',
@@ -210,7 +211,8 @@ final class SettingsStore {
     }
     final fallback = defaults[key];
     if (fallback is bool) return v is bool;
-    if (fallback is String || ['agent_folder', 'models_root'].contains(key)) {
+    if (fallback is String ||
+        ['agent_folder', 'models_root', 'screenshot_folder'].contains(key)) {
       return v is String;
     }
     if (fallback is List) return texts(v);
