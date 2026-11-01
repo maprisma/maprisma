@@ -70,10 +70,13 @@ void main(List<String> args) async {
 }
 
 class MaprismaApp extends StatefulWidget {
-  const MaprismaApp({super.key, this.connectBackend});
+  const MaprismaApp({super.key, this.connectBackend, this.windowShots});
 
   /// Allows isolated service fixtures; production always starts its bundled service.
   final Future<Backend> Function()? connectBackend;
+
+  /// Tests keep their pictures away from the user's folder.
+  final WindowShots? windowShots;
 
   @override
   State<MaprismaApp> createState() => _MaprismaAppState();
@@ -82,11 +85,11 @@ class MaprismaApp extends StatefulWidget {
 class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   final _navigator = GlobalKey<NavigatorState>();
 
-  /// F9: a picture of this window (test_shots.dart). In a recorded test it
-  /// goes next to the protocol, with a note; that part stays in English, it is
-  /// a test tool.
+  /// F9: a picture of this window and a note (test_shots.dart). In a recorded
+  /// test both go next to the protocol.
   final _shots = TestShots.fromEnvironment(Platform.environment);
-  final _windowShots = WindowShots.fromEnvironment(Platform.environment);
+  late final _windowShots =
+      widget.windowShots ?? WindowShots.fromEnvironment(Platform.environment);
   final _shotArea = GlobalKey();
   bool _shooting = false;
 
@@ -121,41 +124,18 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       image.dispose();
       if (data == null) return;
       final png = data.buffer.asUint8List();
-      if (shots == null) {
-        final path = await _windowShots.save(png, time);
-        if (!context.mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(tr('Screenshot saved: {0}').replaceAll('{0}', path)),
-          ),
-        );
-        return;
-      }
-      final path = await shots.save(png, time);
+      final path =
+          await (shots?.save(png, time) ?? _windowShots.save(png, time));
       if (!context.mounted) return;
-      final field = TextEditingController();
       final note = await showDialog<String>(
         context: context,
-        builder: (dialog) => AlertDialog(
-          title: const Text('Screenshot saved'),
-          content: TextField(
-            controller: field,
-            autofocus: true,
-            decoration: const InputDecoration(
-              labelText: 'What is wrong? (optional)',
-            ),
-            onSubmitted: (text) => Navigator.pop(dialog, text),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialog, field.text),
-              child: const Text('Done'),
-            ),
-          ],
-        ),
+        builder: (_) => _ShotNote(path, tr),
       );
-      field.dispose();
-      await shots.record(path, note ?? '', time);
+      if (shots != null) {
+        await shots.record(path, note ?? '', time);
+      } else {
+        await _windowShots.note(path, note ?? '');
+      }
     } catch (_) {
       // A picture must never disturb the app.
     } finally {
@@ -4628,5 +4608,58 @@ class _BackAction<T extends Intent> extends Action<T> {
   Object? invoke(T intent) {
     back();
     return null;
+  }
+}
+
+/// After F9: where the picture went, and an optional note.
+class _ShotNote extends StatefulWidget {
+  const _ShotNote(this.path, this.tr);
+
+  final String path;
+  final String Function(String) tr;
+
+  @override
+  State<_ShotNote> createState() => _ShotNoteState();
+}
+
+class _ShotNoteState extends State<_ShotNote> {
+  final _note = TextEditingController();
+
+  @override
+  void dispose() {
+    _note.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tr = widget.tr;
+    return AlertDialog(
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SelectableText(
+            tr('Screenshot saved: {0}').replaceAll('{0}', widget.path),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            key: const ValueKey('screenshot-note'),
+            controller: _note,
+            autofocus: true,
+            decoration: InputDecoration(
+              labelText: tr('What is wrong? (optional)'),
+            ),
+            onSubmitted: (text) => Navigator.pop(context, text),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, _note.text),
+          child: Text(tr('Done')),
+        ),
+      ],
+    );
   }
 }

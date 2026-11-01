@@ -113,6 +113,7 @@ KEYS = (
     "A picture of this window goes to Pictures/Maprisma. In a terminal, use the camera symbol below it: programs there may use F9.",
     "Save a screenshot",
     "Screenshot saved: {0}",
+    "What is wrong? (optional)",
     "Check again",
     "Nothing to fix.",
     "Ready",

@@ -90,6 +90,7 @@
   "A picture of this window goes to Pictures/Maprisma. In a terminal, use the camera symbol below it: programs there may use F9.": "Une image de cette fenêtre va dans Pictures/Maprisma. Dans un terminal, utilise le symbole d’appareil photo en dessous : les programmes qui s’y trouvent peuvent utiliser F9.",
   "Save a screenshot": "Enregistrer une capture",
   "Screenshot saved: {0}": "Capture enregistrée : {0}",
+  "What is wrong? (optional)": "Qu’est-ce qui ne va pas ? (facultatif)",
   "Check again": "Vérifier à nouveau",
   "Nothing to fix.": "Rien à corriger.",
   "Ready": "Prêt",

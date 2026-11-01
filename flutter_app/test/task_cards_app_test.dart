@@ -9,6 +9,7 @@ import 'package:maprisma/settings_view.dart';
 import 'package:maprisma/main.dart';
 import 'package:maprisma/connections_view.dart';
 import 'package:maprisma/task_card.dart';
+import 'package:maprisma/test_shots.dart';
 import 'package:maprisma/map_addons_focus.dart';
 import 'package:maprisma/map_smart_card.dart';
 import 'package:flutter/material.dart';
@@ -213,6 +214,7 @@ Future<Directory> mountApp(
   final app = MaprismaApp(
     key: UniqueKey(),
     connectBackend: () async => backend!,
+    windowShots: WindowShots('${dir.path}/shots'),
   );
   await tester.pumpWidget(
     areaWidth == null
@@ -273,7 +275,31 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('terminal-screenshot')));
     await settleService(tester);
+    await tester.tap(find.text('Done'));
+    await settleService(tester);
     expect(inTerminal(), isTrue);
+    await unmountApp(tester);
+  });
+
+  testWidgets('F9 saves the picture, then asks for its note', (tester) async {
+    final dir = await mountApp(tester);
+    await tester.sendKeyEvent(LogicalKeyboardKey.f9);
+    await settleService(tester);
+    await tester.enterText(
+      find.byKey(const ValueKey('screenshot-note')),
+      'The header is cut off',
+    );
+    await tester.tap(find.text('Done'));
+    await settleService(tester);
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 50)),
+    );
+    final files = Directory('${dir.path}/shots').listSync().map((f) => f.path);
+    expect(files.where((f) => f.endsWith('.png')), hasLength(1));
+    expect(
+      File(files.singleWhere((f) => f.endsWith('.txt'))).readAsStringSync(),
+      'The header is cut off\n',
+    );
     await unmountApp(tester);
   });
 

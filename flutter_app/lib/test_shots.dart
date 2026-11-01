@@ -2,8 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-/// F9: a picture of the app's own window, in ~/Pictures/Maprisma, while the
-/// setting screenshot_key is on (default).
+/// F9: a picture of the app's own window and its note, in ~/Pictures/Maprisma,
+/// while the setting screenshot_key is on (default).
 final class WindowShots {
   WindowShots(this.folder);
   final String folder;
@@ -29,6 +29,13 @@ final class WindowShots {
     final path = pathFor(time);
     await File(path).writeAsBytes(png, flush: true);
     return path;
+  }
+
+  /// The note goes next to its picture, with the same name; no note, no file.
+  Future<void> note(String picture, String text) async {
+    if (text.trim().isEmpty) return;
+    final stem = picture.substring(0, picture.length - '.png'.length);
+    await File('$stem.txt').writeAsString('${text.trim()}\n', flush: true);
   }
 }
 

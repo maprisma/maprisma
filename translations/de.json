@@ -3250,5 +3250,6 @@
  "A picture of this window goes to Pictures/Maprisma. Not while a terminal is showing: programs there may use F9.": "Ein Bild dieses Fensters kommt nach Bilder/Maprisma (Pictures/Maprisma). Nicht, solange ein Terminal sichtbar ist: Programme dort können F9 selbst nutzen.",
  "Screenshot saved: {0}": "Screenshot gespeichert: {0}",
  "A picture of this window goes to Pictures/Maprisma. In a terminal, use the camera symbol below it: programs there may use F9.": "Ein Bild dieses Fensters kommt nach Bilder/Maprisma (Pictures/Maprisma). Im Terminal nutze das Kamerasymbol darunter: Programme dort können F9 selbst nutzen.",
- "Save a screenshot": "Screenshot speichern"
+ "Save a screenshot": "Screenshot speichern",
+ "What is wrong? (optional)": "Was stimmt nicht? (optional)"
 }

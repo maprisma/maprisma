@@ -23,6 +23,23 @@ void main() {
     },
   );
 
+  test('a note goes next to its picture; no note, no file', () async {
+    final home = Directory.systemTemp.createTempSync('shots-home');
+    addTearDown(() => home.deleteSync(recursive: true));
+    final shots = WindowShots('${home.path}/shots');
+    final picture = await shots.save(
+      Uint8List.fromList([1]),
+      DateTime(2026, 11, 1, 8, 26, 31),
+    );
+    await shots.note(picture, '  ');
+    expect(File(picture.replaceAll('.png', '.txt')).existsSync(), isFalse);
+    await shots.note(picture, ' The header is cut off ');
+    expect(
+      File(picture.replaceAll('.png', '.txt')).readAsStringSync(),
+      'The header is cut off\n',
+    );
+  });
+
   late Directory run;
   setUp(() => run = Directory.systemTemp.createTempSync('maprisma-shots-'));
   tearDown(() => run.deleteSync(recursive: true));
