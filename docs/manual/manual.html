@@ -257,12 +257,9 @@
 
   <h2 id="map">Working with the map</h2>
   <ul>
-    <li><b>Hover</b> a box to light it up together with everything it is joined to: their frames turn
-      the accent colour, the rest of the map dims. Otherwise every box has the same thin grey frame.</li>
-    <li><b>Click</b> a box to select it (✓); <kbd>Shift</kbd>+click adds more. The selected boxes and
-      everything joined to them keep the accent frame while the pointer is not over another box.
-      <kbd>Esc</kbd> or <b>Clear selection</b> clears it.</li>
-    <li>The <b>pin</b> at a box's top-right corner keeps its connections lit while you look elsewhere.</li>
+    <li><b>Hover</b> a box to light it up together with everything it is joined to: their frames turn the accent colour. Nothing fades.</li>
+    <li><b>Click</b> a box to select it; <kbd>Shift</kbd>+click adds more. A selected box has a stronger frame, everything joined to it stays lit, and all other boxes and lines fade. A second click on it, or a click on empty map, ends the selection.</li>
+    <li>The <b>pin</b> at a box's bottom right keeps the box and its lines lit, also while something else is selected.</li>
     <li><b>Right-click</b> a box for everything its card on Setup offers: start or stop, details,
       install, sign in, models, update, remove, and more.</li>
     <li><b>▶</b> on an agent's box starts it in a terminal in the window.</li>
@@ -718,8 +715,7 @@
 
   <h2 id="connect-llm">Agent ↔ local LLM</h2>
   <p>Drag from an agent to a local LLM, or back. Choose the model and whether the agent uses it right
-  away. To change a connection, select its agent (or click the line): every line that can be moved or removed shows an <b>orange hook</b> at its end. Drag the hook to another local LLM — or onto empty space to remove it; hovering a hook says what dragging it does. With an agent selected, clicking a model of a connected local
-  LLM makes that model the agent's model.</p>
+  away. To change a connection, select its agent (or click the line): every line that can be moved or removed shows an <b>orange hook</b> at its end. Drag the hook to another local LLM — or onto empty space to remove it; hovering a hook says what dragging it does. Draw a line from an agent to a model of a connected local LLM to make it the agent's model.</p>
   <p>Supported agents: Hermes, Pi, Oh My Pi, OpenCode, OpenClaw and DeepSeek Harness.</p>
 
   <h2 id="connect-mcp">Agent ↔ MCP server</h2>
