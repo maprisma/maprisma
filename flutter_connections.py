@@ -81,6 +81,20 @@ class Connections:
         result.update({'kind': params['kind'], 'command': command, 'item': params['item'], 'remove': params['remove']})
         return result
 
+    def forget_preview(self, params: dict) -> dict:
+        """A known server no agent uses leaves the list, with a preview and Undo."""
+        import mcp_library
+        if set(params) != {'name'} or not isinstance(params['name'], str):
+            raise ValueError('Invalid request')
+        name = params['name']
+        inv = inventory.collect(agents.list_agents())
+        if name not in mcp_library.load() or any(s.name == name and s.agents for s in inv.mcp):
+            raise ValueError('MCP server unavailable')
+        change = mcp_library.change(name, None)
+        result = self.keep(connect.Plan('', '', name, changes=[change]))
+        result.update({'kind': 'mcp', 'item': name, 'remove': True, 'focus': []})
+        return result
+
     def author_preview(self, params: dict) -> dict:
         """New definitions are data saved to adapter-owned files, never executed."""
         import os, re

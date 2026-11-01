@@ -86,6 +86,7 @@ const portedRoutes = {
   'map.smart_run',
   'map.smart_connect',
   'map.smart_plan',
+  'connections.forget_preview',
   'addons.list',
   'addons.set_enabled',
   'addons.catalog',
@@ -606,22 +607,27 @@ final class CoreService {
       final users = [
         for (final a in server['agents'] as List? ?? const []) '$a',
       ];
-      List<List<String>> rows(String command) {
-        final spec = mcp.spec(command);
-        final prof = spec == null ? mcp.profile(command) : null;
+      List<List<String>> rows(String? command) {
+        final spec = command == null ? null : mcp.spec(command);
+        final prof = spec == null && command != null
+            ? mcp.profile(command)
+            : null;
         final file = spec != null
             ? '${spec['path'] ?? ''}'
             : prof != null
             ? '${prof['file'] ?? ''}'
             : '';
         final out = [
-          [
-            tr('Settings file'),
-            config.tilde(mcp.expand(file)),
-            tr('Where this agent keeps the server.'),
-          ],
+          if (command != null)
+            [
+              tr('Settings file'),
+              config.tilde(mcp.expand(file)),
+              tr('Where this agent keeps the server.'),
+            ],
         ];
-        final entry = normalEntry(mcp.rawEntries(command)[name]);
+        final entry = normalEntry(
+          command == null ? mcp.library()[name] : mcp.rawEntries(command)[name],
+        );
         if (entry == null) {
           return [
             ...out,
@@ -694,6 +700,8 @@ final class CoreService {
         'sections': [
           for (final command in users)
             {'heading': names[command] ?? command, 'rows': rows(command)},
+          // Known, but no agent has it: what the app remembers.
+          if (users.isEmpty) {'heading': tr('Not set up'), 'rows': rows(null)},
         ],
         'missing': missing.isEmpty ? '' : notSet(missing),
         'missing_title': tr('Not set up'),
@@ -2042,6 +2050,7 @@ final class CoreService {
         entry = normalEntry(mcp.rawEntries(agent.command)[name]);
         if (entry != null) break;
       }
+      entry ??= normalEntry(mcp.library()[name]);
       if (entry == null) throw const FormatException('Server unavailable');
       return _askTools({'name': name, 'entry': entry}, 'mcp.tools');
     }
@@ -2934,7 +2943,13 @@ final class CoreService {
               return {
                 'agents': [
                   for (final a in installed)
-                    {'command': a.command, 'name': a.name},
+                    if (mcp.supported(a.command) ||
+                        skills.ownDir(a.command) != null)
+                      {
+                        'command': a.command,
+                        'name': a.name,
+                        'mcp': mcp.supported(a.command),
+                      },
                 ],
                 'mcp': {
                   for (final server in inventory.mcp)
@@ -3208,11 +3223,47 @@ final class CoreService {
     throw const FormatException('Invalid request');
   }
 
+  /// flutter_connections.forget_preview: a known server no agent uses leaves
+  /// the list, with a preview and Undo.
+  Map<String, dynamic> _forgetServer(Map<String, dynamic> params) {
+    final name = params['name'];
+    if (params.length != 1 || name is! String) {
+      throw const FormatException('Invalid request');
+    }
+    final servers = mcp.library();
+    final used = reads.inventory
+        .collect(reads.catalog.scan(), remember: false)
+        .mcp
+        .where((s) => s['name'] == name)
+        .any((s) => (s['agents'] as List).isNotEmpty);
+    if (!servers.containsKey(name) || used) {
+      throw const FormatException('MCP server unavailable');
+    }
+    final keys = (servers.keys.toList()..remove(name))..sort(pyCompare);
+    final plan = Plan('', '', name);
+    plan.changes.add(
+      Change(
+        mcp.libraryFile,
+        config.read(mcp.libraryFile),
+        '${pyJsonDumps({
+          'servers': {for (final k in keys) k: servers[k]},
+        }, indent: 2, ensureAscii: false)}\n',
+      ),
+    );
+    return {
+      ...connections.keep(plan),
+      'kind': 'mcp',
+      'item': name,
+      'remove': true,
+      'focus': <String>[],
+    };
+  }
+
   /// graph.skill_way: why an agent keeps a folder, or '' when it can leave.
   String _skillWay(String command, String path) {
     final folder = skills.expand(path);
     final (through, listed, links) = skills.reach(command, folder);
-    if (listed || links.isNotEmpty) return '';
+    if (listed || links.isNotEmpty || through.isEmpty) return '';
     final other = [
       for (final d in through)
         if (skills.real(d) != skills.real(folder)) d,
@@ -3232,7 +3283,8 @@ final class CoreService {
       final command = pair['agent'] as String;
       if (pair['skill'] case final String folder) {
         if (!inventory.skillSets.any((s) => s['path'] == folder) ||
-            skills.ownDir(command) == null) {
+            skills.ownDir(command) == null ||
+            !catalog.any((a) => a.command == command && a.installed)) {
           throw const FormatException('Skill folder unavailable');
         }
         builders.add(() => skills.plan(command, folder, remove: true));
@@ -4126,6 +4178,7 @@ final class CoreService {
     if (method == 'connections.repair_preview') {
       return edits.repairPreview(params, preview);
     }
+    if (method == 'connections.forget_preview') return _forgetServer(params);
     if (method == 'connections.author_preview') {
       return edits.authorPreview(params, reads.catalog.scan());
     }

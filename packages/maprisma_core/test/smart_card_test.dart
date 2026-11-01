@@ -390,6 +390,23 @@ void main() {
       );
     });
 
+    test('an agent without MCP is left out of what needs MCP', () async {
+      final result = await smartMcp(
+        {
+          ...facts,
+          'agents': [
+            {'command': 'claude', 'name': 'Claude Code', 'mcp': true},
+            {'command': 'aider', 'name': 'Aider', 'mcp': false},
+          ],
+        },
+        answers([
+          '{"action": "connect", "server": "pdfcraft", "agents": ["aider"]}',
+        ], []),
+        (_) async => [],
+      );
+      expect(result['status'], 'redirect');
+    });
+
     test('several servers are one candidate, one change for all', () async {
       final many = {
         ...facts,
@@ -1063,6 +1080,16 @@ void main() {
       'remove': false,
     });
     expect(plan['empty'], isFalse);
+    final details = core.dispatch('details.mcp', {'name': 'kept'});
+    expect(jsonEncode(details['sections']), contains('kept-cli'));
+    final forget = core.dispatch('connections.forget_preview', {
+      'name': 'kept',
+    });
+    expect(forget['empty'], isFalse);
+    expect(
+      () => core.dispatch('connections.forget_preview', {'name': 'none'}),
+      throwsFormatException,
+    );
   });
 
   test('the routes refuse what is not theirs', () {

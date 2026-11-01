@@ -381,6 +381,8 @@ class Service:
             if set(params) - {'command'} or ('command' in params and not isinstance(params['command'], str)):
                 raise ValueError("Unexpected connection parameters")
             return self.connections.snapshot()
+        if method == 'connections.forget_preview':
+            return self.connections.forget_preview(params)
         if method == 'connections.author_preview':
             result = self.connections.author_preview(params)
             anchors = []

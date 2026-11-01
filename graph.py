@@ -144,13 +144,28 @@ class Graph:
         return [n for n in self.nodes if n.column == index]
 
 
+_ways = {}
+_ways_of = None
+
+
+def cached_skill_way(inventory, command: str, path: str) -> str:
+    """Reading folders per line is for a new inventory, not each scan."""
+    global _ways_of
+    if inventory is not _ways_of:
+        _ways_of = inventory
+        _ways.clear()
+    if (command, path) not in _ways:
+        _ways[command, path] = skill_way(command, path)
+    return _ways[command, path]
+
+
 def skill_way(command: str, path: str) -> str:
     """Why an agent keeps a skill folder that nothing here can take away, or ""."""
     import connect
     import skills_ctl
     folder = skills_ctl.expand(path)
     reach = skills_ctl.reach(command, folder)
-    if reach.listed or reach.links:
+    if reach.listed or reach.links or not reach.native:
         return ""
     other = [d for d in reach.native if skills_ctl._real(d) != skills_ctl._real(folder)]
     if other:
@@ -333,7 +348,7 @@ def build(agent_list, details: dict, inventory, labels: dict | None = None, fail
             graph.link(aid, sid, "skills")
             for edge in graph.edges:
                 if edge.source == aid and edge.target == sid:
-                    edge.fixed = skill_way(agent.command, path)
+                    edge.fixed = cached_skill_way(inventory, agent.command, path)
 
     for kind, ident, label, detail in available:
         if kind in ("mcp", "skills"):

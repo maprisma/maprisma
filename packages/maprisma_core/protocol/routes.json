@@ -469,6 +469,18 @@
    },
    "source": "observed"
   },
+  "connections.forget_preview": {
+   "area": "connections",
+   "kind": "preview",
+   "note": "A known server no agent uses leaves mcp-servers.json; applied through connections.apply, with Undo.",
+   "params": {
+    "name": "string"
+   },
+   "result": {
+    "plan": "string"
+   },
+   "source": "manual"
+  },
   "connections.move_preview": {
    "area": "connections",
    "kind": "preview",
@@ -1053,7 +1065,7 @@
   "map.snapshot": {
    "area": "map",
    "kind": "read",
-   "note": "",
+   "note": "nodes: dim marks a known server without agents. edges: fixed says why a line cannot be taken away here.",
    "optional": [
     "force",
     "poll"
@@ -1062,8 +1074,16 @@
     "force": "?",
     "poll": "?"
    },
-   "result": null,
-   "source": null
+   "result": {
+    "nodes": [
+     "object"
+    ],
+    "edges": [
+     "object"
+    ],
+    "pending": "bool"
+   },
+   "source": "manual"
   },
   "map.usage": {
    "area": "map",

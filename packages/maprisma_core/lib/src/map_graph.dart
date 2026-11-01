@@ -42,6 +42,8 @@ final class MapGraph {
 
   /// Why an agent keeps a skill folder that nothing here can take away.
   String Function(String command, String path)? skillWay;
+  Object? _waysOf;
+  final _ways = <String, String>{};
   final ScanFiles files;
   final ServiceI18n i18n;
   final nodes = <Map<String, dynamic>>[], edges = <Map<String, dynamic>>[];
@@ -451,11 +453,19 @@ final class MapGraph {
               .plural('1 skill', '{0} skills', count)
               .replaceAll('{0}', '$count'),
         );
+        // Reading folders per line is for a new inventory, not each scan.
+        if (!identical(inv, _waysOf)) {
+          _waysOf = inv;
+          _ways.clear();
+        }
         link(
           aid,
           id,
           'skills',
-          fixed: skillWay?.call(agent.command, path) ?? '',
+          fixed: _ways.putIfAbsent(
+            '${agent.command}\n$path',
+            () => skillWay?.call(agent.command, path) ?? '',
+          ),
         );
       }
     }

@@ -459,6 +459,13 @@ Future<Map<String, dynamic>> smartMcp(
       },
     };
   }
+  // Only skills reach an agent without MCP.
+  if (action != 'disconnect') {
+    first['agents'] = [
+      for (final c in first['agents'] as List)
+        if (!agents.any((a) => a['command'] == c && a['mcp'] == false)) c,
+    ];
+  }
   if (action == 'disconnect') {
     // One candidate, so one preview, one backup and one Undo for all of it.
     final pairs = [
