@@ -30,6 +30,7 @@ const uiSettings = {
   'warn_yellow',
   'warn_red',
   'terminal_tabs',
+  'screenshot_key',
   'usage_box',
   'usage_box_items',
   'usage_box_size',
