@@ -3204,9 +3204,7 @@ final class CoreService {
     final builders = <Plan Function()>[];
     for (final pair in pairs) {
       final command = pair['agent'] as String, item = pair['server'] as String;
-      final server = inventory.mcp
-          .where((s) => s['name'] == item)
-          .firstOrNull;
+      final server = inventory.mcp.where((s) => s['name'] == item).firstOrNull;
       if (server == null ||
           !mcp.supported(command) ||
           !catalog.any((a) => a.command == command && a.installed)) {
