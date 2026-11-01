@@ -724,6 +724,20 @@ void main() {
       find.byWidgetPredicate((w) => w is Opacity && w.opacity < 1),
       findsWidgets,
     );
+    // A second click ends it, and a pin keeps its light.
+    await tester.tap(find.text('agent:b'));
+    await tester.pumpAndSettle();
+    expect(
+      find.byWidgetPredicate((w) => w is Opacity && w.opacity < 1),
+      findsNothing,
+    );
+    await tester.tap(find.text('agent:b'));
+    await tester.pumpAndSettle();
+    expect(
+      find.byWidgetPredicate((w) => w is Opacity && w.opacity < 1),
+      findsWidgets,
+    );
+
     // A click on empty map ends the selection.
     final board = tester.getTopLeft(find.byType(InteractiveViewer));
     await tester.tapAt(board + const Offset(6, 600));

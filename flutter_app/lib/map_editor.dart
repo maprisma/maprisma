@@ -505,6 +505,11 @@ class _MapEditorState extends State<MapEditor>
     }
     final shift = HardwareKeyboard.instance.isShiftPressed;
     _renderChange(() {
+      // A second click on the only selected box ends the selection.
+      if (!shift && _selected.length == 1 && _selected.contains(id)) {
+        _selected.clear();
+        return;
+      }
       if (!shift) _selected.clear();
       if (widget.graph['nodes'] != null &&
           _layout!.nodes[id]?['kind'] == 'agent') {
