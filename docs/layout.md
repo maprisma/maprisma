@@ -78,18 +78,14 @@ kit one by one.
 ## Flutter task cards
 
 `flutter_app/lib/task_card.dart` provides `TaskCardSpec`, `TaskHost` and the review
-frame. A half card shows the task map on the left and a card at least 460 logical
-pixels wide on the right. Below 900 logical pixels, or without known focus nodes,
-it becomes full width. Catalogs, model browsing and the guide are full cards.
-The frame follows `surfaceContainer`, outline colours and a 12-pixel radius.
+frame. Every `_card` shows in `OverlayWindow`, centred over the dimmed page, like
+the terminal and Ask AI; hosted pages fill the area. Edges and corners in the rim
+around the window drag its size, a double click restores it, and the size holds
+until the app closes. The frame follows `surfaceContainer`, outline colours and a
+12-pixel radius.
 
-The service supplies `focus` anchors from its last bounded graph; resolving them
-does not scan. `task_focus.dart` includes only seeds and direct neighbours, drops
-empty columns and renumbers the survivors without mutating graph facts.
-`AgentMap(readOnly: true)` uses scale-down fitting, no interactive viewer, groups,
-taps, menus or drag/drop. Static primary-colour curves lead from anchor nodes to
-the card's midpoint dot. The main map is absent behind cards; its transform,
-focus and category remain in application state.
+A window is modal: the page behind it has no keyboard, and the header buttons and
+the app's keys wait. Only a window's own content can open another one.
 
 One active `_card` spec owns review → worker progress → result. Underlying guide,
 provider and connection routes use one retained `_view` route rather than three
@@ -98,7 +94,7 @@ closable cards. Running tasks and Undo retain the window-close guard. Task bodie
 use a GlobalKey while polling so focus arrival and responsive layout changes
 cannot relaunch work. Model browser state remains mounted behind progress; the
 System Map retains its state but returns an empty widget while suspended, so its
-map is not laid out. No main-map animation runs behind a full card.
+map is not laid out.
 
 
 ### Task-card review corrections (2026-10-28)
@@ -106,17 +102,17 @@ map is not laid out. No main-map animation runs behind a full card.
 Hosted views omit their own heading and Back/Close controls; the outer card owns
 these. Refresh and Undo stay available as secondary actions. ModelBrowser fills
 the host, and the provider overview is explicitly full width (per-runtime actions
-retain their half-card focus).
+open in the window).
 
-Only a mutating task with a visible half task map forces a completion graph scan,
-owned by the runner. Data-only search/file/catalog operations do not refresh the
-inventory or graph. Idle result cards and model browsing resume the existing
+A mutating task scans at once when the map is on screen; otherwise it sets
+`_mapStale`, and one scan runs when the map is back and nothing is busy. Data-only
+search/file/catalog operations do not refresh the inventory or graph. Idle result cards and model browsing resume the existing
 interval-based metadata updates, without forcing scans. Reviews and running work
 still pause those updates. Closable results allow header navigation.
 
-`RetainedTaskView` offstages view contents under a review/progress card, excludes
-focus and disables tickers. It never keeps the main AI map mounted. View bodies
-have stable keys through half/full layout changes; connection search uses an
+`RetainedTaskView` keeps a page visible under a window without its keyboard, and
+offstages it with tickers off under the model browser. It never keeps the main AI map mounted. View bodies
+have stable keys; connection search uses an
 owned controller and keyed item cards so adding Undo does not reset input or
 expansion. A post-install catalog reload refreshes its handles after success or
 failure while preserving the task result.

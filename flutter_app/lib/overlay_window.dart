@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 /// The centred window over the dimmed map: terminal, Ask AI and every action.
@@ -7,7 +8,7 @@ class OverlayWindow extends StatefulWidget {
   const OverlayWindow({super.key, required this.child});
   final Widget child;
 
-  static Size? _chosen;
+  static double? _wide, _high;
   static const _minimum = Size(420, 300);
 
   @override
@@ -15,21 +16,38 @@ class OverlayWindow extends StatefulWidget {
 }
 
 class _OverlayWindowState extends State<OverlayWindow> {
+  // The handles sit in this rim around the card, never over its buttons.
+  static const _rim = 8.0;
+
   // The window stays centred, so an edge moves half of what the size changes.
   void _drag(Size area, Size shown, Offset delta, int x, int y) {
-    final wide = (shown.width + 2 * delta.dx * x).clamp(
-      OverlayWindow._minimum.width,
-      area.width,
-    );
-    final high = (shown.height + 2 * delta.dy * y).clamp(
-      OverlayWindow._minimum.height,
-      area.height,
-    );
-    setState(() => OverlayWindow._chosen = Size(wide, high));
+    double fit(double wanted, double least, double most) =>
+        wanted.clamp(math.min(least, most), most);
+    setState(() {
+      if (x != 0) {
+        OverlayWindow._wide = fit(
+          shown.width + 2 * delta.dx * x,
+          OverlayWindow._minimum.width,
+          area.width,
+        );
+      }
+      if (y != 0) {
+        OverlayWindow._high = fit(
+          shown.height + 2 * delta.dy * y,
+          OverlayWindow._minimum.height,
+          area.height,
+        );
+      }
+    });
   }
 
+  void _reset() => setState(() {
+    OverlayWindow._wide = null;
+    OverlayWindow._high = null;
+  });
+
   Widget _handle(Size area, Size shown, int x, int y) {
-    const grip = 8.0, corner = 18.0;
+    const grip = _rim, corner = _rim;
     final cursor = x == 0
         ? SystemMouseCursors.resizeUpDown
         : y == 0
@@ -50,7 +68,7 @@ class _OverlayWindowState extends State<OverlayWindow> {
           key: ValueKey('overlay-edge-$x-$y'),
           behavior: HitTestBehavior.opaque,
           onPanUpdate: (d) => _drag(area, shown, d.delta, x, y),
-          onDoubleTap: () => setState(() => OverlayWindow._chosen = null),
+          onDoubleTap: _reset,
         ),
       ),
     );
@@ -64,10 +82,9 @@ class _OverlayWindowState extends State<OverlayWindow> {
       LayoutBuilder(
         builder: (context, area) {
           final room = area.biggest;
-          final chosen = OverlayWindow._chosen;
           final shown = Size(
-            (chosen?.width ?? room.width * .8).clamp(0, room.width),
-            (chosen?.height ?? room.height * .85).clamp(0, room.height),
+            math.min(OverlayWindow._wide ?? room.width * .8, room.width),
+            math.min(OverlayWindow._high ?? room.height * .85, room.height),
           );
           return Center(
             child: SizedBox.fromSize(
@@ -76,7 +93,7 @@ class _OverlayWindowState extends State<OverlayWindow> {
                 fit: StackFit.expand,
                 children: [
                   Card(
-                    margin: const EdgeInsets.all(4),
+                    margin: const EdgeInsets.all(_rim),
                     clipBehavior: Clip.antiAlias,
                     elevation: 8,
                     child: FocusScope(child: widget.child),

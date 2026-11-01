@@ -248,10 +248,44 @@ void main() {
   ) async {
     final dir = await mountApp(tester);
     await openFromHelp(tester, 'Providers and models');
-    final before = forcedScans(dir);
+    var before = forcedScans(dir);
     await tester.tap(find.text('Back').last);
     await settleService(tester);
-    expect(forcedScans(dir), greaterThan(before));
+    expect(forcedScans(dir), before, reason: 'nothing changed');
+
+    await openFromHelp(tester, 'Providers and models');
+    await tester.tap(find.text('Models (1)'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Load'));
+    await settleService(tester);
+    before = forcedScans(dir);
+    await tester.tap(find.widgetWithText(TextButton, 'Close'));
+    await settleService(tester);
+    expect(forcedScans(dir), before, reason: 'still on the page');
+    await tester.tap(find.text('Back').last);
+    await settleService(tester);
+    expect(forcedScans(dir), before + 1);
+    await unmountApp(tester);
+  });
+
+  testWidgets('a window blocks the header; Esc leads out of it', (
+    tester,
+  ) async {
+    await mountApp(tester);
+    await tester.tap(find.byKey(const ValueKey('help-open')));
+    await settleService(tester);
+    expect(find.byType(OverlayWindow), findsOneWidget);
+    expect(
+      tester
+          .widget<IconButton>(find.byKey(const ValueKey('problems-open')))
+          .onPressed,
+      isNull,
+    );
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.f5);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.f5);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await settleService(tester);
+    expect(find.byType(OverlayWindow), findsNothing);
     await unmountApp(tester);
   });
 
@@ -363,7 +397,8 @@ void main() {
         tester
             .widget<IconButton>(find.widgetWithIcon(IconButton, Icons.refresh))
             .onPressed,
-        isNotNull,
+        isNull,
+        reason: 'the result window is modal',
       );
       final liveBefore = requests(
         dir,
@@ -1222,6 +1257,8 @@ void main() {
     );
     await settleService(tester);
     expect(find.text('Add-ons updated: Catalog adapter'), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await settleService(tester);
     await tester.tap(find.byKey(const ValueKey('problems-open')));
     await settleService(tester);
     await tester.tap(find.widgetWithText(OutlinedButton, 'Get add-ons'));

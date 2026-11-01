@@ -70,7 +70,6 @@ void main() {
                 spec: TaskCardSpec(
                   title: entry.key,
                   child: entry.value,
-                  width: TaskCardWidth.full,
                 ),
                 tr: (s) => s,
                 onClose: () {},
@@ -104,7 +103,6 @@ void main() {
             body: TaskHost(
               spec: TaskCardSpec(
                 title: 'Download model · Fixture',
-                width: TaskCardWidth.full,
                 child: ModelBrowser(
                   hosted: true,
                   runtime: const {

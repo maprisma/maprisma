@@ -40,7 +40,6 @@ for line in sys.stdin:
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
-      Set<String> focus = {};
       Map<String, dynamic>? result;
       late TaskProgress progress;
       final taskKey = GlobalKey();
@@ -56,13 +55,11 @@ for line in sys.stdin:
                   params: const {'key': 'test'},
                   title: 'Load',
                   tr: (s) => s,
-                  onFocus: (ids) => setState(() => focus = ids),
                   onComplete: (value) => setState(() => result = value),
                 );
                 return TaskHost(
                   spec: TaskCardSpec(
                     title: 'Load',
-                    focus: focus,
                     closable: result != null,
                     child: result == null
                         ? progress

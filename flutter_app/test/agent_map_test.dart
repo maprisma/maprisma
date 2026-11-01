@@ -94,61 +94,6 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('read-only maps ignore interaction callbacks and paint anchors', (
-    tester,
-  ) async {
-    var callbacks = 0;
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: AgentMap(
-            readOnly: true,
-            anchors: const {'runtime:test'},
-            columns: const ['Providers'],
-            graph: {
-              'nodes': [
-                {
-                  'id': 'runtime:test',
-                  'column': 0,
-                  'kind': 'runtime',
-                  'label': 'Read only',
-                  'detail': '',
-                  'status': '',
-                },
-              ],
-              'edges': [],
-            },
-            onAgent: (_) => callbacks++,
-            onNode: (_) => callbacks++,
-            onNodeMenu: (_, _) => callbacks++,
-            onViewChanged: () => callbacks++,
-            tr: (s) => s,
-          ),
-        ),
-      ),
-    );
-    expect(find.byType(InteractiveViewer), findsNothing);
-    expect(
-      find.byWidgetPredicate(
-        (w) => w is SizedBox && w.width == 310 && w.height == 276,
-      ),
-      findsOneWidget,
-    );
-    expect(find.byType(LongPressDraggable<Map<String, dynamic>>), findsNothing);
-    expect(find.byType(DragTarget<Map<String, dynamic>>), findsNothing);
-    expect(find.byTooltip('Actions'), findsNothing);
-    await tester.tap(find.text('Read only'));
-    await tester.tap(find.text('Read only'), buttons: 2);
-    await tester.drag(find.text('Read only'), const Offset(40, 20));
-    expect(callbacks, 0);
-    final paint = tester
-        .widgetList<CustomPaint>(find.byType(CustomPaint))
-        .firstWhere((w) => w.painter.runtimeType.toString() == '_Connections');
-    // Exercise the actual anchor painter as well as its repaint contract.
-    expect(paint.painter, isNotNull);
-    expect(tester.takeException(), isNull);
-  });
-
   testWidgets('Empty maps remain navigable without invented nodes', (
     tester,
   ) async {

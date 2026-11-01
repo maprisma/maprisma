@@ -3,20 +3,14 @@ import 'package:flutter/services.dart';
 import 'app_theme.dart' show corners;
 import 'overlay_window.dart';
 
-enum TaskCardWidth { half, full }
-
 class TaskCardSpec {
   const TaskCardSpec({
     required this.title,
     required this.child,
-    this.width = TaskCardWidth.half,
-    this.focus = const {},
     this.closable = true,
   });
   final String title;
   final Widget child;
-  final TaskCardWidth width;
-  final Set<String> focus;
   final bool closable;
 }
 

@@ -9,8 +9,6 @@ void main() {
     WidgetTester tester, {
     double width = 1200,
     bool closable = true,
-    TaskCardWidth mode = TaskCardWidth.half,
-    Set<String> focus = const {'agent:test'},
     VoidCallback? close,
     Widget child = const Text('Review contents'),
     bool overlay = false,
@@ -26,8 +24,6 @@ void main() {
             spec: TaskCardSpec(
               title: 'Task',
               child: child,
-              focus: focus,
-              width: mode,
               closable: closable,
             ),
             tr: (s) => s,
@@ -47,7 +43,7 @@ void main() {
     expect(find.byKey(const ValueKey('overlay-task')), findsOneWidget);
     expect(find.byType(OverlayWindow), findsOneWidget);
     expect(find.text('Review contents'), findsOneWidget);
-    await mount(tester, mode: TaskCardWidth.full);
+    await mount(tester);
     expect(find.byKey(const ValueKey('full-task')), findsOneWidget);
     expect(find.byType(OverlayWindow), findsNothing);
     expect(tester.takeException(), isNull);
@@ -77,12 +73,31 @@ void main() {
     await drag('overlay-edge-1-1', const Offset(-5000, -5000));
     expect(tester.getSize(card).width, lessThan(430));
     expect(tester.getSize(card).height, lessThan(310));
+    // A smaller app than the smallest window: no error, nothing stuck.
+    tester.view.physicalSize = const Size(300, 200);
+    await tester.pumpAndSettle();
+    await drag('overlay-edge-1-0', const Offset(30, 0));
+    await drag('overlay-edge-0-1', const Offset(0, 30));
+    expect(tester.takeException(), isNull);
+    tester.view.physicalSize = const Size(1200, 800);
+    await tester.pumpAndSettle();
     final edge = find.byKey(const ValueKey('overlay-edge-1-0'));
     await tester.tap(edge);
     await tester.pump(const Duration(milliseconds: 50));
     await tester.tap(edge);
     await tester.pumpAndSettle();
     expect(tester.getSize(card), start);
+
+    // One edge sizes one way: the other still follows the app's window.
+    await drag('overlay-edge-0-1', const Offset(0, 40));
+    tester.view.physicalSize = const Size(1000, 800);
+    await tester.pumpAndSettle();
+    expect(tester.getSize(card).width, 1000 * .8 - 16);
+    final corner = find.byKey(const ValueKey('overlay-edge-1-0'));
+    await tester.tap(corner);
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.tap(corner);
+    await tester.pumpAndSettle();
   });
 
   testWidgets('running card cannot close via Back or Esc; result can', (

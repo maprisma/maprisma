@@ -325,7 +325,8 @@ class _MapEditorState extends State<MapEditor>
 
   /// The clicked line, whose hook shows without a selected box.
   String? _clickedLine;
-  String _lineKey(Map edge) => '${edge['source']}>${edge['target']}';
+  String _lineKey(Map edge) =>
+      '${edge['kind']}:${edge['source']}>${edge['target']}';
   late Map<String, dynamic> _saved;
   MapLayout? _layout;
   String? _source, _hover, _draggingCard;
@@ -475,6 +476,8 @@ class _MapEditorState extends State<MapEditor>
     bool pointer = false,
   }) {
     _renderChange(() {
+      // The hook being dragged stays; any other drawing ends the click.
+      if (edge == null || _lineKey(edge) != _clickedLine) _clickedLine = null;
       _pointerDrawing = pointer;
       _source = source;
       _moving = edge;
@@ -1251,9 +1254,11 @@ class _MapEditorState extends State<MapEditor>
                                           } else {
                                             _renderChange(() {
                                               _selected.clear();
-                                              _clickedLine = line == null
-                                                  ? null
-                                                  : _lineKey(line.edge);
+                                              _clickedLine =
+                                                  line != null &&
+                                                      layout.movable(line.edge)
+                                                  ? _lineKey(line.edge)
+                                                  : null;
                                             });
                                           }
                                         },

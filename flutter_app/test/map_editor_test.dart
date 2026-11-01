@@ -654,6 +654,19 @@ void main() {
     await tester.tapAt(onLine + const Offset(0, 300));
     await tester.pumpAndSettle();
     expect(hooks, findsNothing);
+
+    // Drawing from a box ends the click; the line's own hook can be dragged.
+    await tester.tapAt(onLine);
+    await tester.pumpAndSettle();
+    final edits = find.text('agent:a');
+    final gesture = await tester.startGesture(tester.getCenter(edits));
+    await gesture.moveBy(const Offset(40, 0));
+    await tester.pump();
+    await gesture.moveBy(const Offset(40, 0));
+    await tester.pump();
+    expect(hooks, findsNothing);
+    await gesture.up();
+    await tester.pumpAndSettle();
   });
   testWidgets(
     'selected line hook removes on empty and Escape cancels keyboard move',
