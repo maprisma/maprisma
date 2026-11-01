@@ -41,6 +41,7 @@ import 'performance_view.dart';
 import 'interrupted_jobs.dart';
 import 'found_on_pc_view.dart';
 import 'help_view.dart';
+import 'overlay_window.dart';
 import 'item_details_view.dart';
 import 'map_layout.dart' show withAgentLinks;
 import 'map_editor.dart' show mapColumnLayers;
@@ -4502,47 +4503,30 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                         if (_visibleTerminal != null &&
                             _card == null &&
                             _browser == null)
-                          Stack(
+                          OverlayWindow(
                             key: const ValueKey('terminal-overlay'),
-                            fit: StackFit.expand,
-                            children: [
-                              const ModalBarrier(
-                                color: Colors.black54,
-                                dismissible: false,
-                              ),
-                              Center(
-                                child: FractionallySizedBox(
-                                  widthFactor: 0.8,
-                                  heightFactor: 0.85,
-                                  child: Card(
-                                    clipBehavior: Clip.antiAlias,
-                                    elevation: 8,
-                                    child: AgentTerminalView(
-                                      session: _visibleTerminal!,
-                                      keys: _terminalKeys,
-                                      tr: tr,
-                                      onBack: () {
-                                        final fromGuide = _guideTerminals
-                                            .remove(_visibleTerminal);
-                                        setState(() => _visibleTerminal = null);
-                                        if (fromGuide) {
-                                          _guideReturn = true;
-                                          _backToGuideIfFromIt();
-                                        }
-                                      },
-                                      onStop: () =>
-                                          _stopTerminal(_visibleTerminal!),
-                                      onScreenshot:
-                                          (_snapshot?['settings']
-                                                  as Map?)?['screenshot_key'] ==
-                                              false
-                                          ? null
-                                          : _takeShot,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
+                            child: AgentTerminalView(
+                              session: _visibleTerminal!,
+                              keys: _terminalKeys,
+                              tr: tr,
+                              onBack: () {
+                                final fromGuide = _guideTerminals.remove(
+                                  _visibleTerminal,
+                                );
+                                setState(() => _visibleTerminal = null);
+                                if (fromGuide) {
+                                  _guideReturn = true;
+                                  _backToGuideIfFromIt();
+                                }
+                              },
+                              onStop: () => _stopTerminal(_visibleTerminal!),
+                              onScreenshot:
+                                  (_snapshot?['settings']
+                                          as Map?)?['screenshot_key'] ==
+                                      false
+                                  ? null
+                                  : _takeShot,
+                            ),
                           ),
                       ],
                     );

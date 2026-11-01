@@ -1177,7 +1177,8 @@ void main() {
     await check(); // the header and the map
     await tester.tap(find.byKey(const ValueKey('problems-open')));
     await settleService(tester);
-    await check(); // the status card
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape); // the status window
+    await settleService(tester);
     await tester.tap(find.byTooltip('Settings').first);
     await settleService(tester);
     await check(); // Settings
@@ -1703,6 +1704,8 @@ void main() {
         await tester.tap(find.byKey(ValueKey('smart-status-$col')));
         await settleService(tester);
         expect(find.text(expected), findsOneWidget);
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        await settleService(tester);
       }
       expect(tester.takeException(), isNull);
       await unmountApp(tester);
