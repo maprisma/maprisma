@@ -1448,8 +1448,10 @@ class _MapEditorState extends State<MapEditor>
                                         layout,
                                         lit,
                                         dimmed:
-                                            dimming && !lit.contains(id) ||
-                                            layout.nodes[id]?['dim'] == true,
+                                            !lit.contains(id) &&
+                                            (dimming ||
+                                                layout.nodes[id]?['dim'] ==
+                                                    true),
                                       ),
                                   ],
                                 ),

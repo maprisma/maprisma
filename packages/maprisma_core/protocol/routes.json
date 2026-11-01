@@ -477,7 +477,24 @@
     "name": "string"
    },
    "result": {
-    "plan": "string"
+    "contexts": [],
+    "empty": "bool",
+    "files": [
+     {
+      "added": "int",
+      "path": "string",
+      "removed": "int"
+     }
+    ],
+    "focus": [
+     "string"
+    ],
+    "item": "string",
+    "kind": "string",
+    "links_add": [],
+    "links_remove": [],
+    "plan": "string",
+    "remove": "bool"
    },
    "source": "manual"
   },

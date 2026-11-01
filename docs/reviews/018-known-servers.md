@@ -87,3 +87,39 @@
 11. Fixed in 957a028.
 12. Fixed: `map.snapshot` has its shape, `docs/protocol.md` and the client regenerated.
 13. Fixed: the case "reads by itself" is in, German, Spanish and Italian use the paragraph's address. The same sentence now names Remove.
+
+## Round 2 (Antigravity, 2026-11-01, commit a3f5436)
+
+1. **`flutter_app/lib/map_editor.dart:1449-1453` (`flutter_app/lib/agent_map.dart:273-287`) — A faded (`dim: true`) box stays at 30% opacity even when selected, hovered, or pinned**
+   - **What goes wrong:** In `MapEditor._buildEditor` (`map_editor.dart:1450-1452`), `dimmed` is passed to `_node` as:
+     ```dart
+     dimmed:
+         dimming && !lit.contains(id) ||
+         layout.nodes[id]?['dim'] == true,
+     ```
+     Because `layout.nodes[id]?['dim'] == true` is combined with `||` and ignores `lit.contains(id)` (which covers `_selected`, `_hover`, and `pinned` at `map_editor.dart:1137-1142`), a known MCP server without agents (or a `+N more` box) stays at `opacity: 0.3` (`map_editor.dart:687`) even when the user selects it, hovers over it, or pins it (`Pin keeps a box highlighted`). Moreover, `AgentMap` (`flutter_app/lib/agent_map.dart:273-287`, used in the keyboard/non-canvas map view) still never reads `node['dim'] == true`, so known servers without agents appear at full opacity there.
+   - **How to reproduce:** Disconnect all agents from an MCP server so its box is faded (`dim: true`). Click the server box to select it, hover over it, or click its pin icon (`Pin`): the box remains at 30% opacity instead of lighting up.
+
+2. **`packages/maprisma_core/lib/src/map_graph.dart:457-468`, `packages/maprisma_core/lib/src/read_service.dart:330-356` (`graph.py:147-156`, `flutter_backend.py:774-795`) — `_ways` / `_ways` cache for `edge.fixed` is keyed only by `identical(inv, _waysOf)` and is not invalidated when `language` changes**
+   - **What goes wrong:** `MapGraph` (`map_graph.dart:457-460`) and `graph.cached_skill_way` (`graph.py:147-156`) clear `_ways` only when `!identical(inv, _waysOf)` (`inventory is not _ways_of`). However, `_skillWay` (`core.dart:3272-3273`) and `skill_way` (`graph.py:165-166`) return a localized string (`i18n.text('reads the folder by itself')` or `'${i18n.text('through a folder it reads')}: ...'`).
+     - In `flutter_backend.py:774`, `build_map(cache, targets)` reuses `cache['inventory']` whenever `'inventory'` is not in `targets` (for example when `map_scan_targets` does not include `'inventory'`).
+     - In `ReadService.buildMap` (`read_service.dart:330-335`), any non-forced scan whose `targets` does not include `'inventory'` or `'agents'` reuses the same `_inventory` instance.
+     - If `buildMap` / `graph.build` is called with the same `InventorySnapshot` / `Inventory` object after `language` changes, `identical(inv, _waysOf)` is `true` and `_ways` returns the cached `fixed` string from the previous language.
+   - **How to reproduce:** Have an inventory snapshot cached across a language change when `buildMap` runs without `'inventory'` in `targets` (or call `graph.build` with the same `inv` after switching `language`): `edge['fixed']` keeps the old language's string from `_ways`.
+
+3. **`docs/manual/manual.es.html:1043`, `docs/manual/manual.fr.html:1052` (`flutter_app/assets/translations/es.json:463`, `flutter_app/assets/translations/fr.json:463`) — `#flutter-map-editor` in Spanish and French names the wrong menu item for `Remove`**
+   - **What goes wrong:** In `MapEditor` (`flutter_app/lib/map_editor.dart:856`), the menu item is `widget.tr('Remove')`.
+     - In Spanish (`flutter_app/assets/translations/es.json:463` and `translations/es.json:712`), `"Remove"` is translated as `"Quitar"`, not `"Eliminar"`, but `docs/manual/manual.es.html:1043` says *"o quítalo con Eliminar en su menú"*.
+     - In French (`flutter_app/assets/translations/fr.json:463` and `translations/fr.json:712`), `"Remove"` is translated as `"Retirer"`, not `"Supprimer"`, but `docs/manual/manual.fr.html:1052` says *"ou oubliez-le avec Supprimer dans son menu"*.
+   - **How to reproduce:** Switch the app language to Spanish or French, open the menu on a faded MCP server box on the map, and compare the menu item (`Quitar` / `Retirer`) with `#flutter-map-editor` in `docs/manual/manual.es.html:1043` (`Eliminar`) and `docs/manual/manual.fr.html:1052` (`Supprimer`).
+
+4. **`packages/maprisma_core/protocol/routes.json:472-483` (`docs/protocol.md:80`) — `connections.forget_preview` result shape in `routes.json` lists only `plan` and omits the 9 other returned fields**
+   - **What goes wrong:** `_forgetServer` (`packages/maprisma_core/lib/src/core.dart:3253-3259`) and `Connections.forget_preview` (`flutter_connections.py:94-96`) return `{...connections.keep(plan), 'kind': 'mcp', 'item': name, 'remove': true, 'focus': <String>[]}`, which has the keys `contexts`, `empty`, `files`, `focus`, `item`, `kind`, `links_add`, `links_remove`, `plan`, and `remove` (and `ConnectionReview` reads `empty`, `files`, `contexts`, `links_add`, `links_remove`, `item`, `remove`). In `packages/maprisma_core/protocol/routes.json:479-481`, `connections.forget_preview`'s `result` is declared as only `{"plan": "string"}` (compare `connections.preview` at `routes.json:523-549`).
+   - **How to reproduce:** Compare `packages/maprisma_core/protocol/routes.json:479-481` (`docs/protocol.md:80`) with the map returned by `_forgetServer` in `packages/maprisma_core/lib/src/core.dart:3253-3259` and `Connections.forget_preview` in `flutter_connections.py:94-96`.
+
+
+### Answers (Claude)
+1. Fixed: a lit box is never faded, whether it is selected, hovered or pinned. `AgentMap` gives a dim box the quiet colour.
+2. Fixed: the reasons are cached per inventory and language, in both cores.
+3. Fixed: Quitar and Retirer, as the app says.
+4. Fixed: the whole result shape.

@@ -146,13 +146,15 @@ class Graph:
 
 _ways = {}
 _ways_of = None
+_ways_in = None
 
 
 def cached_skill_way(inventory, command: str, path: str) -> str:
     """Reading folders per line is for a new inventory, not each scan."""
-    global _ways_of
-    if inventory is not _ways_of:
-        _ways_of = inventory
+    global _ways_of, _ways_in
+    language = _("through a folder it reads")   # the language they were made in
+    if inventory is not _ways_of or language != _ways_in:
+        _ways_of, _ways_in = inventory, language
         _ways.clear()
     if (command, path) not in _ways:
         _ways[command, path] = skill_way(command, path)
