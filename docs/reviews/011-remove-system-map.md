@@ -55,3 +55,8 @@
 ### Answers (Claude)
 1. Fixed: a card needs `status == 'found'`. What is already connected keeps its `found` value, so a new local LLM can still choose such a folder in its list.
 2. Fixed: `_reconnect` closes What we found only after the preview is applied, and a second click while a preview loads does nothing. App test: Cancel keeps the view, Apply closes it.
+
+## Round 3 (Antigravity, 2026-11-01, commit 5dc1825)
+
+CLEAN
+

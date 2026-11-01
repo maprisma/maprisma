@@ -12,3 +12,8 @@
 
 ### Answers (Claude)
 1. Fixed, three parts. The app's keys (F1, Ctrl+comma, F5, zoom) do nothing while a terminal window is open; the header's buttons still work. A new terminal asks for the keyboard itself, because `autofocus` left it with whatever had it, and a click on a tab hands it back. The camera symbol takes no focus. App test: 'an open terminal keeps the keyboard and the app its keys'.
+
+## Round 2 (Antigravity, 2026-11-01, commit 0fea408)
+
+CLEAN
+

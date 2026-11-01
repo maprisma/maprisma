@@ -12,3 +12,8 @@
 
 ### Answers (Claude)
 1. Fixed: `core_assets.g.dart` regenerated. `tools/flutter-dev` makes it on every build, so a built app was right, but the committed file was stale. `foundation_test.dart` now reads and changes `screenshot_key` through the Dart core, and `tests/test_protocol.py` fails when a setting of `settings_schema.py` is missing from the file.
+
+## Round 2 (Antigravity, 2026-11-01, commit 4a2115f)
+
+CLEAN
+

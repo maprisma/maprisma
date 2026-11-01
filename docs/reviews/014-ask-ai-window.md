@@ -62,3 +62,8 @@ Simplified, Uwe's choice: a window no longer waits behind other work. `covered` 
 
 CLEAN
 
+## Round 4 (Antigravity, 2026-11-01, commit 66afe90)
+
+CLEAN
+
+
