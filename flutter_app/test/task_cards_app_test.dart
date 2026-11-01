@@ -244,6 +244,18 @@ Future<void> openFromHelp(WidgetTester tester, String tab) async {
 }
 
 void main() {
+  testWidgets('leaving Providers and models brings the map up to date', (
+    tester,
+  ) async {
+    final dir = await mountApp(tester);
+    await openFromHelp(tester, 'Providers and models');
+    final before = forcedScans(dir);
+    await tester.tap(find.text('Back').last);
+    await settleService(tester);
+    expect(forcedScans(dir), greaterThan(before));
+    await unmountApp(tester);
+  });
+
   testWidgets('an open terminal keeps the keyboard and the app its keys', (
     tester,
   ) async {
