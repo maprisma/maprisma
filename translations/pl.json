@@ -3339,5 +3339,8 @@
  "Current width": "Obecna szerokość",
  "Default width": "Domyślna szerokość",
  "Automatic": "Automatycznie",
- "Drag a border to change the width; a double click restores the default.": "Przeciągnij krawędź, aby zmienić szerokość; dwuklik przywraca domyślną."
+ "Drag a border to change the width; a double click restores the default.": "Przeciągnij krawędź, aby zmienić szerokość; dwuklik przywraca domyślną.",
+ "Borders around category cards": "Obramowania kart kategorii",
+ "Border thickness": "Grubość obramowania",
+ "Border colour": "Kolor obramowania"
 }

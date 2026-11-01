@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 
 import agents
 import ai_core
@@ -17,7 +18,7 @@ import skills_ctl
 
 
 def valid_layout(value) -> bool:
-    if not isinstance(value, dict) or set(value) - {'cards', 'order', 'collapsed', 'pins', 'card_order', 'column_widths', 'column_defaults'}:
+    if not isinstance(value, dict) or set(value) - {'cards', 'order', 'collapsed', 'pins', 'card_order', 'column_widths', 'column_defaults', 'card_border'}:
         return False
     def ident(v):
         return isinstance(v, str) and 0 < len(v) <= 8192 and not any(ord(c) < 32 for c in v)
@@ -26,6 +27,14 @@ def valid_layout(value) -> bool:
     for key, limit in (('collapsed', 100), ('pins', 100), ('card_order', 100)):
         if key in value and not ids(value[key], limit):
             return False
+    border = value.get('card_border', {})
+    if not isinstance(border, dict) or set(border) - {'on', 'width', 'color'}:
+        return False
+    if type(border.get('on', False)) is not bool or type(border.get('width', 1)) is not int \
+            or not 1 <= border.get('width', 1) <= 8:
+        return False
+    if 'color' in border and not (isinstance(border['color'], str) and re.fullmatch('#[0-9a-f]{6}', border['color'])):
+        return False
     for key in ('column_widths', 'column_defaults'):
         widths = value.get(key, {})
         if not isinstance(widths, dict) or any(

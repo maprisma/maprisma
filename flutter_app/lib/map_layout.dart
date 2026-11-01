@@ -6,6 +6,12 @@ import 'map_snapshot.dart';
 const mapColumnKeys = ['mcp', 'agents', 'providers', 'models'];
 const mapColumnMinWidth = 200.0, mapColumnMaxWidth = 900.0;
 
+/// A saved `#rrggbb`; null for none or a broken one.
+Color? mapBorderColor(String? hex) {
+  final value = int.tryParse(hex?.replaceFirst('#', '') ?? '', radix: 16);
+  return value == null ? null : Color(0xFF000000 | value);
+}
+
 const mapBoxWidth = 242.0, mapBoxHeight = 128.0, mapRowStep = 146.0;
 String edgeKey(Map<String, dynamic> e) =>
     '${e['source']}|${e['target']}|${e['kind']}';

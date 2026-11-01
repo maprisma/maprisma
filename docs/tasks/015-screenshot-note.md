@@ -19,6 +19,9 @@ The helper chosen in one Ask AI window holds for all four cards and after a rest
 ## Column widths (Uwe)
 A column's left or right border drags its width, and its boxes follow. Saved in `flutter_map_layout`: `column_widths` (current) and `column_defaults`, by column name, 200 to 900 px, in both validators; protocol unchanged. Nothing set means today's automatic width. A double click drops the current width. Settings › Map shows both for each column. The status symbol left the Ask AI window's title; the bars keep theirs (Uwe's choice).
 
+## Border of the category cards (Uwe)
+Off by default. In `flutter_map_layout`: `card_border` with `on`, `width` (1 to 8 px) and `color` (`#rrggbb`, none is the theme's), in both validators. Settings › Map offers a switch, the thickness and nine colours or the theme's. Settings hands the app a change, not a copy of the layout, so two changes can't undo each other.
+
 ## Texts
 `What is wrong? (optional)` in 7 languages; the dialog is translated now that it is not only a test tool. Manual: the F9 row of the keys table.
 

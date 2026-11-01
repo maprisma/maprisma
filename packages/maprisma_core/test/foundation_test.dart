@@ -215,9 +215,20 @@ void main() {
           'flutter_map_layout': {
             'column_widths': {'agents': 500},
             'column_defaults': {'models': 320},
+            'card_border': {'on': true, 'width': 3, 'color': '#ef5350'},
           },
         },
       });
+      expect(
+        () => core.dispatch('settings.update', {
+          'values': {
+            'flutter_map_layout': {
+              'card_border': {'width': 9},
+            },
+          },
+        }),
+        throwsA(anything),
+      );
       expect(
         () => core.dispatch('settings.update', {
           'values': {

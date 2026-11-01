@@ -1206,6 +1206,7 @@ class _MapEditorState extends State<MapEditor>
                                               lit,
                                               _source,
                                               _cursor,
+                                              _saved['card_border'] as Map?,
                                             ),
                                           ),
                                         ),
@@ -1653,23 +1654,42 @@ class AgentTrafficDialog extends StatelessWidget {
 }
 
 class _MapPaint extends CustomPainter {
-  _MapPaint(this.layout, this.colors, this.lit, this.source, this.cursor);
+  _MapPaint(
+    this.layout,
+    this.colors,
+    this.lit,
+    this.source,
+    this.cursor,
+    this.border,
+  );
   final MapLayout layout;
   final ColorScheme colors;
   final Set<String> lit;
   final String? source;
   final Offset? cursor;
+
+  /// Settings › Map: on, width, color; no color is the theme's.
+  final Map? border;
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint();
+    final edge = border?['on'] == true
+        ? (Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = (border!['width'] as int? ?? 1).toDouble()
+            ..color =
+                mapBorderColor(border!['color'] as String?) ?? colors.outline)
+        : null;
     for (final card in layout.cards.values) {
+      final shape = RRect.fromRectAndRadius(
+        card.rect,
+        const Radius.circular(14),
+      );
       paint
         ..style = PaintingStyle.fill
         ..color = colors.surfaceContainerLow;
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(card.rect, const Radius.circular(14)),
-        paint,
-      );
+      canvas.drawRRect(shape, paint);
+      if (edge != null) canvas.drawRRect(shape, edge);
     }
     for (final curve in layout.curves) {
       final edge = curve.edge,

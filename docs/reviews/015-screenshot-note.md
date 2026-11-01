@@ -24,3 +24,18 @@
 1. Not a defect: Settings, `MapLayout`, `MapEditor` and both validators all use `column_widths` and `column_defaults`. The keys `widths` and `defaults` and `_columnWidthFor` do not exist at fec7b2a.
 2. Fixed: a width typed but not applied is applied when the field goes away. `scan_settings_test.dart` covers it, along with showing a saved width and keeping pins.
 3. Fixed: the new French and Portuguese texts in the manuals and the app, including the camera sentence from 013 in both manuals, now use `vous` and `você`, with `Réglages` and `Configurações`. Older strings in `fr.json` and `pt.json` with `tu` stay as they are.
+
+## Round 2 (Antigravity, 2026-11-01, commit ba41799)
+
+1. **`flutter_app/lib/settings_view.dart:84-93, 986-1005` (and `flutter_app/test/scan_settings_test.dart:42-57`) — A `_WidthField` saving at `dispose()` can re-send an already applied value and overwrite another field's change with its older copy of `layout`**
+   - **What goes wrong:**
+     1. `_WidthFieldState._apply()` (`flutter_app/lib/settings_view.dart:986-996`) calls `widget.onChanged(next)` when `next != widget.value?.round()`, and `dispose()` (`lines 999-1005`) checks the same condition (`valid && next != widget.value?.round()`) without recording that `_apply()` already sent `next`. If `SettingsView` is unmounted before rebuilding with the new `widget.value` (for example, when a field submits or blurs in the same frame that `SettingsView` closes, or when a caller does not rebuild `SettingsView` on `onMapLayout`), `dispose()` schedules a duplicate `changed(next)` post-frame callback for that field.
+     2. In `SettingsView._columnWidthRows()` (`flutter_app/lib/settings_view.dart:84-93`), `change` constructs `{...Map<String, dynamic>.from(layout), list: widths}` from the `layout` snapshot captured when `SettingsView.build` last ran. When two fields' callbacks run without an intervening rebuild (or when a later field in tree order re-fires in `dispose()`), the later callback overwrites the earlier field's change with its older copy of `layout`.
+     3. This happens directly in `flutter_app/test/scan_settings_test.dart:42-57`: after submitting `'5000'` in `column_defaults-models` and typing `'360'` in `column_widths-agents`, unmounting `SettingsView` disposes `column_widths-agents` first (`layouts[1]` has `'column_widths': {'agents': 360}` without `'column_defaults'`) and `column_defaults-models` second (`layouts[2]` re-sends its older `layout` with `'column_widths': {'agents': 410}`, overwriting `layouts.last['column_widths']['agents']` back to `410`).
+   - **How to reproduce:** Run `flutter test test/scan_settings_test.dart` and inspect `layouts.last` at `flutter_app/test/scan_settings_test.dart:51-57`: `layouts.last['column_widths']['agents']` is `410` instead of `360` because `column_defaults-models` fired again in `dispose()` with its stale `layout`. Likewise, in the app, if an earlier width field loses focus and `_apply()` runs in the same frame that `SettingsView` is unmounted while a later width field disposes with an unapplied edit (or vice versa), the second callback's older `layout` copy overwrites the first field's change.
+
+
+### Answers (Claude)
+1. Fixed at the cause: `onMapLayout` now takes a change, which `main.dart` applies to the latest layout, so a field no longer sends a copy of it. A repeated save writes the same value again and changes nothing else. `scan_settings_test.dart` is strict again: both values survive, and my loose check from ba41799 is gone.
+
+New in this commit, by Uwe's request: Settings › Map can draw a border around the category cards, with thickness and colour.

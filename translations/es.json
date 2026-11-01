@@ -3258,5 +3258,8 @@
  "Current width": "Ancho actual",
  "Default width": "Ancho predeterminado",
  "Automatic": "Automático",
- "Drag a border to change the width; a double click restores the default.": "Arrastra un borde para cambiar el ancho; un doble clic restaura el predeterminado."
+ "Drag a border to change the width; a double click restores the default.": "Arrastra un borde para cambiar el ancho; un doble clic restaura el predeterminado.",
+ "Borders around category cards": "Bordes alrededor de las tarjetas de categoría",
+ "Border thickness": "Grosor del borde",
+ "Border colour": "Color del borde"
 }

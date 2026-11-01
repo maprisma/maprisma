@@ -3258,5 +3258,8 @@
  "Current width": "Aktuelle Breite",
  "Default width": "Standardbreite",
  "Automatic": "Automatisch",
- "Drag a border to change the width; a double click restores the default.": "Rand ziehen ändert die Breite, ein Doppelklick stellt den Standard wieder her."
+ "Drag a border to change the width; a double click restores the default.": "Rand ziehen ändert die Breite, ein Doppelklick stellt den Standard wieder her.",
+ "Borders around category cards": "Rahmen um die Kategoriekarten",
+ "Border thickness": "Rahmenstärke",
+ "Border colour": "Rahmenfarbe"
 }

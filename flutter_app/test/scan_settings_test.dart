@@ -3,10 +3,52 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('the border of the category cards: on, thickness, color', (
+    tester,
+  ) async {
+    var layout = <String, dynamic>{};
+    Widget view() => MaterialApp(
+      home: Scaffold(
+        body: SettingsView(
+          settings: {
+            'language': 'auto',
+            'look': 'adwaita',
+            'map_layers': const ['agents'],
+            'flutter_map_layout': layout,
+          },
+          busy: false,
+          tr: (key) => key,
+          onBack: () {},
+          onUpdate: (values) async {},
+          onMapLayout: (change) => layout = change(layout),
+        ),
+      ),
+    );
+    await tester.pumpWidget(view());
+    final toggle = find.byKey(const ValueKey('card-border'));
+    await tester.scrollUntilVisible(
+      toggle,
+      250,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.byKey(const ValueKey('card-border-width')), findsNothing);
+    await tester.tap(toggle);
+    await tester.pumpWidget(view());
+    expect(layout['card_border'], {'on': true});
+    final red = find.byKey(const ValueKey('card-border-color-#ef5350'));
+    await tester.ensureVisible(red);
+    await tester.pumpAndSettle();
+    await tester.tap(red);
+    expect(layout['card_border'], {'on': true, 'color': '#ef5350'});
+  });
+
   testWidgets('column widths: shown, kept with the layout, not lost on Back', (
     tester,
   ) async {
-    final layouts = <Map<String, dynamic>>[];
+    var layout = <String, dynamic>{
+      'pins': ['agent:a'],
+      'column_widths': {'agents': 410},
+    };
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -24,13 +66,13 @@ void main() {
             tr: (key) => key,
             onBack: () {},
             onUpdate: (values) async {},
-            onMapLayout: layouts.add,
+            onMapLayout: (change) => layout = change(layout),
           ),
         ),
       ),
     );
     final current = find.byKey(const ValueKey('column_widths-agents'));
-    final fallback = find.byKey(const ValueKey('column_defaults-models'));
+    final fallback = find.byKey(const ValueKey('column_defaults-agents'));
     await tester.scrollUntilVisible(
       fallback,
       250,
@@ -44,18 +86,15 @@ void main() {
     await tester.enterText(fallback, '5000');
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pump();
-    expect(layouts.last['pins'], ['agent:a']);
-    expect(layouts.last['column_defaults'], {'models': 900});
+    expect(layout['pins'], ['agent:a']);
+    expect(layout['column_defaults'], {'agents': 900});
 
     await tester.enterText(current, '360');
     await tester.pumpWidget(const SizedBox());
     await tester.pump();
-    // This test's Settings never gets the saved layout back, so the other
-    // field repeats its value too; the typed width must have gone out.
-    expect(
-      layouts.any((l) => (l['column_widths'] as Map)['agents'] == 360),
-      isTrue,
-    );
+    // Each field changes only its own value, so nothing goes back.
+    expect(layout['column_widths'], {'agents': 360});
+    expect(layout['column_defaults'], {'agents': 900});
   });
 
   testWidgets('manual mode and independent scan targets are editable', (

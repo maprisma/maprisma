@@ -3258,5 +3258,8 @@
  "Current width": "Largura atual",
  "Default width": "Largura predefinida",
  "Automatic": "Automático",
- "Drag a border to change the width; a double click restores the default.": "Arraste uma margem para mudar a largura; um duplo clique repõe a predefinição."
+ "Drag a border to change the width; a double click restores the default.": "Arraste uma margem para mudar a largura; um duplo clique repõe a predefinição.",
+ "Borders around category cards": "Margens à volta dos cartões de categoria",
+ "Border thickness": "Espessura da margem",
+ "Border colour": "Cor da margem"
 }

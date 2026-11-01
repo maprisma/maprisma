@@ -3258,5 +3258,8 @@
  "Current width": "Huidige breedte",
  "Default width": "Standaardbreedte",
  "Automatic": "Automatisch",
- "Drag a border to change the width; a double click restores the default.": "Sleep een rand om de breedte te wijzigen; dubbelklikken herstelt de standaard."
+ "Drag a border to change the width; a double click restores the default.": "Sleep een rand om de breedte te wijzigen; dubbelklikken herstelt de standaard.",
+ "Borders around category cards": "Randen rond categoriekaarten",
+ "Border thickness": "Randdikte",
+ "Border colour": "Randkleur"
 }

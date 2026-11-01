@@ -60,6 +60,7 @@ bool validLayout(dynamic v) {
           'card_order',
           'column_widths',
           'column_defaults',
+          'card_border',
         ].contains(k),
       )) {
     return false;
@@ -76,6 +77,21 @@ bool validLayout(dynamic v) {
       a.toSet().length == a.length;
   for (final key in ['collapsed', 'pins', 'card_order']) {
     if (v.containsKey(key) && !ids(v[key], 100)) return false;
+  }
+  final border = v.containsKey('card_border')
+      ? v['card_border']
+      : <String, dynamic>{};
+  if (border is! Map ||
+      border.keys.any((k) => !['on', 'width', 'color'].contains(k)) ||
+      border['on'] is! bool && border.containsKey('on') ||
+      border.containsKey('width') &&
+          (border['width'] is! int ||
+              border['width'] < 1 ||
+              border['width'] > 8) ||
+      border.containsKey('color') &&
+          (border['color'] is! String ||
+              !RegExp(r'^#[0-9a-f]{6}$').hasMatch(border['color'] as String))) {
+    return false;
   }
   for (final key in ['column_widths', 'column_defaults']) {
     final widths = v.containsKey(key) ? v[key] : <String, dynamic>{};

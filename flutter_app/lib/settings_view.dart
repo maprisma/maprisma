@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'window_popup.dart';
 import 'app_theme.dart';
 import 'map_layout.dart'
-    show mapColumnKeys, mapColumnMaxWidth, mapColumnMinWidth;
+    show mapBorderColor, mapColumnKeys, mapColumnMaxWidth, mapColumnMinWidth;
 import 'map_smart_card.dart' show mapSmartColumns;
 
 class SettingsView extends StatelessWidget {
@@ -30,8 +30,12 @@ class SettingsView extends StatelessWidget {
 
   final Map<String, dynamic> settings;
 
-  /// The map keeps its layout itself: a change goes through it.
-  final void Function(Map<String, dynamic>)? onMapLayout;
+  /// The map keeps its layout itself. A change gets the latest layout and
+  /// returns the new one, so two changes never undo each other.
+  final void Function(
+    Map<String, dynamic> Function(Map<String, dynamic> layout) change,
+  )?
+  onMapLayout;
   final Map desktopTheme;
   final bool busy;
   final String Function(String) tr;
@@ -83,13 +87,15 @@ class SettingsView extends StatelessWidget {
   List<Widget> _columnWidthRows() {
     final layout = settings['flutter_map_layout'] as Map? ?? const {};
     void change(String list, String column, int? width) {
-      final widths = {...(layout[list] as Map? ?? const {})};
-      if (width == null) {
-        widths.remove(column);
-      } else {
-        widths[column] = width;
-      }
-      onMapLayout?.call({...Map<String, dynamic>.from(layout), list: widths});
+      onMapLayout?.call((latest) {
+        final widths = {...(latest[list] as Map? ?? const {})};
+        if (width == null) {
+          widths.remove(column);
+        } else {
+          widths[column] = width;
+        }
+        return {...latest, list: widths};
+      });
     }
 
     return [
@@ -121,6 +127,93 @@ class SettingsView extends StatelessWidget {
             ],
           ),
         ),
+    ];
+  }
+
+  /// The border around the map's category cards.
+  List<Widget> _cardBorderRows(BuildContext context) {
+    final layout = settings['flutter_map_layout'] as Map? ?? const {};
+    final border = layout['card_border'] as Map? ?? const {};
+    final on = border['on'] == true;
+    void change(Map<String, dynamic> Function(Map old) edit) {
+      onMapLayout?.call(
+        (latest) => {
+          ...latest,
+          'card_border': edit(latest['card_border'] as Map? ?? const {}),
+        },
+      );
+    }
+
+    return [
+      SwitchListTile(
+        key: const ValueKey('card-border'),
+        contentPadding: EdgeInsets.zero,
+        title: Text(tr('Borders around category cards')),
+        value: on,
+        onChanged: busy
+            ? null
+            : (value) => change((old) => {...old, 'on': value}),
+      ),
+      if (on) ...[
+        DropdownButtonFormField<int>(
+          key: const ValueKey('card-border-width'),
+          initialValue: border['width'] as int? ?? 1,
+          decoration: InputDecoration(labelText: tr('Border thickness')),
+          items: [
+            for (var w = 1; w <= 8; w++)
+              DropdownMenuItem(value: w, child: Text('$w px')),
+          ],
+          onChanged: busy
+              ? null
+              : (value) => change((old) => {...old, 'width': value}),
+        ),
+        const SizedBox(height: 12),
+        Text(tr('Border colour')),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            ChoiceChip(
+              key: const ValueKey('card-border-color-theme'),
+              label: Text(tr('Theme')),
+              selected: border['color'] == null,
+              onSelected: busy
+                  ? null
+                  : (_) => change((old) => {...old}..remove('color')),
+            ),
+            for (final hex in _borderColors)
+              Tooltip(
+                message: hex,
+                child: Semantics(
+                  button: true,
+                  selected: border['color'] == hex,
+                  label: hex,
+                  child: InkWell(
+                    key: ValueKey('card-border-color-$hex'),
+                    customBorder: const CircleBorder(),
+                    onTap: busy
+                        ? null
+                        : () => change((old) => {...old, 'color': hex}),
+                    child: Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: mapBorderColor(hex),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: Theme.of(context).colorScheme.onSurface,
+                          width: border['color'] == hex ? 3 : 1,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 12),
+      ],
     ];
   }
 
@@ -887,6 +980,7 @@ class SettingsView extends StatelessWidget {
             const SizedBox(height: 24),
             Text(tr('Map'), style: Theme.of(context).textTheme.titleLarge),
             ..._columnWidthRows(),
+            ..._cardBorderRows(context),
             for (final layer in layers.entries)
               CheckboxListTile(
                 title: Text(tr(layer.value)),
@@ -1023,3 +1117,15 @@ class _WidthFieldState extends State<_WidthField> {
     onSubmitted: (_) => _apply(),
   );
 }
+
+const _borderColors = [
+  '#ffffff',
+  '#9e9e9e',
+  '#ef5350',
+  '#ffa726',
+  '#ffee58',
+  '#66bb6a',
+  '#26c6da',
+  '#42a5f5',
+  '#ab47bc',
+];

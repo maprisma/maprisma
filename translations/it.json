@@ -3258,5 +3258,8 @@
  "Current width": "Larghezza attuale",
  "Default width": "Larghezza predefinita",
  "Automatic": "Automatico",
- "Drag a border to change the width; a double click restores the default.": "Trascina un bordo per cambiare la larghezza; un doppio clic ripristina il valore predefinito."
+ "Drag a border to change the width; a double click restores the default.": "Trascina un bordo per cambiare la larghezza; un doppio clic ripristina il valore predefinito.",
+ "Borders around category cards": "Bordi attorno alle schede di categoria",
+ "Border thickness": "Spessore del bordo",
+ "Border colour": "Colore del bordo"
 }
