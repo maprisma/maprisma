@@ -31,7 +31,7 @@ void main() {
       250,
       scrollable: find.byType(Scrollable).first,
     );
-    expect(find.byKey(const ValueKey('card-border-width')), findsNothing);
+    expect(find.byKey(const ValueKey('card-border-width-1')), findsNothing);
     await tester.tap(toggle);
     await tester.pumpWidget(view());
     expect(layout['card_border'], {'on': true});
@@ -40,6 +40,13 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(red);
     expect(layout['card_border'], {'on': true, 'color': '#ef5350'});
+
+    // A width changed elsewhere shows while Settings stays open.
+    layout = {
+      'card_border': {'on': true, 'width': 5},
+    };
+    await tester.pumpWidget(view());
+    expect(find.text('5 px'), findsOneWidget);
   });
 
   testWidgets('column widths: shown, kept with the layout, not lost on Back', (

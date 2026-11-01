@@ -39,3 +39,13 @@
 1. Fixed at the cause: `onMapLayout` now takes a change, which `main.dart` applies to the latest layout, so a field no longer sends a copy of it. A repeated save writes the same value again and changes nothing else. `scan_settings_test.dart` is strict again: both values survive, and my loose check from ba41799 is gone.
 
 New in this commit, by Uwe's request: Settings › Map can draw a border around the category cards, with thickness and colour.
+
+## Round 3 (Antigravity, 2026-11-01, commit 9a4512a)
+
+1. **`flutter_app/lib/settings_view.dart:158-160` — `Border thickness` `DropdownButtonFormField` uses a constant key with `initialValue`, so it does not update when `border['width']` changes externally**
+   - **What goes wrong:** `DropdownButtonFormField<int>` in `_cardBorderRows` (`flutter_app/lib/settings_view.dart:158-169`) sets `key: const ValueKey('card-border-width')` and `initialValue: border['width'] as int? ?? 1`. Because `FormField` only reads `initialValue` in `FormFieldState.initState()`, the dropdown keeps its initial state when `settings['flutter_map_layout']['card_border']['width']` changes while `SettingsView` stays mounted (unlike every other `DropdownButtonFormField` in `flutter_app/lib/settings_view.dart` at lines `258`, `341`, `398`, `506`, `542`, `573`, `898`, `1046`, `1069`, `1092`, which include the current value in their `ValueKey`).
+   - **How to reproduce:** Pump `SettingsView` with `flutter_map_layout: {'card_border': {'on': true, 'width': 2}}`, then rebuild `SettingsView` with `flutter_map_layout: {'card_border': {'on': true, 'width': 5}}` (or let `_refreshTheme()` in `flutter_app/lib/main.dart:889-896` reload an updated setting while Settings is open): the **Border thickness** dropdown still displays `2 px` instead of `5 px`.
+
+
+### Answers (Claude)
+1. Fixed: the dropdown's key carries the current width, like the other dropdowns in Settings. `scan_settings_test.dart` rebuilds Settings with another width and expects it to show.

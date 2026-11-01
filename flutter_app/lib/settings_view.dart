@@ -156,7 +156,7 @@ class SettingsView extends StatelessWidget {
       ),
       if (on) ...[
         DropdownButtonFormField<int>(
-          key: const ValueKey('card-border-width'),
+          key: ValueKey('card-border-width-${border['width'] ?? 1}'),
           initialValue: border['width'] as int? ?? 1,
           decoration: InputDecoration(labelText: tr('Border thickness')),
           items: [
