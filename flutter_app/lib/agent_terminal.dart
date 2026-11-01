@@ -129,6 +129,7 @@ class AgentTerminalView extends StatelessWidget {
   const AgentTerminalView({
     super.key,
     required this.session,
+    required this.keys,
     required this.tr,
     required this.onBack,
     required this.onStop,
@@ -139,6 +140,9 @@ class AgentTerminalView extends StatelessWidget {
   final String Function(String) tr;
   final VoidCallback onBack;
   final VoidCallback onStop;
+
+  /// Where the keyboard goes; the page asks for it after a tab was clicked.
+  final FocusNode keys;
 
   /// F9 belongs to the program in the terminal: the footer's symbol instead.
   final VoidCallback? onScreenshot;
@@ -174,37 +178,68 @@ class AgentTerminalView extends StatelessWidget {
         Expanded(
           child: Padding(
             padding: const EdgeInsets.all(8),
-            child: TerminalView(
-              session.terminal,
-              controller: session.selection,
-              autofocus: true,
-              onSecondaryTapDown: (_, _) async {
-                final selected = session.selection.selection;
-                if (selected != null) {
-                  final text = session.terminal.buffer.getText(selected);
-                  session.selection.clearSelection();
-                  await Clipboard.setData(ClipboardData(text: text));
-                } else {
-                  final clipboard = await Clipboard.getData('text/plain');
-                  if (clipboard?.text != null) {
-                    session.terminal.paste(clipboard!.text!);
+            child: _TakesKeys(
+              keys,
+              child: TerminalView(
+                session.terminal,
+                controller: session.selection,
+                focusNode: keys,
+                onSecondaryTapDown: (_, _) async {
+                  final selected = session.selection.selection;
+                  if (selected != null) {
+                    final text = session.terminal.buffer.getText(selected);
+                    session.selection.clearSelection();
+                    await Clipboard.setData(ClipboardData(text: text));
+                  } else {
+                    final clipboard = await Clipboard.getData('text/plain');
+                    if (clipboard?.text != null) {
+                      session.terminal.paste(clipboard!.text!);
+                    }
                   }
-                }
-              },
+                },
+              ),
             ),
           ),
         ),
         if (onScreenshot != null)
           Align(
             alignment: Alignment.centerRight,
-            child: IconButton(
-              key: const ValueKey('terminal-screenshot'),
-              tooltip: tr('Save a screenshot'),
-              onPressed: onScreenshot,
-              icon: const Icon(Icons.photo_camera_outlined),
+            // A click leaves the keyboard with the terminal.
+            child: ExcludeFocus(
+              child: IconButton(
+                key: const ValueKey('terminal-screenshot'),
+                tooltip: tr('Save a screenshot'),
+                onPressed: onScreenshot,
+                icon: const Icon(Icons.photo_camera_outlined),
+              ),
             ),
           ),
       ],
     ),
   );
+}
+
+/// A new terminal takes the keyboard from whatever had it: `autofocus` alone
+/// leaves it there.
+class _TakesKeys extends StatefulWidget {
+  const _TakesKeys(this.keys, {required this.child});
+
+  final FocusNode keys;
+  final Widget child;
+
+  @override
+  State<_TakesKeys> createState() => _TakesKeysState();
+}
+
+class _TakesKeysState extends State<_TakesKeys> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) widget.keys.requestFocus();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }

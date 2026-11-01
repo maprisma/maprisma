@@ -161,6 +161,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   final _terminals = <AgentTerminal>[];
   final _startMenu = ProjectStartMenuController();
   AgentTerminal? _visibleTerminal;
+  final _terminalKeys = FocusNode();
   bool _closing = false;
   int _reviewDepth = 0;
   Backend? _backend;
@@ -323,6 +324,9 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
 
   bool get _navigationBlocked =>
       _busy || _taskActive || _reviewDepth > 0 || _card?.closable == false;
+
+  /// The app's keys do nothing behind an open terminal window.
+  bool get _keysBlocked => _navigationBlocked || _visibleTerminal != null;
 
   bool get _hasTaskView =>
       _showGuide ||
@@ -3896,6 +3900,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
 
   @override
   void dispose() {
+    _terminalKeys.dispose();
     _limitsTimer?.cancel();
     _usageTimer?.cancel();
     _mcpTimer?.cancel();
@@ -3944,13 +3949,13 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       ...WidgetsApp.defaultActions,
       _HelpIntent: CallbackAction<_HelpIntent>(
         onInvoke: (_) {
-          if (!_navigationBlocked && _snapshot != null) _openHelp();
+          if (!_keysBlocked && _snapshot != null) _openHelp();
           return null;
         },
       ),
       _SettingsIntent: CallbackAction<_SettingsIntent>(
         onInvoke: (_) {
-          if (!_navigationBlocked && _snapshot != null && !_showSettings) {
+          if (!_keysBlocked && _snapshot != null && !_showSettings) {
             _toggleSettings();
           }
           return null;
@@ -3958,13 +3963,13 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       ),
       _RefreshIntent: CallbackAction<_RefreshIntent>(
         onInvoke: (_) {
-          if (!_navigationBlocked) _retry();
+          if (!_keysBlocked) _retry();
           return null;
         },
       ),
       _ZoomIntent: CallbackAction<_ZoomIntent>(
         onInvoke: (intent) {
-          if (_showMap) _zoom(intent.factor);
+          if (_showMap && _visibleTerminal == null) _zoom(intent.factor);
           return null;
         },
       ),
@@ -4155,9 +4160,15 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                       ? null
                       : _terminals.indexOf(_visibleTerminal!),
                   tr: tr,
-                  onSelect: (i) => setState(() {
-                    _visibleTerminal = _terminals[i];
-                  }),
+                  onSelect: (i) {
+                    setState(() => _visibleTerminal = _terminals[i]);
+                    // The click took the keyboard to the tab.
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (_visibleTerminal != null) {
+                        _terminalKeys.requestFocus();
+                      }
+                    });
+                  },
                 ),
               Expanded(
                 child: LayoutBuilder(
@@ -4508,6 +4519,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                                     elevation: 8,
                                     child: AgentTerminalView(
                                       session: _visibleTerminal!,
+                                      keys: _terminalKeys,
                                       tr: tr,
                                       onBack: () {
                                         final fromGuide = _guideTerminals

@@ -13,6 +13,7 @@ import 'package:maprisma/map_smart_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:xterm/xterm.dart' show TerminalView;
 
 import 'support/a11y.dart';
 
@@ -61,6 +62,9 @@ for line in sys.stdin:
  elif m=='agents.halt_preview':r={'instances':[{'label':'PID 42','preview':'halt-42'}]}
  elif m=='system.refresh':
   tasks['system']={'nodes':[{'id':'found:/data/models','kind':'models','label':'Models','path':'/data/models','found':'a','status':'found','provider':''}] if Path('found_on_pc').exists() else [],'edges':[],'notes':[],'helpers':[],'search_done':Path('found_on_pc').exists()};r={'task':'system'}
+ elif m=='sessions.start':r={'session':'s'+str(len(tasks)),'path':'/home/u'};tasks['s'+str(len(tasks))]={}
+ elif m=='sessions.read':r={'text':'','ended':False}
+ elif m=='sessions.write':r={'accepted':len(__import__('base64').b64decode(p['data'])),'ended':False}
  elif m=='existing.preview':r={'plan':'opaque-existing','files':[],'notes':[],'empty':False}
  elif m=='existing.apply':tasks['existing']={'ok':True};r={'task':'existing'}
  elif m=='setup.detect':tasks['detect']={'installed':['fixture-addon']};r={'task':'detect'}
@@ -237,6 +241,41 @@ Future<void> openFromHelp(WidgetTester tester, String tab) async {
 }
 
 void main() {
+  testWidgets('an open terminal keeps the keyboard and the app its keys', (
+    tester,
+  ) async {
+    await mountApp(tester);
+    bool inTerminal() =>
+        FocusManager.instance.primaryFocus?.context
+            ?.findAncestorWidgetOfExactType<TerminalView>() !=
+        null;
+    final start = find.byKey(const ValueKey('start-agent-test'));
+    tester.widget<IconButton>(start).onPressed!();
+    await settleService(tester);
+    expect(find.byType(TerminalView), findsOneWidget);
+    expect(inTerminal(), isTrue);
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.comma);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await settleService(tester);
+    expect(find.byType(SettingsView), findsNothing);
+    expect(find.byType(TerminalView), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Back'));
+    await settleService(tester);
+    tester.widget<IconButton>(start).onPressed!();
+    await settleService(tester);
+    await tester.tap(find.byKey(const ValueKey('terminal-tab-0')));
+    await settleService(tester);
+    expect(inTerminal(), isTrue);
+
+    await tester.tap(find.byKey(const ValueKey('terminal-screenshot')));
+    await settleService(tester);
+    expect(inTerminal(), isTrue);
+    await unmountApp(tester);
+  });
+
   testWidgets('What we found stays until a preview is applied', (tester) async {
     final dir = await mountApp(
       tester,
