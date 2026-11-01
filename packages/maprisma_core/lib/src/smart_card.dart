@@ -94,6 +94,43 @@ String _ruleFacts(Map facts) {
 
 const smartNotAllowed = 'This is not allowed here.';
 
+/// What a proposed candidate would do, for the rules.
+List<ActionCheck> smartCandidateChecks(Map candidate) {
+  final action = candidate['action'];
+  if (action is! Map) return const [];
+  String text(String key) => '${action[key] ?? ''}';
+  return switch (action['kind']) {
+    'mcp_add' => const [ActionCheck('install', 'mcp', '')],
+    'mcp_connect' => [
+      ActionCheck('connect', 'mcp', text('server'), text('agent')),
+    ],
+    'mcp_disconnect' => [
+      for (final p in action['pairs'] as List? ?? const [])
+        ActionCheck(
+          'disconnect',
+          p['skill'] == null ? 'mcp' : 'skills',
+          '${p['skill'] ?? p['server']}',
+          '${p['agent']}',
+        ),
+    ],
+    'model_move' => const [ActionCheck('move', 'models', '')],
+    'model_remove' => [ActionCheck('remove', 'models', text('model'))],
+    'agent_task' => [ActionCheck('start', 'agents', text('command'))],
+    'agent_action' => actionChecks('agents.action_preview', {
+      'action': text('step'),
+      'command': text('command'),
+    }),
+    'provider_action' => actionChecks('providers.run', {
+      'operation': text('operation'),
+      'params': action['params'],
+    }),
+    _ when action['repo'] != null || action['operation'] == 'models.pull' => [
+      ActionCheck('install', 'models', text('model')),
+    ],
+    _ => const [],
+  };
+}
+
 /// Before a search and a second paid answer: refused unless a narrower rule
 /// could still allow one item.
 Map<String, dynamic>? smartRefused(Map facts, String action, String category) {
@@ -103,7 +140,10 @@ Map<String, dynamic>? smartRefused(Map facts, String action, String category) {
   }
   final narrower = rules.cast<Map>().any(
     (r) =>
-        r['effect'] == 'allow' && r['item'] != '*' && r['category'] == category,
+        r['effect'] == 'allow' &&
+        r['item'] != '*' &&
+        r['category'] == category &&
+        (r['action'] == '*' || r['action'] == action),
   );
   if (narrower) return null;
   return {
@@ -194,7 +234,7 @@ String smartMcpName(String name) {
 String _mcpFacts(Map facts) =>
     'Agents here: ${jsonEncode(facts['agents'])}.\n'
     'MCP servers here, with the agents that use each (none is fine, it can be connected): ${jsonEncode(facts['mcp'])}.\n'
-    'Skill folders here, with the agents that can leave each: ${jsonEncode(facts['skills'] ?? const {})}.\n'
+    'Skill folders here, as short ids, with the agents that can leave each: ${jsonEncode(facts['skills'] ?? const {})}.\n'
     'An agent not listed for a folder reads it through another folder and keeps it.\n';
 
 /// The first step in the MCP column: a fixed list of actions.
@@ -207,7 +247,7 @@ String smartMcpPrompt(Map facts) {
       'when the request is to find or add a new MCP server.\n'
       '{"action": "connect", "server": "<exact name listed above>", "agents": ["<commands>"]}\n'
       'when an agent should use a server that is already here.\n'
-      '{"action": "disconnect", "servers": ["<exact server names listed above>"], "skills": ["<exact skill folders listed above>"], "agents": ["<commands>"]}\n'
+      '{"action": "disconnect", "servers": ["<exact server names listed above>"], "skills": ["<short ids of skill folders listed above>"], "agents": ["<commands>"]}\n'
       'when agents should stop using servers or skill folders: name every one meant, all of them for "all"; the user sees one preview for all of it.\n'
       '$_lookupChoice'
       '{"action": "clarify", "question": "<one short question>", "choices": ["<2 to 4 short answers>"]}\n'
@@ -463,6 +503,7 @@ Future<Map<String, dynamic>> smartMcp(
   final folders = Map<String, dynamic>.from(
     facts['skills'] as Map? ?? const {},
   );
+  final paths = facts['skill_paths'] as Map? ?? const {};
   final names = {for (final a in agents) '${a['command']}': '${a['name']}'};
   final first = smartMcpChecked(
     firstJson(await agent(smartMcpPrompt(facts)), 'action'),
@@ -508,7 +549,7 @@ Future<Map<String, dynamic>> smartMcp(
       for (final folder in first['skills'] as List)
         for (final command in first['agents'] as List)
           if ((folders[folder] as List? ?? const []).contains(command))
-            {'skill': folder, 'agent': command},
+            {'skill': paths[folder] ?? folder, 'agent': command},
     ];
     if (pairs.isEmpty) {
       return {

@@ -15,6 +15,23 @@ const ruleActions = [
 ];
 const ruleCategories = ['mcp', 'skills', 'agents', 'providers', 'models'];
 const maxActionRules = 200;
+const ruleActionNames = {
+  'install': 'Install',
+  'update': 'Update',
+  'remove': 'Remove',
+  'connect': 'Connect',
+  'disconnect': 'Disconnect',
+  'move': 'Move',
+  'start': 'Start',
+  'stop': 'Stop',
+};
+const ruleCategoryNames = {
+  'mcp': 'MCP servers',
+  'skills': 'Skills',
+  'agents': 'Agents',
+  'providers': 'Providers',
+  'models': 'Models',
+};
 
 /// Allow all, one rule per action, so each default can be read and removed.
 final defaultActionRules = <Map<String, dynamic>>[
@@ -61,31 +78,49 @@ int ruleScore(Map rule) =>
     (rule['category'] != '*' ? 2 : 0) +
     (rule['action'] != '*' ? 1 : 0);
 
-bool _matches(Map rule, ActionCheck check) {
+bool _matches(
+  Map rule,
+  ActionCheck check,
+  String Function(String, String) normal,
+) {
   bool same(String key, String value) => rule[key] == '*' || rule[key] == value;
   // "Everything for Pi" also covers what is done to Pi itself.
   final agent =
       same('agent', check.agent) ||
       check.category == 'agents' && rule['agent'] == check.item;
+  final item =
+      rule['item'] == '*' ||
+      normal(check.category, '${rule['item']}') ==
+          normal(check.category, check.item);
   return same('action', check.action) &&
       same('category', check.category) &&
-      same('item', check.item) &&
+      item &&
       agent;
 }
 
-/// The rule that decides, or null when none matches (refused).
-Map? decidingRule(List rules, ActionCheck check) {
+String _asIs(String category, String item) => item;
+
+/// The rule that decides, or null when none matches (refused). [normal] gives
+/// an item its one spelling: models ignore case, skill folders are `~/…`.
+Map? decidingRule(
+  List rules,
+  ActionCheck check, {
+  String Function(String, String) normal = _asIs,
+}) {
   Map? best;
   for (final rule in rules.cast<Map>()) {
-    if (!_matches(rule, check)) continue;
+    if (!_matches(rule, check, normal)) continue;
     final score = ruleScore(rule), top = best == null ? -1 : ruleScore(best);
     if (score > top || score == top && rule['effect'] == 'allow') best = rule;
   }
   return best;
 }
 
-bool ruleAllows(List rules, ActionCheck check) =>
-    decidingRule(rules, check)?['effect'] == 'allow';
+bool ruleAllows(
+  List rules,
+  ActionCheck check, {
+  String Function(String, String) normal = _asIs,
+}) => decidingRule(rules, check, normal: normal)?['effect'] == 'allow';
 
 /// `mcp:x`, `skills:/p`, `runtime:k`, `cloud:k`, `agent:c`, `model:runtime:k:m`.
 (String, String)? _node(Object? id) {
@@ -132,12 +167,40 @@ const _operations = {
   'runtime.stop': ('stop', 'providers'),
 };
 
+/// What only the core knows about a request.
+final class RuleFacts {
+  const RuleFacts({
+    this.installed,
+    this.updateColumn,
+    this.modelUsers,
+    this.addonKind,
+  });
+
+  /// Whether a program of an installer is already here: then it is an update.
+  final bool Function(String kind, String key)? installed;
+
+  /// The category of an entry of updates.run.
+  final String Function(String key)? updateColumn;
+
+  /// The agents on a model's line.
+  final List<String> Function(String node)? modelUsers;
+
+  /// The category of an add-on.
+  final String Function(String id)? addonKind;
+}
+
 /// Everything a request does, for the rules. A route that changes the setup
-/// needs an entry here or in [rulesExempt]: action_rules_test fails otherwise.
-List<ActionCheck> actionChecks(String method, Map<String, dynamic> p) {
+/// needs an entry here or in [rulesExempt]; action_rules_test names what each
+/// entry must give for parameters the handlers really take.
+List<ActionCheck> actionChecks(
+  String method,
+  Map<String, dynamic> p, [
+  RuleFacts facts = const RuleFacts(),
+]) {
   String text(String key) => '${p[key] ?? ''}';
-  // An add-on's id starts with its kind: agent-goose, provider-…
-  String addon(String id) => id.startsWith('agent') ? 'agents' : 'providers';
+  String addon(String id) =>
+      facts.addonKind?.call(id) ??
+      (id.startsWith('agent') ? 'agents' : 'providers');
   switch (method) {
     case 'connections.preview':
       final kind = text('kind');
@@ -155,12 +218,11 @@ List<ActionCheck> actionChecks(String method, Map<String, dynamic> p) {
       return _line(null, p['target'], _agent(p['agent']));
     case 'connections.author_preview':
       final skill = text('kind') == 'skills';
-      return _forAgents(
-        'connect',
-        skill ? 'skills' : 'mcp',
-        text(skill ? 'folder' : 'name'),
-        p['agents'],
-      );
+      final item = text(skill ? 'folder' : 'name');
+      return [
+        if (!skill) ActionCheck('install', 'mcp', item),
+        ..._forAgents('connect', skill ? 'skills' : 'mcp', item, p['agents']),
+      ];
     case 'connections.forget_preview':
       return [ActionCheck('remove', 'mcp', text('name'))];
     case 'mcp.option_preview':
@@ -174,9 +236,13 @@ List<ActionCheck> actionChecks(String method, Map<String, dynamic> p) {
         ..._forAgents('connect', 'skills', text('folder'), p['agents']),
       ];
     case 'found.update_preview':
-      return [ActionCheck('update', 'mcp', text('name'))];
+      return [ActionCheck('update', 'mcp', text('program'))];
     case 'models.switch_preview':
-      return _line(p['old'], p['new'], '');
+      final users = facts.modelUsers?.call(text('old')) ?? const <String>[];
+      return [
+        for (final agent in users.isEmpty ? const [''] : users)
+          ..._line(p['old'], p['new'], agent),
+      ];
     case 'models.attach_preview':
       final model = _node(p['model'])?.$2 ?? text('model');
       return _forAgents('connect', 'models', model, p['agents']);
@@ -184,6 +250,10 @@ List<ActionCheck> actionChecks(String method, Map<String, dynamic> p) {
       return [ActionCheck('remove', 'models', text('model'))];
     case 'models.tuning_preview':
       return [ActionCheck('update', 'providers', text('key'))];
+    case 'models.slots_preview':
+      return const [ActionCheck('update', 'providers', '')];
+    case 'agents.security_preview':
+      return [ActionCheck('update', 'agents', text('command'))];
     case 'system.move_preview':
       return const [ActionCheck('move', 'models', '')];
     case 'existing.preview':
@@ -195,19 +265,21 @@ List<ActionCheck> actionChecks(String method, Map<String, dynamic> p) {
       final known = _operations[p['operation']];
       if (known == null) return const [];
       final inner = p['params'] is Map ? p['params'] as Map : const {};
-      final item = known.$2 == 'models'
-          ? inner['model'] ?? inner['name'] ?? ''
-          : inner['runtime'] ?? inner['key'] ?? '';
-      return [ActionCheck(known.$1, known.$2, '$item')];
+      final item = known.$2 == 'providers'
+          ? inner['key']
+          : inner['model'] ?? inner['name'] ?? inner['repo'] ?? inner['path'];
+      return [ActionCheck(known.$1, known.$2, '${item ?? ''}')];
     case 'jobs.continue':
       return const [ActionCheck('install', 'models', '')];
     case 'agents.action_preview':
-      final action = text('action');
-      final name = const {'install', 'update', 'remove'}.contains(action)
-          ? action
-          : action == 'logout'
-          ? 'disconnect'
-          : 'connect';
+      final name = switch (text('action')) {
+        'install' => 'install',
+        'update' => 'update',
+        'uninstall' => 'remove',
+        'verify' => 'start',
+        'logout' => 'disconnect',
+        _ => 'connect',
+      };
       return [ActionCheck(name, 'agents', text('command'))];
     case 'agents.key_preview':
       return [ActionCheck('connect', 'agents', text('command'))];
@@ -219,12 +291,21 @@ List<ActionCheck> actionChecks(String method, Map<String, dynamic> p) {
     case 'system.fix_preview':
       return [ActionCheck('start', 'agents', text('command'))];
     case 'updates.run':
-      return [ActionCheck('update', 'agents', text('key'))];
-    case 'installers.preview':
       return [
         ActionCheck(
-          'install',
-          text('kind') == 'runtime' ? 'providers' : 'agents',
+          'update',
+          facts.updateColumn?.call(text('key')) ?? 'agents',
+          text('key'),
+        ),
+      ];
+    case 'installers.preview':
+      final kind = text('kind');
+      return [
+        ActionCheck(
+          facts.installed?.call(kind, text('key')) == true
+              ? 'update'
+              : 'install',
+          kind == 'runtime' ? 'providers' : 'agents',
           text('key'),
         ),
       ];
@@ -249,22 +330,26 @@ List<ActionCheck> actionChecks(String method, Map<String, dynamic> p) {
   return const [];
 }
 
-/// Routes of kind preview or change that need no rule: reading a plan's own
-/// follow-up, undoing, settings (the rules live there), and small app state.
+/// Routes that need no rule of their own. A step after a preview is checked
+/// again through its handle in core.dart; the rest reads, undoes, or is the
+/// app's own state.
 const rulesExempt = {
-  'addons.file_install', // the preview before it is checked
-  'addons.remove_apply', 'addons.remove_undo',
-  'agents.action_apply', 'agents.halt_apply', 'agents.key_apply',
-  'agents.security_preview', 'agents.usage_refresh',
-  'app.settings_changed', 'changes.undo', 'checks.mcp_release',
-  'connections.apply', 'connections.undo', 'existing.apply',
-  'found.seen', 'guide.choose', 'help.open_manual',
-  'installers.install', 'jobs.discard', 'limits.notify',
+  // Second steps: the handle of their preview carries its checks.
+  'addons.file_install', 'addons.remove_apply', 'agents.action_apply',
+  'agents.halt_apply', 'agents.key_apply', 'connections.apply',
+  'existing.apply', 'installers.install', 'models.remove_apply',
+  'system.help_apply', 'system.move_apply', 'system.stack_apply',
+  // Ask AI: each dispatches a checked route, or checks its own candidate.
   'map.smart_connect', 'map.smart_plan', 'map.smart_run',
-  'models.remove_apply', 'models.slots_preview', 'models.slots_reload',
-  'projects.forget', 'projects.pin',
-  'sessions.read', 'sessions.resize', 'sessions.write', 'settings.update',
-  'setup.later', 'system.forget_disk', 'system.help_apply',
-  'system.move_apply', 'system.move_undo', 'system.refresh',
-  'system.stack_apply', 'tasks.cancel', 'tasks.status', 'window.popup',
+  // Putting back what was changed; Settings lists these.
+  'addons.remove_undo', 'changes.undo', 'connections.undo', 'system.move_undo',
+  // The rules live in the settings, so these can never lock their editor.
+  'app.settings_changed', 'settings.update',
+  // A running session's input and size, tasks, and the app's own state.
+  'sessions.read', 'sessions.resize', 'sessions.write',
+  'tasks.cancel', 'tasks.status',
+  'agents.usage_refresh', 'checks.mcp_release', 'found.seen', 'guide.choose',
+  'help.open_manual', 'jobs.discard', 'limits.notify', 'models.slots_reload',
+  'projects.forget', 'projects.pin', 'setup.later', 'system.forget_disk',
+  'system.refresh', 'window.popup',
 };

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:maprisma_core/maprisma_core.dart';
 import 'package:maprisma_core/src/action_rules.dart';
+import 'package:maprisma_core/src/smart_card.dart';
 import 'package:test/test.dart';
 
 Map<String, dynamic> rule(
@@ -105,31 +106,178 @@ void main() {
     );
   });
 
-  test('every route that changes the setup has checks or is exempt', () {
+  // Parameters as the handlers really take them.
+  final expected = <String, (Map<String, dynamic>, String, String, String)>{
+    'connections.preview': (
+      {'kind': 'skills', 'command': 'pi', 'item': '/a', 'remove': true},
+      'disconnect',
+      'skills',
+      '/a',
+    ),
+    'connections.forget_preview': ({'name': 's'}, 'remove', 'mcp', 's'),
+    'connections.author_preview': (
+      {
+        'kind': 'skills',
+        'folder': '/a',
+        'agents': ['pi'],
+      },
+      'connect',
+      'skills',
+      '/a',
+    ),
+    'connections.repair_preview': (
+      {'agent': 'agent:pi', 'target': 'mcp:s'},
+      'connect',
+      'mcp',
+      's',
+    ),
+    'connections.move_preview': (
+      {'agent': 'agent:pi', 'old': 'mcp:s', 'new': null},
+      'disconnect',
+      'mcp',
+      's',
+    ),
+    'mcp.option_preview': ({'name': 's'}, 'install', 'mcp', 's'),
+    'skills.web_preview': ({'folder': '/a'}, 'install', 'skills', '/a'),
+    'found.update_preview': ({'program': 'p'}, 'update', 'mcp', 'p'),
+    'models.switch_preview': (
+      {'provider': 'runtime:o', 'old': 'model:runtime:o:m', 'new': null},
+      'disconnect',
+      'models',
+      'm',
+    ),
+    'models.attach_preview': (
+      {
+        'provider': 'runtime:o',
+        'model': 'model:runtime:o:m',
+        'agents': ['pi'],
+      },
+      'connect',
+      'models',
+      'm',
+    ),
+    'models.remove_preview': (
+      {'key': 'o', 'model': 'm'},
+      'remove',
+      'models',
+      'm',
+    ),
+    'models.tuning_preview': ({'key': 'o'}, 'update', 'providers', 'o'),
+    'models.slots_preview': (const {}, 'update', 'providers', ''),
+    'agents.security_preview': ({'command': 'pi'}, 'update', 'agents', 'pi'),
+    'agents.action_preview': (
+      {'action': 'uninstall', 'command': 'pi'},
+      'remove',
+      'agents',
+      'pi',
+    ),
+    'agents.key_preview': ({'command': 'pi'}, 'connect', 'agents', 'pi'),
+    'agents.halt_preview': ({'command': 'pi'}, 'stop', 'agents', 'pi'),
+    'sessions.stop': ({'command': 'pi'}, 'stop', 'agents', 'pi'),
+    'sessions.start': ({'command': 'pi'}, 'start', 'agents', 'pi'),
+    'system.help_preview': ({'command': 'pi'}, 'start', 'agents', 'pi'),
+    'system.fix_preview': ({'command': 'pi'}, 'start', 'agents', 'pi'),
+    'system.move_preview': (const {}, 'move', 'models', ''),
+    'system.stack_preview': ({'part': 'x'}, 'install', 'providers', 'x'),
+    'existing.preview': (const {}, 'connect', 'models', ''),
+    'system.folder_preview': (const {}, 'connect', 'models', ''),
+    'providers.run': (
+      {
+        'operation': 'models.download',
+        'params': {'key': 'o', 'repo': 'r/m', 'file': 'f', 'size': 1},
+      },
+      'install',
+      'models',
+      'r/m',
+    ),
+    'jobs.continue': ({'id': 'j'}, 'install', 'models', ''),
+    'updates.run': ({'key': 'pi'}, 'update', 'agents', 'pi'),
+    'installers.preview': (
+      {'kind': 'runtime', 'key': 'o'},
+      'install',
+      'providers',
+      'o',
+    ),
+    'found.unpack': ({'program': 'p'}, 'install', 'agents', 'p'),
+    'addons.remove_preview': ({'id': 'agent-x'}, 'remove', 'agents', 'agent-x'),
+    'addons.set_enabled': (
+      {'id': 'provider-x', 'enabled': false},
+      'remove',
+      'providers',
+      'provider-x',
+    ),
+    'addons.install': (const {}, 'install', 'agents', ''),
+    'addons.file_preview': (const {}, 'install', 'agents', ''),
+    'setup.apply': (const {}, 'update', 'agents', ''),
+  };
+
+  test('every route gives what its handler does, or is exempt', () {
     final routes =
         (jsonDecode(File('protocol/routes.json').readAsStringSync())
                 as Map)['routes']
             as Map;
-    const samples = <String, dynamic>{
-      'agent': 'agent:pi',
-      'agents': ['pi'],
-      'old': 'mcp:a',
-      'target': 'mcp:a',
-      'model': 'm',
-    };
-    final missing = [
+    final open = [
       for (final e in routes.entries)
         if (const {'preview', 'change', 'handle'}.contains(e.value['kind']) &&
             !rulesExempt.contains(e.key) &&
-            actionChecks(e.key, {
-              'kind': 'mcp',
-              'operation': 'runtime.start',
-              ...samples,
-            }).isEmpty)
+            !expected.containsKey(e.key))
           e.key,
     ];
-    print(missing);
-    expect(missing, isEmpty);
+    expect(open, isEmpty);
+    expect(rulesExempt.intersection(expected.keys.toSet()), isEmpty);
+    expected.forEach((method, want) {
+      final check = actionChecks(method, want.$1).first;
+      expect(
+        (check.action, check.category, check.item),
+        (want.$2, want.$3, want.$4),
+        reason: method,
+      );
+    });
+  });
+
+  test('a model answers to any spelling of its name', () {
+    String normal(String category, String item) =>
+        category == 'models' ? item.toLowerCase() : item;
+    final rules = [
+      ...defaultActionRules,
+      rule('deny', 'remove', 'models', 'qwen'),
+    ];
+    expect(
+      ruleAllows(
+        rules,
+        const ActionCheck('remove', 'models', 'Qwen'),
+        normal: normal,
+      ),
+      isFalse,
+    );
+  });
+
+  test('the update of what is here is an update; a line names its agents', () {
+    final check = actionChecks('installers.preview', {
+      'kind': 'runtime',
+      'key': 'o',
+    }, RuleFacts(installed: (_, _) => true)).single;
+    expect(check.action, 'update');
+    final users = actionChecks('models.switch_preview', {
+      'old': 'model:runtime:o:m',
+      'new': 'model:runtime:o:n',
+    }, RuleFacts(modelUsers: (_) => ['pi']));
+    expect(users.map((c) => (c.action, c.agent)), [
+      ('disconnect', 'pi'),
+      ('connect', 'pi'),
+    ]);
+  });
+
+  test('a proposal knows what it would do', () {
+    final checks = smartCandidateChecks({
+      'action': {
+        'kind': 'mcp_disconnect',
+        'pairs': [
+          {'skill': '/a', 'agent': 'pi'},
+        ],
+      },
+    });
+    expect(checks.single.category, 'skills');
   });
 
   test('the core refuses, and again when rules tighten before apply', () {
@@ -164,7 +312,7 @@ void main() {
       ),
     );
     expect(reply['error']['code'], 'action_refused');
-    expect(reply['error']['message'], contains('stop, providers'));
+    expect(reply['error']['message'], contains('Stop, Providers'));
     core.settings.update({
       'values': {'action_rule_hints': false},
     });
@@ -181,7 +329,7 @@ void main() {
         }),
       ),
     );
-    expect(quiet['error']['message'], isNot(contains('stop')));
+    expect(quiet['error']['message'], isNot(contains('Stop')));
     expect(
       core.dispatch('rules.test', {
         'action': 'stop',

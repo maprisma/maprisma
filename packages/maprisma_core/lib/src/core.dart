@@ -414,6 +414,8 @@ final class CoreService {
       if (params.length != 1 || update == null || task == null) {
         throw const FormatException('Update/helper unavailable');
       }
+      final start = [ActionCheck('start', 'agents', task)];
+      _enforce(start);
       final prompt = mcp_updates.taskPrompt(update, home);
       final adapter = addons.adapters
           .where((a) => a.command == task)
@@ -422,7 +424,10 @@ final class CoreService {
       if (argv == null || argv.isEmpty) {
         throw const FormatException('Guarded helper unavailable');
       }
-      return helpPreviews.keep(task, _nameOf(task), prompt, argv, 'mcp-update');
+      return _kept(
+        start,
+        helpPreviews.keep(task, _nameOf(task), prompt, argv, 'mcp-update'),
+      );
     }
     Map<String, dynamic> snapshot() {
       final images = FoundScan(
@@ -996,6 +1001,9 @@ final class CoreService {
           if (update(c) && (program == null || c['program'] == program)) c,
       ];
       if (chosen.isEmpty) throw const FormatException('Nothing to update');
+      _enforce([
+        for (final c in chosen) ActionCheck('update', 'mcp', '${c['program']}'),
+      ]);
       if (chosen.any((c) => '${c['appimage']}'.isNotEmpty)) {
         throw const FormatException('Unpack the newer version first');
       }
@@ -2335,6 +2343,9 @@ final class CoreService {
       throw const FormatException('This download cannot be continued');
     }
     ProviderOps.validate(operation, inner);
+    _enforce(
+      actionChecks('providers.run', {'operation': operation, 'params': inner}),
+    );
     final started = tasks.start(operation, inner);
     jobs.record(
       started['task'] as String,
@@ -2905,7 +2916,7 @@ final class CoreService {
           'request': request.trim(),
           'answer': ?answer,
           'language': i18n.language,
-          'action_rules': settings.value(settings.load(), 'action_rules'),
+          'action_rules': _rulesForHelper(column),
           'rule_hints': settings.value(settings.load(), 'action_rule_hints'),
           'settings_path': identity.settingsPath,
           if (column == 'providers')
@@ -2966,9 +2977,14 @@ final class CoreService {
                           a.command,
                     ],
                 },
+                // Short names: a path of this PC stays here.
+                'skill_paths': {
+                  for (final (i, set) in inventory.skillSets.indexed)
+                    's${i + 1}': set['path'],
+                },
                 'skills': {
-                  for (final set in inventory.skillSets)
-                    set['path']: [
+                  for (final (i, set) in inventory.skillSets.indexed)
+                    's${i + 1}': [
                       for (final a in installed)
                         if (inventory.agentSkills[a.command]?.contains(
                                   set['path'],
@@ -3005,7 +3021,8 @@ final class CoreService {
       return tasks.startPrivate(
         'map.smart_ask',
         body,
-        (result) => smartProposals.keep(smartWorded(result, i18n.text)),
+        (result) =>
+            smartProposals.keep(smartWorded(_dropRefused(result), i18n.text)),
       );
     }
     if (method == 'map.smart_plan') return _smartPlan(params);
@@ -3023,6 +3040,8 @@ final class CoreService {
     final action = candidate['action'] as Map;
     if (action['kind'] == 'agent_task') {
       final task = action['command'] as String;
+      final start = [ActionCheck('start', 'agents', task)];
+      _enforce(start);
       final argv = taskArgv(
         addons.adapters.where((a) => a.command == task).firstOrNull,
         task,
@@ -3279,7 +3298,7 @@ final class CoreService {
 
   /// Several servers leave their agents in one preview, backup and Undo.
   Map<String, dynamic> _disconnectAll(List<Map> pairs) {
-    _enforce([
+    final checks = [
       for (final p in pairs)
         ActionCheck(
           'disconnect',
@@ -3287,7 +3306,8 @@ final class CoreService {
           '${p['skill'] ?? p['server']}',
           '${p['agent']}',
         ),
-    ]);
+    ];
+    _enforce(checks);
     final catalog = reads.catalog.scan();
     final inventory = reads.inventory.collect(catalog);
     final focus = <String>[];
@@ -3330,7 +3350,7 @@ final class CoreService {
         if (!focus.contains(id)) focus.add(id);
       }
     }
-    return {
+    return _kept(checks, {
       ...connections.keep(chainPlans(config, builders)),
       'kind': 'mcp',
       'remove': true,
@@ -3338,7 +3358,15 @@ final class CoreService {
         for (final p in pairs) '${p['server'] ?? p['skill']} → ${p['agent']}',
       ],
       'focus': focus,
-    };
+    });
+  }
+
+  Map<String, dynamic> _kept(
+    List<ActionCheck> checks,
+    Map<String, dynamic> result,
+  ) {
+    _keepRules(result, checks);
+    return result;
   }
 
   /// A local LLM a model can be downloaded for: Ollama pulls, the others need
@@ -3815,12 +3843,95 @@ final class CoreService {
   /// it is applied.
   final _ruleHandles = <String, List<ActionCheck>>{};
 
+  /// The rules a helper of this column needs, without a path of this PC.
+  List<Map<String, dynamic>> _rulesForHelper(Object? column) {
+    final mine = switch (column) {
+      'mcp' => const ['mcp', 'skills'],
+      'agents' => const ['agents'],
+      'providers' => const ['providers'],
+      _ => const ['models'],
+    };
+    return [
+      for (final r
+          in (settings.value(settings.load(), 'action_rules') as List)
+              .cast<Map>())
+        if (r['category'] == '*' || mine.contains(r['category']))
+          {
+            ...Map<String, dynamic>.from(r),
+            if (r['category'] == 'skills' && r['item'] != '*')
+              'item': 'one folder',
+          },
+    ];
+  }
+
+  /// Candidates the rules refuse do not reach the card.
+  Map<String, dynamic> _dropRefused(Map<String, dynamic> result) {
+    final list = result['candidates'];
+    if (list is! List) return result;
+    final saved = settings.load();
+    final rules = settings.value(saved, 'action_rules') as List;
+    bool ok(Map c) => smartCandidateChecks(
+      c,
+    ).every((check) => ruleAllows(rules, check, normal: _ruleItem));
+    final kept = [
+      for (final c in list.cast<Map>())
+        if (ok(c)) c,
+    ];
+    if (kept.length == list.length) return result;
+    if (kept.isNotEmpty) return {...result, 'candidates': kept};
+    return {
+      'status': 'redirect',
+      'instead': {
+        'hint': i18n.text(smartNotAllowed),
+        'column': null,
+        'request': null,
+      },
+    };
+  }
+
+  /// One spelling per item, for rules and requests alike.
+  String _ruleItem(String category, String item) => switch (category) {
+    'models' => item.toLowerCase(),
+    'skills' when item.isNotEmpty => config.tilde(skills.expand(item)),
+    _ => item,
+  };
+
+  late final _ruleFacts = RuleFacts(
+    installed: (kind, key) => kind == 'runtime'
+        ? reads.map['nodes'] is List &&
+              (reads.map['nodes'] as List).any((n) => n['id'] == 'runtime:$key')
+        : reads.catalog.scan().any((a) => a.command == key && a.installed),
+    updateColumn: (key) {
+      final entry = lastUpdates.where((u) => u['key'] == key).firstOrNull;
+      return entry?['kind'] == 'agent' || entry == null
+          ? 'agents'
+          : 'providers';
+    },
+    modelUsers: (node) => [
+      for (final e in (reads.map['edges'] as List? ?? const []).cast<Map>())
+        if (e['target'] == node && '${e['source']}'.startsWith('agent:'))
+          '${e['source']}'.substring(6),
+    ],
+  );
+
+  void _keepRules(Map<String, dynamic> result, List<ActionCheck> checks) {
+    if (checks.isEmpty) return;
+    for (final key in const ['plan', 'preview', 'token', 'task', 'installer']) {
+      final value = result[key];
+      if (value is! String) continue;
+      if (_ruleHandles.length >= 64) {
+        _ruleHandles.remove(_ruleHandles.keys.first);
+      }
+      _ruleHandles[value] = checks;
+    }
+  }
+
   void _enforce(List<ActionCheck> checks) {
     if (checks.isEmpty) return;
     final saved = settings.load();
     final rules = settings.value(saved, 'action_rules') as List;
     for (final check in checks) {
-      if (ruleAllows(rules, check)) continue;
+      if (ruleAllows(rules, check, normal: _ruleItem)) continue;
       if (settings.value(saved, 'action_rule_hints') != true) {
         throw RuleRefused(i18n.text('This is not allowed here.'));
       }
@@ -3830,9 +3941,10 @@ final class CoreService {
             .replaceAll(
               '{0}',
               [
-                check.action,
-                check.category,
+                i18n.text(ruleActionNames[check.action] ?? check.action),
+                i18n.text(ruleCategoryNames[check.category] ?? check.category),
                 if (check.item.isNotEmpty) check.item,
+                if (check.agent.isNotEmpty) check.agent,
               ].join(', '),
             ),
       );
@@ -3850,23 +3962,22 @@ final class CoreService {
       final rule = decidingRule(
         settings.value(settings.load(), 'action_rules') as List,
         check,
+        normal: _ruleItem,
       );
       return {'allowed': rule?['effect'] == 'allow', 'rule': rule};
     }
-    final checks = actionChecks(method, params);
+    final checks = actionChecks(method, params, _ruleFacts);
     _enforce(checks);
     for (final value in params.values) {
       if (value is String) _enforce(_ruleHandles[value] ?? const []);
     }
     final result = _route(method, params);
-    if (checks.isNotEmpty) {
-      for (final value in result.values) {
-        if (value is String && value.startsWith(coreHandle)) {
-          if (_ruleHandles.length >= 64) {
-            _ruleHandles.remove(_ruleHandles.keys.first);
-          }
-          _ruleHandles[value] = checks;
-        }
+    _keepRules(result, checks);
+    // A worker's preview: its token arrives with the task's result.
+    if (method == 'tasks.status' && result['result'] is Map) {
+      final found = _ruleHandles[params['task']];
+      if (found != null) {
+        _keepRules(Map<String, dynamic>.from(result['result'] as Map), found);
       }
     }
     return result;
