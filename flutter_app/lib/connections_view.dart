@@ -35,7 +35,7 @@ class ConnectionsView extends StatefulWidget {
   /// After a look inside AppImages or an unpack: the hints follow.
   final VoidCallback? onFoundChanged;
 
-  /// Open with what was found on this PC (Open problems' "New on this PC").
+  /// Open with what was found on this PC (the smart card's "New on this PC").
   final bool showFound;
   final Future<void> Function(Map<String, dynamic>)? onSkillPreview;
   final Future<Map<String, dynamic>> Function(String, Map<String, dynamic>)?

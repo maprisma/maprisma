@@ -1406,7 +1406,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   }
 
   /// The health report (health.report): the header's "!" while something
-  /// needs fixing or there are tips; Open problems lists them.
+  /// needs fixing or there are tips; the smart cards list them.
   Map<String, dynamic>? _healthReport;
   int get _healthCount =>
       (_healthReport?['warn'] as int? ?? 0) +
@@ -2086,17 +2086,8 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
             _showSystemMap = false;
           });
         default:
-          final col = line['column'];
-          final cat = col is int
-              ? col
-              : col == 'providers'
-              ? 2
-              : col == 'mcp'
-              ? 0
-              : col == 'models'
-              ? 3
-              : 1;
-          setState(() => _focusCategory = cat);
+          final cat = mapSmartColumns.indexWhere((c) => c.$1 == line['column']);
+          setState(() => _focusCategory = cat < 0 ? 1 : cat);
       }
     },
     onMcpUpdate: _mcpUpdateAction,

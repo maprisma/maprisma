@@ -64,7 +64,9 @@ class MapWelcome extends StatelessWidget {
       content: uses.isEmpty
           ? intro
           : ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 110),
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(context).height * 0.45,
+              ),
               child: SingleChildScrollView(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,

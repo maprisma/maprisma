@@ -226,10 +226,7 @@ class SmartStatusData {
 
   static String _addonHintColumn(Map<String, dynamic> h) {
     final col = h['column'];
-    if (col is String && col.isNotEmpty) return col;
-    if (h['kind'] == 'found' || h['kind'] == 'versions') return 'mcp';
-    if (col == 2) return 'providers';
-    return 'agents';
+    return col is String && col.isNotEmpty ? col : 'agents';
   }
 
   static String _mcpUpdateColumn(Map<String, dynamic> u) {
@@ -436,7 +433,8 @@ class _MapSmartCardState extends State<MapSmartCard> {
       _step = _SmartStep.idle;
     }
     if (widget.statusTrigger != oldWidget.statusTrigger &&
-        widget.statusTrigger > 0) {
+        widget.statusTrigger > 0 &&
+        !_atWork) {
       _step = _SmartStep.status;
     }
     if (oldWidget.enabled && !widget.enabled && _step == _SmartStep.working) {
@@ -449,7 +447,18 @@ class _MapSmartCardState extends State<MapSmartCard> {
     }
   }
 
+  /// A helper, a preview or a confirmed job is at work: closing the status
+  /// view would cancel it, so its progress stays on the card.
+  bool get _atWork =>
+      _step == _SmartStep.working ||
+      _step == _SmartStep.running ||
+      _activeTask != null;
+
   void _openOnStatus() {
+    if (_atWork) {
+      if (!widget.open) widget.onToggle();
+      return;
+    }
     if (!widget.open) {
       setState(() => _step = _SmartStep.status);
       widget.onToggle();
@@ -1873,6 +1882,30 @@ class _MapSmartCardState extends State<MapSmartCard> {
               .replaceAll('{0}', widget.tr(widget.title))
               .replaceAll('{1}', '$statusCount')
         : widget.tr('{0}: all fine').replaceAll('{0}', widget.tr(widget.title));
+    // The System Map has no status: its columns are not these four.
+    final statusButton = widget.columnNames != null
+        ? null
+        : Semantics(
+            button: true,
+            label: statusLabel,
+            excludeSemantics: true,
+            child: InkWell(
+              key: ValueKey('smart-status-${widget.column}'),
+              onTap: _openOnStatus,
+              child: SizedBox(
+                width: 30,
+                height: 38,
+                child: Center(
+                  child: SizedBox(
+                    key: const ValueKey('smart-status-slot'),
+                    width: 16,
+                    height: 16,
+                    child: SmartStatusIcon(level: statusLevel),
+                  ),
+                ),
+              ),
+            ),
+          );
     if (!widget.open) {
       return SizedBox(
         width: widget.width,
@@ -1886,30 +1919,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
           clipBehavior: Clip.antiAlias,
           child: Row(
             children: [
-              Semantics(
-                button: true,
-                label: statusLabel,
-                child: MouseRegion(
-                  cursor: SystemMouseCursors.click,
-                  child: GestureDetector(
-                    key: ValueKey('smart-status-${widget.column}'),
-                    behavior: HitTestBehavior.opaque,
-                    onTap: _openOnStatus,
-                    child: SizedBox(
-                      width: 30,
-                      height: 38,
-                      child: Center(
-                        child: SizedBox(
-                          key: const ValueKey('smart-status-slot'),
-                          width: 16,
-                          height: 16,
-                          child: SmartStatusIcon(level: statusLevel),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
+              ?statusButton,
               Expanded(
                 child: Semantics(
                   button: true,
@@ -2014,30 +2024,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
                     padding: const EdgeInsets.only(right: 4),
                     child: Row(
                       children: [
-                        Semantics(
-                          button: true,
-                          label: statusLabel,
-                          child: MouseRegion(
-                            cursor: SystemMouseCursors.click,
-                            child: GestureDetector(
-                              key: ValueKey('smart-status-${widget.column}'),
-                              behavior: HitTestBehavior.opaque,
-                              onTap: _openOnStatus,
-                              child: SizedBox(
-                                width: 30,
-                                height: 38,
-                                child: Center(
-                                  child: SizedBox(
-                                    key: const ValueKey('smart-status-slot'),
-                                    width: 16,
-                                    height: 16,
-                                    child: SmartStatusIcon(level: statusLevel),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
+                        ?statusButton,
                         Expanded(
                           child: InkWell(
                             onTap: _step == _SmartStep.status
