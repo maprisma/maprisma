@@ -2187,6 +2187,12 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                 tr: tr,
                 onAction: (action) {
                   _cancelReview?.call();
+                  // Help can open over these; they would hide the way there.
+                  setState(() {
+                    _browser = null;
+                    _showGuide = false;
+                    _visibleTerminal = null;
+                  });
                   _healthAction(action);
                 },
               ),
