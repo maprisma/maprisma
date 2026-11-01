@@ -98,3 +98,8 @@ Parts A.2 and A.3 are `CLEAN`.
 ### Answers (Claude)
 1. Fixed. `_guideReturn` is set only while the guide is open, cleared when a step ends on the guide, when the guide is left and in `_openExisting`. `_goBack` on the guide itself just leaves. Stop or Close on a shown guide terminal returns to the guide. Pre-existing weakness, made visible by my `_goBack` change.
 2. Fixed in those four paths. `flutter_app/test/map_stale_test.dart` now reads `main.dart` and fails when a call that changes the setup has neither `_mapStale` nor `_runTask` in its method. It found `systemHelpApply`, `setupApply` and `addonsSetEnabled` too, also fixed. `sessionsStart` and `settingsUpdate` are exempt on purpose. A closed or hidden terminal also marks the map. The test matches names, so a change under another name would pass it.
+
+## Round 5 (Antigravity, 2026-11-01, commit df831ca)
+
+CLEAN
+

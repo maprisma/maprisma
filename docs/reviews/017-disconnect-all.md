@@ -134,3 +134,8 @@ Points 3, 4, 7, and 8 are `CLEAN`.
 1. Fixed. A new message replaces the old one, a window that opens removes it, and its Undo does nothing while something is blocking. With a slot Preview after a plain disconnect, that Undo stays in Connections and Recent changes.
 2. Fixed. The legend button and the welcome bar use `_keysBlocked`, terminal tabs ignore a click with another window open but still switch terminals, a page under a terminal has no keyboard, and hosted pages use `closable: !_navigationBlocked`. A page under Ask AI keeps its focusable state because Ask AI's window lives inside it; its `FocusScope` holds the keyboard.
 3. Fixed.
+
+## Round 3 (Antigravity, 2026-11-01, commit df831ca)
+
+CLEAN
+
