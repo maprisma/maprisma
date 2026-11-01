@@ -57,3 +57,8 @@ Simplified, Uwe's choice: a window no longer waits behind other work. `covered` 
 2. Fixed: `_close(refocus: false)` for every close that hands over to something else.
 3. Fixed: `_doIt` closes first, and a runtime or agent update through `_installProgram` checks for updates again.
 4. Fixed: the title takes half the header, the menu sits at the right, the `Align` is gone and the reviews fill the window.
+
+## Round 3 (Antigravity, 2026-11-01, commit dd3c65b)
+
+CLEAN
+
