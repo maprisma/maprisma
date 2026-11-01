@@ -1443,7 +1443,8 @@
     "warn_yellow": "int",
     "window_mode": "string",
     "screenshot_key": "bool",
-    "screenshot_folder": "null|string"
+    "screenshot_folder": "null|string",
+    "smart_helper": "null|string"
    },
    "source": "manual"
   },
@@ -1506,7 +1507,8 @@
     "warn_yellow": "int",
     "window_mode": "string",
     "screenshot_key": "bool",
-    "screenshot_folder": "null|string"
+    "screenshot_folder": "null|string",
+    "smart_helper": "null|string"
    },
    "source": "manual"
   },

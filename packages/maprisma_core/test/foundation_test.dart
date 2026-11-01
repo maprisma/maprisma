@@ -206,6 +206,10 @@ void main() {
         'values': {'screenshot_folder': '/data/shots'},
       });
       expect(core.settings.snapshot()['screenshot_folder'], '/data/shots');
+      core.dispatch('settings.update', {
+        'values': {'smart_helper': 'claude'},
+      });
+      expect(core.settings.snapshot()['smart_helper'], 'claude');
       core.settings.posix.atomicWrite(
         core.identity.settingsPath,
         utf8.encode(

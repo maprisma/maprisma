@@ -108,6 +108,7 @@ Future<void> mount(
 }
 
 void main() {
+  tearDown(() => smartHelperChosen.value = null);
   testWidgets('connecting a server: Review sends its agent', (tester) async {
     final calls = <String, Map<String, dynamic>>{};
     final client = CoreClient(
@@ -1209,6 +1210,12 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Uses plan/tokens'), findsOneWidget);
       expect(calls, isEmpty);
+      // The choice holds for every card, with its check mark.
+      expect(smartHelperChosen.value, 'claude');
+      expect(
+        find.byKey(const ValueKey('smart-helper-chosen')),
+        findsNWidgets(4),
+      );
 
       // Clicking Ask with blank prompt sends nothing.
       await tester.tap(find.text('Ask'));
@@ -1279,6 +1286,9 @@ void main() {
       );
 
       // State 5: Clarify shows question and choice chips; clicking a chip sends answer.
+      // Back to the local helper, for all cards.
+      smartHelperChosen.value = null;
+      await tester.pump();
       nextResult = {
         'helper': 'Local helper',
         'local': true,

@@ -186,6 +186,10 @@ class SmartStatusIcon extends StatelessWidget {
   }
 }
 
+/// The helper chosen in any Ask AI window, for all four cards; main.dart
+/// loads and saves it (setting smart_helper).
+final smartHelperChosen = ValueNotifier<String?>(null);
+
 class SmartStatusData {
   const SmartStatusData({
     this.report,
@@ -379,7 +383,6 @@ class _MapSmartCardState extends State<MapSmartCard> {
   final _fieldFocus = FocusNode();
   final _portal = OverlayPortalController();
   bool _windowShown = false;
-  String? _selectedCommand;
   _SmartStep _step = _SmartStep.idle;
   String? _activeTask;
   int _runToken = 0;
@@ -398,12 +401,17 @@ class _MapSmartCardState extends State<MapSmartCard> {
 
   Map<String, dynamic>? get _activeHelper {
     if (widget.helpers.isEmpty) return null;
-    if (_selectedCommand != null) {
-      for (final h in widget.helpers) {
-        if (h['command'] == _selectedCommand) return h;
-      }
+    for (final h in widget.helpers) {
+      if (h['command'] == smartHelperChosen.value) return h;
     }
     return widget.helpers.first;
+  }
+
+  bool _chosen(Map<String, dynamic> helper) =>
+      helper['command'] == smartHelperChosen.value;
+
+  void _helperChanged() {
+    if (mounted) setState(() {});
   }
 
   void _focusOpenCard() {
@@ -420,6 +428,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
   @override
   void initState() {
     super.initState();
+    smartHelperChosen.addListener(_helperChanged);
     _portal.show();
     if (widget.initialPrompt != null && widget.initialPrompt!.isNotEmpty) {
       _prompt.text = widget.initialPrompt!;
@@ -1053,6 +1062,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
 
   @override
   void dispose() {
+    smartHelperChosen.removeListener(_helperChanged);
     if (_windowShown) _countWindow(-1);
     _runToken++;
     _prompt.dispose();
@@ -1095,7 +1105,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
                       onChanged: free
                           ? (value) {
                               if (value != null) {
-                                setState(() => _selectedCommand = value);
+                                smartHelperChosen.value = value;
                               }
                             }
                           : null,
@@ -1103,11 +1113,21 @@ class _MapSmartCardState extends State<MapSmartCard> {
                         for (final h in widget.helpers)
                           DropdownMenuItem<String>(
                             value: '${h['command']}',
-                            child: Text(
-                              '${h['name']}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontSize: 12),
+                            child: Row(
+                              children: [
+                                if (_chosen(h)) ...[
+                                  const SmartStatusIcon(level: 'ok', size: 14),
+                                  const SizedBox(width: 4),
+                                ],
+                                Expanded(
+                                  child: Text(
+                                    '${h['name']}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(fontSize: 12),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                       ],
@@ -1923,6 +1943,14 @@ class _MapSmartCardState extends State<MapSmartCard> {
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
+                            if (helper != null && _chosen(helper)) ...[
+                              const SizedBox(width: 6),
+                              SmartStatusIcon(
+                                key: const ValueKey('smart-helper-chosen'),
+                                level: 'ok',
+                                size: 14,
+                              ),
+                            ],
                             if (helper != null)
                               Expanded(
                                 child: Text(

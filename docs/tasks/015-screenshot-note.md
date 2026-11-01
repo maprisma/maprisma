@@ -13,6 +13,9 @@ Setting `screenshot_folder` (null|string, default null: `~/Pictures/Maprisma`), 
 ## Map (Uwe's screenshot note, same branch)
 Column gaps about 12% of the window, as far as the 266 px column minimum leaves room; columns at most 360 px, the rest goes to the gaps. Pin is a symbol at the card's bottom right, no longer in its menu.
 
+## Ask AI helper (Uwe's screenshot notes)
+The helper chosen in one Ask AI window holds for all four cards and after a restart (setting `smart_helper`, null|string), with a green check mark next to it. The status symbol stays what it was: the column's findings. Choosing a helper changes none of them.
+
 ## Texts
 `What is wrong? (optional)` in 7 languages; the dialog is translated now that it is not only a test tool. Manual: the F9 row of the keys table.
 

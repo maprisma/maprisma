@@ -46,7 +46,12 @@ import 'item_details_view.dart';
 import 'map_layout.dart' show withAgentLinks;
 import 'map_editor.dart' show mapColumnLayers;
 import 'map_smart_card.dart'
-    show SmartStatusData, SmartStatusIcon, mapSmartColumns, smartWindowsShown;
+    show
+        SmartStatusData,
+        SmartStatusIcon,
+        mapSmartColumns,
+        smartHelperChosen,
+        smartWindowsShown;
 import 'agent_action_dialog.dart';
 import 'providers_view.dart';
 import 'provider_task_dialog.dart';
@@ -92,6 +97,20 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       widget.windowShots ?? WindowShots.fromEnvironment(Platform.environment);
   final _shotArea = GlobalKey();
   bool _shooting = false;
+
+  bool _helperLoaded = false;
+
+  /// Only after the saved choice was read; a save never disturbs the map.
+  void _smartHelperChanged() {
+    if (!_helperLoaded) return;
+    final client = _maybeClient;
+    if (client == null) return;
+    unawaited(
+      client
+          .settingsUpdate(values: {'smart_helper': smartHelperChosen.value})
+          .then<void>((_) {}, onError: (_) {}),
+    );
+  }
 
   void _smartWindowsChanged() {
     if (mounted) setState(() {});
@@ -583,6 +602,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     windowManager.addListener(this);
     HardwareKeyboard.instance.addHandler(_shotKey);
     smartWindowsShown.addListener(_smartWindowsChanged);
+    smartHelperChosen.addListener(_smartHelperChanged);
     windowChannel.setMethodCallHandler((call) async {
       if (call.method == 'shown') _placePopup();
     });
@@ -3789,6 +3809,11 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       if (!mounted || settingsRevision != _settingsRevision) return;
       setState(() {
         _snapshot = snapshot;
+        if (!_helperLoaded) {
+          smartHelperChosen.value =
+              (snapshot['settings'] as Map?)?['smart_helper'] as String?;
+          _helperLoaded = true;
+        }
         if (connections != null) _connections = connections;
         if (providerData != null) _providers = providerData;
         _startupChecked = true;
@@ -3905,6 +3930,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     _aiTransform.dispose();
     HardwareKeyboard.instance.removeHandler(_shotKey);
     smartWindowsShown.removeListener(_smartWindowsChanged);
+    smartHelperChosen.removeListener(_smartHelperChanged);
     for (final terminal in _terminals) {
       terminal.dispose();
     }
