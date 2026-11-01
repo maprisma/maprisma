@@ -7,6 +7,7 @@ void main() {
     WidgetTester tester,
     List<Map<String, dynamic>> rules, {
     bool Function(Map<String, String>)? allowed,
+    bool rule = false,
   }) async {
     tester.view.physicalSize = const Size(1400, 1000);
     tester.view.devicePixelRatio = 1;
@@ -27,7 +28,10 @@ void main() {
             onSave: (r, _) async => saved.add([
               for (final x in r) {...x},
             ]),
-            onTest: (q) async => {'allowed': allowed?.call(q) ?? true},
+            onTest: (q) async => {
+              'allowed': allowed?.call(q) ?? true,
+              if (rule) 'rule': defaultRules()[4],
+            },
           ),
         ),
       ),
@@ -52,6 +56,9 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('rule-defaults')));
     await tester.pumpAndSettle();
     expect(saved.last, defaultRules());
+    await tester.tap(find.byKey(const ValueKey('rule-undo')));
+    await tester.pumpAndSettle();
+    expect(saved.last, hasLength(defaultRules().length - 1));
   });
 
   testWidgets('a rule for what is gone stays; a dead deny says so', (
@@ -77,5 +84,9 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('rule-test')));
     await tester.pumpAndSettle();
     expect(find.text('Allowed'), findsOneWidget);
+    await mount(tester, defaultRules(), rule: true);
+    await tester.tap(find.byKey(const ValueKey('rule-test')));
+    await tester.pumpAndSettle();
+    expect(find.text('Allowed: Allow · Disconnect · All'), findsOneWidget);
   });
 }

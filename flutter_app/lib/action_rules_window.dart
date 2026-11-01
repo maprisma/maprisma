@@ -81,8 +81,21 @@ class _ActionRulesWindowState extends State<ActionRulesWindow> {
     'agent': '*',
   };
   String? _answer;
+  List<Map<String, dynamic>>? _before;
 
   String tr(String key) => widget.tr(key);
+
+  bool get _tryHasAgent =>
+      const ['connect', 'disconnect'].contains(_try['action']) &&
+      _try['category'] != 'agents';
+
+  String _words(Map rule) => [
+    tr(rule['effect'] == 'allow' ? 'Allow' : 'Deny'),
+    rule['action'] == '*' ? tr('All') : tr(_actionNames[rule['action']]!),
+    rule['category'] == '*' ? tr('All') : tr(_categoryNames[rule['category']]!),
+    if (rule['item'] != '*') '${rule['item']}',
+    if (rule['agent'] != '*') '${rule['agent']}',
+  ].join(' · ');
 
   Future<void> _changed() async {
     setState(() => _answer = null);
@@ -272,28 +285,36 @@ class _ActionRulesWindowState extends State<ActionRulesWindow> {
         (v) => setState(() => _try = {..._try, 'item': v}),
       ),
       const SizedBox(width: 8),
-      _picker(
-        'test-agent',
-        _try['agent']!,
-        _agents(),
-        (v) => setState(() => _try = {..._try, 'agent': v}),
-      ),
+      if (_tryHasAgent)
+        _picker(
+          'test-agent',
+          _try['agent']!,
+          _agents(),
+          (v) => setState(() => _try = {..._try, 'agent': v}),
+        )
+      else
+        const Spacer(),
       const SizedBox(width: 8),
       OutlinedButton(
         key: const ValueKey('rule-test'),
         onPressed: () async {
           final reply = await widget.onTest({
-            for (final e in _try.entries) e.key: e.value == '*' ? '' : e.value,
+            for (final e in _try.entries)
+              e.key: e.value == '*' || e.key == 'agent' && !_tryHasAgent
+                  ? ''
+                  : e.value,
           });
           if (mounted) {
+            final rule = reply['rule'];
             setState(
-              () => _answer = tr(
-                reply['allowed'] == true ? 'Allowed' : 'Refused',
-              ),
+              () => _answer = [
+                tr(reply['allowed'] == true ? 'Allowed' : 'Refused'),
+                if (rule is Map) _words(rule),
+              ].join(': '),
             );
           }
         },
-        child: Text(_answer ?? tr('Test')),
+        child: Text(tr('Test')),
       ),
     ],
   );
@@ -317,11 +338,26 @@ class _ActionRulesWindowState extends State<ActionRulesWindow> {
                 TextButton(
                   key: const ValueKey('rule-defaults'),
                   onPressed: () {
-                    setState(() => _rules = defaultRules());
+                    setState(() {
+                      _before = _rules;
+                      _rules = defaultRules();
+                    });
                     _changed();
                   },
                   child: Text(tr('Restore defaults')),
                 ),
+                if (_before != null)
+                  TextButton(
+                    key: const ValueKey('rule-undo'),
+                    onPressed: () {
+                      setState(() {
+                        _rules = _before!;
+                        _before = null;
+                      });
+                      _changed();
+                    },
+                    child: Text(tr('Undo')),
+                  ),
                 TextButton(
                   onPressed: () => Navigator.pop(context),
                   child: Text(tr('Close')),
@@ -358,6 +394,11 @@ class _ActionRulesWindowState extends State<ActionRulesWindow> {
           ),
           const Divider(height: 1),
           Padding(padding: const EdgeInsets.all(12), child: _tester()),
+          if (_answer != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+              child: Text(_answer!),
+            ),
         ],
       ),
     ),

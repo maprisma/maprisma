@@ -438,15 +438,15 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         title: title,
         child: TaskReview(
           content: Text(
-            tr(
-              value == null
-                  ? 'Cancelled'
-                  : value['ok'] == false
-                  ? 'The action could not be completed.'
-                  : value['external'] == true
-                  ? 'This runs in a separate terminal; passwords are entered there. Refresh when it finishes.'
-                  : 'Succeeded',
-            ),
+            value?['ok'] == false
+                ? failureText(tr)
+                : tr(
+                    value == null
+                        ? 'Cancelled'
+                        : value['external'] == true
+                        ? 'This runs in a separate terminal; passwords are entered there. Refresh when it finishes.'
+                        : 'Succeeded',
+                  ),
           ),
           actions: [
             if (undo != null ||
@@ -546,6 +546,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
 
   /// Settings › What may be done: saved as it changes.
   Future<void> _openRules() async {
+    if (_busy || _taskActive) return;
     final settings = _snapshot?['settings'] as Map? ?? const {};
     final items = <String, Map<String, String>>{};
     final agents = <String, String>{};
@@ -575,10 +576,14 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         items: items,
         agents: agents,
         tr: tr,
-        onSave: (rules, hints) => _updateSettings({
-          'action_rules': rules,
-          'action_rule_hints': hints,
-        }),
+        // A rule is no reason to scan the map.
+        onSave: (rules, hints) async {
+          final values = {'action_rules': rules, 'action_rule_hints': hints};
+          await _client.settingsUpdate(values: values);
+          if (mounted) {
+            setState(() => (_snapshot?['settings'] as Map?)?.addAll(values));
+          }
+        },
         onTest: (request) => _client.rulesTest(
           action: request['action']!,
           agent: request['agent']!,
@@ -3580,6 +3585,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     try {
       plan = await _client.modelsSlotsPreview();
     } catch (_) {
+      lastRefusal = null; // A step of its own: nobody asked for it.
       return;
     }
     if (!mounted) return;

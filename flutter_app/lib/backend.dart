@@ -25,12 +25,18 @@ Map<String, String>? coreEnvironment({
 /// the core's; one it does not know is refused (unported_route).
 /// What the rules said last, until something shows it.
 String? lastRefusal;
+DateTime? _refusedAt;
 
-/// The words for a failed action: the rule's when it was refused.
+/// The words for a failed action: the rule's when it was refused just now. A
+/// refusal nobody showed must not explain a later failure.
 String failureText(String Function(String) tr) {
-  final refusal = lastRefusal;
+  final refusal = lastRefusal, at = _refusedAt;
   lastRefusal = null;
-  return refusal ?? tr('The action could not be completed.');
+  final fresh =
+      at != null && DateTime.now().difference(at) < const Duration(seconds: 3);
+  return fresh && refusal != null
+      ? refusal
+      : tr('The action could not be completed.');
 }
 
 class Backend implements ServiceTransport {
@@ -49,7 +55,10 @@ class Backend implements ServiceTransport {
     try {
       return await transport.call(method, params);
     } on ServiceError catch (error) {
-      if (error.code == 'action_refused') lastRefusal = error.reason;
+      if (error.code == 'action_refused') {
+        lastRefusal = error.reason;
+        _refusedAt = DateTime.now();
+      }
       rethrow;
     }
   }

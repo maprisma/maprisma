@@ -123,3 +123,7 @@
 2. Fixed: the reasons are cached per inventory and language, in both cores.
 3. Fixed: Quitar and Retirer, as the app says.
 4. Fixed: the whole result shape.
+
+## Round 3 (Antigravity, 2026-11-01, commit 7872ecf)
+CLEAN
+
