@@ -4348,8 +4348,11 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                                           as Map<String, dynamic>),
                                       'flutter_map_layout': ?_mapLayoutOverride,
                                     },
-                                    onMapLayout: (layout) =>
-                                        setState(() => _saveMapLayout(layout)),
+                                    onMapLayout: (layout) {
+                                      if (mounted) {
+                                        setState(() => _saveMapLayout(layout));
+                                      }
+                                    },
                                     busy: _busy,
                                     tr: tr,
                                     onUpdate: _updateSettings,

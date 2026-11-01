@@ -970,22 +970,39 @@ class _WidthFieldState extends State<_WidthField> {
     if (old.value != widget.value && !_focus.hasFocus) _text.text = _shown;
   }
 
-  void _apply() {
+  /// What the field says, within the limits; false when it is no number.
+  (bool, int?) get _typed {
     final text = _text.text.trim();
     final width = int.tryParse(text);
-    if (text.isNotEmpty && width == null) {
+    if (text.isNotEmpty && width == null) return (false, null);
+    return (
+      true,
+      width
+          ?.clamp(mapColumnMinWidth.toInt(), mapColumnMaxWidth.toInt())
+          .toInt(),
+    );
+  }
+
+  void _apply() {
+    final (valid, next) = _typed;
+    if (!valid) {
       _text.text = _shown;
       return;
     }
-    final next = width
-        ?.clamp(mapColumnMinWidth.toInt(), mapColumnMaxWidth.toInt())
-        .toInt();
-    if (next?.toString() != text) _text.text = next?.toString() ?? '';
+    if (next?.toString() != _text.text.trim()) {
+      _text.text = next?.toString() ?? '';
+    }
     if (next != widget.value?.round()) widget.onChanged(next);
   }
 
   @override
   void dispose() {
+    // Leaving Settings ends the field without it losing the keyboard first.
+    final (valid, next) = _typed;
+    if (valid && next != widget.value?.round()) {
+      final changed = widget.onChanged;
+      WidgetsBinding.instance.addPostFrameCallback((_) => changed(next));
+    }
     _focus.dispose();
     _text.dispose();
     super.dispose();

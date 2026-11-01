@@ -3253,10 +3253,10 @@
  "Save a screenshot": "Guardar uma captura",
  "What is wrong? (optional)": "O que está errado? (opcional)",
  "Screenshots go to": "Guardar capturas em",
- "A picture of this window is saved, with a note if you like. In a terminal, use the camera symbol below it: programs there may use F9.": "Uma imagem desta janela é guardada, com uma nota se quiseres. Num terminal, usa o símbolo da câmara por baixo: os programas podem usar F9.",
+ "A picture of this window is saved, with a note if you like. In a terminal, use the camera symbol below it: programs there may use F9.": "Uma imagem desta janela é guardada, com uma nota, se quiser. Num terminal, use o símbolo da câmara por baixo: os programas podem usar F9.",
  "Column widths": "Larguras das colunas",
  "Current width": "Largura atual",
  "Default width": "Largura predefinida",
  "Automatic": "Automático",
- "Drag a border to change the width; a double click restores the default.": "Arrasta uma margem para mudar a largura; um duplo clique repõe a predefinição."
+ "Drag a border to change the width; a double click restores the default.": "Arraste uma margem para mudar a largura; um duplo clique repõe a predefinição."
 }
