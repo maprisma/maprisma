@@ -659,105 +659,54 @@ class _MapEditorState extends State<MapEditor>
                   ? 'Connect'
                   : 'Hold and drag to connect or move. A preview appears before changes.',
             ),
-            child: Opacity(
-              opacity: dimmed ? .3 : 1,
-              child: Card(
-                color: node['status'] == 'running'
-                    ? colors.secondaryContainer
-                    : colors.surfaceContainer,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(corners(context)),
-                  side: BorderSide(
-                    color: valid || lit.contains(id)
-                        ? colors.primary
-                        : colors.outlineVariant,
-                    width: valid || _selected.contains(id) ? 3 : 1,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                // Solid behind a faded box: a line passing under it stays hidden.
+                Card(
+                  key: ValueKey('box-backing-$id'),
+                  color: colors.surfaceContainerLow,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(corners(context)),
                   ),
                 ),
-                child: Stack(
-                  children: [
-                    Positioned.fill(
-                      child: InkWell(
-                        onTap: () => _choose(id),
-                        onSecondaryTap: () =>
-                            widget.onMenu?.call(context, node),
-                        child: Padding(
-                          padding: const EdgeInsets.all(8),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
+                Opacity(
+                  opacity: dimmed ? .3 : 1,
+                  child: Card(
+                    color: node['status'] == 'running'
+                        ? colors.secondaryContainer
+                        : colors.surfaceContainer,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(corners(context)),
+                      side: BorderSide(
+                        color: valid || lit.contains(id)
+                            ? colors.primary
+                            : colors.outlineVariant,
+                        width: valid || _selected.contains(id) ? 3 : 1,
+                      ),
+                    ),
+                    child: Stack(
+                      children: [
+                        Positioned.fill(
+                          child: InkWell(
+                            onTap: () => _choose(id),
+                            onSecondaryTap: () =>
+                                widget.onMenu?.call(context, node),
+                            child: Padding(
+                              padding: const EdgeInsets.all(8),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  GestureDetector(
-                                    key: ValueKey('reorder-$id'),
-                                    onVerticalDragStart: (_) =>
-                                        _reorderDistance = 0,
-                                    onVerticalDragUpdate: (d) =>
-                                        _reorderDistance += d.delta.dy,
-                                    onVerticalDragEnd: (d) {
-                                      _save(
-                                        reorderMapBox(
-                                          _saved,
-                                          layout,
-                                          id,
-                                          layout.cards[layout.cardOf[id]]!.nodes
-                                                  .indexOf(id) +
-                                              (_reorderDistance / mapRowStep)
-                                                  .round(),
-                                        ),
-                                      );
-                                    },
-                                    child: Tooltip(
-                                      message: widget.tr('Reorder'),
-                                      child: const Icon(
-                                        Icons.drag_handle,
-                                        size: 16,
-                                      ),
-                                    ),
-                                  ),
-                                  Expanded(
-                                    child: Text(
-                                      widget.tr(node['label'] as String),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                  if ((widget.graph['agent_badges']
-                                          as Map?)?[id]
-                                      case final Map badge)
-                                    AgentBadge(badge: badge),
-                                  if ((widget.graph['usage_boxes'] as Map?)?[id]
-                                      case final Map box)
-                                    Flexible(
-                                      child: UsageBoxLabel(
-                                        box: box,
-                                        size:
-                                            (widget.graph['usage_box_size']
-                                                        as int? ??
-                                                    7)
-                                                .toDouble(),
-                                      ),
-                                    ),
-                                  PopupMenuButton<String>(
-                                    tooltip: widget.tr('Actions'),
-                                    onSelected: (action) {
-                                      switch (action) {
-                                        case 'connect':
-                                          _begin(id);
-                                        case 'up':
-                                          _save(
-                                            reorderMapBox(
-                                              _saved,
-                                              layout,
-                                              id,
-                                              layout
-                                                      .cards[layout.cardOf[id]]!
-                                                      .nodes
-                                                      .indexOf(id) -
-                                                  1,
-                                            ),
-                                          );
-                                        case 'down':
+                                  Row(
+                                    children: [
+                                      GestureDetector(
+                                        key: ValueKey('reorder-$id'),
+                                        onVerticalDragStart: (_) =>
+                                            _reorderDistance = 0,
+                                        onVerticalDragUpdate: (d) =>
+                                            _reorderDistance += d.delta.dy,
+                                        onVerticalDragEnd: (d) {
                                           _save(
                                             reorderMapBox(
                                               _saved,
@@ -767,200 +716,290 @@ class _MapEditorState extends State<MapEditor>
                                                       .cards[layout.cardOf[id]]!
                                                       .nodes
                                                       .indexOf(id) +
-                                                  1,
+                                                  (_reorderDistance /
+                                                          mapRowStep)
+                                                      .round(),
                                             ),
                                           );
-                                        case 'open':
-                                          widget.onOpen?.call(node);
-                                        case 'actions':
-                                          widget.onMenu?.call(context, node);
-                                        case 'move':
-                                          _chooseMove(id, layout);
-                                        default:
-                                          final edge = layout.allEdges
-                                              .firstWhere(
-                                                (e) => edgeKey(e) == action,
+                                        },
+                                        child: Tooltip(
+                                          message: widget.tr('Reorder'),
+                                          child: const Icon(
+                                            Icons.drag_handle,
+                                            size: 16,
+                                          ),
+                                        ),
+                                      ),
+                                      Expanded(
+                                        child: Text(
+                                          widget.tr(node['label'] as String),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      if ((widget.graph['agent_badges']
+                                              as Map?)?[id]
+                                          case final Map badge)
+                                        AgentBadge(badge: badge),
+                                      if ((widget.graph['usage_boxes']
+                                              as Map?)?[id]
+                                          case final Map box)
+                                        Flexible(
+                                          child: UsageBoxLabel(
+                                            box: box,
+                                            size:
+                                                (widget.graph['usage_box_size']
+                                                            as int? ??
+                                                        7)
+                                                    .toDouble(),
+                                          ),
+                                        ),
+                                      PopupMenuButton<String>(
+                                        tooltip: widget.tr('Actions'),
+                                        onSelected: (action) {
+                                          switch (action) {
+                                            case 'connect':
+                                              _begin(id);
+                                            case 'up':
+                                              _save(
+                                                reorderMapBox(
+                                                  _saved,
+                                                  layout,
+                                                  id,
+                                                  layout
+                                                          .cards[layout
+                                                              .cardOf[id]]!
+                                                          .nodes
+                                                          .indexOf(id) -
+                                                      1,
+                                                ),
                                               );
-                                          _begin(
-                                            edge['source'] as String,
-                                            edge: edge,
-                                          );
-                                      }
-                                    },
-                                    itemBuilder: (_) => [
-                                      PopupMenuItem(
-                                        value: 'connect',
-                                        child: Text(widget.tr('Connect')),
-                                      ),
-                                      for (final action in ['up', 'down'])
-                                        PopupMenuItem(
-                                          value: action,
-                                          child: Text(
-                                            widget.tr(
-                                              action == 'up'
-                                                  ? 'Move up'
-                                                  : 'Move down',
-                                            ),
-                                          ),
-                                        ),
-                                      PopupMenuItem(
-                                        value: 'open',
-                                        child: Text(widget.tr('Details')),
-                                      ),
-                                      if (widget.onMenu != null)
-                                        PopupMenuItem(
-                                          value: 'actions',
-                                          child: Text(widget.tr('Actions')),
-                                        ),
-                                      // Many connections get a page of their own, or
-                                      // the menu would fill the screen.
-                                      if (_movable(id, layout).length > 3)
-                                        PopupMenuItem(
-                                          value: 'move',
-                                          child: Text(
-                                            '${widget.tr('Move connection')}…',
-                                          ),
-                                        )
-                                      else
-                                        for (final edge in _movable(id, layout))
+                                            case 'down':
+                                              _save(
+                                                reorderMapBox(
+                                                  _saved,
+                                                  layout,
+                                                  id,
+                                                  layout
+                                                          .cards[layout
+                                                              .cardOf[id]]!
+                                                          .nodes
+                                                          .indexOf(id) +
+                                                      1,
+                                                ),
+                                              );
+                                            case 'open':
+                                              widget.onOpen?.call(node);
+                                            case 'actions':
+                                              widget.onMenu?.call(
+                                                context,
+                                                node,
+                                              );
+                                            case 'move':
+                                              _chooseMove(id, layout);
+                                            default:
+                                              final edge = layout.allEdges
+                                                  .firstWhere(
+                                                    (e) => edgeKey(e) == action,
+                                                  );
+                                              _begin(
+                                                edge['source'] as String,
+                                                edge: edge,
+                                              );
+                                          }
+                                        },
+                                        itemBuilder: (_) => [
                                           PopupMenuItem(
-                                            value: edgeKey(edge),
-                                            child: Text(
-                                              _moveLabel(edge, layout),
-                                            ),
+                                            value: 'connect',
+                                            child: Text(widget.tr('Connect')),
                                           ),
+                                          for (final action in ['up', 'down'])
+                                            PopupMenuItem(
+                                              value: action,
+                                              child: Text(
+                                                widget.tr(
+                                                  action == 'up'
+                                                      ? 'Move up'
+                                                      : 'Move down',
+                                                ),
+                                              ),
+                                            ),
+                                          PopupMenuItem(
+                                            value: 'open',
+                                            child: Text(widget.tr('Details')),
+                                          ),
+                                          if (widget.onMenu != null)
+                                            PopupMenuItem(
+                                              value: 'actions',
+                                              child: Text(widget.tr('Actions')),
+                                            ),
+                                          // Many connections get a page of their own, or
+                                          // the menu would fill the screen.
+                                          if (_movable(id, layout).length > 3)
+                                            PopupMenuItem(
+                                              value: 'move',
+                                              child: Text(
+                                                '${widget.tr('Move connection')}…',
+                                              ),
+                                            )
+                                          else
+                                            for (final edge in _movable(
+                                              id,
+                                              layout,
+                                            ))
+                                              PopupMenuItem(
+                                                value: edgeKey(edge),
+                                                child: Text(
+                                                  _moveLabel(edge, layout),
+                                                ),
+                                              ),
+                                        ],
+                                      ),
                                     ],
                                   ),
+                                  Text(
+                                    node['detail'] as String? ?? '',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(fontSize: 12),
+                                  ),
+                                  if (hasSubagents ||
+                                      hasTraffic ||
+                                      widget.controls != null ||
+                                      widget.onOpen != null)
+                                    SizedBox(
+                                      height: 26,
+                                      child: Row(
+                                        children: [
+                                          if (hasSubagents)
+                                            Tooltip(
+                                              message:
+                                                  '${widget.tr('Subagents')}: ${activity?['active_subagents']} / ${children.length}',
+                                              child: InkWell(
+                                                key: ValueKey(
+                                                  'subagents-$command',
+                                                ),
+                                                borderRadius:
+                                                    BorderRadius.circular(4),
+                                                onTap: () =>
+                                                    widget.onSubagents!(
+                                                      command,
+                                                    ),
+                                                child: Padding(
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 4,
+                                                        vertical: 2,
+                                                      ),
+                                                  child: Row(
+                                                    mainAxisSize:
+                                                        MainAxisSize.min,
+                                                    children: [
+                                                      const Icon(
+                                                        Icons
+                                                            .account_tree_outlined,
+                                                        size: 14,
+                                                      ),
+                                                      const SizedBox(width: 2),
+                                                      Text(
+                                                        '${children.length}',
+                                                        style: const TextStyle(
+                                                          fontSize: 11,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          if (hasTraffic)
+                                            IconButton(
+                                              key: ValueKey('traffic-$command'),
+                                              padding: EdgeInsets.zero,
+                                              visualDensity:
+                                                  VisualDensity.compact,
+                                              constraints: const BoxConstraints(
+                                                minWidth: 26,
+                                                minHeight: 24,
+                                              ),
+                                              tooltip: trafficTooltip(
+                                                traffic!,
+                                                widget.tr,
+                                              ),
+                                              onPressed: () => showDialog<void>(
+                                                context: context,
+                                                builder: (_) =>
+                                                    AgentTrafficDialog(
+                                                      label: widget.tr(
+                                                        node['label'] as String,
+                                                      ),
+                                                      traffic: traffic,
+                                                      tr: widget.tr,
+                                                    ),
+                                              ),
+                                              icon: const Icon(
+                                                Icons.swap_vert,
+                                                size: 16,
+                                              ),
+                                            ),
+                                          if (widget.controls != null)
+                                            Expanded(
+                                              child: widget.controls!(node),
+                                            )
+                                          else if (widget.onOpen != null)
+                                            IconButton(
+                                              key: ValueKey('details-$id'),
+                                              padding: EdgeInsets.zero,
+                                              visualDensity:
+                                                  VisualDensity.compact,
+                                              constraints: const BoxConstraints(
+                                                minWidth: 26,
+                                                minHeight: 24,
+                                              ),
+                                              tooltip: widget.tr('Details'),
+                                              onPressed: () =>
+                                                  widget.onOpen!(node),
+                                              icon: const Icon(
+                                                Icons.info_outline,
+                                                size: 16,
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                    ),
                                 ],
                               ),
-                              Text(
-                                node['detail'] as String? ?? '',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontSize: 12),
-                              ),
-                              if (hasSubagents ||
-                                  hasTraffic ||
-                                  widget.controls != null ||
-                                  widget.onOpen != null)
-                                SizedBox(
-                                  height: 26,
-                                  child: Row(
-                                    children: [
-                                      if (hasSubagents)
-                                        Tooltip(
-                                          message:
-                                              '${widget.tr('Subagents')}: ${activity?['active_subagents']} / ${children.length}',
-                                          child: InkWell(
-                                            key: ValueKey('subagents-$command'),
-                                            borderRadius: BorderRadius.circular(
-                                              4,
-                                            ),
-                                            onTap: () =>
-                                                widget.onSubagents!(command),
-                                            child: Padding(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                    horizontal: 4,
-                                                    vertical: 2,
-                                                  ),
-                                              child: Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  const Icon(
-                                                    Icons.account_tree_outlined,
-                                                    size: 14,
-                                                  ),
-                                                  const SizedBox(width: 2),
-                                                  Text(
-                                                    '${children.length}',
-                                                    style: const TextStyle(
-                                                      fontSize: 11,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      if (hasTraffic)
-                                        IconButton(
-                                          key: ValueKey('traffic-$command'),
-                                          padding: EdgeInsets.zero,
-                                          visualDensity: VisualDensity.compact,
-                                          constraints: const BoxConstraints(
-                                            minWidth: 26,
-                                            minHeight: 24,
-                                          ),
-                                          tooltip: trafficTooltip(
-                                            traffic!,
-                                            widget.tr,
-                                          ),
-                                          onPressed: () => showDialog<void>(
-                                            context: context,
-                                            builder: (_) => AgentTrafficDialog(
-                                              label: widget.tr(
-                                                node['label'] as String,
-                                              ),
-                                              traffic: traffic,
-                                              tr: widget.tr,
-                                            ),
-                                          ),
-                                          icon: const Icon(
-                                            Icons.swap_vert,
-                                            size: 16,
-                                          ),
-                                        ),
-                                      if (widget.controls != null)
-                                        Expanded(child: widget.controls!(node))
-                                      else if (widget.onOpen != null)
-                                        IconButton(
-                                          key: ValueKey('details-$id'),
-                                          padding: EdgeInsets.zero,
-                                          visualDensity: VisualDensity.compact,
-                                          constraints: const BoxConstraints(
-                                            minWidth: 26,
-                                            minHeight: 24,
-                                          ),
-                                          tooltip: widget.tr('Details'),
-                                          onPressed: () => widget.onOpen!(node),
-                                          icon: const Icon(
-                                            Icons.info_outline,
-                                            size: 16,
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                            ],
+                            ),
                           ),
                         ),
-                      ),
-                    ),
-                    Positioned(
-                      right: 4,
-                      bottom: 4,
-                      child: IconButton(
-                        key: ValueKey('pin-$id'),
-                        padding: EdgeInsets.zero,
-                        visualDensity: VisualDensity.compact,
-                        constraints: const BoxConstraints(
-                          minWidth: 26,
-                          minHeight: 24,
+                        Positioned(
+                          right: 4,
+                          bottom: 4,
+                          child: IconButton(
+                            key: ValueKey('pin-$id'),
+                            padding: EdgeInsets.zero,
+                            visualDensity: VisualDensity.compact,
+                            constraints: const BoxConstraints(
+                              minWidth: 26,
+                              minHeight: 24,
+                            ),
+                            tooltip: widget.tr(
+                              pins.contains(id) ? 'Unpin' : 'Pin',
+                            ),
+                            onPressed: () => _pin(id),
+                            icon: Icon(
+                              pins.contains(id)
+                                  ? Icons.push_pin
+                                  : Icons.push_pin_outlined,
+                              size: 16,
+                            ),
+                          ),
                         ),
-                        tooltip: widget.tr(pins.contains(id) ? 'Unpin' : 'Pin'),
-                        onPressed: () => _pin(id),
-                        icon: Icon(
-                          pins.contains(id)
-                              ? Icons.push_pin
-                              : Icons.push_pin_outlined,
-                          size: 16,
-                        ),
-                      ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
-              ),
+              ],
             ),
           ),
         ),

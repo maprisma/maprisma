@@ -720,6 +720,16 @@ void main() {
     await tester.pumpAndSettle();
     expect(shade('agent:a'), 1);
     expect(shade('runtime:r'), lessThan(1));
+    // A faded box still hides the lines passing under it.
+    final faded = find.byKey(const ValueKey('box-backing-runtime:r'));
+    expect(tester.widget<Card>(faded).color?.a, 1);
+    expect(
+      find.descendant(
+        of: find.ancestor(of: faded, matching: find.byType(Stack)).first,
+        matching: find.byWidgetPredicate((w) => w is Opacity && w.opacity < 1),
+      ),
+      findsOneWidget,
+    );
     expect(
       find.byWidgetPredicate((w) => w is Opacity && w.opacity < 1),
       findsWidgets,
