@@ -618,6 +618,19 @@ class SettingsView extends StatelessWidget {
                   ? null
                   : (value) => onUpdate({'terminal_tabs': value}),
             ),
+            SwitchListTile(
+              key: const ValueKey('screenshot-key'),
+              title: Text(tr('F9 saves a screenshot')),
+              subtitle: Text(
+                tr(
+                  'A picture of this window goes to Pictures/Maprisma. Not while a terminal is showing: programs there may use F9.',
+                ),
+              ),
+              value: settings['screenshot_key'] as bool? ?? true,
+              onChanged: busy
+                  ? null
+                  : (value) => onUpdate({'screenshot_key': value}),
+            ),
             const SizedBox(height: 24),
             Text(
               tr('Usage statistics box'),

@@ -3245,5 +3245,8 @@
  "{0}: all fine": "{0}: alles in orde",
  "Offered first for AI help; its tokens are used for it.": "Wordt als eerste aangeboden voor AI-hulp; zijn tokens worden daarvoor gebruikt.",
  "An agent with a model of your local LLM answers the AI help that needs no web (which MCP server fits, help with local LLMs) on this PC, without tokens. Suggested: the largest chat model your graphics card holds.": "Een agent met een model van je lokale LLM beantwoordt de AI-hulp die geen web nodig heeft (welke MCP-server past, hulp bij lokale LLM's) op deze pc, zonder tokens. Aanbevolen: het grootste chatmodel dat je grafische kaart kan bevatten.",
- "Nothing new found.": "Niets nieuws gevonden."
+ "Nothing new found.": "Niets nieuws gevonden.",
+ "F9 saves a screenshot": "F9 slaat een schermafbeelding op",
+ "A picture of this window goes to Pictures/Maprisma. Not while a terminal is showing: programs there may use F9.": "Een afbeelding van dit venster gaat naar Pictures/Maprisma. Niet zolang een terminal zichtbaar is: programma’s daar kunnen F9 zelf gebruiken.",
+ "Screenshot saved: {0}": "Schermafbeelding opgeslagen: {0}"
 }

@@ -3245,5 +3245,8 @@
  "{0}: all fine": "{0}: tutto a posto",
  "Offered first for AI help; its tokens are used for it.": "Proposto per primo per l’aiuto IA; i suoi token vengono usati per questo.",
  "An agent with a model of your local LLM answers the AI help that needs no web (which MCP server fits, help with local LLMs) on this PC, without tokens. Suggested: the largest chat model your graphics card holds.": "Un agente con un modello del tuo LLM locale risponde all'aiuto IA che non richiede il web (quale server MCP è adatto, aiuto con gli LLM locali) su questo PC, senza token. Consigliato: il modello di chat più grande che la tua scheda grafica può contenere.",
- "Nothing new found.": "Non è stato trovato nulla di nuovo."
+ "Nothing new found.": "Non è stato trovato nulla di nuovo.",
+ "F9 saves a screenshot": "F9 salva uno screenshot",
+ "A picture of this window goes to Pictures/Maprisma. Not while a terminal is showing: programs there may use F9.": "Un’immagine di questa finestra va in Pictures/Maprisma. Non mentre è visibile un terminale: i programmi lì possono usare F9.",
+ "Screenshot saved: {0}": "Screenshot salvato: {0}"
 }

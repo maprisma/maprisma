@@ -109,6 +109,9 @@ KEYS = (
     "{0} {1} is available (you have {2})",
     "Update",
     # Status in the smart cards (health.report).
+    "F9 saves a screenshot",
+    "A picture of this window goes to Pictures/Maprisma. Not while a terminal is showing: programs there may use F9.",
+    "Screenshot saved: {0}",
     "Check again",
     "Nothing to fix.",
     "Ready",

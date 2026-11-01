@@ -6,6 +6,23 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:maprisma/test_shots.dart';
 
 void main() {
+  test(
+    'window pictures: Pictures/Maprisma, dated, never overwritten',
+    () async {
+      final home = Directory.systemTemp.createTempSync('shots-home');
+      addTearDown(() => home.deleteSync(recursive: true));
+      final shots = WindowShots.fromEnvironment({'HOME': home.path});
+      final time = DateTime(2026, 11, 1, 8, 26, 31);
+      final first = await shots.save(Uint8List.fromList([1]), time);
+      final second = await shots.save(Uint8List.fromList([2]), time);
+      expect(
+        first,
+        '${home.path}/Pictures/Maprisma/maprisma-2026-11-01-08-26-31.png',
+      );
+      expect(second, endsWith('-08-26-31-2.png'));
+    },
+  );
+
   late Directory run;
   setUp(() => run = Directory.systemTemp.createTempSync('maprisma-shots-'));
   tearDown(() => run.deleteSync(recursive: true));

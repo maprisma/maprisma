@@ -81,15 +81,22 @@ class MaprismaApp extends StatefulWidget {
 class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   final _navigator = GlobalKey<NavigatorState>();
 
-  /// F9 in a recorded test: only with MAPRISMA_RECORD_PROTOCOL (test_shots.dart).
-  /// English only: this is a test tool, not part of the app's interface.
+  /// F9: a picture of this window (test_shots.dart). In a recorded test it
+  /// goes next to the protocol, with a note; that part stays in English, it is
+  /// a test tool.
   final _shots = TestShots.fromEnvironment(Platform.environment);
+  final _windowShots = WindowShots.fromEnvironment(Platform.environment);
   final _shotArea = GlobalKey();
   bool _shooting = false;
 
   bool _shotKey(KeyEvent event) {
     if (event is! KeyDownEvent || event.logicalKey != LogicalKeyboardKey.f9) {
       return false;
+    }
+    if (_shots == null) {
+      final on = (_snapshot?['settings'] as Map?)?['screenshot_key'] != false;
+      // A program in a terminal may use F9 itself.
+      if (!on || _visibleTerminal != null) return false;
     }
     unawaited(_takeShot());
     return true;
@@ -98,7 +105,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   Future<void> _takeShot() async {
     final shots = _shots, context = _navigator.currentContext;
     final area = _shotArea.currentContext?.findRenderObject();
-    if (shots == null || context == null || _shooting) return;
+    if (context == null || _shooting) return;
     if (area is! RenderRepaintBoundary) return;
     _shooting = true;
     try {
@@ -108,7 +115,18 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       final data = await image.toByteData(format: ui.ImageByteFormat.png);
       image.dispose();
       if (data == null) return;
-      final path = await shots.save(data.buffer.asUint8List(), time);
+      final png = data.buffer.asUint8List();
+      if (shots == null) {
+        final path = await _windowShots.save(png, time);
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(tr('Screenshot saved: {0}').replaceAll('{0}', path)),
+          ),
+        );
+        return;
+      }
+      final path = await shots.save(png, time);
       if (!context.mounted) return;
       final field = TextEditingController();
       final note = await showDialog<String>(
@@ -134,7 +152,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       field.dispose();
       await shots.record(path, note ?? '', time);
     } catch (_) {
-      // A test tool must never disturb the app.
+      // A picture must never disturb the app.
     } finally {
       _shooting = false;
     }
@@ -568,7 +586,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   void initState() {
     super.initState();
     windowManager.addListener(this);
-    if (_shots != null) HardwareKeyboard.instance.addHandler(_shotKey);
+    HardwareKeyboard.instance.addHandler(_shotKey);
     windowChannel.setMethodCallHandler((call) async {
       if (call.method == 'shown') _placePopup();
     });
@@ -3887,7 +3905,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     _mapLayoutTimer?.cancel();
     _startMenu.dispose();
     _aiTransform.dispose();
-    if (_shots != null) HardwareKeyboard.instance.removeHandler(_shotKey);
+    HardwareKeyboard.instance.removeHandler(_shotKey);
     for (final terminal in _terminals) {
       terminal.dispose();
     }
@@ -3980,9 +3998,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     themeMode: appThemeMode(_themePreference, _desktopTheme),
     builder: (context, child) {
       _followTitleBar(Theme.of(context).brightness == Brightness.dark);
-      return _shots == null
-          ? child!
-          : RepaintBoundary(key: _shotArea, child: child);
+      return RepaintBoundary(key: _shotArea, child: child);
     },
     // Esc on the window's page: back from a page (the route's own dismiss
     // action would take it first); dialogs are routes of their own and keep
