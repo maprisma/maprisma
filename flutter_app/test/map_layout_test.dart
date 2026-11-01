@@ -44,8 +44,8 @@ void main() {
         const {},
         viewportWidth: 1896,
       );
-      expect(wide.columnGap, 152);
-      expect(wide.columnWidth, 352);
+      expect(wide.columnGap, 228);
+      expect(wide.columnWidth, 295);
       final tight = MapLayout(
         const {'nodes': [], 'edges': []},
         const {},
@@ -195,7 +195,7 @@ void main() {
       columns: const [0, 1],
       viewportWidth: 1896,
     );
-    expect(l.columnWidth, 560);
+    expect(l.columnWidth, 360);
     expect(l.columnGap, greaterThan(400));
     expect(l.size.width, greaterThan(1650));
   });
@@ -209,7 +209,7 @@ void main() {
     );
     final left = l.columnX(1), right = 1000 - (l.columnX(2) + l.columnWidth);
     expect(left, closeTo(right, 2));
-    expect(l.columnWidth, inInclusiveRange(266, 560));
+    expect(l.columnWidth, inInclusiveRange(266, 360));
     expect(l.columnGap, greaterThanOrEqualTo(36));
     expect(l.boxes['agent:a']!.width, l.columnWidth - 24);
     expect(l.size.width, lessThanOrEqualTo(1000));

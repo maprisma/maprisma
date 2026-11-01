@@ -11,7 +11,7 @@ After the picture is saved, a dialog shows where it went and takes an optional n
 Setting `screenshot_folder` (null|string, default null: `~/Pictures/Maprisma`), additive, protocol stays 2. A folder that cannot be written falls back to the default, so no picture is lost. A recorded test keeps its own folder.
 
 ## Map (Uwe's screenshot note, same branch)
-Column gaps about 8% of the window, as far as the 266 px column minimum leaves room.
+Column gaps about 12% of the window, as far as the 266 px column minimum leaves room; columns at most 360 px, the rest goes to the gaps. Pin is a symbol at the card's bottom right, no longer in its menu.
 
 ## Texts
 `What is wrong? (optional)` in 7 languages; the dialog is translated now that it is not only a test tool. Manual: the F9 row of the keys table.
