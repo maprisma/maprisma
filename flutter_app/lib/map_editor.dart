@@ -503,15 +503,6 @@ class _MapEditorState extends State<MapEditor>
       _drop(id);
       return;
     }
-    final agent = _selected
-        .where((v) => _layout!.nodes[v]?['kind'] == 'agent')
-        .firstOrNull;
-    if (_layout!.nodes[id]?['kind'] == 'model' &&
-        agent != null &&
-        _layout!.targetOk(agent, id)) {
-      widget.onEdit({'source': agent, 'target': id});
-      return;
-    }
     final shift = HardwareKeyboard.instance.isShiftPressed;
     _renderChange(() {
       if (!shift) _selected.clear();

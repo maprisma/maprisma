@@ -747,7 +747,7 @@ void main() {
     },
   );
   testWidgets(
-    'one agent selected with Shift; selecting model requests model edit',
+    'one agent selected with Shift; a click on a model only selects it',
     (tester) async {
       final edits = <Map<String, dynamic>>[], selection = <String>{};
       await mount(tester, edits: edits, selection: selection);
@@ -759,6 +759,16 @@ void main() {
       await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
       expect(selection, {'agent:b'});
       await tester.tap(find.text('agent:a'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('model:r:n'));
+      await tester.pump();
+      expect(edits, isEmpty);
+      expect(selection, {'model:r:n'});
+
+      // Connecting stays a deliberate step.
+      await tester.tap(find.byTooltip('Actions').at(1));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Connect'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('model:r:n'));
       await tester.pump();
