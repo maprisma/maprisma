@@ -506,7 +506,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
   void _close() {
     if (_step == _SmartStep.working) {
       setState(_abortWorking);
-    } else if (_step != _SmartStep.running) {
+    } else if (_step != _SmartStep.running && !_applyingConnect) {
       _runToken++;
       final taskId = _activeTask;
       _activeTask = null;
@@ -869,7 +869,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
     ];
     if (left.isEmpty) {
       setState(() => _step = _SmartStep.idle);
-      _close();
+      if (widget.open) _close();
       return;
     }
     setState(() {
@@ -1032,7 +1032,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
         return;
       }
       setState(() => _step = _SmartStep.idle);
-      _close();
+      if (widget.open) _close();
     } catch (_) {
       if (!mounted || token != _runToken) return;
       _activeTask = null;

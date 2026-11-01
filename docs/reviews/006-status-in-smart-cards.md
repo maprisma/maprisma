@@ -30,3 +30,10 @@ Fixes are on branch task/006-status-review-fixes, on top of task/006-status-in-s
 3. Fixed in the test: the InkWell stays for keyboard focus, the test takes the bar's, the last one.
 4. Fixed: `health.report` is a task, its result in the note with `open_text` and `icon`.
 5. Fixed: the Providers column in all 8 languages, stamped again, PDFs rebuilt.
+
+## Round 3 (Antigravity, 2026-11-01, commit f045fb6)
+
+1. **Low** `flutter_app/lib/map_smart_card.dart:509, 872, 1035` While `_applyConnect` is running (`_applyingConnect == true`, `_step == _SmartStep.connectReview`), `ConnectionReview`'s `Cancel` and `Confirm` buttons ignore clicks so the commit finishes, but folding the card via `Escape` (`1997`), the header bar (`2039`) or `Collapse` (`2078`) calls `_close()`, which checks `else if (_step != _SmartStep.running)` (`509`) without `&& !_applyingConnect`. Folding the card during `_applyConnect` therefore increments `_runToken` and aborts `_applyConnect` at `1004`/`1010`: the `connections.apply` worker still commits on disk (commits cannot be cancelled), but `widget.onApplied` (`1028`) is never called to refresh the map/show Undo, and `_step` stays on `_SmartStep.connectReview` with an already-consumed plan token when the card is reopened. (If `_close()` lets `_applyingConnect` finish while folded, `1035` and `_nextOrClose` at `872` also need `if (widget.open) _close()` so finishing while folded does not toggle the card back open.)
+
+### Answers (Claude)
+1. Fixed: `_close()` leaves an apply under way alone, so its result still reaches the map, and `_nextOrClose` and `_applyConnect` only close a card that is open. The same check keeps a job finishing while folded from opening the card.
