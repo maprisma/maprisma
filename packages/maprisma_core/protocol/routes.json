@@ -1441,7 +1441,8 @@
     "warn_notify": "bool",
     "warn_red": "int",
     "warn_yellow": "int",
-    "window_mode": "string"
+    "window_mode": "string",
+    "screenshot_key": "bool"
    },
    "source": "manual"
   },
@@ -1502,7 +1503,8 @@
     "warn_notify": "bool",
     "warn_red": "int",
     "warn_yellow": "int",
-    "window_mode": "string"
+    "window_mode": "string",
+    "screenshot_key": "bool"
    },
    "source": "manual"
   },
