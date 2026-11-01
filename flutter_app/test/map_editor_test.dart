@@ -677,6 +677,37 @@ void main() {
     expect(saved.last['column_widths'], isEmpty);
   });
 
+  testWidgets('a selection grays out the rest, but not what is pinned', (
+    tester,
+  ) async {
+    await mount(tester, edits: []);
+    double shade(String label) => tester
+        .widget<Opacity>(
+          find
+              .ancestor(of: find.text(label), matching: find.byType(Opacity))
+              .first,
+        )
+        .opacity;
+    await tester.tap(find.byKey(const ValueKey('pin-agent:b')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('agent:a'));
+    await tester.pumpAndSettle();
+    expect(shade('agent:a'), 1);
+    expect(shade('agent:b'), 1);
+    expect(
+      find.byWidgetPredicate((w) => w is Opacity && w.opacity < 1),
+      findsWidgets,
+    );
+    // A click on empty map ends the selection.
+    final board = tester.getTopLeft(find.byType(InteractiveViewer));
+    await tester.tapAt(board + const Offset(6, 600));
+    await tester.pumpAndSettle();
+    expect(
+      find.byWidgetPredicate((w) => w is Opacity && w.opacity < 1),
+      findsNothing,
+    );
+  });
+
   testWidgets(
     'fold and keyboard reorder save only layout; pin survives remount',
     (tester) async {
