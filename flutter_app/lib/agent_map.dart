@@ -47,7 +47,6 @@ class AgentMap extends StatelessWidget {
     this.onSmartApplied,
     this.smartStatus,
     this.smartStatusTarget,
-    this.smartWindowsCovered = false,
     this.columns = const [
       'MCP servers and skills',
       'Agents',
@@ -66,9 +65,6 @@ class AgentMap extends StatelessWidget {
   final ValueChanged<Map<String, dynamic>>? onSmartApplied;
   final SmartStatusData? smartStatus;
   final (int, String)? smartStatusTarget;
-
-  /// Something opened above the map: an Ask AI window waits below it.
-  final bool smartWindowsCovered;
   final Set<String>? selection;
   final Widget Function(Map<String, dynamic>)? controls;
   final Future<void> Function(Map<String, dynamic>)? onEdit;
@@ -178,7 +174,6 @@ class AgentMap extends StatelessWidget {
         onSmartApplied: onSmartApplied,
         smartStatus: smartStatus,
         smartStatusTarget: smartStatusTarget,
-        smartWindowsCovered: smartWindowsCovered,
       );
     }
     final groups = readOnly ? null : this.groups;

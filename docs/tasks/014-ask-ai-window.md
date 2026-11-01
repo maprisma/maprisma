@@ -10,6 +10,8 @@ None.
 ## UI
 `overlay_window.dart` is the one window for the terminal and Ask AI: centred, 80% × 85%, over the dimmed app, what is below takes no clicks. The column's bar stays; opening it shows the window through an `OverlayPortal`, so the card keeps its state. Header: status symbol, title, helper menu with its cost, Collapse; the helper can change while nothing is under way. Footer: the buttons of the step. Reviews keep their own buttons.
 
+An action that opens a task card, terminal, browser or page closes the window; it does not come back.
+
 ## Acceptance
 - Every step works as before, its buttons in the footer.
 - A column hidden while its window is open hides the window and keeps the prompt.

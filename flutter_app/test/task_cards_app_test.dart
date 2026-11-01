@@ -3,6 +3,7 @@ import 'support/python_transport.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'package:maprisma/backend.dart';
+import 'package:maprisma/overlay_window.dart';
 import 'package:maprisma/agent_map.dart';
 import 'package:maprisma/settings_view.dart';
 import 'package:maprisma/main.dart';
@@ -806,6 +807,9 @@ void main() {
       requests(dir).lastWhere((q) => q['method'] == 'updates.run')['params'],
       {'key': 'test', 'running_ok': true},
     );
+    // Update closed the window; the problem is still there to open.
+    await tester.tap(find.byKey(const ValueKey('problems-open')));
+    await settleService(tester);
     await tester.tap(
       find.descendant(
         of: find.byKey(const ValueKey('smart-card-agents')),
@@ -1771,6 +1775,36 @@ void main() {
       await unmountApp(tester);
     },
   );
+
+  testWidgets('an open Ask AI window holds the keys; Update closes it', (
+    tester,
+  ) async {
+    final dir = await mountApp(tester);
+    await settleService(tester);
+    await tester.tap(find.byKey(const ValueKey('smart-status-agents')));
+    await settleService(tester);
+    expect(find.byType(OverlayWindow), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.f1);
+    await settleService(tester);
+    expect(find.byKey(const ValueKey('help-manual')), findsNothing);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await settleService(tester);
+    expect(find.byType(OverlayWindow), findsNothing);
+    // The header works again.
+    await tester.sendKeyEvent(LogicalKeyboardKey.f1);
+    await settleService(tester);
+    expect(find.byKey(const ValueKey('help-manual')), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await settleService(tester);
+    await tester.tap(find.byKey(const ValueKey('smart-status-agents')));
+    await settleService(tester);
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Update').first);
+    await settleService(tester);
+    expect(find.byType(OverlayWindow), findsNothing);
+    expect(requests(dir).any((q) => q['method'] == 'updates.run'), isTrue);
+    expect(tester.takeException(), isNull);
+    await unmountApp(tester);
+  });
 
   testWidgets('the use cases stay reachable in Help', (tester) async {
     await mountApp(tester);

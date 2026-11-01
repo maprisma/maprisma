@@ -341,7 +341,6 @@ class MapSmartCard extends StatefulWidget {
     this.onApplied,
     this.status,
     this.statusTrigger = 0,
-    this.covered = false,
     this.width = 266,
   });
 
@@ -367,9 +366,6 @@ class MapSmartCard extends StatefulWidget {
   final ValueChanged<Map<String, dynamic>>? onApplied;
   final SmartStatusData? status;
   final int statusTrigger;
-
-  /// A task or terminal above the map: the window waits and comes back.
-  final bool covered;
   final double width;
 
   @override
@@ -515,7 +511,9 @@ class _MapSmartCardState extends State<MapSmartCard> {
     }
   }
 
-  void _close() {
+  /// [refocus] false when what comes next takes the keyboard: a task card, a
+  /// terminal, a page.
+  void _close({bool refocus = true}) {
     if (_step == _SmartStep.working) {
       setState(_abortWorking);
     } else if (_step != _SmartStep.running && !_applyingConnect) {
@@ -531,6 +529,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
       }
     }
     widget.onToggle();
+    if (!refocus) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && !widget.open) _barFocus.requestFocus();
     });
@@ -677,6 +676,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
         candidate: '${candidate['id']}',
       );
       if (!mounted) return;
+      _close(refocus: false);
       widget.onTask?.call(plan);
     } catch (_) {
       if (!mounted) return;
@@ -853,6 +853,11 @@ class _MapSmartCardState extends State<MapSmartCard> {
     }
   }
 
+  void _closeForTerminal() {
+    setState(() => _step = _SmartStep.idle);
+    if (widget.open) _close(refocus: false);
+  }
+
   /// The others of the proposal stay to choose, one by one.
   void _nextOrClose(Map<String, dynamic> candidate) {
     final left = [
@@ -892,8 +897,8 @@ class _MapSmartCardState extends State<MapSmartCard> {
       if (!mounted || token != _runToken) return;
       if (candidate['kind'] == 'agent_action') {
         // It runs in a terminal, not as a task: the app shows that terminal.
+        _closeForTerminal();
         widget.onApplied?.call(started);
-        _nextOrClose(candidate);
         return;
       }
       final taskId = started['task'] as String?;
@@ -923,6 +928,11 @@ class _MapSmartCardState extends State<MapSmartCard> {
                   '${result['message'] ?? widget.tr('The action could not be completed.')}';
               _step = _SmartStep.error;
             });
+            return;
+          }
+          if (result['session'] != null) {
+            _closeForTerminal();
+            widget.onApplied?.call(result);
             return;
           }
           widget.onApplied?.call(result);
@@ -1072,6 +1082,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
       mainAxisSize: MainAxisSize.min,
       children: [
         Flexible(
+          flex: 3,
           child: widget.helpers.length > 1
               ? SizedBox(
                   width: 220,
@@ -1115,6 +1126,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
         ),
         const SizedBox(width: 6),
         Flexible(
+          flex: 2,
           child: Text(
             cost,
             maxLines: 1,
@@ -1140,7 +1152,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
           OutlinedButton(
             key: const ValueKey('smart-no-helper-action'),
             onPressed: () {
-              _close();
+              _close(refocus: false);
               onFirstAgent(const ['firstagent']);
             },
             child: Text(tr('Get started')),
@@ -1302,7 +1314,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
                 OutlinedButton(
                   style: _statusButtonStyle,
                   onPressed: () {
-                    _close();
+                    _close(refocus: false);
                     onAction(action);
                   },
                   child: Text(widget.tr(label)),
@@ -1375,7 +1387,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
                   OutlinedButton(
                     style: _statusButtonStyle,
                     onPressed: () {
-                      _close();
+                      _close(refocus: false);
                       onAddonHint(h, action);
                     },
                     child: Text(widget.tr(label)),
@@ -1419,7 +1431,10 @@ class _MapSmartCardState extends State<MapSmartCard> {
             const SizedBox(height: 4),
             OutlinedButton(
               style: _statusButtonStyle,
-              onPressed: () => onUpdate(u),
+              onPressed: () {
+                _close(refocus: false);
+                onUpdate(u);
+              },
               child: Text(widget.tr('Update')),
             ),
           ],
@@ -1477,7 +1492,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
                     key: ValueKey('mcp-$action-${u['name']}'),
                     style: _statusButtonStyle,
                     onPressed: () {
-                      if (action == 'use') _close();
+                      if (action != 'release') _close(refocus: false);
                       onMcpUpdate(u, action);
                     },
                     child: Text(label),
@@ -1728,7 +1743,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
                           onPressed: () {
                             if (c['kind'] == 'provider_action') {
                               // Its own page has the review.
-                              _close();
+                              _close(refocus: false);
                               widget.onProvider?.call(
                                 '${c['step']}',
                                 '${c['key']}',
@@ -1855,7 +1870,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
         ),
       ),
     );
-    final shown = widget.open && !widget.covered && Visibility.of(context);
+    final shown = widget.open && Visibility.of(context);
     if (shown != _windowShown) {
       _windowShown = shown;
       _countWindow(shown ? 1 : -1);
@@ -1964,7 +1979,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
               child: Row(
                 children: [
                   statusButton,
-                  Flexible(
+                  Expanded(
                     child: Semantics(
                       button: _step == _SmartStep.status,
                       child: InkWell(
@@ -1974,7 +1989,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
                         child: Padding(
                           padding: const EdgeInsets.symmetric(vertical: 6),
                           child: Row(
-                            mainAxisSize: MainAxisSize.min,
+                            mainAxisSize: MainAxisSize.max,
                             children: [
                               Icon(
                                 Icons.auto_awesome,
@@ -2004,8 +2019,8 @@ class _MapSmartCardState extends State<MapSmartCard> {
                       ),
                     ),
                   ),
-                  const Spacer(),
-                  Flexible(flex: 2, child: _buildHelperChoice(colors)),
+                  const SizedBox(width: 16),
+                  Flexible(child: _buildHelperChoice(colors)),
                   IconButton(
                     tooltip: widget.tr('Collapse'),
                     onPressed: _close,
@@ -2017,61 +2032,55 @@ class _MapSmartCardState extends State<MapSmartCard> {
             const Divider(height: 1),
             if (_step == _SmartStep.review)
               Expanded(
-                child: Align(
-                  alignment: Alignment.topCenter,
-                  child: _activeCandidate?['kind'] == 'agent_action'
-                      ? AgentActionReview(
-                          plan: _reviewData,
-                          tr: widget.tr,
-                          onConfirm: _confirmReview,
-                          onCancel: () =>
-                              setState(() => _step = _SmartStep.proposal),
-                        )
-                      : _activeCandidate?['kind'] == 'model_move'
-                      ? SmartMoveReview(
-                          plan: _reviewData,
-                          title: '${_activeCandidate?['title'] ?? ''}',
-                          subtitle: '${_activeCandidate?['subtitle'] ?? ''}',
-                          tr: widget.tr,
-                          onConfirm: _confirmReview,
-                          onCancel: () =>
-                              setState(() => _step = _SmartStep.proposal),
-                        )
-                      : _reviewData['removal'] != null
-                      ? ModelRemovalReview(
-                          preview: _reviewData,
-                          tr: widget.tr,
-                          onConfirm: _confirmReview,
-                          onCancel: () =>
-                              setState(() => _step = _SmartStep.proposal),
-                        )
-                      : SmartModelDownloadReview(
-                          review: _reviewData,
-                          tr: widget.tr,
-                          onConfirm: _confirmReview,
-                          onCancel: () =>
-                              setState(() => _step = _SmartStep.proposal),
-                        ),
-                ),
+                child: _activeCandidate?['kind'] == 'agent_action'
+                    ? AgentActionReview(
+                        plan: _reviewData,
+                        tr: widget.tr,
+                        onConfirm: _confirmReview,
+                        onCancel: () =>
+                            setState(() => _step = _SmartStep.proposal),
+                      )
+                    : _activeCandidate?['kind'] == 'model_move'
+                    ? SmartMoveReview(
+                        plan: _reviewData,
+                        title: '${_activeCandidate?['title'] ?? ''}',
+                        subtitle: '${_activeCandidate?['subtitle'] ?? ''}',
+                        tr: widget.tr,
+                        onConfirm: _confirmReview,
+                        onCancel: () =>
+                            setState(() => _step = _SmartStep.proposal),
+                      )
+                    : _reviewData['removal'] != null
+                    ? ModelRemovalReview(
+                        preview: _reviewData,
+                        tr: widget.tr,
+                        onConfirm: _confirmReview,
+                        onCancel: () =>
+                            setState(() => _step = _SmartStep.proposal),
+                      )
+                    : SmartModelDownloadReview(
+                        review: _reviewData,
+                        tr: widget.tr,
+                        onConfirm: _confirmReview,
+                        onCancel: () =>
+                            setState(() => _step = _SmartStep.proposal),
+                      ),
               )
             else if (_step == _SmartStep.connectReview)
               Expanded(
-                child: Align(
-                  alignment: Alignment.topCenter,
-                  child: ConnectionReview(
-                    plan: _connectPlan,
-                    tr: widget.tr,
-                    onConfirm: _applyConnect,
-                    onCancel: () {
-                      // An apply under way finishes: it has no way back.
-                      if (_applyingConnect) return;
-                      setState(
-                        () => _step = _activeCandidate?['kind'] == null
-                            ? _SmartStep.done
-                            : _SmartStep.proposal,
-                      );
-                    },
-                  ),
+                child: ConnectionReview(
+                  plan: _connectPlan,
+                  tr: widget.tr,
+                  onConfirm: _applyConnect,
+                  onCancel: () {
+                    // An apply under way finishes: it has no way back.
+                    if (_applyingConnect) return;
+                    setState(
+                      () => _step = _activeCandidate?['kind'] == null
+                          ? _SmartStep.done
+                          : _SmartStep.proposal,
+                    );
+                  },
                 ),
               )
             else

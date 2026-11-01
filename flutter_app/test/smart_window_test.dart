@@ -10,57 +10,57 @@ void main() {
     {'command': 'b', 'name': 'Agent B', 'local': false},
   ];
 
-  Widget app({required bool covered}) => MaterialApp(
+  Widget app({bool visible = true}) => MaterialApp(
     home: Scaffold(
       body: Column(
         children: [
           TextButton(onPressed: () {}, child: const Text('behind')),
-          MapSmartCard(
-            column: 'agents',
-            title: 'Agents',
-            open: true,
-            covered: covered,
-            onToggle: () {},
-            tr: (s) => s,
-            helpers: helpers,
+          Visibility(
+            visible: visible,
+            maintainState: true,
+            child: MapSmartCard(
+              column: 'agents',
+              title: 'Agents',
+              open: true,
+              onToggle: () {},
+              tr: (s) => s,
+              helpers: helpers,
+            ),
           ),
         ],
       ),
     ),
   );
 
-  testWidgets('a covered window waits, comes back focused and blocks keys', (
+  bool focusInWindow(WidgetTester tester) =>
+      tester.binding.focusManager.primaryFocus?.context
+          ?.findAncestorWidgetOfExactType<OverlayWindow>() !=
+      null;
+
+  testWidgets('a hidden column hides the window, it returns with focus', (
     tester,
   ) async {
-    await tester.pumpWidget(app(covered: true));
+    await tester.pumpWidget(app(visible: false));
     await tester.pump();
     expect(find.byType(OverlayWindow), findsNothing);
     expect(smartWindowsShown.value, 0);
-    await tester.pumpWidget(app(covered: false));
+    await tester.pumpWidget(app());
     await tester.pumpAndSettle();
     expect(find.byType(OverlayWindow), findsOneWidget);
     expect(smartWindowsShown.value, 1);
-    expect(
-      tester.binding.focusManager.primaryFocus?.context
-          ?.findAncestorWidgetOfExactType<OverlayWindow>(),
-      isNotNull,
-    );
+    expect(focusInWindow(tester), isTrue);
     await tester.pumpWidget(const SizedBox());
     await tester.pump();
     expect(smartWindowsShown.value, 0);
   });
 
   testWidgets('Tab stays in the window', (tester) async {
-    await tester.pumpWidget(app(covered: false));
+    await tester.pumpWidget(app());
     await tester.pumpAndSettle();
     for (var i = 0; i < 12; i++) {
       await tester.sendKeyEvent(LogicalKeyboardKey.tab);
       await tester.pump();
-      expect(
-        tester.binding.focusManager.primaryFocus?.context
-            ?.findAncestorWidgetOfExactType<OverlayWindow>(),
-        isNotNull,
-      );
+      expect(focusInWindow(tester), isTrue);
     }
   });
 }

@@ -1811,6 +1811,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         update['kind'] == 'runtime' ? 'runtime' : 'agent',
         '${update['key']}',
       );
+      if (mounted) unawaited(_checkUpdates());
       return;
     }
     try {
@@ -4440,10 +4441,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                                             smartStatus: _smartStatusData,
                                             smartStatusTarget:
                                                 _smartStatusTarget,
-                                            smartWindowsCovered:
-                                                _card != null ||
-                                                _browser != null ||
-                                                _visibleTerminal != null,
                                             client: _maybeClient,
                                             onSmartApplied: (result) {
                                               if (result['session'] != null) {
