@@ -833,48 +833,10 @@
   "health.report": {
    "area": "health",
    "kind": "read",
-   "note": "Every finding and use step has column: mcp, agents, providers, models.",
+   "note": "A task. Its result: areas (key, icon, title, findings), uses (key, icon, title, blurb, have, level, steps), warn, hint, level, summary, open_text. Every finding and use step has level, title, text, action and column (mcp, agents, providers, models).",
    "params": {},
    "result": {
-    "areas": [
-     {
-      "findings": [
-       {
-        "action": "null|array",
-        "column": "string",
-        "level": "string",
-        "text": "string",
-        "title": "string"
-       }
-      ],
-      "key": "string",
-      "title": "string"
-     }
-    ],
-    "hint": "int",
-    "level": "string",
-    "summary": "string",
-    "uses": [
-     {
-      "blurb": "string",
-      "have": [
-       "string"
-      ],
-      "key": "string",
-      "level": "string",
-      "steps": [
-       {
-        "action": "null|array",
-        "column": "string",
-        "level": "string",
-        "text": "string",
-        "title": "string"
-       }
-      ],
-      "title": "string"
-     }
-    ],
-    "warn": "int"
+    "task": "string"
    },
    "source": "manual"
   },

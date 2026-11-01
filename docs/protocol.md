@@ -141,7 +141,7 @@ A parameter written `name?` may be left out.
 
 | Route | Kind | Params | Result |
 |---|---|---|---|
-| `health.report` | read | — | `areas`, `hint`, `level`, `summary`, `uses`, `warn` Every finding and use step has column: mcp, agents, providers, models. |
+| `health.report` | read | — | `task` A task. Its result: areas (key, icon, title, findings), uses (key, icon, title, blurb, have, level, steps), warn, hint, level, summary, open_text. Every finding and use step has level, title, text, action and column (mcp, agents, providers, models). |
 
 ## help
 
