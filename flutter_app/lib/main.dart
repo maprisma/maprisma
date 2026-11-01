@@ -46,7 +46,7 @@ import 'item_details_view.dart';
 import 'map_layout.dart' show withAgentLinks;
 import 'map_editor.dart' show mapColumnLayers;
 import 'map_smart_card.dart'
-    show SmartStatusData, SmartStatusIcon, mapSmartColumns;
+    show SmartStatusData, SmartStatusIcon, mapSmartColumns, smartWindowsShown;
 import 'agent_action_dialog.dart';
 import 'providers_view.dart';
 import 'provider_task_dialog.dart';
@@ -89,6 +89,10 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   final _windowShots = WindowShots.fromEnvironment(Platform.environment);
   final _shotArea = GlobalKey();
   bool _shooting = false;
+
+  void _smartWindowsChanged() {
+    if (mounted) setState(() {});
+  }
 
   bool _shotKey(KeyEvent event) {
     if (event is! KeyDownEvent || event.logicalKey != LogicalKeyboardKey.f9) {
@@ -324,7 +328,11 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   }
 
   bool get _navigationBlocked =>
-      _busy || _taskActive || _reviewDepth > 0 || _card?.closable == false;
+      _busy ||
+      _taskActive ||
+      _reviewDepth > 0 ||
+      _card?.closable == false ||
+      smartWindowsShown.value > 0;
 
   /// The app's keys do nothing behind an open terminal window.
   bool get _keysBlocked => _navigationBlocked || _visibleTerminal != null;
@@ -592,6 +600,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     super.initState();
     windowManager.addListener(this);
     HardwareKeyboard.instance.addHandler(_shotKey);
+    smartWindowsShown.addListener(_smartWindowsChanged);
     windowChannel.setMethodCallHandler((call) async {
       if (call.method == 'shown') _placePopup();
     });
@@ -3912,6 +3921,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     _startMenu.dispose();
     _aiTransform.dispose();
     HardwareKeyboard.instance.removeHandler(_shotKey);
+    smartWindowsShown.removeListener(_smartWindowsChanged);
     for (final terminal in _terminals) {
       terminal.dispose();
     }
@@ -4430,6 +4440,10 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                                             smartStatus: _smartStatusData,
                                             smartStatusTarget:
                                                 _smartStatusTarget,
+                                            smartWindowsCovered:
+                                                _card != null ||
+                                                _browser != null ||
+                                                _visibleTerminal != null,
                                             client: _maybeClient,
                                             onSmartApplied: (result) {
                                               if (result['session'] != null) {

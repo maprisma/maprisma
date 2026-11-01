@@ -11,6 +11,14 @@ import 'core_client.g.dart';
 import 'providers_view.dart' show modelSize;
 import 'task_card.dart' show TaskReview;
 
+/// Ask AI windows on screen: the app's keys and header wait for them.
+final smartWindowsShown = ValueNotifier<int>(0);
+
+/// After the frame: the app redraws its header on this.
+void _countWindow(int change) => WidgetsBinding.instance.addPostFrameCallback(
+  (_) => smartWindowsShown.value += change,
+);
+
 const mapSmartColumns = [
   ('mcp', 'MCP servers and skills'),
   ('agents', 'Agents'),
@@ -333,6 +341,7 @@ class MapSmartCard extends StatefulWidget {
     this.onApplied,
     this.status,
     this.statusTrigger = 0,
+    this.covered = false,
     this.width = 266,
   });
 
@@ -358,6 +367,9 @@ class MapSmartCard extends StatefulWidget {
   final ValueChanged<Map<String, dynamic>>? onApplied;
   final SmartStatusData? status;
   final int statusTrigger;
+
+  /// A task or terminal above the map: the window waits and comes back.
+  final bool covered;
   final double width;
 
   @override
@@ -370,6 +382,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
   final _cardFocus = FocusNode();
   final _fieldFocus = FocusNode();
   final _portal = OverlayPortalController();
+  bool _windowShown = false;
   String? _selectedCommand;
   _SmartStep _step = _SmartStep.idle;
   String? _activeTask;
@@ -1030,6 +1043,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
 
   @override
   void dispose() {
+    if (_windowShown) _countWindow(-1);
     _runToken++;
     _prompt.dispose();
     for (final field in _mcpFields.values) {
@@ -1052,36 +1066,41 @@ class _MapSmartCardState extends State<MapSmartCard> {
     final free =
         _step == _SmartStep.idle ||
         _step == _SmartStep.clarify ||
+        _step == _SmartStep.error ||
         _step == _SmartStep.status;
     return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Expanded(
+        Flexible(
           child: widget.helpers.length > 1
-              ? DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    key: const ValueKey('smart-helper-select'),
-                    isExpanded: true,
-                    isDense: true,
-                    value: '${helper['command']}',
-                    onChanged: free
-                        ? (value) {
-                            if (value != null) {
-                              setState(() => _selectedCommand = value);
+              ? SizedBox(
+                  width: 220,
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      key: const ValueKey('smart-helper-select'),
+                      isExpanded: true,
+                      isDense: true,
+                      value: '${helper['command']}',
+                      onChanged: free
+                          ? (value) {
+                              if (value != null) {
+                                setState(() => _selectedCommand = value);
+                              }
                             }
-                          }
-                        : null,
-                    items: [
-                      for (final h in widget.helpers)
-                        DropdownMenuItem<String>(
-                          value: '${h['command']}',
-                          child: Text(
-                            '${h['name']}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontSize: 12),
+                          : null,
+                      items: [
+                        for (final h in widget.helpers)
+                          DropdownMenuItem<String>(
+                            value: '${h['command']}',
+                            child: Text(
+                              '${h['name']}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 12),
+                            ),
                           ),
-                        ),
-                    ],
+                      ],
+                    ),
                   ),
                 )
               : Text(
@@ -1836,11 +1855,16 @@ class _MapSmartCardState extends State<MapSmartCard> {
         ),
       ),
     );
+    final shown = widget.open && !widget.covered && Visibility.of(context);
+    if (shown != _windowShown) {
+      _windowShown = shown;
+      _countWindow(shown ? 1 : -1);
+      if (shown) _focusOpenCard();
+    }
     return OverlayPortal(
       controller: _portal,
-      overlayChildBuilder: (_) => widget.open && Visibility.of(context)
-          ? _buildWindow(colors, statusButton)
-          : const SizedBox.shrink(),
+      overlayChildBuilder: (_) =>
+          shown ? _buildWindow(colors, statusButton) : const SizedBox.shrink(),
       child: SizedBox(
         width: widget.width,
         height: 38,
@@ -1940,29 +1964,48 @@ class _MapSmartCardState extends State<MapSmartCard> {
               child: Row(
                 children: [
                   statusButton,
-                  Icon(Icons.auto_awesome, size: 15, color: colors.primary),
-                  const SizedBox(width: 6),
                   Flexible(
-                    child: InkWell(
-                      onTap: _step == _SmartStep.status ? _openOnPrompt : null,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        child: Text(
-                          widget
-                              .tr('Ask AI · {0}')
-                              .replaceAll('{0}', widget.tr(widget.title)),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
+                    child: Semantics(
+                      button: _step == _SmartStep.status,
+                      child: InkWell(
+                        onTap: _step == _SmartStep.status
+                            ? _openOnPrompt
+                            : null,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 6),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.auto_awesome,
+                                size: 15,
+                                color: colors.primary,
+                              ),
+                              const SizedBox(width: 6),
+                              Flexible(
+                                child: Text(
+                                  widget
+                                      .tr('Ask AI · {0}')
+                                      .replaceAll(
+                                        '{0}',
+                                        widget.tr(widget.title),
+                                      ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(child: _buildHelperChoice(colors)),
+                  const Spacer(),
+                  Flexible(flex: 2, child: _buildHelperChoice(colors)),
                   IconButton(
                     tooltip: widget.tr('Collapse'),
                     onPressed: _close,
@@ -1974,55 +2017,61 @@ class _MapSmartCardState extends State<MapSmartCard> {
             const Divider(height: 1),
             if (_step == _SmartStep.review)
               Expanded(
-                child: _activeCandidate?['kind'] == 'agent_action'
-                    ? AgentActionReview(
-                        plan: _reviewData,
-                        tr: widget.tr,
-                        onConfirm: _confirmReview,
-                        onCancel: () =>
-                            setState(() => _step = _SmartStep.proposal),
-                      )
-                    : _activeCandidate?['kind'] == 'model_move'
-                    ? SmartMoveReview(
-                        plan: _reviewData,
-                        title: '${_activeCandidate?['title'] ?? ''}',
-                        subtitle: '${_activeCandidate?['subtitle'] ?? ''}',
-                        tr: widget.tr,
-                        onConfirm: _confirmReview,
-                        onCancel: () =>
-                            setState(() => _step = _SmartStep.proposal),
-                      )
-                    : _reviewData['removal'] != null
-                    ? ModelRemovalReview(
-                        preview: _reviewData,
-                        tr: widget.tr,
-                        onConfirm: _confirmReview,
-                        onCancel: () =>
-                            setState(() => _step = _SmartStep.proposal),
-                      )
-                    : SmartModelDownloadReview(
-                        review: _reviewData,
-                        tr: widget.tr,
-                        onConfirm: _confirmReview,
-                        onCancel: () =>
-                            setState(() => _step = _SmartStep.proposal),
-                      ),
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  child: _activeCandidate?['kind'] == 'agent_action'
+                      ? AgentActionReview(
+                          plan: _reviewData,
+                          tr: widget.tr,
+                          onConfirm: _confirmReview,
+                          onCancel: () =>
+                              setState(() => _step = _SmartStep.proposal),
+                        )
+                      : _activeCandidate?['kind'] == 'model_move'
+                      ? SmartMoveReview(
+                          plan: _reviewData,
+                          title: '${_activeCandidate?['title'] ?? ''}',
+                          subtitle: '${_activeCandidate?['subtitle'] ?? ''}',
+                          tr: widget.tr,
+                          onConfirm: _confirmReview,
+                          onCancel: () =>
+                              setState(() => _step = _SmartStep.proposal),
+                        )
+                      : _reviewData['removal'] != null
+                      ? ModelRemovalReview(
+                          preview: _reviewData,
+                          tr: widget.tr,
+                          onConfirm: _confirmReview,
+                          onCancel: () =>
+                              setState(() => _step = _SmartStep.proposal),
+                        )
+                      : SmartModelDownloadReview(
+                          review: _reviewData,
+                          tr: widget.tr,
+                          onConfirm: _confirmReview,
+                          onCancel: () =>
+                              setState(() => _step = _SmartStep.proposal),
+                        ),
+                ),
               )
             else if (_step == _SmartStep.connectReview)
               Expanded(
-                child: ConnectionReview(
-                  plan: _connectPlan,
-                  tr: widget.tr,
-                  onConfirm: _applyConnect,
-                  onCancel: () {
-                    // An apply under way finishes: it has no way back.
-                    if (_applyingConnect) return;
-                    setState(
-                      () => _step = _activeCandidate?['kind'] == null
-                          ? _SmartStep.done
-                          : _SmartStep.proposal,
-                    );
-                  },
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  child: ConnectionReview(
+                    plan: _connectPlan,
+                    tr: widget.tr,
+                    onConfirm: _applyConnect,
+                    onCancel: () {
+                      // An apply under way finishes: it has no way back.
+                      if (_applyingConnect) return;
+                      setState(
+                        () => _step = _activeCandidate?['kind'] == null
+                            ? _SmartStep.done
+                            : _SmartStep.proposal,
+                      );
+                    },
+                  ),
                 ),
               )
             else

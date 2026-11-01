@@ -55,6 +55,7 @@ class MapEditor extends StatefulWidget {
     this.onSmartApplied,
     this.smartStatus,
     this.smartStatusTarget,
+    this.smartWindowsCovered = false,
   });
   final Object? staticState;
   final MapLightStyle lightStyle;
@@ -71,6 +72,7 @@ class MapEditor extends StatefulWidget {
   final ValueChanged<Map<String, dynamic>>? onSmartApplied;
   final SmartStatusData? smartStatus;
   final (int, String)? smartStatusTarget;
+  final bool smartWindowsCovered;
   final Set<String>? selection;
   final ValueChanged<String>? onSubagents;
   final Widget Function(Map<String, dynamic>)? controls;
@@ -1415,6 +1417,7 @@ class _MapEditorState extends State<MapEditor>
                                       },
                                       onApplied: widget.onSmartApplied,
                                       status: widget.smartStatus,
+                                      covered: widget.smartWindowsCovered,
                                       statusTrigger:
                                           _smartStatusTokens[mapSmartColumns[col]
                                               .$1] ??
