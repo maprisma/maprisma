@@ -72,16 +72,24 @@ List<Map<String, dynamic>> addonHints(
     for (final r in rows)
       if (r['action'] == 'update' && r['preview'] is String) r,
   ];
-  if (updates.isNotEmpty) {
+  // Each column offers the updates of its own add-ons.
+  for (final (column, isProvider) in const [
+    ('agents', false),
+    ('providers', true),
+  ]) {
+    final own = [
+      for (final r in updates)
+        if ((r['kind'] == 'provider') == isProvider) r,
+    ];
+    if (own.isEmpty) continue;
     lines.add({
       'kind': 'updates',
-      'column': updates.first['kind'] == 'provider' ? 'providers' : 'agents',
-      'text': tr('Add-on updates ready: {0}').replaceAll(
-        '{0}',
-        _listed([for (final r in updates) '${r['name']}'], 3),
-      ),
+      'column': column,
+      'text': tr(
+        'Add-on updates ready: {0}',
+      ).replaceAll('{0}', _listed([for (final r in own) '${r['name']}'], 3)),
       'updates': [
-        for (final r in updates)
+        for (final r in own)
           {
             'id': r['id'],
             'name': r['name'],
