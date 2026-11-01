@@ -70,6 +70,7 @@ import 'change_history.dart';
 import 'legacy_move.dart';
 import 'hyprland.dart' show placePopup, WindowRounding;
 import 'protocol_recording.dart';
+import 'action_rules.dart';
 import 'smart_card.dart';
 
 const portedRoutes = {
@@ -87,6 +88,7 @@ const portedRoutes = {
   'map.smart_connect',
   'map.smart_plan',
   'connections.forget_preview',
+  'rules.test',
   'addons.list',
   'addons.set_enabled',
   'addons.catalog',
@@ -2903,6 +2905,8 @@ final class CoreService {
           'request': request.trim(),
           'answer': ?answer,
           'language': i18n.language,
+          'action_rules': settings.value(settings.load(), 'action_rules'),
+          'rule_hints': settings.value(settings.load(), 'action_rule_hints'),
           'settings_path': identity.settingsPath,
           if (column == 'providers')
             'providers': [
@@ -3275,6 +3279,15 @@ final class CoreService {
 
   /// Several servers leave their agents in one preview, backup and Undo.
   Map<String, dynamic> _disconnectAll(List<Map> pairs) {
+    _enforce([
+      for (final p in pairs)
+        ActionCheck(
+          'disconnect',
+          p['skill'] == null ? 'mcp' : 'skills',
+          '${p['skill'] ?? p['server']}',
+          '${p['agent']}',
+        ),
+    ]);
     final catalog = reads.catalog.scan();
     final inventory = reads.inventory.collect(catalog);
     final focus = <String>[];
@@ -3798,7 +3811,68 @@ final class CoreService {
     }
   }
 
+  /// The checks of a preview, kept with its handle: rules may tighten before
+  /// it is applied.
+  final _ruleHandles = <String, List<ActionCheck>>{};
+
+  void _enforce(List<ActionCheck> checks) {
+    if (checks.isEmpty) return;
+    final saved = settings.load();
+    final rules = settings.value(saved, 'action_rules') as List;
+    for (final check in checks) {
+      if (ruleAllows(rules, check)) continue;
+      if (settings.value(saved, 'action_rule_hints') != true) {
+        throw RuleRefused(i18n.text('This is not allowed here.'));
+      }
+      throw RuleRefused(
+        i18n
+            .text('{0}: not allowed by your rules')
+            .replaceAll(
+              '{0}',
+              [
+                check.action,
+                check.category,
+                if (check.item.isNotEmpty) check.item,
+              ].join(', '),
+            ),
+      );
+    }
+  }
+
   Map<String, dynamic> _dispatch(String method, Map<String, dynamic> params) {
+    if (method == 'rules.test') {
+      final check = ActionCheck(
+        params['action'] as String,
+        params['category'] as String,
+        params['item'] as String,
+        params['agent'] as String,
+      );
+      final rule = decidingRule(
+        settings.value(settings.load(), 'action_rules') as List,
+        check,
+      );
+      return {'allowed': rule?['effect'] == 'allow', 'rule': rule};
+    }
+    final checks = actionChecks(method, params);
+    _enforce(checks);
+    for (final value in params.values) {
+      if (value is String) _enforce(_ruleHandles[value] ?? const []);
+    }
+    final result = _route(method, params);
+    if (checks.isNotEmpty) {
+      for (final value in result.values) {
+        if (value is String && value.startsWith(coreHandle)) {
+          if (_ruleHandles.length >= 64) {
+            _ruleHandles.remove(_ruleHandles.keys.first);
+          }
+          _ruleHandles[value] = checks;
+        }
+      }
+    }
+    return result;
+  }
+
+  Map<String, dynamic> _route(String method, Map<String, dynamic> params) {
     if (handleRoutes.containsKey(method)) {
       final value = params[handleRoutes[method]];
       if (value is! String || !value.startsWith(coreHandle)) {
@@ -4268,6 +4342,11 @@ final class CoreService {
       response = {
         'id': id,
         'error': {'code': e.code},
+      };
+    } on RuleRefused catch (e) {
+      response = {
+        'id': id,
+        'error': {'code': 'action_refused', 'message': e.message},
       };
     } on FormatException {
       response = {

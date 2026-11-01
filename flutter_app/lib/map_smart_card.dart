@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'app_theme.dart' show corners;
+import 'backend.dart' show failureText;
 import 'connections_view.dart' show ConnectionReview;
 import 'agent_action_dialog.dart';
 import 'model_removal_dialog.dart';
@@ -10,6 +11,9 @@ import 'overlay_window.dart';
 import 'core_client.g.dart';
 import 'providers_view.dart' show modelSize;
 import 'task_card.dart' show TaskReview;
+
+/// Opens the rules of what may be done; the app sets it.
+VoidCallback? smartOpenRules;
 
 /// Ask AI windows on screen: the app's keys and header wait for them.
 final smartWindowsShown = ValueNotifier<int>(0);
@@ -609,7 +613,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
       final taskId = started['task'] as String?;
       if (taskId == null || taskId.isEmpty) {
         setState(() {
-          _errorText = widget.tr('The action could not be completed.');
+          _errorText = failureText(widget.tr);
           _step = _SmartStep.error;
         });
         return;
@@ -648,7 +652,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
         if (state != 'running') {
           _activeTask = null;
           setState(() {
-            _errorText = widget.tr('The action could not be completed.');
+            _errorText = failureText(widget.tr);
             _step = _SmartStep.error;
           });
           return;
@@ -659,7 +663,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
       if (!mounted || token != _runToken) return;
       _activeTask = null;
       setState(() {
-        _errorText = widget.tr('The action could not be completed.');
+        _errorText = failureText(widget.tr);
         _step = _SmartStep.error;
       });
     }
@@ -690,7 +694,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _errorText = widget.tr('The action could not be completed.');
+        _errorText = failureText(widget.tr);
         _step = _SmartStep.error;
       });
     }
@@ -747,7 +751,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
     } catch (_) {
       if (!mounted || token != _runToken) return;
       setState(() {
-        _errorText = widget.tr('The action could not be completed.');
+        _errorText = failureText(widget.tr);
         _step = _SmartStep.error;
       });
     }
@@ -856,7 +860,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
       if (!mounted || token != _runToken) return;
       _activeTask = null;
       setState(() {
-        _errorText = widget.tr('The action could not be completed.');
+        _errorText = failureText(widget.tr);
         _step = _SmartStep.error;
       });
     }
@@ -913,7 +917,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
       final taskId = started['task'] as String?;
       if (taskId == null || taskId.isEmpty) {
         setState(() {
-          _errorText = widget.tr('The action could not be completed.');
+          _errorText = failureText(widget.tr);
           _step = _SmartStep.error;
         });
         return;
@@ -960,7 +964,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
         if (state != 'running') {
           _activeTask = null;
           setState(() {
-            _errorText = widget.tr('The action could not be completed.');
+            _errorText = failureText(widget.tr);
             _step = _SmartStep.error;
           });
           return;
@@ -976,7 +980,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
       if (!mounted || token != _runToken) return;
       _activeTask = null;
       setState(() {
-        _errorText = widget.tr('The action could not be completed.');
+        _errorText = failureText(widget.tr);
         _step = _SmartStep.error;
       });
     }
@@ -1002,7 +1006,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
     } catch (_) {
       if (!mounted || token != _runToken) return;
       setState(() {
-        _errorText = widget.tr('The action could not be completed.');
+        _errorText = failureText(widget.tr);
         _step = _SmartStep.error;
       });
     }
@@ -1032,7 +1036,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
           if (status['state'] != 'running') {
             _activeTask = null;
             setState(() {
-              _errorText = widget.tr('The action could not be completed.');
+              _errorText = failureText(widget.tr);
               _step = _SmartStep.error;
             });
             return;
@@ -1052,7 +1056,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
       if (!mounted || token != _runToken) return;
       _activeTask = null;
       setState(() {
-        _errorText = widget.tr('The action could not be completed.');
+        _errorText = failureText(widget.tr);
         _step = _SmartStep.error;
       });
     } finally {
@@ -2048,6 +2052,12 @@ class _MapSmartCardState extends State<MapSmartCard> {
                   ),
                   const SizedBox(width: 16),
                   Flexible(child: _buildHelperChoice(colors)),
+                  IconButton(
+                    key: const ValueKey('smart-rules'),
+                    tooltip: widget.tr('What may be done'),
+                    onPressed: smartOpenRules,
+                    icon: const Icon(Icons.rule, size: 18),
+                  ),
                   IconButton(
                     tooltip: widget.tr('Collapse'),
                     onPressed: _close,

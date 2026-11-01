@@ -1350,6 +1350,22 @@
    "result": null,
    "source": null
   },
+  "rules.test": {
+   "area": "rules",
+   "kind": "read",
+   "note": "Which rule decides a request, for the window of rules.",
+   "params": {
+    "action": "string",
+    "agent": "string",
+    "category": "string",
+    "item": "string"
+   },
+   "result": {
+    "allowed": "bool",
+    "rule": "null|object"
+   },
+   "source": "manual"
+  },
   "sessions.read": {
    "area": "sessions",
    "handle": "session",
@@ -1464,6 +1480,10 @@
     "window_mode": "string",
     "screenshot_key": "bool",
     "screenshot_folder": "null|string",
+    "action_rule_hints": "bool",
+    "action_rules": [
+     "object"
+    ],
     "smart_helper": "null|string"
    },
    "source": "manual"
@@ -1528,6 +1548,10 @@
     "window_mode": "string",
     "screenshot_key": "bool",
     "screenshot_folder": "null|string",
+    "action_rule_hints": "bool",
+    "action_rules": [
+     "object"
+    ],
     "smart_helper": "null|string"
    },
    "source": "manual"

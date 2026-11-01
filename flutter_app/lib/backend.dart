@@ -23,6 +23,16 @@ Map<String, String>? coreEnvironment({
 
 /// The app's service: the Dart core in a background isolate. Every route is
 /// the core's; one it does not know is refused (unported_route).
+/// What the rules said last, until something shows it.
+String? lastRefusal;
+
+/// The words for a failed action: the rule's when it was refused.
+String failureText(String Function(String) tr) {
+  final refusal = lastRefusal;
+  lastRefusal = null;
+  return refusal ?? tr('The action could not be completed.');
+}
+
 class Backend implements ServiceTransport {
   Backend.fromTransport(this.transport);
   final ServiceTransport transport;
@@ -35,7 +45,15 @@ class Backend implements ServiceTransport {
   Future<Map<String, dynamic>> call(
     String method, [
     Map<String, dynamic> params = const {},
-  ]) => transport.call(method, params);
+  ]) async {
+    try {
+      return await transport.call(method, params);
+    } on ServiceError catch (error) {
+      if (error.code == 'action_refused') lastRefusal = error.reason;
+      rethrow;
+    }
+  }
+
   @override
   void dispose() => transport.dispose();
   @override

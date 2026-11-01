@@ -1,6 +1,6 @@
-# 019 Rules for what may be done (draft, discussed with Antigravity)
+# 019 Rules for what may be done
 
-Author: Claude · Reviewer: Antigravity · Branch: not started; 018 comes first
+Author: Claude · Reviewer: Antigravity · Branch: task/019-action-rules, on task/018-known-servers
 
 Uwe, 2026-11-01: rules in Settings that say what Ask AI may do. Actions such as install, remove, update, connect, reconnect, for one or all categories. Default: allow all, written out as explicit rules. A scope picker: all, a category, an instance. The same for deny rules. The user manages both with a + symbol. An allow overrides a deny: all disconnects of skills denied, but disconnecting skills for Pi allowed, then the allow wins. The rules can be shown when an Ask AI action or a drawn action is refused, if a setting allows that hint (off: protects the setup from other users or children). Defined in their own popup, opened from Settings.
 
@@ -52,7 +52,11 @@ A button in Settings opens `OverlayWindow`: an Allow list and a Deny list, a + p
 ## What it is not
 Not a lock. Anyone who can open Settings can change the rules, and the file is plain. Every terminal in the app, an agent started on the map too, runs under the user's account and can change anything. Recent changes can put old states back, and the background start and stop of local LLMs is not covered. For children this needs at least a PIN on the popup; that is a separate decision.
 
-## Open for Uwe
-1. Do the rules bind what the user draws by hand, or only Ask AI? The request says drawn actions can be refused, so this draft says yes.
-2. "Action rules stay for facts": read here as "the rules also go to the helper as facts, the helper's fixed action list stays".
-3. A PIN for the popup?
+## Decided (Uwe, 2026-11-01)
+The rules bind what is drawn by hand too. The helper gets them as facts, its fixed action list stays. No PIN. No `ask` action: a prompt is not checked, what it would do is.
+
+## Not in the Python reference
+Enforcement, `rules.test` and `smartRefused` are in the Dart core, which the app runs; like the smart cards they have no Python twin. `settings_schema.py` knows both settings.
+
+## How it is built
+`action_rules.dart`: the rules and `actionChecks(method, params)`. `_dispatch` in `core.dart` checks every request, keeps the checks with a preview's handle and checks again when the handle comes back. `action_rules_test` fails for a route of kind preview, change or handle with neither checks nor a place in `rulesExempt`. The GUI's `failureText` shows a refusal wherever a failure is shown today.

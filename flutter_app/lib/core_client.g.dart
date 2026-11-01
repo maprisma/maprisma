@@ -504,6 +504,18 @@ class CoreClient {
     Map<String, dynamic> params = const {},
   ]) => transport.call('providers.snapshot', params);
 
+  Future<Map<String, dynamic>> rulesTest({
+    required String action,
+    required String agent,
+    required String category,
+    required String item,
+  }) => transport.call('rules.test', {
+    'action': action,
+    'agent': agent,
+    'category': category,
+    'item': item,
+  });
+
   Future<Map<String, dynamic>> sessionsRead({required String session}) =>
       transport.call('sessions.read', {'session': session});
 

@@ -70,7 +70,12 @@ final class IsolateTransport implements ServiceTransport {
           throw const FormatException('Invalid error');
         }
         _pending.remove(data['id']);
-        completer.completeError(ServiceError(data['error']['code'] as String));
+        completer.completeError(
+          ServiceError(
+            data['error']['code'] as String,
+            data['error']['message'] as String?,
+          ),
+        );
       } else {
         if (data['result'] is! Map<String, dynamic>) {
           throw const FormatException('Invalid result');

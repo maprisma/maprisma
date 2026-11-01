@@ -3261,5 +3261,16 @@
  "Drag a border to change the width; a double click restores the default.": "Sleep een rand om de breedte te wijzigen; dubbelklikken herstelt de standaard.",
  "Borders around category cards": "Randen rond categoriekaarten",
  "Border thickness": "Randdikte",
- "Border colour": "Randkleur"
+ "Border colour": "Randkleur",
+ "What may be done": "Wat is toegestaan",
+ "Rules for Ask AI and for what you draw on the map.": "Regels voor Vraag AI en voor wat je op de kaart tekent.",
+ "The most specific rule decides; on a tie allow wins. A request no rule matches is refused.": "De meest specifieke regel beslist; bij gelijke stand wint toestaan. Een verzoek zonder passende regel wordt geweigerd.",
+ "Deny": "Weigeren",
+ "Refused": "Geweigerd",
+ "Test a request": "Verzoek testen",
+ "Restore defaults": "Standaard herstellen",
+ "Say which rule refused something": "Zeggen welke regel iets weigerde",
+ "Never decides: an allow rule names the same things.": "Beslist nooit: een toestaan-regel noemt hetzelfde.",
+ "This is not allowed here.": "Dit is hier niet toegestaan.",
+ "{0}: not allowed by your rules": "{0}: niet toegestaan door je regels"
 }

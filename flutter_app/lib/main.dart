@@ -45,12 +45,14 @@ import 'overlay_window.dart';
 import 'item_details_view.dart';
 import 'map_layout.dart' show withAgentLinks;
 import 'map_editor.dart' show mapColumnLayers;
+import 'action_rules_window.dart';
 import 'map_smart_card.dart'
     show
         SmartStatusData,
         SmartStatusIcon,
         mapSmartColumns,
         smartHelperChosen,
+        smartOpenRules,
         smartWindowsShown;
 import 'agent_action_dialog.dart';
 import 'providers_view.dart';
@@ -537,8 +539,53 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       _busy = false;
       if (_card?.child is! TaskProgress) _card = null;
     });
-    ScaffoldMessenger.of(_navigator.currentContext!).showSnackBar(
-      SnackBar(content: Text(tr('The action could not be completed.'))),
+    ScaffoldMessenger.of(
+      _navigator.currentContext!,
+    ).showSnackBar(SnackBar(content: Text(failureText(tr))));
+  }
+
+  /// Settings › What may be done: saved as it changes.
+  Future<void> _openRules() async {
+    final settings = _snapshot?['settings'] as Map? ?? const {};
+    final items = <String, Map<String, String>>{};
+    final agents = <String, String>{};
+    for (final n in (_graph?['nodes'] as List? ?? const []).cast<Map>()) {
+      final id = '${n['id']}', label = '${n['label']}';
+      final parts = id.split(':');
+      switch (parts.first) {
+        case 'agent':
+          agents[id.substring(6)] = label;
+          (items['agents'] ??= {})[id.substring(6)] = label;
+        case 'mcp' || 'skills':
+          (items[parts.first] ??= {})[id.substring(parts.first.length + 1)] =
+              label;
+        case 'runtime' || 'cloud':
+          (items['providers'] ??= {})[id.substring(parts.first.length + 1)] =
+              label;
+        case 'model' when parts.length > 3:
+          (items['models'] ??= {})[parts.skip(3).join(':')] = label;
+      }
+    }
+    await showDialog<void>(
+      context: _navigator.currentContext!,
+      builder: (_) => ActionRulesWindow(
+        rules: (settings['action_rules'] as List? ?? const [])
+            .cast<Map<String, dynamic>>(),
+        hints: settings['action_rule_hints'] != false,
+        items: items,
+        agents: agents,
+        tr: tr,
+        onSave: (rules, hints) => _updateSettings({
+          'action_rules': rules,
+          'action_rule_hints': hints,
+        }),
+        onTest: (request) => _client.rulesTest(
+          action: request['action']!,
+          agent: request['agent']!,
+          category: request['category']!,
+          item: request['item']!,
+        ),
+      ),
     );
   }
 
@@ -549,6 +596,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     HardwareKeyboard.instance.addHandler(_shotKey);
     smartWindowsShown.addListener(_smartWindowsChanged);
     smartHelperChosen.addListener(_smartHelperChanged);
+    smartOpenRules = _openRules;
     windowChannel.setMethodCallHandler((call) async {
       if (call.method == 'shown') _placePopup();
     });
@@ -4409,6 +4457,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                                     )
                                   : _showSettings && _snapshot != null
                                   ? SettingsView(
+                                      onRules: _openRules,
                                       settings: {
                                         ...(_snapshot!['settings']
                                             as Map<String, dynamic>),

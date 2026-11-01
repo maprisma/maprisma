@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'action_rules.dart';
 import 'adapters.dart' show Adapter;
 import 'desktop.dart' show whichIn;
 import 'health_report.dart' show pcInfo;
@@ -74,10 +75,41 @@ String _request(Map facts) {
 /// The words the user reads come in their language; keys and names do not.
 String _language(Map facts) {
   final language = facts['language'];
-  return language is String && RegExp(r'^[a-z]{2}$').hasMatch(language)
-      ? 'Write question, choices, hint, summary and reason in the language '
-            'with the code "$language".'
-      : '';
+  return (language is String && RegExp(r'^[a-z]{2}$').hasMatch(language)
+          ? 'Write question, choices, hint, summary and reason in the language '
+                'with the code "$language".'
+          : '') +
+      _ruleFacts(facts);
+}
+
+/// The user's rules, for the helper: the most specific rule decides, and the
+/// core checks whatever it answers.
+String _ruleFacts(Map facts) {
+  final rules = facts['action_rules'];
+  if (rules is! List || rules.isEmpty) return '';
+  return '\nThe user\'s rules for what may be done, the most specific rule '
+      'decides: ${jsonEncode(rules)}. Do not propose what they refuse.'
+      '${facts['rule_hints'] == false ? ' When they refuse a request say only that it is not allowed here: name no rule, and do not look it up instead.' : ''}';
+}
+
+const smartNotAllowed = 'This is not allowed here.';
+
+/// Before a search and a second paid answer: refused unless a narrower rule
+/// could still allow one item.
+Map<String, dynamic>? smartRefused(Map facts, String action, String category) {
+  final rules = facts['action_rules'];
+  if (rules is! List || ruleAllows(rules, ActionCheck(action, category, ''))) {
+    return null;
+  }
+  final narrower = rules.cast<Map>().any(
+    (r) =>
+        r['effect'] == 'allow' && r['item'] != '*' && r['category'] == category,
+  );
+  if (narrower) return null;
+  return {
+    'status': 'redirect',
+    'instead': {'hint': smartNotAllowed, 'column': null, 'request': null},
+  };
 }
 
 /// What the agent is told about the runners: no paths of this PC.
@@ -536,6 +568,7 @@ Future<Map<String, dynamic>> smartMcp(
     }
     return {'status': 'proposal', 'summary': '', 'candidates': candidates};
   }
+  if (smartRefused(facts, 'install', 'mcp') case final refused?) return refused;
   final servers = [
     for (final s in await search(first['query'] as String))
       if (smartMcpOption(s) != null) s,
@@ -877,6 +910,9 @@ Future<Map<String, dynamic>> smartModels(
         },
       ],
     };
+  }
+  if (smartRefused(facts, 'install', 'models') case final refused?) {
+    return refused;
   }
   final repos = await search(first['query'] as String);
   if (repos.isEmpty) {

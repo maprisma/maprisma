@@ -14,6 +14,7 @@ class SettingsView extends StatelessWidget {
     required this.busy,
     required this.tr,
     required this.onUpdate,
+    this.onRules,
     this.onMapLayout,
     required this.onBack,
     this.desktopTheme = const {},
@@ -40,6 +41,9 @@ class SettingsView extends StatelessWidget {
   final bool busy;
   final String Function(String) tr;
   final Future<void> Function(Map<String, dynamic>) onUpdate;
+
+  /// Opens the window with the rules of what may be done.
+  final VoidCallback? onRules;
   final VoidCallback onBack;
 
   /// The installed agents that can do the checks (command, name).
@@ -226,6 +230,17 @@ class SettingsView extends StatelessWidget {
         '$i',
     ];
     return [
+      ListTile(
+        key: const ValueKey('rules-open'),
+        contentPadding: EdgeInsets.zero,
+        leading: const Icon(Icons.rule),
+        title: Text(tr('What may be done')),
+        subtitle: Text(
+          tr('Rules for Ask AI and for what you draw on the map.'),
+        ),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: busy ? null : onRules,
+      ),
       SwitchListTile(
         key: const ValueKey('usage-box'),
         title: Text(tr('Show the usage statistics box')),
