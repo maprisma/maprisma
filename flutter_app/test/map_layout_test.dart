@@ -36,6 +36,26 @@ Map<String, dynamic> fixtureGraph({bool active = false}) => {
   ],
 };
 void main() {
+  test(
+    'a wide window gives the lines room; the columns never go below 266',
+    () {
+      final wide = MapLayout(
+        const {'nodes': [], 'edges': []},
+        const {},
+        viewportWidth: 1896,
+      );
+      expect(wide.columnGap, 152);
+      expect(wide.columnWidth, 352);
+      final tight = MapLayout(
+        const {'nodes': [], 'edges': []},
+        const {},
+        viewportWidth: 1300,
+      );
+      expect(tight.columnWidth, greaterThanOrEqualTo(266));
+      expect(tight.columnX(3) + tight.columnWidth, lessThanOrEqualTo(1300));
+    },
+  );
+
   test('bezier distance, node and hook hit testing use scene coordinates', () {
     final l = MapLayout(fixtureGraph(), {});
     final curve = l.curves.first;

@@ -108,14 +108,21 @@ class MapLayout {
   }) {
     _columns = columns;
     // The shown columns sit in the middle of a wider window and grow to fill
-    // the free space (column width 266..560, gap at least 3.5% of the width).
+    // the free space (column width 266..560, gap about 8% of the width, as far
+    // as the columns' minimum leaves room).
     final count = columns?.length ?? 4;
     final minNatural = 32.0 + count * 266.0 + math.max(0, count - 1) * 36.0;
     if (count == 0 || viewportWidth <= minNatural) {
       columnGap = 36.0;
       columnWidth = 266.0;
     } else {
-      var gap = (viewportWidth * 0.035).floorToDouble().clamp(36.0, 96.0);
+      final room = count > 1
+          ? (viewportWidth - 32.0 - count * 266.0) / (count - 1)
+          : 160.0;
+      var gap = math
+          .min(viewportWidth * 0.08, room)
+          .floorToDouble()
+          .clamp(36.0, 160.0);
       columnWidth = ((viewportWidth - 32.0 - (count - 1) * gap) / count)
           .floorToDouble()
           .clamp(266.0, 560.0);

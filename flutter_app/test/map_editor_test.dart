@@ -818,7 +818,7 @@ void main() {
       expect(dropLine, findsOneWidget);
       final lineRect = tester.getRect(dropLine);
       expect(lineRect.left, 16);
-      expect(lineRect.width, 328);
+      expect(lineRect.width, 277);
       expect(lineRect.height, 2);
       await gesture.up();
       await tester.pumpAndSettle();
@@ -2656,9 +2656,9 @@ void main() {
                   )
                   .first,
             );
-            expect(groupPos.left, 16.0 + col * 380);
+            expect(groupPos.left, 16.0 + col * 397);
             expect(groupPos.top, 8);
-            expect(groupPos.width, 328);
+            expect(groupPos.width, 277);
             expect(groupPos.height, 86);
             expect(
               tester
@@ -2669,7 +2669,7 @@ void main() {
                     ),
                   )
                   .width,
-              328,
+              277,
             );
           }
           final agentsHeader = tester.widget<Positioned>(
@@ -2680,8 +2680,8 @@ void main() {
                 )
                 .first,
           );
-          expect(agentsHeader.left, 396);
-          expect(agentsHeader.width, 328);
+          expect(agentsHeader.left, 413);
+          expect(agentsHeader.width, 277);
           if (smart) {
             final smartPos = tester.widget<Positioned>(
               find
@@ -2691,9 +2691,9 @@ void main() {
                   )
                   .first,
             );
-            expect(smartPos.left, 396);
+            expect(smartPos.left, 413);
             expect(smartPos.top, 106); // 8 + 86 + 12
-            expect(smartPos.width, 328);
+            expect(smartPos.width, 277);
             expect(agentsHeader.top, 156); // 106 + 38 + 12
           } else {
             expect(agentsHeader.top, 106); // 8 + 86 + 12
