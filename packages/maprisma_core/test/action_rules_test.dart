@@ -204,8 +204,14 @@ void main() {
       'providers',
       'ollama',
     ),
-    'addons.file_preview': (const {}, 'install', 'agents', ''),
-    'setup.apply': (const {}, 'update', 'agents', ''),
+    'setup.apply': (
+      {
+        'enabled': ['agent-a'],
+      },
+      'install',
+      'agents',
+      'a',
+    ),
   };
 
   test('every route gives what its handler does, or is exempt', () {
@@ -262,6 +268,32 @@ void main() {
     expect(users.map((c) => (c.action, c.agent)), [
       ('disconnect', 'pi'),
       ('connect', 'pi'),
+    ]);
+  });
+
+  test('add-ons by what they are, from their real records', () {
+    final catalog = ruleCatalogCheck({
+      'entry': {'id': 'agent-pi', 'kind': 'agent'},
+      'installed_version': '1.0',
+    });
+    expect(
+      (catalog.action, catalog.category, catalog.item),
+      ('update', 'agents', 'pi'),
+    );
+    final fresh = ruleCatalogCheck({
+      'entry': {'id': 'llm-ollama', 'kind': 'provider'},
+      'installed_version': '',
+    });
+    expect(
+      (fresh.action, fresh.category, fresh.item),
+      ('install', 'providers', 'ollama'),
+    );
+    final setup = actionChecks('setup.apply', {
+      'enabled': ['agent-a', 'agent-b'],
+    }, RuleFacts(enabled: () => {'agent-b', 'agent-c'}));
+    expect(setup.map((c) => (c.action, c.item)), [
+      ('install', 'a'),
+      ('remove', 'c'),
     ]);
   });
 

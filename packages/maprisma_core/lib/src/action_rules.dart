@@ -176,15 +176,43 @@ String ruleAddonItem(String id) => id.startsWith('agent-')
     ? id.substring(4)
     : id;
 
+/// A record of the add-on catalog: the entry, and the version that is here.
+ActionCheck ruleCatalogCheck(Map record) {
+  final id = '${(record['entry'] as Map)['id']}';
+  return ActionCheck(
+    '${record['installed_version'] ?? ''}'.isEmpty ? 'install' : 'update',
+    ruleAddonCategory(id),
+    ruleAddonItem(id),
+  );
+}
+
+/// What was read from an add-on file.
+ActionCheck ruleAddonFileCheck(Map shown) {
+  final id = '${shown['id']}';
+  return ActionCheck(
+    shown['action'] == 'update' ? 'update' : 'install',
+    ruleAddonCategory(id),
+    ruleAddonItem(id),
+  );
+}
+
 /// What only the core knows about a request.
 final class RuleFacts {
-  const RuleFacts({this.installed, this.updateColumn, this.modelUsers});
+  const RuleFacts({
+    this.installed,
+    this.updateColumn,
+    this.enabled,
+    this.modelUsers,
+  });
 
   /// Whether a program of an installer is already here: then it is an update.
   final bool Function(String kind, String key)? installed;
 
   /// The category of an entry of updates.run.
   final String Function(String key)? updateColumn;
+
+  /// The add-ons switched on now.
+  final Set<String> Function()? enabled;
 
   /// The agents on a model's line.
   final List<String> Function(String node)? modelUsers;
@@ -321,16 +349,15 @@ List<ActionCheck> actionChecks(
           ruleAddonItem(text('id')),
         ),
       ];
-    // Which kind a file holds shows later: both must be allowed.
-    case 'addons.file_preview':
-      return const [
-        ActionCheck('install', 'agents', ''),
-        ActionCheck('install', 'providers', ''),
-      ];
     case 'setup.apply':
-      return const [
-        ActionCheck('update', 'agents', ''),
-        ActionCheck('update', 'providers', ''),
+      final wanted = {...(p['enabled'] as List? ?? const []).map((e) => '$e')};
+      final now = facts.enabled?.call() ?? const <String>{};
+      if (p['enabled'] is! List) return const [];
+      return [
+        for (final id in wanted.difference(now))
+          ActionCheck('install', ruleAddonCategory(id), ruleAddonItem(id)),
+        for (final id in now.difference(wanted))
+          ActionCheck('remove', ruleAddonCategory(id), ruleAddonItem(id)),
       ];
   }
   return const [];
@@ -339,7 +366,8 @@ List<ActionCheck> actionChecks(
 /// Routes that need no rule of their own.
 const rulesExempt = {
   // Their handler knows what they touch and checks that itself.
-  'addons.install', 'found.unpack', 'found.update_preview',
+  'addons.file_preview', 'addons.install', 'found.unpack',
+  'found.update_preview',
   // Second steps: their preview was checked, and a review is modal, so the
   // rules cannot change in between. The rules button waits in Ask AI too.
   'addons.file_install', 'addons.remove_apply', 'agents.action_apply',

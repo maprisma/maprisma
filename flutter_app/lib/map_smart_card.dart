@@ -2058,7 +2058,8 @@ class _MapSmartCardState extends State<MapSmartCard> {
                     // A review waits on what was checked when it opened.
                     onPressed:
                         _step == _SmartStep.review ||
-                            _step == _SmartStep.connectReview
+                            _step == _SmartStep.connectReview ||
+                            _step == _SmartStep.mcpForm
                         ? null
                         : smartOpenRules,
                     icon: const Icon(Icons.rule, size: 18),

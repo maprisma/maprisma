@@ -885,30 +885,6 @@ final class CoreService {
         'mcp_folders': _savedList('mcp_folders'),
       }, (result) => result);
     }
-    if (method == 'found.unpack') {
-      final program = params['program'];
-      final candidate = [
-        for (final c in lastFound['mcp'] as List? ?? const [])
-          if (c is Map &&
-              c['program'] == program &&
-              '${c['appimage']}'.isNotEmpty)
-            c,
-      ].firstOrNull;
-      if (params.length != 1 || candidate == null) {
-        throw const FormatException('Unknown program');
-      }
-      _enforce([
-        ActionCheck(
-          '${candidate['update_from'] ?? ''}'.isEmpty ? 'install' : 'update',
-          'mcp',
-          '${candidate['name']}',
-        ),
-      ]);
-      return tasks.start('found.unpack', {
-        'appimage': candidate['appimage'],
-        'mcp_folders': _savedList('mcp_folders'),
-      }, (result) => result);
-    }
     final agents = reads.catalog.scan();
     final configured = configuredPrograms(agents);
     final mcpNames = {
@@ -942,6 +918,30 @@ final class CoreService {
       }
     }
 
+    if (method == 'found.unpack') {
+      final program = params['program'];
+      final candidate = [
+        for (final c in lastFound['mcp'] as List? ?? const [])
+          if (c is Map &&
+              c['program'] == program &&
+              '${c['appimage']}'.isNotEmpty)
+            c,
+      ].firstOrNull;
+      if (params.length != 1 || candidate == null) {
+        throw const FormatException('Unknown program');
+      }
+      _enforce([
+        ActionCheck(
+          update(candidate) ? 'update' : 'install',
+          'mcp',
+          '${candidate['name']}',
+        ),
+      ]);
+      return tasks.start('found.unpack', {
+        'appimage': candidate['appimage'],
+        'mcp_folders': _savedList('mcp_folders'),
+      }, (result) => result);
+    }
     final seen = _seenFound();
     if (method == 'found.hints') {
       if (params.isNotEmpty) throw const FormatException('Invalid request');
@@ -3040,6 +3040,8 @@ final class CoreService {
       throw const FormatException('Invalid request');
     }
     final candidate = smartProposals.candidate(params);
+    // Rules can have changed since it was proposed.
+    _enforce(smartCandidateChecks(candidate));
     final action = candidate['action'] as Map;
     if (action['kind'] == 'agent_task') {
       final task = action['command'] as String;
@@ -3201,6 +3203,7 @@ final class CoreService {
       throw const FormatException('Invalid request');
     }
     final candidate = smartProposals.candidate(params);
+    _enforce(smartCandidateChecks(candidate));
     final action = candidate['action'] as Map;
     final kind = action['kind'];
     if (kind == 'mcp_add') {
@@ -3541,10 +3544,13 @@ final class CoreService {
         AddonVerifier(Posix()),
       );
       try {
-        return {
-          ...addonFiles.preview(params['path'] as String, store, addons.dirs),
-          'focus': <String>[],
-        };
+        final shown = addonFiles.preview(
+          params['path'] as String,
+          store,
+          addons.dirs,
+        );
+        _enforce([ruleAddonFileCheck(shown)]);
+        return {...shown, 'focus': <String>[]};
       } on InstallError catch (error) {
         throw FormatException(error.message);
       }
@@ -3586,14 +3592,7 @@ final class CoreService {
       if (DateTime.now().difference(kept.$1).inSeconds >= 600) {
         throw const FormatException('Add-on preview expired');
       }
-      final record = kept.$2 as Map;
-      _enforce([
-        ActionCheck(
-          record['action'] == 'update' ? 'update' : 'install',
-          ruleAddonCategory('${record['id']}'),
-          ruleAddonItem('${record['id']}'),
-        ),
-      ]);
+      _enforce([ruleCatalogCheck(kept.$2)]);
       final body = utf8.encode(
         pyJsonDumps({
           'record': kept.$2,
@@ -3888,9 +3887,12 @@ final class CoreService {
             if (smartPairChecks(p).every(ok)) p,
         ];
         if (left.isNotEmpty) {
+          final commands = {for (final p in left) '${p['agent']}'}.toList();
           kept.add({
             ...c,
             'title': smartDisconnectTitle(left),
+            'agents': commands,
+            'subtitle': [for (final a in commands) _nameOf(a)].join(', '),
             'action': {...action, 'pairs': left},
           });
         }
@@ -3937,6 +3939,7 @@ final class CoreService {
           : 'providers';
     },
     // As models.switch_preview moves them: the agents set to the model.
+    enabled: enabledAddons,
     modelUsers: (node) => [
       for (final e in (edits.currentMap()['edges'] as List).cast<Map>())
         if (e['target'] == node &&

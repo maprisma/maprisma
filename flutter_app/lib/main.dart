@@ -581,7 +581,12 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         tr: tr,
         // A rule is no reason to scan the map.
         onSave: (rules, hints) async {
-          final values = {'action_rules': rules, 'action_rule_hints': hints};
+          final values = {
+            'action_rules': [
+              for (final r in rules) {...r},
+            ],
+            'action_rule_hints': hints,
+          };
           _settingsRevision++;
           await _client.settingsUpdate(values: values);
           if (mounted) {
@@ -1764,26 +1769,30 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
 
   /// A task from Ask AI: the prompt to read, then the agent in a terminal.
   Future<void> _smartTask(Map<String, dynamic> plan) async {
-    final yes = await showDialog<bool>(
-      context: _navigator.currentContext!,
-      builder: (context) => AlertDialog(
-        title: Text(tr('Do it with {0}…').replaceAll('{0}', '${plan['name']}')),
-        content: SizedBox(
-          width: 760,
-          child: SingleChildScrollView(
-            child: SelectableText(plan['prompt'] as String),
+    final yes = await _review(
+      () => showDialog<bool>(
+        context: _navigator.currentContext!,
+        builder: (context) => AlertDialog(
+          title: Text(
+            tr('Do it with {0}…').replaceAll('{0}', '${plan['name']}'),
           ),
+          content: SizedBox(
+            width: 760,
+            child: SingleChildScrollView(
+              child: SelectableText(plan['prompt'] as String),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(tr('Cancel')),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(tr('Start')),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(tr('Cancel')),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(tr('Start')),
-          ),
-        ],
       ),
     );
     if (yes != true || !mounted) return;
@@ -1919,28 +1928,30 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       }
       final plan = await _client.checksMcpTask(name: update['name'] as String);
       if (!mounted) return;
-      final yes = await showDialog<bool>(
-        context: _navigator.currentContext!,
-        builder: (context) => AlertDialog(
-          title: Text(
-            '${tr('Update {0}').replaceAll('{0}', '${update['name']}')} · ${plan['name']}',
+      final yes = await _review(
+        () => showDialog<bool>(
+          context: _navigator.currentContext!,
+          builder: (context) => AlertDialog(
+            title: Text(
+              '${tr('Update {0}').replaceAll('{0}', '${update['name']}')} · ${plan['name']}',
+            ),
+            content: SizedBox(
+              width: 760,
+              child: SingleChildScrollView(
+                child: SelectableText(plan['prompt'] as String),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text(tr('Cancel')),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: Text(tr('Continue')),
+              ),
+            ],
           ),
-          content: SizedBox(
-            width: 760,
-            child: SingleChildScrollView(
-              child: SelectableText(plan['prompt'] as String),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: Text(tr('Cancel')),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: Text(tr('Continue')),
-            ),
-          ],
         ),
       );
       if (yes != true || !mounted) return;
