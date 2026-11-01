@@ -317,6 +317,7 @@ void main() {
       [],
       {'id': true},
       {'id': 1, 'protocol': true, 'method': 'settings.get'},
+      {'id': 1, 'protocol': 1, 'method': 'settings.get'},
       {'id': 1, 'protocol': 2, 'method': 'settings.get', 'params': []},
     ]) {
       expect(reply(jsonEncode(value))['error']['code'], 'invalid_request');

@@ -341,7 +341,7 @@
           "raw": "{\"id\":2,\"protocol\":true,\"method\":\"settings.get\"}"
         },
         {
-          "raw": "{\"id\":3,\"protocol\":1,\"method\":\"settings.get\",\"params\":[]}"
+          "raw": "{\"id\":3,\"protocol\":2,\"method\":\"settings.get\",\"params\":[]}"
         },
         {
           "raw_repeat": [

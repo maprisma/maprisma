@@ -38,7 +38,7 @@ class FlutterBackendTest(unittest.TestCase):
         ai_core.update_settings(self.settings, agent_folder=str(self.project))
         before = self.settings.read_bytes()
         result = self.service.snapshot()
-        self.assertEqual(result['protocol'], 1)
+        self.assertEqual(result['protocol'], 2)
         self.assertEqual(result['agents'][0]['command'], 'test-agent')
         self.assertEqual(result['projects']['test-agent']['default'], str(self.project))
         self.assertIsNone(result['projects']['test-agent']['pinned'])
@@ -70,6 +70,7 @@ class FlutterBackendTest(unittest.TestCase):
 
     def test_protocol_rejects_malformed_or_mismatched_requests_and_recovers(self):
         for request in ([], {'id': True}, {'id': 3, 'protocol': 99},
+                        {'id': 3, 'protocol': 1, 'method': 'app.snapshot'},
                         {'id': 3, 'protocol': True},
                         {'id': 3, 'protocol': 2, 'method': 42},
                         {'id': 3, 'protocol': 2, 'method': 'app.snapshot', 'params': []}):
@@ -81,7 +82,7 @@ class FlutterBackendTest(unittest.TestCase):
         first, second = map(json.loads, output.getvalue().splitlines())
         self.assertIn('error', first)
         self.assertEqual(second['id'], 7)
-        self.assertEqual(second['result']['protocol'], 1)
+        self.assertEqual(second['result']['protocol'], 2)
 
     def test_oversized_request_discards_tail_and_recovers(self):
         source = io.BytesIO(b'x' * (flutter_backend.MAX_REQUEST + 1) + b'\n{}\n')
@@ -237,7 +238,7 @@ class FlutterBackendTest(unittest.TestCase):
              mock.patch.object(self.service.tasks, 'status', return_value={'state': 'running'}):
             self.assertEqual(self.service.dispatch('map.snapshot', {})['nodes'], [])
             self.assertEqual(self.service.dispatch('map.snapshot', {})['nodes'], [])
-            self.assertEqual(self.service.dispatch('app.snapshot', {})['protocol'], 1)
+            self.assertEqual(self.service.dispatch('app.snapshot', {})['protocol'], 2)
 
     def test_subagent_history_settings_round_trip_and_reject_invalid_values(self):
         result = self.service.dispatch('settings.update', {'values': {'subagents_minutes': 60, 'subagents_kept': 20}})

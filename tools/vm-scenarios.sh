@@ -17,7 +17,7 @@ coproc CORE { "$B/lib/maprisma-core" 2>/tmp/core.err; }
 n=0
 ask() {  # method [params-json] -> prints the answer line
   n=$((n + 1))
-  printf '{"id":%d,"protocol":1,"method":"%s","params":%s}\n' "$n" "$1" "${2:-{\}}" >&"${CORE[1]}"
+  printf '{"id":%d,"protocol":2,"method":"%s","params":%s}\n' "$n" "$1" "${2:-{\}}" >&"${CORE[1]}"
   IFS= read -r -t 120 REPLY_LINE <&"${CORE[0]}" || { REPLY_LINE="no answer to $1"; return 1; }
 }
 wait_task() {  # method [params] -> the task's result (polls tasks.status)
