@@ -322,6 +322,10 @@ class _MapEditorState extends State<MapEditor>
   late final MapLightClock _phase;
   final _localSelection = <String>{};
   Set<String> get _selected => widget.selection ?? _localSelection;
+
+  /// The clicked line, whose hook shows without a selected box.
+  String? _clickedLine;
+  String _lineKey(Map edge) => '${edge['source']}>${edge['target']}';
   late Map<String, dynamic> _saved;
   MapLayout? _layout;
   String? _source, _hover, _draggingCard;
@@ -505,6 +509,7 @@ class _MapEditorState extends State<MapEditor>
     }
     final shift = HardwareKeyboard.instance.isShiftPressed;
     _renderChange(() {
+      _clickedLine = null;
       // A second click on the only selected box ends the selection.
       if (!shift && _selected.length == 1 && _selected.contains(id)) {
         _selected.clear();
@@ -1244,9 +1249,12 @@ class _MapEditorState extends State<MapEditor>
                                               'failure': line.edge,
                                             });
                                           } else {
-                                            _renderChange(
-                                              () => _selected.clear(),
-                                            );
+                                            _renderChange(() {
+                                              _selected.clear();
+                                              _clickedLine = line == null
+                                                  ? null
+                                                  : _lineKey(line.edge);
+                                            });
                                           }
                                         },
                                         child: RepaintBoundary(
@@ -1460,7 +1468,8 @@ class _MapEditorState extends State<MapEditor>
                               (c) =>
                                   layout.movable(c.edge) &&
                                   (_selected.contains(c.edge['source']) ||
-                                      _selected.contains(c.edge['target'])),
+                                      _selected.contains(c.edge['target']) ||
+                                      _clickedLine == _lineKey(c.edge)),
                             ))
                               Positioned(
                                 left: curve.hook.dx - 12,

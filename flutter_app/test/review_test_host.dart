@@ -21,7 +21,6 @@ Future<bool> _present(
                 () => Navigator.pop(context, false),
               ),
             ),
-            graph: const {'nodes': [], 'edges': []},
             tr: tr,
             onClose: () => Navigator.pop(context, false),
           ),

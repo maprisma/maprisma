@@ -635,6 +635,26 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+  testWidgets('a click on a line shows its hook; empty space hides it', (
+    tester,
+  ) async {
+    await mount(tester, edits: []);
+    final hooks = find.byTooltip(
+      'Move this connection to another compatible box, or to empty space to disconnect.',
+    );
+    await tester.tap(find.text('agent:a'));
+    await tester.pumpAndSettle();
+    final onLine = tester.getCenter(hooks.first);
+    await tester.tap(find.text('agent:a'));
+    await tester.pumpAndSettle();
+    expect(hooks, findsNothing);
+    await tester.tapAt(onLine);
+    await tester.pumpAndSettle();
+    expect(hooks, findsOneWidget);
+    await tester.tapAt(onLine + const Offset(0, 300));
+    await tester.pumpAndSettle();
+    expect(hooks, findsNothing);
+  });
   testWidgets(
     'selected line hook removes on empty and Escape cancels keyboard move',
     (tester) async {

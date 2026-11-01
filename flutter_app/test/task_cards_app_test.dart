@@ -8,7 +8,6 @@ import 'package:maprisma/agent_map.dart';
 import 'package:maprisma/settings_view.dart';
 import 'package:maprisma/main.dart';
 import 'package:maprisma/connections_view.dart';
-import 'package:maprisma/task_card.dart';
 import 'package:maprisma/test_shots.dart';
 import 'package:maprisma/map_addons_focus.dart';
 import 'package:maprisma/map_smart_card.dart';
@@ -345,7 +344,7 @@ void main() {
   });
 
   testWidgets(
-    'search/files do no inventory refresh; model load scans once; idle surfaces keep updates',
+    'search/files do no inventory refresh; idle surfaces keep updates',
     (tester) async {
       final dir = await mountApp(tester);
       final baseline = forcedScans(dir);
@@ -357,7 +356,8 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Load'));
       await settleService(tester);
-      expect(forcedScans(dir), baseline + 1);
+      // The page keeps its data; leaving it brings the map up to date.
+      expect(forcedScans(dir), baseline);
       expect(find.text('Succeeded'), findsOneWidget);
       expect(
         tester
@@ -417,10 +417,16 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(SwitchListTile, 'Test agent'));
       await settleService(tester);
-      expect(find.byType(ConnectionsView), findsNothing);
-      expect(find.byType(ConnectionsView, skipOffstage: false), findsOneWidget);
-      await tester.tap(find.text('Cancel'));
+      expect(find.byType(OverlayWindow), findsOneWidget);
+      expect(find.byType(ConnectionsView), findsOneWidget);
+      await tester.tap(
+        find.descendant(
+          of: find.byType(OverlayWindow),
+          matching: find.text('Cancel'),
+        ),
+      );
       await settleService(tester);
+      expect(find.byType(OverlayWindow), findsNothing);
       expect(
         tester.widget<EditableText>(find.byType(EditableText)).controller.text,
         'Known',
@@ -431,10 +437,14 @@ void main() {
       await tester.tap(find.widgetWithText(FilledButton, 'Apply'));
       await settleService(tester);
       expect(find.text('Succeeded'), findsOneWidget);
-      expect(find.widgetWithText(TextButton, 'Undo'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(OverlayWindow),
+          matching: find.widgetWithText(TextButton, 'Undo'),
+        ),
+        findsOneWidget,
+      );
       expect(forcedScans(dir), scans + 1);
-      final host = tester.widget<TaskHost>(find.byType(TaskHost).last);
-      expect((host.graph['edges'] as List), isNotEmpty);
       await tester.tap(find.widgetWithText(TextButton, 'Close'));
       await tester.pumpAndSettle();
       expect(
@@ -471,8 +481,13 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Get add-on'));
       await settleService(tester);
-      expect(find.byType(MapAddonsFocus), findsNothing);
-      await tester.tap(find.text('Cancel'));
+      expect(find.byType(OverlayWindow), findsOneWidget);
+      await tester.tap(
+        find.descendant(
+          of: find.byType(OverlayWindow),
+          matching: find.text('Cancel'),
+        ),
+      );
       await settleService(tester);
       final focus = tester.widget<MapAddonsFocus>(find.byType(MapAddonsFocus));
       expect(focus.welcome, isTrue);
@@ -581,7 +596,12 @@ void main() {
         'new-server',
       );
       expect(find.text('Agents: Test agent'), findsOneWidget);
-      await tester.tap(find.text('Cancel'));
+      await tester.tap(
+        find.descendant(
+          of: find.byType(OverlayWindow),
+          matching: find.text('Cancel'),
+        ),
+      );
       await settleService(tester);
       expect(
         requests(dir).where((q) => q['method'] == 'connections.apply'),
@@ -649,7 +669,9 @@ void main() {
         const Offset(0, 240),
       );
       await settleService(tester);
-      expect(find.byType(ConnectionReview), findsOneWidget);
+      final dialog = find.byKey(const ValueKey('disconnect-dialog'));
+      expect(dialog, findsOneWidget);
+      expect(find.byType(ConnectionReview), findsNothing);
       final move = requests(
         dir,
       ).singleWhere((q) => q['method'] == 'connections.move_preview');
@@ -658,12 +680,31 @@ void main() {
         'old': 'mcp:known-server',
         'new': null,
       });
-      await tester.tap(find.text('Cancel'));
+      await tester.tap(
+        find.descendant(of: dialog, matching: find.text('Cancel')),
+      );
       await settleService(tester);
       expect(
         requests(dir).where((q) => q['method'] == 'connections.apply').length,
         1,
       );
+      await tester.drag(
+        find.byTooltip(
+          'Move this connection to another compatible box, or to empty space to disconnect.',
+        ),
+        const Offset(0, 240),
+      );
+      await settleService(tester);
+      await tester.tap(
+        find.descendant(of: dialog, matching: find.text('Apply')),
+      );
+      await settleService(tester);
+      expect(
+        requests(dir).where((q) => q['method'] == 'connections.apply').length,
+        2,
+      );
+      expect(find.text('Succeeded'), findsOneWidget);
+      expect(find.widgetWithText(SnackBarAction, 'Undo'), findsOneWidget);
       expect(tester.takeException(), isNull);
       await unmountApp(tester);
     },
@@ -1196,7 +1237,7 @@ void main() {
     final semantics = tester.ensureSemantics();
     await mountApp(tester);
     await settleService(tester);
-    Future<void> check() async {
+    Future<void> check({bool overlay = false}) async {
       await expectLater(tester, meetsGuideline(labeledTapTargetGuideline));
       // Each text measured on its own. The header's AI Map is left out: the
       // guideline reads 2.34 whatever its colour, so it samples it wrongly.
@@ -1204,12 +1245,21 @@ void main() {
         tester,
         meetsGuideline(
           CustomMinimumContrastGuideline(
-            finder: find.byWidgetPredicate(
-              (w) =>
-                  w is Text &&
-                  (w.data ?? 'rich').trim().isNotEmpty &&
-                  w.data != 'AI Map',
-            ),
+            finder: () {
+              final texts = find.byWidgetPredicate(
+                (w) =>
+                    w is Text &&
+                    (w.data ?? 'rich').trim().isNotEmpty &&
+                    w.data != 'AI Map',
+              );
+              // What the barrier dims behind the window is not to be read.
+              return overlay
+                  ? find.descendant(
+                      of: find.byType(OverlayWindow),
+                      matching: texts,
+                    )
+                  : texts;
+            }(),
           ),
         ),
       );
@@ -1226,7 +1276,7 @@ void main() {
     await check(); // Settings
     await tester.tap(find.byKey(const ValueKey('help-open')));
     await settleService(tester);
-    await check(); // Help
+    await check(overlay: true); // Help
     await tester.sendKeyEvent(LogicalKeyboardKey.escape); // Esc closes it
     await settleService(tester);
     expect(find.byKey(const ValueKey('help-manual')), findsNothing);

@@ -236,7 +236,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   bool _windowFocused = true;
   DateTime? _nextMapScan;
 
-  double _mapAreaWidth = 0;
   TaskCardSpec? _card;
   final _viewBodyKeys = <String, GlobalKey>{};
   VoidCallback? _cancelReview;
@@ -348,12 +347,12 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
           _visibleTerminal == null &&
           _focusCategory != null);
 
-  bool _halfTaskMapVisible(TaskCardWidth width, Set<String> focus) =>
-      TaskHost.usesHalfCard(
-        width,
-        _mapAreaWidth,
-        (_graph?['nodes'] as List? ?? []).any((n) => focus.contains(n['id'])),
-      );
+  /// A page under the window keeps its data; only a map there needs a scan.
+  bool _mapUnderCard(TaskCardWidth width) =>
+      width == TaskCardWidth.half &&
+      _showMap &&
+      !_showSettings &&
+      !_hasTaskView;
 
   static const _dataTasks = {
     'models.search',
@@ -375,6 +374,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     String? existingTask,
     Set<String> focus = const {},
     TaskCardWidth width = TaskCardWidth.half,
+    bool quiet = false,
   }) async {
     final result = Completer<Map<String, dynamic>?>();
     if (operation.startsWith('system.') ||
@@ -423,7 +423,9 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     final resultFocus = _card?.focus ?? effectiveFocus;
     if (!mounted) return value;
     if (!_dataTasks.contains(operation)) {
-      await _refresh(refreshMap: _halfTaskMapVisible(width, resultFocus));
+      await _refresh(
+        refreshMap: operation == 'connections.apply' || _mapUnderCard(width),
+      );
     }
     if (!mounted) return value;
     if (value?['undo'] is String) _connectionUndo = value!['undo'] as String;
@@ -432,15 +434,16 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     }
     setState(() => _taskActive = false);
     // Data-selection tasks return straight to the retained browser/overview.
-    if (const [
-          'models.search',
-          'models.files',
-          'addons.catalog',
-          'guide.snapshot',
-          'system.refresh',
-          'system.move_undo',
-          'existing.scan',
-        ].contains(operation) &&
+    if ((quiet ||
+            const [
+              'models.search',
+              'models.files',
+              'addons.catalog',
+              'guide.snapshot',
+              'system.refresh',
+              'system.move_undo',
+              'existing.scan',
+            ].contains(operation)) &&
         value != null &&
         value['ok'] != false) {
       setState(() => _card = null);
@@ -537,7 +540,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     var ok = false;
     try {
       await undo();
-      await _refresh(refreshMap: _halfTaskMapVisible(width, focus));
+      await _refresh(refreshMap: _mapUnderCard(width));
       ok = true;
     } catch (_) {
       // Keep failures in the same result card, without consuming another action.
@@ -577,11 +580,12 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     close,
   );
 
-  Widget _host(TaskCardSpec spec, VoidCallback close) => TaskHost(
+  Widget _host(TaskCardSpec spec, VoidCallback close, {bool overlay = false}) =>
+      TaskHost(
     spec: spec,
-    graph: _graph ?? const {'nodes': [], 'edges': []},
     tr: tr,
     onClose: close,
+    overlay: overlay,
   );
 
   String tr(String key) => _strings[key] ?? key;
@@ -772,7 +776,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     if (!(_backend?.isConnected ?? false)) return _connect();
     if (_card != null) {
       return _refresh(
-        refreshMap: _halfTaskMapVisible(_card!.width, _card!.focus),
+        refreshMap: _mapUnderCard(_card!.width),
       );
     }
     return _refresh();
@@ -3313,11 +3317,13 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       }
       if (['runtime', 'cloud'].contains(source['kind']) &&
           old?['kind'] == 'model') {
-        await _connectionPreview({
-          'provider': source['id'],
-          'old': old!['id'],
-          'new': target?['id'],
-        }, method: 'models.switch_preview');
+        await _connectionPreview(
+          {'provider': source['id'], 'old': old!['id'], 'new': target?['id']},
+          method: 'models.switch_preview',
+          plainDisconnect: target == null
+              ? '${source['label']} → ${old['label']}'
+              : null,
+        );
         return;
       }
       if (source['kind'] == 'agent' && old?['kind'] == 'model') {
@@ -3335,11 +3341,13 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
           'edge': {'source': source['id'], 'target': provider['source']},
         });
       }
-      await _connectionPreview({
-        'agent': source['id'],
-        'old': edge['target'],
-        'new': target?['id'],
-      }, method: 'connections.move_preview');
+      await _connectionPreview(
+        {'agent': source['id'], 'old': edge['target'], 'new': target?['id']},
+        method: 'connections.move_preview',
+        plainDisconnect: target == null
+            ? '${source['label']} → ${old?['label'] ?? edge['target']}'
+            : null,
+      );
       return;
     }
     if (target == null) return;
@@ -3437,6 +3445,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     Map<String, dynamic> params, {
     bool author = false,
     String? method,
+    String? plainDisconnect,
   }) async {
     setState(() => _busy = true);
     var applied = false;
@@ -3460,12 +3469,24 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
               useNow: params['use_now'] as bool?,
             );
       if (!mounted) return;
-      final apply = await _cardReview(
-        tr('Preview'),
-        plan,
-        (yes, no) =>
-            ConnectionReview(plan: plan, tr: tr, onConfirm: yes, onCancel: no),
-      );
+      // A line taken away with nothing to warn about needs only a yes.
+      final quiet =
+          plainDisconnect != null &&
+          plan['empty'] != true &&
+          (plan['notes'] as List? ?? const []).isEmpty &&
+          (plan['contexts'] as List? ?? const []).isEmpty;
+      final apply = quiet
+          ? await _askDisconnect(plainDisconnect, plan)
+          : await _cardReview(
+              tr('Preview'),
+              plan,
+              (yes, no) => ConnectionReview(
+                plan: plan,
+                tr: tr,
+                onConfirm: yes,
+                onCancel: no,
+              ),
+            );
       if (apply) {
         setState(() => _taskActive = true);
         var result = await _client.connectionsApply(
@@ -3478,17 +3499,17 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
             params: const {},
             existingTask: result['task'] as String,
             title: tr('Apply'),
+            quiet: quiet,
           );
           if (finished == null) return;
           result = finished;
         }
         if (!queued) {
           _connectionUndo = result['undo'] as String?;
-          await _refresh(
-            refreshMap: _halfTaskMapVisible(TaskCardWidth.half, _focusOf(plan)),
-          );
-          _taskResult(tr('Apply'), result, _focusOf(plan));
+          await _refresh(refreshMap: true);
+          if (!quiet) _taskResult(tr('Apply'), result, _focusOf(plan));
         }
+        if (quiet && mounted) _disconnected();
         applied = true;
         if ((result['context_failures'] as num? ?? 0) > 0 && mounted) {
           ScaffoldMessenger.of(_navigator.currentContext!).showSnackBar(
@@ -3587,6 +3608,51 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     if (result?['ok'] == true && mounted) setState(() => _moveUndo = null);
     await _reloadSystem();
     await _refreshSystem(false, quiet: true);
+  }
+
+  Future<bool> _askDisconnect(String line, Map<String, dynamic> plan) async {
+    final yes = await _review(
+      () => showDialog<bool>(
+        context: _navigator.currentContext!,
+        builder: (context) => AlertDialog(
+          key: const ValueKey('disconnect-dialog'),
+          title: Text(tr('Disconnect')),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(line),
+              for (final action in plan['model_actions'] as List? ?? const [])
+                Text(
+                  '${tr(action['operation'] == 'model.load' ? 'Load' : 'Unload')}: ${action['model']}',
+                ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(tr('Cancel')),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(tr('Apply')),
+            ),
+          ],
+        ),
+      ),
+    );
+    return yes == true;
+  }
+
+  void _disconnected() {
+    ScaffoldMessenger.of(_navigator.currentContext!).showSnackBar(
+      SnackBar(
+        content: Text(tr('Succeeded')),
+        action: _connectionUndo == null
+            ? null
+            : SnackBarAction(label: tr('Undo'), onPressed: _undoConnection),
+      ),
+    );
   }
 
   Future<bool> _undoConnection({bool refresh = true}) async {
@@ -4206,14 +4272,13 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                 Expanded(
                   child: LayoutBuilder(
                     builder: (context, constraints) {
-                      _mapAreaWidth = constraints.maxWidth;
                       return Stack(
                         fit: StackFit.expand,
                         children: [
                           if (_browser != null)
-                            Offstage(
+                            ExcludeFocus(
                               key: const ValueKey('browser-slot'),
-                              offstage: _card != null,
+                              excluding: _card != null,
                               child: _viewHost(
                                 'Download model',
                                 ModelBrowser(
@@ -4227,11 +4292,11 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                                 () => setState(() => _browser = null),
                               ),
                             ),
-                          if (_hasTaskView ||
-                              (_card == null && _browser == null))
+                          if (_hasTaskView || _browser == null)
                             RetainedTaskView(
                               key: const ValueKey('view-slot'),
-                              visible: _card == null && _browser == null,
+                              visible: _browser == null,
+                              focusable: _card == null,
                               child: _showGuide
                                   ? _viewHost(
                                       'Your first agent',
@@ -4556,7 +4621,8 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                                       },
                                     ),
                             ),
-                          if (_card != null) _host(_card!, _closeCard),
+                          if (_card != null)
+                            _host(_card!, _closeCard, overlay: true),
                           if (_visibleTerminal != null &&
                               _card == null &&
                               _browser == null)

@@ -68,18 +68,6 @@ for line in sys.stdin:
                         ? progress
                         : Text('starts: ${result!['starts']}'),
                   ),
-                  graph: const {
-                    'nodes': [
-                      {
-                        'id': 'runtime:test',
-                        'column': 2,
-                        'kind': 'runtime',
-                        'label': 'Test runtime',
-                        'detail': '',
-                      },
-                    ],
-                    'edges': [],
-                  },
                   tr: (s) => s,
                   onClose: () {},
                 );
@@ -91,9 +79,6 @@ for line in sys.stdin:
       await tester.runAsync(
         () => Future<void>.delayed(const Duration(milliseconds: 120)),
       );
-      await tester.pump();
-      expect(find.byKey(const ValueKey('half-task')), findsOneWidget);
-      tester.view.physicalSize = const Size(800, 800);
       await tester.pump();
       expect(find.byKey(const ValueKey('full-task')), findsOneWidget);
       // Polling delays run in fake time; subprocess IO runs in real time.
