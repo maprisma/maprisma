@@ -3166,7 +3166,7 @@ final class CoreService {
         'agents': agents,
       });
     }
-    if (kind == 'mcp_connect' || kind == 'mcp_disconnect') {
+    if (kind == 'mcp_connect') {
       if (agents.length != 1 || agents.single != action['agent']) {
         throw const FormatException('Invalid request');
       }
@@ -3174,10 +3174,64 @@ final class CoreService {
         'kind': 'mcp',
         'command': action['agent'],
         'item': action['server'],
-        'remove': kind == 'mcp_disconnect',
+        'remove': false,
       });
     }
+    if (kind == 'mcp_disconnect') {
+      final pairs = [for (final p in action['pairs'] as List) p as Map];
+      if (agents.length != {...agents}.length ||
+          !{...agents}.containsAll(candidate['agents'] as List) ||
+          agents.length != (candidate['agents'] as List).length) {
+        throw const FormatException('Invalid request');
+      }
+      return pairs.length == 1
+          ? dispatch('connections.preview', {
+              'kind': 'mcp',
+              'command': pairs.single['agent'],
+              'item': pairs.single['server'],
+              'remove': true,
+            })
+          : _disconnectAll(pairs);
+    }
     throw const FormatException('Invalid request');
+  }
+
+  /// Several servers leave their agents in one preview, backup and Undo.
+  Map<String, dynamic> _disconnectAll(List<Map> pairs) {
+    final catalog = reads.catalog.scan();
+    final inventory = reads.inventory.collect(catalog);
+    final focus = <String>[];
+    final builders = <Plan Function()>[];
+    for (final pair in pairs) {
+      final command = pair['agent'] as String, item = pair['server'] as String;
+      final server = inventory.mcp
+          .where((s) => s['name'] == item)
+          .firstOrNull;
+      if (server == null ||
+          !mcp.supported(command) ||
+          !catalog.any((a) => a.command == command && a.installed)) {
+        throw const FormatException('MCP server unavailable');
+      }
+      builders.add(
+        () => mcp.plan(command, item, [
+          for (final a in server['agents'] as List) a as String,
+        ], remove: true),
+      );
+      for (final id in taskFocus(reads.map, {
+        'command': command,
+        'kind': 'mcp',
+        'item': item,
+      })) {
+        if (!focus.contains(id)) focus.add(id);
+      }
+    }
+    return {
+      ...connections.keep(chainPlans(config, builders)),
+      'kind': 'mcp',
+      'remove': true,
+      'disconnects': [for (final p in pairs) '${p['server']} → ${p['agent']}'],
+      'focus': focus,
+    };
   }
 
   /// A local LLM a model can be downloaded for: Ollama pulls, the others need

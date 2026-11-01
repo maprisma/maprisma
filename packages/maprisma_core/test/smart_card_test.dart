@@ -267,8 +267,18 @@ void main() {
         },
         {
           'action': 'disconnect',
-          'server': 'pdfcraft',
+          'servers': ['pdfcraft'],
           'agents': ['nobody'],
+        },
+        {
+          'action': 'disconnect',
+          'servers': ['pdfcraft', 'unknown'],
+          'agents': ['claude'],
+        },
+        {
+          'action': 'disconnect',
+          'server': 'pdfcraft',
+          'agents': ['claude'],
         },
       ]) {
         expect(() => check(bad), throwsFormatException);
@@ -335,7 +345,7 @@ void main() {
       final result = await smartMcp(
         facts,
         answers([
-          '{"action": "disconnect", "server": "pdfcraft", "agents": ["claude", "codex"]}',
+          '{"action": "disconnect", "servers": ["pdfcraft"], "agents": ["claude", "codex"]}',
         ], []),
         (_) async => [],
       );
@@ -344,6 +354,33 @@ void main() {
       expect((candidates.single as Map)['subtitle'], 'Claude Code');
       expect((candidates.single as Map)['kind'], 'mcp_disconnect');
       expect((candidates.single as Map)['agents'], ['claude']);
+    });
+
+    test('several servers are one candidate, one change for all', () async {
+      final many = {
+        ...facts,
+        'mcp': {
+          'a': ['claude'],
+          'b': ['claude', 'codex'],
+          'c': ['codex'],
+          'd': ['claude'],
+          'e': ['claude'],
+        },
+      };
+      final result = await smartMcp(
+        many,
+        answers([
+          '{"action": "disconnect", "servers": ["a", "b", "c", "d", "e"], "agents": ["claude", "codex"]}',
+        ], []),
+        (_) async => [],
+      );
+      final candidate = (result['candidates'] as List).single as Map;
+      expect(candidate['agents'], ['claude', 'codex']);
+      expect(candidate['title'], 'a, b, c +2');
+      expect(candidate['subtitle'], 'Claude Code, Codex');
+      expect((candidate['action'] as Map)['pairs'], hasLength(6));
+      final prompt = smartMcpPrompt(many);
+      expect(prompt, contains('"servers"'));
     });
   });
 
@@ -866,6 +903,78 @@ void main() {
       'hf.co/a/b:Q4',
     );
     expect(smartInstalled(['other'], action('ollama', 'hf.co/a/b:Q4')), isNull);
+  });
+
+  test('all servers leave in one preview of one file', () {
+    final home = Directory.systemTemp.createTempSync('smart');
+    addTearDown(() => home.deleteSync(recursive: true));
+    final bin = Directory('${home.path}/bin')..createSync();
+    File('${bin.path}/claude')
+      ..writeAsStringSync('#!/bin/sh\necho 1.0.0\n')
+      ..setLastModifiedSync(DateTime(2026));
+    Process.runSync('chmod', ['+x', '${bin.path}/claude']);
+    final config = File('${home.path}/.claude.json')
+      ..writeAsStringSync(
+        const JsonEncoder.withIndent('  ').convert({
+          'mcpServers': {
+            'one': {'command': 'one-cli'},
+            'two': {'command': 'two-cli'},
+            'three': {'command': 'three-cli'},
+          },
+        }),
+      );
+    final before = config.readAsStringSync();
+    final core = CoreService(
+      environment: {
+        'HOME': home.path,
+        'PATH': bin.path,
+        'MAPRISMA_DESKTOP': 'generic',
+      },
+    );
+    final kept = core.smartProposals.keep({
+      'status': 'proposal',
+      'candidates': [
+        {
+          'id': 'c1',
+          'kind': 'mcp_disconnect',
+          'agents': ['claude'],
+          'title': 'one, two, three',
+          'action': {
+            'kind': 'mcp_disconnect',
+            'pairs': [
+              {'server': 'one', 'agent': 'claude'},
+              {'server': 'two', 'agent': 'claude'},
+              {'server': 'three', 'agent': 'claude'},
+            ],
+          },
+        },
+      ],
+    });
+    final params = {
+      'proposal': kept['proposal'],
+      'candidate': 'c1',
+      'values': <String, dynamic>{},
+    };
+    expect(
+      () => core.dispatch('map.smart_plan', {
+        ...params,
+        'agents': ['codex'],
+      }),
+      throwsFormatException,
+    );
+    final plan = core.dispatch('map.smart_plan', {
+      ...params,
+      'agents': ['claude'],
+    });
+    expect(plan['disconnects'], [
+      'one → claude',
+      'two → claude',
+      'three → claude',
+    ]);
+    // One file, all three entries gone from it, nothing written yet.
+    final file = (plan['files'] as List).single as Map;
+    expect(file['removed'], greaterThanOrEqualTo(9));
+    expect(config.readAsStringSync(), before);
   });
 
   test('the routes refuse what is not theirs', () {

@@ -173,8 +173,8 @@ String smartMcpPrompt(Map facts) {
       'when the request is to find or add a new MCP server.\n'
       '{"action": "connect", "server": "<exact name listed above>", "agents": ["<commands>"]}\n'
       'when an agent should use a server that is already here.\n'
-      '{"action": "disconnect", "server": "<exact name listed above>", "agents": ["<commands>"]}\n'
-      'when an agent should stop using a server.\n'
+      '{"action": "disconnect", "servers": ["<exact names listed above>"], "agents": ["<commands>"]}\n'
+      'when agents should stop using servers: name every server meant, all of them for "all servers"; the user sees one preview for all of it.\n'
       '$_lookupChoice'
       '{"action": "clarify", "question": "<one short question>", "choices": ["<2 to 4 short answers>"]}\n'
       'when you cannot tell what is meant, for example which agents.\n'
@@ -389,12 +389,26 @@ Map<String, dynamic> smartMcpChecked(
     if (query.isEmpty) throw const FormatException('no search');
     return {'action': action, 'query': query, 'agents': unique};
   }
-  if (action == 'connect' || action == 'disconnect') {
+  if (action == 'connect') {
     final server = answer['server'];
     if (!servers.contains(server) || unique.isEmpty) {
       throw const FormatException('no server');
     }
     return {'action': action, 'server': server, 'agents': unique};
+  }
+  if (action == 'disconnect') {
+    final named = answer['servers'];
+    if (named is! List ||
+        named.isEmpty ||
+        !named.every(servers.contains) ||
+        unique.isEmpty) {
+      throw const FormatException('no server');
+    }
+    return {
+      'action': action,
+      'servers': {...named.cast<String>()}.toList(),
+      'agents': unique,
+    };
   }
   throw const FormatException('unknown action');
 }
@@ -434,16 +448,51 @@ Future<Map<String, dynamic>> smartMcp(
       },
     };
   }
-  if (action == 'connect' || action == 'disconnect') {
-    final remove = action == 'disconnect';
+  if (action == 'disconnect') {
+    // One candidate, so one preview, one backup and one Undo for all of it.
+    final pairs = [
+      for (final server in first['servers'] as List)
+        for (final command in first['agents'] as List)
+          if ((used[server] as List? ?? const []).contains(command))
+            {'server': server, 'agent': command},
+    ];
+    if (pairs.isEmpty) {
+      return {
+        'status': 'redirect',
+        'instead': {'hint': smartNothingToDo, 'column': null, 'request': null},
+      };
+    }
+    final commands = {for (final p in pairs) p['agent']}.toList();
+    final shown = {for (final p in pairs) p['server']}.toList();
+    return {
+      'status': 'proposal',
+      'summary': '',
+      'candidates': [
+        {
+          'id': 'c1',
+          'kind': 'mcp_disconnect',
+          'agents': commands,
+          'title': shown.length > 3
+              ? '${shown.take(3).join(', ')} +${shown.length - 3}'
+              : shown.join(', '),
+          'subtitle': [for (final c in commands) names[c]].join(', '),
+          'reason': '',
+          'fit': 'ok',
+          'size': 0,
+          'action': {'kind': 'mcp_disconnect', 'pairs': pairs},
+        },
+      ],
+    };
+  }
+  if (action == 'connect') {
     final server = first['server'] as String;
     final using = (used[server] as List? ?? const []).toSet();
     final candidates = [
       for (final (i, command) in (first['agents'] as List).indexed)
-        if (using.contains(command) == remove)
+        if (!using.contains(command))
           {
             'id': 'c${i + 1}',
-            'kind': remove ? 'mcp_disconnect' : 'mcp_connect',
+            'kind': 'mcp_connect',
             'agents': [command],
             'title': server,
             'subtitle': names[command],
@@ -451,7 +500,7 @@ Future<Map<String, dynamic>> smartMcp(
             'fit': 'ok',
             'size': 0,
             'action': {
-              'kind': remove ? 'mcp_disconnect' : 'mcp_connect',
+              'kind': 'mcp_connect',
               'server': server,
               'agent': command,
             },
