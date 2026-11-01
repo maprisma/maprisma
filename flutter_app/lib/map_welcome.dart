@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'map_smart_card.dart' show smartActionLabels;
-import 'system_map_view.dart' show separateMountHint, simplifyHint;
+
+const _separateMountHint =
+    'Already have AI tools on another disk? Mount it first, then use Find existing AI before installing or downloading again.';
+const _simplifyHint =
+    'Reuse a shared model folder instead of downloading models again. Review duplicate files and unused services before changing anything.';
 
 const _useLevels = {'ready': 'Ready', 'almost': 'Almost', 'missing': 'Not yet'};
 
@@ -103,14 +107,13 @@ class MapWelcome extends StatelessWidget {
     required this.searched,
     required this.onLook,
     required this.onSkip,
-    required this.onSystem,
     required this.onAgents,
     this.uses = const [],
     this.onAction,
   });
   final String Function(String) tr;
   final bool busy, skipSearch, searched;
-  final VoidCallback onLook, onSkip, onSystem, onAgents;
+  final VoidCallback onLook, onSkip, onAgents;
   final List<Map<String, dynamic>> uses;
   final void Function(List<String> action)? onAction;
 
@@ -118,7 +121,7 @@ class MapWelcome extends StatelessWidget {
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
     final intro = Text(
-      '${tr('Welcome to {0}').replaceAll('{0}', 'Maprisma')}\n${tr(separateMountHint)}\n${tr(simplifyHint)}\n${tr('Only this PC is inspected. Nothing is sent and no detected program is run. You can skip the disk search.')}',
+      '${tr('Welcome to {0}').replaceAll('{0}', 'Maprisma')}\n${tr(_separateMountHint)}\n${tr(_simplifyHint)}\n${tr('Only this PC is inspected. Nothing is sent and no detected program is run. You can skip the disk search.')}',
     );
     return MaterialBanner(
       content: uses.isEmpty
@@ -149,10 +152,6 @@ class MapWelcome extends StatelessWidget {
           ),
           TextButton(onPressed: busy ? null : onSkip, child: Text(tr('Skip'))),
         ],
-        TextButton(
-          onPressed: busy ? null : onSystem,
-          child: Text(tr('System Map')),
-        ),
         TextButton(
           onPressed: busy ? null : onAgents,
           child: Text(tr('Agents')),

@@ -984,6 +984,8 @@ void main() {
       await tester.pump();
       final scaledNodes = nodeRects();
       final scaledMatrix = controller.value.clone();
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('smart-card-models')));
       await tester.pumpAndSettle();
       expect(
@@ -1080,11 +1082,6 @@ void main() {
 
       await tester.tap(find.byKey(const ValueKey('smart-card-providers')));
       await tester.pumpAndSettle();
-      final cardRect = tester.getRect(
-        find.byKey(const ValueKey('smart-card-providers')),
-      );
-      expect(cardRect.contains(hookCenter), isTrue);
-
       await tester.tapAt(hookCenter);
       await tester.pump();
       expect(find.text('Disconnect'), findsNothing);
@@ -2908,8 +2905,6 @@ void main() {
           isFalse,
         );
         // Moving to Models turns its column on in any window and opens it.
-        await tester.tap(find.byKey(const ValueKey('smart-card-agents')));
-        await tester.pumpAndSettle();
         tester
             .widget<MapSmartCard>(
               find.byKey(const ValueKey('smart-card-agents')),
@@ -2926,6 +2921,8 @@ void main() {
         );
         tester.view.physicalSize = const Size(1500, 700);
         await tester.pump();
+        await tester.tap(find.text('Close'));
+        await tester.pumpAndSettle();
         await tester.tap(find.byKey(const ValueKey('map-column-3')));
         await tester.pump();
         expect(find.byKey(const ValueKey('smart-card-models')), findsNothing);

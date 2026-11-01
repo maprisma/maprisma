@@ -31,7 +31,7 @@ class SettingsView extends StatelessWidget {
   final Future<void> Function(Map<String, dynamic>) onUpdate;
   final VoidCallback onBack;
 
-  /// The installed agents that can do the System Map's checks (command, name).
+  /// The installed agents that can do the checks (command, name).
   final List<Map> checkers;
 
   /// helper.snapshot: the local helper's candidates, suggestion and choice.
@@ -196,7 +196,7 @@ class SettingsView extends StatelessWidget {
         decoration: InputDecoration(
           labelText: tr('Local helper'),
           helperText: tr(
-            'An agent with a model of your local LLM answers the AI help that needs no web (Smart Check, which MCP server fits, help with local LLMs) on this PC, without tokens. Suggested: the largest chat model your graphics card holds.',
+            'An agent with a model of your local LLM answers the AI help that needs no web (which MCP server fits, help with local LLMs) on this PC, without tokens. Suggested: the largest chat model your graphics card holds.',
           ),
           helperMaxLines: 4,
         ),
@@ -618,6 +618,19 @@ class SettingsView extends StatelessWidget {
                   ? null
                   : (value) => onUpdate({'terminal_tabs': value}),
             ),
+            SwitchListTile(
+              key: const ValueKey('screenshot-key'),
+              title: Text(tr('F9 saves a screenshot')),
+              subtitle: Text(
+                tr(
+                  'A picture of this window goes to Pictures/Maprisma. In a terminal, use the camera symbol below it: programs there may use F9.',
+                ),
+              ),
+              value: settings['screenshot_key'] as bool? ?? true,
+              onChanged: busy
+                  ? null
+                  : (value) => onUpdate({'screenshot_key': value}),
+            ),
             const SizedBox(height: 24),
             Text(
               tr('Usage statistics box'),
@@ -676,11 +689,7 @@ class SettingsView extends StatelessWidget {
                       },
               ),
             const SizedBox(height: 8),
-            Text(
-              tr(
-                'Offered first for AI help and the Smart Check on the System Map; its tokens are used for them.',
-              ),
-            ),
+            Text(tr('Offered first for AI help; its tokens are used for it.')),
             const SizedBox(height: 16),
             SwitchListTile(
               key: const ValueKey('ai-checks'),

@@ -83,6 +83,7 @@ SCHEMA: dict[str, Setting] = {
     "window_size": Setting(None, _size, "the window's size when it was last closed: [width, height]"),
     "last_view": Setting("main", _text, "the view open when the window was last closed"),
     "terminal_tabs": Setting(True, _bool, "Settings › Terminal tabs above the map"),
+    "screenshot_key": Setting(True, _bool, "Settings › F9 saves a screenshot"),
     "agent_folder": Setting(None, _text, "Settings › Agents start in: the folder agents start in"),
     "agent_projects": Setting({}, _text_mapping, "Start: the optional project folder pinned as each agent's default"),
     "agent_project_history": Setting({}, _history_mapping, "Project folders used to start each agent, newest first"),

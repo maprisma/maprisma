@@ -3242,5 +3242,13 @@
  "CPU & RAM": "CPU e RAM",
  "No AI helper is set up yet.": "Ainda não há nenhum ajudante de IA configurado.",
  "{0}: {1} to fix": "{0}: {1} a corrigir",
- "{0}: all fine": "{0}: tudo bem"
+ "{0}: all fine": "{0}: tudo bem",
+ "Offered first for AI help; its tokens are used for it.": "Oferecido primeiro para a ajuda de IA; os seus tokens são usados para isso.",
+ "An agent with a model of your local LLM answers the AI help that needs no web (which MCP server fits, help with local LLMs) on this PC, without tokens. Suggested: the largest chat model your graphics card holds.": "Um agente com um modelo do teu LLM local responde à ajuda de IA que não precisa da web (que servidor MCP serve, ajuda com LLM locais) neste PC, sem tokens. Sugerido: o maior modelo de chat que a tua placa gráfica comporta.",
+ "Nothing new found.": "Nada de novo encontrado.",
+ "F9 saves a screenshot": "F9 guarda uma captura de ecrã",
+ "A picture of this window goes to Pictures/Maprisma. Not while a terminal is showing: programs there may use F9.": "Uma imagem desta janela vai para Pictures/Maprisma. Não enquanto um terminal estiver visível: os programas nele podem usar F9.",
+ "Screenshot saved: {0}": "Captura guardada: {0}",
+ "A picture of this window goes to Pictures/Maprisma. In a terminal, use the camera symbol below it: programs there may use F9.": "Uma imagem desta janela vai para Pictures/Maprisma. Num terminal, usa o símbolo da câmara por baixo: os programas nele podem usar F9.",
+ "Save a screenshot": "Guardar uma captura"
 }

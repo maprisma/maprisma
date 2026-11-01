@@ -92,7 +92,7 @@ void main() {
   });
 
   testWidgets('an MCP server\'s details', (tester) async {
-    var system = false, closed = false;
+    var closed = false;
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -120,7 +120,6 @@ void main() {
                 ['lookup', 'Looks up'],
               ],
             },
-            onSystemMap: () => system = true,
             onClose: () => closed = true,
           ),
         ),
@@ -129,8 +128,7 @@ void main() {
     expect(find.text('NOTES_TOKEN = •••'), findsOneWidget);
     expect(find.text('lookup'), findsOneWidget);
     expect(find.text('Codex · draw a line'), findsOneWidget);
-    await tester.tap(find.text('System Map'));
     await tester.tap(find.text('Close'));
-    expect(system && closed, isTrue);
+    expect(closed, isTrue);
   });
 }

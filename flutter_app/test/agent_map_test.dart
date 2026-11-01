@@ -121,7 +121,6 @@ void main() {
             onAgent: (_) => callbacks++,
             onNode: (_) => callbacks++,
             onNodeMenu: (_, _) => callbacks++,
-            onNodeDrop: (_, _) => callbacks++,
             onViewChanged: () => callbacks++,
             tr: (s) => s,
           ),

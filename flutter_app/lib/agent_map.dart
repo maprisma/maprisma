@@ -16,8 +16,6 @@ class AgentMap extends StatelessWidget {
   const AgentMap({
     this.layers,
     this.onLayers,
-    this.shownColumns,
-    this.onShowColumn,
     super.key,
     required this.graph,
     required this.onAgent,
@@ -35,7 +33,6 @@ class AgentMap extends StatelessWidget {
     this.onSubagents,
     this.onNode,
     this.controller,
-    this.onNodeDrop,
     this.onViewChanged,
     this.focusedNode,
     this.groups,
@@ -59,10 +56,6 @@ class AgentMap extends StatelessWidget {
   });
 
   final Object? staticState;
-  final List<int>? shownColumns;
-
-  /// Show a hidden column: Ask AI moved a request to it.
-  final ValueChanged<int>? onShowColumn;
   final bool smartCards;
   final Set<String>? smartAskColumns;
   final void Function(String step, String key, String name)? onSmartProvider;
@@ -93,7 +86,6 @@ class AgentMap extends StatelessWidget {
   final List<MapGroup>? groups;
   final ValueChanged<int>? onExpandGroup;
   final void Function(BuildContext, Map<String, dynamic>)? onNodeMenu;
-  final void Function(Map<String, dynamic>, Map<String, dynamic>)? onNodeDrop;
   final List<String>? layers;
   final FutureOr<void> Function(List<String>)? onLayers;
 
@@ -118,14 +110,6 @@ class AgentMap extends StatelessWidget {
             child: UsageBoxLabel(
               box: box,
               size: (graph['usage_box_size'] as int? ?? 7).toDouble(),
-            ),
-          ),
-        if ((node['badges'] as int? ?? 0) > 0)
-          Tooltip(
-            message: tr('Findings'),
-            child: Badge(
-              backgroundColor: Colors.blueGrey,
-              label: Text('${node['badges']}'),
             ),
           ),
         if (node['kind'] == 'agent' &&
@@ -156,58 +140,6 @@ class AgentMap extends StatelessWidget {
             ),
           ),
       ],
-    );
-  }
-
-  Widget _interactiveNode(
-    BuildContext context,
-    Map<String, dynamic> node,
-    Widget child,
-  ) {
-    if (readOnly || onNodeDrop == null) return child;
-    final target = DragTarget<Map<String, dynamic>>(
-      onWillAcceptWithDetails: (details) =>
-          details.data['id'] != node['id'] &&
-          node['status'] != 'missing' &&
-          ((details.data['kind'] == 'runtime' &&
-                  node['found'] != null &&
-                  node['kind'] != 'runtime') ||
-              (['models', 'folder', 'store'].contains(details.data['kind']) &&
-                  ['disk', 'runtime'].contains(node['kind']) &&
-                  !(details.data['kind'] == 'store' &&
-                      node['kind'] == 'disk'))),
-      onAcceptWithDetails: (details) => onNodeDrop!(details.data, node),
-      builder: (context, candidates, rejected) => DecoratedBox(
-        decoration: BoxDecoration(
-          border: candidates.isEmpty
-              ? null
-              : Border.all(
-                  color: Theme.of(context).colorScheme.primary,
-                  width: 2,
-                ),
-        ),
-        child: child,
-      ),
-    );
-    if (node['status'] == 'missing' ||
-        !['runtime', 'models', 'folder', 'store'].contains(node['kind'])) {
-      return target;
-    }
-    return Tooltip(
-      message: tr(
-        'Hold and drag to connect or move. A preview appears before changes.',
-      ),
-      child: LongPressDraggable<Map<String, dynamic>>(
-        data: node,
-        feedback: Material(
-          child: SizedBox(
-            width: 240,
-            child: ListTile(title: Text(node['label'] as String)),
-          ),
-        ),
-        childWhenDragging: Opacity(opacity: 0.4, child: target),
-        child: target,
-      ),
     );
   }
 
@@ -247,8 +179,7 @@ class AgentMap extends StatelessWidget {
     final groups = readOnly ? null : this.groups;
     final allNodes = (graph['nodes'] as List).cast<Map<String, dynamic>>();
     final allEdges = (graph['edges'] as List).cast<Map<String, dynamic>>();
-    final shownCols =
-        shownColumns ?? [for (var i = 0; i < columns.length; i++) i];
+    final shownCols = [for (var i = 0; i < columns.length; i++) i];
     final nodes = [
       for (final n in allNodes)
         if (shownCols.contains(n['column'] as int)) n,
@@ -275,25 +206,12 @@ class AgentMap extends StatelessWidget {
         .toDouble();
     final colors = Theme.of(context).colorScheme;
 
-    String nodeInfoLine(Map<String, dynamic> node) {
-      final raw = '${node['info'] ?? ''}'.trim();
-      if (raw.isEmpty || raw == '${node['detail'] ?? ''}'.trim()) return '';
-      if (node['kind'] == 'runtime' && RegExp(r'^\d+$').hasMatch(raw)) {
-        return '$raw ${tr('Models')}';
-      }
-      return raw;
-    }
-
     Widget buildCanvas({
       required double colWidth,
       required double colGap,
       required double boxWidth,
       required double inset,
       required Size canvasSize,
-      int? openSmartColumn,
-      ValueChanged<int>? onToggleSmart,
-      Map<int, String>? smartPrompts,
-      void Function(int col, String targetCol, String request)? onSmartMove,
     }) {
       final step = colWidth + colGap;
       double colLeft(int col) {
@@ -312,9 +230,6 @@ class AgentMap extends StatelessWidget {
         );
         rowCounts[col] = row + 1;
       }
-      String smartKeyFor(int col) => columns.length == 5
-          ? _systemSmartKeys[col]
-          : mapSmartColumns[col % mapSmartColumns.length].$1;
       return SizedBox(
         width: canvasSize.width,
         height: canvasSize.height,
@@ -358,142 +273,90 @@ class AgentMap extends StatelessWidget {
                 top: positions[node['id']]!.dy,
                 width: boxWidth,
                 height: 88,
-                child: _interactiveNode(
-                  context,
-                  node,
-                  Semantics(
-                    button:
-                        !readOnly &&
-                        (onNode != null || node['kind'] == 'agent'),
-                    label: node['label'] as String,
-                    child: Card(
-                      shape: focusedNode == node['id']
-                          ? RoundedRectangleBorder(
-                              side: BorderSide(color: colors.primary, width: 2),
-                              borderRadius: BorderRadius.circular(
-                                corners(context),
-                              ),
+                child: Semantics(
+                  button:
+                      !readOnly && (onNode != null || node['kind'] == 'agent'),
+                  label: node['label'] as String,
+                  child: Card(
+                    shape: focusedNode == node['id']
+                        ? RoundedRectangleBorder(
+                            side: BorderSide(color: colors.primary, width: 2),
+                            borderRadius: BorderRadius.circular(
+                              corners(context),
+                            ),
+                          )
+                        : null,
+                    color: node['status'] == 'running'
+                        ? colors.secondaryContainer
+                        : node['status'] == 'missing'
+                        ? colors.surfaceContainerLowest
+                        : colors.surfaceContainer,
+                    clipBehavior: Clip.antiAlias,
+                    child: InkWell(
+                      onSecondaryTap: readOnly || onNodeMenu == null
+                          ? null
+                          : () => onNodeMenu!(context, node),
+                      onTap: readOnly
+                          ? null
+                          : onNode != null
+                          ? () => onNode!(node)
+                          : node['kind'] == 'agent'
+                          ? () => onAgent(
+                              (node['id'] as String).substring('agent:'.length),
                             )
                           : null,
-                      color: node['status'] == 'running'
-                          ? colors.secondaryContainer
-                          : node['status'] == 'missing'
-                          ? colors.surfaceContainerLowest
-                          : colors.surfaceContainer,
-                      clipBehavior: Clip.antiAlias,
-                      child: InkWell(
-                        onSecondaryTap: readOnly || onNodeMenu == null
-                            ? null
-                            : () => onNodeMenu!(context, node),
-                        onTap: readOnly
-                            ? null
-                            : onNode != null
-                            ? () => onNode!(node)
-                            : node['kind'] == 'agent'
-                            ? () => onAgent(
-                                (node['id'] as String).substring(
-                                  'agent:'.length,
+                      // The Actions button keeps its place in the title row
+                      // but takes a 44 × 44 corner of the box (tap targets).
+                      child: Stack(
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(child: _title(node)),
+                                    if (!readOnly && onNodeMenu != null)
+                                      const SizedBox(width: 28, height: 28),
+                                  ],
                                 ),
-                              )
-                            : null,
-                        // The Actions button keeps its place in the title row
-                        // but takes a 44 × 44 corner of the box (tap targets).
-                        child: Stack(
-                          children: [
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 8,
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Expanded(child: _title(node)),
-                                      if (!readOnly && onNodeMenu != null)
-                                        const SizedBox(width: 28, height: 28),
-                                    ],
+                                if ('${node['detail'] ?? ''}'.isNotEmpty)
+                                  Text(
+                                    node['detail'] as String,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: colors.onSurfaceVariant,
+                                    ),
                                   ),
-                                  if ('${node['detail'] ?? ''}'.isNotEmpty)
-                                    Text(
-                                      node['detail'] as String,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: colors.onSurfaceVariant,
-                                      ),
-                                    ),
-                                  if (nodeInfoLine(node).isNotEmpty)
-                                    Text(
-                                      nodeInfoLine(node),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: colors.onSurfaceVariant,
-                                      ),
-                                    ),
-                                ],
+                              ],
+                            ),
+                          ),
+                          if (!readOnly && onNodeMenu != null)
+                            Positioned(
+                              top: 11,
+                              right: 4,
+                              width: 44,
+                              height: 44,
+                              child: IconButton(
+                                padding: EdgeInsets.zero,
+                                tooltip: tr('Actions'),
+                                onPressed: () => onNodeMenu!(context, node),
+                                icon: const Icon(Icons.more_vert, size: 18),
                               ),
                             ),
-                            if (!readOnly && onNodeMenu != null)
-                              Positioned(
-                                top: 11,
-                                right: 4,
-                                width: 44,
-                                height: 44,
-                                child: IconButton(
-                                  padding: EdgeInsets.zero,
-                                  tooltip: tr('Actions'),
-                                  onPressed: () => onNodeMenu!(context, node),
-                                  icon: const Icon(Icons.more_vert, size: 18),
-                                ),
-                              ),
-                          ],
-                        ),
+                        ],
                       ),
                     ),
                   ),
                 ),
               ),
-            if (!readOnly && smartCards)
-              for (final col in [
-                for (final c in shownCols)
-                  if (c != openSmartColumn) c,
-                if (openSmartColumn != null &&
-                    shownCols.contains(openSmartColumn))
-                  openSmartColumn,
-              ])
-                Positioned(
-                  key: ValueKey('system-smart-slot-$col'),
-                  left: colLeft(col),
-                  top: 106,
-                  width: colWidth,
-                  child: MapSmartCard(
-                    key: ValueKey('system-smart-card-$col'),
-                    width: colWidth,
-                    column: smartKeyFor(col),
-                    title: columns[col],
-                    open: openSmartColumn == col,
-                    onToggle: () => onToggleSmart?.call(col),
-                    tr: tr,
-                    helpers: smartHelpers,
-                    client: client,
-                    onProvider: onSmartProvider,
-                    onTask: onSmartTask,
-                    onApplied: onSmartApplied,
-                    status: smartStatus,
-                    initialPrompt: smartPrompts?[col],
-                    columnNames: columns.length == 5
-                        ? _systemColumnNames
-                        : null,
-                    onMoveToColumn: (targetCol, request) =>
-                        onSmartMove?.call(col, targetCol, request),
-                  ),
-                ),
           ],
         ),
       );
@@ -519,23 +382,10 @@ class AgentMap extends StatelessWidget {
       height: height,
       controller: controller,
       onViewChanged: onViewChanged,
-      onShowColumn: onShowColumn,
       buildCanvas: buildCanvas,
     );
   }
 }
-
-/// The Ask AI column behind each System Map column.
-const _systemSmartKeys = ['providers', 'models', 'agents', 'mcp', 'models'];
-
-/// Ask AI's columns by the System Map's names, and the column each moves to.
-const _systemColumnNames = {
-  'providers': 'This PC',
-  'models': 'Folders',
-  'agents': 'Programs',
-  'mcp': 'Tools',
-};
-const _systemColumnOf = {'providers': 0, 'models': 4, 'agents': 2, 'mcp': 3};
 
 class _InteractiveBoard extends StatefulWidget {
   const _InteractiveBoard({
@@ -543,24 +393,18 @@ class _InteractiveBoard extends StatefulWidget {
     required this.height,
     required this.controller,
     required this.onViewChanged,
-    required this.onShowColumn,
     required this.buildCanvas,
   });
   final List<int> shownCols;
   final double height;
   final TransformationController? controller;
   final VoidCallback? onViewChanged;
-  final ValueChanged<int>? onShowColumn;
   final Widget Function({
     required double colWidth,
     required double colGap,
     required double boxWidth,
     required double inset,
     required Size canvasSize,
-    int? openSmartColumn,
-    ValueChanged<int>? onToggleSmart,
-    Map<int, String>? smartPrompts,
-    void Function(int col, String targetCol, String request)? onSmartMove,
   })
   buildCanvas;
 
@@ -569,37 +413,6 @@ class _InteractiveBoard extends StatefulWidget {
 }
 
 class _InteractiveBoardState extends State<_InteractiveBoard> {
-  int? _openSmartColumn;
-  final _smartPrompts = <int, String>{};
-
-  void _toggleSmart(int col) {
-    setState(() {
-      _openSmartColumn = _openSmartColumn == col ? null : col;
-    });
-  }
-
-  void _moveSmart(int fromCol, String targetKey, String request) {
-    final targetCol = _systemColumnOf[targetKey];
-    if (targetCol == null) return;
-    if (!widget.shownCols.contains(targetCol)) {
-      if (widget.onShowColumn == null) return;
-      widget.onShowColumn!(targetCol);
-    }
-    setState(() {
-      _smartPrompts[targetCol] = request;
-      _openSmartColumn = targetCol;
-    });
-  }
-
-  @override
-  void didUpdateWidget(covariant _InteractiveBoard oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (_openSmartColumn != null &&
-        !widget.shownCols.contains(_openSmartColumn)) {
-      _openSmartColumn = null;
-    }
-  }
-
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, box) {
@@ -632,10 +445,6 @@ class _InteractiveBoardState extends State<_InteractiveBoard> {
         boxWidth: boxWidth,
         inset: inset,
         canvasSize: canvasSize,
-        openSmartColumn: _openSmartColumn,
-        onToggleSmart: _toggleSmart,
-        smartPrompts: _smartPrompts,
-        onSmartMove: _moveSmart,
       );
       final controller = widget.controller;
       final onViewChanged = widget.onViewChanged;

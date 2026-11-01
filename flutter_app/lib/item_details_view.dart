@@ -10,12 +10,10 @@ class ItemDetailsView extends StatelessWidget {
     super.key,
     required this.details,
     required this.tr,
-    required this.onSystemMap,
     required this.onClose,
   });
   final Map<String, dynamic> details;
   final String Function(String) tr;
-  final VoidCallback onSystemMap;
   final VoidCallback onClose;
 
   @override
@@ -64,10 +62,7 @@ class ItemDetailsView extends StatelessWidget {
           ],
         ],
       ),
-      actions: [
-        TextButton(onPressed: onSystemMap, child: Text(tr('System Map'))),
-        FilledButton(onPressed: onClose, child: Text(tr('Close'))),
-      ],
+      actions: [FilledButton(onPressed: onClose, child: Text(tr('Close')))],
     );
   }
 }

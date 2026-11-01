@@ -3,6 +3,7 @@ import 'support/python_transport.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'package:maprisma/backend.dart';
+import 'package:maprisma/overlay_window.dart';
 import 'package:maprisma/agent_map.dart';
 import 'package:maprisma/settings_view.dart';
 import 'package:maprisma/main.dart';
@@ -13,6 +14,7 @@ import 'package:maprisma/map_smart_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:xterm/xterm.dart' show TerminalView;
 
 import 'support/a11y.dart';
 
@@ -59,7 +61,13 @@ for line in sys.stdin:
  elif m=='map.snapshot':r={'nodes':[({**n,'status':'running'} if n['id']=='agent:test' and Path('agent_running').exists() else n) for n in nodes],'edges':[{'source':'agent:test','target':'mcp:known-server','kind':'mcp'}] if connected else [],'activity':{},'pending':Path('pending').exists()}
  elif m=='agents.traffic':r={'available':True,'agents':{}}
  elif m=='agents.halt_preview':r={'instances':[{'label':'PID 42','preview':'halt-42'}]}
- elif m=='system.refresh':tasks['system']={'nodes':[],'edges':[],'notes':[],'helpers':[]};r={'task':'system'}
+ elif m=='system.refresh':
+  tasks['system']={'nodes':[{'id':'found:/data/models','kind':'models','label':'Models','path':'/data/models','found':'a','status':'found','provider':''}] if Path('found_on_pc').exists() else [],'edges':[],'notes':[],'helpers':[],'search_done':Path('found_on_pc').exists()};r={'task':'system'}
+ elif m=='sessions.start':r={'session':'s'+str(len(tasks)),'path':'/home/u'};tasks['s'+str(len(tasks))]={}
+ elif m=='sessions.read':r={'text':'','ended':False}
+ elif m=='sessions.write':r={'accepted':len(__import__('base64').b64decode(p['data'])),'ended':False}
+ elif m=='existing.preview':r={'plan':'opaque-existing','files':[],'notes':[],'empty':False}
+ elif m=='existing.apply':tasks['existing']={'ok':True};r={'task':'existing'}
  elif m=='setup.detect':tasks['detect']={'installed':['fixture-addon']};r={'task':'detect'}
  elif m=='providers.snapshot':r={'local':[runtime],'online':[],'folders':[]}
  elif m=='connections.snapshot':r={'agents':[{'command':'test','name':'Test agent','mcp':True,'skills':False}],
@@ -234,6 +242,70 @@ Future<void> openFromHelp(WidgetTester tester, String tab) async {
 }
 
 void main() {
+  testWidgets('an open terminal keeps the keyboard and the app its keys', (
+    tester,
+  ) async {
+    await mountApp(tester);
+    bool inTerminal() =>
+        FocusManager.instance.primaryFocus?.context
+            ?.findAncestorWidgetOfExactType<TerminalView>() !=
+        null;
+    final start = find.byKey(const ValueKey('start-agent-test'));
+    tester.widget<IconButton>(start).onPressed!();
+    await settleService(tester);
+    expect(find.byType(TerminalView), findsOneWidget);
+    expect(inTerminal(), isTrue);
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.comma);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await settleService(tester);
+    expect(find.byType(SettingsView), findsNothing);
+    expect(find.byType(TerminalView), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Back'));
+    await settleService(tester);
+    tester.widget<IconButton>(start).onPressed!();
+    await settleService(tester);
+    await tester.tap(find.byKey(const ValueKey('terminal-tab-0')));
+    await settleService(tester);
+    expect(inTerminal(), isTrue);
+
+    await tester.tap(find.byKey(const ValueKey('terminal-screenshot')));
+    await settleService(tester);
+    expect(inTerminal(), isTrue);
+    await unmountApp(tester);
+  });
+
+  testWidgets('What we found stays until a preview is applied', (tester) async {
+    final dir = await mountApp(
+      tester,
+      beforeStart: (dir) =>
+          File('${dir.path}/found_on_pc').writeAsStringSync(''),
+    );
+    await tester.tap(find.byKey(const ValueKey('help-open')));
+    await settleService(tester);
+    await tester.tap(find.text('Find existing AI').first);
+    await settleService(tester);
+    final reuse = find.byKey(const ValueKey('found-reuse-found:/data/models'));
+    await tester.tap(reuse);
+    await settleService(tester);
+    await tester.tap(find.text('Cancel').last);
+    await settleService(tester);
+    expect(reuse, findsOneWidget);
+    await tester.tap(reuse);
+    await settleService(tester);
+    await tester.tap(find.text('Apply'));
+    await settleService(tester);
+    expect(reuse, findsNothing);
+    expect(
+      requests(dir).lastWhere((q) => q['method'] == 'existing.apply')['params'],
+      containsPair('plan', 'opaque-existing'),
+    );
+    await settleService(tester);
+    await unmountApp(tester);
+  });
+
   testWidgets(
     'search/files do no inventory refresh; model load scans once; idle surfaces keep updates',
     (tester) async {
@@ -735,6 +807,9 @@ void main() {
       requests(dir).lastWhere((q) => q['method'] == 'updates.run')['params'],
       {'key': 'test', 'running_ok': true},
     );
+    // Update closed the window; the problem is still there to open.
+    await tester.tap(find.byKey(const ValueKey('problems-open')));
+    await settleService(tester);
     await tester.tap(
       find.descendant(
         of: find.byKey(const ValueKey('smart-card-agents')),
@@ -1085,10 +1160,8 @@ void main() {
     await settleService(tester);
     Future<void> check() async {
       await expectLater(tester, meetsGuideline(labeledTapTargetGuideline));
-      // Each text measured on its own. The header's AI Map / System Map
-      // switch is left out: its pixels measure 7.5:1 and 16:1, but the
-      // guideline reads 2.34 for both (it samples the segmented button
-      // wrongly).
+      // Each text measured on its own. The header's AI Map is left out: the
+      // guideline reads 2.34 whatever its colour, so it samples it wrongly.
       await expectLater(
         tester,
         meetsGuideline(
@@ -1097,7 +1170,7 @@ void main() {
               (w) =>
                   w is Text &&
                   (w.data ?? 'rich').trim().isNotEmpty &&
-                  !const {'AI Map', 'System Map'}.contains(w.data),
+                  w.data != 'AI Map',
             ),
           ),
         ),
@@ -1108,7 +1181,8 @@ void main() {
     await check(); // the header and the map
     await tester.tap(find.byKey(const ValueKey('problems-open')));
     await settleService(tester);
-    await check(); // Open problems
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape); // the status window
+    await settleService(tester);
     await tester.tap(find.byTooltip('Settings').first);
     await settleService(tester);
     await check(); // Settings
@@ -1118,9 +1192,6 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.escape); // Esc closes it
     await settleService(tester);
     expect(find.byKey(const ValueKey('help-manual')), findsNothing);
-    await tester.tap(find.text('System Map'));
-    await settleService(tester);
-    await check(); // the System Map
     expect(tester.takeException(), isNull);
     semantics.dispose();
     await unmountApp(tester);
@@ -1637,6 +1708,8 @@ void main() {
         await tester.tap(find.byKey(ValueKey('smart-status-$col')));
         await settleService(tester);
         expect(find.text(expected), findsOneWidget);
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        await settleService(tester);
       }
       expect(tester.takeException(), isNull);
       await unmountApp(tester);
@@ -1702,6 +1775,36 @@ void main() {
       await unmountApp(tester);
     },
   );
+
+  testWidgets('an open Ask AI window holds the keys; Update closes it', (
+    tester,
+  ) async {
+    final dir = await mountApp(tester);
+    await settleService(tester);
+    await tester.tap(find.byKey(const ValueKey('smart-status-agents')));
+    await settleService(tester);
+    expect(find.byType(OverlayWindow), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.f1);
+    await settleService(tester);
+    expect(find.byKey(const ValueKey('help-manual')), findsNothing);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await settleService(tester);
+    expect(find.byType(OverlayWindow), findsNothing);
+    // The header works again.
+    await tester.sendKeyEvent(LogicalKeyboardKey.f1);
+    await settleService(tester);
+    expect(find.byKey(const ValueKey('help-manual')), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await settleService(tester);
+    await tester.tap(find.byKey(const ValueKey('smart-status-agents')));
+    await settleService(tester);
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Update').first);
+    await settleService(tester);
+    expect(find.byType(OverlayWindow), findsNothing);
+    expect(requests(dir).any((q) => q['method'] == 'updates.run'), isTrue);
+    expect(tester.takeException(), isNull);
+    await unmountApp(tester);
+  });
 
   testWidgets('the use cases stay reachable in Help', (tester) async {
     await mountApp(tester);
