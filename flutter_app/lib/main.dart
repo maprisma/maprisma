@@ -47,7 +47,6 @@ import 'map_smart_card.dart'
     show SmartStatusData, SmartStatusIcon, mapSmartColumns;
 import 'agent_action_dialog.dart';
 import 'providers_view.dart';
-import 'system_map_view.dart';
 import 'provider_task_dialog.dart';
 import 'connections_view.dart';
 import 'model_removal_dialog.dart';
@@ -157,7 +156,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   Locale? _locale;
   String _search = '';
   bool _showMap = true;
-  bool _showSystemMap = false;
   bool _systemRefreshing = false;
   Map<String, dynamic> _system = {
     'nodes': [],
@@ -167,7 +165,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     'limited': false,
   };
   final _aiTransform = TransformationController();
-  final _systemTransform = TransformationController();
   Map<String, dynamic>? _graph;
   Map<String, dynamic>? _agentInfo;
   bool _showSettings = false;
@@ -189,7 +186,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   Map<String, dynamic> _connections = {'agents': [], 'mcp': [], 'skills': []};
   String? _connectionUndo;
   String? _moveUndo;
-  String? _systemSelection;
   String? _aiFocus;
   final _mapSelection = <String>{};
   Timer? _liveTimer;
@@ -212,7 +208,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   bool _livePending = false;
   bool _windowFocused = true;
   DateTime? _nextMapScan;
-  DateTime? _nextSystemMountCheck;
 
   double _mapAreaWidth = 0;
   TaskCardSpec? _card;
@@ -737,7 +732,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
 
   Future<void> _retry() {
     if (!(_backend?.isConnected ?? false)) return _connect();
-    if (_showSystemMap) return _refreshSystem(true);
     if (_card != null) {
       return _refresh(
         refreshMap: _halfTaskMapVisible(_card!.width, _card!.focus),
@@ -876,28 +870,8 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     try {
       if (_taskActive || _reviewDepth > 0 || _card?.closable == false) return;
       final idleTaskSurface = _card != null || _browser != null;
-      if (_showSystemMap) {
-        final settings = _snapshot?['settings'] as Map? ?? const {};
-        final interval = settings['map_scan_interval'] as int? ?? 6;
-        if (!_systemRefreshing &&
-            interval > 0 &&
-            (settings['map_scan_pause_unfocused'] == false || _windowFocused) &&
-            !(_nextSystemMountCheck?.isAfter(DateTime.now()) ?? false)) {
-          _nextSystemMountCheck = DateTime.now().add(
-            Duration(seconds: interval < 15 ? 15 : interval),
-          );
-          final changed = await _client.systemMountSignature();
-          if (mounted &&
-              _showSystemMap &&
-              changed['signature'] != _system['mount_signature']) {
-            unawaited(_refreshSystem(false, quiet: true));
-          }
-        }
-        return;
-      }
       if (!idleTaskSurface &&
           (!_showMap ||
-              _showSystemMap ||
               _showProviders ||
               _showConnections ||
               _showSettings ||
@@ -959,7 +933,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       _selected = command;
       _agentInfo = null;
       _showMap = false;
-      _showSystemMap = false;
       _showSettings = false;
       _showProviders = false;
       _showConnections = false;
@@ -1306,7 +1279,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         existingTask: started['task'] as String,
         title: tr(
           (method.startsWith('existing.') || method == 'system.refresh')
-              ? (method == 'system.refresh' ? 'System Map' : 'Find existing AI')
+              ? 'Find existing AI'
               : method == 'guide.snapshot'
               ? 'Your first agent'
               : method.startsWith('installers.')
@@ -1452,7 +1425,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   Future<void> _loadTraffic() async {
     if (_backend?.isConnected != true || _trafficAsking) return;
     if (!_showMap ||
-        _showSystemMap ||
         _showSettings ||
         _showGuide ||
         _showProviders ||
@@ -1892,7 +1864,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
           _showConnections = true;
           _showFound = true;
           _showProviders = false;
-          _showSystemMap = false;
         });
         return;
       }
@@ -2000,7 +1971,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     if (_showSettings && _shortName == null) _loadShortName();
     if (_showSettings && _helpers == null) _loadHelpers();
     if (_showSettings) _loadChanges();
-    _showSystemMap = false;
     _showConnections = false;
     _showProviders = false;
     _showGuide = false;
@@ -2018,11 +1988,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       (_pageOpen || !_showMap);
 
   bool get _pageOpen =>
-      _showSettings ||
-      _showProviders ||
-      _showConnections ||
-      _showGuide ||
-      _showSystemMap;
+      _showSettings || _showProviders || _showConnections || _showGuide;
 
   /// Esc on the main page in popup mode closes the popup (Backspace never).
   bool get _canCloseTopLevel =>
@@ -2046,13 +2012,11 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     _showProviders = false;
     _showConnections = false;
     _showGuide = false;
-    _showSystemMap = false;
   });
 
   /// Ctrl+Plus / Ctrl+Minus / Ctrl+0: the map in view zoomed in, out, or fit
   /// to the window (within the map's own 30–200 %).
-  void _zoom(double factor) =>
-      zoomMap(_showSystemMap ? _systemTransform : _aiTransform, factor);
+  void _zoom(double factor) => zoomMap(_aiTransform, factor);
 
   Future<void> _checkHealth() async {
     try {
@@ -2083,7 +2047,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
             _showConnections = true;
             _showFound = true;
             _showProviders = false;
-            _showSystemMap = false;
           });
         default:
           final cat = mapSmartColumns.indexWhere((c) => c.$1 == line['column']);
@@ -2117,7 +2080,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       _card = null;
       _browser = null;
       _focusCategory = null;
-      _showSystemMap = false;
       _showMap = true;
       _showGuide = false;
       _showSettings = false;
@@ -2143,27 +2105,22 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         _openGuide();
       case 'install':
         _installProgram('runtime', action[1]);
-      case 'runtime' || 'models':
+      case 'runtime' || 'models' || 'reorganize':
         setState(() {
           _showProviders = true;
           _showConnections = false;
-          _showSystemMap = false;
         });
       case 'addmcp' || 'addskills':
         setState(() {
           _showConnections = true;
           _showFound = true;
           _showProviders = false;
-          _showSystemMap = false;
         });
-      case 'reorganize':
-        _openSystem();
       default:
         setState(() {
           _showMap = true;
           _showConnections = false;
           _showProviders = false;
-          _showSystemMap = false;
         });
     }
   }
@@ -2244,7 +2201,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
               () => setState(() {
                 _guideReturn = false;
                 _showMap = false;
-                _showSystemMap = false;
                 _showConnections = false;
                 _showSettings = false;
                 _showGuide = false;
@@ -2261,7 +2217,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                 _guideReturn = false;
                 _showProviders = true;
                 _showConnections = false;
-                _showSystemMap = false;
                 _showGuide = false;
                 _showSettings = false;
                 _visibleTerminal = null;
@@ -2278,7 +2233,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                 _guideReturn = false;
                 _showConnections = true;
                 _showProviders = false;
-                _showSystemMap = false;
                 _showGuide = false;
                 _showSettings = false;
                 _visibleTerminal = null;
@@ -2440,38 +2394,22 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     }
   }
 
-  Future<void> _openSystem({bool search = false}) async {
+  /// Looks through this PC for AI programs and folders; what it finds comes
+  /// to the map.
+  Future<void> _openExisting() async {
     if (!mounted) return;
     setState(() {
       _card = null;
       _browser = null;
-      _showSystemMap = true;
+      _showMap = true;
       _showGuide = false;
       _showConnections = false;
       _showProviders = false;
       _showSettings = false;
       _visibleTerminal = null;
     });
-    await _refreshSystem(search, quiet: !search);
-  }
-
-  Future<void> _openExisting() => _openSystem(search: true);
-
-  Future<void> _systemSaved(Map<String, dynamic> result) async {
-    if (result['ok'] == false) _actionFailed();
-    if (result.containsKey('move_undo')) {
-      _moveUndo = result['move_undo'] as String?;
-    }
-    if (result['undo'] != null) {
-      _connectionUndo = result['undo'] as String;
-      _moveUndo = null;
-    }
-    if (_card != null &&
-        (result['undo'] != null || result['move_undo'] != null)) {
-      _taskResult(_card!.title, result, _card!.focus, width: _card!.width);
-    }
-    await _reloadSystem();
-    await _refreshSystem(false, quiet: true);
+    await _refreshSystem(true);
+    if (mounted) await _refresh();
   }
 
   void _systemSession(Map<String, dynamic> result) {
@@ -2485,87 +2423,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     setState(() {
       _terminals.add(terminal);
       _visibleTerminal = terminal;
-      _showSystemMap = false;
     });
-  }
-
-  Future<void> _systemFolderOnAI(
-    Map<String, dynamic> source,
-    Map<String, dynamic> target,
-  ) async {
-    if (_busy || source['found'] == null || target['kind'] != 'runtime') return;
-    setState(() => _busy = true);
-    try {
-      final plan = await _client.systemFolderPreview(
-        found: source['found'],
-        runtime: (target['id'] as String).substring(8),
-      );
-      if (!mounted ||
-          !await _cardReview(
-            tr('Preview'),
-            plan,
-            (yes, no) => ConnectionReview(
-              plan: plan,
-              tr: tr,
-              onConfirm: yes,
-              onCancel: no,
-            ),
-          )) {
-        return;
-      }
-      final started = await _client.connectionsApply(
-        plan: plan['plan'] as String,
-      );
-      if (!mounted) return;
-      await _runTask(
-        operation: 'connections.apply',
-        params: const {},
-        existingTask: started['task'] as String,
-        title: tr('Apply'),
-      );
-    } catch (_) {
-      _actionFailed();
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  Future<void> _showAI(Map<String, dynamic> node) async {
-    if ((node['id'] as String).startsWith('agent:')) {
-      final command = (node['id'] as String).substring(6);
-      if (!_catalog.any((a) => a['command'] == command)) {
-        await _openGroups();
-        return;
-      }
-      _selectAgent(command);
-      return;
-    }
-    final graph = await _freshMap();
-    if (!mounted) return;
-    final target = (graph['nodes'] as List)
-        .where(
-          (n) =>
-              n['id'] == node['id'] ||
-              (n['group'] != null && n['group'] == node['path']),
-        )
-        .firstOrNull;
-    setState(() {
-      _showSystemMap = false;
-      _showMap = true;
-      _graph = graph;
-      _aiFocus = target?['id'] as String?;
-    });
-    if (target == null) {
-      ScaffoldMessenger.of(_navigator.currentContext!).showSnackBar(
-        SnackBar(
-          content: Text(
-            tr(
-              'This component has no AI Map node yet. Enable its add-on or connect a runtime first.',
-            ),
-          ),
-        ),
-      );
-    }
   }
 
   void _aiNode(Map<String, dynamic> node) {
@@ -2578,11 +2436,11 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       unawaited(_itemDetails(node));
       return;
     }
-    _systemNode(node);
+    _healthAction(const ['runtime']);
   }
 
   /// An MCP server's or a skill set's box: its details (details.mcp /
-  /// details.skills); the System Map is a button away, as before.
+  /// details.skills).
   Future<void> _itemDetails(Map<String, dynamic> node) async {
     final id = node['id'] as String;
     final mcp = id.startsWith('mcp:');
@@ -2592,49 +2450,12 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
           ? await _client.detailsMcp(name: id.substring(4))
           : await _client.detailsSkills(path: id.substring(7));
     } catch (_) {
-      _systemNode(node);
       return;
     }
     if (!mounted) return;
-    var toSystem = false;
-    await _cardReview(
-      '${details['title']}',
-      {
-        'focus': [id],
-      },
-      (yes, no) => ItemDetailsView(
-        details: details,
-        tr: tr,
-        onSystemMap: () {
-          toSystem = true;
-          no();
-        },
-        onClose: no,
-      ),
-    );
-    if (toSystem && mounted) _systemNode(node);
-  }
-
-  void _systemNode(Map<String, dynamic> node) {
-    String? target;
-    if (node['kind'] == 'runtime') {
-      target = node['id'] as String;
-    } else {
-      final group = node['group'] as String?;
-      target =
-          (_system['nodes'] as List)
-                  .where((n) => group != null && n['path'] == group)
-                  .firstOrNull?['id']
-              as String?;
-      if (target == null && node['kind'] == 'model') {
-        final id = node['id'] as String;
-        if (id.startsWith('model:runtime:')) {
-          target = 'runtime:${id.split(':')[2]}';
-        }
-      }
-    }
-    setState(() => _systemSelection = target);
-    _openSystem();
+    await _cardReview('${details['title']}', {
+      'focus': [id],
+    }, (yes, no) => ItemDetailsView(details: details, tr: tr, onClose: no));
   }
 
   Future<void> _loadAddonCatalog() async {
@@ -2822,7 +2643,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     setState(() {
       _guide = result;
       _showGuide = true;
-      _showSystemMap = false;
       _showProviders = false;
       _showConnections = false;
       _showSettings = false;
@@ -2846,7 +2666,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   void _guideAction(String command, String action) {
     _connectionCommand = command.isEmpty ? null : command;
     _guideReturn = action != 'addons' && action != 'existing';
-    if (action != 'existing') setState(() => _showSystemMap = false);
     if (action == 'addons') {
       _openGroups();
       return;
@@ -3670,6 +3489,16 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     }
   }
 
+  /// Undo of a model folder move made from Ask AI.
+  Future<void> _undoMove() async {
+    final token = _moveUndo;
+    if (token == null || _busy) return;
+    final result = await _addonOperation('system.move_undo', {'undo': token});
+    if (result?['ok'] == true && mounted) setState(() => _moveUndo = null);
+    await _reloadSystem();
+    await _refreshSystem(false, quiet: true);
+  }
+
   Future<bool> _undoConnection({bool refresh = true}) async {
     final token = _connectionUndo;
     if (token == null) return false;
@@ -3739,7 +3568,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     setState(() {
       _focusCategory = category;
       _showMap = true;
-      _showSystemMap = false;
       _showGuide = false;
       _showConnections = false;
       _showProviders = false;
@@ -3855,7 +3683,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       }
       final mapVisible =
           _showMap &&
-          !_showSystemMap &&
           !_showSettings &&
           !_showGuide &&
           !_showProviders &&
@@ -3900,7 +3727,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
           _welcome = true;
           _focusCategory = 1;
           _showMap = true;
-          _showSystemMap = false;
           _setupRevision++;
         }
         _addons = (addons['addons'] as List).cast<Map<String, dynamic>>();
@@ -4007,7 +3833,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     _mapLayoutTimer?.cancel();
     _startMenu.dispose();
     _aiTransform.dispose();
-    _systemTransform.dispose();
     if (_shots != null) HardwareKeyboard.instance.removeHandler(_shotKey);
     for (final terminal in _terminals) {
       terminal.dispose();
@@ -4067,7 +3892,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       ),
       _ZoomIntent: CallbackAction<_ZoomIntent>(
         onInvoke: (intent) {
-          if (_showMap || _showSystemMap) _zoom(intent.factor);
+          if (_showMap) _zoom(intent.factor);
           return null;
         },
       ),
@@ -4123,62 +3948,34 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
             actions: [
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: SegmentedButton<bool>(
-                  segments: [
-                    ButtonSegment(
-                      value: false,
-                      label: DragTarget<Map<String, dynamic>>(
-                        onWillAcceptWithDetails: (details) {
-                          if (details.data['found'] != null) {
-                            setState(() {
-                              _card = null;
-                              _browser = null;
-                              _showSystemMap = false;
-                              _showMap = true;
-                            });
-                            if (_graph == null) _refresh();
-                            return true;
-                          }
-                          return false;
-                        },
-                        builder: (context, candidates, rejected) =>
-                            Text(tr('AI Map')),
-                      ),
-                    ),
-                    ButtonSegment(value: true, label: Text(tr('System Map'))),
-                  ],
-                  // Neither on a page or the agent list, so AI Map can be
-                  // tapped to go back: a selected segment takes no tap.
-                  emptySelectionAllowed: true,
-                  selected: {
-                    if (_showSystemMap)
-                      true
-                    else if (_showMap && !_pageOpen && _visibleTerminal == null)
-                      false,
-                  },
-                  onSelectionChanged: _navigationBlocked
+                child: TextButton(
+                  key: const ValueKey('ai-map-open'),
+                  // From a page or the agent list, back to the map.
+                  onPressed: _navigationBlocked
                       ? null
-                      : (choice) {
-                          if (choice.isEmpty) return; // the current map again
-                          if (choice.single) {
-                            _openSystem();
-                          } else {
-                            setState(() {
-                              _card = null;
-                              _browser = null;
-                              _showSystemMap = false;
-                              _showMap = true;
-                              _showGuide = false;
-                              _showSettings = false;
-                              _showProviders = false;
-                              _showConnections = false;
-                              _visibleTerminal = null;
-                            });
-                            _refresh();
-                          }
+                      : () {
+                          setState(() {
+                            _card = null;
+                            _browser = null;
+                            _showMap = true;
+                            _showGuide = false;
+                            _showSettings = false;
+                            _showProviders = false;
+                            _showConnections = false;
+                            _visibleTerminal = null;
+                          });
+                          _refresh();
                         },
+                  child: Text(tr('AI Map')),
                 ),
               ),
+              if (_moveUndo != null)
+                IconButton(
+                  key: const ValueKey('move-undo'),
+                  tooltip: tr('Undo'),
+                  icon: const Icon(Icons.undo),
+                  onPressed: _navigationBlocked ? null : _undoMove,
+                ),
               if (_healthReport != null || _healthCount > 0)
                 IconButton(
                   key: const ValueKey('problems-open'),
@@ -4256,7 +4053,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                   searched: _system['search_done'] == true,
                   onLook: _openExisting,
                   onSkip: () => setState(() => _skipWelcomeSearch = true),
-                  onSystem: () => _openSystem(),
                   onAgents: () => _openGroups(),
                   uses: _uses,
                   onAction: _healthAction,
@@ -4283,13 +4079,12 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                             : 'running',
                       ),
                   ],
-                  current: _visibleTerminal == null || _showSystemMap
+                  current: _visibleTerminal == null
                       ? null
                       : _terminals.indexOf(_visibleTerminal!),
                   tr: tr,
                   onSelect: (i) => setState(() {
                     _visibleTerminal = _terminals[i];
-                    _showSystemMap = false;
                   }),
                 ),
               Expanded(
@@ -4299,86 +4094,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                     return Stack(
                       fit: StackFit.expand,
                       children: [
-                        if (_backend != null)
-                          Offstage(
-                            key: const ValueKey('system-slot'),
-                            offstage:
-                                !_showSystemMap ||
-                                _card != null ||
-                                _browser != null,
-                            child: SystemMapView(
-                              key: const ValueKey("system-state"),
-                              suspended:
-                                  !_showSystemMap ||
-                                  _card != null ||
-                                  _browser != null,
-                              data: _system,
-                              backend: _backend!,
-                              tr: tr,
-                              busy: _busy || _systemRefreshing,
-                              controller: _systemTransform,
-                              columns:
-                                  (_snapshot?['settings']['system_map_columns']
-                                          as List?)
-                                      ?.cast<String>(),
-                              onColumns: (cols) =>
-                                  _updateSettings({'system_map_columns': cols}),
-                              onRefresh: (search) => _refreshSystem(search),
-                              onOperation: (method, params, title) =>
-                                  _addonOperation(method, params),
-                              onSaved: _systemSaved,
-                              onSession: _systemSession,
-                              onShowAI: _showAI,
-                              onHealthAction: (action) {
-                                if (action.first == 'install') {
-                                  _openGuide();
-                                } else if ([
-                                  'runtime',
-                                  'models',
-                                ].contains(action.first)) {
-                                  _guideAction('', 'providers');
-                                } else {
-                                  setState(() => _systemSelection = 'pc');
-                                }
-                              },
-                              onGroups: _openGroups,
-                              smartHelpers: _smartHelpers,
-                              onSmartProvider: _smartProvider,
-                              onSmartTask: _smartTask,
-                              onSmartApplied: (result) {
-                                if (result['session'] != null) {
-                                  _systemSession(result);
-                                }
-                                if (result['move_undo'] is String) {
-                                  _moveUndo = result['move_undo'] as String;
-                                }
-                                if (result['undo'] is String) {
-                                  _connectionUndo = result['undo'] as String;
-                                }
-                                unawaited(_reloadSystem());
-                                unawaited(_refreshSystem(false, quiet: true));
-                              },
-                              requestedNode: _systemSelection,
-                              onUndo:
-                                  _connectionUndo == null && _moveUndo == null
-                                  ? null
-                                  : () async {
-                                      if (_moveUndo != null) {
-                                        final result = await _addonOperation(
-                                          'system.move_undo',
-                                          {'undo': _moveUndo},
-                                        );
-                                        if (result?['ok'] == true) {
-                                          _moveUndo = null;
-                                        }
-                                      } else {
-                                        await _undoConnection();
-                                      }
-                                      await _reloadSystem();
-                                      await _refreshSystem(false, quiet: true);
-                                    },
-                            ),
-                          ),
                         if (_browser != null)
                           Offstage(
                             key: const ValueKey('browser-slot'),
@@ -4395,16 +4110,10 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                               () => setState(() => _browser = null),
                             ),
                           ),
-                        if (_hasTaskView ||
-                            (_card == null &&
-                                _browser == null &&
-                                !_showSystemMap))
+                        if (_hasTaskView || (_card == null && _browser == null))
                           RetainedTaskView(
                             key: const ValueKey('view-slot'),
-                            visible:
-                                _card == null &&
-                                _browser == null &&
-                                !_showSystemMap,
+                            visible: _card == null && _browser == null,
                             child: _showGuide
                                 ? _viewHost(
                                     'Your first agent',
@@ -4626,7 +4335,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                                             tr: tr,
                                             onAgent: _selectAgent,
                                             onSubagents: _openSubagents,
-                                            onNodeDrop: _systemFolderOnAI,
                                             onNodeMenu: _nodeMenu,
                                             groups: MapGroup.fromGraph(
                                               _mapGraph,
@@ -4672,9 +4380,11 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                                               }
                                               if (result['move_undo']
                                                   is String) {
-                                                _moveUndo =
-                                                    result['move_undo']
-                                                        as String;
+                                                setState(
+                                                  () => _moveUndo =
+                                                      result['move_undo']
+                                                          as String,
+                                                );
                                               }
                                               if (result['undo'] is String) {
                                                 _connectionUndo =

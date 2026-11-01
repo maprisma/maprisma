@@ -14,15 +14,6 @@ enum MapViewSize {
     MapViewSize.medium => column == 1 || column == 2 || column == 3,
     MapViewSize.max => true,
   };
-
-  /// System Map columns: 0 This PC, 1 Disks and home, 2 Programs, 3 Tools, 4 Folders.
-  /// Small shows 3 (This PC, Disks and home, Folders), medium 4 (+ Programs), max all 5.
-  bool allowsSystem(int column) => switch (this) {
-    MapViewSize.small => column == 0 || column == 1 || column == 4,
-    MapViewSize.medium =>
-      column == 0 || column == 1 || column == 2 || column == 4,
-    MapViewSize.max => true,
-  };
 }
 
 MapViewSize mapViewSizeFor({

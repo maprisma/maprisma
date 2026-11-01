@@ -290,10 +290,6 @@ class AgentMap extends StatelessWidget {
       required double boxWidth,
       required double inset,
       required Size canvasSize,
-      int? openSmartColumn,
-      ValueChanged<int>? onToggleSmart,
-      Map<int, String>? smartPrompts,
-      void Function(int col, String targetCol, String request)? onSmartMove,
     }) {
       final step = colWidth + colGap;
       double colLeft(int col) {
@@ -312,9 +308,6 @@ class AgentMap extends StatelessWidget {
         );
         rowCounts[col] = row + 1;
       }
-      String smartKeyFor(int col) => columns.length == 5
-          ? _systemSmartKeys[col]
-          : mapSmartColumns[col % mapSmartColumns.length].$1;
       return SizedBox(
         width: canvasSize.width,
         height: canvasSize.height,
@@ -459,41 +452,6 @@ class AgentMap extends StatelessWidget {
                   ),
                 ),
               ),
-            if (!readOnly && smartCards)
-              for (final col in [
-                for (final c in shownCols)
-                  if (c != openSmartColumn) c,
-                if (openSmartColumn != null &&
-                    shownCols.contains(openSmartColumn))
-                  openSmartColumn,
-              ])
-                Positioned(
-                  key: ValueKey('system-smart-slot-$col'),
-                  left: colLeft(col),
-                  top: 106,
-                  width: colWidth,
-                  child: MapSmartCard(
-                    key: ValueKey('system-smart-card-$col'),
-                    width: colWidth,
-                    column: smartKeyFor(col),
-                    title: columns[col],
-                    open: openSmartColumn == col,
-                    onToggle: () => onToggleSmart?.call(col),
-                    tr: tr,
-                    helpers: smartHelpers,
-                    client: client,
-                    onProvider: onSmartProvider,
-                    onTask: onSmartTask,
-                    onApplied: onSmartApplied,
-                    status: smartStatus,
-                    initialPrompt: smartPrompts?[col],
-                    columnNames: columns.length == 5
-                        ? _systemColumnNames
-                        : null,
-                    onMoveToColumn: (targetCol, request) =>
-                        onSmartMove?.call(col, targetCol, request),
-                  ),
-                ),
           ],
         ),
       );
@@ -525,18 +483,6 @@ class AgentMap extends StatelessWidget {
   }
 }
 
-/// The Ask AI column behind each System Map column.
-const _systemSmartKeys = ['providers', 'models', 'agents', 'mcp', 'models'];
-
-/// Ask AI's columns by the System Map's names, and the column each moves to.
-const _systemColumnNames = {
-  'providers': 'This PC',
-  'models': 'Folders',
-  'agents': 'Programs',
-  'mcp': 'Tools',
-};
-const _systemColumnOf = {'providers': 0, 'models': 4, 'agents': 2, 'mcp': 3};
-
 class _InteractiveBoard extends StatefulWidget {
   const _InteractiveBoard({
     required this.shownCols,
@@ -557,10 +503,6 @@ class _InteractiveBoard extends StatefulWidget {
     required double boxWidth,
     required double inset,
     required Size canvasSize,
-    int? openSmartColumn,
-    ValueChanged<int>? onToggleSmart,
-    Map<int, String>? smartPrompts,
-    void Function(int col, String targetCol, String request)? onSmartMove,
   })
   buildCanvas;
 
@@ -569,37 +511,6 @@ class _InteractiveBoard extends StatefulWidget {
 }
 
 class _InteractiveBoardState extends State<_InteractiveBoard> {
-  int? _openSmartColumn;
-  final _smartPrompts = <int, String>{};
-
-  void _toggleSmart(int col) {
-    setState(() {
-      _openSmartColumn = _openSmartColumn == col ? null : col;
-    });
-  }
-
-  void _moveSmart(int fromCol, String targetKey, String request) {
-    final targetCol = _systemColumnOf[targetKey];
-    if (targetCol == null) return;
-    if (!widget.shownCols.contains(targetCol)) {
-      if (widget.onShowColumn == null) return;
-      widget.onShowColumn!(targetCol);
-    }
-    setState(() {
-      _smartPrompts[targetCol] = request;
-      _openSmartColumn = targetCol;
-    });
-  }
-
-  @override
-  void didUpdateWidget(covariant _InteractiveBoard oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (_openSmartColumn != null &&
-        !widget.shownCols.contains(_openSmartColumn)) {
-      _openSmartColumn = null;
-    }
-  }
-
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, box) {
@@ -632,10 +543,6 @@ class _InteractiveBoardState extends State<_InteractiveBoard> {
         boxWidth: boxWidth,
         inset: inset,
         canvasSize: canvasSize,
-        openSmartColumn: _openSmartColumn,
-        onToggleSmart: _toggleSmart,
-        smartPrompts: _smartPrompts,
-        onSmartMove: _moveSmart,
       );
       final controller = widget.controller;
       final onViewChanged = widget.onViewChanged;

@@ -3323,5 +3323,6 @@
  "CPU & RAM": "CPU i RAM",
  "No AI helper is set up yet.": "Nie skonfigurowano jeszcze pomocnika AI.",
  "{0}: {1} to fix": "{0}: {1} do naprawienia",
- "{0}: all fine": "{0}: wszystko w porządku"
+ "{0}: all fine": "{0}: wszystko w porządku",
+ "Offered first for AI help; its tokens are used for it.": "Proponowany jako pierwszy do pomocy AI; zużywane są na to jego tokeny."
 }

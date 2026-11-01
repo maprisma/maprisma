@@ -3242,5 +3242,6 @@
  "CPU & RAM": "CPU & RAM",
  "No AI helper is set up yet.": "Er is nog geen AI-helper ingesteld.",
  "{0}: {1} to fix": "{0}: {1} op te lossen",
- "{0}: all fine": "{0}: alles in orde"
+ "{0}: all fine": "{0}: alles in orde",
+ "Offered first for AI help; its tokens are used for it.": "Wordt als eerste aangeboden voor AI-hulp; zijn tokens worden daarvoor gebruikt."
 }

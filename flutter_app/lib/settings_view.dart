@@ -676,11 +676,7 @@ class SettingsView extends StatelessWidget {
                       },
               ),
             const SizedBox(height: 8),
-            Text(
-              tr(
-                'Offered first for AI help and the Smart Check on the System Map; its tokens are used for them.',
-              ),
-            ),
+            Text(tr('Offered first for AI help; its tokens are used for it.')),
             const SizedBox(height: 16),
             SwitchListTile(
               key: const ValueKey('ai-checks'),

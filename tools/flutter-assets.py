@@ -68,7 +68,6 @@ KEYS = (
     "Terminal tabs above the map",
     "While agents run in terminals here: a tab for each, with a dot for working, running or ended, above the map and the terminals. A click shows the terminal.",
     # Details of MCP servers and skills.
-    "System Map",
     # A local LLM's details.
     # Settings › Costs.
     "Costs",
@@ -274,7 +273,7 @@ KEYS = (
     "When an agent connected to a local LLM starts, its LLM starts too; when the last such agent closes, the LLM stops and its GPU memory is free again. Works with this window closed and after a reboot (user service {0}).",
     "Agent for AI checks",
     "None installed",
-    "Offered first for AI help and the Smart Check on the System Map; its tokens are used for them.",
+    "Offered first for AI help; its tokens are used for it.",
     # Add-ons from a file (addons.file_preview / addons.file_install).
     "Install from file…",
     "Add-on (.zip)",
@@ -395,7 +394,6 @@ KEYS = (
     'Remove this missing disk from the saved map only. Files and settings are kept.',
 
     'AI Map',
-    'AI help can explain this System Map and propose a simpler setup. Review its plan before approving changes.',
     'Changes apply when the runtime next starts. Running services are not restarted.',
     'Check this system with AI',
     'Close Maprisma? Running agents will stop; committed changes will finish.',
@@ -422,10 +420,8 @@ KEYS = (
     'Skip',
     'Some components need an explicit check. Executable, network and credential probes were skipped.',
     'Some runtimes will need their model folder updated after this move.',
-    'System Map',
     'The new folder is on another disk: copied first, then removed here.',
     'The saved map opens immediately. Visits refresh status; Refresh searches mounted disks and measures sizes. Missing disks stay visible.',
-    'The selected AI agent and, for an online model, its service receive this System Map, including folder paths. Its use may consume your plan or tokens.',
     'This component has no AI Map node yet. Enable its add-on or connect a runtime first.',
     'Tools',
     'Unknown',

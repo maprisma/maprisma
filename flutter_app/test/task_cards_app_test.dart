@@ -1085,19 +1085,13 @@ void main() {
     await settleService(tester);
     Future<void> check() async {
       await expectLater(tester, meetsGuideline(labeledTapTargetGuideline));
-      // Each text measured on its own. The header's AI Map / System Map
-      // switch is left out: its pixels measure 7.5:1 and 16:1, but the
-      // guideline reads 2.34 for both (it samples the segmented button
-      // wrongly).
+      // Each text measured on its own.
       await expectLater(
         tester,
         meetsGuideline(
           CustomMinimumContrastGuideline(
             finder: find.byWidgetPredicate(
-              (w) =>
-                  w is Text &&
-                  (w.data ?? 'rich').trim().isNotEmpty &&
-                  !const {'AI Map', 'System Map'}.contains(w.data),
+              (w) => w is Text && (w.data ?? 'rich').trim().isNotEmpty,
             ),
           ),
         ),
@@ -1108,7 +1102,7 @@ void main() {
     await check(); // the header and the map
     await tester.tap(find.byKey(const ValueKey('problems-open')));
     await settleService(tester);
-    await check(); // Open problems
+    await check(); // the status card
     await tester.tap(find.byTooltip('Settings').first);
     await settleService(tester);
     await check(); // Settings
@@ -1118,9 +1112,6 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.escape); // Esc closes it
     await settleService(tester);
     expect(find.byKey(const ValueKey('help-manual')), findsNothing);
-    await tester.tap(find.text('System Map'));
-    await settleService(tester);
-    await check(); // the System Map
     expect(tester.takeException(), isNull);
     semantics.dispose();
     await unmountApp(tester);

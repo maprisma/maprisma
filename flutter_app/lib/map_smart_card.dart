@@ -91,7 +91,7 @@ class SmartModelDownloadReview extends StatelessWidget {
   }
 }
 
-/// The review of a model folder move: the System Map's notes and files.
+/// The review of a model folder move: its notes and files.
 class SmartMoveReview extends StatelessWidget {
   const SmartMoveReview({
     super.key,
@@ -330,7 +330,6 @@ class MapSmartCard extends StatefulWidget {
     this.client,
     this.initialPrompt,
     this.onMoveToColumn,
-    this.columnNames,
     this.onApplied,
     this.status,
     this.statusTrigger = 0,
@@ -356,8 +355,6 @@ class MapSmartCard extends StatefulWidget {
   final String? initialPrompt;
   final void Function(String column, String request)? onMoveToColumn;
 
-  /// What this map calls a column, when not the AI Map's name: for Move to.
-  final Map<String, String>? columnNames;
   final ValueChanged<Map<String, dynamic>>? onApplied;
   final SmartStatusData? status;
   final int statusTrigger;
@@ -1573,9 +1570,10 @@ class _MapSmartCardState extends State<MapSmartCard> {
         (_reply['instead'] as Map?)?.cast<String, dynamic>() ?? const {};
     final hint = '${instead['hint'] ?? ''}';
     final targetCol = instead['column'] as String?;
-    final targetTitle =
-        widget.columnNames?[targetCol] ??
-        mapSmartColumns.where((c) => c.$1 == targetCol).firstOrNull?.$2;
+    final targetTitle = mapSmartColumns
+        .where((c) => c.$1 == targetCol)
+        .firstOrNull
+        ?.$2;
     final targetReq = instead['request'] as String?;
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -1889,30 +1887,27 @@ class _MapSmartCardState extends State<MapSmartCard> {
               .replaceAll('{0}', widget.tr(widget.title))
               .replaceAll('{1}', '$statusCount')
         : widget.tr('{0}: all fine').replaceAll('{0}', widget.tr(widget.title));
-    // The System Map has no status: its columns are not these four.
-    final statusButton = widget.columnNames != null
-        ? null
-        : Semantics(
-            button: true,
-            label: statusLabel,
-            excludeSemantics: true,
-            child: InkWell(
-              key: ValueKey('smart-status-${widget.column}'),
-              onTap: _openOnStatus,
-              child: SizedBox(
-                width: 30,
-                height: 38,
-                child: Center(
-                  child: SizedBox(
-                    key: const ValueKey('smart-status-slot'),
-                    width: 16,
-                    height: 16,
-                    child: SmartStatusIcon(level: statusLevel),
-                  ),
-                ),
-              ),
+    final statusButton = Semantics(
+      button: true,
+      label: statusLabel,
+      excludeSemantics: true,
+      child: InkWell(
+        key: ValueKey('smart-status-${widget.column}'),
+        onTap: _openOnStatus,
+        child: SizedBox(
+          width: 30,
+          height: 38,
+          child: Center(
+            child: SizedBox(
+              key: const ValueKey('smart-status-slot'),
+              width: 16,
+              height: 16,
+              child: SmartStatusIcon(level: statusLevel),
             ),
-          );
+          ),
+        ),
+      ),
+    );
     if (!widget.open) {
       return SizedBox(
         width: widget.width,
@@ -1926,7 +1921,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
           clipBehavior: Clip.antiAlias,
           child: Row(
             children: [
-              ?statusButton,
+              statusButton,
               Expanded(
                 child: Semantics(
                   button: true,
@@ -2031,7 +2026,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
                     padding: const EdgeInsets.only(right: 4),
                     child: Row(
                       children: [
-                        ?statusButton,
+                        statusButton,
                         Expanded(
                           child: InkWell(
                             onTap: _step == _SmartStep.status

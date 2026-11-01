@@ -274,7 +274,6 @@ void main() {
                     searched: false,
                     onLook: () {},
                     onSkip: () {},
-                    onSystem: () => setState(() => expanded = false),
                     onAgents: () => setState(() => expanded = true),
                   ),
                   Expanded(
@@ -311,13 +310,6 @@ void main() {
           ),
         ),
       );
-      await tester.tap(find.widgetWithText(TextButton, 'Agents'));
-      await tester.pumpAndSettle();
-      expect(find.text('Switch on').hitTestable(), findsOneWidget);
-      expect(find.text('Later').hitTestable(), findsOneWidget);
-      await tester.tap(find.widgetWithText(TextButton, 'System Map'));
-      await tester.pumpAndSettle();
-      expect(find.text('Switch on'), findsNothing);
       await tester.tap(find.widgetWithText(TextButton, 'Agents'));
       await tester.pumpAndSettle();
       expect(find.text('Switch on').hitTestable(), findsOneWidget);
