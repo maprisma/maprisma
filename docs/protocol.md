@@ -77,7 +77,7 @@ A parameter written `name?` may be left out.
 |---|---|---|---|
 | `connections.apply` | handle (plan) | `plan`: string | `ok`, `task`, `undo` |
 | `connections.author_preview` | preview | `agents`: ["string"], `entry?`: object, `folder?`: string, `kind`: string, `name?`: string | `agents`, `contexts`, `empty`, `files`, `focus`, `item`, `kind`, `links_add`, `links_remove`, `notes`, `plan` |
-| `connections.forget_preview` | preview | `name`: string | `plan` A known server no agent uses leaves mcp-servers.json; applied through connections.apply, with Undo. |
+| `connections.forget_preview` | preview | `name`: string | `contexts`, `empty`, `files`, `focus`, `item`, `kind`, `links_add`, `links_remove`, `plan`, `remove` A known server no agent uses leaves mcp-servers.json; applied through connections.apply, with Undo. |
 | `connections.move_preview` | preview | `agent`: string, `new`: null|string, `old`: string | `agents`, `contexts`, `empty`, `files`, `focus`, `links_add`, `links_remove`, `model_actions`, `notes`, `plan` |
 | `connections.preview` | preview | `command`: string, `item`: string, `kind`: string, `model?`: string, `remove`: bool, `use_now?`: bool | `command`, `contexts`, `empty`, `files`, `focus`, `item`, `kind`, `links_add`, `links_remove`, `plan`, `remove` |
 | `connections.repair_preview` | preview | `agent`: string, `target`: string | `command`, `contexts`, `empty`, `files`, `focus`, `item`, `kind`, `links_add`, `links_remove`, `plan`, `remove` |

@@ -279,7 +279,9 @@ class AgentMap extends StatelessWidget {
                             ),
                           )
                         : null,
-                    color: node['status'] == 'running'
+                    color: node['dim'] == true
+                        ? colors.surfaceContainerLowest
+                        : node['status'] == 'running'
                         ? colors.secondaryContainer
                         : node['status'] == 'missing'
                         ? colors.surfaceContainerLowest
