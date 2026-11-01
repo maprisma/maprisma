@@ -666,7 +666,7 @@ class _MapEditorState extends State<MapEditor>
                     color: valid || lit.contains(id)
                         ? colors.primary
                         : colors.outlineVariant,
-                    width: valid ? 3 : 1,
+                    width: valid || _selected.contains(id) ? 3 : 1,
                   ),
                 ),
                 child: Stack(
@@ -1070,13 +1070,12 @@ class _MapEditorState extends State<MapEditor>
     _phase.framesPerSecond = widget.lightFps;
     _phase.refreshRate = View.of(context).display.refreshRate;
     _phase.enabled = flowing;
-    final seed = {
-      ..._selected,
-      ...(_saved['pins'] as List? ?? []).cast<String>(),
-      ?_hover,
-    };
+    final seed = {..._selected, ?_hover};
+    final pinned = {...(_saved['pins'] as List? ?? []).cast<String>()};
     seed.retainWhere(layout.nodes.containsKey); // a hidden column has no lines
-    final lit = {...seed};
+    pinned.retainWhere(layout.nodes.containsKey);
+    // A selection lights its neighbours; a pin only itself and its lines.
+    final lit = {...seed, ...pinned};
     for (final e in layout.allEdges) {
       if (seed.contains(e['source']) || seed.contains(e['target'])) {
         lit.addAll([e['source'] as String, e['target'] as String]);
@@ -1216,6 +1215,7 @@ class _MapEditorState extends State<MapEditor>
                                               _cursor,
                                               _saved['card_border'] as Map?,
                                               dimming,
+                                              pinned,
                                             ),
                                           ),
                                         ),
@@ -1676,6 +1676,7 @@ class _MapPaint extends CustomPainter {
     this.cursor,
     this.border,
     this.dimming,
+    this.pinned,
   );
   final MapLayout layout;
   final ColorScheme colors;
@@ -1688,6 +1689,7 @@ class _MapPaint extends CustomPainter {
 
   /// Something is selected: lines not part of it fade.
   final bool dimming;
+  final Set<String> pinned;
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint();
@@ -1713,7 +1715,9 @@ class _MapPaint extends CustomPainter {
       final edge = curve.edge,
           related =
               lit.isEmpty ||
-              lit.contains(edge['source']) && lit.contains(edge['target']);
+              lit.contains(edge['source']) && lit.contains(edge['target']) ||
+              pinned.contains(edge['source']) ||
+              pinned.contains(edge['target']);
       paint
         ..style = PaintingStyle.stroke
         ..strokeWidth = related ? 2 : 1

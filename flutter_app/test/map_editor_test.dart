@@ -694,6 +694,32 @@ void main() {
     await tester.pumpAndSettle();
     expect(shade('agent:a'), 1);
     expect(shade('agent:b'), 1);
+    // A selected box stands out from what is merely lit.
+    double outline(String label) =>
+        ((tester
+                        .widget<Card>(
+                          find
+                              .ancestor(
+                                of: find.text(label),
+                                matching: find.byType(Card),
+                              )
+                              .first,
+                        )
+                        .shape
+                    as RoundedRectangleBorder)
+                .side)
+            .width;
+    expect(outline('agent:a'), 3);
+    expect(outline('agent:b'), 1);
+
+    // A pin lights itself, not its neighbours.
+    await tester.tap(find.byKey(const ValueKey('pin-agent:b')));
+    await tester.tap(find.byKey(const ValueKey('pin-agent:a')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('agent:b'));
+    await tester.pumpAndSettle();
+    expect(shade('agent:a'), 1);
+    expect(shade('runtime:r'), lessThan(1));
     expect(
       find.byWidgetPredicate((w) => w is Opacity && w.opacity < 1),
       findsWidgets,
