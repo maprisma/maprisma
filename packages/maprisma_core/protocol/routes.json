@@ -53,14 +53,14 @@
   "addons.hints": {
    "area": "addons",
    "kind": "read",
-   "note": "Each line has kind (off, new, updates), column (agents, providers), title, and ids or count.",
+   "note": "Each line has kind (off, new, updates), column (agents, providers) and text; off and new have ids, updates has updates.",
    "params": {},
    "result": {
     "lines": [
      {
       "column": "string",
       "kind": "string",
-      "title": "string"
+      "text": "string"
      }
     ]
    },
@@ -381,16 +381,24 @@
    "note": "Each update has column: mcp.",
    "params": {},
    "result": {
-    "checked": "bool",
+    "agent": "null|string",
+    "due": "bool",
+    "on": "bool",
+    "servers": "int",
+    "summary": "string",
+    "task_agent": "null|string",
     "updates": [
      {
-      "action": "string",
+      "app": "string",
       "column": "string",
-      "command": "string",
       "current": "string",
       "latest": "string",
       "name": "string",
       "notes": "string",
+      "on_pc": "bool",
+      "program": "string",
+      "source": "string",
+      "text": "string",
       "url": "string"
      }
     ]
@@ -717,14 +725,16 @@
   "found.hints": {
    "area": "found",
    "kind": "read",
-   "note": "Each line has column: mcp, kind (mcp, skill), title, and text or updates.",
+   "note": "Each line has kind (found, versions), column (mcp), text, mcp and skills.",
    "params": {},
    "result": {
     "lines": [
      {
       "column": "string",
       "kind": "string",
-      "title": "string"
+      "mcp": "bool",
+      "skills": "bool",
+      "text": "string"
      }
     ]
    },
@@ -838,12 +848,11 @@
        }
       ],
       "key": "string",
-      "state": "string",
       "title": "string"
      }
     ],
-    "hint_count": "int",
-    "state": "string",
+    "hint": "int",
+    "level": "string",
     "summary": "string",
     "uses": [
      {
@@ -852,7 +861,7 @@
        "string"
       ],
       "key": "string",
-      "state": "string",
+      "level": "string",
       "steps": [
        {
         "action": "null|array",
@@ -865,7 +874,7 @@
       "title": "string"
      }
     ],
-    "warn_count": "int"
+    "warn": "int"
    },
    "source": "manual"
   },
@@ -1765,21 +1774,10 @@
   "updates.check": {
    "area": "updates",
    "kind": "read",
-   "note": "Each update has column: agents, providers.",
+   "note": "A task. Its result: updates, each with kind (agent, runtime), key, name, current, available, command, column (agents, providers).",
    "params": {},
    "result": {
-    "updates": [
-     {
-      "available": "string",
-      "column": "string",
-      "command": "string",
-      "installed": "string",
-      "key": "string",
-      "kind": "string",
-      "method": "string",
-      "name": "string"
-     }
-    ]
+    "task": "string"
    },
    "source": "manual"
   },
