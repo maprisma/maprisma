@@ -167,14 +167,18 @@ const _operations = {
   'runtime.stop': ('stop', 'providers'),
 };
 
+/// `agent-pi` is the agent pi, `llm-ollama` the local LLM ollama.
+String ruleAddonCategory(String id) =>
+    id.startsWith('agent-') ? 'agents' : 'providers';
+String ruleAddonItem(String id) => id.startsWith('agent-')
+    ? id.substring(6)
+    : id.startsWith('llm-')
+    ? id.substring(4)
+    : id;
+
 /// What only the core knows about a request.
 final class RuleFacts {
-  const RuleFacts({
-    this.installed,
-    this.updateColumn,
-    this.modelUsers,
-    this.addonKind,
-  });
+  const RuleFacts({this.installed, this.updateColumn, this.modelUsers});
 
   /// Whether a program of an installer is already here: then it is an update.
   final bool Function(String kind, String key)? installed;
@@ -184,9 +188,6 @@ final class RuleFacts {
 
   /// The agents on a model's line.
   final List<String> Function(String node)? modelUsers;
-
-  /// The category of an add-on.
-  final String Function(String id)? addonKind;
 }
 
 /// Everything a request does, for the rules. A route that changes the setup
@@ -198,9 +199,6 @@ List<ActionCheck> actionChecks(
   RuleFacts facts = const RuleFacts(),
 ]) {
   String text(String key) => '${p[key] ?? ''}';
-  String addon(String id) =>
-      facts.addonKind?.call(id) ??
-      (id.startsWith('agent') ? 'agents' : 'providers');
   switch (method) {
     case 'connections.preview':
       final kind = text('kind');
@@ -235,8 +233,6 @@ List<ActionCheck> actionChecks(
         ActionCheck('install', 'skills', text('folder')),
         ..._forAgents('connect', 'skills', text('folder'), p['agents']),
       ];
-    case 'found.update_preview':
-      return [ActionCheck('update', 'mcp', text('program'))];
     case 'models.switch_preview':
       final users = facts.modelUsers?.call(text('old')) ?? const <String>[];
       return [
@@ -309,32 +305,43 @@ List<ActionCheck> actionChecks(
           text('key'),
         ),
       ];
-    case 'found.unpack':
-      return [ActionCheck('install', 'agents', text('program'))];
     case 'addons.remove_preview':
-      return [ActionCheck('remove', addon(text('id')), text('id'))];
+      return [
+        ActionCheck(
+          'remove',
+          ruleAddonCategory(text('id')),
+          ruleAddonItem(text('id')),
+        ),
+      ];
     case 'addons.set_enabled':
       return [
         ActionCheck(
           p['enabled'] == true ? 'install' : 'remove',
-          addon(text('id')),
-          text('id'),
+          ruleAddonCategory(text('id')),
+          ruleAddonItem(text('id')),
         ),
       ];
-    case 'addons.install':
+    // Which kind a file holds shows later: both must be allowed.
     case 'addons.file_preview':
-      return const [ActionCheck('install', 'agents', '')];
+      return const [
+        ActionCheck('install', 'agents', ''),
+        ActionCheck('install', 'providers', ''),
+      ];
     case 'setup.apply':
-      return const [ActionCheck('update', 'agents', '')];
+      return const [
+        ActionCheck('update', 'agents', ''),
+        ActionCheck('update', 'providers', ''),
+      ];
   }
   return const [];
 }
 
-/// Routes that need no rule of their own. A step after a preview is checked
-/// again through its handle in core.dart; the rest reads, undoes, or is the
-/// app's own state.
+/// Routes that need no rule of their own.
 const rulesExempt = {
-  // Second steps: the handle of their preview carries its checks.
+  // Their handler knows what they touch and checks that itself.
+  'addons.install', 'found.unpack', 'found.update_preview',
+  // Second steps: their preview was checked, and a review is modal, so the
+  // rules cannot change in between. The rules button waits in Ask AI too.
   'addons.file_install', 'addons.remove_apply', 'agents.action_apply',
   'agents.halt_apply', 'agents.key_apply', 'connections.apply',
   'existing.apply', 'installers.install', 'models.remove_apply',

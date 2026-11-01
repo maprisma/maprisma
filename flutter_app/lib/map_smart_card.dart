@@ -2055,7 +2055,12 @@ class _MapSmartCardState extends State<MapSmartCard> {
                   IconButton(
                     key: const ValueKey('smart-rules'),
                     tooltip: widget.tr('What may be done'),
-                    onPressed: smartOpenRules,
+                    // A review waits on what was checked when it opened.
+                    onPressed:
+                        _step == _SmartStep.review ||
+                            _step == _SmartStep.connectReview
+                        ? null
+                        : smartOpenRules,
                     icon: const Icon(Icons.rule, size: 18),
                   ),
                   IconButton(

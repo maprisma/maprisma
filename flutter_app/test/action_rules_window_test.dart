@@ -59,6 +59,11 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('rule-undo')));
     await tester.pumpAndSettle();
     expect(saved.last, hasLength(defaultRules().length - 1));
+    await tester.tap(find.byKey(const ValueKey('rule-defaults')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('rule-add-deny')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('rule-undo')), findsNothing);
   });
 
   testWidgets('a rule for what is gone stays; a dead deny says so', (

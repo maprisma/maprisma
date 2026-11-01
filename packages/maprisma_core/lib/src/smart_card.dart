@@ -94,24 +94,45 @@ String _ruleFacts(Map facts) {
 
 const smartNotAllowed = 'This is not allowed here.';
 
+/// A card's title: the first names, and how many more.
+String smartDisconnectTitle(List<Map> pairs) {
+  final shown = {for (final p in pairs) p['server'] ?? p['skill']}.toList();
+  return shown.length > 3
+      ? '${shown.take(3).join(', ')} +${shown.length - 3}'
+      : shown.join(', ');
+}
+
+List<ActionCheck> smartPairChecks(Map pair) => [
+  ActionCheck(
+    'disconnect',
+    pair['skill'] == null ? 'mcp' : 'skills',
+    '${pair['skill'] ?? pair['server']}',
+    '${pair['agent']}',
+  ),
+];
+
+const _providerSteps = {'uninstall': 'remove'};
+
 /// What a proposed candidate would do, for the rules.
 List<ActionCheck> smartCandidateChecks(Map candidate) {
   final action = candidate['action'];
   if (action is! Map) return const [];
   String text(String key) => '${action[key] ?? ''}';
-  return switch (action['kind']) {
-    'mcp_add' => const [ActionCheck('install', 'mcp', '')],
+  final kind = action['kind'] ?? candidate['kind'];
+  return switch (kind) {
+    'mcp_add' => [
+      ActionCheck(
+        'install',
+        'mcp',
+        smartMcpName('${(action['server'] as Map?)?['name'] ?? ''}'),
+      ),
+    ],
     'mcp_connect' => [
       ActionCheck('connect', 'mcp', text('server'), text('agent')),
     ],
     'mcp_disconnect' => [
-      for (final p in action['pairs'] as List? ?? const [])
-        ActionCheck(
-          'disconnect',
-          p['skill'] == null ? 'mcp' : 'skills',
-          '${p['skill'] ?? p['server']}',
-          '${p['agent']}',
-        ),
+      for (final p in (action['pairs'] as List? ?? const []).cast<Map>())
+        ...smartPairChecks(p),
     ],
     'model_move' => const [ActionCheck('move', 'models', '')],
     'model_remove' => [ActionCheck('remove', 'models', text('model'))],
@@ -120,14 +141,17 @@ List<ActionCheck> smartCandidateChecks(Map candidate) {
       'action': text('step'),
       'command': text('command'),
     }),
-    'provider_action' => actionChecks('providers.run', {
+    'provider_action' => [
+      ActionCheck(
+        _providerSteps[candidate['step']] ?? '${candidate['step']}',
+        'providers',
+        '${candidate['key']}',
+      ),
+    ],
+    _ => actionChecks('providers.run', {
       'operation': text('operation'),
       'params': action['params'],
     }),
-    _ when action['repo'] != null || action['operation'] == 'models.pull' => [
-      ActionCheck('install', 'models', text('model')),
-    ],
-    _ => const [],
   };
 }
 
@@ -558,7 +582,6 @@ Future<Map<String, dynamic>> smartMcp(
       };
     }
     final commands = {for (final p in pairs) p['agent']}.toList();
-    final shown = {for (final p in pairs) p['server'] ?? p['skill']}.toList();
     return {
       'status': 'proposal',
       'summary': '',
@@ -567,9 +590,7 @@ Future<Map<String, dynamic>> smartMcp(
           'id': 'c1',
           'kind': 'mcp_disconnect',
           'agents': commands,
-          'title': shown.length > 3
-              ? '${shown.take(3).join(', ')} +${shown.length - 3}'
-              : shown.join(', '),
+          'title': smartDisconnectTitle(pairs),
           'subtitle': [for (final c in commands) names[c]].join(', '),
           'reason': '',
           'fit': 'ok',
@@ -1390,6 +1411,7 @@ Map<String, dynamic> smartWorded(
     smartNeedsWeb,
     smartLocalDown,
     smartNothingToDo,
+    smartNotAllowed,
   };
   final instead = result['instead'];
   return {

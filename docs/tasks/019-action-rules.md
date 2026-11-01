@@ -35,7 +35,7 @@ One entry, `requiredChecks(method, params)`, gives every (action, category, item
 - Also the routes with no preview: `providers.run`, `jobs.continue`, `updates.run`, `sessions.start`, `addons.set_enabled`, `setup.apply`, `found.unpack`, `system.help_apply`.
 - Lists are checked item by item: `_disconnectAll`, `author_preview`, `option_preview`, `attach_preview`, `found.update_preview`.
 - A line moved on the map is disconnect on the old end and connect on the new one, never `move`; moved to empty space it is disconnect.
-- Checked at preview and again at apply: previews live 10 minutes, proposals 30.
+- Checked at preview. Not again at apply: a review is modal, and the rules button in Ask AI waits while one is open.
 - In `map.smart_ask` right after the helper's first answer, before a search or a second paid call.
 
 The helper gets the rules as facts and its fixed action list stays; its answer is not trusted.
@@ -59,4 +59,4 @@ The rules bind what is drawn by hand too. The helper gets them as facts, its fix
 Enforcement, `rules.test` and `smartRefused` are in the Dart core, which the app runs; like the smart cards they have no Python twin. `settings_schema.py` knows both settings.
 
 ## How it is built
-`action_rules.dart`: the rules and `actionChecks(method, params)`. `_dispatch` in `core.dart` checks every request, keeps the checks with a preview's handle and checks again when the handle comes back. `action_rules_test` fails for a route of kind preview, change or handle with neither checks nor a place in `rulesExempt`. The GUI's `failureText` shows a refusal wherever a failure is shown today.
+`action_rules.dart`: the rules and `actionChecks(method, params)`. `_dispatch` in `core.dart` checks every request; a few handlers check what only they know. `action_rules_test` fails for a route of kind preview, change or handle with neither checks nor a place in `rulesExempt`. The GUI's `failureText` shows a refusal wherever a failure is shown today.

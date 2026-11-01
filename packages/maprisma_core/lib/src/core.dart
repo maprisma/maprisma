@@ -414,8 +414,7 @@ final class CoreService {
       if (params.length != 1 || update == null || task == null) {
         throw const FormatException('Update/helper unavailable');
       }
-      final start = [ActionCheck('start', 'agents', task)];
-      _enforce(start);
+      _enforce([ActionCheck('start', 'agents', task)]);
       final prompt = mcp_updates.taskPrompt(update, home);
       final adapter = addons.adapters
           .where((a) => a.command == task)
@@ -424,10 +423,7 @@ final class CoreService {
       if (argv == null || argv.isEmpty) {
         throw const FormatException('Guarded helper unavailable');
       }
-      return _kept(
-        start,
-        helpPreviews.keep(task, _nameOf(task), prompt, argv, 'mcp-update'),
-      );
+      return helpPreviews.keep(task, _nameOf(task), prompt, argv, 'mcp-update');
     }
     Map<String, dynamic> snapshot() {
       final images = FoundScan(
@@ -901,6 +897,13 @@ final class CoreService {
       if (params.length != 1 || candidate == null) {
         throw const FormatException('Unknown program');
       }
+      _enforce([
+        ActionCheck(
+          '${candidate['update_from'] ?? ''}'.isEmpty ? 'install' : 'update',
+          'mcp',
+          '${candidate['name']}',
+        ),
+      ]);
       return tasks.start('found.unpack', {
         'appimage': candidate['appimage'],
         'mcp_folders': _savedList('mcp_folders'),
@@ -1002,7 +1005,7 @@ final class CoreService {
       ];
       if (chosen.isEmpty) throw const FormatException('Nothing to update');
       _enforce([
-        for (final c in chosen) ActionCheck('update', 'mcp', '${c['program']}'),
+        for (final c in chosen) ActionCheck('update', 'mcp', '${c['name']}'),
       ]);
       if (chosen.any((c) => '${c['appimage']}'.isNotEmpty)) {
         throw const FormatException('Unpack the newer version first');
@@ -3040,8 +3043,7 @@ final class CoreService {
     final action = candidate['action'] as Map;
     if (action['kind'] == 'agent_task') {
       final task = action['command'] as String;
-      final start = [ActionCheck('start', 'agents', task)];
-      _enforce(start);
+      _enforce([ActionCheck('start', 'agents', task)]);
       final argv = taskArgv(
         addons.adapters.where((a) => a.command == task).firstOrNull,
         task,
@@ -3350,7 +3352,7 @@ final class CoreService {
         if (!focus.contains(id)) focus.add(id);
       }
     }
-    return _kept(checks, {
+    return {
       ...connections.keep(chainPlans(config, builders)),
       'kind': 'mcp',
       'remove': true,
@@ -3358,15 +3360,7 @@ final class CoreService {
         for (final p in pairs) '${p['server'] ?? p['skill']} → ${p['agent']}',
       ],
       'focus': focus,
-    });
-  }
-
-  Map<String, dynamic> _kept(
-    List<ActionCheck> checks,
-    Map<String, dynamic> result,
-  ) {
-    _keepRules(result, checks);
-    return result;
+    };
   }
 
   /// A local LLM a model can be downloaded for: Ollama pulls, the others need
@@ -3592,6 +3586,14 @@ final class CoreService {
       if (DateTime.now().difference(kept.$1).inSeconds >= 600) {
         throw const FormatException('Add-on preview expired');
       }
+      final record = kept.$2 as Map;
+      _enforce([
+        ActionCheck(
+          record['action'] == 'update' ? 'update' : 'install',
+          ruleAddonCategory('${record['id']}'),
+          ruleAddonItem('${record['id']}'),
+        ),
+      ]);
       final body = utf8.encode(
         pyJsonDumps({
           'record': kept.$2,
@@ -3839,11 +3841,8 @@ final class CoreService {
     }
   }
 
-  /// The checks of a preview, kept with its handle: rules may tighten before
-  /// it is applied.
-  final _ruleHandles = <String, List<ActionCheck>>{};
-
-  /// The rules a helper of this column needs, without a path of this PC.
+  /// The rules a helper of this column needs. A skill folder is named by the
+  /// short id the helper knows it by, never by its path.
   List<Map<String, dynamic>> _rulesForHelper(Object? column) {
     final mine = switch (column) {
       'mcp' => const ['mcp', 'skills'],
@@ -3851,42 +3850,67 @@ final class CoreService {
       'providers' => const ['providers'],
       _ => const ['models'],
     };
+    final rules = (settings.value(settings.load(), 'action_rules') as List)
+        .cast<Map>();
+    final ids = <String, String>{};
+    if (rules.any((r) => r['category'] == 'skills' && r['item'] != '*')) {
+      final sets = reads.inventory
+          .collect(reads.catalog.scan(), remember: false)
+          .skillSets;
+      for (final (i, set) in sets.indexed) {
+        ids[_ruleItem('skills', '${set['path']}')] = 's${i + 1}';
+      }
+    }
     return [
-      for (final r
-          in (settings.value(settings.load(), 'action_rules') as List)
-              .cast<Map>())
+      for (final r in rules)
         if (r['category'] == '*' || mine.contains(r['category']))
           {
             ...Map<String, dynamic>.from(r),
             if (r['category'] == 'skills' && r['item'] != '*')
-              'item': 'one folder',
+              'item': ids[_ruleItem('skills', '${r['item']}')] ?? 'none here',
           },
     ];
   }
 
-  /// Candidates the rules refuse do not reach the card.
+  /// Refused candidates do not reach the card: a disconnect keeps what may
+  /// go, a web answer stays without its button.
   Map<String, dynamic> _dropRefused(Map<String, dynamic> result) {
     final list = result['candidates'];
     if (list is! List) return result;
-    final saved = settings.load();
-    final rules = settings.value(saved, 'action_rules') as List;
-    bool ok(Map c) => smartCandidateChecks(
-      c,
-    ).every((check) => ruleAllows(rules, check, normal: _ruleItem));
-    final kept = [
-      for (final c in list.cast<Map>())
-        if (ok(c)) c,
-    ];
-    if (kept.length == list.length) return result;
-    if (kept.isNotEmpty) return {...result, 'candidates': kept};
-    return {
-      'status': 'redirect',
-      'instead': {
-        'hint': i18n.text(smartNotAllowed),
-        'column': null,
-        'request': null,
-      },
-    };
+    final rules = settings.value(settings.load(), 'action_rules') as List;
+    bool ok(ActionCheck check) => ruleAllows(rules, check, normal: _ruleItem);
+    final kept = <Map>[];
+    for (final c in list.cast<Map>()) {
+      final action = c['action'];
+      if (action is Map && action['kind'] == 'mcp_disconnect') {
+        final left = [
+          for (final p in (action['pairs'] as List).cast<Map>())
+            if (smartPairChecks(p).every(ok)) p,
+        ];
+        if (left.isNotEmpty) {
+          kept.add({
+            ...c,
+            'title': smartDisconnectTitle(left),
+            'action': {...action, 'pairs': left},
+          });
+        }
+      } else if (smartCandidateChecks(c).every(ok)) {
+        kept.add(c);
+      }
+    }
+    if (kept.isNotEmpty || result['instead'] != null) {
+      return {...result, 'candidates': kept};
+    }
+    return list.isEmpty
+        ? result
+        : {
+            'status': 'redirect',
+            'instead': {
+              'hint': smartNotAllowed,
+              'column': null,
+              'request': null,
+            },
+          };
   }
 
   /// One spelling per item, for rules and requests alike.
@@ -3897,34 +3921,30 @@ final class CoreService {
   };
 
   late final _ruleFacts = RuleFacts(
-    installed: (kind, key) => kind == 'runtime'
-        ? reads.map['nodes'] is List &&
-              (reads.map['nodes'] as List).any((n) => n['id'] == 'runtime:$key')
-        : reads.catalog.scan().any((a) => a.command == key && a.installed),
+    installed: (kind, key) {
+      final agents = reads.catalog.scan();
+      return kind == 'runtime'
+          ? reads.inventory
+                .collect(agents, remember: false)
+                .runtimes
+                .any((r) => r.key == key && r.installed)
+          : agents.any((a) => a.command == key && a.installed);
+    },
     updateColumn: (key) {
       final entry = lastUpdates.where((u) => u['key'] == key).firstOrNull;
       return entry?['kind'] == 'agent' || entry == null
           ? 'agents'
           : 'providers';
     },
+    // As models.switch_preview moves them: the agents set to the model.
     modelUsers: (node) => [
-      for (final e in (reads.map['edges'] as List? ?? const []).cast<Map>())
-        if (e['target'] == node && '${e['source']}'.startsWith('agent:'))
+      for (final e in (edits.currentMap()['edges'] as List).cast<Map>())
+        if (e['target'] == node &&
+            e['kind'] == 'default' &&
+            '${e['source']}'.startsWith('agent:'))
           '${e['source']}'.substring(6),
     ],
   );
-
-  void _keepRules(Map<String, dynamic> result, List<ActionCheck> checks) {
-    if (checks.isEmpty) return;
-    for (final key in const ['plan', 'preview', 'token', 'task', 'installer']) {
-      final value = result[key];
-      if (value is! String) continue;
-      if (_ruleHandles.length >= 64) {
-        _ruleHandles.remove(_ruleHandles.keys.first);
-      }
-      _ruleHandles[value] = checks;
-    }
-  }
 
   void _enforce(List<ActionCheck> checks) {
     if (checks.isEmpty) return;
@@ -3968,19 +3988,7 @@ final class CoreService {
     }
     final checks = actionChecks(method, params, _ruleFacts);
     _enforce(checks);
-    for (final value in params.values) {
-      if (value is String) _enforce(_ruleHandles[value] ?? const []);
-    }
-    final result = _route(method, params);
-    _keepRules(result, checks);
-    // A worker's preview: its token arrives with the task's result.
-    if (method == 'tasks.status' && result['result'] is Map) {
-      final found = _ruleHandles[params['task']];
-      if (found != null) {
-        _keepRules(Map<String, dynamic>.from(result['result'] as Map), found);
-      }
-    }
-    return result;
+    return _route(method, params);
   }
 
   Map<String, dynamic> _route(String method, Map<String, dynamic> params) {

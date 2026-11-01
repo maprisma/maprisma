@@ -394,6 +394,8 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       );
     });
     final value = await result.future;
+    // Before the refresh: that can take longer than a refusal counts.
+    final failure = value?['ok'] == false ? failureText(tr) : null;
     if (!mounted) return value;
     if (!_dataTasks.contains(operation)) {
       _mapStale = true;
@@ -422,7 +424,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         value['ok'] != false) {
       setState(() => _card = null);
     } else {
-      _taskResult(title, value);
+      _taskResult(title, value, failure: failure);
     }
     return value?['ok'] == false ? null : value;
   }
@@ -431,6 +433,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     String title,
     Map<String, dynamic>? value, {
     Future<void> Function()? undo,
+    String? failure,
   }) {
     if (!mounted) return;
     setState(
@@ -439,7 +442,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         child: TaskReview(
           content: Text(
             value?['ok'] == false
-                ? failureText(tr)
+                ? failure ?? failureText(tr)
                 : tr(
                     value == null
                         ? 'Cancelled'
@@ -579,6 +582,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         // A rule is no reason to scan the map.
         onSave: (rules, hints) async {
           final values = {'action_rules': rules, 'action_rule_hints': hints};
+          _settingsRevision++;
           await _client.settingsUpdate(values: values);
           if (mounted) {
             setState(() => (_snapshot?['settings'] as Map?)?.addAll(values));

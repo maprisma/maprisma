@@ -139,7 +139,6 @@ void main() {
     ),
     'mcp.option_preview': ({'name': 's'}, 'install', 'mcp', 's'),
     'skills.web_preview': ({'folder': '/a'}, 'install', 'skills', '/a'),
-    'found.update_preview': ({'program': 'p'}, 'update', 'mcp', 'p'),
     'models.switch_preview': (
       {'provider': 'runtime:o', 'old': 'model:runtime:o:m', 'new': null},
       'disconnect',
@@ -198,15 +197,13 @@ void main() {
       'providers',
       'o',
     ),
-    'found.unpack': ({'program': 'p'}, 'install', 'agents', 'p'),
-    'addons.remove_preview': ({'id': 'agent-x'}, 'remove', 'agents', 'agent-x'),
+    'addons.remove_preview': ({'id': 'agent-pi'}, 'remove', 'agents', 'pi'),
     'addons.set_enabled': (
-      {'id': 'provider-x', 'enabled': false},
+      {'id': 'llm-ollama', 'enabled': false},
       'remove',
       'providers',
-      'provider-x',
+      'ollama',
     ),
-    'addons.install': (const {}, 'install', 'agents', ''),
     'addons.file_preview': (const {}, 'install', 'agents', ''),
     'setup.apply': (const {}, 'update', 'agents', ''),
   };
@@ -269,6 +266,33 @@ void main() {
   });
 
   test('a proposal knows what it would do', () {
+    expect(
+      smartCandidateChecks({
+        'kind': 'provider_action',
+        'key': 'ollama',
+        'step': 'stop',
+        'action': {'kind': 'provider_action'},
+      }).single.action,
+      'stop',
+    );
+    expect(
+      smartCandidateChecks({
+        'action': {
+          'kind': 'mcp_add',
+          'server': {'name': 'io.github.a/files'},
+        },
+      }).single.item,
+      'files',
+    );
+    expect(
+      smartCandidateChecks({
+        'action': {
+          'operation': 'models.download',
+          'params': {'key': 'o', 'repo': 'r/m', 'file': 'f', 'size': 1},
+        },
+      }).single.item,
+      'r/m',
+    );
     final checks = smartCandidateChecks({
       'action': {
         'kind': 'mcp_disconnect',

@@ -82,6 +82,7 @@ class _ActionRulesWindowState extends State<ActionRulesWindow> {
   };
   String? _answer;
   List<Map<String, dynamic>>? _before;
+  bool _failed = false;
 
   String tr(String key) => widget.tr(key);
 
@@ -98,8 +99,17 @@ class _ActionRulesWindowState extends State<ActionRulesWindow> {
   ].join(' · ');
 
   Future<void> _changed() async {
-    setState(() => _answer = null);
-    await widget.onSave(_rules, _hints);
+    setState(() {
+      _answer = null;
+      _before = null;
+    });
+    try {
+      await widget.onSave(_rules, _hints);
+    } catch (_) {
+      if (mounted) setState(() => _failed = true);
+      return;
+    }
+    if (mounted) setState(() => _failed = false);
   }
 
   bool _deadDeny(Map rule) =>
@@ -338,11 +348,10 @@ class _ActionRulesWindowState extends State<ActionRulesWindow> {
                 TextButton(
                   key: const ValueKey('rule-defaults'),
                   onPressed: () {
-                    setState(() {
-                      _before = _rules;
-                      _rules = defaultRules();
-                    });
+                    final before = _before ?? _rules;
+                    _rules = defaultRules();
                     _changed();
+                    setState(() => _before = before);
                   },
                   child: Text(tr('Restore defaults')),
                 ),
@@ -394,6 +403,11 @@ class _ActionRulesWindowState extends State<ActionRulesWindow> {
           ),
           const Divider(height: 1),
           Padding(padding: const EdgeInsets.all(12), child: _tester()),
+          if (_failed)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+              child: Text(tr('The action could not be completed.')),
+            ),
           if (_answer != null)
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
