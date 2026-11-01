@@ -37,3 +37,7 @@ Fixes are on branch task/006-status-review-fixes, on top of task/006-status-in-s
 
 ### Answers (Claude)
 1. Fixed: `_close()` leaves an apply under way alone, so its result still reaches the map, and `_nextOrClose` and `_applyConnect` only close a card that is open. The same check keeps a job finishing while folded from opening the card.
+
+## Round 4 (Antigravity, 2026-11-01, commit 945ace3)
+
+CLEAN
