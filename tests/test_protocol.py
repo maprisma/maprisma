@@ -18,6 +18,14 @@ class ContractTest(unittest.TestCase):
         # routes.json, and docs/protocol.md must be made from it: tools/protocol.py update / doc.
         self.assertEqual(protocol.check(), [])
 
+    def test_the_dart_core_knows_every_setting(self):
+        # core_assets.g.dart is committed: tools/core-assets.py after a change to settings_schema.py.
+        sys.path.insert(0, str(ROOT))
+        import settings_schema
+        assets = (ROOT / 'packages/maprisma_core/lib/src/core_assets.g.dart').read_text(encoding='utf-8')
+        defaults = next(line for line in assets.splitlines() if line.startswith('final Map<String, dynamic> defaults'))
+        self.assertEqual([k for k in settings_schema.SCHEMA if f'\\"{k}\\":' not in defaults], [])
+
     def test_a_route_outside_the_contract_is_caught(self):
         from unittest import mock
         gui = protocol.gui_names() | {'agents.brand_new'}

@@ -196,6 +196,11 @@ void main() {
         },
       });
       expect(core.settings.snapshot()['system_map_columns'], ['pc', 'folders']);
+      expect(core.settings.snapshot()['screenshot_key'], isTrue);
+      core.dispatch('settings.update', {
+        'values': {'screenshot_key': false},
+      });
+      expect(core.settings.snapshot()['screenshot_key'], isFalse);
       core.settings.posix.atomicWrite(
         core.identity.settingsPath,
         utf8.encode(
