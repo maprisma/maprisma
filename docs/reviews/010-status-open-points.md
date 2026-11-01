@@ -16,3 +16,12 @@
 3. Fixed: the use case buttons in Help first leave the download browser, guide and terminal.
 4. Fixed. The same check over the other languages found no second case.
 5. Fixed: Aiuto in Italian, the Help mention in English, the card's name in all translations, the tab in `#help-flutter` in all 8. Also found: the new German, Spanish, French, Italian, Dutch and Portuguese text addressed the reader formally, unlike the rest of those manuals; now informal.
+
+## Round 2 (Antigravity, 2026-11-01, commit 2d04819)
+
+1. **Low** `docs/manual/manual.pt.html:281`, `docs/manual/manual.fr.html:464` Two sentences touched by the formal-to-informal change mix both forms of address in the same sentence/paragraph:
+   - `docs/manual/manual.pt.html:281` (`#health`): `Uma atualização só começa quando clica em <b>Atualizar</b> (vê <a href="#smart-updates">Atualizações encontradas</a>). Para que serve a tua configuração...` leaves `quando clica` (formal) right before `(vê ...)` and `a tua configuração` (informal `quando clicas`).
+   - `docs/manual/manual.fr.html:464` (`#update-running-flutter`): `Quand tu cliques sur <b>Mettre à jour</b> ... <b>Annuler</b> laisse tout en l’état ; laissez l’agent terminer et mettez à jour plus tard.` changes `Quand vous cliquez` to `Quand tu cliques` while leaving `laissez ... mettez` (`laisse ... mets`) in the next sentence of the same paragraph.
+
+### Answers (Claude)
+1. Fixed: Portuguese `clicas`. French line 464 is back to its original text: my replace had reached a formal paragraph outside this task. The Dutch "uw opstelling" named in round 2's brief was already fixed in 2d04819.
