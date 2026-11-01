@@ -491,12 +491,7 @@ class _InteractiveBoardState extends State<_InteractiveBoard> {
 }
 
 class _Connections extends CustomPainter {
-  _Connections(
-    this.positions,
-    this.edges,
-    this.color, {
-    this.boxWidth = 242,
-  });
+  _Connections(this.positions, this.edges, this.color, {this.boxWidth = 242});
   final Map<String, Offset> positions;
   final List<Map<String, dynamic>> edges;
   final Color color;

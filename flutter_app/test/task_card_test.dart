@@ -21,11 +21,7 @@ void main() {
       MaterialApp(
         home: Scaffold(
           body: TaskHost(
-            spec: TaskCardSpec(
-              title: 'Task',
-              child: child,
-              closable: closable,
-            ),
+            spec: TaskCardSpec(title: 'Task', child: child, closable: closable),
             tr: (s) => s,
             onClose: close ?? () {},
             overlay: overlay,

@@ -67,10 +67,7 @@ void main() {
           MaterialApp(
             home: Scaffold(
               body: TaskHost(
-                spec: TaskCardSpec(
-                  title: entry.key,
-                  child: entry.value,
-                ),
+                spec: TaskCardSpec(title: entry.key, child: entry.value),
                 tr: (s) => s,
                 onClose: () {},
               ),
