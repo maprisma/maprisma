@@ -173,8 +173,7 @@
     <li><b>Setup</b> and <b>Map</b> — the two views, on every page; the one in view is highlighted.
       Setup has every agent, local LLM, MCP server, skill folder and model as a card: install, update,
       sign in, remove (see below).</li>
-    <li>The header's symbols: <b>⟳</b> refresh (<kbd>F5</kbd>: look again, as on start), <b>!</b> open problems and updates (red: something to fix; the accent
-      colour: only updates and suggestions; not there when there is nothing), <b>ⓘ</b> the legend (what every dot, line and mark on the map
+    <li>The header's symbols: <b>⟳</b> refresh (<kbd>F5</kbd>: look again, as on start), <b>!</b> the overall state (green: all fine; yellow: tips or updates; red: something to fix; a click goes to the first column concerned), <b>ⓘ</b> the legend (what every dot, line and mark on the map
       means), <b>⇅</b> the network traffic of the running agents (see <a href="#network">Network
       traffic</a>), the two sparkles for <b>Smart Check</b> (only while Claude Code or Codex is installed,
       see <a href="#smart-check">Smart Check</a>), the add-ons <span class="badge">Maprisma</span>, the filled <b>i</b> for Information
@@ -326,7 +325,7 @@
 
   <h2 id="health">Column status</h2>
   <p>Every column's <b>Ask AI…</b> bar shows that column's state at its left, and the header shows the worst state of all columns, also of a hidden one: a green check mark when all is fine, a yellow triangle for tips, updates or suggestions, a red <b>!</b> when something needs fixing. A click on the symbol opens the column's list, worst first: an agent not signed in, a local LLM without models, a connection that does not work, little free space for models, each with a button to where it is fixed. <b>Ask AI</b> on a line puts it into the prompt; only <b>Ask</b> sends it. A click on the header's symbol goes to the first column concerned. The check only reads; it never changes, starts or sends anything.</p>
-  <p>The list also shows new programs or skills found on this PC, what is on this PC but not on the map, and updates for installed agents, local LLMs and MCP servers, each with its button. Updates are checked in the background when the window opens, at most every six hours. An update starts only when you click <b>Update</b> (see <a href="#smart-updates">Updates found</a>). What your setup is good for is on the welcome page, under <b>What you can do with it</b>.</p>
+  <p>The list also shows new programs or skills found on this PC, what is on this PC but not on the map, and updates for installed agents, local LLMs and MCP servers, each with its button. Updates are checked in the background when the window opens, at most every six hours. An update starts only when you click <b>Update</b> (see <a href="#smart-updates">Updates found</a>). What your setup is good for is on the welcome page and in Help, under <b>What you can do with it</b>.</p>
 
   <h2 id="smart-card">Smart cards on the map</h2>
   <p>In the Flutter preview, a collapsed <b>Ask AI…</b> bar sits at the top of every map column, with a status symbol at its left: a green check mark when all is fine, a yellow triangle for tips, updates or suggestions, or a red <b>!</b> when something in that column needs fixing. The header bar shows the overall status across all four columns (even hidden ones) and opens the first column that needs attention. Clicking a column’s status symbol opens its status list: each finding for that column with the button that opens where it is fixed and <b>Ask AI</b> to pre-fill the prompt, newer versions of installed agents and local LLMs (<b>Update</b> runs <code>mise upgrade</code> or the agent’s own updater in a terminal, or opens the install review; checked at most every six hours), MCP server updates from the daily AI checks, and <b>Check again</b>. On the welcome page, <b>What you can do with it</b> shows the use cases (everyday help, vibe coding, images, voice, research and writing) as <b>Ready</b>, <b>Almost</b> or <b>Not yet</b>, with what is there for each and the next step.</p>
@@ -483,7 +482,7 @@
 
   <h2 id="agent-updates">Updating agents</h2>
   <p>When a newer version of an installed agent is out, its card on Setup gets a yellow <b>↑ version</b>,
-  and <b>Updates and suggestions</b> (the header's <b>!</b>) names it. <b>Update</b> runs
+  and the column’s status names it. <b>Update</b> runs
   the update the same way the agent was installed — for example <code>mise upgrade &lt;tool&gt;</code>
   or <code>claude update</code> — in a terminal window of its own, so you can follow it.</p>
 
@@ -1283,7 +1282,7 @@
   everywhere. <b>Update</b> replaces it with the newer version from the catalog, after the new one
   was checked; <b>Remove</b> moves it to the trash. <b>Install from file…</b> takes an add-on zip
   you downloaded yourself; the same checks apply.</p>
-  <p>When the catalog has newer versions of installed add-ons, <b>Setup</b>'s cards say <i>Add-on update</i>, the open problems page (the red <b>!</b> in the header) lists <b>Add-on updates ready</b> with <b>Update all</b> and <b>Add-ons</b>, and the Add-ons page shows a bar with <b>Update all</b>. The card's ⋯ menu (or a right-click on it) also has <b>Update add-on to</b> <i>version</i>, for that one add-on. Update all updates every one of them in turn, with the same checks, and says in one message which were updated. One install or update runs at a time; another one started meanwhile asks you to try again in a moment.</p>
+  <p>When the catalog has newer versions of installed add-ons, <b>Setup</b>'s cards say <i>Add-on update</i>, the column’s status lists <b>Add-on updates ready</b> with <b>Update all</b> and <b>Add-ons</b>, and the Add-ons page shows a bar with <b>Update all</b>. The card's ⋯ menu (or a right-click on it) also has <b>Update add-on to</b> <i>version</i>, for that one add-on. Update all updates every one of them in turn, with the same checks, and says in one message which were updated. One install or update runs at a time; another one started meanwhile asks you to try again in a moment.</p>
 
   <div class="tip"><p><b>Only from the author.</b> Maprisma loads only add-ons signed by Uwe
   Bruckhaus (key fingerprint <code>SHA256:e5cC634Ke3Our5LAeSc88qs22NKZEHTncBW5Ig3amWQ</code>). Before
@@ -1323,8 +1322,7 @@
   <h2 id="addons-new-harness">A new agent on your computer</h2>
   <p>When you install an agent Maprisma does not know yet, it looks in the catalog (Settings ›
   <b>Look for add-ons online</b>, on by default: the list is read from GitHub every few hours, nothing
-  is sent but the request). If an add-on knows that agent, <b>Updates and suggestions</b> (the
-  header's <b>!</b>) says so (<i>"Kilo Code is on this PC but not on the map"</i>) and a card under <b>Suggested for this PC</b>; one click installs it. If no add-on exists yet, the
+  is sent but the request). If an add-on knows that agent, the column’s status says so (<i>"Kilo Code is on this PC but not on the map"</i>) and a card under <b>Suggested for this PC</b>; one click installs it. If no add-on exists yet, the
   agent's details say so, with a link to ask for one.</p>
 
   <h2 id="addons-make">Making an add-on</h2>
