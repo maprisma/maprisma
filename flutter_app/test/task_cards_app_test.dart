@@ -3,6 +3,7 @@ import 'support/python_transport.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'package:maprisma/backend.dart';
+import 'package:maprisma/first_agent_view.dart';
 import 'package:maprisma/overlay_window.dart';
 import 'package:maprisma/agent_map.dart';
 import 'package:maprisma/settings_view.dart';
@@ -119,6 +120,7 @@ for line in sys.stdin:
  elif m=='models.tuning':tasks['tune']={'runtime':'Fixture provider','key':'fixture','gpu':'GPU','vram':8<<30,'stacks':[],'build':'','builds':[],'devices':'','settings':{'*':{}},'tuning':{'mode':['a|b','A mode']},'per_model':False,'models':[],'loaded':[],'vram_used':0,'helpers':[{'command':'test','name':'Test agent'}]};r={'task':'tune'}
  elif m=='models.tuning_ask':tasks['ask']={'summary':'One thing.','agent':p['command'],'suggestions':[{'kind':'setting','title':'Use b','why':'Faster.','model':'*','key':'mode','value':'b'}]};r={'task':'ask'}
  elif m=='models.tuning_preview':r={'plan':'opaque-tune','empty':False,'files':[{'path':'~/.config/x.ini','added':1,'removed':0}],'links_add':[],'links_remove':[],'item':'Fixture provider','notes':[],'focus':['runtime:fixture']}
+ elif m=='models.slots_preview' and Path('no-slots').exists():r={'empty':True}
  elif m=='models.slots_preview':r={'plan':'opaque-slots','empty':False,'files':[{'path':'~/.config/llama.cpp/server.env','added':1,'removed':0}],'links_add':[],'links_remove':[],'notes':['Fixture provider keeps 2 models loaded at once'],'warnings':['Too big together.'],'reload':True,'focus':['runtime:fixture']}
  elif m=='models.slots_reload':r={'ok':True}
  elif m=='updates.check':tasks['up']={'updates':[{'kind':'agent','column':'agents','key':'test','name':'Test agent','current':'1.0','available':'1.1','command':['mise','upgrade','test'],'page':False}]};r={'task':'up'}
@@ -268,6 +270,18 @@ void main() {
     await unmountApp(tester);
   });
 
+  testWidgets('leaving the guide leaves it; a page from a box returns there', (
+    tester,
+  ) async {
+    await mountApp(tester);
+    await openFromHelp(tester, 'Your first agent');
+    await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
+    await settleService(tester);
+    expect(find.byType(FirstAgentView), findsNothing);
+    expect(tester.takeException(), isNull);
+    await unmountApp(tester);
+  });
+
   testWidgets('a window blocks the header; Esc leads out of it', (
     tester,
   ) async {
@@ -275,12 +289,12 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('help-open')));
     await settleService(tester);
     expect(find.byType(OverlayWindow), findsOneWidget);
-    expect(
-      tester
-          .widget<IconButton>(find.byKey(const ValueKey('problems-open')))
-          .onPressed,
-      isNull,
-    );
+    for (final key in ['problems-open', 'map-legend']) {
+      expect(
+        tester.widget<IconButton>(find.byKey(ValueKey(key))).onPressed,
+        isNull,
+      );
+    }
     await tester.sendKeyDownEvent(LogicalKeyboardKey.f5);
     await tester.sendKeyUpEvent(LogicalKeyboardKey.f5);
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
@@ -683,67 +697,65 @@ void main() {
       await unmountApp(tester);
     },
   );
-  testWidgets(
-    'hook to empty opens removal review; Cancel leaves the connection',
-    (tester) async {
-      final dir = await mountApp(tester);
-      final from = tester.getCenter(find.text('Test agent')),
-          to = tester.getCenter(find.text('Known server'));
-      await tester.dragFrom(from, to - from);
-      await settleService(tester);
-      await tester.tap(find.text('Apply'));
-      await settleService(tester);
-      await tester.tap(find.widgetWithText(TextButton, 'Close'));
-      await settleService(tester);
-      await tester.tap(find.text('Test agent'));
-      await tester.pumpAndSettle();
-      await tester.drag(
-        find.byTooltip(
-          'Move this connection to another compatible box, or to empty space to disconnect.',
-        ),
-        const Offset(0, 240),
-      );
-      await settleService(tester);
-      final dialog = find.byKey(const ValueKey('disconnect-dialog'));
-      expect(dialog, findsOneWidget);
-      expect(find.byType(ConnectionReview), findsNothing);
-      final move = requests(
-        dir,
-      ).singleWhere((q) => q['method'] == 'connections.move_preview');
-      expect(move['params'], {
-        'agent': 'agent:test',
-        'old': 'mcp:known-server',
-        'new': null,
-      });
-      await tester.tap(
-        find.descendant(of: dialog, matching: find.text('Cancel')),
-      );
-      await settleService(tester);
-      expect(
-        requests(dir).where((q) => q['method'] == 'connections.apply').length,
-        1,
-      );
-      await tester.drag(
-        find.byTooltip(
-          'Move this connection to another compatible box, or to empty space to disconnect.',
-        ),
-        const Offset(0, 240),
-      );
-      await settleService(tester);
-      await tester.tap(
-        find.descendant(of: dialog, matching: find.text('Apply')),
-      );
-      await settleService(tester);
-      expect(
-        requests(dir).where((q) => q['method'] == 'connections.apply').length,
-        2,
-      );
-      expect(find.text('Succeeded'), findsOneWidget);
-      expect(find.widgetWithText(SnackBarAction, 'Undo'), findsOneWidget);
-      expect(tester.takeException(), isNull);
-      await unmountApp(tester);
-    },
-  );
+  testWidgets('hook to empty opens removal review; Cancel leaves the connection', (
+    tester,
+  ) async {
+    final dir = await mountApp(tester);
+    final from = tester.getCenter(find.text('Test agent')),
+        to = tester.getCenter(find.text('Known server'));
+    await tester.dragFrom(from, to - from);
+    await settleService(tester);
+    await tester.tap(find.text('Apply'));
+    await settleService(tester);
+    await tester.tap(find.widgetWithText(TextButton, 'Close'));
+    await settleService(tester);
+    await tester.tap(find.text('Test agent'));
+    await tester.pumpAndSettle();
+    await tester.drag(
+      find.byTooltip(
+        'Move this connection to another compatible box, or to empty space to disconnect.',
+      ),
+      const Offset(0, 240),
+    );
+    await settleService(tester);
+    final dialog = find.byKey(const ValueKey('disconnect-dialog'));
+    expect(dialog, findsOneWidget);
+    expect(find.byType(ConnectionReview), findsNothing);
+    final move = requests(
+      dir,
+    ).singleWhere((q) => q['method'] == 'connections.move_preview');
+    expect(move['params'], {
+      'agent': 'agent:test',
+      'old': 'mcp:known-server',
+      'new': null,
+    });
+    await tester.tap(
+      find.descendant(of: dialog, matching: find.text('Cancel')),
+    );
+    await settleService(tester);
+    expect(
+      requests(dir).where((q) => q['method'] == 'connections.apply').length,
+      1,
+    );
+    await tester.drag(
+      find.byTooltip(
+        'Move this connection to another compatible box, or to empty space to disconnect.',
+      ),
+      const Offset(0, 240),
+    );
+    await settleService(tester);
+    File('${dir.path}/no-slots').writeAsStringSync('');
+    await tester.tap(find.descendant(of: dialog, matching: find.text('Apply')));
+    await settleService(tester);
+    expect(
+      requests(dir).where((q) => q['method'] == 'connections.apply').length,
+      2,
+    );
+    expect(find.text('Succeeded'), findsOneWidget);
+    expect(find.widgetWithText(SnackBarAction, 'Undo'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await unmountApp(tester);
+  });
   for (final pending in [false, true]) {
     testWidgets(
       'live scans retain equal snapshots and map widgets (pending=$pending)',

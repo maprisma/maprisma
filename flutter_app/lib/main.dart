@@ -99,6 +99,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   bool _shooting = false;
 
   bool _helperLoaded = false;
+
   /// Something changed while the map was out of sight.
   bool _mapStale = false;
 
@@ -312,6 +313,8 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       answer.complete(value);
     }
 
+    // A window takes over: an older message's Undo would run behind it.
+    ScaffoldMessenger.of(_navigator.currentContext!).clearSnackBars();
     setState(() {
       _busy = true;
       _cancelReview = () => finish(false);
@@ -417,7 +420,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         value['ok'] != false) {
       setState(() => _card = null);
     } else {
-      _taskResult(title, value,);
+      _taskResult(title, value);
     }
     return value?['ok'] == false ? null : value;
   }
@@ -481,10 +484,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     );
   }
 
-  Future<void> _undoTask(
-    String title,
-    Future<void> Function() undo,
-  ) async {
+  Future<void> _undoTask(String title, Future<void> Function() undo) async {
     if (_busy || _taskActive) return;
     setState(() {
       _busy = true;
@@ -509,22 +509,15 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
           _busy = false;
           _taskActive = false;
         });
-        _taskResult(
-          title,
-          {'ok': ok},
-          undo: ok ? null : undo,
-        );
+        _taskResult(title, {'ok': ok}, undo: ok ? null : undo);
       }
     }
   }
 
-  Widget _viewHost(
-    String title,
-    Widget child,
-    VoidCallback close,
-  ) => _host(
+  Widget _viewHost(String title, Widget child, VoidCallback close) => _host(
     TaskCardSpec(
       title: tr(title),
+      closable: !_navigationBlocked,
       child: KeyedSubtree(
         key: _viewBodyKeys.putIfAbsent(title, () => GlobalKey()),
         child: child,
@@ -534,12 +527,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   );
 
   Widget _host(TaskCardSpec spec, VoidCallback close, {bool overlay = false}) =>
-      TaskHost(
-    spec: spec,
-    tr: tr,
-    onClose: close,
-    overlay: overlay,
-  );
+      TaskHost(spec: spec, tr: tr, onClose: close, overlay: overlay);
 
   String tr(String key) => _strings[key] ?? key;
 
@@ -715,11 +703,18 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     try {
       if (_backend?.isConnected ?? false) await terminal.stop();
       if (!mounted) return;
+      final shown = _visibleTerminal == terminal;
+      final fromGuide = _guideTerminals.remove(terminal);
+      _mapStale = true;
       setState(() {
         _terminals.remove(terminal);
-        if (_visibleTerminal == terminal) _visibleTerminal = null;
+        if (shown) _visibleTerminal = null;
       });
       terminal.dispose();
+      if (shown && fromGuide) {
+        _guideReturn = true;
+        _backToGuideIfFromIt();
+      }
     } catch (_) {
       _actionFailed();
     }
@@ -728,9 +723,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   Future<void> _retry() {
     if (!(_backend?.isConnected ?? false)) return _connect();
     if (_card != null) {
-      return _refresh(
-        refreshMap: _mapOnScreen,
-      );
+      return _refresh(refreshMap: _mapOnScreen);
     }
     return _refresh();
   }
@@ -1025,6 +1018,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
             setState(() => _busy = true);
             try {
               await undo();
+              _mapStale = true;
             } catch (_) {
               _actionFailed();
             } finally {
@@ -1214,6 +1208,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       if (yes != true || !mounted) return;
       setState(() => _busy = true);
       final result = await _client.addonsRemoveApply(preview: plan['preview']);
+      _mapStale = true;
       _addonEntries = null;
       _taskResult(
         tr('Remove'),
@@ -1236,6 +1231,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         _addons.where((i) => i['id'] == id).firstOrNull?['enabled'] == true;
     setState(() => _busy = true);
     try {
+      _mapStale = true;
       await _client.addonsSetEnabled(id: id, enabled: on);
       if (!mounted) return;
       setState(() {
@@ -1733,6 +1729,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     );
     if (yes != true || !mounted) return;
     try {
+      _mapStale = true;
       _systemSession(await _client.systemHelpApply(preview: plan['preview']));
     } catch (_) {
       _actionFailed();
@@ -1888,6 +1885,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         ),
       );
       if (yes != true || !mounted) return;
+      _mapStale = true;
       _systemSession(await _client.systemHelpApply(preview: plan['preview']));
     } catch (_) {
       _actionFailed();
@@ -1915,6 +1913,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     setState(() => _busy = true);
     try {
       final done = await _client.changesUndo(id: id);
+      _mapStale = true;
       final restored = (done['restored'] as List).cast<String>();
       ScaffoldMessenger.of(_navigator.currentContext!).showSnackBar(
         SnackBar(
@@ -1998,6 +1997,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   /// A page back to what lay under it; an agent's details or the list back
   /// to the map, the main page.
   void _goBack() {
+    if (_showGuide) _guideReturn = false;
     setState(() {
       if (!_pageOpen) {
         _selected = null;
@@ -2394,6 +2394,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   /// to the map.
   Future<void> _openExisting() async {
     if (!mounted) return;
+    _guideReturn = false;
     setState(() {
       _card = null;
       _browser = null;
@@ -2495,7 +2496,10 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       return;
     }
     if (!mounted) return;
-    await _cardReview('${details['title']}', (yes, no) => ItemDetailsView(details: details, tr: tr, onClose: no));
+    await _cardReview(
+      '${details['title']}',
+      (yes, no) => ItemDetailsView(details: details, tr: tr, onClose: no),
+    );
   }
 
   Future<void> _loadAddonCatalog() async {
@@ -2699,9 +2703,20 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     if (mounted) await _openGuide();
   }
 
+  /// A step that ended on the guide has nothing to return from.
+  Future<void> _guideStep(Future<void> step) async {
+    await step;
+    if (_showGuide) _guideReturn = false;
+  }
+
+  void _leaveGuide() => setState(() {
+    _showGuide = false;
+    _guideReturn = false;
+  });
+
   void _guideAction(String command, String action) {
     _connectionCommand = command.isEmpty ? null : command;
-    _guideReturn = action != 'addons' && action != 'existing';
+    _guideReturn = _showGuide && action != 'addons' && action != 'existing';
     if (action == 'addons') {
       _openGroups();
       return;
@@ -2711,21 +2726,28 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       return;
     }
     if (['install', 'login', 'verify'].contains(action)) {
-      _agentAction(command, action);
+      unawaited(_guideStep(_agentAction(command, action)));
       return;
     }
     // The agent the app installs itself has no checksummed release to take
     // here: its recipe (an installer step shows what to do).
     if (action == 'install-agent') {
-      _agentAction(command, 'install');
+      unawaited(_guideStep(_agentAction(command, 'install')));
       return;
     }
     if (action == 'install-node') {
-      _agentAction('node', 'install', kind: 'tool');
+      unawaited(_guideStep(_agentAction('node', 'install', kind: 'tool')));
       return;
     }
     if (action == 'install-tool' || action == 'install-runtime') {
-      _installProgram(action == 'install-tool' ? 'tool' : 'runtime', command);
+      unawaited(
+        _guideStep(
+          _installProgram(
+            action == 'install-tool' ? 'tool' : 'runtime',
+            command,
+          ),
+        ),
+      );
       return;
     }
     setState(() {
@@ -2977,8 +2999,9 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         return;
       }
       final result = await _client.agentsActionApply(preview: plan['preview']);
+      _mapStale = true;
       if (!mounted) return;
-      _taskResult(tr(actionLabel(action)), result,);
+      _taskResult(tr(actionLabel(action)), result);
       if (result['session'] != null) {
         final terminal = AgentTerminal(
           _backend!,
@@ -3443,7 +3466,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         if (!queued) {
           _connectionUndo = result['undo'] as String?;
           await _refresh(refreshMap: true);
-          if (!quiet) _taskResult(tr('Apply'), result,);
+          if (!quiet) _taskResult(tr('Apply'), result);
         }
         if (quiet && mounted) _appliedMessage();
         applied = true;
@@ -3511,8 +3534,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
           ConnectionReview(plan: shown, tr: tr, onConfirm: yes, onCancel: no),
     );
     if (!apply || !mounted) return;
-    // Undo now means this change; an older message would undo the wrong one.
-    ScaffoldMessenger.of(_navigator.currentContext!).hideCurrentSnackBar();
     setState(() => _busy = true);
     _mapStale = true;
     try {
@@ -3583,12 +3604,19 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   }
 
   void _appliedMessage() {
-    ScaffoldMessenger.of(_navigator.currentContext!).showSnackBar(
+    final messenger = ScaffoldMessenger.of(_navigator.currentContext!);
+    messenger.clearSnackBars();
+    messenger.showSnackBar(
       SnackBar(
         content: Text(tr('Succeeded')),
         action: _connectionUndo == null
             ? null
-            : SnackBarAction(label: tr('Undo'), onPressed: _undoConnection),
+            : SnackBarAction(
+                label: tr('Undo'),
+                onPressed: () {
+                  if (!_keysBlocked) unawaited(_undoConnection());
+                },
+              ),
       ),
     );
   }
@@ -3728,6 +3756,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       if (enabled == null) {
         await _client.setupLater();
       } else {
+        _mapStale = true;
         await _client.setupApply(enabled: enabled);
       }
       if (!mounted) return;
@@ -4086,9 +4115,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                     key: const ValueKey('move-undo'),
                     tooltip: tr('Undo'),
                     icon: const Icon(Icons.undo),
-                    onPressed: _keysBlocked
-                        ? null
-                        : _undoMove,
+                    onPressed: _keysBlocked ? null : _undoMove,
                   ),
                 if (_healthReport != null || _healthCount > 0)
                   IconButton(
@@ -4104,7 +4131,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                     ),
                     onPressed: _keysBlocked ? null : _openProblems,
                   ),
-                MapLegendButton(tr: tr),
+                MapLegendButton(tr: tr, enabled: !_keysBlocked),
                 IconButton(
                   key: const ValueKey('help-open'),
                   tooltip: tr('Help (F1)'),
@@ -4162,7 +4189,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                 if (_welcome)
                   MapWelcome(
                     tr: tr,
-                    busy: _busy,
+                    busy: _keysBlocked,
                     skipSearch: _skipWelcomeSearch,
                     searched: _system['search_done'] == true,
                     onLook: _openExisting,
@@ -4199,6 +4226,8 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                         : _terminals.indexOf(_visibleTerminal!),
                     tr: tr,
                     onSelect: (i) {
+                      // Tabs switch terminals, not what another window shows.
+                      if (_navigationBlocked || _card != null) return;
                       setState(() => _visibleTerminal = _terminals[i]);
                       // The click took the keyboard to the tab.
                       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -4235,7 +4264,8 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                             RetainedTaskView(
                               key: const ValueKey('view-slot'),
                               visible: _browser == null,
-                              focusable: _card == null,
+                              focusable:
+                                  _card == null && _visibleTerminal == null,
                               child: _showGuide
                                   ? _viewHost(
                                       'Your first agent',
@@ -4247,11 +4277,10 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                                         onChoose: _chooseGuide,
                                         onAction: _guideAction,
                                         onStarter: _downloadStarter,
-                                        onBack: () =>
-                                            setState(() => _showGuide = false),
+                                        onBack: _leaveGuide,
                                         onRefresh: _openGuide,
                                       ),
-                                      () => setState(() => _showGuide = false),
+                                      _leaveGuide,
                                     )
                                   : _showConnections
                                   ? _viewHost(
@@ -4572,6 +4601,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                                   final fromGuide = _guideTerminals.remove(
                                     _visibleTerminal,
                                   );
+                                  _mapStale = true;
                                   setState(() => _visibleTerminal = null);
                                   if (fromGuide) {
                                     _guideReturn = true;

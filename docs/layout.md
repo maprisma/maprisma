@@ -108,7 +108,7 @@ A mutating task scans at once when the map is on screen; otherwise it sets
 `_mapStale`, and one scan runs when the map is back and nothing is busy. Data-only
 search/file/catalog operations do not refresh the inventory or graph. Idle result cards and model browsing resume the existing
 interval-based metadata updates, without forcing scans. Reviews and running work
-still pause those updates. Closable results allow header navigation.
+still pause those updates.
 
 `RetainedTaskView` keeps a page visible under a window without its keyboard, and
 offstages it with tickers off under the model browser. It never keeps the main AI map mounted. View bodies

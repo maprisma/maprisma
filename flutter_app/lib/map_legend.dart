@@ -4,18 +4,21 @@ import 'map_groups.dart' show AgentBadge;
 
 /// What the marks on the map mean (the ⓘ in the header).
 class MapLegendButton extends StatelessWidget {
-  const MapLegendButton({super.key, required this.tr});
+  const MapLegendButton({super.key, required this.tr, this.enabled = true});
   final String Function(String) tr;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) => IconButton(
     key: const ValueKey('map-legend'),
     tooltip: tr('What the marks mean'),
     icon: const Icon(Icons.info_outline),
-    onPressed: () => showDialog<void>(
-      context: context,
-      builder: (_) => MapLegend(tr: tr),
-    ),
+    onPressed: enabled
+        ? () => showDialog<void>(
+            context: context,
+            builder: (_) => MapLegend(tr: tr),
+          )
+        : null,
   );
 }
 
