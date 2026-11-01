@@ -3,6 +3,9 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'window_popup.dart';
 import 'app_theme.dart';
+import 'map_layout.dart'
+    show mapBorderColor, mapColumnKeys, mapColumnMaxWidth, mapColumnMinWidth;
+import 'map_smart_card.dart' show mapSmartColumns;
 
 class SettingsView extends StatelessWidget {
   const SettingsView({
@@ -11,6 +14,7 @@ class SettingsView extends StatelessWidget {
     required this.busy,
     required this.tr,
     required this.onUpdate,
+    this.onMapLayout,
     required this.onBack,
     this.desktopTheme = const {},
     this.checkers = const [],
@@ -25,6 +29,13 @@ class SettingsView extends StatelessWidget {
   });
 
   final Map<String, dynamic> settings;
+
+  /// The map keeps its layout itself. A change gets the latest layout and
+  /// returns the new one, so two changes never undo each other.
+  final void Function(
+    Map<String, dynamic> Function(Map<String, dynamic> layout) change,
+  )?
+  onMapLayout;
   final Map desktopTheme;
   final bool busy;
   final String Function(String) tr;
@@ -71,6 +82,141 @@ class SettingsView extends StatelessWidget {
 
   /// Settings › Usage statistics box: whether a working agent shows it,
   /// what it shows, and how big.
+  /// Each map column: the width now and the default a double click returns
+  /// to; both empty mean the automatic width.
+  List<Widget> _columnWidthRows() {
+    final layout = settings['flutter_map_layout'] as Map? ?? const {};
+    void change(String list, String column, int? width) {
+      onMapLayout?.call((latest) {
+        final widths = {...(latest[list] as Map? ?? const {})};
+        if (width == null) {
+          widths.remove(column);
+        } else {
+          widths[column] = width;
+        }
+        return {...latest, list: widths};
+      });
+    }
+
+    return [
+      const SizedBox(height: 8),
+      Text(tr('Column widths')),
+      for (var i = 0; i < mapColumnKeys.length; i++)
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Row(
+            children: [
+              Expanded(child: Text(tr(mapSmartColumns[i].$2))),
+              for (final (list, label) in const [
+                ('column_widths', 'Current width'),
+                ('column_defaults', 'Default width'),
+              ]) ...[
+                const SizedBox(width: 12),
+                SizedBox(
+                  width: 150,
+                  child: _WidthField(
+                    key: ValueKey('$list-${mapColumnKeys[i]}'),
+                    label: tr(label),
+                    hint: tr('Automatic'),
+                    value: (layout[list] as Map?)?[mapColumnKeys[i]] as num?,
+                    enabled: !busy,
+                    onChanged: (width) => change(list, mapColumnKeys[i], width),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+    ];
+  }
+
+  /// The border around the map's category cards.
+  List<Widget> _cardBorderRows(BuildContext context) {
+    final layout = settings['flutter_map_layout'] as Map? ?? const {};
+    final border = layout['card_border'] as Map? ?? const {};
+    final on = border['on'] == true;
+    void change(Map<String, dynamic> Function(Map old) edit) {
+      onMapLayout?.call(
+        (latest) => {
+          ...latest,
+          'card_border': edit(latest['card_border'] as Map? ?? const {}),
+        },
+      );
+    }
+
+    return [
+      SwitchListTile(
+        key: const ValueKey('card-border'),
+        contentPadding: EdgeInsets.zero,
+        title: Text(tr('Borders around category cards')),
+        value: on,
+        onChanged: busy
+            ? null
+            : (value) => change((old) => {...old, 'on': value}),
+      ),
+      if (on) ...[
+        DropdownButtonFormField<int>(
+          key: ValueKey('card-border-width-${border['width'] ?? 1}'),
+          initialValue: border['width'] as int? ?? 1,
+          decoration: InputDecoration(labelText: tr('Border thickness')),
+          items: [
+            for (var w = 1; w <= 8; w++)
+              DropdownMenuItem(value: w, child: Text('$w px')),
+          ],
+          onChanged: busy
+              ? null
+              : (value) => change((old) => {...old, 'width': value}),
+        ),
+        const SizedBox(height: 12),
+        Text(tr('Border colour')),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            ChoiceChip(
+              key: const ValueKey('card-border-color-theme'),
+              label: Text(tr('Theme')),
+              selected: border['color'] == null,
+              onSelected: busy
+                  ? null
+                  : (_) => change((old) => {...old}..remove('color')),
+            ),
+            for (final hex in _borderColors)
+              Tooltip(
+                message: hex,
+                child: Semantics(
+                  button: true,
+                  selected: border['color'] == hex,
+                  label: hex,
+                  child: InkWell(
+                    key: ValueKey('card-border-color-$hex'),
+                    customBorder: const CircleBorder(),
+                    onTap: busy
+                        ? null
+                        : () => change((old) => {...old, 'color': hex}),
+                    child: Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: mapBorderColor(hex),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: Theme.of(context).colorScheme.onSurface,
+                          width: border['color'] == hex ? 3 : 1,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 12),
+      ],
+    ];
+  }
+
   List<Widget> _usageBoxRows() {
     final on = settings['usage_box'] as bool? ?? true;
     final items = [
@@ -623,13 +769,47 @@ class SettingsView extends StatelessWidget {
               title: Text(tr('F9 saves a screenshot')),
               subtitle: Text(
                 tr(
-                  'A picture of this window goes to Pictures/Maprisma. In a terminal, use the camera symbol below it: programs there may use F9.',
+                  'A picture of this window is saved, with a note if you like. In a terminal, use the camera symbol below it: programs there may use F9.',
                 ),
               ),
               value: settings['screenshot_key'] as bool? ?? true,
               onChanged: busy
                   ? null
                   : (value) => onUpdate({'screenshot_key': value}),
+            ),
+            ListTile(
+              key: const ValueKey('screenshot-folder'),
+              title: Text(tr('Screenshots go to')),
+              subtitle: Text(
+                settings['screenshot_folder'] as String? ??
+                    '~/Pictures/Maprisma',
+              ),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (settings['screenshot_folder'] != null)
+                    TextButton(
+                      onPressed: busy
+                          ? null
+                          : () => onUpdate({'screenshot_folder': null}),
+                      child: Text(tr('Default')),
+                    ),
+                  IconButton(
+                    tooltip: tr('Choose folder…'),
+                    icon: const Icon(Icons.folder_open),
+                    onPressed: busy
+                        ? null
+                        : () async {
+                            final chosen = await PopupGuard.around(
+                              getDirectoryPath,
+                            );
+                            if (chosen != null) {
+                              await onUpdate({'screenshot_folder': chosen});
+                            }
+                          },
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 24),
             Text(
@@ -799,6 +979,8 @@ class SettingsView extends StatelessWidget {
             Text(tr('Updates apply only while the map is visible.')),
             const SizedBox(height: 24),
             Text(tr('Map'), style: Theme.of(context).textTheme.titleLarge),
+            ..._columnWidthRows(),
+            ..._cardBorderRows(context),
             for (final layer in layers.entries)
               CheckboxListTile(
                 title: Text(tr(layer.value)),
@@ -840,3 +1022,110 @@ class SettingsView extends StatelessWidget {
     );
   }
 }
+
+/// A column width in pixels; empty means none set. It applies on Enter and
+/// when the field loses the keyboard.
+class _WidthField extends StatefulWidget {
+  const _WidthField({
+    super.key,
+    required this.label,
+    required this.hint,
+    required this.value,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  final String label, hint;
+  final num? value;
+  final bool enabled;
+  final ValueChanged<int?> onChanged;
+
+  @override
+  State<_WidthField> createState() => _WidthFieldState();
+}
+
+class _WidthFieldState extends State<_WidthField> {
+  late final _text = TextEditingController(text: _shown);
+  final _focus = FocusNode();
+
+  String get _shown => widget.value?.round().toString() ?? '';
+
+  @override
+  void initState() {
+    super.initState();
+    _focus.addListener(() {
+      if (!_focus.hasFocus) _apply();
+    });
+  }
+
+  @override
+  void didUpdateWidget(_WidthField old) {
+    super.didUpdateWidget(old);
+    if (old.value != widget.value && !_focus.hasFocus) _text.text = _shown;
+  }
+
+  /// What the field says, within the limits; false when it is no number.
+  (bool, int?) get _typed {
+    final text = _text.text.trim();
+    final width = int.tryParse(text);
+    if (text.isNotEmpty && width == null) return (false, null);
+    return (
+      true,
+      width
+          ?.clamp(mapColumnMinWidth.toInt(), mapColumnMaxWidth.toInt())
+          .toInt(),
+    );
+  }
+
+  void _apply() {
+    final (valid, next) = _typed;
+    if (!valid) {
+      _text.text = _shown;
+      return;
+    }
+    if (next?.toString() != _text.text.trim()) {
+      _text.text = next?.toString() ?? '';
+    }
+    if (next != widget.value?.round()) widget.onChanged(next);
+  }
+
+  @override
+  void dispose() {
+    // Leaving Settings ends the field without it losing the keyboard first.
+    final (valid, next) = _typed;
+    if (valid && next != widget.value?.round()) {
+      final changed = widget.onChanged;
+      WidgetsBinding.instance.addPostFrameCallback((_) => changed(next));
+    }
+    _focus.dispose();
+    _text.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => TextField(
+    controller: _text,
+    focusNode: _focus,
+    enabled: widget.enabled,
+    keyboardType: TextInputType.number,
+    decoration: InputDecoration(
+      labelText: widget.label,
+      hintText: widget.hint,
+      floatingLabelBehavior: FloatingLabelBehavior.always,
+      isDense: true,
+    ),
+    onSubmitted: (_) => _apply(),
+  );
+}
+
+const _borderColors = [
+  '#ffffff',
+  '#9e9e9e',
+  '#ef5350',
+  '#ffa726',
+  '#ffee58',
+  '#66bb6a',
+  '#26c6da',
+  '#42a5f5',
+  '#ab47bc',
+];

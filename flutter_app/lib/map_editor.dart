@@ -423,6 +423,34 @@ class _MapEditorState extends State<MapEditor>
     widget.onLayout?.call(data);
   }
 
+  /// The width at the drag's start, then where the pointer has taken it.
+  double _widthAtDrag = 0;
+
+  void _dragColumn(int col, double dx) {
+    _widthAtDrag = (_widthAtDrag + dx).clamp(
+      mapColumnMinWidth,
+      mapColumnMaxWidth,
+    );
+    _renderChange(() {
+      _saved = {
+        ..._saved,
+        'column_widths': {
+          ...(_saved['column_widths'] as Map? ?? const {}),
+          mapColumnKeys[col]: _widthAtDrag.round(),
+        },
+      };
+      _layout = null;
+    });
+  }
+
+  void _resetColumn(int col) {
+    _save({
+      ..._saved,
+      'column_widths': {...(_saved['column_widths'] as Map? ?? const {})}
+        ..remove(mapColumnKeys[col]),
+    });
+  }
+
   void _cancel() {
     _renderChange(() {
       _pointerDrawing = false;
@@ -523,7 +551,7 @@ class _MapEditorState extends State<MapEditor>
       _transform.toScene(Offset(box.size.width, box.size.height)),
     );
     final left = layout.columnX(col);
-    final card = Rect.fromLTWH(left, 106, layout.columnWidth, 320);
+    final card = Rect.fromLTWH(left, 106, layout.columnWidthOf(col), 320);
     final dx = card.right > visible.right
         ? visible.right - 16 - card.right
         : card.left < visible.left
@@ -643,242 +671,285 @@ class _MapEditorState extends State<MapEditor>
                   width: valid ? 3 : 1,
                 ),
               ),
-              child: InkWell(
-                onTap: () => _choose(id),
-                onSecondaryTap: () => widget.onMenu?.call(context, node),
-                child: Padding(
-                  padding: const EdgeInsets.all(8),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          GestureDetector(
-                            key: ValueKey('reorder-$id'),
-                            onVerticalDragStart: (_) => _reorderDistance = 0,
-                            onVerticalDragUpdate: (d) =>
-                                _reorderDistance += d.delta.dy,
-                            onVerticalDragEnd: (d) {
-                              _save(
-                                reorderMapBox(
-                                  _saved,
-                                  layout,
-                                  id,
-                                  layout.cards[layout.cardOf[id]]!.nodes
-                                          .indexOf(id) +
-                                      (_reorderDistance / mapRowStep).round(),
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: InkWell(
+                      onTap: () => _choose(id),
+                      onSecondaryTap: () => widget.onMenu?.call(context, node),
+                      child: Padding(
+                        padding: const EdgeInsets.all(8),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                GestureDetector(
+                                  key: ValueKey('reorder-$id'),
+                                  onVerticalDragStart: (_) =>
+                                      _reorderDistance = 0,
+                                  onVerticalDragUpdate: (d) =>
+                                      _reorderDistance += d.delta.dy,
+                                  onVerticalDragEnd: (d) {
+                                    _save(
+                                      reorderMapBox(
+                                        _saved,
+                                        layout,
+                                        id,
+                                        layout.cards[layout.cardOf[id]]!.nodes
+                                                .indexOf(id) +
+                                            (_reorderDistance / mapRowStep)
+                                                .round(),
+                                      ),
+                                    );
+                                  },
+                                  child: Tooltip(
+                                    message: widget.tr('Reorder'),
+                                    child: const Icon(
+                                      Icons.drag_handle,
+                                      size: 16,
+                                    ),
+                                  ),
                                 ),
-                              );
-                            },
-                            child: Tooltip(
-                              message: widget.tr('Reorder'),
-                              child: const Icon(Icons.drag_handle, size: 16),
+                                Expanded(
+                                  child: Text(
+                                    widget.tr(node['label'] as String),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                if ((widget.graph['agent_badges'] as Map?)?[id]
+                                    case final Map badge)
+                                  AgentBadge(badge: badge),
+                                if ((widget.graph['usage_boxes'] as Map?)?[id]
+                                    case final Map box)
+                                  Flexible(
+                                    child: UsageBoxLabel(
+                                      box: box,
+                                      size:
+                                          (widget.graph['usage_box_size']
+                                                      as int? ??
+                                                  7)
+                                              .toDouble(),
+                                    ),
+                                  ),
+                                PopupMenuButton<String>(
+                                  tooltip: widget.tr('Actions'),
+                                  onSelected: (action) {
+                                    switch (action) {
+                                      case 'connect':
+                                        _begin(id);
+                                      case 'up':
+                                        _save(
+                                          reorderMapBox(
+                                            _saved,
+                                            layout,
+                                            id,
+                                            layout
+                                                    .cards[layout.cardOf[id]]!
+                                                    .nodes
+                                                    .indexOf(id) -
+                                                1,
+                                          ),
+                                        );
+                                      case 'down':
+                                        _save(
+                                          reorderMapBox(
+                                            _saved,
+                                            layout,
+                                            id,
+                                            layout
+                                                    .cards[layout.cardOf[id]]!
+                                                    .nodes
+                                                    .indexOf(id) +
+                                                1,
+                                          ),
+                                        );
+                                      case 'open':
+                                        widget.onOpen?.call(node);
+                                      case 'actions':
+                                        widget.onMenu?.call(context, node);
+                                      case 'move':
+                                        _chooseMove(id, layout);
+                                      default:
+                                        final edge = layout.allEdges.firstWhere(
+                                          (e) => edgeKey(e) == action,
+                                        );
+                                        _begin(
+                                          edge['source'] as String,
+                                          edge: edge,
+                                        );
+                                    }
+                                  },
+                                  itemBuilder: (_) => [
+                                    PopupMenuItem(
+                                      value: 'connect',
+                                      child: Text(widget.tr('Connect')),
+                                    ),
+                                    for (final action in ['up', 'down'])
+                                      PopupMenuItem(
+                                        value: action,
+                                        child: Text(
+                                          widget.tr(
+                                            action == 'up'
+                                                ? 'Move up'
+                                                : 'Move down',
+                                          ),
+                                        ),
+                                      ),
+                                    PopupMenuItem(
+                                      value: 'open',
+                                      child: Text(widget.tr('Details')),
+                                    ),
+                                    if (widget.onMenu != null)
+                                      PopupMenuItem(
+                                        value: 'actions',
+                                        child: Text(widget.tr('Actions')),
+                                      ),
+                                    // Many connections get a page of their own, or
+                                    // the menu would fill the screen.
+                                    if (_movable(id, layout).length > 3)
+                                      PopupMenuItem(
+                                        value: 'move',
+                                        child: Text(
+                                          '${widget.tr('Move connection')}…',
+                                        ),
+                                      )
+                                    else
+                                      for (final edge in _movable(id, layout))
+                                        PopupMenuItem(
+                                          value: edgeKey(edge),
+                                          child: Text(_moveLabel(edge, layout)),
+                                        ),
+                                  ],
+                                ),
+                              ],
                             ),
-                          ),
-                          Expanded(
-                            child: Text(
-                              widget.tr(node['label'] as String),
+                            Text(
+                              node['detail'] as String? ?? '',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 12),
                             ),
-                          ),
-                          if ((widget.graph['agent_badges'] as Map?)?[id]
-                              case final Map badge)
-                            AgentBadge(badge: badge),
-                          if ((widget.graph['usage_boxes'] as Map?)?[id]
-                              case final Map box)
-                            Flexible(
-                              child: UsageBoxLabel(
-                                box: box,
-                                size:
-                                    (widget.graph['usage_box_size'] as int? ??
-                                            7)
-                                        .toDouble(),
-                              ),
-                            ),
-                          PopupMenuButton<String>(
-                            tooltip: widget.tr('Actions'),
-                            onSelected: (action) {
-                              switch (action) {
-                                case 'connect':
-                                  _begin(id);
-                                case 'pin':
-                                  _pin(id);
-                                case 'up':
-                                  _save(
-                                    reorderMapBox(
-                                      _saved,
-                                      layout,
-                                      id,
-                                      layout.cards[layout.cardOf[id]]!.nodes
-                                              .indexOf(id) -
-                                          1,
-                                    ),
-                                  );
-                                case 'down':
-                                  _save(
-                                    reorderMapBox(
-                                      _saved,
-                                      layout,
-                                      id,
-                                      layout.cards[layout.cardOf[id]]!.nodes
-                                              .indexOf(id) +
-                                          1,
-                                    ),
-                                  );
-                                case 'open':
-                                  widget.onOpen?.call(node);
-                                case 'actions':
-                                  widget.onMenu?.call(context, node);
-                                case 'move':
-                                  _chooseMove(id, layout);
-                                default:
-                                  final edge = layout.allEdges.firstWhere(
-                                    (e) => edgeKey(e) == action,
-                                  );
-                                  _begin(edge['source'] as String, edge: edge);
-                              }
-                            },
-                            itemBuilder: (_) => [
-                              PopupMenuItem(
-                                value: 'connect',
-                                child: Text(widget.tr('Connect')),
-                              ),
-                              PopupMenuItem(
-                                value: 'pin',
-                                child: Text(
-                                  widget.tr(
-                                    pins.contains(id) ? 'Unpin' : 'Pin',
-                                  ),
-                                ),
-                              ),
-                              for (final action in ['up', 'down'])
-                                PopupMenuItem(
-                                  value: action,
-                                  child: Text(
-                                    widget.tr(
-                                      action == 'up' ? 'Move up' : 'Move down',
-                                    ),
-                                  ),
-                                ),
-                              PopupMenuItem(
-                                value: 'open',
-                                child: Text(widget.tr('Details')),
-                              ),
-                              if (widget.onMenu != null)
-                                PopupMenuItem(
-                                  value: 'actions',
-                                  child: Text(widget.tr('Actions')),
-                                ),
-                              // Many connections get a page of their own, or
-                              // the menu would fill the screen.
-                              if (_movable(id, layout).length > 3)
-                                PopupMenuItem(
-                                  value: 'move',
-                                  child: Text(
-                                    '${widget.tr('Move connection')}…',
-                                  ),
-                                )
-                              else
-                                for (final edge in _movable(id, layout))
-                                  PopupMenuItem(
-                                    value: edgeKey(edge),
-                                    child: Text(_moveLabel(edge, layout)),
-                                  ),
-                            ],
-                          ),
-                        ],
-                      ),
-                      Text(
-                        node['detail'] as String? ?? '',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                      if (hasSubagents ||
-                          hasTraffic ||
-                          widget.controls != null ||
-                          widget.onOpen != null)
-                        SizedBox(
-                          height: 26,
-                          child: Row(
-                            children: [
-                              if (hasSubagents)
-                                Tooltip(
-                                  message:
-                                      '${widget.tr('Subagents')}: ${activity?['active_subagents']} / ${children.length}',
-                                  child: InkWell(
-                                    key: ValueKey('subagents-$command'),
-                                    borderRadius: BorderRadius.circular(4),
-                                    onTap: () => widget.onSubagents!(command),
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 4,
-                                        vertical: 2,
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          const Icon(
-                                            Icons.account_tree_outlined,
-                                            size: 14,
+                            if (hasSubagents ||
+                                hasTraffic ||
+                                widget.controls != null ||
+                                widget.onOpen != null)
+                              SizedBox(
+                                height: 26,
+                                child: Row(
+                                  children: [
+                                    if (hasSubagents)
+                                      Tooltip(
+                                        message:
+                                            '${widget.tr('Subagents')}: ${activity?['active_subagents']} / ${children.length}',
+                                        child: InkWell(
+                                          key: ValueKey('subagents-$command'),
+                                          borderRadius: BorderRadius.circular(
+                                            4,
                                           ),
-                                          const SizedBox(width: 2),
-                                          Text(
-                                            '${children.length}',
-                                            style: const TextStyle(
-                                              fontSize: 11,
+                                          onTap: () =>
+                                              widget.onSubagents!(command),
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 4,
+                                              vertical: 2,
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                const Icon(
+                                                  Icons.account_tree_outlined,
+                                                  size: 14,
+                                                ),
+                                                const SizedBox(width: 2),
+                                                Text(
+                                                  '${children.length}',
+                                                  style: const TextStyle(
+                                                    fontSize: 11,
+                                                  ),
+                                                ),
+                                              ],
                                             ),
                                           ),
-                                        ],
+                                        ),
                                       ),
-                                    ),
-                                  ),
+                                    if (hasTraffic)
+                                      IconButton(
+                                        key: ValueKey('traffic-$command'),
+                                        padding: EdgeInsets.zero,
+                                        visualDensity: VisualDensity.compact,
+                                        constraints: const BoxConstraints(
+                                          minWidth: 26,
+                                          minHeight: 24,
+                                        ),
+                                        tooltip: trafficTooltip(
+                                          traffic!,
+                                          widget.tr,
+                                        ),
+                                        onPressed: () => showDialog<void>(
+                                          context: context,
+                                          builder: (_) => AgentTrafficDialog(
+                                            label: widget.tr(
+                                              node['label'] as String,
+                                            ),
+                                            traffic: traffic,
+                                            tr: widget.tr,
+                                          ),
+                                        ),
+                                        icon: const Icon(
+                                          Icons.swap_vert,
+                                          size: 16,
+                                        ),
+                                      ),
+                                    if (widget.controls != null)
+                                      Expanded(child: widget.controls!(node))
+                                    else if (widget.onOpen != null)
+                                      IconButton(
+                                        key: ValueKey('details-$id'),
+                                        padding: EdgeInsets.zero,
+                                        visualDensity: VisualDensity.compact,
+                                        constraints: const BoxConstraints(
+                                          minWidth: 26,
+                                          minHeight: 24,
+                                        ),
+                                        tooltip: widget.tr('Details'),
+                                        onPressed: () => widget.onOpen!(node),
+                                        icon: const Icon(
+                                          Icons.info_outline,
+                                          size: 16,
+                                        ),
+                                      ),
+                                  ],
                                 ),
-                              if (hasTraffic)
-                                IconButton(
-                                  key: ValueKey('traffic-$command'),
-                                  padding: EdgeInsets.zero,
-                                  visualDensity: VisualDensity.compact,
-                                  constraints: const BoxConstraints(
-                                    minWidth: 26,
-                                    minHeight: 24,
-                                  ),
-                                  tooltip: trafficTooltip(traffic!, widget.tr),
-                                  onPressed: () => showDialog<void>(
-                                    context: context,
-                                    builder: (_) => AgentTrafficDialog(
-                                      label: widget.tr(node['label'] as String),
-                                      traffic: traffic,
-                                      tr: widget.tr,
-                                    ),
-                                  ),
-                                  icon: const Icon(Icons.swap_vert, size: 16),
-                                ),
-                              if (widget.controls != null)
-                                Expanded(child: widget.controls!(node))
-                              else if (widget.onOpen != null)
-                                IconButton(
-                                  key: ValueKey('details-$id'),
-                                  padding: EdgeInsets.zero,
-                                  visualDensity: VisualDensity.compact,
-                                  constraints: const BoxConstraints(
-                                    minWidth: 26,
-                                    minHeight: 24,
-                                  ),
-                                  tooltip: widget.tr('Details'),
-                                  onPressed: () => widget.onOpen!(node),
-                                  icon: const Icon(
-                                    Icons.info_outline,
-                                    size: 16,
-                                  ),
-                                ),
-                            ],
-                          ),
+                              ),
+                          ],
                         ),
-                    ],
+                      ),
+                    ),
                   ),
-                ),
+                  Positioned(
+                    right: 4,
+                    bottom: 4,
+                    child: IconButton(
+                      key: ValueKey('pin-$id'),
+                      padding: EdgeInsets.zero,
+                      visualDensity: VisualDensity.compact,
+                      constraints: const BoxConstraints(
+                        minWidth: 26,
+                        minHeight: 24,
+                      ),
+                      tooltip: widget.tr(pins.contains(id) ? 'Unpin' : 'Pin'),
+                      onPressed: () => _pin(id),
+                      icon: Icon(
+                        pins.contains(id)
+                            ? Icons.push_pin
+                            : Icons.push_pin_outlined,
+                        size: 16,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -1135,6 +1206,7 @@ class _MapEditorState extends State<MapEditor>
                                               lit,
                                               _source,
                                               _cursor,
+                                              _saved['card_border'] as Map?,
                                             ),
                                           ),
                                         ),
@@ -1150,7 +1222,7 @@ class _MapEditorState extends State<MapEditor>
                                           Positioned(
                                             left: layout.columnX(i),
                                             top: 8,
-                                            width: layout.columnWidth,
+                                            width: layout.columnWidthOf(i),
                                             height: 86,
                                             child: MapGroupCard(
                                               group: widget.groups![i],
@@ -1303,6 +1375,29 @@ class _MapEditorState extends State<MapEditor>
                                   style: widget.lightStyle,
                                 ),
                               ),
+                            for (final col in _shownColumns)
+                              for (final left in [true, false])
+                                Positioned(
+                                  left:
+                                      layout.columnX(col) +
+                                      (left ? 0 : layout.columnWidthOf(col)) -
+                                      5,
+                                  top: 8,
+                                  bottom: 0,
+                                  width: 10,
+                                  child: _ColumnEdge(
+                                    key: ValueKey(
+                                      'column-edge-${mapColumnKeys[col]}-${left ? 'left' : 'right'}',
+                                    ),
+                                    tooltip: widget.tr(_columnHint),
+                                    onStart: () => _widthAtDrag = layout
+                                        .columnWidthOf(col),
+                                    onDrag: (dx) =>
+                                        _dragColumn(col, left ? -dx : dx),
+                                    onEnd: () => widget.onLayout?.call(_saved),
+                                    onReset: () => _resetColumn(col),
+                                  ),
+                                ),
                             for (final curve in layout.curves.where(
                               (c) =>
                                   layout.movable(c.edge) &&
@@ -1361,7 +1456,7 @@ class _MapEditorState extends State<MapEditor>
                                   ),
                                   left: layout.columnX(col),
                                   top: 106,
-                                  width: layout.columnWidth,
+                                  width: layout.columnWidthOf(col),
                                   child: Visibility(
                                     visible: _shownColumns.contains(col),
                                     maintainState: true,
@@ -1369,7 +1464,7 @@ class _MapEditorState extends State<MapEditor>
                                       key: ValueKey(
                                         'smart-card-${mapSmartColumns[col].$1}',
                                       ),
-                                      width: layout.columnWidth,
+                                      width: layout.columnWidthOf(col),
                                       column: mapSmartColumns[col].$1,
                                       onProvider: widget.onSmartProvider,
                                       onTask: widget.onSmartTask,
@@ -1559,23 +1654,42 @@ class AgentTrafficDialog extends StatelessWidget {
 }
 
 class _MapPaint extends CustomPainter {
-  _MapPaint(this.layout, this.colors, this.lit, this.source, this.cursor);
+  _MapPaint(
+    this.layout,
+    this.colors,
+    this.lit,
+    this.source,
+    this.cursor,
+    this.border,
+  );
   final MapLayout layout;
   final ColorScheme colors;
   final Set<String> lit;
   final String? source;
   final Offset? cursor;
+
+  /// Settings › Map: on, width, color; no color is the theme's.
+  final Map? border;
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint();
+    final edge = border?['on'] == true
+        ? (Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = (border!['width'] as int? ?? 1).toDouble()
+            ..color =
+                mapBorderColor(border!['color'] as String?) ?? colors.outline)
+        : null;
     for (final card in layout.cards.values) {
+      final shape = RRect.fromRectAndRadius(
+        card.rect,
+        const Radius.circular(14),
+      );
       paint
         ..style = PaintingStyle.fill
         ..color = colors.surfaceContainerLow;
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(card.rect, const Radius.circular(14)),
-        paint,
-      );
+      canvas.drawRRect(shape, paint);
+      if (edge != null) canvas.drawRRect(shape, edge);
     }
     for (final curve in layout.curves) {
       final edge = curve.edge,
@@ -1607,4 +1721,39 @@ class _MapPaint extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _MapPaint old) => true;
+}
+
+const _columnHint =
+    'Drag a border to change the width; a double click restores the default.';
+
+/// The left or right border of a column.
+class _ColumnEdge extends StatelessWidget {
+  const _ColumnEdge({
+    super.key,
+    required this.tooltip,
+    required this.onStart,
+    required this.onDrag,
+    required this.onEnd,
+    required this.onReset,
+  });
+
+  final String tooltip;
+  final VoidCallback onStart, onEnd, onReset;
+  final ValueChanged<double> onDrag;
+
+  @override
+  Widget build(BuildContext context) => Tooltip(
+    message: tooltip,
+    waitDuration: const Duration(seconds: 1),
+    child: MouseRegion(
+      cursor: SystemMouseCursors.resizeColumn,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onHorizontalDragStart: (_) => onStart(),
+        onHorizontalDragUpdate: (d) => onDrag(d.delta.dx),
+        onHorizontalDragEnd: (_) => onEnd(),
+        onDoubleTap: onReset,
+      ),
+    ),
+  );
 }

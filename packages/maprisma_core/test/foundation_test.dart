@@ -201,6 +201,44 @@ void main() {
         'values': {'screenshot_key': false},
       });
       expect(core.settings.snapshot()['screenshot_key'], isFalse);
+      expect(core.settings.snapshot()['screenshot_folder'], isNull);
+      core.dispatch('settings.update', {
+        'values': {'screenshot_folder': '/data/shots'},
+      });
+      expect(core.settings.snapshot()['screenshot_folder'], '/data/shots');
+      core.dispatch('settings.update', {
+        'values': {'smart_helper': 'claude'},
+      });
+      expect(core.settings.snapshot()['smart_helper'], 'claude');
+      core.dispatch('settings.update', {
+        'values': {
+          'flutter_map_layout': {
+            'column_widths': {'agents': 500},
+            'column_defaults': {'models': 320},
+            'card_border': {'on': true, 'width': 3, 'color': '#ef5350'},
+          },
+        },
+      });
+      expect(
+        () => core.dispatch('settings.update', {
+          'values': {
+            'flutter_map_layout': {
+              'card_border': {'width': 9},
+            },
+          },
+        }),
+        throwsA(anything),
+      );
+      expect(
+        () => core.dispatch('settings.update', {
+          'values': {
+            'flutter_map_layout': {
+              'column_widths': {'agents': 50},
+            },
+          },
+        }),
+        throwsA(anything),
+      );
       core.settings.posix.atomicWrite(
         core.identity.settingsPath,
         utf8.encode(

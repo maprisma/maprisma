@@ -36,6 +36,46 @@ Map<String, dynamic> fixtureGraph({bool active = false}) => {
   ],
 };
 void main() {
+  test('a column keeps its own width; the next one moves along', () {
+    final auto = MapLayout(
+      const {'nodes': [], 'edges': []},
+      const {},
+      viewportWidth: 1896,
+    );
+    final set = MapLayout(
+      const {'nodes': [], 'edges': []},
+      const {
+        'column_widths': {'agents': 500},
+        'column_defaults': {'agents': 300, 'models': 320},
+      },
+      viewportWidth: 1896,
+    );
+    expect(set.columnWidthOf(1), 500);
+    expect(set.columnWidthOf(3), 320);
+    expect(set.columnWidthOf(0), auto.columnWidthOf(0));
+    expect(set.columnX(2), set.columnX(1) + 500 + set.columnGap);
+  });
+
+  test(
+    'a wide window gives the lines room; the columns never go below 266',
+    () {
+      final wide = MapLayout(
+        const {'nodes': [], 'edges': []},
+        const {},
+        viewportWidth: 1896,
+      );
+      expect(wide.columnGap, 228);
+      expect(wide.columnWidth, 295);
+      final tight = MapLayout(
+        const {'nodes': [], 'edges': []},
+        const {},
+        viewportWidth: 1300,
+      );
+      expect(tight.columnWidth, greaterThanOrEqualTo(266));
+      expect(tight.columnX(3) + tight.columnWidth, lessThanOrEqualTo(1300));
+    },
+  );
+
   test('bezier distance, node and hook hit testing use scene coordinates', () {
     final l = MapLayout(fixtureGraph(), {});
     final curve = l.curves.first;
@@ -175,7 +215,7 @@ void main() {
       columns: const [0, 1],
       viewportWidth: 1896,
     );
-    expect(l.columnWidth, 560);
+    expect(l.columnWidth, 360);
     expect(l.columnGap, greaterThan(400));
     expect(l.size.width, greaterThan(1650));
   });
@@ -189,7 +229,7 @@ void main() {
     );
     final left = l.columnX(1), right = 1000 - (l.columnX(2) + l.columnWidth);
     expect(left, closeTo(right, 2));
-    expect(l.columnWidth, inInclusiveRange(266, 560));
+    expect(l.columnWidth, inInclusiveRange(266, 360));
     expect(l.columnGap, greaterThanOrEqualTo(36));
     expect(l.boxes['agent:a']!.width, l.columnWidth - 24);
     expect(l.size.width, lessThanOrEqualTo(1000));

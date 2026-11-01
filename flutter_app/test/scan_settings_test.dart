@@ -3,6 +3,107 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('the border of the category cards: on, thickness, color', (
+    tester,
+  ) async {
+    var layout = <String, dynamic>{};
+    Widget view() => MaterialApp(
+      home: Scaffold(
+        body: SettingsView(
+          settings: {
+            'language': 'auto',
+            'look': 'adwaita',
+            'map_layers': const ['agents'],
+            'flutter_map_layout': layout,
+          },
+          busy: false,
+          tr: (key) => key,
+          onBack: () {},
+          onUpdate: (values) async {},
+          onMapLayout: (change) => layout = change(layout),
+        ),
+      ),
+    );
+    await tester.pumpWidget(view());
+    final toggle = find.byKey(const ValueKey('card-border'));
+    await tester.scrollUntilVisible(
+      toggle,
+      250,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.byKey(const ValueKey('card-border-width-1')), findsNothing);
+    await tester.tap(toggle);
+    await tester.pumpWidget(view());
+    expect(layout['card_border'], {'on': true});
+    final red = find.byKey(const ValueKey('card-border-color-#ef5350'));
+    await tester.ensureVisible(red);
+    await tester.pumpAndSettle();
+    await tester.tap(red);
+    expect(layout['card_border'], {'on': true, 'color': '#ef5350'});
+
+    // A width changed elsewhere shows while Settings stays open.
+    layout = {
+      'card_border': {'on': true, 'width': 5},
+    };
+    await tester.pumpWidget(view());
+    expect(find.text('5 px'), findsOneWidget);
+  });
+
+  testWidgets('column widths: shown, kept with the layout, not lost on Back', (
+    tester,
+  ) async {
+    var layout = <String, dynamic>{
+      'pins': ['agent:a'],
+      'column_widths': {'agents': 410},
+    };
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SettingsView(
+            settings: const {
+              'language': 'auto',
+              'look': 'adwaita',
+              'map_layers': ['agents'],
+              'flutter_map_layout': {
+                'pins': ['agent:a'],
+                'column_widths': {'agents': 410},
+              },
+            },
+            busy: false,
+            tr: (key) => key,
+            onBack: () {},
+            onUpdate: (values) async {},
+            onMapLayout: (change) => layout = change(layout),
+          ),
+        ),
+      ),
+    );
+    final current = find.byKey(const ValueKey('column_widths-agents'));
+    final fallback = find.byKey(const ValueKey('column_defaults-agents'));
+    await tester.scrollUntilVisible(
+      fallback,
+      250,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(
+      find.descendant(of: current, matching: find.text('410')),
+      findsOneWidget,
+    );
+
+    await tester.enterText(fallback, '5000');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump();
+    expect(layout['pins'], ['agent:a']);
+    expect(layout['column_defaults'], {'agents': 900});
+
+    await tester.enterText(current, '360');
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+    // Each field changes only its own value, so nothing goes back.
+    expect(layout['column_widths'], {'agents': 360});
+    expect(layout['column_defaults'], {'agents': 900});
+  });
+
   testWidgets('manual mode and independent scan targets are editable', (
     tester,
   ) async {

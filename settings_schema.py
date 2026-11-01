@@ -84,6 +84,8 @@ SCHEMA: dict[str, Setting] = {
     "last_view": Setting("main", _text, "the view open when the window was last closed"),
     "terminal_tabs": Setting(True, _bool, "Settings › Terminal tabs above the map"),
     "screenshot_key": Setting(True, _bool, "Settings › F9 saves a screenshot"),
+    "smart_helper": Setting(None, _text, "Ask AI: the chosen helper's command, for all four cards"),
+    "screenshot_folder": Setting(None, _text, "Settings › Screenshots go to: empty is ~/Pictures/Maprisma"),
     "agent_folder": Setting(None, _text, "Settings › Agents start in: the folder agents start in"),
     "agent_projects": Setting({}, _text_mapping, "Start: the optional project folder pinned as each agent's default"),
     "agent_project_history": Setting({}, _history_mapping, "Project folders used to start each agent, newest first"),

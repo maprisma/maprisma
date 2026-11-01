@@ -31,6 +31,8 @@ const uiSettings = {
   'warn_red',
   'terminal_tabs',
   'screenshot_key',
+  'screenshot_folder',
+  'smart_helper',
   'usage_box',
   'usage_box_items',
   'usage_box_size',
@@ -50,8 +52,16 @@ bool subset(dynamic v, List<String> choices) =>
 bool validLayout(dynamic v) {
   if (v is! Map ||
       v.keys.any(
-        (k) =>
-            !['cards', 'order', 'collapsed', 'pins', 'card_order'].contains(k),
+        (k) => ![
+          'cards',
+          'order',
+          'collapsed',
+          'pins',
+          'card_order',
+          'column_widths',
+          'column_defaults',
+          'card_border',
+        ].contains(k),
       )) {
     return false;
   }
@@ -67,6 +77,35 @@ bool validLayout(dynamic v) {
       a.toSet().length == a.length;
   for (final key in ['collapsed', 'pins', 'card_order']) {
     if (v.containsKey(key) && !ids(v[key], 100)) return false;
+  }
+  final border = v.containsKey('card_border')
+      ? v['card_border']
+      : <String, dynamic>{};
+  if (border is! Map ||
+      border.keys.any((k) => !['on', 'width', 'color'].contains(k)) ||
+      border['on'] is! bool && border.containsKey('on') ||
+      border.containsKey('width') &&
+          (border['width'] is! int ||
+              border['width'] < 1 ||
+              border['width'] > 8) ||
+      border.containsKey('color') &&
+          (border['color'] is! String ||
+              !RegExp(r'^#[0-9a-f]{6}$').hasMatch(border['color'] as String))) {
+    return false;
+  }
+  for (final key in ['column_widths', 'column_defaults']) {
+    final widths = v.containsKey(key) ? v[key] : <String, dynamic>{};
+    if (widths is! Map ||
+        widths.entries.any(
+          (e) =>
+              !['mcp', 'agents', 'providers', 'models'].contains(e.key) ||
+              e.value is! num ||
+              !(e.value as num).isFinite ||
+              e.value < 200 ||
+              e.value > 900,
+        )) {
+      return false;
+    }
   }
   for (final key in ['cards', 'order']) {
     final mapping = v[key] ?? <String, dynamic>{};
@@ -210,7 +249,13 @@ final class SettingsStore {
     }
     final fallback = defaults[key];
     if (fallback is bool) return v is bool;
-    if (fallback is String || ['agent_folder', 'models_root'].contains(key)) {
+    if (fallback is String ||
+        [
+          'agent_folder',
+          'models_root',
+          'screenshot_folder',
+          'smart_helper',
+        ].contains(key)) {
       return v is String;
     }
     if (fallback is List) return texts(v);

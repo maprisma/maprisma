@@ -108,6 +108,7 @@ Future<void> mount(
 }
 
 void main() {
+  tearDown(() => smartHelperChosen.value = null);
   testWidgets('connecting a server: Review sends its agent', (tester) async {
     final calls = <String, Map<String, dynamic>>{};
     final client = CoreClient(
@@ -658,14 +659,30 @@ void main() {
       expect(edits, isEmpty);
     },
   );
+  testWidgets('a column border drags its width; a double click restores it', (
+    tester,
+  ) async {
+    final saved = <Map<String, dynamic>>[];
+    await mount(tester, edits: [], onLayout: saved.add);
+    final edge = find.byKey(const ValueKey('column-edge-agents-right'));
+    await tester.drag(edge, const Offset(40, 0));
+    await tester.pumpAndSettle();
+    final widths = saved.last['column_widths'] as Map;
+    expect(widths.keys, ['agents']);
+    expect(widths['agents'], greaterThan(266));
+    await tester.tap(edge);
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.tap(edge);
+    await tester.pumpAndSettle();
+    expect(saved.last['column_widths'], isEmpty);
+  });
+
   testWidgets(
     'fold and keyboard reorder save only layout; pin survives remount',
     (tester) async {
       final edits = <Map<String, dynamic>>[], saved = <Map<String, dynamic>>[];
       await mount(tester, edits: edits, onLayout: saved.add);
-      await tester.tap(find.byTooltip('Actions').at(1));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Pin'));
+      await tester.tap(find.byKey(const ValueKey('pin-agent:a')));
       await tester.pumpAndSettle();
       expect(saved.last['pins'], ['agent:a']);
       expect(edits, isEmpty);
@@ -777,8 +794,8 @@ void main() {
       final skillsHeader = find
           .ancestor(of: find.text('Skills'), matching: find.byType(Positioned))
           .first;
-      expect(tester.getTopLeft(mcpHeader).dx, 16);
-      expect(tester.getTopLeft(skillsHeader).dx, 16);
+      expect(tester.getTopLeft(mcpHeader).dx, 17);
+      expect(tester.getTopLeft(skillsHeader).dx, 17);
       expect(
         tester.getTopLeft(mcpHeader).dy,
         lessThan(tester.getTopLeft(skillsHeader).dy),
@@ -801,7 +818,7 @@ void main() {
       // Trying Earlier card on the top card in column 0 keeps it in column 0 at index 0.
       await tester.tap(find.text('Earlier card'));
       await tester.pumpAndSettle();
-      expect(tester.getTopLeft(mcpHeader).dx, 16);
+      expect(tester.getTopLeft(mcpHeader).dx, 17);
       expect(
         tester.getTopLeft(mcpHeader).dy,
         lessThan(tester.getTopLeft(skillsHeader).dy),
@@ -817,14 +834,14 @@ void main() {
       final dropLine = find.byKey(const ValueKey('card-drop-line'));
       expect(dropLine, findsOneWidget);
       final lineRect = tester.getRect(dropLine);
-      expect(lineRect.left, 16);
-      expect(lineRect.width, 328);
+      expect(lineRect.left, 17);
+      expect(lineRect.width, 266);
       expect(lineRect.height, 2);
       await gesture.up();
       await tester.pumpAndSettle();
       expect(dropLine, findsNothing);
-      expect(tester.getTopLeft(mcpHeader).dx, 16);
-      expect(tester.getTopLeft(skillsHeader).dx, 16);
+      expect(tester.getTopLeft(mcpHeader).dx, 17);
+      expect(tester.getTopLeft(skillsHeader).dx, 17);
       expect(
         tester.getTopLeft(skillsHeader).dy,
         lessThan(tester.getTopLeft(mcpHeader).dy),
@@ -1211,6 +1228,12 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Uses plan/tokens'), findsOneWidget);
       expect(calls, isEmpty);
+      // The choice holds for every card, with its check mark.
+      expect(smartHelperChosen.value, 'claude');
+      expect(
+        find.byKey(const ValueKey('smart-helper-chosen')),
+        findsNWidgets(4),
+      );
 
       // Clicking Ask with blank prompt sends nothing.
       await tester.tap(find.text('Ask'));
@@ -1281,6 +1304,9 @@ void main() {
       );
 
       // State 5: Clarify shows question and choice chips; clicking a chip sends answer.
+      // Back to the local helper, for all cards.
+      smartHelperChosen.value = null;
+      await tester.pump();
       nextResult = {
         'helper': 'Local helper',
         'local': true,
@@ -2656,9 +2682,9 @@ void main() {
                   )
                   .first,
             );
-            expect(groupPos.left, 16.0 + col * 380);
+            expect(groupPos.left, 17.0 + col * 400);
             expect(groupPos.top, 8);
-            expect(groupPos.width, 328);
+            expect(groupPos.width, 266);
             expect(groupPos.height, 86);
             expect(
               tester
@@ -2669,7 +2695,7 @@ void main() {
                     ),
                   )
                   .width,
-              328,
+              266,
             );
           }
           final agentsHeader = tester.widget<Positioned>(
@@ -2680,8 +2706,8 @@ void main() {
                 )
                 .first,
           );
-          expect(agentsHeader.left, 396);
-          expect(agentsHeader.width, 328);
+          expect(agentsHeader.left, 417);
+          expect(agentsHeader.width, 266);
           if (smart) {
             final smartPos = tester.widget<Positioned>(
               find
@@ -2691,9 +2717,9 @@ void main() {
                   )
                   .first,
             );
-            expect(smartPos.left, 396);
+            expect(smartPos.left, 417);
             expect(smartPos.top, 106); // 8 + 86 + 12
-            expect(smartPos.width, 328);
+            expect(smartPos.width, 266);
             expect(agentsHeader.top, 156); // 106 + 38 + 12
           } else {
             expect(agentsHeader.top, 106); // 8 + 86 + 12

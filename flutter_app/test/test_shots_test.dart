@@ -23,6 +23,47 @@ void main() {
     },
   );
 
+  test('a note goes next to its picture; no note, no file', () async {
+    final home = Directory.systemTemp.createTempSync('shots-home');
+    addTearDown(() => home.deleteSync(recursive: true));
+    final shots = WindowShots('${home.path}/shots');
+    final picture = await shots.save(
+      Uint8List.fromList([1]),
+      DateTime(2026, 11, 1, 8, 26, 31),
+    );
+    await shots.note(picture, '  ');
+    expect(File(picture.replaceAll('.png', '.txt')).existsSync(), isFalse);
+    await shots.note(picture, ' The header is cut off ');
+    expect(
+      File(picture.replaceAll('.png', '.txt')).readAsStringSync(),
+      'The header is cut off\n',
+    );
+  });
+
+  test(
+    'a chosen folder is used; one that cannot be written loses nothing',
+    () async {
+      final home = Directory.systemTemp.createTempSync('shots-home');
+      addTearDown(() => home.deleteSync(recursive: true));
+      final shots = WindowShots('${home.path}/default');
+      final time = DateTime(2026, 11, 1, 8, 26, 31);
+      final png = Uint8List.fromList([1]);
+      expect(
+        await shots.saveTo('${home.path}/mine', png, time),
+        startsWith('${home.path}/mine/'),
+      );
+      File('${home.path}/a-file').writeAsStringSync('');
+      expect(
+        await shots.saveTo('${home.path}/a-file', png, time),
+        startsWith('${home.path}/default/'),
+      );
+      expect(
+        await shots.saveTo(null, png, time),
+        startsWith('${home.path}/default/'),
+      );
+    },
+  );
+
   late Directory run;
   setUp(() => run = Directory.systemTemp.createTempSync('maprisma-shots-'));
   tearDown(() => run.deleteSync(recursive: true));

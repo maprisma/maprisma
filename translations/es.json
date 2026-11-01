@@ -3250,5 +3250,16 @@
  "A picture of this window goes to Pictures/Maprisma. Not while a terminal is showing: programs there may use F9.": "Una imagen de esta ventana va a Pictures/Maprisma. No mientras se muestra un terminal: los programas allí pueden usar F9.",
  "Screenshot saved: {0}": "Captura guardada: {0}",
  "A picture of this window goes to Pictures/Maprisma. In a terminal, use the camera symbol below it: programs there may use F9.": "Una imagen de esta ventana va a Pictures/Maprisma. En un terminal, usa el símbolo de la cámara debajo: los programas allí pueden usar F9.",
- "Save a screenshot": "Guardar una captura"
+ "Save a screenshot": "Guardar una captura",
+ "What is wrong? (optional)": "¿Qué falla? (opcional)",
+ "Screenshots go to": "Guardar capturas en",
+ "A picture of this window is saved, with a note if you like. In a terminal, use the camera symbol below it: programs there may use F9.": "Se guarda una imagen de esta ventana, con una nota si quieres. En un terminal, usa el símbolo de la cámara debajo: los programas pueden usar F9.",
+ "Column widths": "Anchos de columna",
+ "Current width": "Ancho actual",
+ "Default width": "Ancho predeterminado",
+ "Automatic": "Automático",
+ "Drag a border to change the width; a double click restores the default.": "Arrastra un borde para cambiar el ancho; un doble clic restaura el predeterminado.",
+ "Borders around category cards": "Bordes alrededor de las tarjetas de categoría",
+ "Border thickness": "Grosor del borde",
+ "Border colour": "Color del borde"
 }
