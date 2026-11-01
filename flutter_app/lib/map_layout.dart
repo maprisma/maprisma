@@ -359,7 +359,8 @@ class MapLayout {
       )
       .firstOrNull;
   bool movable(Map<String, dynamic> edge) =>
-      nodes[edge['source']]?['kind'] == 'agent' &&
+      '${edge['fixed'] ?? ''}'.isEmpty &&
+          nodes[edge['source']]?['kind'] == 'agent' &&
           [
             'uses',
             'available',

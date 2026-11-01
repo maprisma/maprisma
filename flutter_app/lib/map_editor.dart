@@ -1251,6 +1251,11 @@ class _MapEditorState extends State<MapEditor>
                                             widget.onEdit({
                                               'failure': line.edge,
                                             });
+                                          } else if ('${line?.edge['fixed'] ?? ''}'
+                                              .isNotEmpty) {
+                                            widget.onEdit({
+                                              'fixed': line!.edge,
+                                            });
                                           } else {
                                             _renderChange(() {
                                               _selected.clear();

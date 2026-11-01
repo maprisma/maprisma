@@ -635,6 +635,34 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+  testWidgets('a line that is not ours has no hook and says why', (
+    tester,
+  ) async {
+    final edits = <Map<String, dynamic>>[];
+    final graph = fixtureGraph();
+    await mount(tester, edits: edits);
+    final hooks = find.byTooltip(
+      'Move this connection to another compatible box, or to empty space to disconnect.',
+    );
+    await tester.tap(find.text('agent:a'));
+    await tester.pumpAndSettle();
+    final count = hooks.evaluate().length;
+    final onLine = tester.getCenter(hooks.first);
+    await tester.pumpWidget(const SizedBox());
+    for (final edge in (graph['edges'] as List).cast<Map>()) {
+      edge['fixed'] = 'through a folder it reads';
+    }
+    await mount(tester, edits: edits, graph: graph);
+    await tester.tap(find.text('agent:a'));
+    await tester.pumpAndSettle();
+    expect(count, greaterThan(0));
+    expect(hooks, findsNothing);
+    await tester.tap(find.text('agent:a'));
+    await tester.pumpAndSettle();
+    await tester.tapAt(onLine);
+    await tester.pumpAndSettle();
+    expect(edits.single['fixed'], isNotNull);
+  });
   testWidgets('a click on a line shows its hook; empty space hides it', (
     tester,
   ) async {

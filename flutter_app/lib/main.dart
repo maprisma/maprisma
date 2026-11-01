@@ -3222,6 +3222,19 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       for (final n in (_mapGraph['nodes'] as List).cast<Map<String, dynamic>>())
         n['id'] as String: n,
     };
+    if (edit['fixed'] case final Map fixed) {
+      // A line that is true but not this app's to take away says why.
+      final messenger = ScaffoldMessenger.of(_navigator.currentContext!);
+      messenger.clearSnackBars();
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            '${nodes[fixed['source']]?['label']}: ${fixed['fixed']}',
+          ),
+        ),
+      );
+      return;
+    }
     Map<String, dynamic>? edge = edit['edge'] as Map<String, dynamic>?;
     if (edit['failure'] != null) {
       edge = edit['failure'] as Map<String, dynamic>;
