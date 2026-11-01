@@ -43,7 +43,7 @@ class DartFoundationReferenceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             service = flutter_backend.Service(Path(temp) / 'settings.json')
             requests = [
-                {'id': i, 'protocol': 1, 'method': method, 'params': params}
+                {'id': i, 'protocol': 2, 'method': method, 'params': params}
                 for i, (method, params) in enumerate([
                     ('settings.get', {}), ('app.identity', {'extra': True}),
                     ('desktop.snapshot', {'extra': True}),

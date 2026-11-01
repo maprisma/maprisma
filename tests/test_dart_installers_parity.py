@@ -134,7 +134,7 @@ def files_of(home: Path) -> dict:
 @unittest.skipIf(DART is None, 'native Dart SDK not available')
 class DartInstallersParityTest(unittest.TestCase):
     def probe(self, requests):
-        lines = [json.dumps({'id': i, 'protocol': 1, 'method': method, 'params': params})
+        lines = [json.dumps({'id': i, 'protocol': 2, 'method': method, 'params': params})
                  for i, (method, params) in enumerate(requests, 1)]
         out = subprocess.run([DART, '--disable-dart-dev', '--packages=.dart_tool/package_config.json',
                               'bin/fixture_probe.dart'], input=('\n'.join(lines) + '\n').encode(),

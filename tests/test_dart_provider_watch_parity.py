@@ -114,7 +114,7 @@ class DartProviderWatchParityTest(unittest.TestCase):
     def test_same_commands_and_saved_state(self):
         requests = [{'config': s['config'], 'steps': s['steps'], 'fail': s.get('fail', False),
                      'lms': s.get('lms'), 'lms_up': s.get('lms_up', False)} for s in SCENARIOS]
-        lines = [json.dumps({'id': i, 'protocol': 1, 'method': 'dev.watch', 'params': r})
+        lines = [json.dumps({'id': i, 'protocol': 2, 'method': 'dev.watch', 'params': r})
                  for i, r in enumerate(requests, 1)]
         out = subprocess.run([DART, '--disable-dart-dev', '--packages=.dart_tool/package_config.json',
                               'bin/fixture_probe.dart'], input=('\n'.join(lines) + '\n').encode(),

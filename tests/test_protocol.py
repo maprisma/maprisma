@@ -58,7 +58,7 @@ class ContractTest(unittest.TestCase):
         from unittest import mock
         with tempfile.TemporaryDirectory() as tmp:
             routes = Path(tmp) / 'routes.json'
-            routes.write_text(json.dumps({'protocol': 1, 'other': [], 'routes': {
+            routes.write_text(json.dumps({'protocol': 2, 'other': [], 'routes': {
                 'found.list': {'params': {}, 'optional': ['x'], 'result': None, 'source': None, 'note': 'kept'}}}))
             record = Path(tmp) / 'record.jsonl'
             record.write_text(json.dumps({'method': 'found.list', 'params': {'kind': 'mcp'}, 'result': {'a': 1}}) + '\n'

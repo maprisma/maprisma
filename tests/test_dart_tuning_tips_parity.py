@@ -92,7 +92,7 @@ print(json.dumps(out))
         env = {**os.environ, 'LANG': 'C.UTF-8'}
         python = json.loads(subprocess.run([sys.executable, '-c', python_code, str(ROOT)], input=json.dumps(cases),
                                            capture_output=True, check=True, text=True, env=env, timeout=120).stdout)
-        lines = [json.dumps({'id': i, 'protocol': 1, 'method': 'dev.tuningtips',
+        lines = [json.dumps({'id': i, 'protocol': 2, 'method': 'dev.tuningtips',
                              'params': {'facts': f, 'answer': a}}) for i, (f, a) in enumerate(cases, 1)]
         out = subprocess.run([DART, '--disable-dart-dev', '--packages=.dart_tool/package_config.json',
                               'bin/fixture_probe.dart'], input=('\n'.join(lines) + '\n').encode(),

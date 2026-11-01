@@ -71,10 +71,10 @@ class FlutterBackendTest(unittest.TestCase):
     def test_protocol_rejects_malformed_or_mismatched_requests_and_recovers(self):
         for request in ([], {'id': True}, {'id': 3, 'protocol': 99},
                         {'id': 3, 'protocol': True},
-                        {'id': 3, 'protocol': 1, 'method': 42},
-                        {'id': 3, 'protocol': 1, 'method': 'app.snapshot', 'params': []}):
+                        {'id': 3, 'protocol': 2, 'method': 42},
+                        {'id': 3, 'protocol': 2, 'method': 'app.snapshot', 'params': []}):
             self.assertIn('error', self.request(request))
-        request = {'id': 7, 'protocol': 1, 'method': 'app.snapshot'}
+        request = {'id': 7, 'protocol': 2, 'method': 'app.snapshot'}
         source = io.BytesIO(b'{invalid\n' + json.dumps(request).encode() + b'\n')
         output = io.StringIO()
         flutter_backend.serve(self.service, source, output)
@@ -94,7 +94,7 @@ class FlutterBackendTest(unittest.TestCase):
 
     def test_internal_error_does_not_disclose_exception_text(self):
         with mock.patch.object(self.service, 'snapshot', side_effect=OSError('private-path-or-token')):
-            response = self.request({'id': 1, 'protocol': 1, 'method': 'app.snapshot'})
+            response = self.request({'id': 1, 'protocol': 2, 'method': 'app.snapshot'})
         self.assertEqual(response, {'id': 1, 'error': {'code': 'operation_failed'}})
 
     def test_backend_import_has_no_gtk_dependency(self):

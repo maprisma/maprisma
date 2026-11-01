@@ -53,7 +53,7 @@ class Side:
 
     def call(self, method, params):
         self.count += 1
-        self.process.stdin.write(json.dumps({'id': self.count, 'protocol': 1, 'method': method,
+        self.process.stdin.write(json.dumps({'id': self.count, 'protocol': 2, 'method': method,
                                              'params': params}) + '\n')
         self.process.stdin.flush()
         reply = json.loads(self.process.stdout.readline())

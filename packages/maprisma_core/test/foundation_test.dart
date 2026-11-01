@@ -317,7 +317,7 @@ void main() {
       [],
       {'id': true},
       {'id': 1, 'protocol': true, 'method': 'settings.get'},
-      {'id': 1, 'protocol': 1, 'method': 'settings.get', 'params': []},
+      {'id': 1, 'protocol': 2, 'method': 'settings.get', 'params': []},
     ]) {
       expect(reply(jsonEncode(value))['error']['code'], 'invalid_request');
     }
@@ -325,13 +325,13 @@ void main() {
     expect(reply('{')['error']['code'], 'invalid_request');
     expect(
       reply(
-        jsonEncode({'id': 5, 'protocol': 1, 'method': 'settings.get'}),
+        jsonEncode({'id': 5, 'protocol': 2, 'method': 'settings.get'}),
       )['result']['map_light_fps'],
       20,
     );
     expect(
       reply(
-        jsonEncode({'id': 5, 'protocol': 1, 'method': 'shell.exec'}),
+        jsonEncode({'id': 5, 'protocol': 2, 'method': 'shell.exec'}),
       )['error']['code'],
       'unported_route',
     );

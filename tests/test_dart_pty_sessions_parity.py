@@ -67,7 +67,7 @@ class DartPtySessionsParityTest(unittest.TestCase):
             argv = ['/bin/sh', '-c', SCRIPT]
             env = {'PATH': '/usr/bin:/bin', 'PROBE_VAR': 'ünï', 'TERM': 'xterm-256color', 'HOME': cwd}
             expected = python_side(argv, cwd, env)
-            request = {'id': 1, 'protocol': 1, 'method': 'dev.pty',
+            request = {'id': 1, 'protocol': 2, 'method': 'dev.pty',
                        'params': {'argv': argv, 'cwd': cwd, 'env': env, 'steps': STEPS}}
             out = subprocess.run([DART, '--disable-dart-dev', '--packages=.dart_tool/package_config.json',
                                   'bin/fixture_probe.dart'], input=(json.dumps(request) + '\n').encode(),

@@ -48,7 +48,7 @@ class DartModelHubParityTest(unittest.TestCase):
             {'kind': 'files', 'repo': 'unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF', 'items': ANSWERS['tree']},
             {'kind': 'files', 'repo': 'not a repo', 'items': []},
         ]
-        lines = [json.dumps({'id': i, 'protocol': 1, 'method': 'dev.hfparse', 'params': r})
+        lines = [json.dumps({'id': i, 'protocol': 2, 'method': 'dev.hfparse', 'params': r})
                  for i, r in enumerate(requests, 1)]
         out = subprocess.run([DART, '--disable-dart-dev', '--packages=.dart_tool/package_config.json',
                               'bin/fixture_probe.dart'], input=('\n'.join(lines) + '\n').encode(),

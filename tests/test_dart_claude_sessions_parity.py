@@ -72,7 +72,7 @@ class DartClaudeSessionsParityTest(unittest.TestCase):
             env = {k: v for k, v in os.environ.items() if not k.startswith('XDG_') and k != 'CLAUDE_CONFIG_DIR'}
             env.update(HOME=str(home), LANG='C.UTF-8', MAPRISMA_DESKTOP='generic', TZ='Europe/Berlin',
                        XDG_CACHE_HOME=str(home / 'dart-cache'))
-            line = json.dumps({'id': 1, 'protocol': 1, 'method': 'scan.sessions', 'params': {'command': 'claude'}})
+            line = json.dumps({'id': 1, 'protocol': 2, 'method': 'scan.sessions', 'params': {'command': 'claude'}})
             results = []
             for run in range(2):
                 python = json.loads(subprocess.run(

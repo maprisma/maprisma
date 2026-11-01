@@ -80,7 +80,7 @@ class DartSkillsWebParityTest(unittest.TestCase):
         python = json.loads(subprocess.run([sys.executable, '-c', PYTHON, str(ROOT), json.dumps(SEARCH)],
                                            input=json.dumps(cases), capture_output=True, check=True, text=True,
                                            env=env, timeout=120).stdout)
-        lines = [json.dumps({'id': i, 'protocol': 1, 'method': 'dev.skillsweb',
+        lines = [json.dumps({'id': i, 'protocol': 2, 'method': 'dev.skillsweb',
                              'params': {'search': SEARCH, 'tree': tree, 'skill_id': skill_id, 'text': text}})
                  for i, (tree, skill_id, text) in enumerate(cases, 1)]
         out = subprocess.run([DART, '--disable-dart-dev', '--packages=.dart_tool/package_config.json',

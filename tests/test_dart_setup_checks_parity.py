@@ -147,7 +147,7 @@ class DartSetupChecksParityTest(unittest.TestCase):
                     params = {**c, 'desktop': desktop}
                     if 'agent' not in c:
                         params = {'agent': None, 'runtime': c['runtimes'][0], **params}
-                    lines.append(json.dumps({'id': i, 'protocol': 1, 'method': 'dev.setupchecks', 'params': params}))
+                    lines.append(json.dumps({'id': i, 'protocol': 2, 'method': 'dev.setupchecks', 'params': params}))
                 out = subprocess.run([DART, '--disable-dart-dev', '--packages=.dart_tool/package_config.json',
                                       'bin/fixture_probe.dart'], input=('\n'.join(lines) + '\n').encode(),
                                      capture_output=True, cwd=ROOT / 'packages/maprisma_core', timeout=300, env=env)

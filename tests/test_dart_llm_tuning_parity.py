@@ -105,7 +105,7 @@ class DartLlmTuningParityTest(unittest.TestCase):
                 python = json.loads(subprocess.run([sys.executable, '-c', PYTHON, str(ROOT)],
                                                    input=json.dumps(cases), capture_output=True, check=True,
                                                    text=True, env=env, timeout=120).stdout)
-                lines = [json.dumps({'id': i, 'protocol': 1, 'method': 'dev.llmtuning', 'params': c})
+                lines = [json.dumps({'id': i, 'protocol': 2, 'method': 'dev.llmtuning', 'params': c})
                          for i, c in enumerate(cases, 1)]
                 out = subprocess.run([DART, '--disable-dart-dev', '--packages=.dart_tool/package_config.json',
                                       'bin/fixture_probe.dart'], input=('\n'.join(lines) + '\n').encode(),

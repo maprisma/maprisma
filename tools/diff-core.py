@@ -54,7 +54,7 @@ def interactive(command, case, home, env):
                 params[name] = value
             body['params'] = params
             for attempt in range(600):
-                process.stdin.write((json.dumps({'id': i, 'protocol': 1, **body}, ensure_ascii=False) + '\n').encode())
+                process.stdin.write((json.dumps({'id': i, 'protocol': 2, **body}, ensure_ascii=False) + '\n').encode())
                 process.stdin.flush()
                 reply = json.loads(process.stdout.readline())
                 if not request.get('until_done') or reply.get('result', {}).get('state') != 'running':
@@ -253,7 +253,7 @@ def run_side(command, case, home):
         elif 'raw' in request:
             script.append(request['raw'])
         else:
-            script.append(json.dumps({'id': i, 'protocol': 1, **expand(request, home)}, ensure_ascii=False))
+            script.append(json.dumps({'id': i, 'protocol': 2, **expand(request, home)}, ensure_ascii=False))
     if any('refs' in r or 'until_done' in r for r in case['requests']):
         try:
             replies = interactive(command, case, home, env)

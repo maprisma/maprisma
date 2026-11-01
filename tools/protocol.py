@@ -32,7 +32,7 @@ CORE = ROOT / 'packages/maprisma_core'
 ROUTES = CORE / 'protocol/routes.json'
 DOC = ROOT / 'docs/protocol.md'
 CLIENT = ROOT / 'flutter_app/lib/core_client.g.dart'
-VERSION = 1
+VERSION = 2
 NAME = re.compile(r"""['"]([a-z][a-z0-9]*\.[a-z_]+)['"]""")
 FILE_ENDINGS = {'json', 'toml', 'yaml', 'md', 'pdf', 'py', 'sh', 'service', 'desktop', 'txt', 'log', 'lock',
                 'db', 'svg', 'png', 'zip', 'gz', 'sig', 'sha256', 'jsonl', 'dart', 'g', 'ini', 'conf', 'env',

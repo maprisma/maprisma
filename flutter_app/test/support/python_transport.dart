@@ -104,7 +104,7 @@ class PythonTransport implements ServiceTransport {
     try {
       _process.stdin.writeln(
         jsonEncode({
-          'protocol': 1,
+          'protocol': 2,
           'id': id,
           'method': method,
           'params': params,

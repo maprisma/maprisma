@@ -55,7 +55,7 @@ def tree(root: Path) -> dict:
 @unittest.skipIf(DART is None or not ADDONS.is_dir(), 'native Dart SDK or maprisma-addons not available')
 class DartAddonStoreParityTest(unittest.TestCase):
     def probe(self, requests):
-        lines = [json.dumps({'id': i, 'protocol': 1, 'method': 'dev.addonstore', 'params': r})
+        lines = [json.dumps({'id': i, 'protocol': 2, 'method': 'dev.addonstore', 'params': r})
                  for i, r in enumerate(requests, 1)]
         out = subprocess.run([DART, '--disable-dart-dev', '--packages=.dart_tool/package_config.json',
                               'bin/fixture_probe.dart'], input=('\n'.join(lines) + '\n').encode(),

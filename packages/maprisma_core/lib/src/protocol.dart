@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-const protocolVersion = 1;
+const protocolVersion = 2;
 const maxRequest = 64 * 1024;
 const maxResponse = 1024 * 1024;
 

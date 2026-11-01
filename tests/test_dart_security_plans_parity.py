@@ -62,7 +62,7 @@ class DartSecurityPlansParityTest(unittest.TestCase):
                    'MAPRISMA_DESKTOP': 'generic', 'LANG': 'C.UTF-8'}
             python = json.loads(subprocess.run([sys.executable, '-c', PYTHON, str(ROOT), json.dumps(COMMANDS)],
                                                capture_output=True, check=True, env=env, timeout=120).stdout)
-            lines = [json.dumps({'id': i, 'protocol': 1, 'method': 'dev.securityplan',
+            lines = [json.dumps({'id': i, 'protocol': 2, 'method': 'dev.securityplan',
                                  'params': {'command': c, 'key': k, 'value': v}})
                      for i, (c, k, v, _r) in enumerate(python, 1)]
             out = subprocess.run([DART, '--disable-dart-dev', '--packages=.dart_tool/package_config.json',

@@ -97,7 +97,7 @@ class DartWorkerParityTest(unittest.TestCase):
             probe = subprocess.run([DART, '--disable-dart-dev', '--packages=.dart_tool/package_config.json',
                                     'bin/fixture_probe.dart'], capture_output=True, cwd=CORE, timeout=120,
                                    env={**os.environ, 'HOME': str(homes[0])},
-                                   input=json.dumps({'id': 1, 'protocol': 1, 'method': 'dev.undo',
+                                   input=json.dumps({'id': 1, 'protocol': 2, 'method': 'dev.undo',
                                                      'params': {'folder': str(python_backup)}}).encode() + b'\n')
             restored_py = json.loads(undo.stdout)
             restored_dart = json.loads(probe.stdout.splitlines()[-1])['result']['restored']

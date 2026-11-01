@@ -85,7 +85,7 @@ class DartMcpUpdateParityTest(unittest.TestCase):
                                  capture_output=True, text=True, env=env, timeout=120)
             self.assertEqual(out.returncode, 0, out.stderr[-3000:])
             python = json.loads(out.stdout)
-            line = json.dumps({'id': 1, 'protocol': 1, 'method': 'dev.mcpupdate',
+            line = json.dumps({'id': 1, 'protocol': 2, 'method': 'dev.mcpupdate',
                                'params': {'candidates': python['candidates'], 'agents': case['agents']}})
             run = subprocess.run([DART, '--disable-dart-dev', '--packages=.dart_tool/package_config.json',
                                   'bin/fixture_probe.dart'], input=(line + '\n').encode(), capture_output=True,

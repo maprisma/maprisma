@@ -194,7 +194,7 @@ class DartMcpCatalogParityTest(unittest.TestCase):
             requests += [('dev.mcpsearch', case) for case in search]
             requests += [('dev.mcppicks', {'versions': versions})]
             requests += [('dev.mcprefresh', case) for case in refresh[1]]
-            lines = [json.dumps({'id': i, 'protocol': 1, 'method': m, 'params': p})
+            lines = [json.dumps({'id': i, 'protocol': 2, 'method': m, 'params': p})
                      for i, (m, p) in enumerate(requests, 1)]
             out = subprocess.run([DART, '--disable-dart-dev', '--packages=.dart_tool/package_config.json',
                                   'bin/fixture_probe.dart'], input=('\n'.join(lines) + '\n').encode(),

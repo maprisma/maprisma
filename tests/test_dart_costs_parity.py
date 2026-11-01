@@ -98,7 +98,7 @@ class DartCostsParityTest(unittest.TestCase):
             python = json.loads(subprocess.run([sys.executable, '-c', PYTHON, str(ROOT)],
                                                input=json.dumps({**common, 'rates': rates[0]}), capture_output=True,
                                                check=True, text=True, env=env, timeout=120).stdout)
-            line = json.dumps({'id': 1, 'protocol': 1, 'method': 'dev.costs', 'params': {**common, 'rates': rates[1]}})
+            line = json.dumps({'id': 1, 'protocol': 2, 'method': 'dev.costs', 'params': {**common, 'rates': rates[1]}})
             out = subprocess.run([DART, '--disable-dart-dev', '--packages=.dart_tool/package_config.json',
                                   'bin/fixture_probe.dart'], input=(line + '\n').encode(), capture_output=True,
                                  cwd=ROOT / 'packages/maprisma_core', timeout=300, env=env)

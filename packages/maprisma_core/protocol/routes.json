@@ -22,7 +22,7 @@
   "runtime.stop",
   "system.analyze"
  ],
- "protocol": 1,
+ "protocol": 2,
  "routes": {
   "addons.catalog": {
    "area": "addons",

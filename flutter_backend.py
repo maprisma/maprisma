@@ -43,7 +43,7 @@ MAP_SCAN_SETTINGS = (
     'models_root', 'model_folders', 'mcp_folders', 'skill_folders',
 )
 
-PROTOCOL = 1
+PROTOCOL = 2
 MAX_REQUEST = 64 * 1024
 MAP_REUSE = 5.0                 # seconds a self-built map serves previews and task focus
 UI_SETTINGS = frozenset(("flutter_theme_mode", "map_light_fps", "flutter_map_layout", "map_animations", "language", "look", "agent_folder", "map_layers", "system_map_columns", "subagents_minutes", "subagents_kept", "addons_online", "map_scan_interval", "map_scan_pause_unfocused", "map_scan_targets", "providers_with_agents", "ai_checks_agent", "warn_notify",

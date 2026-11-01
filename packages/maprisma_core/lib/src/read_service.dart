@@ -167,7 +167,7 @@ final class ReadService {
       final pinned = mapOf(saved['agent_projects']),
           history = mapOf(saved['agent_project_history']);
       return {
-        'protocol': 1,
+        'protocol': 2,
         'migration_error': migrationError,
         'language': settings.value(saved, 'language'),
         'settings': settings.snapshot(),

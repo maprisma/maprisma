@@ -79,9 +79,9 @@ class DartItemDetailsParityTest(unittest.TestCase):
             python = json.loads(subprocess.run([sys.executable, '-c', PYTHON, str(ROOT)], input=json.dumps(case),
                                                capture_output=True, check=True, text=True, env=env, timeout=120)
                                 .stdout.replace(str(home), '~'))
-            lines = [json.dumps({'id': 1, 'protocol': 1, 'method': 'details.mcp', 'params': {'name': 'notes'}}),
-                     json.dumps({'id': 2, 'protocol': 1, 'method': 'details.mcp', 'params': {'name': 'remote'}}),
-                     json.dumps({'id': 3, 'protocol': 1, 'method': 'details.skills',
+            lines = [json.dumps({'id': 1, 'protocol': 2, 'method': 'details.mcp', 'params': {'name': 'notes'}}),
+                     json.dumps({'id': 2, 'protocol': 2, 'method': 'details.mcp', 'params': {'name': 'remote'}}),
+                     json.dumps({'id': 3, 'protocol': 2, 'method': 'details.skills',
                                  'params': {'path': '~/shared/skills'}})]
             out = subprocess.run([DART, '--disable-dart-dev', '--packages=.dart_tool/package_config.json',
                                   'bin/fixture_probe.dart'], input=('\n'.join(lines) + '\n').encode(),
