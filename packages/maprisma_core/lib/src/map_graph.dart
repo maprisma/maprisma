@@ -39,6 +39,9 @@ String graphModelKey(String model) {
 
 final class MapGraph {
   MapGraph(this.files, this.i18n);
+
+  /// Why an agent keeps a skill folder that nothing here can take away.
+  String Function(String command, String path)? skillWay;
   final ScanFiles files;
   final ServiceI18n i18n;
   final nodes = <Map<String, dynamic>>[], edges = <Map<String, dynamic>>[];
@@ -79,6 +82,7 @@ final class MapGraph {
     String kind, {
     String failed = '',
     String dangling = '',
+    String fixed = '',
   }) {
     if (edges.any((e) => e['source'] == source && e['target'] == target)) {
       return;
@@ -88,6 +92,7 @@ final class MapGraph {
       'target': target,
       'kind': kind,
       'failed': failed,
+      'fixed': fixed,
       'dangling': dangling,
     });
   }
@@ -446,8 +451,25 @@ final class MapGraph {
               .plural('1 skill', '{0} skills', count)
               .replaceAll('{0}', '$count'),
         );
-        link(aid, id, 'skills');
+        link(
+          aid,
+          id,
+          'skills',
+          fixed: skillWay?.call(agent.command, path) ?? '',
+        );
       }
+    }
+    // A known server without agents stays, to draw a line to it again.
+    for (final server in inv.mcp) {
+      node(
+        'mcp:${server['name']}',
+        0,
+        server['name'] as String,
+        kind: 'mcp',
+        detail: server['target'] ?? '',
+        group: server['kind'] == 'url' ? 'online' : '',
+        dim: true,
+      );
     }
     for (final rt in inv.runtimes.where((r) => r.installed)) {
       runtime(rt);

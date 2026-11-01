@@ -356,6 +356,40 @@ void main() {
       expect((candidates.single as Map)['agents'], ['claude']);
     });
 
+    test('skill folders leave with the servers; a shared one stays', () async {
+      final result = await smartMcp(
+        {
+          ...facts,
+          'skills': {
+            '/a': ['claude'],
+            '/shared': <String>[],
+          },
+        },
+        answers([
+          '{"action": "disconnect", "servers": ["pdfcraft"], "skills": ["/a", "/shared"], "agents": ["claude"]}',
+        ], []),
+        (_) async => [],
+      );
+      final action = ((result['candidates'] as List).single as Map)['action'];
+      expect(action['pairs'], [
+        {'server': 'pdfcraft', 'agent': 'claude'},
+        {'skill': '/a', 'agent': 'claude'},
+      ]);
+      expect(
+        () => smartMcpChecked(
+          {
+            'action': 'disconnect',
+            'skills': ['/nowhere'],
+            'agents': ['claude'],
+          },
+          {'claude'},
+          {'pdfcraft'},
+          {'/a'},
+        ),
+        throwsFormatException,
+      );
+    });
+
     test('several servers are one candidate, one change for all', () async {
       final many = {
         ...facts,
@@ -975,6 +1009,60 @@ void main() {
     final file = (plan['files'] as List).single as Map;
     expect(file['removed'], greaterThanOrEqualTo(9));
     expect(config.readAsStringSync(), before);
+  });
+
+  test('a known server without agents stays on the map', () async {
+    final home = Directory.systemTemp.createTempSync('smart');
+    addTearDown(() => home.deleteSync(recursive: true));
+    final bin = Directory('${home.path}/bin')..createSync();
+    File('${bin.path}/claude').writeAsStringSync('#!/bin/sh\necho 1.0.0\n');
+    Process.runSync('chmod', ['+x', '${bin.path}/claude']);
+    File('${home.path}/.claude.json').writeAsStringSync('{}');
+    final config = Directory('${home.path}/.config/maprisma')
+      ..createSync(recursive: true);
+    File('${config.path}/mcp-servers.json').writeAsStringSync(
+      jsonEncode({
+        'servers': {
+          'kept': {
+            'transport': 'stdio',
+            'command': 'kept-cli',
+            'args': <String>[],
+            'url': '',
+            'env': <String, String>{},
+            'headers': <String, String>{},
+          },
+        },
+      }),
+    );
+    final core = CoreService(
+      environment: {
+        'HOME': home.path,
+        'PATH': bin.path,
+        'MAPRISMA_DESKTOP': 'generic',
+      },
+    );
+    var graph = core.dispatch('map.snapshot', {'force': true});
+    for (var i = 0; i < 100 && graph['pending'] == true; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      graph = core.dispatch('map.snapshot', {'poll': true});
+    }
+    final node = (graph['nodes'] as List).cast<Map>().singleWhere(
+      (n) => n['id'] == 'mcp:kept',
+    );
+    expect(node['dim'], isTrue);
+    expect(
+      (graph['edges'] as List).cast<Map>().where(
+        (e) => e['target'] == 'mcp:kept',
+      ),
+      isEmpty,
+    );
+    final plan = core.dispatch('connections.preview', {
+      'kind': 'mcp',
+      'command': 'claude',
+      'item': 'kept',
+      'remove': false,
+    });
+    expect(plan['empty'], isFalse);
   });
 
   test('the routes refuse what is not theirs', () {

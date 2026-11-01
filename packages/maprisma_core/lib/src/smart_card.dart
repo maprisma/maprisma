@@ -161,7 +161,9 @@ String smartMcpName(String name) {
 /// The MCP facts the agent gets: names only, no paths or settings.
 String _mcpFacts(Map facts) =>
     'Agents here: ${jsonEncode(facts['agents'])}.\n'
-    'MCP servers here, with the agents that use each: ${jsonEncode(facts['mcp'])}.\n';
+    'MCP servers here, with the agents that use each (none is fine, it can be connected): ${jsonEncode(facts['mcp'])}.\n'
+    'Skill folders here, with the agents that can leave each: ${jsonEncode(facts['skills'] ?? const {})}.\n'
+    'An agent not listed for a folder reads it through another folder and keeps it.\n';
 
 /// The first step in the MCP column: a fixed list of actions.
 String smartMcpPrompt(Map facts) {
@@ -173,13 +175,13 @@ String smartMcpPrompt(Map facts) {
       'when the request is to find or add a new MCP server.\n'
       '{"action": "connect", "server": "<exact name listed above>", "agents": ["<commands>"]}\n'
       'when an agent should use a server that is already here.\n'
-      '{"action": "disconnect", "servers": ["<exact names listed above>"], "agents": ["<commands>"]}\n'
-      'when agents should stop using servers: name every server meant, all of them for "all servers"; the user sees one preview for all of it.\n'
+      '{"action": "disconnect", "servers": ["<exact server names listed above>"], "skills": ["<exact skill folders listed above>"], "agents": ["<commands>"]}\n'
+      'when agents should stop using servers or skill folders: name every one meant, all of them for "all"; the user sees one preview for all of it.\n'
       '$_lookupChoice'
       '{"action": "clarify", "question": "<one short question>", "choices": ["<2 to 4 short answers>"]}\n'
       'when you cannot tell what is meant, for example which agents.\n'
       '{"action": "redirect", "hint": "<what works instead, one sentence>", "column": "<agents, providers or models, or null>", "request": "<the request for that column, or null>"}\n'
-      'for anything else: this column cannot manage models, agents, providers or skills, cannot update or install programs, and cannot delete a server from the PC.';
+      'for anything else: this column cannot manage models, agents or providers, cannot add or update skills, cannot update or install programs, and cannot delete a server from the PC.';
 }
 
 /// The second step: the agent picks from real registry results.
@@ -368,8 +370,9 @@ Future<Map<String, dynamic>> smartProviders(Map facts, SmartAgent agent) async {
 Map<String, dynamic> smartMcpChecked(
   Map answer,
   Set<String> agents,
-  Set<String> servers,
-) {
+  Set<String> servers, [
+  Set<String> skills = const {},
+]) {
   final action = answer['action'];
   if (action == 'lookup') return smartChecked(answer, const {});
   if (action == 'clarify' || action == 'redirect') {
@@ -397,16 +400,20 @@ Map<String, dynamic> smartMcpChecked(
     return {'action': action, 'server': server, 'agents': unique};
   }
   if (action == 'disconnect') {
-    final named = answer['servers'];
+    final named = answer['servers'] ?? const [];
+    final folders = answer['skills'] ?? const [];
     if (named is! List ||
-        named.isEmpty ||
+        folders is! List ||
+        named.isEmpty && folders.isEmpty ||
         !named.every(servers.contains) ||
+        !folders.every(skills.contains) ||
         unique.isEmpty) {
       throw const FormatException('no server');
     }
     return {
       'action': action,
       'servers': {...named.cast<String>()}.toList(),
+      'skills': {...folders.cast<String>()}.toList(),
       'agents': unique,
     };
   }
@@ -421,11 +428,15 @@ Future<Map<String, dynamic>> smartMcp(
 ) async {
   final agents = [for (final a in facts['agents'] as List) a as Map];
   final used = Map<String, dynamic>.from(facts['mcp'] as Map);
+  final folders = Map<String, dynamic>.from(
+    facts['skills'] as Map? ?? const {},
+  );
   final names = {for (final a in agents) '${a['command']}': '${a['name']}'};
   final first = smartMcpChecked(
     firstJson(await agent(smartMcpPrompt(facts)), 'action'),
     names.keys.toSet(),
     used.keys.toSet(),
+    folders.keys.toSet(),
   );
   final action = first['action'];
   if (action == 'lookup') {
@@ -455,6 +466,10 @@ Future<Map<String, dynamic>> smartMcp(
         for (final command in first['agents'] as List)
           if ((used[server] as List? ?? const []).contains(command))
             {'server': server, 'agent': command},
+      for (final folder in first['skills'] as List)
+        for (final command in first['agents'] as List)
+          if ((folders[folder] as List? ?? const []).contains(command))
+            {'skill': folder, 'agent': command},
     ];
     if (pairs.isEmpty) {
       return {
@@ -463,7 +478,7 @@ Future<Map<String, dynamic>> smartMcp(
       };
     }
     final commands = {for (final p in pairs) p['agent']}.toList();
-    final shown = {for (final p in pairs) p['server']}.toList();
+    final shown = {for (final p in pairs) p['server'] ?? p['skill']}.toList();
     return {
       'status': 'proposal',
       'summary': '',

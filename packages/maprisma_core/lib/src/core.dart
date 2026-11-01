@@ -202,6 +202,7 @@ final class CoreService {
     // built-in ones the way the reference does.
     addons.reload(enabledAddons());
     reads.catalog.adapters = addons.adapters;
+    reads.graph.skillWay = _skillWay;
     // Inventory scans remember the MCP servers in use, as the reference does.
     reads.inventory.knownServers = mcp.knownServers;
     // After each scan the provider watcher's config, and its service on or off.
@@ -2936,14 +2937,25 @@ final class CoreService {
                     {'command': a.command, 'name': a.name},
                 ],
                 'mcp': {
-                  for (final name in {
-                    for (final a in installed)
-                      ...?inventory.agentMcp[a.command],
-                  })
-                    name: [
+                  for (final server in inventory.mcp)
+                    server['name']: [
                       for (final a in installed)
-                        if (inventory.agentMcp[a.command]?.contains(name) ==
+                        if (inventory.agentMcp[a.command]?.contains(
+                              server['name'],
+                            ) ==
                             true)
+                          a.command,
+                    ],
+                },
+                'skills': {
+                  for (final set in inventory.skillSets)
+                    set['path']: [
+                      for (final a in installed)
+                        if (inventory.agentSkills[a.command]?.contains(
+                                  set['path'],
+                                ) ==
+                                true &&
+                            _skillWay(a.command, set['path'] as String).isEmpty)
                           a.command,
                     ],
                 },
@@ -3186,14 +3198,28 @@ final class CoreService {
       }
       return pairs.length == 1
           ? dispatch('connections.preview', {
-              'kind': 'mcp',
+              'kind': pairs.single['skill'] == null ? 'mcp' : 'skills',
               'command': pairs.single['agent'],
-              'item': pairs.single['server'],
+              'item': pairs.single['server'] ?? pairs.single['skill'],
               'remove': true,
             })
           : _disconnectAll(pairs);
     }
     throw const FormatException('Invalid request');
+  }
+
+  /// graph.skill_way: why an agent keeps a folder, or '' when it can leave.
+  String _skillWay(String command, String path) {
+    final folder = skills.expand(path);
+    final (through, listed, links) = skills.reach(command, folder);
+    if (listed || links.isNotEmpty) return '';
+    final other = [
+      for (final d in through)
+        if (skills.real(d) != skills.real(folder)) d,
+    ];
+    return other.isEmpty
+        ? i18n.text('reads the folder by itself')
+        : '${i18n.text('through a folder it reads')}: ${config.tilde(other.first)}';
   }
 
   /// Several servers leave their agents in one preview, backup and Undo.
@@ -3203,7 +3229,23 @@ final class CoreService {
     final focus = <String>[];
     final builders = <Plan Function()>[];
     for (final pair in pairs) {
-      final command = pair['agent'] as String, item = pair['server'] as String;
+      final command = pair['agent'] as String;
+      if (pair['skill'] case final String folder) {
+        if (!inventory.skillSets.any((s) => s['path'] == folder) ||
+            skills.ownDir(command) == null) {
+          throw const FormatException('Skill folder unavailable');
+        }
+        builders.add(() => skills.plan(command, folder, remove: true));
+        for (final id in taskFocus(reads.map, {
+          'command': command,
+          'kind': 'skills',
+          'item': folder,
+        })) {
+          if (!focus.contains(id)) focus.add(id);
+        }
+        continue;
+      }
+      final item = pair['server'] as String;
       final server = inventory.mcp.where((s) => s['name'] == item).firstOrNull;
       if (server == null ||
           !mcp.supported(command) ||
@@ -3227,7 +3269,9 @@ final class CoreService {
       ...connections.keep(chainPlans(config, builders)),
       'kind': 'mcp',
       'remove': true,
-      'disconnects': [for (final p in pairs) '${p['server']} → ${p['agent']}'],
+      'disconnects': [
+        for (final p in pairs) '${p['server'] ?? p['skill']} → ${p['agent']}',
+      ],
       'focus': focus,
     };
   }
