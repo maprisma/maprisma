@@ -2,6 +2,10 @@ import 'dart:math' as math;
 import 'package:flutter/painting.dart';
 import 'map_snapshot.dart';
 
+/// The saved layout's names for the four columns, in order.
+const mapColumnKeys = ['mcp', 'agents', 'providers', 'models'];
+const mapColumnMinWidth = 200.0, mapColumnMaxWidth = 900.0;
+
 const mapBoxWidth = 242.0, mapBoxHeight = 128.0, mapRowStep = 146.0;
 String edgeKey(Map<String, dynamic> e) =>
     '${e['source']}|${e['target']}|${e['kind']}';
@@ -140,8 +144,24 @@ class MapLayout {
       columnGap = gap;
     }
     boxWidth = columnWidth - 24.0;
+    // A width set by the user, else its default, else the automatic one.
+    final current = saved['column_widths'] as Map? ?? const {};
+    final defaults = saved['column_defaults'] as Map? ?? const {};
+    for (var i = 0; i < mapColumnKeys.length; i++) {
+      final width =
+          (current[mapColumnKeys[i]] ?? defaults[mapColumnKeys[i]]) as num?;
+      if (width != null) {
+        _widths[i] = width.toDouble().clamp(
+          mapColumnMinWidth,
+          mapColumnMaxWidth,
+        );
+      }
+    }
+    final shownColumns = columns ?? const [0, 1, 2, 3];
     final natural =
-        32.0 + count * columnWidth + math.max(0, count - 1) * columnGap;
+        32.0 +
+        shownColumns.fold<double>(0, (sum, c) => sum + columnWidthOf(c)) +
+        math.max(0, count - 1) * columnGap;
     final span = centerWidth ?? viewportWidth;
     _inset = count == 0 || span <= natural
         ? 0
@@ -180,7 +200,7 @@ class MapLayout {
       final folded = (saved['collapsed'] as List? ?? []).contains(id);
       final origin = Offset(columnX(column), heights[column] ?? startTop);
       final height = folded ? 38.0 : 32 + ids.length * mapRowStep;
-      final rect = origin & Size(columnWidth, height);
+      final rect = origin & Size(columnWidthOf(column), height);
       final first = nodes[ids.first]!;
       const labels = {
         'agent': 'Agents',
@@ -206,7 +226,7 @@ class MapLayout {
           boxes[ids[i]] = Rect.fromLTWH(
             origin.dx + 12,
             origin.dy + 38 + i * mapRowStep,
-            boxWidth,
+            columnWidthOf(column) - 24.0,
             mapBoxHeight,
           );
         }
@@ -272,9 +292,19 @@ class MapLayout {
   late final double columnWidth, columnGap, boxWidth;
   double _inset = 0;
   bool _sized = false;
+  final _widths = <int, double>{};
+
+  double columnWidthOf(int column) => _widths[column] ?? columnWidth;
+
   double columnX(int column) {
-    final slot = _columns?.indexOf(column) ?? -1;
-    return _inset + 16 + (slot < 0 ? column : slot) * (columnWidth + columnGap);
+    final shown = _columns ?? const [0, 1, 2, 3];
+    final slot = shown.indexOf(column);
+    if (slot < 0) return _inset + 16 + column * (columnWidth + columnGap);
+    var x = _inset + 16;
+    for (var i = 0; i < slot; i++) {
+      x += columnWidthOf(shown[i]) + columnGap;
+    }
+    return x;
   }
 
   Size get size => Size(
@@ -284,7 +314,7 @@ class MapLayout {
         null || [_, _, _, _] when !_sized => 1250,
         final shown =>
           columnX(shown == null ? 3 : shown.last) +
-              columnWidth +
+              columnWidthOf(shown == null ? 3 : shown.last) +
               (_sized ? 16 : 48),
       },
       cards.values.fold<double>(0, (v, c) => math.max(v, c.rect.right)) +

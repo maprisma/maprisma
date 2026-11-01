@@ -1899,7 +1899,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
     return OverlayPortal(
       controller: _portal,
       overlayChildBuilder: (_) =>
-          shown ? _buildWindow(colors, statusButton) : const SizedBox.shrink(),
+          shown ? _buildWindow(colors) : const SizedBox.shrink(),
       child: SizedBox(
         width: widget.width,
         height: 38,
@@ -1984,7 +1984,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
     );
   }
 
-  Widget _buildWindow(ColorScheme colors, Widget statusButton) {
+  Widget _buildWindow(ColorScheme colors) {
     final actions = _actions();
     return OverlayWindow(
       key: ValueKey('smart-window-${widget.column}'),
@@ -2006,7 +2006,6 @@ class _MapSmartCardState extends State<MapSmartCard> {
               padding: const EdgeInsets.fromLTRB(4, 4, 4, 4),
               child: Row(
                 children: [
-                  statusButton,
                   Expanded(
                     child: Semantics(
                       button: _step == _SmartStep.status,

@@ -659,6 +659,24 @@ void main() {
       expect(edits, isEmpty);
     },
   );
+  testWidgets('a column border drags its width; a double click restores it', (
+    tester,
+  ) async {
+    final saved = <Map<String, dynamic>>[];
+    await mount(tester, edits: [], onLayout: saved.add);
+    final edge = find.byKey(const ValueKey('column-edge-agents-right'));
+    await tester.drag(edge, const Offset(40, 0));
+    await tester.pumpAndSettle();
+    final widths = saved.last['column_widths'] as Map;
+    expect(widths.keys, ['agents']);
+    expect(widths['agents'], greaterThan(266));
+    await tester.tap(edge);
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.tap(edge);
+    await tester.pumpAndSettle();
+    expect(saved.last['column_widths'], isEmpty);
+  });
+
   testWidgets(
     'fold and keyboard reorder save only layout; pin survives remount',
     (tester) async {

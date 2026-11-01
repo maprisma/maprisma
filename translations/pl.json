@@ -3334,5 +3334,10 @@
  "Save a screenshot": "Zapisz zrzut ekranu",
  "What is wrong? (optional)": "Co jest nie tak? (opcjonalnie)",
  "Screenshots go to": "Zapisuj zrzuty w",
- "A picture of this window is saved, with a note if you like. In a terminal, use the camera symbol below it: programs there may use F9.": "Obraz tego okna zostaje zapisany, jeśli chcesz, z notatką. W terminalu użyj symbolu aparatu pod nim: programy mogą używać F9."
+ "A picture of this window is saved, with a note if you like. In a terminal, use the camera symbol below it: programs there may use F9.": "Obraz tego okna zostaje zapisany, jeśli chcesz, z notatką. W terminalu użyj symbolu aparatu pod nim: programy mogą używać F9.",
+ "Column widths": "Szerokości kolumn",
+ "Current width": "Obecna szerokość",
+ "Default width": "Domyślna szerokość",
+ "Automatic": "Automatycznie",
+ "Drag a border to change the width; a double click restores the default.": "Przeciągnij krawędź, aby zmienić szerokość; dwuklik przywraca domyślną."
 }

@@ -16,6 +16,9 @@ Column gaps about 12% of the window, as far as the 266 px column minimum leaves 
 ## Ask AI helper (Uwe's screenshot notes)
 The helper chosen in one Ask AI window holds for all four cards and after a restart (setting `smart_helper`, null|string), with a green check mark next to it. The status symbol stays what it was: the column's findings. Choosing a helper changes none of them.
 
+## Column widths (Uwe)
+A column's left or right border drags its width, and its boxes follow. Saved in `flutter_map_layout`: `column_widths` (current) and `column_defaults`, by column name, 200 to 900 px, in both validators; protocol unchanged. Nothing set means today's automatic width. A double click drops the current width. Settings › Map shows both for each column. The status symbol left the Ask AI window's title; the bars keep theirs (Uwe's choice).
+
 ## Texts
 `What is wrong? (optional)` in 7 languages; the dialog is translated now that it is not only a test tool. Manual: the F9 row of the keys table.
 

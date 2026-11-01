@@ -423,6 +423,34 @@ class _MapEditorState extends State<MapEditor>
     widget.onLayout?.call(data);
   }
 
+  /// The width at the drag's start, then where the pointer has taken it.
+  double _widthAtDrag = 0;
+
+  void _dragColumn(int col, double dx) {
+    _widthAtDrag = (_widthAtDrag + dx).clamp(
+      mapColumnMinWidth,
+      mapColumnMaxWidth,
+    );
+    _renderChange(() {
+      _saved = {
+        ..._saved,
+        'column_widths': {
+          ...(_saved['column_widths'] as Map? ?? const {}),
+          mapColumnKeys[col]: _widthAtDrag.round(),
+        },
+      };
+      _layout = null;
+    });
+  }
+
+  void _resetColumn(int col) {
+    _save({
+      ..._saved,
+      'column_widths': {...(_saved['column_widths'] as Map? ?? const {})}
+        ..remove(mapColumnKeys[col]),
+    });
+  }
+
   void _cancel() {
     _renderChange(() {
       _pointerDrawing = false;
@@ -523,7 +551,7 @@ class _MapEditorState extends State<MapEditor>
       _transform.toScene(Offset(box.size.width, box.size.height)),
     );
     final left = layout.columnX(col);
-    final card = Rect.fromLTWH(left, 106, layout.columnWidth, 320);
+    final card = Rect.fromLTWH(left, 106, layout.columnWidthOf(col), 320);
     final dx = card.right > visible.right
         ? visible.right - 16 - card.right
         : card.left < visible.left
@@ -1193,7 +1221,7 @@ class _MapEditorState extends State<MapEditor>
                                           Positioned(
                                             left: layout.columnX(i),
                                             top: 8,
-                                            width: layout.columnWidth,
+                                            width: layout.columnWidthOf(i),
                                             height: 86,
                                             child: MapGroupCard(
                                               group: widget.groups![i],
@@ -1346,6 +1374,29 @@ class _MapEditorState extends State<MapEditor>
                                   style: widget.lightStyle,
                                 ),
                               ),
+                            for (final col in _shownColumns)
+                              for (final left in [true, false])
+                                Positioned(
+                                  left:
+                                      layout.columnX(col) +
+                                      (left ? 0 : layout.columnWidthOf(col)) -
+                                      5,
+                                  top: 8,
+                                  bottom: 0,
+                                  width: 10,
+                                  child: _ColumnEdge(
+                                    key: ValueKey(
+                                      'column-edge-${mapColumnKeys[col]}-${left ? 'left' : 'right'}',
+                                    ),
+                                    tooltip: widget.tr(_columnHint),
+                                    onStart: () => _widthAtDrag = layout
+                                        .columnWidthOf(col),
+                                    onDrag: (dx) =>
+                                        _dragColumn(col, left ? -dx : dx),
+                                    onEnd: () => widget.onLayout?.call(_saved),
+                                    onReset: () => _resetColumn(col),
+                                  ),
+                                ),
                             for (final curve in layout.curves.where(
                               (c) =>
                                   layout.movable(c.edge) &&
@@ -1404,7 +1455,7 @@ class _MapEditorState extends State<MapEditor>
                                   ),
                                   left: layout.columnX(col),
                                   top: 106,
-                                  width: layout.columnWidth,
+                                  width: layout.columnWidthOf(col),
                                   child: Visibility(
                                     visible: _shownColumns.contains(col),
                                     maintainState: true,
@@ -1412,7 +1463,7 @@ class _MapEditorState extends State<MapEditor>
                                       key: ValueKey(
                                         'smart-card-${mapSmartColumns[col].$1}',
                                       ),
-                                      width: layout.columnWidth,
+                                      width: layout.columnWidthOf(col),
                                       column: mapSmartColumns[col].$1,
                                       onProvider: widget.onSmartProvider,
                                       onTask: widget.onSmartTask,
@@ -1650,4 +1701,39 @@ class _MapPaint extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _MapPaint old) => true;
+}
+
+const _columnHint =
+    'Drag a border to change the width; a double click restores the default.';
+
+/// The left or right border of a column.
+class _ColumnEdge extends StatelessWidget {
+  const _ColumnEdge({
+    super.key,
+    required this.tooltip,
+    required this.onStart,
+    required this.onDrag,
+    required this.onEnd,
+    required this.onReset,
+  });
+
+  final String tooltip;
+  final VoidCallback onStart, onEnd, onReset;
+  final ValueChanged<double> onDrag;
+
+  @override
+  Widget build(BuildContext context) => Tooltip(
+    message: tooltip,
+    waitDuration: const Duration(seconds: 1),
+    child: MouseRegion(
+      cursor: SystemMouseCursors.resizeColumn,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onHorizontalDragStart: (_) => onStart(),
+        onHorizontalDragUpdate: (d) => onDrag(d.delta.dx),
+        onHorizontalDragEnd: (_) => onEnd(),
+        onDoubleTap: onReset,
+      ),
+    ),
+  );
 }

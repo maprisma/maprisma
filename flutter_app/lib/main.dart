@@ -4343,9 +4343,13 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                                   )
                                 : _showSettings && _snapshot != null
                                 ? SettingsView(
-                                    settings:
-                                        _snapshot!['settings']
-                                            as Map<String, dynamic>,
+                                    settings: {
+                                      ...(_snapshot!['settings']
+                                          as Map<String, dynamic>),
+                                      'flutter_map_layout': ?_mapLayoutOverride,
+                                    },
+                                    onMapLayout: (layout) =>
+                                        setState(() => _saveMapLayout(layout)),
                                     busy: _busy,
                                     tr: tr,
                                     onUpdate: _updateSettings,

@@ -52,8 +52,15 @@ bool subset(dynamic v, List<String> choices) =>
 bool validLayout(dynamic v) {
   if (v is! Map ||
       v.keys.any(
-        (k) =>
-            !['cards', 'order', 'collapsed', 'pins', 'card_order'].contains(k),
+        (k) => ![
+          'cards',
+          'order',
+          'collapsed',
+          'pins',
+          'card_order',
+          'column_widths',
+          'column_defaults',
+        ].contains(k),
       )) {
     return false;
   }
@@ -69,6 +76,20 @@ bool validLayout(dynamic v) {
       a.toSet().length == a.length;
   for (final key in ['collapsed', 'pins', 'card_order']) {
     if (v.containsKey(key) && !ids(v[key], 100)) return false;
+  }
+  for (final key in ['column_widths', 'column_defaults']) {
+    final widths = v.containsKey(key) ? v[key] : <String, dynamic>{};
+    if (widths is! Map ||
+        widths.entries.any(
+          (e) =>
+              !['mcp', 'agents', 'providers', 'models'].contains(e.key) ||
+              e.value is! num ||
+              !(e.value as num).isFinite ||
+              e.value < 200 ||
+              e.value > 900,
+        )) {
+      return false;
+    }
   }
   for (final key in ['cards', 'order']) {
     final mapping = v[key] ?? <String, dynamic>{};

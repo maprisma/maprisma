@@ -36,6 +36,26 @@ Map<String, dynamic> fixtureGraph({bool active = false}) => {
   ],
 };
 void main() {
+  test('a column keeps its own width; the next one moves along', () {
+    final auto = MapLayout(
+      const {'nodes': [], 'edges': []},
+      const {},
+      viewportWidth: 1896,
+    );
+    final set = MapLayout(
+      const {'nodes': [], 'edges': []},
+      const {
+        'column_widths': {'agents': 500},
+        'column_defaults': {'agents': 300, 'models': 320},
+      },
+      viewportWidth: 1896,
+    );
+    expect(set.columnWidthOf(1), 500);
+    expect(set.columnWidthOf(3), 320);
+    expect(set.columnWidthOf(0), auto.columnWidthOf(0));
+    expect(set.columnX(2), set.columnX(1) + 500 + set.columnGap);
+  });
+
   test(
     'a wide window gives the lines room; the columns never go below 266',
     () {

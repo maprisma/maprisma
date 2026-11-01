@@ -210,6 +210,24 @@ void main() {
         'values': {'smart_helper': 'claude'},
       });
       expect(core.settings.snapshot()['smart_helper'], 'claude');
+      core.dispatch('settings.update', {
+        'values': {
+          'flutter_map_layout': {
+            'column_widths': {'agents': 500},
+            'column_defaults': {'models': 320},
+          },
+        },
+      });
+      expect(
+        () => core.dispatch('settings.update', {
+          'values': {
+            'flutter_map_layout': {
+              'column_widths': {'agents': 50},
+            },
+          },
+        }),
+        throwsA(anything),
+      );
       core.settings.posix.atomicWrite(
         core.identity.settingsPath,
         utf8.encode(

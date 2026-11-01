@@ -1273,7 +1273,11 @@ void main() {
     await tester.tap(find.byTooltip('Settings').first);
     await settleService(tester);
     final undo = find.byKey(const ValueKey('undo-20261030-100000-000000'));
-    await tester.scrollUntilVisible(undo, 300);
+    await tester.scrollUntilVisible(
+      undo,
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('~/.claude.json'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('undo-20261029-090000-000000')),
@@ -1304,7 +1308,11 @@ void main() {
     await tester.tap(find.byTooltip('Settings').first);
     await settleService(tester);
     final undo = find.byKey(const ValueKey('undo-20261030-100000-000000'));
-    await tester.scrollUntilVisible(undo, 300);
+    await tester.scrollUntilVisible(
+      undo,
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
     File('${dir.path}/slow').writeAsStringSync('');
     await tester.tap(undo); // busy until the core answers
     await settleService(tester);
@@ -1328,7 +1336,11 @@ void main() {
     await tester.tap(find.byTooltip('Settings').first);
     await settleService(tester);
     final daily = find.byKey(const ValueKey('ai-checks'));
-    await tester.scrollUntilVisible(daily, 300);
+    await tester.scrollUntilVisible(
+      daily,
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(tester.widget<SwitchListTile>(daily).value, isFalse);
     File(
       '${dir.path}/other.json',

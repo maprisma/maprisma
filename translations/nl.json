@@ -3253,5 +3253,10 @@
  "Save a screenshot": "Schermafbeelding opslaan",
  "What is wrong? (optional)": "Wat klopt er niet? (optioneel)",
  "Screenshots go to": "Schermafbeeldingen opslaan in",
- "A picture of this window is saved, with a note if you like. In a terminal, use the camera symbol below it: programs there may use F9.": "Een afbeelding van dit venster wordt opgeslagen, desgewenst met een notitie. Gebruik in een terminal het camerasymbool eronder: programma’s kunnen F9 zelf gebruiken."
+ "A picture of this window is saved, with a note if you like. In a terminal, use the camera symbol below it: programs there may use F9.": "Een afbeelding van dit venster wordt opgeslagen, desgewenst met een notitie. Gebruik in een terminal het camerasymbool eronder: programma’s kunnen F9 zelf gebruiken.",
+ "Column widths": "Kolombreedtes",
+ "Current width": "Huidige breedte",
+ "Default width": "Standaardbreedte",
+ "Automatic": "Automatisch",
+ "Drag a border to change the width; a double click restores the default.": "Sleep een rand om de breedte te wijzigen; dubbelklikken herstelt de standaard."
 }
