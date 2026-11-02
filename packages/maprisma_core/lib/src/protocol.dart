@@ -5,8 +5,12 @@ const maxRequest = 64 * 1024;
 const maxResponse = 1024 * 1024;
 
 final class ServiceError extends StateError {
-  ServiceError(this.code) : super('Service operation failed: $code');
+  ServiceError(this.code, [this.reason])
+    : super('Service operation failed: $code');
   final String code;
+
+  /// Only for `action_refused`: the core's own words, safe to show.
+  final String? reason;
 }
 
 final class Request {

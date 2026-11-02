@@ -180,19 +180,20 @@ class GraphTest(unittest.TestCase):
         self.assertEqual(groups, {"opus": "", "fable": "", "sonnet": "", "qwen": "~/Models", "gemma": "~/Models"})
 
     def test_only_what_is_set_up(self):
-        """The map has no places to add things: no local LLM that is not installed, no MCP server
-        no agent uses, no "+" boxes (Setup adds and removes)."""
+        """The map has no places to add things: no local LLM that is not installed, no "+" boxes.
+        A known MCP server without agents stays as a faded box, to draw a line to it again (task 018)."""
         claude = agents.Agent(command="claude", name="Claude Code", icon="c", installed=True)
         inv = invmod.Inventory(
             runtimes=[invmod.Runtime("ollama", "Ollama", True, False, models=["gemma"], models_dir="/m"),
                       invmod.Runtime("jan", "Jan", False, False)],
             mcp=[invmod.McpServer("github", "command", "gh", ["claude"]), invmod.McpServer("old", "command", "x", [])],
             agent_mcp={"claude": ["github"]})
-        ids = {n.id for n in graph.build([claude], {"claude": ad.Details(model="opus")}, inv).nodes}
+        nodes = {n.id: n for n in graph.build([claude], {"claude": ad.Details(model="opus")}, inv).nodes}
+        ids = set(nodes)
         self.assertIn("runtime:ollama", ids)
-        self.assertIn("mcp:github", ids)
+        self.assertFalse(nodes["mcp:github"].dim)
         self.assertNotIn("runtime:jan", ids)
-        self.assertNotIn("mcp:old", ids)
+        self.assertTrue(nodes["mcp:old"].dim)
         self.assertFalse([i for i in ids if i.startswith("add:")])
 
     def test_running_instances(self):

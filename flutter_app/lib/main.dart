@@ -45,12 +45,14 @@ import 'overlay_window.dart';
 import 'item_details_view.dart';
 import 'map_layout.dart' show withAgentLinks;
 import 'map_editor.dart' show mapColumnLayers;
+import 'action_rules_window.dart';
 import 'map_smart_card.dart'
     show
         SmartStatusData,
         SmartStatusIcon,
         mapSmartColumns,
         smartHelperChosen,
+        smartOpenRules,
         smartWindowsShown;
 import 'agent_action_dialog.dart';
 import 'providers_view.dart';
@@ -392,6 +394,8 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       );
     });
     final value = await result.future;
+    // Before the refresh: that can take longer than a refusal counts.
+    final failure = value?['ok'] == false ? failureText(tr) : null;
     if (!mounted) return value;
     if (!_dataTasks.contains(operation)) {
       _mapStale = true;
@@ -420,7 +424,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         value['ok'] != false) {
       setState(() => _card = null);
     } else {
-      _taskResult(title, value);
+      _taskResult(title, value, failure: failure);
     }
     return value?['ok'] == false ? null : value;
   }
@@ -429,6 +433,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     String title,
     Map<String, dynamic>? value, {
     Future<void> Function()? undo,
+    String? failure,
   }) {
     if (!mounted) return;
     setState(
@@ -436,15 +441,15 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         title: title,
         child: TaskReview(
           content: Text(
-            tr(
-              value == null
-                  ? 'Cancelled'
-                  : value['ok'] == false
-                  ? 'The action could not be completed.'
-                  : value['external'] == true
-                  ? 'This runs in a separate terminal; passwords are entered there. Refresh when it finishes.'
-                  : 'Succeeded',
-            ),
+            value?['ok'] == false
+                ? failure ?? failureText(tr)
+                : tr(
+                    value == null
+                        ? 'Cancelled'
+                        : value['external'] == true
+                        ? 'This runs in a separate terminal; passwords are entered there. Refresh when it finishes.'
+                        : 'Succeeded',
+                  ),
           ),
           actions: [
             if (undo != null ||
@@ -537,8 +542,64 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       _busy = false;
       if (_card?.child is! TaskProgress) _card = null;
     });
-    ScaffoldMessenger.of(_navigator.currentContext!).showSnackBar(
-      SnackBar(content: Text(tr('The action could not be completed.'))),
+    ScaffoldMessenger.of(
+      _navigator.currentContext!,
+    ).showSnackBar(SnackBar(content: Text(failureText(tr))));
+  }
+
+  /// Settings › What may be done: saved as it changes.
+  Future<void> _openRules() async {
+    if (_busy || _taskActive) return;
+    final settings = _snapshot?['settings'] as Map? ?? const {};
+    final items = <String, Map<String, String>>{};
+    final agents = <String, String>{};
+    for (final n in (_graph?['nodes'] as List? ?? const []).cast<Map>()) {
+      final id = '${n['id']}', label = '${n['label']}';
+      final parts = id.split(':');
+      switch (parts.first) {
+        case 'agent':
+          agents[id.substring(6)] = label;
+          (items['agents'] ??= {})[id.substring(6)] = label;
+        case 'mcp' || 'skills':
+          (items[parts.first] ??= {})[id.substring(parts.first.length + 1)] =
+              label;
+        case 'runtime' || 'cloud':
+          (items['providers'] ??= {})[id.substring(parts.first.length + 1)] =
+              label;
+        case 'model' when parts.length > 3:
+          (items['models'] ??= {})[parts.skip(3).join(':')] = label;
+      }
+    }
+    await showDialog<void>(
+      context: _navigator.currentContext!,
+      builder: (_) => ActionRulesWindow(
+        rules: (settings['action_rules'] as List? ?? const [])
+            .cast<Map<String, dynamic>>(),
+        hints: settings['action_rule_hints'] != false,
+        items: items,
+        agents: agents,
+        tr: tr,
+        // A rule is no reason to scan the map.
+        onSave: (rules, hints) async {
+          final values = {
+            'action_rules': [
+              for (final r in rules) {...r},
+            ],
+            'action_rule_hints': hints,
+          };
+          _settingsRevision++;
+          await _client.settingsUpdate(values: values);
+          if (mounted) {
+            setState(() => (_snapshot?['settings'] as Map?)?.addAll(values));
+          }
+        },
+        onTest: (request) => _client.rulesTest(
+          action: request['action']!,
+          agent: request['agent']!,
+          category: request['category']!,
+          item: request['item']!,
+        ),
+      ),
     );
   }
 
@@ -549,6 +610,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     HardwareKeyboard.instance.addHandler(_shotKey);
     smartWindowsShown.addListener(_smartWindowsChanged);
     smartHelperChosen.addListener(_smartHelperChanged);
+    smartOpenRules = _openRules;
     windowChannel.setMethodCallHandler((call) async {
       if (call.method == 'shown') _placePopup();
     });
@@ -935,6 +997,8 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     setState(() => _busy = true);
     try {
       await _client.settingsUpdate(values: values);
+      // The map's reasons are in the language they were made in.
+      if (values.containsKey('language')) _mapStale = true;
       if (!mounted || revision != _settingsRevision) return;
       setState(() => (_snapshot?['settings'] as Map?)?.addAll(values));
       await _refresh();
@@ -1705,26 +1769,30 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
 
   /// A task from Ask AI: the prompt to read, then the agent in a terminal.
   Future<void> _smartTask(Map<String, dynamic> plan) async {
-    final yes = await showDialog<bool>(
-      context: _navigator.currentContext!,
-      builder: (context) => AlertDialog(
-        title: Text(tr('Do it with {0}…').replaceAll('{0}', '${plan['name']}')),
-        content: SizedBox(
-          width: 760,
-          child: SingleChildScrollView(
-            child: SelectableText(plan['prompt'] as String),
+    final yes = await _review(
+      () => showDialog<bool>(
+        context: _navigator.currentContext!,
+        builder: (context) => AlertDialog(
+          title: Text(
+            tr('Do it with {0}…').replaceAll('{0}', '${plan['name']}'),
           ),
+          content: SizedBox(
+            width: 760,
+            child: SingleChildScrollView(
+              child: SelectableText(plan['prompt'] as String),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(tr('Cancel')),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(tr('Start')),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(tr('Cancel')),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(tr('Start')),
-          ),
-        ],
       ),
     );
     if (yes != true || !mounted) return;
@@ -1860,28 +1928,30 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       }
       final plan = await _client.checksMcpTask(name: update['name'] as String);
       if (!mounted) return;
-      final yes = await showDialog<bool>(
-        context: _navigator.currentContext!,
-        builder: (context) => AlertDialog(
-          title: Text(
-            '${tr('Update {0}').replaceAll('{0}', '${update['name']}')} · ${plan['name']}',
+      final yes = await _review(
+        () => showDialog<bool>(
+          context: _navigator.currentContext!,
+          builder: (context) => AlertDialog(
+            title: Text(
+              '${tr('Update {0}').replaceAll('{0}', '${update['name']}')} · ${plan['name']}',
+            ),
+            content: SizedBox(
+              width: 760,
+              child: SingleChildScrollView(
+                child: SelectableText(plan['prompt'] as String),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text(tr('Cancel')),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: Text(tr('Continue')),
+              ),
+            ],
           ),
-          content: SizedBox(
-            width: 760,
-            child: SingleChildScrollView(
-              child: SelectableText(plan['prompt'] as String),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: Text(tr('Cancel')),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: Text(tr('Continue')),
-            ),
-          ],
         ),
       );
       if (yes != true || !mounted) return;
@@ -3217,11 +3287,28 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   }
 
   Future<void> _mapEdit(Map<String, dynamic> edit) async {
-    if (_busy) return;
     final nodes = {
       for (final n in (_mapGraph['nodes'] as List).cast<Map<String, dynamic>>())
         n['id'] as String: n,
     };
+    if (edit['fixed'] case final Map fixed) {
+      // A line that is true but not this app's to take away says why. It
+      // waits its turn: an Undo on the screen must not go.
+      ScaffoldMessenger.of(_navigator.currentContext!).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${nodes[fixed['source']]?['label']}: ${fixed['fixed']}',
+          ),
+        ),
+      );
+      return;
+    }
+    if (_busy) return;
+    if (edit['forget'] case final String id) {
+      return _connectionPreview({
+        'name': id.substring('mcp:'.length),
+      }, method: 'connections.forget_preview');
+    }
     Map<String, dynamic>? edge = edit['edge'] as Map<String, dynamic>?;
     if (edit['failure'] != null) {
       edge = edit['failure'] as Map<String, dynamic>;
@@ -3237,7 +3324,8 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
           ),
           actions: [
             TextButton(onPressed: no, child: Text(tr('Cancel'))),
-            TextButton(onPressed: yes, child: Text(tr('Disconnect'))),
+            if ('${edge['fixed'] ?? ''}'.isEmpty)
+              TextButton(onPressed: yes, child: Text(tr('Disconnect'))),
             FilledButton(
               onPressed: () {
                 repair = true;
@@ -3512,6 +3600,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     try {
       plan = await _client.modelsSlotsPreview();
     } catch (_) {
+      lastRefusal = null; // A step of its own: nobody asked for it.
       return;
     }
     if (!mounted) return;
@@ -4389,6 +4478,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                                     )
                                   : _showSettings && _snapshot != null
                                   ? SettingsView(
+                                      onRules: _openRules,
                                       settings: {
                                         ...(_snapshot!['settings']
                                             as Map<String, dynamic>),

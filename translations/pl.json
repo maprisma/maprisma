@@ -3342,5 +3342,16 @@
  "Drag a border to change the width; a double click restores the default.": "Przeciągnij krawędź, aby zmienić szerokość; dwuklik przywraca domyślną.",
  "Borders around category cards": "Obramowania kart kategorii",
  "Border thickness": "Grubość obramowania",
- "Border colour": "Kolor obramowania"
+ "Border colour": "Kolor obramowania",
+ "What may be done": "Co jest dozwolone",
+ "Rules for Ask AI and for what you draw on the map.": "Reguły dla Zapytaj AI i tego, co rysujesz na mapie.",
+ "The most specific rule decides; on a tie allow wins. A request no rule matches is refused.": "Decyduje najbardziej szczegółowa reguła; przy remisie wygrywa zezwolenie. Żądanie bez pasującej reguły jest odrzucane.",
+ "Deny": "Odmów",
+ "Refused": "Odrzucone",
+ "Test a request": "Sprawdź żądanie",
+ "Restore defaults": "Przywróć domyślne",
+ "Say which rule refused something": "Pokazuj, która reguła coś odrzuciła",
+ "Never decides: an allow rule names the same things.": "Nigdy nie decyduje: reguła zezwolenia wskazuje to samo.",
+ "This is not allowed here.": "To nie jest tutaj dozwolone.",
+ "{0}: not allowed by your rules": "{0}: niedozwolone przez twoje reguły"
 }

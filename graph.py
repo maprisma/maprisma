@@ -120,6 +120,7 @@ class Edge:
     kind: str                # uses / available (agent→provider), serves (provider→model), mcp, skills, default,
                              # failed (drawn but not written: only its hints are kept, link_hints)
     failed: str = ""         # "error" / "warning": the connection did not pass its check (dotted red / yellow)
+    fixed: str = ""          # why this line cannot be taken away here (skills reached through another folder)
     dangling: str = ""       # the model the agent is set to on a local LLM it has no provider for any more
 
 
@@ -141,6 +142,37 @@ class Graph:
 
     def column(self, index: int) -> list:
         return [n for n in self.nodes if n.column == index]
+
+
+_ways = {}
+_ways_of = None
+_ways_in = None
+
+
+def cached_skill_way(inventory, command: str, path: str) -> str:
+    """Reading folders per line is for a new inventory, not each scan."""
+    global _ways_of, _ways_in
+    language = _("through a folder it reads")   # the language they were made in
+    if inventory is not _ways_of or language != _ways_in:
+        _ways_of, _ways_in = inventory, language
+        _ways.clear()
+    if (command, path) not in _ways:
+        _ways[command, path] = skill_way(command, path)
+    return _ways[command, path]
+
+
+def skill_way(command: str, path: str) -> str:
+    """Why an agent keeps a skill folder that nothing here can take away, or ""."""
+    import connect
+    import skills_ctl
+    folder = skills_ctl.expand(path)
+    reach = skills_ctl.reach(command, folder)
+    if reach.listed or reach.links or not reach.native:
+        return ""
+    other = [d for d in reach.native if skills_ctl._real(d) != skills_ctl._real(folder)]
+    if other:
+        return f"{_('through a folder it reads')}: {connect.tilde(other[0])}"
+    return _('reads the folder by itself')
 
 
 def runtime_status(rt) -> str:
@@ -316,12 +348,21 @@ def build(agent_list, details: dict, inventory, labels: dict | None = None, fail
             count = len(skill_set.skills) if skill_set else 0
             graph.add(Node(sid, 0, path, labels["skills"](count), "skills"))
             graph.link(aid, sid, "skills")
+            for edge in graph.edges:
+                if edge.source == aid and edge.target == sid:
+                    edge.fixed = cached_skill_way(inventory, agent.command, path)
 
     for kind, ident, label, detail in available:
         if kind in ("mcp", "skills"):
             server = next((s for s in inventory.mcp if s.name == ident), None) if kind == "mcp" else None
             graph.add(Node(f"{kind}:{ident}", 0, label, detail, kind, dim=True,
                            group="online" if server and server.kind == "url" else ""))
+
+    # A known server without agents stays, to draw a line to it again.
+    for server in inventory.mcp:
+        if not any(n.id == f"mcp:{server.name}" for n in graph.nodes):
+            graph.add(Node(f"mcp:{server.name}", 0, server.name, server.target, "mcp", dim=True,
+                           group="online" if server.kind == "url" else ""))
 
     # Every installed local runtime (something to connect agents to), with its models.
     for rt in inventory.runtimes:

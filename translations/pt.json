@@ -3261,5 +3261,16 @@
  "Drag a border to change the width; a double click restores the default.": "Arraste uma margem para mudar a largura; um duplo clique repõe a predefinição.",
  "Borders around category cards": "Margens à volta dos cartões de categoria",
  "Border thickness": "Espessura da margem",
- "Border colour": "Cor da margem"
+ "Border colour": "Cor da margem",
+ "What may be done": "O que é permitido",
+ "Rules for Ask AI and for what you draw on the map.": "Regras para Perguntar à IA e para o que desenha no mapa.",
+ "The most specific rule decides; on a tie allow wins. A request no rule matches is refused.": "Decide a regra mais específica; em caso de empate ganha permitir. Um pedido sem regra correspondente é recusado.",
+ "Deny": "Recusar",
+ "Refused": "Recusado",
+ "Test a request": "Testar um pedido",
+ "Restore defaults": "Repor predefinições",
+ "Say which rule refused something": "Dizer que regra recusou algo",
+ "Never decides: an allow rule names the same things.": "Nunca decide: uma regra de permitir indica o mesmo.",
+ "This is not allowed here.": "Isto não é permitido aqui.",
+ "{0}: not allowed by your rules": "{0}: não permitido pelas suas regras"
 }

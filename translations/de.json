@@ -3261,5 +3261,16 @@
  "Drag a border to change the width; a double click restores the default.": "Rand ziehen ändert die Breite, ein Doppelklick stellt den Standard wieder her.",
  "Borders around category cards": "Rahmen um die Kategoriekarten",
  "Border thickness": "Rahmenstärke",
- "Border colour": "Rahmenfarbe"
+ "Border colour": "Rahmenfarbe",
+ "What may be done": "Was erlaubt ist",
+ "Rules for Ask AI and for what you draw on the map.": "Regeln für KI fragen und für das, was du auf der Karte zeichnest.",
+ "The most specific rule decides; on a tie allow wins. A request no rule matches is refused.": "Die genaueste Regel entscheidet; bei Gleichstand gewinnt Erlauben. Eine Anfrage ohne passende Regel wird abgelehnt.",
+ "Deny": "Ablehnen",
+ "Refused": "Abgelehnt",
+ "Test a request": "Anfrage testen",
+ "Restore defaults": "Standard wiederherstellen",
+ "Say which rule refused something": "Sagen, welche Regel etwas abgelehnt hat",
+ "Never decides: an allow rule names the same things.": "Entscheidet nie: Eine Erlauben-Regel nennt dasselbe.",
+ "This is not allowed here.": "Das ist hier nicht erlaubt.",
+ "{0}: not allowed by your rules": "{0}: durch deine Regeln nicht erlaubt"
 }

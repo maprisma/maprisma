@@ -1,3 +1,4 @@
+import 'action_rules.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'package:path/path.dart' as p;
@@ -33,6 +34,8 @@ const uiSettings = {
   'screenshot_key',
   'screenshot_folder',
   'smart_helper',
+  'action_rules',
+  'action_rule_hints',
   'usage_box',
   'usage_box_items',
   'usage_box_size',
@@ -203,6 +206,8 @@ final class SettingsStore {
         return v is int && [20, 30, 60].contains(v);
       case 'flutter_map_layout':
         return validLayout(v);
+      case 'action_rules':
+        return validActionRules(v);
       case 'look':
         return ['omarchy', 'adwaita'].contains(v);
       case 'window_mode':

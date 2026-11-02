@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'action_rules.dart';
 import 'adapters.dart' show Adapter;
 import 'desktop.dart' show whichIn;
 import 'health_report.dart' show pcInfo;
@@ -74,10 +75,105 @@ String _request(Map facts) {
 /// The words the user reads come in their language; keys and names do not.
 String _language(Map facts) {
   final language = facts['language'];
-  return language is String && RegExp(r'^[a-z]{2}$').hasMatch(language)
-      ? 'Write question, choices, hint, summary and reason in the language '
-            'with the code "$language".'
-      : '';
+  return (language is String && RegExp(r'^[a-z]{2}$').hasMatch(language)
+          ? 'Write question, choices, hint, summary and reason in the language '
+                'with the code "$language".'
+          : '') +
+      _ruleFacts(facts);
+}
+
+/// The user's rules, for the helper: the most specific rule decides, and the
+/// core checks whatever it answers.
+String _ruleFacts(Map facts) {
+  final rules = facts['action_rules'];
+  if (rules is! List || rules.isEmpty) return '';
+  return '\nThe user\'s rules for what may be done, the most specific rule '
+      'decides: ${jsonEncode(rules)}. Do not propose what they refuse.'
+      '${facts['rule_hints'] == false ? ' When they refuse a request say only that it is not allowed here: name no rule, and do not look it up instead.' : ''}';
+}
+
+const smartNotAllowed = 'This is not allowed here.';
+
+/// A card's title: the first names, and how many more.
+String smartDisconnectTitle(List<Map> pairs) {
+  final shown = {for (final p in pairs) p['server'] ?? p['skill']}.toList();
+  return shown.length > 3
+      ? '${shown.take(3).join(', ')} +${shown.length - 3}'
+      : shown.join(', ');
+}
+
+List<ActionCheck> smartPairChecks(Map pair) => [
+  ActionCheck(
+    'disconnect',
+    pair['skill'] == null ? 'mcp' : 'skills',
+    '${pair['skill'] ?? pair['server']}',
+    '${pair['agent']}',
+  ),
+];
+
+const _providerSteps = {'uninstall': 'remove'};
+
+/// What a proposed candidate would do, for the rules.
+List<ActionCheck> smartCandidateChecks(Map candidate) {
+  final action = candidate['action'];
+  if (action is! Map) return const [];
+  String text(String key) => '${action[key] ?? ''}';
+  final kind = action['kind'] ?? candidate['kind'];
+  return switch (kind) {
+    'mcp_add' => [
+      ActionCheck(
+        'install',
+        'mcp',
+        smartMcpName('${(action['server'] as Map?)?['name'] ?? ''}'),
+      ),
+    ],
+    'mcp_connect' => [
+      ActionCheck('connect', 'mcp', text('server'), text('agent')),
+    ],
+    'mcp_disconnect' => [
+      for (final p in (action['pairs'] as List? ?? const []).cast<Map>())
+        ...smartPairChecks(p),
+    ],
+    'model_move' => const [ActionCheck('move', 'models', '')],
+    'model_remove' => [ActionCheck('remove', 'models', text('model'))],
+    'agent_task' => [ActionCheck('start', 'agents', text('command'))],
+    'agent_action' => actionChecks('agents.action_preview', {
+      'action': text('step'),
+      'command': text('command'),
+    }),
+    'provider_action' => [
+      ActionCheck(
+        _providerSteps[candidate['step']] ?? '${candidate['step']}',
+        'providers',
+        '${candidate['key']}',
+      ),
+    ],
+    _ => actionChecks('providers.run', {
+      'operation': text('operation'),
+      'params': action['params'],
+    }),
+  };
+}
+
+/// Before a search and a second paid answer: refused unless a narrower rule
+/// could still allow one item.
+Map<String, dynamic>? smartRefused(Map facts, String action, String category) {
+  final rules = facts['action_rules'];
+  if (rules is! List || ruleAllows(rules, ActionCheck(action, category, ''))) {
+    return null;
+  }
+  final narrower = rules.cast<Map>().any(
+    (r) =>
+        r['effect'] == 'allow' &&
+        r['item'] != '*' &&
+        r['category'] == category &&
+        (r['action'] == '*' || r['action'] == action),
+  );
+  if (narrower) return null;
+  return {
+    'status': 'redirect',
+    'instead': {'hint': smartNotAllowed, 'column': null, 'request': null},
+  };
 }
 
 /// What the agent is told about the runners: no paths of this PC.
@@ -161,7 +257,9 @@ String smartMcpName(String name) {
 /// The MCP facts the agent gets: names only, no paths or settings.
 String _mcpFacts(Map facts) =>
     'Agents here: ${jsonEncode(facts['agents'])}.\n'
-    'MCP servers here, with the agents that use each: ${jsonEncode(facts['mcp'])}.\n';
+    'MCP servers here, with the agents that use each (none is fine, it can be connected): ${jsonEncode(facts['mcp'])}.\n'
+    'Skill folders here, as short ids, with the agents that can leave each: ${jsonEncode(facts['skills'] ?? const {})}.\n'
+    'An agent not listed for a folder reads it through another folder and keeps it.\n';
 
 /// The first step in the MCP column: a fixed list of actions.
 String smartMcpPrompt(Map facts) {
@@ -173,13 +271,13 @@ String smartMcpPrompt(Map facts) {
       'when the request is to find or add a new MCP server.\n'
       '{"action": "connect", "server": "<exact name listed above>", "agents": ["<commands>"]}\n'
       'when an agent should use a server that is already here.\n'
-      '{"action": "disconnect", "servers": ["<exact names listed above>"], "agents": ["<commands>"]}\n'
-      'when agents should stop using servers: name every server meant, all of them for "all servers"; the user sees one preview for all of it.\n'
+      '{"action": "disconnect", "servers": ["<exact server names listed above>"], "skills": ["<short ids of skill folders listed above>"], "agents": ["<commands>"]}\n'
+      'when agents should stop using servers or skill folders: name every one meant, all of them for "all"; the user sees one preview for all of it.\n'
       '$_lookupChoice'
       '{"action": "clarify", "question": "<one short question>", "choices": ["<2 to 4 short answers>"]}\n'
       'when you cannot tell what is meant, for example which agents.\n'
       '{"action": "redirect", "hint": "<what works instead, one sentence>", "column": "<agents, providers or models, or null>", "request": "<the request for that column, or null>"}\n'
-      'for anything else: this column cannot manage models, agents, providers or skills, cannot update or install programs, and cannot delete a server from the PC.';
+      'for anything else: this column cannot manage models, agents or providers, cannot add or update skills, cannot update or install programs, and cannot delete a server from the PC.';
 }
 
 /// The second step: the agent picks from real registry results.
@@ -368,8 +466,9 @@ Future<Map<String, dynamic>> smartProviders(Map facts, SmartAgent agent) async {
 Map<String, dynamic> smartMcpChecked(
   Map answer,
   Set<String> agents,
-  Set<String> servers,
-) {
+  Set<String> servers, [
+  Set<String> skills = const {},
+]) {
   final action = answer['action'];
   if (action == 'lookup') return smartChecked(answer, const {});
   if (action == 'clarify' || action == 'redirect') {
@@ -397,16 +496,20 @@ Map<String, dynamic> smartMcpChecked(
     return {'action': action, 'server': server, 'agents': unique};
   }
   if (action == 'disconnect') {
-    final named = answer['servers'];
+    final named = answer['servers'] ?? const [];
+    final folders = answer['skills'] ?? const [];
     if (named is! List ||
-        named.isEmpty ||
+        folders is! List ||
+        named.isEmpty && folders.isEmpty ||
         !named.every(servers.contains) ||
+        !folders.every(skills.contains) ||
         unique.isEmpty) {
       throw const FormatException('no server');
     }
     return {
       'action': action,
       'servers': {...named.cast<String>()}.toList(),
+      'skills': {...folders.cast<String>()}.toList(),
       'agents': unique,
     };
   }
@@ -421,11 +524,16 @@ Future<Map<String, dynamic>> smartMcp(
 ) async {
   final agents = [for (final a in facts['agents'] as List) a as Map];
   final used = Map<String, dynamic>.from(facts['mcp'] as Map);
+  final folders = Map<String, dynamic>.from(
+    facts['skills'] as Map? ?? const {},
+  );
+  final paths = facts['skill_paths'] as Map? ?? const {};
   final names = {for (final a in agents) '${a['command']}': '${a['name']}'};
   final first = smartMcpChecked(
     firstJson(await agent(smartMcpPrompt(facts)), 'action'),
     names.keys.toSet(),
     used.keys.toSet(),
+    folders.keys.toSet(),
   );
   final action = first['action'];
   if (action == 'lookup') {
@@ -448,6 +556,13 @@ Future<Map<String, dynamic>> smartMcp(
       },
     };
   }
+  // Only skills reach an agent without MCP.
+  if (action != 'disconnect') {
+    first['agents'] = [
+      for (final c in first['agents'] as List)
+        if (!agents.any((a) => a['command'] == c && a['mcp'] == false)) c,
+    ];
+  }
   if (action == 'disconnect') {
     // One candidate, so one preview, one backup and one Undo for all of it.
     final pairs = [
@@ -455,6 +570,10 @@ Future<Map<String, dynamic>> smartMcp(
         for (final command in first['agents'] as List)
           if ((used[server] as List? ?? const []).contains(command))
             {'server': server, 'agent': command},
+      for (final folder in first['skills'] as List)
+        for (final command in first['agents'] as List)
+          if ((folders[folder] as List? ?? const []).contains(command))
+            {'skill': paths[folder] ?? folder, 'agent': command},
     ];
     if (pairs.isEmpty) {
       return {
@@ -463,7 +582,6 @@ Future<Map<String, dynamic>> smartMcp(
       };
     }
     final commands = {for (final p in pairs) p['agent']}.toList();
-    final shown = {for (final p in pairs) p['server']}.toList();
     return {
       'status': 'proposal',
       'summary': '',
@@ -472,9 +590,7 @@ Future<Map<String, dynamic>> smartMcp(
           'id': 'c1',
           'kind': 'mcp_disconnect',
           'agents': commands,
-          'title': shown.length > 3
-              ? '${shown.take(3).join(', ')} +${shown.length - 3}'
-              : shown.join(', '),
+          'title': smartDisconnectTitle(pairs),
           'subtitle': [for (final c in commands) names[c]].join(', '),
           'reason': '',
           'fit': 'ok',
@@ -514,6 +630,7 @@ Future<Map<String, dynamic>> smartMcp(
     }
     return {'status': 'proposal', 'summary': '', 'candidates': candidates};
   }
+  if (smartRefused(facts, 'install', 'mcp') case final refused?) return refused;
   final servers = [
     for (final s in await search(first['query'] as String))
       if (smartMcpOption(s) != null) s,
@@ -855,6 +972,9 @@ Future<Map<String, dynamic>> smartModels(
         },
       ],
     };
+  }
+  if (smartRefused(facts, 'install', 'models') case final refused?) {
+    return refused;
   }
   final repos = await search(first['query'] as String);
   if (repos.isEmpty) {
@@ -1291,6 +1411,7 @@ Map<String, dynamic> smartWorded(
     smartNeedsWeb,
     smartLocalDown,
     smartNothingToDo,
+    smartNotAllowed,
   };
   final instead = result['instead'];
   return {

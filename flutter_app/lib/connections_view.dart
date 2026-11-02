@@ -6,6 +6,7 @@ import 'mcp_tools_view.dart';
 import 'skills_web_view.dart';
 
 import 'package:flutter/material.dart';
+import 'backend.dart' show failureText;
 
 import 'provider_connections.dart';
 
@@ -109,11 +110,9 @@ class _ConnectionsViewState extends State<ConnectionsView> {
       widget.onFoundChanged?.call();
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(widget.tr('The action could not be completed.')),
-          ),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(failureText(widget.tr))));
       }
     } finally {
       if (mounted) setState(() => _foundWork = null);

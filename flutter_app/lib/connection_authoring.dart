@@ -1,4 +1,5 @@
 import 'package:file_selector/file_selector.dart';
+import 'backend.dart' show failureText;
 import 'window_popup.dart';
 import 'package:flutter/material.dart';
 
@@ -132,7 +133,7 @@ class _ConnectionAuthoringState extends State<ConnectionAuthoring> {
       await widget.onPreview(params);
     } catch (_) {
       if (mounted) {
-        setState(() => _error = tr('The action could not be completed.'));
+        setState(() => _error = failureText(tr));
       }
     } finally {
       if (mounted) setState(() => _working = false);

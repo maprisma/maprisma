@@ -25,6 +25,26 @@ WARN_RED = (80, 85, 90, 95, 100)                    # … red (90); always above
 LOOKS = ("omarchy", "adwaita")
 
 
+RULE_ACTIONS = ("install", "update", "remove", "connect", "disconnect", "move", "start", "stop")
+RULE_CATEGORIES = ("mcp", "skills", "agents", "providers", "models")
+
+
+def default_rules() -> list:
+    return [{"effect": "allow", "action": action, "category": "*", "item": "*", "agent": "*"}
+            for action in RULE_ACTIONS]
+
+
+def _rules(v) -> bool:
+    return isinstance(v, list) and len(v) <= 200 and all(
+        isinstance(r, dict) and set(r) == {"effect", "action", "category", "item", "agent"}
+        and all(isinstance(r[k], str) and r[k] for k in ("action", "category", "item", "agent"))
+        and r["effect"] in ("allow", "deny")
+        and (r["action"] == "*" or r["action"] in RULE_ACTIONS)
+        and (r["category"] == "*" or r["category"] in RULE_CATEGORIES)
+        and (r["item"] == "*" or r["category"] != "*")
+        for r in v)
+
+
 def _bool(v) -> bool:
     return isinstance(v, bool)
 
@@ -84,6 +104,8 @@ SCHEMA: dict[str, Setting] = {
     "last_view": Setting("main", _text, "the view open when the window was last closed"),
     "terminal_tabs": Setting(True, _bool, "Settings › Terminal tabs above the map"),
     "screenshot_key": Setting(True, _bool, "Settings › F9 saves a screenshot"),
+    "action_rules": Setting(default_rules(), _rules, "what may be done, task 019: the most specific rule decides, on a tie allow"),
+    "action_rule_hints": Setting(True, _bool, "a refusal names the rule; off: it only says it is not allowed"),
     "smart_helper": Setting(None, _text, "Ask AI: the chosen helper's command, for all four cards"),
     "screenshot_folder": Setting(None, _text, "Settings › Screenshots go to: empty is ~/Pictures/Maprisma"),
     "agent_folder": Setting(None, _text, "Settings › Agents start in: the folder agents start in"),

@@ -183,6 +183,10 @@ class CoreClient {
     'name': ?name,
   });
 
+  Future<Map<String, dynamic>> connectionsForgetPreview({
+    required String name,
+  }) => transport.call('connections.forget_preview', {'name': name});
+
   Future<Map<String, dynamic>> connectionsMovePreview({
     required String agent,
     required Object? newValue,
@@ -499,6 +503,18 @@ class CoreClient {
   Future<Map<String, dynamic>> providersSnapshot([
     Map<String, dynamic> params = const {},
   ]) => transport.call('providers.snapshot', params);
+
+  Future<Map<String, dynamic>> rulesTest({
+    required String action,
+    required String agent,
+    required String category,
+    required String item,
+  }) => transport.call('rules.test', {
+    'action': action,
+    'agent': agent,
+    'category': category,
+    'item': item,
+  });
 
   Future<Map<String, dynamic>> sessionsRead({required String session}) =>
       transport.call('sessions.read', {'session': session});

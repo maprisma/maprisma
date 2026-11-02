@@ -469,6 +469,35 @@
    },
    "source": "observed"
   },
+  "connections.forget_preview": {
+   "area": "connections",
+   "kind": "preview",
+   "note": "A known server no agent uses leaves mcp-servers.json; applied through connections.apply, with Undo.",
+   "params": {
+    "name": "string"
+   },
+   "result": {
+    "contexts": [],
+    "empty": "bool",
+    "files": [
+     {
+      "added": "int",
+      "path": "string",
+      "removed": "int"
+     }
+    ],
+    "focus": [
+     "string"
+    ],
+    "item": "string",
+    "kind": "string",
+    "links_add": [],
+    "links_remove": [],
+    "plan": "string",
+    "remove": "bool"
+   },
+   "source": "manual"
+  },
   "connections.move_preview": {
    "area": "connections",
    "kind": "preview",
@@ -1053,7 +1082,7 @@
   "map.snapshot": {
    "area": "map",
    "kind": "read",
-   "note": "",
+   "note": "nodes: dim marks a known server without agents. edges: fixed says why a line cannot be taken away here.",
    "optional": [
     "force",
     "poll"
@@ -1062,8 +1091,16 @@
     "force": "?",
     "poll": "?"
    },
-   "result": null,
-   "source": null
+   "result": {
+    "nodes": [
+     "object"
+    ],
+    "edges": [
+     "object"
+    ],
+    "pending": "bool"
+   },
+   "source": "manual"
   },
   "map.usage": {
    "area": "map",
@@ -1330,6 +1367,22 @@
    "result": null,
    "source": null
   },
+  "rules.test": {
+   "area": "rules",
+   "kind": "read",
+   "note": "Which rule decides a request, for the window of rules.",
+   "params": {
+    "action": "string",
+    "agent": "string",
+    "category": "string",
+    "item": "string"
+   },
+   "result": {
+    "allowed": "bool",
+    "rule": "null|object"
+   },
+   "source": "manual"
+  },
   "sessions.read": {
    "area": "sessions",
    "handle": "session",
@@ -1444,6 +1497,10 @@
     "window_mode": "string",
     "screenshot_key": "bool",
     "screenshot_folder": "null|string",
+    "action_rule_hints": "bool",
+    "action_rules": [
+     "object"
+    ],
     "smart_helper": "null|string"
    },
    "source": "manual"
@@ -1508,6 +1565,10 @@
     "window_mode": "string",
     "screenshot_key": "bool",
     "screenshot_folder": "null|string",
+    "action_rule_hints": "bool",
+    "action_rules": [
+     "object"
+    ],
     "smart_helper": "null|string"
    },
    "source": "manual"

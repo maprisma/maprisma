@@ -5,6 +5,23 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 KEYS = (
+    # Settings › What may be done.
+    "What may be done",
+    "Rules for Ask AI and for what you draw on the map.",
+    "The most specific rule decides; on a tie allow wins. A request no rule matches is refused.",
+    "Deny",
+    "Allowed",
+    "Refused",
+    "Test",
+    "Test a request",
+    "Restore defaults",
+    "Say which rule refused something",
+    "Never decides: an allow rule names the same things.",
+    "This is not allowed here.",
+    "{0}: not allowed by your rules",
+    "Allow",
+    "All",
+    "Add",
     # Settings › Corners.
     "Corners",
     "Like windows",
