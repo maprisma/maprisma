@@ -10,5 +10,8 @@ The guard before a model unload asks `generating`: are models loaded on any runn
 ## Fix
 `MAPRISMA_SCAN_GPU` names the folder of GPU cards, in both cores; when set and no card is there, there is no GPU and nothing is busy. The parity test sets it to an empty folder. Without the variable nothing changes.
 
+## Round 1
+The process scan of the PC is out of the test too (`MAPRISMA_SCAN_PROC` in both cores), and the Dart scan no longer takes the address of a model llama.cpp's router started.
+
 ## Open
 Proof needs a run with a real local LLM busy on the GPU, which this branch did not start on Uwe's PC. The process scan still sees every local LLM of the PC; with the GPU out of the question that no longer decides the result.

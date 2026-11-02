@@ -93,7 +93,9 @@ def own_processes() -> list[tuple[int, str, list[str]]]:
     """(pid, comm, argv) of this user's processes."""
     found, uid = [], os.getuid()
     try:
-        pids = [int(p) for p in os.listdir("/proc") if p.isdigit()][:MAX_PROCS]
+        # Tests name their own processes there, as for the Dart core.
+        root = os.environ.get("MAPRISMA_SCAN_PROC") or "/proc"
+        pids = [int(p) for p in os.listdir(root) if p.isdigit()][:MAX_PROCS]
     except OSError:
         return found
     for pid in pids:

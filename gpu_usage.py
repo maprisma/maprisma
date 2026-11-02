@@ -76,7 +76,7 @@ def _read(path, limit: int = 65536) -> str:
 def discrete_gpu() -> str | None:
     """The card with the largest VRAM (skips the iGPU carve-out)."""
     best = None
-    root = os.environ.get("MAPRISMA_SCAN_GPU") or "/sys/class/drm"   # tests: their own cards
+    root = os.environ.get("MAPRISMA_SCAN_GPU", "/sys/class/drm")   # tests: their own cards
     for total in glob.glob(f"{root}/card*/device/mem_info_vram_total"):
         try:
             size = int(_read(total, 64) or 0)
@@ -106,11 +106,15 @@ def busy_now() -> float | None:
 
 def gpu_totals() -> tuple[int, int, float | None]:
     """(used, total, busy percent)."""
+    if "MAPRISMA_SCAN_GPU" in os.environ:   # read now: a test may set it after import
+        card = discrete_gpu()
+        if not card:
+            return 0, 0, None
+        return (int(_number(f"{card}/mem_info_vram_used") or 0), int(_number(f"{card}/mem_info_vram_total") or 0),
+                _number(f"{card}/gpu_busy_percent"))
     if GPU_DIR:
         return (int(_number(f"{GPU_DIR}/mem_info_vram_used") or 0), int(_number(f"{GPU_DIR}/mem_info_vram_total") or 0),
                 _number(f"{GPU_DIR}/gpu_busy_percent"))
-    if os.environ.get("MAPRISMA_SCAN_GPU"):
-        return 0, 0, None
     out, ok = ai_core.read_bounded_output(["nvidia-smi", "--query-gpu=memory.used,memory.total,utilization.gpu",
                                            "--format=csv,noheader,nounits"], max_bytes=4096, timeout=2)
     if ok:

@@ -45,6 +45,19 @@ http.server.HTTPServer(("127.0.0.1", port), Handler).serve_forever()
 SYSTEMCTL = '#!/bin/sh\necho "$@" >> "$HOME/systemctl.log"\n'
 
 
+def own_proc(home: Path, pid: int) -> str:
+    """A /proc of the test's fake server only: the PC's own local LLMs stay out."""
+    root = home / 'proc'
+    target = root / str(pid)
+    target.mkdir(parents=True, exist_ok=True)
+    for name in ('comm', 'cmdline', 'stat', 'environ'):
+        try:
+            (target / name).write_bytes(Path(f'/proc/{pid}/{name}').read_bytes())
+        except OSError:
+            pass
+    return str(root)
+
+
 def free_port() -> int:
     with socket.socket() as s:
         s.bind(('127.0.0.1', 0))
@@ -74,6 +87,8 @@ class DartProviderOpsParityTest(unittest.TestCase):
                    # Not the PC's GPU: a busy one with a real local LLM on it refused at random.
                    'MAPRISMA_SCAN_GPU': str(home / 'drm')}
             server = subprocess.Popen([str(bin_dir / 'llama-server'), '--port', str(port)], env=env)
+            time.sleep(0.2)   # its comm and environ are set
+            env['MAPRISMA_SCAN_PROC'] = own_proc(home, server.pid)
             try:
                 for _ in range(100):
                     with socket.socket() as s:
@@ -141,6 +156,8 @@ class DartProviderOpsParityTest(unittest.TestCase):
                    # Not the PC's GPU: a busy one with a real local LLM on it refused at random.
                    'MAPRISMA_SCAN_GPU': str(home / 'drm')}
             server = subprocess.Popen([str(bin_dir / 'llama-server'), '--port', str(port)], env=env)
+            time.sleep(0.2)   # its comm and environ are set
+            env['MAPRISMA_SCAN_PROC'] = own_proc(home, server.pid)
             try:
                 for _ in range(100):
                     with socket.socket() as s:
@@ -208,6 +225,8 @@ class DartProviderOpsParityTest(unittest.TestCase):
                    # Not the PC's GPU: a busy one with a real local LLM on it refused at random.
                    'MAPRISMA_SCAN_GPU': str(home / 'drm')}
             server = subprocess.Popen([str(bin_dir / 'ollama'), '--port', str(port)], env=env)
+            time.sleep(0.2)
+            env['MAPRISMA_SCAN_PROC'] = own_proc(home, server.pid)
             try:
                 for _ in range(100):
                     with socket.socket() as s:

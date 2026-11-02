@@ -76,6 +76,16 @@ final class ProviderScans {
     return found;
   }
 
+  /// inventory.parent_pid.
+  int parentPid(int pid) {
+    final stat = files.text('$proc/$pid/stat', limit: 1024) ?? '';
+    final fields = stat
+        .substring(stat.lastIndexOf(')') + 1)
+        .trim()
+        .split(RegExp(r'\s+'));
+    return fields.length > 1 ? int.tryParse(fields[1]) ?? 0 : 0;
+  }
+
   Map<String, String> processEnv(int pid, Set<String> allowed) {
     final text = files.text('$proc/$pid/environ', limit: 256 * 1024) ?? '';
     final found = <String, String>{};
@@ -281,13 +291,20 @@ final class ProviderScans {
           rt.service = service;
           var folder = '';
           final models = <String>[];
+          bool server(ProcessRecord process) =>
+              process.comm == 'llama-server' &&
+              !(process.argv.isNotEmpty &&
+                  process.argv[0].contains('/.lmstudio/'));
+          final servers = {
+            for (final process in processesNow)
+              if (server(process)) process.pid,
+          };
           for (final process in processesNow) {
-            if (process.comm != 'llama-server' ||
-                process.argv.isNotEmpty &&
-                    process.argv[0].contains('/.lmstudio/')) {
-              continue;
-            }
+            if (!server(process)) continue;
             rt.running = rt.installed = true;
+            // A model the router started on a port of its own: the router is
+            // the address (inventory.llamacpp).
+            if (servers.contains(parentPid(process.pid))) continue;
             env.addAll(processEnv(process.pid, environmentKeys));
             final model = arg(process.argv, ['-m', '--model']);
             if (model.isNotEmpty) {
