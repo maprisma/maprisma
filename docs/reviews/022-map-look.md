@@ -18,3 +18,10 @@
 5. Fixed: with borders, `hookOf` puts the hook where the line shows, and `lineAt` takes no click inside a card.
 6. Fixed: the card keeps every box in `all`; a move fills the shown places only.
 7. Fixed: the label is the translated name.
+
+## Round 2 (Antigravity, 2026-11-02, commit 19c6e1e)
+
+1. **Low** `flutter_app/lib/map_lights.dart:121-125`, `flutter_app/lib/map_lights.dart:145`, `flutter_app/lib/map_lights.dart:185` When one agent uses another while working (`edge['kind'] == agentLink`, `edge['active'] == true`), `_MapPaint` draws the `agent-link` bend whole over the Agents card even when `layout.bordered` is `true` (`flutter_app/lib/map_editor.dart:1872-1874`), and `hookOf` likewise exempts `agentLink` (`flutter_app/lib/map_layout.dart:392`). However, `MapLightTiles` applies card-rect occlusion (`layout.cards.values.map((c) => c.rect)`) to every curve including `agentLink`, hiding the moving light dots on the parts of the `agent-link` curve inside the Agents card (`t < 0.24` and `t > 0.76`); and `_makeTiles()` computes `Rect.fromPoints(curve.start, curve.end).inflate(radius)` (`bounds.right = a.right + 4`), which omits `curve.middle` (`a.right + 22`) so no light tile is created for the rightward bend when `a.right + 4` and `a.right + 16.5` fall in different 64 px tiles (e.g. `viewportWidth: 1600`, where `a.right = 762` is in tile `x = 11` and the bend at `x = 778.5` is in tile `x = 12`). Reproduce: turn on **Borders around category cards** (or resize the map to `viewportWidth: 1600` with no line crossing tile `x = 12` at the agents' Y range) while an agent is working and using another agent (`activity.<agent>.uses`).
+
+### Answers (Claude)
+1. Fixed: cards hide the lights of every line but the bend between two agents, and a tile covers a curve's whole path.
