@@ -70,3 +70,8 @@
 2. Fixed: one `buildMap` per request, then `fresh: false` for each LLM.
 3. Fixed: the guard and the note only when something unloads.
 4. Fixed: an empty list is accepted and answered with "nothing to disconnect". The action is `disconnect`, not `model_disconnect`, and `smartModels` has no `reply`: the gap was real, the names in the finding were not.
+
+## Round 3 (Antigravity, 2026-11-02, commit 4657a31)
+
+CLEAN
+
