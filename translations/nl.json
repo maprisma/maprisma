@@ -3272,5 +3272,6 @@
  "Say which rule refused something": "Zeggen welke regel iets weigerde",
  "Never decides: an allow rule names the same things.": "Beslist nooit: een toestaan-regel noemt hetzelfde.",
  "This is not allowed here.": "Dit is hier niet toegestaan.",
- "{0}: not allowed by your rules": "{0}: niet toegestaan door je regels"
+ "{0}: not allowed by your rules": "{0}: niet toegestaan door je regels",
+ "No agent uses it, so there is nothing to disconnect.": "Geen enkele agent gebruikt het, dus er valt niets los te koppelen."
 }

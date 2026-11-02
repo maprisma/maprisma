@@ -38,6 +38,7 @@ const smartNotYet = 'This column does not take requests yet.',
     smartNoModel = 'No model was found for this search.',
     smartNoServer = 'No MCP server was found for this search.',
     smartNothingToDo = 'Nothing to change: it is already set up that way.',
+    smartNoUsers = 'No agent uses it, so there is nothing to disconnect.',
     smartNeedsWeb =
         'This needs a web search, which a local helper cannot do. Choose Claude Code or Codex above and ask again.',
     smartLocalDown =
@@ -96,7 +97,9 @@ const smartNotAllowed = 'This is not allowed here.';
 
 /// A card's title: the first names, and how many more.
 String smartDisconnectTitle(List<Map> pairs) {
-  final shown = {for (final p in pairs) p['server'] ?? p['skill']}.toList();
+  final shown = {
+    for (final p in pairs) p['server'] ?? p['skill'] ?? p['model'],
+  }.toList();
   return shown.length > 3
       ? '${shown.take(3).join(', ')} +${shown.length - 3}'
       : shown.join(', ');
@@ -105,8 +108,12 @@ String smartDisconnectTitle(List<Map> pairs) {
 List<ActionCheck> smartPairChecks(Map pair) => [
   ActionCheck(
     'disconnect',
-    pair['skill'] == null ? 'mcp' : 'skills',
-    '${pair['skill'] ?? pair['server']}',
+    pair['model'] != null
+        ? 'models'
+        : pair['skill'] == null
+        ? 'mcp'
+        : 'skills',
+    '${pair['skill'] ?? pair['server'] ?? pair['model']}',
     '${pair['agent']}',
   ),
 ];
@@ -130,7 +137,7 @@ List<ActionCheck> smartCandidateChecks(Map candidate) {
     'mcp_connect' => [
       ActionCheck('connect', 'mcp', text('server'), text('agent')),
     ],
-    'mcp_disconnect' => [
+    'mcp_disconnect' || 'model_disconnect' => [
       for (final p in (action['pairs'] as List? ?? const []).cast<Map>())
         ...smartPairChecks(p),
     ],
@@ -179,7 +186,12 @@ Map<String, dynamic>? smartRefused(Map facts, String action, String category) {
 /// What the agent is told about the runners: no paths of this PC.
 List<Map> _runners(Map facts) => [
   for (final r in facts['runtimes'] as List)
-    {'key': (r as Map)['key'], 'name': r['name'], 'models': r['models']},
+    {
+      'key': (r as Map)['key'],
+      'name': r['name'],
+      'models': r['models'],
+      'used_by': r['used_by'] ?? const {},
+    },
 ];
 
 /// Moving a folder is offered only when the System Map knows folders and disks.
@@ -207,7 +219,9 @@ String smartModelsPrompt(Map facts) {
       '{"action": "search", "query": "<words for a Hugging Face GGUF search, at most 80 characters>", "runtime": "<key of a runner listed above>"}\n'
       'when the request is to find or add a model for a runner.\n'
       '{"action": "remove", "runtime": "<key of a runner listed above>", "model": "<exact name in its models>"}\n'
-      'when the request is to remove a model that is listed above.\n'
+      'when the request is to delete a model that is listed above.\n'
+      '{"action": "disconnect", "runtime": "<key of a runner listed above>", "models": ["<exact names in its models>"]}\n'
+      'when agents should stop using models, one, several or all of a runner: its used_by says which agents use which model. No file is deleted; the user sees one preview for all of it.\n'
       '${_moveChoice(facts)}'
       '$_lookupChoice'
       '{"action": "clarify", "question": "<one short question>", "choices": ["<2 to 4 short answers>"]}\n'
@@ -402,6 +416,7 @@ String smartProvidersPrompt(Map facts) {
       '{"action": "clarify", "question": "<one short question>", "choices": ["<2 to 4 short answers>"]}\n'
       'when you cannot tell which provider is meant.\n'
       '{"action": "redirect", "hint": "<what works instead, one sentence>", "column": "<mcp, agents or models, or null>", "request": "<the request for that column, or null>"}\n'
+      'when models should be disconnected or deleted use redirect with column models and the request. '
       'for anything else: this column cannot manage models, agents, MCP servers or skills, and cannot uninstall a provider or sign in to an online one.';
 }
 
@@ -741,6 +756,20 @@ Map<String, dynamic> smartChecked(
       'disk': answer['disk'],
     };
   }
+  if (action == 'disconnect') {
+    final models = answer['models'];
+    if (models is! List ||
+        models.isEmpty ||
+        models.any((m) => m is! String) ||
+        !runtimes.contains(answer['runtime'])) {
+      throw const FormatException('no model');
+    }
+    return {
+      'action': action,
+      'runtime': answer['runtime'],
+      'models': {...models.cast<String>()}.toList(),
+    };
+  }
   if (action == 'remove') {
     final model = answer['model'];
     if (model is! String ||
@@ -941,6 +970,43 @@ Future<Map<String, dynamic>> smartModels(
               'target': disk['node'],
             },
           },
+      ],
+    };
+  }
+  if (first['action'] == 'disconnect') {
+    final runtime = runtimes.firstWhere((r) => r['key'] == first['runtime']);
+    final used = runtime['used_by'] as Map? ?? const {};
+    final pairs = <Map<String, dynamic>>[
+      for (final model in first['models'] as List)
+        for (final agent in used[model] as List? ?? const [])
+          {'model': model, 'agent': agent},
+    ];
+    if (pairs.isEmpty) {
+      return {
+        'status': 'redirect',
+        'instead': {'hint': smartNoUsers, 'column': null, 'request': null},
+      };
+    }
+    final commands = {for (final p in pairs) p['agent']}.toList();
+    return {
+      'status': 'proposal',
+      'summary': '',
+      'candidates': [
+        {
+          'id': 'c1',
+          'kind': 'model_disconnect',
+          'agents': commands,
+          'title': smartDisconnectTitle(pairs),
+          'subtitle': _line(runtime['name']),
+          'reason': '',
+          'fit': 'ok',
+          'size': 0,
+          'action': {
+            'kind': 'model_disconnect',
+            'key': runtime['key'],
+            'pairs': pairs,
+          },
+        },
       ],
     };
   }
@@ -1412,6 +1478,7 @@ Map<String, dynamic> smartWorded(
     smartLocalDown,
     smartNothingToDo,
     smartNotAllowed,
+    smartNoUsers,
   };
   final instead = result['instead'];
   return {

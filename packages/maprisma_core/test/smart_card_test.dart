@@ -1092,6 +1092,57 @@ void main() {
     );
   });
 
+  group('models leave their agents', () {
+    Map facts() => {
+      'limits': {'ram': 1, 'vram': 1},
+      'runtimes': [
+        {
+          'key': 'llamacpp',
+          'name': 'llama.cpp',
+          'models': ['a', 'b', 'c'],
+          'used_by': {
+            'a': ['pi'],
+            'b': ['pi', 'codex'],
+            'c': <String>[],
+          },
+        },
+      ],
+    };
+    Future<Map<String, dynamic>> ask(String answer) => smartModels(
+      facts(),
+      (_) async => answer,
+      (_) async => [],
+      (_, _) async => [],
+    );
+
+    test('all of a runner is one candidate, what nobody uses is left', () async {
+      final result = await ask(
+        '{"action": "disconnect", "runtime": "llamacpp", "models": ["a", "b", "c"]}',
+      );
+      final candidate = (result['candidates'] as List).single as Map;
+      expect(candidate['kind'], 'model_disconnect');
+      expect(candidate['agents'], ['pi', 'codex']);
+      expect(candidate['title'], 'a, b');
+      expect(
+        smartCandidateChecks(
+          candidate,
+        ).map((c) => (c.category, c.item, c.agent)),
+        [
+          ('models', 'a', 'pi'),
+          ('models', 'b', 'pi'),
+          ('models', 'b', 'codex'),
+        ],
+      );
+    });
+
+    test('nobody uses it: says so', () async {
+      final result = await ask(
+        '{"action": "disconnect", "runtime": "llamacpp", "models": ["c"]}',
+      );
+      expect(result['instead']['hint'], smartNoUsers);
+    });
+  });
+
   test('the routes refuse what is not theirs', () {
     final home = Directory.systemTemp.createTempSync('smart');
     addTearDown(() => home.deleteSync(recursive: true));

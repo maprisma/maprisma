@@ -1774,8 +1774,9 @@ class _MapSmartCardState extends State<MapSmartCard> {
                                 '${c['title']}',
                               );
                             } else if ('${c['kind'] ?? ''}'.startsWith(
-                              'mcp_',
-                            )) {
+                                  'mcp_',
+                                ) ||
+                                c['kind'] == 'model_disconnect') {
                               _openMcp(proposal, c);
                             } else {
                               _openReview(proposal, c);

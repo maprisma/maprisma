@@ -503,6 +503,85 @@ final class MapEdits {
     );
   }
 
+  /// Ask AI: agents leave several models of a local LLM in one preview, one
+  /// backup and one Undo, as models.switch_preview does for one. The files stay.
+  Map<String, dynamic> modelsDisconnect(
+    String key,
+    List<String> models,
+    void Function(String key, List<String> commands) guard,
+  ) {
+    final graph = currentMap();
+    final nodes = {
+      for (final n in graph['nodes'] as List) n['id'] as String: n as Map,
+    };
+    final catalog = {
+      for (final a in reads.catalog.scan().where((a) => a.installed))
+        a.command: a,
+    };
+    final rt = reads.inventory
+        .collect(catalog.values.toList())
+        .runtimes
+        .where((r) => r.key == key && r.installed)
+        .firstOrNull;
+    if (rt == null) throw const FormatException('Runtime unavailable');
+    final pid = 'runtime:$key';
+    final users = <String, List<String>>{};
+    for (final model in {...models}) {
+      final old = 'model:$pid:${model.toLowerCase()}';
+      users[model] = [
+        for (final e in (graph['edges'] as List).cast<Map>())
+          if (e['target'] == old && e['kind'] == 'default')
+            '${e['source']}'.substring('agent:'.length),
+      ];
+    }
+    final selected = {for (final u in users.values) ...u}.toList();
+    final builders = <Plan Function()>[];
+    for (final command in selected) {
+      final adapter = catalog[command]?.adapter;
+      if (adapter == null) throw const FormatException('Agent unavailable');
+      final fixed = adapter.facts['fixed_provider'];
+      if (!llm.supported(command) || fixed is String && fixed.isNotEmpty) {
+        throw const FormatException('Agent cannot switch provider');
+      }
+      builders.add(() => llm.plan(command, rt, '', false, remove: true));
+    }
+    final actions = <Map<String, dynamic>>[], notes = <String>[];
+    if ((providerFacts['engines'] as Map)[key]?['can_load'] == true) {
+      guard(key, selected);
+      for (final e in users.entries) {
+        if (e.value.isEmpty) continue;
+        actions.add({
+          'operation': 'model.unload',
+          'key': key,
+          'model': e.key,
+          'agents': e.value,
+        });
+      }
+      notes.add(
+        'Undo restores configuration files; runtime load and unload actions are not undone.',
+      );
+    }
+    return {
+      ..._modelResult(
+        builders,
+        actions,
+        notes,
+        nodes,
+        {
+          pid,
+          for (final m in users.keys) 'model:$pid:${m.toLowerCase()}',
+          for (final c in selected) 'agent:$c',
+        },
+        selected,
+        catalog,
+      ),
+      'disconnects': [
+        for (final e in users.entries)
+          for (final c in e.value) '${e.key} → $c',
+      ],
+    };
+  }
+
   Map<String, dynamic> _modelResult(
     List<Plan Function()> builders,
     List<Map<String, dynamic>> actions,

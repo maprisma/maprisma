@@ -3008,6 +3008,18 @@ final class CoreService {
                   'download': '${(engines[rt.key] as Map?)?['download'] ?? ''}',
                   'models_dir': rt.modelsDir,
                   'models': rt.models.take(40).toList(),
+                  'used_by': {
+                    for (final m in rt.models.take(40))
+                      m: [
+                        for (final e
+                            in (reads.map['edges'] as List? ?? const [])
+                                .cast<Map>())
+                          if (e['kind'] == 'default' &&
+                              e['target'] ==
+                                  'model:runtime:${rt.key}:${m.toLowerCase()}')
+                            '${e['source']}'.substring('agent:'.length),
+                      ],
+                  },
                 },
           ],
           if (helper != null)
@@ -3231,6 +3243,11 @@ final class CoreService {
         'item': action['server'],
         'remove': false,
       });
+    }
+    if (kind == 'model_disconnect') {
+      return edits.modelsDisconnect(action['key'] as String, [
+        for (final p in (action['pairs'] as List).cast<Map>()) '${p['model']}',
+      ], guardModel);
     }
     if (kind == 'mcp_disconnect') {
       final pairs = [for (final p in action['pairs'] as List) p as Map];
@@ -3881,7 +3898,11 @@ final class CoreService {
     final kept = <Map>[];
     for (final c in list.cast<Map>()) {
       final action = c['action'];
-      if (action is Map && action['kind'] == 'mcp_disconnect') {
+      if (action is Map &&
+          const {
+            'mcp_disconnect',
+            'model_disconnect',
+          }.contains(action['kind'])) {
         final left = [
           for (final p in (action['pairs'] as List).cast<Map>())
             if (smartPairChecks(p).every(ok)) p,
@@ -3892,7 +3913,8 @@ final class CoreService {
             ...c,
             'title': smartDisconnectTitle(left),
             'agents': commands,
-            'subtitle': [for (final a in commands) _nameOf(a)].join(', '),
+            if (action['kind'] == 'mcp_disconnect')
+              'subtitle': [for (final a in commands) _nameOf(a)].join(', '),
             'action': {...action, 'pairs': left},
           });
         }
