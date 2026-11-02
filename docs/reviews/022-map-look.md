@@ -25,3 +25,7 @@
 
 ### Answers (Claude)
 1. Fixed: cards hide the lights of every line but the bend between two agents, and a tile covers a curve's whole path.
+
+## Round 3 (Antigravity, 2026-11-02, commit 332a94f)
+
+CLEAN
