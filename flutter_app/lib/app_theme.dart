@@ -65,7 +65,15 @@ ThemeData appTheme(
     colorScheme: colors,
     useMaterial3: true,
     extensions: [Corners(radius ?? 12)],
-    cardTheme: shape == null ? null : CardThemeData(shape: shape),
+    // Every card looks like the map's category cards (app_look SectionCard).
+    cardTheme: CardThemeData(
+      color: colors.surfaceContainerLow,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(radius ?? 12),
+        side: BorderSide(color: colors.outlineVariant),
+      ),
+    ),
     dialogTheme: shape == null ? null : DialogThemeData(shape: shape),
     // Material's default is the inverted surface: a white bar on a dark app.
     snackBarTheme: SnackBarThemeData(

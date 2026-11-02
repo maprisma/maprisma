@@ -14,6 +14,6 @@ Uwe, 2026-11-02: one recognisable layout for the whole app, especially the windo
 ## Steps
 1. The parts; `TaskHost` and `TaskReview` use them. Done.
 2. The rules window: header with its rule and Restore defaults, Allow and Deny as section cards with + in the band, the hint switch as a row, the test as its own card with the deciding rule. Rows without underlines. No second shade over the window. Done.
-3. Settings and the side pages.
+3. Settings and the side pages. Done: Settings has the shared header and each part is a section card (untitled ones for the language, the agents' folder and the rules); every `Card` in the app takes the section card's look from the theme, so the side pages follow without their own changes.
 4. Ask AI, the terminal window, the welcome view.
 5. The remaining dialogs, and hard-coded sizes and colours.
