@@ -648,6 +648,26 @@ void main() {
     expect(groups.single.count, 1);
   });
 
+  testWidgets('the card header filters to what is used, and back', (
+    tester,
+  ) async {
+    final layouts = <Map<String, dynamic>>[];
+    await mount(tester, edits: [], onLayout: layouts.add);
+    final toggle = find.byWidgetPredicate(
+      (w) =>
+          w is IconButton &&
+          w.key is ValueKey<String> &&
+          (w.key as ValueKey<String>).value.startsWith('card-used-only-'),
+    );
+    expect(toggle, findsWidgets);
+    await tester.tap(toggle.first);
+    await tester.pumpAndSettle();
+    expect(layouts.last['used_only'], hasLength(1));
+    await tester.tap(toggle.first);
+    await tester.pumpAndSettle();
+    expect(layouts.last['used_only'], isEmpty);
+  });
+
   testWidgets('a line that is not ours has no hook and says why', (
     tester,
   ) async {

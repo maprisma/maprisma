@@ -215,10 +215,27 @@ void main() {
           'flutter_map_layout': {
             'column_widths': {'agents': 500},
             'column_defaults': {'models': 320},
-            'card_border': {'on': true, 'width': 3, 'color': '#ef5350'},
+            'card_border': {'on': true, 'width': 3, 'color': 'theme:primary'},
+            'line_colors': {'mcp': '#ef5350', 'model': 'theme:tertiary'},
+            'used_only': ['0:mcp:'],
           },
         },
       });
+      for (final bad in [
+        {
+          'line_colors': {'mcp': 'theme:pink'},
+        },
+        {
+          'line_colors': {'cables': '#ffffff'},
+        },
+      ]) {
+        expect(
+          () => core.dispatch('settings.update', {
+            'values': {'flutter_map_layout': bad},
+          }),
+          throwsA(anything),
+        );
+      }
       expect(
         () => core.dispatch('settings.update', {
           'values': {

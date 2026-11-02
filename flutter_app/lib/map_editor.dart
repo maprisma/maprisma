@@ -533,6 +533,13 @@ class _MapEditorState extends State<MapEditor>
     _save({..._saved, 'pins': pins.toList()});
   }
 
+  /// The card's header symbol: all its boxes, or only what has a line or a pin.
+  void _toggleUsedOnly(String id) {
+    final used = {...(_saved['used_only'] as List? ?? []).cast<String>()};
+    if (!used.remove(id)) used.add(id);
+    _save({..._saved, 'used_only': used.toList()});
+  }
+
   void _fold(String id) {
     final folded = {...(_saved['collapsed'] as List? ?? []).cast<String>()};
     if (!folded.add(id)) folded.remove(id);
@@ -1035,6 +1042,7 @@ class _MapEditorState extends State<MapEditor>
   }
 
   Widget _buildEditor(BuildContext context, BoxConstraints constraints) {
+    final usedOnly = {...(_saved['used_only'] as List? ?? []).cast<String>()};
     final vw = constraints.maxWidth.isFinite && constraints.maxWidth > 0
         ? constraints.maxWidth
         : MediaQuery.sizeOf(context).width;
@@ -1136,7 +1144,8 @@ class _MapEditorState extends State<MapEditor>
     _phase.enabled = flowing;
     final seed = {..._selected, ?_hover};
     final pinned = {...(_saved['pins'] as List? ?? []).cast<String>()};
-    seed.retainWhere(layout.nodes.containsKey); // a hidden column has no lines
+    // A hidden column or a box a card leaves out has no lines to light.
+    seed.retainWhere(layout.boxes.containsKey);
     pinned.retainWhere(layout.nodes.containsKey);
     // A selection lights its neighbours; a pin only itself and its lines.
     final lit = {...seed, ...pinned};
@@ -1147,7 +1156,7 @@ class _MapEditorState extends State<MapEditor>
     }
     // A selection grays out what is not part of it; pins stay, as they do not
     // count as a selection and are lit themselves.
-    final dimming = _selected.any(layout.nodes.containsKey);
+    final dimming = _selected.any(layout.boxes.containsKey);
     return Focus(
       autofocus: true,
       onKeyEvent: (_, event) {
@@ -1290,6 +1299,9 @@ class _MapEditorState extends State<MapEditor>
                                               _saved['card_border'] as Map?,
                                               dimming,
                                               pinned,
+                                              corners(context),
+                                              _saved['line_colors'] as Map? ??
+                                                  const {},
                                             ),
                                           ),
                                         ),
@@ -1376,6 +1388,25 @@ class _MapEditorState extends State<MapEditor>
                                                   maxLines: 1,
                                                   overflow:
                                                       TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                              IconButton(
+                                                key: ValueKey(
+                                                  'card-used-only-${card.id}',
+                                                ),
+                                                tooltip: widget.tr(
+                                                  usedOnly.contains(card.id)
+                                                      ? 'Show all'
+                                                      : 'Show only what is connected or pinned',
+                                                ),
+                                                onPressed: () =>
+                                                    _toggleUsedOnly(card.id),
+                                                icon: Icon(
+                                                  usedOnly.contains(card.id)
+                                                      ? Icons.filter_alt
+                                                      : Icons
+                                                            .filter_alt_off_outlined,
+                                                  size: 18,
                                                 ),
                                               ),
                                               PopupMenuButton<String>(
@@ -1498,8 +1529,8 @@ class _MapEditorState extends State<MapEditor>
                                       _clickedLine == _lineKey(c.edge)),
                             ))
                               Positioned(
-                                left: curve.hook.dx - 12,
-                                top: curve.hook.dy - 12,
+                                left: layout.hookOf(curve).dx - 12,
+                                top: layout.hookOf(curve).dy - 12,
                                 width: 24,
                                 height: 24,
                                 child: GestureDetector(
@@ -1756,8 +1787,16 @@ class _MapPaint extends CustomPainter {
     this.border,
     this.dimming,
     this.pinned,
+    this.radius,
+    this.lineColors,
   );
   final MapLayout layout;
+
+  /// The corners of Settings › Corners.
+  final double radius;
+
+  /// Settings › Map: a colour per kind of line.
+  final Map lineColors;
   final ColorScheme colors;
   final Set<String> lit;
   final String? source;
@@ -1777,26 +1816,40 @@ class _MapPaint extends CustomPainter {
             ..style = PaintingStyle.stroke
             ..strokeWidth = (border!['width'] as int? ?? 1).toDouble()
             ..color =
-                mapBorderColor(border!['color'] as String?) ?? colors.outline)
+                mapColor(border!['color'] as String?, colors) ?? colors.outline)
         : null;
+    final inside = Path();
     for (final card in layout.cards.values) {
-      final shape = RRect.fromRectAndRadius(
-        card.rect,
-        const Radius.circular(14),
-      );
+      final shape = RRect.fromRectAndRadius(card.rect, Radius.circular(radius));
+      inside.addRRect(shape);
       paint
         ..style = PaintingStyle.fill
         ..color = colors.surfaceContainerLow;
       canvas.drawRRect(shape, paint);
       if (edge != null) canvas.drawRRect(shape, edge);
     }
-    for (final curve in layout.curves) {
+    // With a border drawn, a line does not cross a card: it shows between them.
+    canvas.save();
+    if (edge != null) {
+      canvas.clipPath(
+        Path.combine(
+          PathOperation.difference,
+          Path()..addRect(Offset.zero & size),
+          inside,
+        ),
+      );
+    }
+    void line(MapCurve curve) {
       final edge = curve.edge,
           related =
               lit.isEmpty ||
               lit.contains(edge['source']) && lit.contains(edge['target']) ||
               pinned.contains(edge['source']) ||
               pinned.contains(edge['target']);
+      final kind = mapLineKind('${edge['kind']}');
+      final own = kind == null
+          ? null
+          : mapColor(lineColors[kind] as String?, colors);
       paint
         ..style = PaintingStyle.stroke
         ..strokeWidth = related ? 2 : 1
@@ -1805,10 +1858,19 @@ class _MapPaint extends CustomPainter {
                 (edge['hints'] as List? ?? []).isNotEmpty
             ? colors.error
             : related
-            ? colors.primary
-            : colors.outlineVariant;
+            ? own ?? colors.primary
+            : own?.withValues(alpha: .45) ?? colors.outlineVariant;
       if (dimming && !related) paint.color = paint.color.withValues(alpha: .2);
       canvas.drawPath(curve.path, paint);
+    }
+
+    for (final curve in layout.curves) {
+      if (curve.edge['kind'] != agentLink) line(curve);
+    }
+    canvas.restore();
+    // Two agents in one card: their bend stays whole.
+    for (final curve in layout.curves) {
+      if (curve.edge['kind'] == agentLink) line(curve);
     }
     if (source != null && cursor != null && layout.boxes[source] != null) {
       final rect = layout.boxes[source]!;

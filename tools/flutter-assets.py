@@ -5,6 +5,17 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 KEYS = (
+    # Settings › Map: line colours; a card shows only what is used.
+    "Show all",
+    "Show only what is connected or pinned",
+    "Line colours",
+    "Agent and provider",
+    "Agent and model",
+    "Provider and model",
+    "Theme: main colour",
+    "Theme: second colour",
+    "Theme: third colour",
+    "Theme: outline",
     # Settings › What may be done.
     "What may be done",
     "Rules for Ask AI and for what you draw on the map.",

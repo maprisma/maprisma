@@ -17,14 +17,20 @@ import provider_watch
 import skills_ctl
 
 
+def _color(value) -> bool:
+    """#rrggbb, or one of the theme's colours."""
+    return isinstance(value, str) and bool(
+        re.fullmatch('#[0-9a-f]{6}', value) or re.fullmatch('theme:(primary|secondary|tertiary|outline)', value))
+
+
 def valid_layout(value) -> bool:
-    if not isinstance(value, dict) or set(value) - {'cards', 'order', 'collapsed', 'pins', 'card_order', 'column_widths', 'column_defaults', 'card_border'}:
+    if not isinstance(value, dict) or set(value) - {'cards', 'order', 'collapsed', 'pins', 'card_order', 'column_widths', 'column_defaults', 'used_only', 'line_colors', 'card_border'}:
         return False
     def ident(v):
         return isinstance(v, str) and 0 < len(v) <= 8192 and not any(ord(c) < 32 for c in v)
     def ids(v, limit):
         return isinstance(v, list) and len(v) <= limit and all(ident(i) for i in v) and len(set(v)) == len(v)
-    for key, limit in (('collapsed', 100), ('pins', 100), ('card_order', 100)):
+    for key, limit in (('collapsed', 100), ('pins', 100), ('card_order', 100), ('used_only', 100)):
         if key in value and not ids(value[key], limit):
             return False
     border = value.get('card_border', {})
@@ -33,7 +39,12 @@ def valid_layout(value) -> bool:
     if type(border.get('on', False)) is not bool or type(border.get('width', 1)) is not int \
             or not 1 <= border.get('width', 1) <= 8:
         return False
-    if 'color' in border and not (isinstance(border['color'], str) and re.fullmatch('#[0-9a-f]{6}', border['color'])):
+    if 'color' in border and not _color(border['color']):
+        return False
+    lines = value.get('line_colors', {})
+    if not isinstance(lines, dict) or any(
+            kind not in ('provider', 'model', 'serves', 'mcp', 'skills') or not _color(c)
+            for kind, c in lines.items()):
         return False
     for key in ('column_widths', 'column_defaults'):
         widths = value.get(key, {})

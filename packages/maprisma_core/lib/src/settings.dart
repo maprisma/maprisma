@@ -52,6 +52,12 @@ bool texts(dynamic v) => v is List && v.every((e) => e is String);
 bool subset(dynamic v, List<String> choices) =>
     texts(v) && (v as List).every(choices.contains);
 
+/// `#rrggbb`, or one of the theme's colours.
+bool mapColorValue(dynamic v) =>
+    v is String &&
+    (RegExp(r'^#[0-9a-f]{6}$').hasMatch(v) ||
+        RegExp(r'^theme:(primary|secondary|tertiary|outline)$').hasMatch(v));
+
 bool validLayout(dynamic v) {
   if (v is! Map ||
       v.keys.any(
@@ -64,6 +70,8 @@ bool validLayout(dynamic v) {
           'column_widths',
           'column_defaults',
           'card_border',
+          'used_only',
+          'line_colors',
         ].contains(k),
       )) {
     return false;
@@ -78,7 +86,7 @@ bool validLayout(dynamic v) {
       a.length <= limit &&
       a.every(ident) &&
       a.toSet().length == a.length;
-  for (final key in ['collapsed', 'pins', 'card_order']) {
+  for (final key in ['collapsed', 'pins', 'card_order', 'used_only']) {
     if (v.containsKey(key) && !ids(v[key], 100)) return false;
   }
   final border = v.containsKey('card_border')
@@ -91,9 +99,18 @@ bool validLayout(dynamic v) {
           (border['width'] is! int ||
               border['width'] < 1 ||
               border['width'] > 8) ||
-      border.containsKey('color') &&
-          (border['color'] is! String ||
-              !RegExp(r'^#[0-9a-f]{6}$').hasMatch(border['color'] as String))) {
+      border.containsKey('color') && !mapColorValue(border['color'])) {
+    return false;
+  }
+  final lines = v.containsKey('line_colors')
+      ? v['line_colors']
+      : <String, dynamic>{};
+  if (lines is! Map ||
+      lines.entries.any(
+        (e) =>
+            !['provider', 'model', 'serves', 'mcp', 'skills'].contains(e.key) ||
+            !mapColorValue(e.value),
+      )) {
     return false;
   }
   for (final key in ['column_widths', 'column_defaults']) {

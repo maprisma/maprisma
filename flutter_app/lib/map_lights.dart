@@ -119,6 +119,11 @@ class MapLightTiles {
       tileSize *= 2;
     }
     occluders = layout.boxes.values.map((r) => r.inflate(radius)).toList();
+    // Over a bordered card the line is not drawn, nor are its lights; the bend
+    // between two agents is drawn whole, and so are its lights.
+    cardOccluders = layout.bordered
+        ? [for (final c in layout.cards.values) c.rect]
+        : const [];
   }
   static const radius = 4.0;
   static const maxTiles = 4096;
@@ -131,14 +136,15 @@ class MapLightTiles {
             (mode == 'all' || c.edge['activity'] == 'agent'),
       )
       .toList();
-  late final List<Rect> occluders;
+  late final List<Rect> occluders, cardOccluders;
   double tileSize = 64;
   final tiles = <(int, int), MapLightTile>{};
   Set<(int, int)> _occupied = {};
 
   bool _makeTiles() {
     for (final curve in layout.curves) {
-      final bounds = Rect.fromPoints(curve.start, curve.end).inflate(radius);
+      // The whole path: a bend between two agents reaches past both ends.
+      final bounds = curve.path.getBounds().inflate(radius);
       for (
         var y = math.max(0, (bounds.top / tileSize).floor());
         y <= (bounds.bottom / tileSize).floor();
@@ -179,6 +185,10 @@ class MapLightTiles {
         // The static scene is now one cache above which the light tiles sit.
         // Hide marks passing through boxes, as when boxes painted over lights.
         if (occluders.any((r) => r.contains(point))) continue;
+        if (curve.edge['kind'] != agentLink &&
+            cardOccluders.any((r) => r.contains(point))) {
+          continue;
+        }
         for (
           var y = ((point.dy - radius) / tileSize).floor();
           y <= ((point.dy + radius) / tileSize).floor();
