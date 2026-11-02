@@ -3010,16 +3010,19 @@ final class CoreService {
                   'models': rt.models.take(40).toList(),
                 },
           ],
-          'model_users': [
-            for (final rt in reads.inventory.collect(agents).runtimes)
-              if (rt.installed && rt.models.isNotEmpty)
-                {
-                  'key': rt.key,
-                  'name': rt.name,
-                  'used_by': reads.modelUsers(rt, fresh: false)
-                    ..removeWhere((_, users) => users.isEmpty),
-                },
-          ],
+          'model_users': () {
+            reads.buildMap(); // Once, for all of them: a request sees today.
+            return [
+              for (final rt in reads.inventory.collect(agents).runtimes)
+                if (rt.installed && rt.models.isNotEmpty)
+                  {
+                    'key': rt.key,
+                    'name': rt.name,
+                    'used_by': reads.modelUsers(rt, fresh: false)
+                      ..removeWhere((_, users) => users.isEmpty),
+                  },
+            ];
+          }(),
           if (helper != null)
             'helper': {
               'provider': helper.provider,

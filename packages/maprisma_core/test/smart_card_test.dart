@@ -1141,6 +1141,10 @@ void main() {
         '{"action": "disconnect", "runtime": "jan", "models": ["c"]}',
       );
       expect(result['instead']['hint'], smartNoUsers);
+      final none = await ask(
+        '{"action": "disconnect", "runtime": "jan", "models": []}',
+      );
+      expect(none['instead']['hint'], smartNoUsers);
     });
   });
 

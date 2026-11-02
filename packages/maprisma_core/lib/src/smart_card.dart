@@ -216,7 +216,7 @@ String smartModelsPrompt(Map facts) {
       '{"action": "remove", "runtime": "<key of a runner listed above>", "model": "<exact name in its models>"}\n'
       'when the request is to delete a model that is listed above.\n'
       '{"action": "disconnect", "runtime": "<key of a local LLM in use, listed next>", "models": ["<exact model names listed next>"]}\n'
-      'when agents should stop using models, one, several or all of a local LLM. Models in use, with their agents: ${jsonEncode(facts['model_users'] ?? const [])}. No file is deleted, and the agent leaves that local LLM; the user sees one preview for all of it.\n'
+      'when agents should stop using models, one, several or all of a local LLM; an empty list when none is in use. Models in use, with their agents: ${jsonEncode(facts['model_users'] ?? const [])}. No file is deleted, and the agent leaves that local LLM; the user sees one preview for all of it.\n'
       '${_moveChoice(facts)}'
       '$_lookupChoice'
       '{"action": "clarify", "question": "<one short question>", "choices": ["<2 to 4 short answers>"]}\n'
@@ -755,7 +755,6 @@ Map<String, dynamic> smartChecked(
   if (action == 'disconnect') {
     final models = answer['models'];
     if (models is! List ||
-        models.isEmpty ||
         models.any((m) => m is! String) ||
         !using.contains(answer['runtime'])) {
       throw const FormatException('no model');

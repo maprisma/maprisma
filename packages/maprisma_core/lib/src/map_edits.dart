@@ -561,7 +561,7 @@ final class MapEdits {
     }
     final actions = <Map<String, dynamic>>[], notes = <String>[];
     if ((providerFacts['engines'] as Map)[key]?['can_load'] == true) {
-      guard(key, selected);
+      // Only what nobody stays on unloads, and only that asks the LLM.
       for (final model in leaving) {
         if (!users[model]!.every(selected.contains)) continue;
         actions.add({
@@ -571,9 +571,12 @@ final class MapEdits {
           'agents': users[model]!,
         });
       }
-      notes.add(
-        'Undo restores configuration files; runtime load and unload actions are not undone.',
-      );
+      if (actions.isNotEmpty) {
+        guard(key, selected);
+        notes.add(
+          'Undo restores configuration files; runtime load and unload actions are not undone.',
+        );
+      }
     }
     final pid = 'runtime:$key';
     final nodes = {
