@@ -53,6 +53,7 @@ def free_port() -> int:
 
 @unittest.skipIf(DART is None, 'native Dart SDK not available')
 class DartProviderOpsParityTest(unittest.TestCase):
+    maxDiff = None
     def test_same_requests_and_results(self):
         with tempfile.TemporaryDirectory() as temp:
             home = Path(temp)
@@ -69,7 +70,9 @@ class DartProviderOpsParityTest(unittest.TestCase):
             (home / '.cache/llama.cpp/fixture-chat-Q4_K_M.gguf').write_text('GGUF')
             env = {'HOME': str(home), 'PATH': f'{bin_dir}:/usr/bin:/bin', 'LANG': 'C.UTF-8',
                    'XDG_CONFIG_HOME': str(home / '.config'), 'XDG_CACHE_HOME': str(home / '.cache'),
-                   'XDG_DATA_HOME': str(home / '.local/share'), 'MAPRISMA_DESKTOP': 'generic'}
+                   'XDG_DATA_HOME': str(home / '.local/share'), 'MAPRISMA_DESKTOP': 'generic',
+                   # Not the PC's GPU: a busy one with a real local LLM on it refused at random.
+                   'MAPRISMA_SCAN_GPU': str(home / 'drm')}
             server = subprocess.Popen([str(bin_dir / 'llama-server'), '--port', str(port)], env=env)
             try:
                 for _ in range(100):
@@ -134,7 +137,9 @@ class DartProviderOpsParityTest(unittest.TestCase):
                 (home / f'.cache/llama.cpp/{name}.gguf').write_text('GGUF')
             env = {'HOME': str(home), 'PATH': f'{bin_dir}:/usr/bin:/bin', 'LANG': 'C.UTF-8',
                    'XDG_CONFIG_HOME': str(home / '.config'), 'XDG_CACHE_HOME': str(home / '.cache'),
-                   'XDG_DATA_HOME': str(home / '.local/share'), 'MAPRISMA_DESKTOP': 'generic'}
+                   'XDG_DATA_HOME': str(home / '.local/share'), 'MAPRISMA_DESKTOP': 'generic',
+                   # Not the PC's GPU: a busy one with a real local LLM on it refused at random.
+                   'MAPRISMA_SCAN_GPU': str(home / 'drm')}
             server = subprocess.Popen([str(bin_dir / 'llama-server'), '--port', str(port)], env=env)
             try:
                 for _ in range(100):
@@ -199,7 +204,9 @@ class DartProviderOpsParityTest(unittest.TestCase):
             port = free_port()
             env = {'HOME': str(home), 'PATH': f'{bin_dir}:/usr/bin:/bin', 'LANG': 'C.UTF-8',
                    'XDG_CONFIG_HOME': str(home / '.config'), 'XDG_CACHE_HOME': str(home / '.cache'),
-                   'XDG_DATA_HOME': str(home / '.local/share'), 'MAPRISMA_DESKTOP': 'generic'}
+                   'XDG_DATA_HOME': str(home / '.local/share'), 'MAPRISMA_DESKTOP': 'generic',
+                   # Not the PC's GPU: a busy one with a real local LLM on it refused at random.
+                   'MAPRISMA_SCAN_GPU': str(home / 'drm')}
             server = subprocess.Popen([str(bin_dir / 'ollama'), '--port', str(port)], env=env)
             try:
                 for _ in range(100):

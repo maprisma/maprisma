@@ -37,11 +37,14 @@ final class GpuUsage {
       ) ??
       '';
 
+  /// Tests name their own cards here, so the PC's GPU does not decide.
+  String? get _drm => files.identity.environment['MAPRISMA_SCAN_GPU'];
+
   /// gpu_usage.discrete_gpu: the card with the largest VRAM.
   String? _discreteGpu() {
     (int, String)? best;
     for (final entry in files.list(
-      '/sys/class/drm',
+      _drm ?? '/sys/class/drm',
       limit: 4000,
       allowRootOwned: true,
     )) {
@@ -67,6 +70,7 @@ final class GpuUsage {
         _number('$gpuDir/gpu_busy_percent'),
       );
     }
+    if (_drm != null) return (0, 0, null);
     try {
       final process = await Process.start('nvidia-smi', [
         '--query-gpu=memory.used,memory.total,utilization.gpu',
