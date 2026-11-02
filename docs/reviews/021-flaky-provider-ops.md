@@ -10,3 +10,8 @@
 1. Fixed: the Dart scan skips a llama-server whose parent is one, as `inventory.llamacpp` does. Test: `router_children_test.dart`. This was a fault of the app, not only of the test.
 2. Fixed: the test gives both workers a /proc with only its fake server, through `MAPRISMA_SCAN_PROC`, which `inventory.own_processes` now reads too.
 3. Fixed: `gpu_totals` reads `MAPRISMA_SCAN_GPU` on each call, and an empty value means no cards in both cores.
+
+
+## Round 2 (Antigravity, 2026-11-02, commit 9bb65bd)
+
+CLEAN
