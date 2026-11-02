@@ -42,9 +42,11 @@ final _whisperGgmlRe = RegExp(
 );
 
 /// Only real Whisper GGML/GGUF files count as Whisper models, never general
-/// `ggml-*.bin` LLM weights in `models_root` or `model_folders`.
+/// `ggml-*.bin` LLM weights in `models_root` or `model_folders` or `.part`
+/// partial downloads.
 bool isWhisperModelFile(String fileName) {
   final lower = fileName.toLowerCase();
+  if (lower.endsWith('.part')) return false;
   return _whisperGgmlRe.hasMatch(lower) ||
       (lower.contains('whisper') &&
           (lower.endsWith('.bin') || lower.endsWith('.gguf')));
@@ -425,7 +427,11 @@ final class DictationService {
       for (final entry in entries) {
         if (entry is! File) continue;
         final name = p.basename(entry.path);
-        if (!isWhisperModelFile(name) || !seenPaths.add(entry.path)) continue;
+        if (name.endsWith('.part') ||
+            !isWhisperModelFile(name) ||
+            !seenPaths.add(entry.path)) {
+          continue;
+        }
         models.add({
           'name': name,
           'path': entry.path,
@@ -1305,9 +1311,11 @@ final class DictationService {
       }
       Directory(_managedWhisperDir).createSync(recursive: true);
       final dest = p.join(_managedWhisperDir, fileName);
+      final part = '$dest.part';
       final url = model['url'] as String;
       final ok = desktop.runStepsInTerminal([
-        ['curl', '-fL', '--progress-bar', '-o', dest, url],
+        ['curl', '-fL', '--progress-bar', '-o', part, url],
+        ['mv', '-f', part, dest],
       ], prompt);
       if (!ok) {
         throw ServiceError(
@@ -1334,10 +1342,14 @@ final class DictationService {
         testActions.add({'action': action, 'target': target});
         return {'ok': true};
       }
-      final file = File(p.join(_managedWhisperDir, target));
-      if (FileSystemEntity.typeSync(file.path, followLinks: false) ==
-          FileSystemEntityType.file) {
-        file.deleteSync();
+      for (final candidate in [
+        File(p.join(_managedWhisperDir, target)),
+        File(p.join(_managedWhisperDir, '$target.part')),
+      ]) {
+        if (FileSystemEntity.typeSync(candidate.path, followLinks: false) ==
+            FileSystemEntityType.file) {
+          candidate.deleteSync();
+        }
       }
       return {'ok': true};
     }
@@ -1464,8 +1476,10 @@ final class DictationService {
           settings.saveOwn({'dictation_whisper_model': fileName});
           Directory(_managedWhisperDir).createSync(recursive: true);
           final dest = p.join(_managedWhisperDir, fileName);
+          final part = '$dest.part';
           final url = model.first['url'] as String;
-          steps.add(['curl', '-fL', '--progress-bar', '-o', dest, url]);
+          steps.add(['curl', '-fL', '--progress-bar', '-o', part, url]);
+          steps.add(['mv', '-f', part, dest]);
         }
       case 'update_whisper':
         final updateCmd = _whisperUpdateCmd();

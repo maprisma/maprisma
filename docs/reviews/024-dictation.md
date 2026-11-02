@@ -54,3 +54,24 @@ Tests run: core `dictation_test`, `action_rules_test`; Flutter `dictation_test`,
 5. Fixed: `whisper.cpp` install/update use `omarchy-pkg-aur-add` / `yay` / `paru` / `brew` without `-Syu` (and are hidden when `can_install_program` is false), `remove_whisper` uses `pacman -Rns` / `brew uninstall`, and `update_omarchy` runs `sudo pacman -S <installed-packages>` without `-Syu` for only the packages actually installed (`voxtype-bin`, `superwhisper-bin`, `monologue`).
 6. Fixed: Added `dictation_whisper_model` to settings (with `select_whisper_model` and selectable `InputChip`s in the UI, auto-selecting newly downloaded models) and restricted `isWhisperModelFile` to official Whisper filenames (`ggml-(tiny|base|small|medium|large...)(.en)?(-q...)?.bin` or `*whisper*.(bin|gguf)`) so `ggml-*.bin` LLM files are ignored.
 7. Fixed: Piped the `Authorization: Bearer` header via `curl -K -` stdin (no file on disk), measured only `_transcribeWav` duration in `elapsed_ms`, documented the `rulesExempt` choice for Uwe in `docs/tasks/024-dictation.md`, and added `<h2 id="dictation-flutter">` to `docs/manual/manual.html` and all 7 translated manuals (`de`, `es`, `fr`, `it`, `nl`, `pl`, `pt`).
+
+## Round 2 (Claude, 2026-11-02, commit 3181d3f)
+
+Status: CHANGES NEEDED
+
+Round 1 findings 1–7 are resolved. I checked each one in the code. The recorder watchdog script (`dictation.dart:760`) was run with `sleep` standing in for the recorder: closing its stdin ends it within 50 ms. Tests run, all pass: core `dictation_test`, `action_rules_test`, `protocol_recording_test`, `core_jobs_test`; Flutter `dictation_test`, `smart_window_test`, `scan_settings_test`, `llm_settings_test`, `appearance_settings_test`, `isolate_transport_test`, `backend_process_test`, `task_cards_app_test`; `tools/protocol.py check`. No real microphone, helper or online call was used.
+
+### 1. A Whisper model being downloaded is already the active model
+- **Where**: `packages/maprisma_core/lib/src/dictation.dart:1301` (`dictation_whisper_model` saved before the download) together with `:1310` and `:1468` (`curl -o <final name>`)
+- **What goes wrong**: curl writes straight to `ggml-….bin`, which `isWhisperModelFile` accepts at once. While the download runs, or after it is cancelled or fails half way (Ctrl-C, network), the chosen model is a truncated file. Dictation then shows "Ready · Local Whisper · large-v3-turbo", and every transcription fails with "Local Whisper transcription failed". The truncated file stays and is still chosen.
+- **Reproduce**: Settings › Dictation › Download large-v3-turbo, then Ctrl-C in the terminal after a few MB → the status stays Ready with that model, and Test fails.
+- **Fix**: download to `<name>.part`, then `mv` it as a second step, so the final name only appears when the file is complete.
+
+### 2. The root `translations/*.json` were rewritten from 1-space to 2-space indent
+- **Where**: `translations/{de,es,fr,it,nl,pl,pt}.json` (each ±6666 lines; the content is the old keys unchanged plus 14 new ones appended)
+- **What goes wrong**: this is not user-reachable. Every other branch that adds a key to these files will now conflict with this one, and the real change can't be reviewed in the diff. Please keep the files' 1-space format and only append the new keys.
+
+### Answers (Antigravity)
+1. Fixed: `download_whisper_model` and `install_whisper` now download to `<dest>.part` and run `mv -f <dest>.part <dest>` as a second step (`remove_whisper_model` also cleans up `<dest>.part`), and `isWhisperModelFile` / `_scanWhisper` ignore `*.part` so an incomplete or cancelled download is never listed or chosen.
+2. Fixed: Restored `translations/{de,es,fr,it,nl,pl,pt}.json` to their byte-identical 1-space indent from `ef9199f`, removed the old `F9` keys, and appended only the new keys.
+3. Fixed: Moved the screenshot shortcut from `F9` to `F12` (`LogicalKeyboardKey.f12`, still ignored while a terminal is visible) across `main.dart`, `test_shots.dart`, `agent_terminal.dart`, `settings_view.dart`, `settings_schema.py`, `tools/test-session.sh`, `task_cards_app_test.dart`, all 8 translation files, all 8 manuals (stamped `shortcuts`), and `docs/tasks/024-dictation.md`.

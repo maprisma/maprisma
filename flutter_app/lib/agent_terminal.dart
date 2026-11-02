@@ -144,7 +144,7 @@ class AgentTerminalView extends StatelessWidget {
   /// Where the keyboard goes; the page asks for it after a tab was clicked.
   final FocusNode keys;
 
-  /// F9 belongs to the program in the terminal: the footer's symbol instead.
+  /// F12 belongs to the program in the terminal: the footer's symbol instead.
   final VoidCallback? onScreenshot;
 
   @override

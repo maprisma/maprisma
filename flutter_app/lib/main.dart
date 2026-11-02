@@ -92,7 +92,7 @@ class MaprismaApp extends StatefulWidget {
 class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   final _navigator = GlobalKey<NavigatorState>();
 
-  /// F9: a picture of this window and a note (test_shots.dart). In a recorded
+  /// F12: a picture of this window and a note (test_shots.dart). In a recorded
   /// test both go next to the protocol.
   final _shots = TestShots.fromEnvironment(Platform.environment);
   late final _windowShots =
@@ -122,12 +122,12 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   }
 
   bool _shotKey(KeyEvent event) {
-    if (event is! KeyDownEvent || event.logicalKey != LogicalKeyboardKey.f9) {
+    if (event is! KeyDownEvent || event.logicalKey != LogicalKeyboardKey.f12) {
       return false;
     }
     if (_shots == null) {
       final on = (_snapshot?['settings'] as Map?)?['screenshot_key'] != false;
-      // A program in a terminal may use F9 itself.
+      // A program in a terminal may use F12 itself.
       if (!on || _visibleTerminal != null) return false;
     }
     unawaited(_takeShot());
@@ -4825,7 +4825,7 @@ class _BackAction<T extends Intent> extends Action<T> {
   }
 }
 
-/// After F9: where the picture went, and an optional note.
+/// After F12: where the picture went, and an optional note.
 class _ShotNote extends StatefulWidget {
   const _ShotNote(this.path, this.tr);
 

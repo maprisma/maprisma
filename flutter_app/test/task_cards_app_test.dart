@@ -341,9 +341,9 @@ void main() {
     await unmountApp(tester);
   });
 
-  testWidgets('F9 saves the picture, then asks for its note', (tester) async {
+  testWidgets('F12 saves the picture, then asks for its note', (tester) async {
     final dir = await mountApp(tester);
-    await tester.sendKeyEvent(LogicalKeyboardKey.f9);
+    await tester.sendKeyEvent(LogicalKeyboardKey.f12);
     await settleService(tester);
     await tester.enterText(
       find.byKey(const ValueKey('screenshot-note')),

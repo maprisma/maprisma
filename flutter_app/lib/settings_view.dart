@@ -897,10 +897,10 @@ class SettingsView extends StatelessWidget {
                   ),
                   SwitchListTile(
                     key: const ValueKey('screenshot-key'),
-                    title: Text(tr('F9 saves a screenshot')),
+                    title: Text(tr('F12 saves a screenshot')),
                     subtitle: Text(
                       tr(
-                        'A picture of this window is saved, with a note if you like. In a terminal, use the camera symbol below it: programs there may use F9.',
+                        'A picture of this window is saved, with a note if you like. In a terminal, use the camera symbol below it: programs there may use F12.',
                       ),
                     ),
                     value: settings['screenshot_key'] as bool? ?? true,

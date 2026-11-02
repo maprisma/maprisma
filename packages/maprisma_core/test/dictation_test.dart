@@ -172,6 +172,9 @@ void main() {
         ..writeAsStringSync('model');
       final turboFile = File('${modelDir.path}/ggml-large-v3-turbo-q5_0.bin')
         ..writeAsStringSync('model');
+      // A half-downloaded .part file must never be listed or chosen.
+      final partFile = File('${modelDir.path}/ggml-small.bin.part')
+        ..writeAsStringSync('partial');
       // Old llama.cpp GGML LLM file in ~/Models must NOT count as a Whisper model.
       final llmModelsDir = Directory('${temp.path}/Models')
         ..createSync(recursive: true);
@@ -195,7 +198,9 @@ void main() {
           .map((m) => m['name'])
           .toList();
       expect(modelNames, ['ggml-base.bin', 'ggml-large-v3-turbo-q5_0.bin']);
+      expect(modelNames, isNot(contains('ggml-small.bin.part')));
       expect(modelNames, isNot(contains('ggml-alpaca-7b-q4_0.bin')));
+      expect(partFile.existsSync(), isTrue);
       // By default, higher-accuracy starter model is preferred over alphabetical order.
       expect(whisper['active_model'], 'ggml-large-v3-turbo-q5_0.bin');
 
@@ -354,12 +359,16 @@ void main() {
       writeExecutable(binDir, 'yay', '#!/bin/sh\nexit 0\n');
       await core.dispatchAsync('dictation.run', {'action': 'update_omarchy'});
       await core.dispatchAsync('dictation.run', {'action': 'install_whisper'});
+      await core.dispatchAsync('dictation.run', {
+        'action': 'download_whisper_model',
+        'target': 'small',
+      });
       await core.dispatchAsync('dictation.run', {'action': 'update_whisper'});
       for (
         var i = 0;
         i < 20 &&
             (!termArgsFile.existsSync() ||
-                termArgsFile.readAsLinesSync().length < 3);
+                termArgsFile.readAsLinesSync().length < 4);
         i++
       ) {
         await Future<void>.delayed(const Duration(milliseconds: 20));
@@ -375,6 +384,9 @@ void main() {
           contains('yay -S --needed whisper.cpp'),
         ),
       );
+      expect(termLines, contains('ggml-base.bin.part'));
+      expect(termLines, contains('mv -f'));
+      expect(termLines, contains('ggml-small.bin.part'));
       expect(termLines, contains('yay -S whisper.cpp'));
     },
   );

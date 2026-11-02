@@ -7,7 +7,7 @@
 #     system.txt       distribution, desktop, graphics, the installed Maprisma
 #     notes.md         your notes: a checklist to fill in while you test
 #     after.txt        what Maprisma left on the PC when it closed (folders, user units)
-#     shots/           F9 in the running app: a picture of its window and a note (in protocol.jsonl)
+#     shots/           F12 in the running app: a picture of its window and a note (in protocol.jsonl)
 #
 #   test-session.sh                 start the installed maprisma
 #   test-session.sh <AppImage>      start this AppImage instead
@@ -55,7 +55,7 @@ cat > "$run/notes.md" <<'EOF'
 
 Write what you did, what you expected and what happened, with the time (`date +%T`).
 Tick what worked, cross out what did not, add anything odd.
-F9 in Maprisma saves a picture of its window into shots/ and asks for a note. It shows what is on
+F12 in Maprisma saves a picture of its window into shots/ and asks for a note. It shows what is on
 screen, also keys and file names: look at the pictures before you share them. GTK's title bar and
 windows of other programs are not in it; take a normal screenshot of those.
 
@@ -89,7 +89,7 @@ windows of other programs are not in it; take a normal screenshot of those.
 EOF
 
 echo "Recording into $run"
-echo "Write your notes into $run/notes.md while you test. F9 in Maprisma: a screenshot with a note."
+echo "Write your notes into $run/notes.md while you test. F12 in Maprisma: a screenshot with a note."
 echo "Close Maprisma to finish."
 status=0
 MAPRISMA_RECORD_PROTOCOL="$run/protocol.jsonl" "$app" > "$run/app.log" 2>&1 || status=$?

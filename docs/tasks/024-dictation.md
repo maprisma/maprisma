@@ -28,6 +28,7 @@ Uwe, 2026-11-02: voice dictation in Ask AI and a Dictation section card in Setti
 ## Storage, routes, and manual
 - Settings: `dictation` (`bool`, default `true`), `dictation_engine` (`'auto' | 'omarchy' | 'whisper' | 'local' | 'online'`, default `'auto'`), and `dictation_whisper_model` (`string`, default `''`) in `settings_schema.py`, `flutter_backend.py` (`UI_SETTINGS`), `settings.dart` (`uiSettings`), `core_assets.g.dart`, and `routes.json`.
 - Routes: `dictation.snapshot` (`read`), `dictation.start` (`change`), `dictation.stop` (`change`), `dictation.run` (`change`).
+- Screenshot key moved from `F9` to `F12` across code, tests, translations and manual because Omarchy binds `F9` globally as push-to-talk (`/usr/share/omarchy/default/hypr/bindings/dictation.lua`) once a dictation backend is set up.
 - User manual: `<h2 id="dictation-flutter">` in `docs/manual/manual.html` and all 7 translations (`de`, `es`, `fr`, `it`, `nl`, `pl`, `pt`).
 
 ## Decision for Uwe: Action Rules (019) and `dictation.run`
