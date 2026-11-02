@@ -733,5 +733,19 @@
   "Dictate": "Dictar",
   "Listening… Click Stop when done.": "Escuchando… Haga clic en Detener al terminar.",
   "Your dictated test text appears here…": "Su texto de prueba dictado aparece aquí…",
-  "Transcribed in {0} ms · {1}": "Transcrito en {0} ms · {1}"
+  "Transcribed in {0} ms · {1}": "Transcrito en {0} ms · {1}",
+  "Transcribing…": "Transcribiendo…",
+  "Omarchy dictation types into the focused text field.": "El dictado de Omarchy escribe en el campo de texto activo.",
+  "Dictation is turned off in Settings.": "El dictado está desactivado en Ajustes.",
+  "Dictation is not set up yet.": "El dictado aún no está configurado.",
+  "No audio recorder (pw-record, arecord, or ffmpeg) was found on this PC.": "No se encontró ninguna grabadora de audio (pw-record, arecord o ffmpeg) en este PC.",
+  "Could not start Omarchy dictation.": "No se pudo iniciar el dictado de Omarchy.",
+  "No dictation recording is running.": "No hay ninguna grabación de dictado en curso.",
+  "No speech was recorded. Check your microphone and try again.": "No se grabó voz. Compruebe el micrófono e inténtelo de nuevo.",
+  "Whisper is not set up completely yet.": "Whisper aún no está completamente configurado.",
+  "Online transcription failed.": "La transcripción en línea ha fallado.",
+  "Local Whisper transcription failed.": "La transcripción local con Whisper ha fallado.",
+  "No terminal was found to run this setup step.": "No se encontró ninguna terminal para ejecutar este paso de configuración.",
+  "Monologue is not installed.": "Monologue no está instalado.",
+  "No AUR helper (yay or paru) was found to install whisper.cpp.": "No se encontró ningún asistente AUR (yay o paru) para instalar whisper.cpp."
 }

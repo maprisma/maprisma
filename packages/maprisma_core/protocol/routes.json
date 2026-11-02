@@ -727,7 +727,7 @@
   "dictation.snapshot": {
    "area": "dictation",
    "kind": "read",
-   "note": "Voice dictation status across Omarchy dictation/Monologue, local Whisper, local LLM speech models, and connected online providers.",
+   "note": "Voice dictation status across Omarchy dictation, local Whisper, local LLM speech models, and connected online providers.",
    "params": {},
    "result": {
     "active": "string",
@@ -741,7 +741,9 @@
     "online": "object",
     "ready": "bool",
     "recording": "bool",
-    "whisper": "object"
+    "transcribing": "bool",
+    "whisper": "object",
+    "whisper_model": "string"
    },
    "source": "manual"
   },
@@ -760,11 +762,13 @@
   "dictation.stop": {
    "area": "dictation",
    "kind": "change",
-   "note": "Stops microphone capture or Omarchy dictation, transcribes the recorded WAV, deletes the temporary file, and returns the text.",
+   "note": "Stops microphone capture or Omarchy dictation, transcribes the recorded WAV (unless `cancel` is true), deletes the temporary file, and returns the text.",
    "optional": [
+    "cancel",
     "recording"
    ],
    "params": {
+    "cancel": "bool",
     "recording": "string"
    },
    "result": {
@@ -772,7 +776,8 @@
     "elapsed_ms": "int",
     "engine": "string",
     "mode": "string",
-    "text": "string"
+    "text": "string",
+    "typed_by_desktop": "bool"
    },
    "source": "manual"
   },
@@ -1530,6 +1535,7 @@
     "cost_limit": "int",
     "dictation": "bool",
     "dictation_engine": "string",
+    "dictation_whisper_model": "string",
     "flutter_map_layout": {
      "cards": {
       "a": [
@@ -1597,6 +1603,7 @@
     "cost_limit": "int",
     "dictation": "bool",
     "dictation_engine": "string",
+    "dictation_whisper_model": "string",
     "flutter_map_layout": {
      "cards": {
       "a": [

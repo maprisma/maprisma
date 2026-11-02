@@ -21,11 +21,11 @@ void main() {
   });
 
   CoreClient clientFor(CoreService core) => CoreClient.fromCall(
-    (method, params) async => core.dispatch(method, params),
+    (method, params) => core.dispatchAsync(method, params),
   );
 
   testWidgets(
-    'Settings Dictation card shows unconfigured hint, Omarchy and Whisper setup, online cost warning, test dictation, and off switch',
+    'Settings Dictation card shows unconfigured hint, Omarchy and Whisper setup, model selection, online cost warning, test dictation, and off switch',
     (tester) async {
       final fixture = <String, dynamic>{
         'omarchy': {
@@ -38,6 +38,7 @@ void main() {
         },
         'whisper': {
           'program_installed': false,
+          'can_install_program': true,
           'ready': false,
           'models': const [],
         },
@@ -120,7 +121,7 @@ void main() {
         findsOneWidget,
       );
 
-      // Install Omarchy Monologue and Whisper actions route through dictation.run.
+      // Install Omarchy Monologue action routes through dictation.run.
       await tester.tap(
         find.byKey(const ValueKey('dictation-install-monologue')),
       );
@@ -132,15 +133,21 @@ void main() {
         isTrue,
       );
 
-      // Now simulate local Whisper ready and online provider ready.
+      // Simulate local Whisper ready with two models and online provider ready.
       fixture['whisper'] = {
         'program_installed': true,
+        'can_install_program': true,
         'ready': true,
         'active_model': 'ggml-base.bin',
         'models': [
           {
             'name': 'ggml-base.bin',
             'path': '/tmp/ggml-base.bin',
+            'managed': true,
+          },
+          {
+            'name': 'ggml-large-v3-turbo-q5_0.bin',
+            'path': '/tmp/ggml-large-v3-turbo-q5_0.bin',
             'managed': true,
           },
         ],
@@ -162,6 +169,22 @@ void main() {
       expect(
         find.byKey(const ValueKey('dictation-status-ready')),
         findsOneWidget,
+      );
+
+      // Selecting the second Whisper model chip calls select_whisper_model.
+      await tester.tap(
+        find.byKey(
+          const ValueKey('dictation-model-chip-ggml-large-v3-turbo-q5_0.bin'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        core.dictation.testActions.any(
+          (a) =>
+              a['action'] == 'select_whisper_model' &&
+              a['target'] == 'ggml-large-v3-turbo-q5_0.bin',
+        ),
+        isTrue,
       );
 
       // Test dictation records and populates the test text field.
@@ -200,7 +223,7 @@ void main() {
   );
 
   testWidgets(
-    'Ask AI shows microphone with unconfigured hint, opens inline setup, and dictates into prompt when ready',
+    'Ask AI shows microphone with unconfigured hint, opens inline setup, dictates into prompt when ready, stops recorder on close, and displays readable errors',
     (tester) async {
       final fixture = <String, dynamic>{
         'omarchy': {'supported': true, 'ready': false},
@@ -218,15 +241,18 @@ void main() {
         },
       );
 
+      var cardOpen = true;
       Widget buildCard() => MaterialApp(
         home: Scaffold(
           body: MapSmartCard(
             width: 360,
             column: 'mcp',
             title: 'MCP servers and skills',
-            open: true,
+            open: cardOpen,
             enabled: true,
-            onToggle: () {},
+            onToggle: () {
+              cardOpen = !cardOpen;
+            },
             tr: (k) => k,
             helpers: const [
               {'command': 'claude', 'name': 'Claude Code', 'local': false},
@@ -282,6 +308,44 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('smart-dictation-mic')));
       await tester.pumpAndSettle();
       expect(find.text('Connect filesystem MCP server'), findsOneWidget);
+
+      // Start dictation, then close Ask AI -> cancels active recording on the backend.
+      await tester.tap(find.byKey(const ValueKey('smart-dictation-mic')));
+      await tester.pumpAndSettle();
+      expect(
+        (await core.dispatchAsync('dictation.snapshot', {}))['recording'],
+        isTrue,
+      );
+      cardOpen = false;
+      await tester.pumpWidget(buildCard());
+      await tester.pumpAndSettle();
+      expect(
+        (await core.dispatchAsync('dictation.snapshot', {}))['recording'],
+        isFalse,
+      );
+
+      // Reopen Ask AI and verify readable error when dictation start fails.
+      cardOpen = true;
+      await tester.pumpWidget(buildCard());
+      await tester.pumpAndSettle();
+      // Force backend unconfigured while UI thinks it was ready, then click mic.
+      fixture['online'] = {'provider': 'OpenAI', 'ready': false};
+      core = CoreService(
+        environment: {
+          'HOME': temp.path,
+          'PATH': '${temp.path}/bin',
+          'MAPRISMA_DESKTOP': 'omarchy',
+          'MAPRISMA_TEST_DICTATION': jsonEncode(fixture),
+        },
+      );
+      await tester.pumpWidget(buildCard());
+      await tester.tap(find.byKey(const ValueKey('smart-dictation-mic')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('smart-dictation-error')),
+        findsOneWidget,
+      );
+      expect(find.text('Dictation is not set up yet.'), findsOneWidget);
 
       // Disabling dictation in settings hides the microphone button.
       core.dispatch('settings.update', {

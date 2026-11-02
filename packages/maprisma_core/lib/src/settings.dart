@@ -36,6 +36,7 @@ const uiSettings = {
   'smart_helper',
   'dictation',
   'dictation_engine',
+  'dictation_whisper_model',
   'action_rules',
   'action_rule_hints',
   'usage_box',

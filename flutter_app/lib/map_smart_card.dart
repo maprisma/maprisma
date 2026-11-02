@@ -406,8 +406,25 @@ class _MapSmartCardState extends State<MapSmartCard> {
   _SmartStep _errorReturnTo = _SmartStep.idle;
   Map<String, dynamic>? _dictation;
   bool _dictationRecording = false;
+  bool _dictationTranscribing = false;
   String? _dictationHandle;
   bool _showDictationSetup = false;
+  String _dictationError = '';
+
+  void _cancelDictationRecording() {
+    if (!_dictationRecording) return;
+    final handle = _dictationHandle;
+    _dictationRecording = false;
+    _dictationHandle = null;
+    final client = widget.client;
+    if (client != null) {
+      unawaited(
+        client
+            .dictationStop(recording: handle, cancel: true)
+            .then((_) {}, onError: (_) {}),
+      );
+    }
+  }
 
   Map<String, dynamic>? get _activeHelper {
     if (widget.helpers.isEmpty) return null;
@@ -472,7 +489,9 @@ class _MapSmartCardState extends State<MapSmartCard> {
     if (!oldWidget.open && widget.open) {
       _focusOpenCard();
     } else if (oldWidget.open && !widget.open) {
+      _cancelDictationRecording();
       _showDictationSetup = false;
+      _dictationError = '';
       if (_step == _SmartStep.redirect) _step = _SmartStep.idle;
     }
   }
@@ -490,6 +509,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
       if (!widget.open) widget.onToggle();
       return;
     }
+    _cancelDictationRecording();
     if (!widget.open) {
       setState(() => _step = _SmartStep.status);
       widget.onToggle();
@@ -535,6 +555,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
   /// [refocus] false when what comes next takes the keyboard: a task card, a
   /// terminal, a page.
   void _close({bool refocus = true}) {
+    _cancelDictationRecording();
     if (_step == _SmartStep.working) {
       setState(_abortWorking);
     } else if (_step != _SmartStep.running && !_applyingConnect) {
@@ -1078,6 +1099,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
 
   @override
   void dispose() {
+    _cancelDictationRecording();
     smartHelperChosen.removeListener(_helperChanged);
     dictationChanged.removeListener(_loadDictation);
     if (_windowShown) _countWindow(-1);
@@ -1273,13 +1295,15 @@ class _MapSmartCardState extends State<MapSmartCard> {
       setState(() {
         _dictation = snap;
         _dictationRecording = snap['recording'] == true;
+        _dictationTranscribing = snap['transcribing'] == true;
       });
     } catch (_) {}
   }
 
   Future<void> _toggleDictation() async {
     final client = widget.client;
-    if (client == null) return;
+    if (client == null || _dictationTranscribing) return;
+    setState(() => _dictationError = '');
     if (_dictation == null) {
       await _loadDictation();
       if (!mounted) return;
@@ -1298,11 +1322,21 @@ class _MapSmartCardState extends State<MapSmartCard> {
           _dictationRecording = true;
           _dictationHandle = started['recording'] as String?;
         });
-      } catch (_) {}
+      } catch (e) {
+        if (!mounted) return;
+        setState(() => _dictationError = failureText(widget.tr, e));
+      }
       return;
     }
+    _fieldFocus.requestFocus();
+    final handle = _dictationHandle;
+    setState(() {
+      _dictationRecording = false;
+      _dictationHandle = null;
+      _dictationTranscribing = true;
+    });
     try {
-      final stopped = await client.dictationStop(recording: _dictationHandle);
+      final stopped = await client.dictationStop(recording: handle);
       if (!mounted) return;
       final text = (stopped['text'] as String? ?? '').trim();
       if (text.isNotEmpty) {
@@ -1313,14 +1347,13 @@ class _MapSmartCardState extends State<MapSmartCard> {
         );
       }
       setState(() {
-        _dictationRecording = false;
-        _dictationHandle = null;
+        _dictationTranscribing = false;
       });
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
       setState(() {
-        _dictationRecording = false;
-        _dictationHandle = null;
+        _dictationTranscribing = false;
+        _dictationError = failureText(widget.tr, e);
       });
     }
   }
@@ -1328,26 +1361,41 @@ class _MapSmartCardState extends State<MapSmartCard> {
   Future<void> _updateDictationEngine(String engine) async {
     final client = widget.client;
     if (client == null) return;
+    setState(() => _dictationError = '');
     try {
       await client.settingsUpdate(values: {'dictation_engine': engine});
       dictationChanged.value++;
       await _loadDictation();
-    } catch (_) {}
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _dictationError = failureText(widget.tr, e));
+    }
   }
 
   Future<void> _runDictationAction(String action, [String? target]) async {
     final client = widget.client;
     if (client == null) return;
+    setState(() => _dictationError = '');
     try {
       await client.dictationRun(action: action, target: target);
       dictationChanged.value++;
       await _loadDictation();
-    } catch (_) {}
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _dictationError = failureText(widget.tr, e));
+    }
   }
 
   Widget _buildDictationSuffix(ColorScheme colors, bool ready, String active) {
     final Widget micIcon;
-    if (_dictationRecording) {
+    if (_dictationTranscribing) {
+      micIcon = const SizedBox(
+        key: ValueKey('smart-dictation-transcribing'),
+        width: 16,
+        height: 16,
+        child: CircularProgressIndicator(strokeWidth: 2),
+      );
+    } else if (_dictationRecording) {
       micIcon = Icon(Icons.stop_circle, size: 20, color: colors.error);
     } else if (!ready) {
       micIcon = Stack(
@@ -1392,13 +1440,15 @@ class _MapSmartCardState extends State<MapSmartCard> {
           IconButton(
             key: const ValueKey('smart-dictation-mic'),
             visualDensity: VisualDensity.compact,
-            tooltip: _dictationRecording
+            tooltip: _dictationTranscribing
+                ? widget.tr('Transcribing…')
+                : _dictationRecording
                 ? widget.tr('Stop dictation')
                 : ready
                 ? widget.tr('Dictate')
                 : widget.tr('On · not set up yet'),
             icon: micIcon,
-            onPressed: _toggleDictation,
+            onPressed: _dictationTranscribing ? null : _toggleDictation,
           ),
           IconButton(
             key: const ValueKey('smart-dictation-manage'),
@@ -1448,7 +1498,9 @@ class _MapSmartCardState extends State<MapSmartCard> {
           style: const TextStyle(fontSize: 13),
           decoration: InputDecoration(
             isDense: true,
-            hintText: _dictationRecording
+            hintText: _dictationTranscribing
+                ? widget.tr('Transcribing…')
+                : _dictationRecording
                 ? widget.tr('Listening… Click Stop when done.')
                 : widget.tr(_columnHint(widget.column)),
             border: const OutlineInputBorder(),
@@ -1457,6 +1509,14 @@ class _MapSmartCardState extends State<MapSmartCard> {
                 : null,
           ),
         ),
+        if (_dictationError.isNotEmpty) ...[
+          const SizedBox(height: AppSpace.xs),
+          Text(
+            _dictationError,
+            key: const ValueKey('smart-dictation-error'),
+            style: TextStyle(fontSize: 11, color: colors.error),
+          ),
+        ],
         if (showMic && dictCostHint.isNotEmpty && !_showDictationSetup) ...[
           const SizedBox(height: AppSpace.xs),
           Row(

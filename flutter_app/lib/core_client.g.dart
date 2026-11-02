@@ -254,8 +254,13 @@ class CoreClient {
     Map<String, dynamic> params = const {},
   ]) => transport.call('dictation.start', params);
 
-  Future<Map<String, dynamic>> dictationStop({String? recording}) =>
-      transport.call('dictation.stop', {'recording': ?recording});
+  Future<Map<String, dynamic>> dictationStop({
+    bool? cancel,
+    String? recording,
+  }) => transport.call('dictation.stop', {
+    'cancel': ?cancel,
+    'recording': ?recording,
+  });
 
   Future<Map<String, dynamic>> existingApply([
     Map<String, dynamic> params = const {},

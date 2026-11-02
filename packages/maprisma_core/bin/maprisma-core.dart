@@ -25,7 +25,7 @@ Future<void> main(List<String> args) async {
   final service = CoreService();
   final frame = <int>[];
   var oversized = false;
-  void reply() {
+  Future<void> reply() async {
     if (oversized) {
       stdout.writeln(
         jsonEncode({
@@ -35,7 +35,7 @@ Future<void> main(List<String> args) async {
       );
     } else {
       try {
-        stdout.writeln(service.handle(utf8.decode(frame)));
+        stdout.writeln(await service.handleAsync(utf8.decode(frame)));
       } on FormatException {
         stdout.writeln(
           jsonEncode({
@@ -52,7 +52,7 @@ Future<void> main(List<String> args) async {
   await for (final chunk in stdin) {
     for (final byte in chunk) {
       if (byte == 10) {
-        reply();
+        await reply();
       } else if (!oversized) {
         if (frame.length + 1 >= maxRequest) {
           frame.clear();
@@ -63,5 +63,6 @@ Future<void> main(List<String> args) async {
       }
     }
   }
-  if (oversized || frame.isNotEmpty) reply();
+  if (oversized || frame.isNotEmpty) await reply();
+  service.dispose();
 }

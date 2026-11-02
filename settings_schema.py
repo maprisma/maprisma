@@ -110,6 +110,7 @@ SCHEMA: dict[str, Setting] = {
     "dictation": Setting(True, _bool, "Settings › Dictation: microphone in Ask AI"),
     "dictation_engine": Setting("auto", _one_of("auto", "omarchy", "whisper", "local", "online"),
                                 "Settings › Dictation: chosen backend"),
+    "dictation_whisper_model": Setting("", _text, "Settings › Dictation: chosen local Whisper model file name"),
     "screenshot_folder": Setting(None, _text, "Settings › Screenshots go to: empty is ~/Pictures/Maprisma"),
     "agent_folder": Setting(None, _text, "Settings › Agents start in: the folder agents start in"),
     "agent_projects": Setting({}, _text_mapping, "Start: the optional project folder pinned as each agent's default"),

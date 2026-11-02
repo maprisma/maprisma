@@ -733,5 +733,19 @@
   "Dictate": "Dicteren",
   "Listening… Click Stop when done.": "Luistert… Klik op Stop wanneer u klaar bent.",
   "Your dictated test text appears here…": "Uw gedicteerde testtekst verschijnt hier…",
-  "Transcribed in {0} ms · {1}": "Getranscribeerd in {0} ms · {1}"
+  "Transcribed in {0} ms · {1}": "Getranscribeerd in {0} ms · {1}",
+  "Transcribing…": "Transcriberen…",
+  "Omarchy dictation types into the focused text field.": "Omarchy-dicteren typt in het actieve tekstveld.",
+  "Dictation is turned off in Settings.": "Dicteren is uitgeschakeld in Instellingen.",
+  "Dictation is not set up yet.": "Dicteren is nog niet ingesteld.",
+  "No audio recorder (pw-record, arecord, or ffmpeg) was found on this PC.": "Er is geen audiorecorder (pw-record, arecord of ffmpeg) gevonden op deze pc.",
+  "Could not start Omarchy dictation.": "Kon Omarchy-dicteren niet starten.",
+  "No dictation recording is running.": "Er loopt momenteel geen dicteeropname.",
+  "No speech was recorded. Check your microphone and try again.": "Er is geen spraak opgenomen. Controleer uw microfoon en probeer het opnieuw.",
+  "Whisper is not set up completely yet.": "Whisper is nog niet volledig ingesteld.",
+  "Online transcription failed.": "Online transcriptie is mislukt.",
+  "Local Whisper transcription failed.": "Lokale Whisper-transcriptie is mislukt.",
+  "No terminal was found to run this setup step.": "Er is geen terminal gevonden om deze instelstap uit te voeren.",
+  "Monologue is not installed.": "Monologue is niet geïnstalleerd.",
+  "No AUR helper (yay or paru) was found to install whisper.cpp.": "Er is geen AUR-helper (yay of paru) gevonden om whisper.cpp te installeren."
 }

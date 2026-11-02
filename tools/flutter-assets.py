@@ -703,6 +703,20 @@ KEYS = (
     "Listening… Click Stop when done.",
     "Your dictated test text appears here…",
     "Transcribed in {0} ms · {1}",
+    "Transcribing…",
+    "Omarchy dictation types into the focused text field.",
+    "Dictation is turned off in Settings.",
+    "Dictation is not set up yet.",
+    "No audio recorder (pw-record, arecord, or ffmpeg) was found on this PC.",
+    "Could not start Omarchy dictation.",
+    "No dictation recording is running.",
+    "No speech was recorded. Check your microphone and try again.",
+    "Whisper is not set up completely yet.",
+    "Online transcription failed.",
+    "Local Whisper transcription failed.",
+    "No terminal was found to run this setup step.",
+    "Monologue is not installed.",
+    "No AUR helper (yay or paru) was found to install whisper.cpp.",
 )
 
 

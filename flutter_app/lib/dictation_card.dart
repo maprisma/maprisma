@@ -13,14 +13,17 @@ final dictationChanged = ValueNotifier<int>(0);
 Map<String, dynamic> fallbackDictationSnapshot(Map<String, dynamic> settings) {
   final enabled = settings['dictation'] as bool? ?? true;
   final engine = settings['dictation_engine'] as String? ?? 'auto';
+  final whisperModel = settings['dictation_whisper_model'] as String? ?? '';
   return {
     'enabled': enabled,
     'engine': engine,
+    'whisper_model': whisperModel,
     'active': '',
     'active_label': '',
     'ready': false,
     'configured': false,
     'recording': false,
+    'transcribing': false,
     'cost_hint': engine == 'online'
         ? 'Online dictation sends audio to an online provider and uses API credit. Local Whisper or Omarchy dictation is free and stays on this PC.'
         : '',
@@ -37,6 +40,7 @@ Map<String, dynamic> fallbackDictationSnapshot(Map<String, dynamic> settings) {
     },
     'whisper': const {
       'program_installed': false,
+      'can_install_program': true,
       'binary': '',
       'recorder_installed': false,
       'models': <Map<String, dynamic>>[],
@@ -137,6 +141,8 @@ class DictationControls extends StatelessWidget {
         .whereType<Map>()
         .map((m) => m.cast<String, dynamic>())
         .toList();
+    final activeWhisperModel = whisper['active_model'] as String? ?? '';
+    final canInstallWhisper = whisper['can_install_program'] != false;
     final downloadedNames = {for (final m in whisperModels) '${m['name']}'};
     final catalog = (whisper['catalog'] as List? ?? const [])
         .whereType<Map>()
@@ -227,6 +233,14 @@ class DictationControls extends StatelessWidget {
         ],
         if (showOmarchy) ...[
           const SizedBox(height: AppSpace.sm),
+          if (omarchy['ready'] == true || engine == 'omarchy')
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpace.xs),
+              child: Text(
+                tr('Omarchy dictation types into the focused text field.'),
+                style: TextStyle(fontSize: 11, color: colors.onSurfaceVariant),
+              ),
+            ),
           Wrap(
             spacing: AppSpace.sm,
             runSpacing: AppSpace.xs,
@@ -310,6 +324,7 @@ class DictationControls extends StatelessWidget {
                 ),
               ],
               if (omarchy['voxtype_installed'] == true ||
+                  omarchy['superwhisper_configured'] == true ||
                   omarchy['monologue_installed'] == true)
                 OutlinedButton(
                   key: const ValueKey('dictation-update-omarchy'),
@@ -327,7 +342,7 @@ class DictationControls extends StatelessWidget {
             runSpacing: AppSpace.xs,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              if (whisper['program_installed'] != true)
+              if (whisper['program_installed'] != true && canInstallWhisper)
                 OutlinedButton(
                   key: const ValueKey('dictation-install-whisper'),
                   style: _btnStyle,
@@ -336,7 +351,8 @@ class DictationControls extends StatelessWidget {
                       : () => onAction('install_whisper', 'base'),
                   child: Text(tr('Install Whisper + base model…')),
                 )
-              else ...[
+              else if (whisper['program_installed'] == true &&
+                  canInstallWhisper) ...[
                 OutlinedButton(
                   key: const ValueKey('dictation-update-whisper'),
                   style: _btnStyle,
@@ -377,6 +393,11 @@ class DictationControls extends StatelessWidget {
                   InputChip(
                     key: ValueKey('dictation-model-chip-${m['name']}'),
                     visualDensity: VisualDensity.compact,
+                    selected: m['name'] == activeWhisperModel,
+                    onSelected: busy
+                        ? null
+                        : (_) =>
+                              onAction('select_whisper_model', '${m['name']}'),
                     label: Text(
                       '${m['name']}',
                       style: const TextStyle(fontSize: 12),
@@ -454,10 +475,12 @@ class DictationSection extends StatefulWidget {
 class _DictationSectionState extends State<DictationSection> {
   Map<String, dynamic>? _snapshot;
   bool _recording = false;
+  bool _transcribing = false;
   String? _recordingHandle;
-  String _testText = '';
   String _testMeta = '';
   String _testError = '';
+  final _testField = TextEditingController();
+  final _testFocus = FocusNode();
 
   @override
   void initState() {
@@ -467,6 +490,21 @@ class _DictationSectionState extends State<DictationSection> {
     _loadSnapshot();
   }
 
+  void _cancelActiveRecording() {
+    if (!_recording) return;
+    final handle = _recordingHandle;
+    _recording = false;
+    _recordingHandle = null;
+    final client = widget.client;
+    if (client != null) {
+      unawaited(
+        client
+            .dictationStop(recording: handle, cancel: true)
+            .then((_) {}, onError: (_) {}),
+      );
+    }
+  }
+
   @override
   void didUpdateWidget(DictationSection oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -474,16 +512,24 @@ class _DictationSectionState extends State<DictationSection> {
         widget.initialSnapshot != null) {
       _snapshot = widget.initialSnapshot;
     }
+    if (widget.settings['dictation'] == false && _recording) {
+      _cancelActiveRecording();
+    }
     if (widget.settings['dictation'] != oldWidget.settings['dictation'] ||
         widget.settings['dictation_engine'] !=
-            oldWidget.settings['dictation_engine']) {
+            oldWidget.settings['dictation_engine'] ||
+        widget.settings['dictation_whisper_model'] !=
+            oldWidget.settings['dictation_whisper_model']) {
       _loadSnapshot();
     }
   }
 
   @override
   void dispose() {
+    _cancelActiveRecording();
     dictationChanged.removeListener(_loadSnapshot);
+    _testField.dispose();
+    _testFocus.dispose();
     super.dispose();
   }
 
@@ -496,6 +542,7 @@ class _DictationSectionState extends State<DictationSection> {
       setState(() {
         _snapshot = snap;
         _recording = snap['recording'] == true;
+        _transcribing = snap['transcribing'] == true;
       });
     } catch (_) {}
   }
@@ -508,17 +555,18 @@ class _DictationSectionState extends State<DictationSection> {
       await client.dictationRun(action: action, target: target);
       dictationChanged.value++;
       await _loadSnapshot();
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
-      setState(() => _testError = failureText(widget.tr));
+      setState(() => _testError = failureText(widget.tr, e));
     }
   }
 
   Future<void> _toggleTestRecording() async {
     final client = widget.client;
-    if (client == null) return;
+    if (client == null || _transcribing) return;
     setState(() => _testError = '');
     if (!_recording) {
+      _testFocus.requestFocus();
       try {
         final started = await client.dictationStart();
         if (!mounted) return;
@@ -527,35 +575,45 @@ class _DictationSectionState extends State<DictationSection> {
           _recordingHandle = started['recording'] as String?;
           _testMeta = '';
         });
-      } catch (_) {
+      } catch (e) {
         if (!mounted) return;
-        setState(() => _testError = failureText(widget.tr));
+        setState(() => _testError = failureText(widget.tr, e));
       }
       return;
     }
+    // Keep focus on the test field so Omarchy dictation (Voxtype/Superwhisper)
+    // types into it when stopping.
+    _testFocus.requestFocus();
+    final handle = _recordingHandle;
+    setState(() {
+      _recording = false;
+      _recordingHandle = null;
+      _transcribing = true;
+    });
     try {
-      final stopped = await client.dictationStop(recording: _recordingHandle);
+      final stopped = await client.dictationStop(recording: handle);
       if (!mounted) return;
       final text = (stopped['text'] as String? ?? '').trim();
       final elapsed = stopped['elapsed_ms'] as int? ?? 0;
       final engine = stopped['engine'] as String? ?? '';
+      final typedByDesktop = stopped['typed_by_desktop'] == true;
+      if (text.isNotEmpty) {
+        _testField.text = text;
+      }
       setState(() {
-        if (text.isNotEmpty) {
-          _testText = text;
-        }
-        _recording = false;
-        _recordingHandle = null;
-        _testMeta = widget
-            .tr('Transcribed in {0} ms · {1}')
-            .replaceAll('{0}', '$elapsed')
-            .replaceAll('{1}', engine);
+        _transcribing = false;
+        _testMeta = typedByDesktop
+            ? widget.tr('Omarchy dictation types into the focused text field.')
+            : widget
+                  .tr('Transcribed in {0} ms · {1}')
+                  .replaceAll('{0}', '$elapsed')
+                  .replaceAll('{1}', engine);
       });
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
       setState(() {
-        _recording = false;
-        _recordingHandle = null;
-        _testError = failureText(widget.tr);
+        _transcribing = false;
+        _testError = failureText(widget.tr, e);
       });
     }
   }
@@ -623,6 +681,12 @@ class _DictationSectionState extends State<DictationSection> {
       );
     }
 
+    final hintText = _transcribing
+        ? tr('Transcribing…')
+        : _recording
+        ? tr('Listening… Click Stop when done.')
+        : tr('Your dictated test text appears here…');
+
     return SectionCard(
       key: const ValueKey('settings-dictation-card'),
       title: tr('Dictation'),
@@ -645,6 +709,9 @@ class _DictationSectionState extends State<DictationSection> {
               onChanged: widget.busy
                   ? null
                   : (value) async {
+                      if (!value && _recording) {
+                        _cancelActiveRecording();
+                      }
                       await widget.onUpdate({'dictation': value});
                       dictationChanged.value++;
                     },
@@ -685,15 +752,31 @@ class _DictationSectionState extends State<DictationSection> {
                           ),
                           FilledButton.tonalIcon(
                             key: const ValueKey('dictation-test-button'),
-                            onPressed: !widget.busy && (ready || _recording)
+                            onPressed:
+                                !widget.busy &&
+                                    !_transcribing &&
+                                    (ready || _recording)
                                 ? _toggleTestRecording
                                 : null,
-                            icon: Icon(
-                              _recording ? Icons.stop : Icons.mic,
-                              size: 16,
-                            ),
+                            icon: _transcribing
+                                ? const SizedBox(
+                                    key: ValueKey(
+                                      'dictation-test-transcribing',
+                                    ),
+                                    width: 14,
+                                    height: 14,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : Icon(
+                                    _recording ? Icons.stop : Icons.mic,
+                                    size: 16,
+                                  ),
                             label: Text(
-                              _recording
+                              _transcribing
+                                  ? tr('Transcribing…')
+                                  : _recording
                                   ? tr('Stop')
                                   : tr('Speak a test sentence'),
                             ),
@@ -701,51 +784,38 @@ class _DictationSectionState extends State<DictationSection> {
                         ],
                       ),
                       const SizedBox(height: AppSpace.sm),
-                      Container(
-                        key: const ValueKey('dictation-test-field'),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppSpace.sm,
-                          vertical: AppSpace.sm,
-                        ),
-                        decoration: BoxDecoration(
-                          color: colors.surface,
-                          borderRadius: BorderRadius.circular(corners(context)),
-                          border: Border.all(color: colors.outlineVariant),
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                _testText.isNotEmpty
-                                    ? _testText
-                                    : _recording
-                                    ? tr('Listening… Click Stop when done.')
-                                    : tr(
-                                        'Your dictated test text appears here…',
-                                      ),
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: _testText.isNotEmpty
-                                      ? colors.onSurface
-                                      : colors.onSurfaceVariant,
-                                ),
-                              ),
+                      if (ready ||
+                          _recording ||
+                          _transcribing ||
+                          _testField.text.isNotEmpty)
+                        TextField(
+                          key: const ValueKey('dictation-test-field'),
+                          controller: _testField,
+                          focusNode: _testFocus,
+                          minLines: 1,
+                          maxLines: 3,
+                          style: const TextStyle(fontSize: 13),
+                          decoration: InputDecoration(
+                            isDense: true,
+                            hintText: hintText,
+                            border: const OutlineInputBorder(),
+                          ),
+                        )
+                      else
+                        InputDecorator(
+                          key: const ValueKey('dictation-test-field'),
+                          decoration: const InputDecoration(
+                            isDense: true,
+                            border: OutlineInputBorder(),
+                          ),
+                          child: Text(
+                            hintText,
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: colors.onSurfaceVariant,
                             ),
-                            if (_testText.isNotEmpty)
-                              IconButton(
-                                icon: const Icon(Icons.clear, size: 15),
-                                visualDensity: VisualDensity.compact,
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(),
-                                tooltip: tr('Clear'),
-                                onPressed: () => setState(() {
-                                  _testText = '';
-                                  _testMeta = '';
-                                }),
-                              ),
-                          ],
+                          ),
                         ),
-                      ),
                       if (_testMeta.isNotEmpty)
                         Padding(
                           padding: const EdgeInsets.only(top: AppSpace.xs),
