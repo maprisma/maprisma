@@ -4535,6 +4535,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                                       unitName: _shortName == null
                                           ? ''
                                           : '$_shortName-providers.service',
+                                      client: _client,
                                       onBack: () =>
                                           setState(() => _showSettings = false),
                                     )

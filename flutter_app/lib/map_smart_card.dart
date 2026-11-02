@@ -2,10 +2,12 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'app_look.dart' show AppSpace;
 import 'app_theme.dart' show corners;
 import 'backend.dart' show failureText;
 import 'connections_view.dart' show ConnectionReview;
 import 'agent_action_dialog.dart';
+import 'dictation_card.dart';
 import 'model_removal_dialog.dart';
 import 'overlay_window.dart';
 import 'core_client.g.dart';
@@ -402,6 +404,10 @@ class _MapSmartCardState extends State<MapSmartCard> {
   String _runText = '';
   String _errorText = '';
   _SmartStep _errorReturnTo = _SmartStep.idle;
+  Map<String, dynamic>? _dictation;
+  bool _dictationRecording = false;
+  String? _dictationHandle;
+  bool _showDictationSetup = false;
 
   Map<String, dynamic>? get _activeHelper {
     if (widget.helpers.isEmpty) return null;
@@ -433,6 +439,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
   void initState() {
     super.initState();
     smartHelperChosen.addListener(_helperChanged);
+    dictationChanged.addListener(_loadDictation);
     _portal.show();
     if (widget.initialPrompt != null && widget.initialPrompt!.isNotEmpty) {
       _prompt.text = widget.initialPrompt!;
@@ -465,6 +472,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
     if (!oldWidget.open && widget.open) {
       _focusOpenCard();
     } else if (oldWidget.open && !widget.open) {
+      _showDictationSetup = false;
       if (_step == _SmartStep.redirect) _step = _SmartStep.idle;
     }
   }
@@ -1071,6 +1079,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
   @override
   void dispose() {
     smartHelperChosen.removeListener(_helperChanged);
+    dictationChanged.removeListener(_loadDictation);
     if (_windowShown) _countWindow(-1);
     _runToken++;
     _prompt.dispose();
@@ -1255,6 +1264,157 @@ class _MapSmartCardState extends State<MapSmartCard> {
         )
       : _buildAsk(colors);
 
+  Future<void> _loadDictation() async {
+    final client = widget.client;
+    if (client == null) return;
+    try {
+      final snap = await client.dictationSnapshot();
+      if (!mounted) return;
+      setState(() {
+        _dictation = snap;
+        _dictationRecording = snap['recording'] == true;
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _toggleDictation() async {
+    final client = widget.client;
+    if (client == null) return;
+    if (_dictation == null) {
+      await _loadDictation();
+      if (!mounted) return;
+    }
+    final snap = _dictation;
+    if (snap == null || snap['ready'] != true) {
+      setState(() => _showDictationSetup = !_showDictationSetup);
+      return;
+    }
+    if (!_dictationRecording) {
+      _fieldFocus.requestFocus();
+      try {
+        final started = await client.dictationStart();
+        if (!mounted) return;
+        setState(() {
+          _dictationRecording = true;
+          _dictationHandle = started['recording'] as String?;
+        });
+      } catch (_) {}
+      return;
+    }
+    try {
+      final stopped = await client.dictationStop(recording: _dictationHandle);
+      if (!mounted) return;
+      final text = (stopped['text'] as String? ?? '').trim();
+      if (text.isNotEmpty) {
+        final current = _prompt.text.trim();
+        _prompt.text = current.isEmpty ? text : '$current $text';
+        _prompt.selection = TextSelection.fromPosition(
+          TextPosition(offset: _prompt.text.length),
+        );
+      }
+      setState(() {
+        _dictationRecording = false;
+        _dictationHandle = null;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _dictationRecording = false;
+        _dictationHandle = null;
+      });
+    }
+  }
+
+  Future<void> _updateDictationEngine(String engine) async {
+    final client = widget.client;
+    if (client == null) return;
+    try {
+      await client.settingsUpdate(values: {'dictation_engine': engine});
+      dictationChanged.value++;
+      await _loadDictation();
+    } catch (_) {}
+  }
+
+  Future<void> _runDictationAction(String action, [String? target]) async {
+    final client = widget.client;
+    if (client == null) return;
+    try {
+      await client.dictationRun(action: action, target: target);
+      dictationChanged.value++;
+      await _loadDictation();
+    } catch (_) {}
+  }
+
+  Widget _buildDictationSuffix(ColorScheme colors, bool ready, String active) {
+    final Widget micIcon;
+    if (_dictationRecording) {
+      micIcon = Icon(Icons.stop_circle, size: 20, color: colors.error);
+    } else if (!ready) {
+      micIcon = Stack(
+        clipBehavior: Clip.none,
+        children: const [
+          Icon(Icons.mic_none, size: 20),
+          Positioned(
+            right: -4,
+            top: -4,
+            child: SmartStatusIcon(
+              key: ValueKey('smart-dictation-unconfigured'),
+              level: 'hint',
+              size: 12,
+            ),
+          ),
+        ],
+      );
+    } else if (active == 'online') {
+      micIcon = Stack(
+        clipBehavior: Clip.none,
+        children: const [
+          Icon(Icons.mic, size: 20),
+          Positioned(
+            right: -4,
+            top: -4,
+            child: SmartStatusIcon(
+              key: ValueKey('smart-dictation-online-indicator'),
+              level: 'hint',
+              size: 12,
+            ),
+          ),
+        ],
+      );
+    } else {
+      micIcon = const Icon(Icons.mic, size: 20);
+    }
+
+    return ExcludeFocusTraversal(
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            key: const ValueKey('smart-dictation-mic'),
+            visualDensity: VisualDensity.compact,
+            tooltip: _dictationRecording
+                ? widget.tr('Stop dictation')
+                : ready
+                ? widget.tr('Dictate')
+                : widget.tr('On · not set up yet'),
+            icon: micIcon,
+            onPressed: _toggleDictation,
+          ),
+          IconButton(
+            key: const ValueKey('smart-dictation-manage'),
+            visualDensity: VisualDensity.compact,
+            tooltip: widget.tr('Dictation'),
+            icon: const Icon(Icons.tune, size: 16),
+            onPressed: () {
+              if (_dictation == null) unawaited(_loadDictation());
+              setState(() => _showDictationSetup = !_showDictationSetup);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildAsk(ColorScheme colors) {
     if (widget.helpers.isEmpty) {
       return Column(
@@ -1268,6 +1428,13 @@ class _MapSmartCardState extends State<MapSmartCard> {
         ],
       );
     }
+    final dict = _dictation;
+    final dictEnabled = dict == null ? true : dict['enabled'] != false;
+    final dictReady = dict?['ready'] == true;
+    final dictActive = dict?['active'] as String? ?? '';
+    final dictCostHint = dict?['cost_hint'] as String? ?? '';
+    final showMic = dictEnabled && widget.client != null;
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1281,10 +1448,74 @@ class _MapSmartCardState extends State<MapSmartCard> {
           style: const TextStyle(fontSize: 13),
           decoration: InputDecoration(
             isDense: true,
-            hintText: widget.tr(_columnHint(widget.column)),
+            hintText: _dictationRecording
+                ? widget.tr('Listening… Click Stop when done.')
+                : widget.tr(_columnHint(widget.column)),
             border: const OutlineInputBorder(),
+            suffixIcon: showMic
+                ? _buildDictationSuffix(colors, dictReady, dictActive)
+                : null,
           ),
         ),
+        if (showMic && dictCostHint.isNotEmpty && !_showDictationSetup) ...[
+          const SizedBox(height: AppSpace.xs),
+          Row(
+            key: const ValueKey('smart-dictation-cost-hint'),
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Padding(
+                padding: EdgeInsets.only(top: 2, right: AppSpace.xs),
+                child: SmartStatusIcon(level: 'hint', size: 13),
+              ),
+              Expanded(
+                child: Text(
+                  dictCostHint,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: colors.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+        if (showMic && _showDictationSetup) ...[
+          const SizedBox(height: AppSpace.sm),
+          Material(
+            key: const ValueKey('smart-dictation-panel'),
+            color: colors.surfaceContainer,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(corners(context)),
+              side: BorderSide(color: colors.outlineVariant),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpace.sm),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    widget.tr(dictReady ? 'Dictation' : 'Set up dictation'),
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpace.xs),
+                  DictationControls(
+                    snapshot: dict ?? fallbackDictationSnapshot(const {}),
+                    busy: false,
+                    tr: widget.tr,
+                    compact: true,
+                    onEngineChanged: _updateDictationEngine,
+                    onAction: _runDictationAction,
+                    onRefresh: _loadDictation,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }

@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'app_look.dart';
+import 'core_client.g.dart';
+import 'dictation_card.dart';
 import 'window_popup.dart';
 import 'app_theme.dart';
 import 'map_layout.dart'
@@ -33,6 +35,8 @@ class SettingsView extends StatelessWidget {
     this.windowRounding,
     this.onUndoChange,
     this.unitName = '',
+    this.client,
+    this.dictation,
   });
 
   final Map<String, dynamic> settings;
@@ -74,6 +78,8 @@ class SettingsView extends StatelessWidget {
 
   /// The provider watcher's user service, as the user sees it in systemctl.
   final String unitName;
+  final CoreClient? client;
+  final Map<String, dynamic>? dictation;
 
   static const _boxItems = [
     (
@@ -1043,6 +1049,14 @@ class SettingsView extends StatelessWidget {
                     ),
                   const SizedBox(height: 16),
                   ..._helperRows(),
+                  DictationSection(
+                    settings: settings,
+                    busy: busy,
+                    tr: tr,
+                    onUpdate: onUpdate,
+                    client: client,
+                    initialSnapshot: dictation,
+                  ),
                   const SizedBox(height: AppSpace.md),
                   _Heading(tr('Automatic map scans')),
                   const SizedBox(height: 16),
@@ -1202,6 +1216,11 @@ class SettingsView extends StatelessWidget {
         close();
         title = item.title;
         body = [];
+      } else if (item is DictationSection) {
+        close();
+        title = null;
+        if (cards.isNotEmpty) cards.add(const SizedBox(height: AppSpace.md));
+        cards.add(item);
       } else {
         body.add(item);
       }

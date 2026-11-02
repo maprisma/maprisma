@@ -13,6 +13,7 @@ import 'addon_store.dart';
 import 'addon_hints.dart';
 import 'agent_badges.dart';
 import 'costs.dart';
+import 'dictation.dart';
 import 'projects.dart' show projectsCard;
 import 'runtime_details.dart';
 import 'usage_box.dart';
@@ -189,6 +190,10 @@ const portedRoutes = {
   'window.rounding',
   'details.skills',
   'costs.rate',
+  'dictation.snapshot',
+  'dictation.start',
+  'dictation.stop',
+  'dictation.run',
   ...readOnlyRoutes,
 };
 
@@ -213,6 +218,13 @@ final class CoreService {
   }
   late final reads = ReadService(identity, settings, desktop, i18n)
     ..migrationError = migrationError;
+  late final dictation = DictationService(
+    identity,
+    settings,
+    desktop,
+    i18n,
+    reads,
+  );
   String? migrationError;
   late final tasks = CoreTasks(defaultWorkerCommand(identity.environment));
   late final config = ConfigFiles(Posix(), identity.home);
@@ -4350,6 +4362,10 @@ final class CoreService {
     if (method == 'models.slots_preview' || method == 'models.slots_reload') {
       return slotsRoute(method, params);
     }
+    if (method == 'dictation.snapshot') return dictation.snapshot(params);
+    if (method == 'dictation.start') return dictation.start(params);
+    if (method == 'dictation.stop') return dictation.stop(params);
+    if (method == 'dictation.run') return dictation.run(params);
     if (method.startsWith('map.smart_')) return smartRoute(method, params);
     if (method == 'updates.check' || method == 'updates.run') {
       return updatesRoute(method, params);

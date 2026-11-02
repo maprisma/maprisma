@@ -103,6 +103,15 @@ A parameter written `name?` may be left out.
 | `details.mcp` | read | `name`: string | `intro`, `missing`, `missing_title`, `sections`, `server`, `text`, `title`, `tools` |
 | `details.skills` | read | `path`: string | `intro`, `missing`, `missing_title`, `sections`, `text`, `title`, `tools` |
 
+## dictation
+
+| Route | Kind | Params | Result |
+|---|---|---|---|
+| `dictation.run` | change | `action`: string, `target?`: string | `ok` Runs a dictation setup, update, model or removal action. |
+| `dictation.snapshot` | read | — | `active`, `active_label`, `configured`, `cost_hint`, `enabled`, `engine`, `local`, `omarchy`, `online`, `ready`, `recording`, `whisper` Voice dictation status across Omarchy dictation/Monologue, local Whisper, local LLM speech models, and connected online providers. |
+| `dictation.start` | change | — | `engine`, `mode`, `recording` Starts microphone capture or Omarchy dictation (`mode`: `wav` or `omarchy`). |
+| `dictation.stop` | change | `recording?`: string | `cost_hint`, `elapsed_ms`, `engine`, `mode`, `text` Stops microphone capture or Omarchy dictation, transcribes the recorded WAV, deletes the temporary file, and returns the text. |
+
 ## existing
 
 | Route | Kind | Params | Result |
@@ -259,8 +268,8 @@ A parameter written `name?` may be left out.
 
 | Route | Kind | Params | Result |
 |---|---|---|---|
-| `settings.get` | read | — | `action_rule_hints`, `action_rules`, `addons_online`, `agent_folder`, `ai_checks`, `ai_checks_agent`, `ai_local_helper`, `corners`, `cost_currency`, `cost_limit`, `flutter_map_layout`, `flutter_theme_mode`, `language`, `look`, `map_animations`, `map_layers`, `map_light_fps`, `map_scan_interval`, `map_scan_pause_unfocused`, `map_scan_targets`, `providers_with_agents`, `screenshot_folder`, `screenshot_key`, `smart_helper`, `subagents_kept`, `subagents_minutes`, `system_map_columns`, `terminal_tabs`, `usage_box`, `usage_box_items`, `usage_box_size`, `warn_notify`, `warn_red`, `warn_yellow`, `window_mode` |
-| `settings.update` | change | `values`: object | `action_rule_hints`, `action_rules`, `addons_online`, `agent_folder`, `ai_checks`, `ai_checks_agent`, `ai_local_helper`, `corners`, `cost_currency`, `cost_limit`, `flutter_map_layout`, `flutter_theme_mode`, `language`, `look`, `map_animations`, `map_layers`, `map_light_fps`, `map_scan_interval`, `map_scan_pause_unfocused`, `map_scan_targets`, `providers_with_agents`, `screenshot_folder`, `screenshot_key`, `smart_helper`, `subagents_kept`, `subagents_minutes`, `system_map_columns`, `terminal_tabs`, `usage_box`, `usage_box_items`, `usage_box_size`, `warn_notify`, `warn_red`, `warn_yellow`, `window_mode` |
+| `settings.get` | read | — | `action_rule_hints`, `action_rules`, `addons_online`, `agent_folder`, `ai_checks`, `ai_checks_agent`, `ai_local_helper`, `corners`, `cost_currency`, `cost_limit`, `dictation`, `dictation_engine`, `flutter_map_layout`, `flutter_theme_mode`, `language`, `look`, `map_animations`, `map_layers`, `map_light_fps`, `map_scan_interval`, `map_scan_pause_unfocused`, `map_scan_targets`, `providers_with_agents`, `screenshot_folder`, `screenshot_key`, `smart_helper`, `subagents_kept`, `subagents_minutes`, `system_map_columns`, `terminal_tabs`, `usage_box`, `usage_box_items`, `usage_box_size`, `warn_notify`, `warn_red`, `warn_yellow`, `window_mode` |
+| `settings.update` | change | `values`: object | `action_rule_hints`, `action_rules`, `addons_online`, `agent_folder`, `ai_checks`, `ai_checks_agent`, `ai_local_helper`, `corners`, `cost_currency`, `cost_limit`, `dictation`, `dictation_engine`, `flutter_map_layout`, `flutter_theme_mode`, `language`, `look`, `map_animations`, `map_layers`, `map_light_fps`, `map_scan_interval`, `map_scan_pause_unfocused`, `map_scan_targets`, `providers_with_agents`, `screenshot_folder`, `screenshot_key`, `smart_helper`, `subagents_kept`, `subagents_minutes`, `system_map_columns`, `terminal_tabs`, `usage_box`, `usage_box_items`, `usage_box_size`, `warn_notify`, `warn_red`, `warn_yellow`, `window_mode` |
 
 ## setup
 
