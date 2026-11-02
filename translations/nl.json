@@ -3273,5 +3273,15 @@
  "Never decides: an allow rule names the same things.": "Beslist nooit: een toestaan-regel noemt hetzelfde.",
  "This is not allowed here.": "Dit is hier niet toegestaan.",
  "{0}: not allowed by your rules": "{0}: niet toegestaan door je regels",
- "No agent uses it, so there is nothing to disconnect.": "Geen enkele agent gebruikt het, dus er valt niets los te koppelen."
+ "No agent uses it, so there is nothing to disconnect.": "Geen enkele agent gebruikt het, dus er valt niets los te koppelen.",
+ "Show all": "Alles tonen",
+ "Show only what is connected or pinned": "Alleen verbonden of vastgezette tonen",
+ "Line colours": "Lijnkleuren",
+ "Agent and provider": "Agent en aanbieder",
+ "Agent and model": "Agent en model",
+ "Provider and model": "Aanbieder en model",
+ "Theme: main colour": "Thema: hoofdkleur",
+ "Theme: second colour": "Thema: tweede kleur",
+ "Theme: third colour": "Thema: derde kleur",
+ "Theme: outline": "Thema: omlijning"
 }

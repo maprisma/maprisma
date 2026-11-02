@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'package:flutter/material.dart' show ColorScheme;
 import 'package:flutter/painting.dart';
 import 'map_snapshot.dart';
 
@@ -6,11 +7,33 @@ import 'map_snapshot.dart';
 const mapColumnKeys = ['mcp', 'agents', 'providers', 'models'];
 const mapColumnMinWidth = 200.0, mapColumnMaxWidth = 900.0;
 
-/// A saved `#rrggbb`; null for none or a broken one.
-Color? mapBorderColor(String? hex) {
-  final value = int.tryParse(hex?.replaceFirst('#', '') ?? '', radix: 16);
-  return value == null ? null : Color(0xFF000000 | value);
+/// The theme's colours a user can choose, as saved: `theme:<name>`.
+const mapThemeColors = ['primary', 'secondary', 'tertiary', 'outline'];
+
+/// A saved `#rrggbb` or `theme:<name>`; null for none or a broken one.
+Color? mapColor(String? value, ColorScheme colors) {
+  if (value != null && value.startsWith('theme:')) {
+    return switch (value.substring(6)) {
+      'primary' => colors.primary,
+      'secondary' => colors.secondary,
+      'tertiary' => colors.tertiary,
+      'outline' => colors.outline,
+      _ => null,
+    };
+  }
+  final number = int.tryParse(value?.replaceFirst('#', '') ?? '', radix: 16);
+  return number == null ? null : Color(0xFF000000 | number);
 }
+
+/// Which line a colour of Settings › Map is for.
+String? mapLineKind(String kind) => switch (kind) {
+  'uses' || 'available' => 'provider',
+  'default' || 'live' => 'model',
+  'serves' => 'serves',
+  'mcp' => 'mcp',
+  'skills' => 'skills',
+  _ => null,
+};
 
 const mapBoxWidth = 242.0, mapBoxHeight = 128.0, mapRowStep = 146.0;
 String edgeKey(Map<String, dynamic> e) =>
@@ -196,18 +219,30 @@ class MapLayout {
         return (ai < 0 ? 10000 : ai).compareTo(bi < 0 ? 10000 : bi);
       });
     final heights = <int, double>{};
+    // A card set to "only what is used" leaves out boxes with no line.
+    final usedOnly = {
+      ...(saved['used_only'] as List? ?? const []).cast<String>(),
+    };
+    final linked = <String>{
+      for (final e in (graph['edges'] as List? ?? []).cast<Map>())
+        if (e['kind'] != 'offer') ...['${e['source']}', '${e['target']}'],
+      ...(saved['pins'] as List? ?? const []).cast<String>(),
+    };
     for (final id in keys) {
-      final ids = grouped[id]!;
+      final ids = usedOnly.contains(id)
+          ? grouped[id]!.where(linked.contains).toList()
+          : grouped[id]!;
+
       final order = ((saved['order'] as Map?)?[id] as List? ?? [])
           .cast<String>();
       final rank = {for (var i = 0; i < order.length; i++) order[i]: i};
       ids.sort((a, b) => (rank[a] ?? 10000).compareTo(rank[b] ?? 10000));
-      final column = nodes[ids.first]!['column'] as int;
+      final column = nodes[grouped[id]!.first]!['column'] as int;
       final folded = (saved['collapsed'] as List? ?? []).contains(id);
       final origin = Offset(columnX(column), heights[column] ?? startTop);
       final height = folded ? 38.0 : 32 + ids.length * mapRowStep;
       final rect = origin & Size(columnWidthOf(column), height);
-      final first = nodes[ids.first]!;
+      final first = nodes[grouped[id]!.first]!;
       const labels = {
         'agent': 'Agents',
         'runtime': 'Providers',

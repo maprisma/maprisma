@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:maprisma/map_layout.dart';
+import 'package:flutter/material.dart' show ColorScheme;
 import 'package:flutter_test/flutter_test.dart';
 
 Map<String, dynamic> fixtureGraph({bool active = false}) => {
@@ -36,6 +37,36 @@ Map<String, dynamic> fixtureGraph({bool active = false}) => {
   ],
 };
 void main() {
+  test('a card set to used only leaves out boxes without a line or a pin', () {
+    final graph = {
+      ...fixtureGraph(),
+      'nodes': [
+        ...fixtureGraph()['nodes'] as List,
+        {'id': 'mcp:d', 'kind': 'mcp', 'column': 0, 'label': 'd', 'detail': ''},
+      ],
+    };
+    final all = MapLayout(graph, {});
+    final card = all.cardOf['mcp:c']!;
+    expect(all.boxes.containsKey('mcp:c'), isTrue);
+    final used = MapLayout(graph, {
+      'used_only': [card, all.cardOf['agent:a']!],
+      'pins': ['mcp:d'],
+    });
+    expect(used.boxes.containsKey('mcp:c'), isFalse, reason: 'no line, no pin');
+    expect(used.boxes.containsKey('mcp:d'), isTrue, reason: 'pinned');
+    expect(used.boxes.containsKey('agent:a'), isTrue);
+    expect(used.boxes.containsKey('agent:b'), isFalse);
+  });
+
+  test('a colour is a hex value or one of the theme', () {
+    final colors = ColorScheme.fromSeed(seedColor: const Color(0xff123456));
+    expect(mapColor('theme:tertiary', colors), colors.tertiary);
+    expect(mapColor('#ff0000', colors), const Color(0xffff0000));
+    expect(mapColor('theme:pink', colors), isNull);
+    expect(mapLineKind('available'), 'provider');
+    expect(mapLineKind('offer'), isNull);
+  });
+
   test('a column keeps its own width; the next one moves along', () {
     final auto = MapLayout(
       const {'nodes': [], 'edges': []},

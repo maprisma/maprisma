@@ -3273,5 +3273,15 @@
  "Never decides: an allow rule names the same things.": "Nunca decide: uma regra de permitir indica o mesmo.",
  "This is not allowed here.": "Isto não é permitido aqui.",
  "{0}: not allowed by your rules": "{0}: não permitido pelas suas regras",
- "No agent uses it, so there is nothing to disconnect.": "Nenhum agente o usa, por isso não há nada a desligar."
+ "No agent uses it, so there is nothing to disconnect.": "Nenhum agente o usa, por isso não há nada a desligar.",
+ "Show all": "Mostrar tudo",
+ "Show only what is connected or pinned": "Mostrar só o que está ligado ou fixado",
+ "Line colours": "Cores das linhas",
+ "Agent and provider": "Agente e fornecedor",
+ "Agent and model": "Agente e modelo",
+ "Provider and model": "Fornecedor e modelo",
+ "Theme: main colour": "Tema: cor principal",
+ "Theme: second colour": "Tema: segunda cor",
+ "Theme: third colour": "Tema: terceira cor",
+ "Theme: outline": "Tema: contorno"
 }

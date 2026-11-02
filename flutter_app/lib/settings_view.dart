@@ -4,7 +4,12 @@ import 'package:flutter/material.dart';
 import 'window_popup.dart';
 import 'app_theme.dart';
 import 'map_layout.dart'
-    show mapBorderColor, mapColumnKeys, mapColumnMaxWidth, mapColumnMinWidth;
+    show
+        mapColor,
+        mapColumnKeys,
+        mapThemeColors,
+        mapColumnMaxWidth,
+        mapColumnMinWidth;
 import 'map_smart_card.dart' show mapSmartColumns;
 
 class SettingsView extends StatelessWidget {
@@ -186,38 +191,98 @@ class SettingsView extends StatelessWidget {
                   ? null
                   : (_) => change((old) => {...old}..remove('color')),
             ),
-            for (final hex in _borderColors)
-              Tooltip(
-                message: hex,
-                child: Semantics(
-                  button: true,
-                  selected: border['color'] == hex,
-                  label: hex,
-                  child: InkWell(
-                    key: ValueKey('card-border-color-$hex'),
-                    customBorder: const CircleBorder(),
-                    onTap: busy
-                        ? null
-                        : () => change((old) => {...old, 'color': hex}),
-                    child: Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: mapBorderColor(hex),
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: Theme.of(context).colorScheme.onSurface,
-                          width: border['color'] == hex ? 3 : 1,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
+            ..._colorChoices(
+              context,
+              'card-border-color',
+              border['color'] as String?,
+              (value) => change((old) => {...old, 'color': value}),
+            ),
           ],
         ),
         const SizedBox(height: 12),
       ],
+    ];
+  }
+
+  /// The theme's colours first, then fixed ones; each a round swatch.
+  List<Widget> _colorChoices(
+    BuildContext context,
+    String key,
+    String? chosen,
+    ValueChanged<String> pick,
+  ) {
+    final colors = Theme.of(context).colorScheme;
+    return [
+      for (final value in [
+        for (final t in mapThemeColors) 'theme:$t',
+        ..._borderColors,
+      ])
+        Tooltip(
+          message: value.startsWith('theme:')
+              ? tr(_themeNames[value.substring(6)]!)
+              : value,
+          child: Semantics(
+            button: true,
+            selected: chosen == value,
+            label: value,
+            child: InkWell(
+              key: ValueKey('$key-$value'),
+              customBorder: const CircleBorder(),
+              onTap: busy ? null : () => pick(value),
+              child: Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: mapColor(value, colors),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: colors.onSurface,
+                    width: chosen == value ? 3 : 1,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+    ];
+  }
+
+  /// Settings › Map: a colour per kind of line, or the theme's.
+  List<Widget> _lineColorRows(BuildContext context) {
+    final layout = settings['flutter_map_layout'] as Map? ?? const {};
+    final chosen = layout['line_colors'] as Map? ?? const {};
+    void change(String kind, String? value) => onMapLayout?.call((latest) {
+      final colors = {...(latest['line_colors'] as Map? ?? const {})};
+      value == null ? colors.remove(kind) : colors[kind] = value;
+      return {...latest, 'line_colors': colors};
+    });
+    return [
+      const SizedBox(height: 12),
+      Text(tr('Line colours')),
+      for (final line in _lineKinds.entries) ...[
+        const SizedBox(height: 8),
+        Text(tr(line.value), style: Theme.of(context).textTheme.bodySmall),
+        const SizedBox(height: 4),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            ChoiceChip(
+              key: ValueKey('line-color-${line.key}-default'),
+              label: Text(tr('Theme')),
+              selected: chosen[line.key] == null,
+              onSelected: busy ? null : (_) => change(line.key, null),
+            ),
+            ..._colorChoices(
+              context,
+              'line-color-${line.key}',
+              chosen[line.key] as String?,
+              (value) => change(line.key, value),
+            ),
+          ],
+        ),
+      ],
+      const SizedBox(height: 12),
     ];
   }
 
@@ -996,6 +1061,7 @@ class SettingsView extends StatelessWidget {
             Text(tr('Map'), style: Theme.of(context).textTheme.titleLarge),
             ..._columnWidthRows(),
             ..._cardBorderRows(context),
+            ..._lineColorRows(context),
             for (final layer in layers.entries)
               CheckboxListTile(
                 title: Text(tr(layer.value)),
@@ -1132,6 +1198,21 @@ class _WidthFieldState extends State<_WidthField> {
     onSubmitted: (_) => _apply(),
   );
 }
+
+const _themeNames = {
+  'primary': 'Theme: main colour',
+  'secondary': 'Theme: second colour',
+  'tertiary': 'Theme: third colour',
+  'outline': 'Theme: outline',
+};
+
+const _lineKinds = {
+  'provider': 'Agent and provider',
+  'model': 'Agent and model',
+  'serves': 'Provider and model',
+  'mcp': 'MCP servers',
+  'skills': 'Skills',
+};
 
 const _borderColors = [
   '#ffffff',

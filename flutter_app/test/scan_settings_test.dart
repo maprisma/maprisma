@@ -40,12 +40,33 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(red);
     expect(layout['card_border'], {'on': true, 'color': '#ef5350'});
+    final theme = find.byKey(const ValueKey('card-border-color-theme:primary'));
+    await tester.ensureVisible(theme);
+    await tester.pumpAndSettle();
+    await tester.tap(theme);
+    expect(layout['card_border'], {'on': true, 'color': 'theme:primary'});
+    final line = find.byKey(const ValueKey('line-color-mcp-#66bb6a'));
+    await tester.ensureVisible(line);
+    await tester.pumpAndSettle();
+    await tester.tap(line);
+    expect(layout['line_colors'], {'mcp': '#66bb6a'});
+    await tester.pumpWidget(view());
+    final back = find.byKey(const ValueKey('line-color-mcp-default'));
+    await tester.ensureVisible(back);
+    await tester.pumpAndSettle();
+    await tester.tap(back);
+    expect(layout['line_colors'], <String, dynamic>{});
 
     // A width changed elsewhere shows while Settings stays open.
     layout = {
       'card_border': {'on': true, 'width': 5},
     };
     await tester.pumpWidget(view());
+    await tester.scrollUntilVisible(
+      find.text('5 px'),
+      -250,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('5 px'), findsOneWidget);
   });
 
