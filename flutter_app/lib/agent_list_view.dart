@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'app_look.dart' show StatusColors;
+
 class AgentListView extends StatelessWidget {
   const AgentListView({
     super.key,
@@ -52,7 +54,7 @@ class AgentListView extends StatelessWidget {
                   selected: agent['command'] == selected,
                   leading: Icon(
                     Icons.smart_toy_outlined,
-                    color: agent['installed'] == true ? Colors.green : null,
+                    color: agent['installed'] == true ? StatusColors.ok : null,
                   ),
                   title: Text(agent['name'] as String),
                   subtitle: Text(

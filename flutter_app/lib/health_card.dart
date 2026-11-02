@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'app_look.dart' show StatusColors;
+
 const _badges = {
   'ok': 'Healthy',
   'warn': 'Needs a look',
@@ -66,7 +68,7 @@ class _HealthCardState extends State<HealthCard> {
     Color colorOf(String s) => switch (s) {
       'missing' => scheme.error,
       'warn' => scheme.tertiary,
-      'ok' => Colors.green,
+      'ok' => StatusColors.ok,
       _ => scheme.outline,
     };
     IconData iconOf(String s) => switch (s) {

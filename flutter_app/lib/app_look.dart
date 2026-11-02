@@ -7,6 +7,14 @@ abstract final class AppSpace {
   static const xs = 4.0, sm = 8.0, md = 12.0, lg = 16.0, xl = 24.0;
 }
 
+/// The app's state colours: the same green and yellow wherever a state is
+/// shown (map lights, status icons, health, terminals). Red is the theme's
+/// `error`.
+abstract final class StatusColors {
+  static const ok = Colors.green;
+  static const warn = Color(0xFFFFA000); // amber 700
+}
+
 /// The top of every window and side page: title, an optional line under it,
 /// actions, and Back at the right. Esc does what Back does where it is used.
 class WindowHeader extends StatelessWidget {

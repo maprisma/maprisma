@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'app_look.dart' show AppSpace;
+import 'app_look.dart' show AppSpace, WindowFooter, WindowHeader, StatusColors;
 import 'app_theme.dart' show corners;
 import 'backend.dart' show failureText;
 import 'connections_view.dart' show ConnectionReview;
@@ -186,8 +186,8 @@ class SmartStatusIcon extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     return switch (level) {
       'warn' => Icon(Icons.error, size: size, color: colors.error),
-      'hint' => Icon(Icons.warning, size: size, color: Colors.amber.shade800),
-      _ => Icon(Icons.check_circle, size: size, color: Colors.green),
+      'hint' => Icon(Icons.warning, size: size, color: StatusColors.warn),
+      _ => Icon(Icons.check_circle, size: size, color: StatusColors.ok),
     };
   }
 }
@@ -1200,13 +1200,16 @@ class _MapSmartCardState extends State<MapSmartCard> {
   /// The window's footer: what can be done at this step.
   List<Widget> _actions() {
     final tr = widget.tr;
-    final close = TextButton(onPressed: _close, child: Text(tr('Close')));
-    final back = TextButton(onPressed: _backToIdle, child: Text(tr('← Back')));
+    // Back in the header leaves the window; the footer only goes on.
+    final back = TextButton(
+      key: const ValueKey('smart-ask-again'),
+      onPressed: _backToIdle,
+      child: Text(tr('Ask again')),
+    );
     final onFirstAgent = widget.status?.onAction;
     return switch (_step) {
-      _SmartStep.idle when !widget.takesRequests => [close],
+      _SmartStep.idle when !widget.takesRequests => const [],
       _SmartStep.idle when widget.helpers.isEmpty => [
-        close,
         if (onFirstAgent != null)
           OutlinedButton(
             key: const ValueKey('smart-no-helper-action'),
@@ -1218,7 +1221,6 @@ class _MapSmartCardState extends State<MapSmartCard> {
           ),
       ],
       _SmartStep.idle => [
-        close,
         FilledButton(onPressed: () => _ask(), child: Text(tr('Ask'))),
       ],
       _SmartStep.status => [
@@ -1227,18 +1229,23 @@ class _MapSmartCardState extends State<MapSmartCard> {
           onPressed: widget.status?.onCheckAgain,
           child: Text(tr('Check again')),
         ),
-        close,
+        if (widget.takesRequests)
+          FilledButton(
+            key: const ValueKey('smart-status-ask'),
+            onPressed: _openOnPrompt,
+            child: Text(tr('Ask')),
+          ),
       ],
       _SmartStep.working => [
         TextButton(onPressed: _cancelTask, child: Text(tr('Cancel'))),
       ],
       _SmartStep.clarify ||
       _SmartStep.redirect ||
-      _SmartStep.proposal => [back, close],
+      _SmartStep.proposal => [back],
       _SmartStep.mcpForm => [
         TextButton(
           onPressed: () => setState(() => _step = _SmartStep.proposal),
-          child: Text(tr('← Back')),
+          child: Text(tr('Cancel')),
         ),
         FilledButton(
           key: const ValueKey('smart-mcp-review'),
@@ -1266,7 +1273,6 @@ class _MapSmartCardState extends State<MapSmartCard> {
         ),
       ],
       _SmartStep.error => [
-        close,
         FilledButton.tonal(onPressed: _tryAgain, child: Text(tr('Try again'))),
       ],
       _SmartStep.review || _SmartStep.connectReview => const [],
@@ -2002,15 +2008,15 @@ class _MapSmartCardState extends State<MapSmartCard> {
         ],
         for (final c in candidates)
           Padding(
-            padding: const EdgeInsets.only(bottom: 6),
+            padding: const EdgeInsets.only(bottom: AppSpace.sm),
             child: DecoratedBox(
               decoration: BoxDecoration(
                 color: colors.surfaceContainer,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(corners(context)),
                 border: Border.all(color: colors.outlineVariant),
               ),
               child: Padding(
-                padding: const EdgeInsets.all(8),
+                padding: const EdgeInsets.all(AppSpace.md),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -2302,77 +2308,37 @@ class _MapSmartCardState extends State<MapSmartCard> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(4, 4, 4, 4),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Semantics(
-                      button: _step == _SmartStep.status,
-                      child: InkWell(
-                        onTap: _step == _SmartStep.status
-                            ? _openOnPrompt
-                            : null,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 6),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.max,
-                            children: [
-                              Icon(
-                                Icons.auto_awesome,
-                                size: 15,
-                                color: colors.primary,
-                              ),
-                              const SizedBox(width: 6),
-                              Flexible(
-                                child: Text(
-                                  widget
-                                      .tr('Ask AI · {0}')
-                                      .replaceAll(
-                                        '{0}',
-                                        widget.tr(widget.title),
-                                      ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Flexible(child: _buildHelperChoice(colors)),
-                  IconButton(
-                    key: const ValueKey('smart-rules'),
-                    tooltip: widget.tr('What may be done'),
-                    // A review waits on what was checked when it opened.
-                    onPressed:
-                        _step == _SmartStep.review ||
-                            _step == _SmartStep.connectReview ||
-                            _step == _SmartStep.mcpForm
-                        ? null
-                        : () {
-                            // One window at a time: the rules take its place.
-                            _close();
-                            smartOpenRules?.call();
-                          },
-                    icon: const Icon(Icons.rule, size: 18),
-                  ),
-                  IconButton(
-                    tooltip: widget.tr('Collapse'),
-                    onPressed: _close,
-                    icon: const Icon(Icons.expand_less, size: 18),
-                  ),
-                ],
-              ),
+            WindowHeader(
+              title: widget
+                  .tr('Ask AI · {0}')
+                  .replaceAll('{0}', widget.tr(widget.title)),
+              tr: widget.tr,
+              backKey: const ValueKey('smart-back'),
+              onBack: _close,
+              actions: [
+                // The helper's name and cost: never wider than a third.
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 300),
+                  child: _buildHelperChoice(colors),
+                ),
+                IconButton(
+                  key: const ValueKey('smart-rules'),
+                  tooltip: widget.tr('What may be done'),
+                  // A review waits on what was checked when it opened.
+                  onPressed:
+                      _step == _SmartStep.review ||
+                          _step == _SmartStep.connectReview ||
+                          _step == _SmartStep.mcpForm
+                      ? null
+                      : () {
+                          // One window at a time: the rules take its place.
+                          _close();
+                          smartOpenRules?.call();
+                        },
+                  icon: const Icon(Icons.rule),
+                ),
+              ],
             ),
-            const Divider(height: 1),
             if (_step == _SmartStep.review)
               Expanded(
                 child: _activeCandidate?['kind'] == 'agent_action'
@@ -2429,7 +2395,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
             else
               Expanded(
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(10),
+                  padding: const EdgeInsets.all(AppSpace.lg),
                   child: switch (_step) {
                     _SmartStep.status => _buildStatus(),
                     _SmartStep.idle => _buildIdle(colors),
@@ -2446,18 +2412,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
                   },
                 ),
               ),
-            if (actions.isNotEmpty) ...[
-              const Divider(height: 1),
-              Padding(
-                padding: const EdgeInsets.all(8),
-                child: Wrap(
-                  alignment: WrapAlignment.end,
-                  spacing: 8,
-                  runSpacing: 6,
-                  children: actions,
-                ),
-              ),
-            ],
+            if (actions.isNotEmpty) WindowFooter(children: actions),
           ],
         ),
       ),

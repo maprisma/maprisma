@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'app_look.dart' show StatusColors;
 import 'core_client.g.dart';
 
 /// A local LLM's details (providers.details, the GTK local LLM page): whether
@@ -145,7 +146,7 @@ class _RuntimeDetailsCardState extends State<RuntimeDetailsCard> {
                           ? Icons.error_outline
                           : Icons.info_outline,
                       color: r['level'] == 'ok'
-                          ? Colors.green
+                          ? StatusColors.ok
                           : r['level'] == 'high'
                           ? scheme.error
                           : scheme.outline,

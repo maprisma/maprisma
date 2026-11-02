@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'app_look.dart' show StatusColors;
+
 class AgentUsage extends StatelessWidget {
   const AgentUsage({super.key, required this.info, required this.tr});
   final Map<String, dynamic> info;
@@ -13,7 +15,7 @@ class AgentUsage extends StatelessWidget {
     return ListTile(
       key: const ValueKey('agent-extra-usage'),
       leading: on == true
-          ? Icon(Icons.warning_amber, color: Colors.amber.shade700)
+          ? Icon(Icons.warning_amber, color: StatusColors.warn)
           : null,
       title: Text(tr('Additional usage')),
       subtitle: SelectableText(

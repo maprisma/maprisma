@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:xterm/xterm.dart';
 
+import 'app_look.dart' show AppSpace, WindowHeader;
 import 'backend.dart';
 
 class AgentTerminal extends ChangeNotifier {
@@ -152,32 +153,28 @@ class AgentTerminalView extends StatelessWidget {
     listenable: session,
     builder: (context, _) => Column(
       children: [
-        Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            children: [
-              IconButton(
-                tooltip: tr('Back'),
-                onPressed: onBack,
-                icon: const Icon(Icons.arrow_back),
+        WindowHeader(
+          title: session.command,
+          subtitle: session.path,
+          tr: tr,
+          backKey: const ValueKey('terminal-back'),
+          onBack: onBack,
+          actions: [
+            if (session.failed)
+              Icon(
+                Icons.error_outline,
+                color: Theme.of(context).colorScheme.error,
               ),
-              Expanded(
-                child: Text(
-                  '${session.command} · ${session.path}',
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              if (session.failed) const Icon(Icons.error_outline),
-              TextButton(
-                onPressed: onStop,
-                child: Text(tr(session.ended ? 'Close' : 'Stop')),
-              ),
-            ],
-          ),
+            OutlinedButton(
+              key: const ValueKey('terminal-stop'),
+              onPressed: onStop,
+              child: Text(tr(session.ended ? 'Close' : 'Stop')),
+            ),
+          ],
         ),
         Expanded(
           child: Padding(
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.all(AppSpace.sm),
             child: _TakesKeys(
               keys,
               child: TerminalView(

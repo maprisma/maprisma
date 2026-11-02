@@ -325,7 +325,7 @@ void main() {
     expect(find.byType(SettingsView), findsNothing);
     expect(find.byType(TerminalView), findsOneWidget);
 
-    await tester.tap(find.byTooltip('Back'));
+    await tester.tap(find.byKey(const ValueKey('terminal-back')));
     await settleService(tester);
     tester.widget<IconButton>(start).onPressed!();
     await settleService(tester);
