@@ -34,6 +34,9 @@ const uiSettings = {
   'screenshot_key',
   'screenshot_folder',
   'smart_helper',
+  'dictation',
+  'dictation_engine',
+  'dictation_whisper_model',
   'action_rules',
   'action_rule_hints',
   'usage_box',
@@ -229,6 +232,8 @@ final class SettingsStore {
         return ['omarchy', 'adwaita'].contains(v);
       case 'window_mode':
         return ['auto', 'popup', 'window'].contains(v);
+      case 'dictation_engine':
+        return ['auto', 'omarchy', 'whisper', 'local', 'online'].contains(v);
       case 'map_animations':
         return ['all', 'agents', 'off'].contains(v);
       case 'choice_text':

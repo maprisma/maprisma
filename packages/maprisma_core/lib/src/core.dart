@@ -13,6 +13,7 @@ import 'addon_store.dart';
 import 'addon_hints.dart';
 import 'agent_badges.dart';
 import 'costs.dart';
+import 'dictation.dart';
 import 'projects.dart' show projectsCard;
 import 'runtime_details.dart';
 import 'usage_box.dart';
@@ -189,6 +190,10 @@ const portedRoutes = {
   'window.rounding',
   'details.skills',
   'costs.rate',
+  'dictation.snapshot',
+  'dictation.start',
+  'dictation.stop',
+  'dictation.run',
   ...readOnlyRoutes,
 };
 
@@ -213,6 +218,13 @@ final class CoreService {
   }
   late final reads = ReadService(identity, settings, desktop, i18n)
     ..migrationError = migrationError;
+  late final dictation = DictationService(
+    identity,
+    settings,
+    desktop,
+    i18n,
+    reads,
+  );
   String? migrationError;
   late final tasks = CoreTasks(defaultWorkerCommand(identity.environment));
   late final config = ConfigFiles(Posix(), identity.home);
@@ -4350,6 +4362,10 @@ final class CoreService {
     if (method == 'models.slots_preview' || method == 'models.slots_reload') {
       return slotsRoute(method, params);
     }
+    if (method == 'dictation.snapshot') return dictation.snapshot(params);
+    if (method == 'dictation.start') return dictation.start(params);
+    if (method == 'dictation.stop') return dictation.stop(params);
+    if (method == 'dictation.run') return dictation.run(params);
     if (method.startsWith('map.smart_')) return smartRoute(method, params);
     if (method == 'updates.check' || method == 'updates.run') {
       return updatesRoute(method, params);
@@ -4496,7 +4512,68 @@ final class CoreService {
     } on ServiceError catch (e) {
       response = {
         'id': id,
-        'error': {'code': e.code},
+        'error': {'code': e.code, if (e.reason != null) 'message': e.reason},
+      };
+    } on RuleRefused catch (e) {
+      response = {
+        'id': id,
+        'error': {'code': 'action_refused', 'message': e.message},
+      };
+    } on FormatException {
+      response = {
+        'id': id,
+        'error': {'code': 'invalid_request'},
+      };
+    } on TypeError {
+      response = {
+        'id': id,
+        'error': {'code': 'invalid_request'},
+      };
+    } catch (_) {
+      response = {
+        'id': id,
+        'error': {'code': 'operation_failed'},
+      };
+    }
+    var result = jsonEncode(response);
+    if (utf8.encode(result).length > maxResponse) {
+      result = jsonEncode({
+        'id': id,
+        'error': {'code': 'response_too_large'},
+      });
+    }
+    return result;
+  }
+
+  void dispose() => dictation.dispose();
+
+  Future<Map<String, dynamic>> dispatchAsync(
+    String method,
+    Map<String, dynamic> params,
+  ) async {
+    if (method == 'dictation.start') return dictation.startAsync(params);
+    if (method == 'dictation.stop') return dictation.stopAsync(params);
+    return dispatch(method, params);
+  }
+
+  Future<String> handleAsync(String frame) async {
+    int? id;
+    Map<String, dynamic> response;
+    try {
+      if (utf8.encode(frame).length + 1 > maxRequest) {
+        throw ServiceError('request_too_large');
+      }
+      final raw = jsonDecode(frame);
+      if (raw is Map && raw['id'] is int && raw['id'] >= 0) id = raw['id'];
+      final request = Request.decode(frame);
+      response = {
+        'id': request.id,
+        'result': await dispatchAsync(request.method, request.params),
+      };
+    } on ServiceError catch (e) {
+      response = {
+        'id': id,
+        'error': {'code': e.code, if (e.reason != null) 'message': e.reason},
       };
     } on RuleRefused catch (e) {
       response = {

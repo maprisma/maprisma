@@ -10,10 +10,13 @@ void _serveIsolate((SendPort, Map<String, String>?) args) {
   args.$1.send(inbox.sendPort);
   inbox.listen((message) {
     if (message == null) {
+      service.dispose();
       inbox.close();
       return;
     }
-    if (message is String) args.$1.send(service.handle(message));
+    if (message is String) {
+      service.handleAsync(message).then(args.$1.send);
+    }
   });
 }
 
@@ -122,6 +125,9 @@ final class IsolateTransport implements ServiceTransport {
       p.completeError(error);
     }
     _pending.clear();
+    try {
+      _send?.send(null);
+    } catch (_) {}
     _isolate?.kill(priority: Isolate.immediate);
     _inbox.close();
     _errors.close();

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'app_look.dart' show AppSpace, StatusColors;
+
 /// The terminal tabs above the map (ai_popup.build_terminal_tabs): while an
 /// agent has a terminal here, a legend over one tab per terminal with a dot
 /// for working, running or ended; a click shows it, the one in view is
@@ -20,7 +22,7 @@ class TerminalTabs extends StatelessWidget {
   final ValueChanged<int> onSelect;
 
   static Color colour(BuildContext context, String state) => switch (state) {
-    'working' => Colors.green,
+    'working' => StatusColors.ok,
     'running' => Theme.of(context).colorScheme.primary,
     _ => Theme.of(context).colorScheme.outline,
   };
@@ -29,7 +31,12 @@ class TerminalTabs extends StatelessWidget {
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpace.sm,
+        AppSpace.xs,
+        AppSpace.sm,
+        AppSpace.xs,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -44,7 +51,7 @@ class TerminalTabs extends StatelessWidget {
               ),
               for (final state in ['working', 'running', 'ended'])
                 Padding(
-                  padding: const EdgeInsets.only(left: 10),
+                  padding: const EdgeInsets.only(left: AppSpace.md),
                   child: Text(
                     '● ${tr(state)}',
                     style: text.labelSmall?.copyWith(
@@ -54,7 +61,7 @@ class TerminalTabs extends StatelessWidget {
                 ),
             ],
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: AppSpace.xs),
           SizedBox(
             height: 36,
             child: ListView(
@@ -62,7 +69,7 @@ class TerminalTabs extends StatelessWidget {
               children: [
                 for (var i = 0; i < tabs.length; i++)
                   Padding(
-                    padding: const EdgeInsets.only(right: 6),
+                    padding: const EdgeInsets.only(right: AppSpace.sm),
                     child: ChoiceChip(
                       key: ValueKey('terminal-tab-$i'),
                       selected: current == i,

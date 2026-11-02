@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'app_look.dart' show StatusColors;
+
 const _badges = {
   'ok': 'Healthy',
   'warn': 'Needs a look',
@@ -65,8 +67,8 @@ class _HealthCardState extends State<HealthCard> {
     final state = '${report['state']}';
     Color colorOf(String s) => switch (s) {
       'missing' => scheme.error,
-      'warn' => scheme.tertiary,
-      'ok' => Colors.green,
+      'warn' => StatusColors.warn,
+      'ok' => StatusColors.ok,
       _ => scheme.outline,
     };
     IconData iconOf(String s) => switch (s) {
@@ -76,6 +78,8 @@ class _HealthCardState extends State<HealthCard> {
       _ => Icons.info_outline,
     };
     return Card(
+      // Inside a provider's card: one step stronger.
+      color: Theme.of(context).colorScheme.surfaceContainer,
       key: ValueKey('health-${widget.method}'),
       child: ExpansionTile(
         initiallyExpanded: state != 'ok',

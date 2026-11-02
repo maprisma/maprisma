@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'app_look.dart';
 import 'app_theme.dart' show corners;
 import 'overlay_window.dart';
 
@@ -43,26 +44,15 @@ class TaskHost extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    spec.title,
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                ),
-                TextButton.icon(
-                  onPressed: spec.closable ? onClose : null,
-                  icon: const Icon(Icons.arrow_back),
-                  label: Text(tr('Back')),
-                ),
-              ],
-            ),
+          WindowHeader(
+            title: spec.title,
+            tr: tr,
+            backKey: const ValueKey('task-back'),
+            onBack: spec.closable ? onClose : null,
           ),
-          const Divider(height: 1),
-          Expanded(child: spec.child),
+          Expanded(
+            child: _HostTitle(title: spec.title, child: spec.child),
+          ),
         ],
       ),
     );
@@ -88,6 +78,22 @@ class TaskHost extends StatelessWidget {
   }
 }
 
+/// The title of the window a review sits in.
+class _HostTitle extends InheritedWidget {
+  const _HostTitle({required this.title, required super.child});
+  final String title;
+
+  static bool repeats(BuildContext context, Widget title) {
+    final host = context
+        .dependOnInheritedWidgetOfExactType<_HostTitle>()
+        ?.title;
+    return host != null && title is Text && title.data == host;
+  }
+
+  @override
+  bool updateShouldNotify(_HostTitle old) => title != old.title;
+}
+
 /// Reuses existing review contents while keeping actions inside the task card.
 class TaskReview extends StatelessWidget {
   const TaskReview({
@@ -104,17 +110,21 @@ class TaskReview extends StatelessWidget {
     children: [
       Expanded(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(AppSpace.xl),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [?title, const SizedBox(height: 16), content],
+            children: [
+              // The window's header already says it: no second heading.
+              if (title != null && !_HostTitle.repeats(context, title!)) ...[
+                title!,
+                const SizedBox(height: AppSpace.lg),
+              ],
+              content,
+            ],
           ),
         ),
       ),
-      Padding(
-        padding: const EdgeInsets.all(16),
-        child: Wrap(spacing: 8, runSpacing: 8, children: actions),
-      ),
+      WindowFooter(children: actions),
     ],
   );
 }

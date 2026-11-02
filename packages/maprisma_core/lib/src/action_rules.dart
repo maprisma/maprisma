@@ -387,4 +387,5 @@ const rulesExempt = {
   'help.open_manual', 'jobs.discard', 'limits.notify', 'models.slots_reload',
   'projects.forget', 'projects.pin', 'setup.later', 'system.forget_disk',
   'system.refresh', 'window.popup',
+  'dictation.run', 'dictation.start', 'dictation.stop',
 };

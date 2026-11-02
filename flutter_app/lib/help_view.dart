@@ -216,9 +216,7 @@ class _HelpViewState extends State<HelpView> {
           ],
         ],
       ),
-      actions: [
-        TextButton(onPressed: widget.onClose, child: Text(tr('Close'))),
-      ],
+      actions: const [], // Back in the window's header leads out
     );
   }
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'app_look.dart' show StatusColors;
 import 'core_client.g.dart';
 
 /// A local LLM's details (providers.details, the GTK local LLM page): whether
@@ -102,6 +103,8 @@ class _RuntimeDetailsCardState extends State<RuntimeDetailsCard> {
         _tiles(context, details['tiles'] as List),
         if (usage != null)
           Card(
+            // Inside a provider's card: one step stronger.
+            color: Theme.of(context).colorScheme.surfaceContainer,
             child: ExpansionTile(
               leading: const Icon(Icons.bar_chart),
               title: Text('${usage['title']}'),
@@ -126,6 +129,8 @@ class _RuntimeDetailsCardState extends State<RuntimeDetailsCard> {
           ),
         if (risks.isNotEmpty)
           Card(
+            // Inside a provider's card: one step stronger.
+            color: Theme.of(context).colorScheme.surfaceContainer,
             child: ExpansionTile(
               leading: const Icon(Icons.shield_outlined),
               title: Text(widget.tr('Risk management')),
@@ -141,7 +146,7 @@ class _RuntimeDetailsCardState extends State<RuntimeDetailsCard> {
                           ? Icons.error_outline
                           : Icons.info_outline,
                       color: r['level'] == 'ok'
-                          ? Colors.green
+                          ? StatusColors.ok
                           : r['level'] == 'high'
                           ? scheme.error
                           : scheme.outline,

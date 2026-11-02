@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'app_look.dart' show AppSpace, StatusColors;
 import 'map_smart_card.dart' show smartActionLabels;
 
 const _separateMountHint =
@@ -36,8 +37,8 @@ class UseCaseCards extends StatelessWidget {
           color: level == 'warn'
               ? scheme.error
               : level == 'ok'
-              ? Colors.green
-              : scheme.tertiary,
+              ? StatusColors.ok
+              : StatusColors.warn,
         ),
       ),
       title: Text('${f['title']}'),
@@ -55,8 +56,8 @@ class UseCaseCards extends StatelessWidget {
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
     return Wrap(
-      spacing: 8,
-      runSpacing: 8,
+      spacing: AppSpace.sm,
+      runSpacing: AppSpace.sm,
       children: [
         for (final u in uses)
           SizedBox(
@@ -64,7 +65,7 @@ class UseCaseCards extends StatelessWidget {
             child: Card(
               key: ValueKey('use-${u['key']}'),
               child: Padding(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(AppSpace.md),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -133,12 +134,12 @@ class MapWelcome extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     intro,
-                    const SizedBox(height: 12),
+                    const SizedBox(height: AppSpace.md),
                     Text(
                       tr('What you can do with it'),
                       style: text.titleMedium,
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: AppSpace.sm),
                     UseCaseCards(uses: uses, tr: tr, onAction: onAction),
                   ],
                 ),

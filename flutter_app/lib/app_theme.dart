@@ -53,9 +53,19 @@ ThemeData appTheme(
   );
   final background = desktopThemeColor(desktop, 'background');
   if (mode == 'system' && background != null) {
+    final foreground =
+        desktopThemeColor(desktop, 'foreground') ?? colors.onSurface;
+    // The card tones step from the desktop's background, as Material's do
+    // from its own surface: cards keep their contrast on any desktop.
+    Color step(double amount) => Color.lerp(background, foreground, amount)!;
     colors = colors.copyWith(
       surface: background,
-      onSurface: desktopThemeColor(desktop, 'foreground') ?? colors.onSurface,
+      onSurface: foreground,
+      surfaceContainerLowest: step(.02),
+      surfaceContainerLow: step(.05),
+      surfaceContainer: step(.08),
+      surfaceContainerHigh: step(.11),
+      surfaceContainerHighest: step(.14),
     );
   }
   final shape = radius == null
@@ -65,7 +75,15 @@ ThemeData appTheme(
     colorScheme: colors,
     useMaterial3: true,
     extensions: [Corners(radius ?? 12)],
-    cardTheme: shape == null ? null : CardThemeData(shape: shape),
+    // Every card looks like the map's category cards (app_look SectionCard).
+    cardTheme: CardThemeData(
+      color: colors.surfaceContainerLow,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(radius ?? 12),
+        side: BorderSide(color: colors.outlineVariant),
+      ),
+    ),
     dialogTheme: shape == null ? null : DialogThemeData(shape: shape),
     // Material's default is the inverted surface: a white bar on a dark app.
     snackBarTheme: SnackBarThemeData(
@@ -109,6 +127,8 @@ class ThemeChoices extends StatelessWidget {
                 child: Card(
                   margin: EdgeInsets.zero,
                   clipBehavior: Clip.antiAlias,
+                  // A card in a card: one step stronger, so it stands out.
+                  color: Theme.of(context).colorScheme.surfaceContainer,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(corners(context)),
                     side: BorderSide(
@@ -190,9 +210,14 @@ class _ThemePreview extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final paint = Paint()..color = colors.surface;
     final rect = Offset.zero & size;
+    final shape = RRect.fromRectAndRadius(rect, const Radius.circular(8));
+    canvas.drawRRect(shape, paint);
+    // An outline: a preview of the same mode as the app still shows its edge.
     canvas.drawRRect(
-      RRect.fromRectAndRadius(rect, const Radius.circular(8)),
-      paint,
+      shape,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..color = colors.outlineVariant,
     );
     paint.color = colors.primary;
     canvas.drawCircle(const Offset(12, 12), 3, paint);

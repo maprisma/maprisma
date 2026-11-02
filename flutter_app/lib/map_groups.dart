@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
-import 'app_theme.dart' show corners;
 import 'package:flutter/services.dart';
+
+import 'app_look.dart' show StatusColors;
+import 'app_theme.dart' show corners;
 
 /// UI-only metadata. Never inserted into the graph or serialized.
 class MapGroup {
@@ -60,6 +62,12 @@ class MapGroupCard extends StatelessWidget {
           color: group.dummy
               ? colors.surfaceContainerLowest
               : colors.surfaceContainerHigh,
+          // The empty card has only its dashed border.
+          shape: group.dummy
+              ? RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(corners(context)),
+                )
+              : null,
           child: InkWell(
             onTap: onExpand,
             borderRadius: BorderRadius.circular(corners(context)),
@@ -225,8 +233,8 @@ class AgentBadge extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final colour = switch ('${badge['colour']}') {
       'red' => scheme.error,
-      'yellow' => Colors.amber.shade700,
-      _ => Colors.green,
+      'yellow' => StatusColors.warn,
+      _ => StatusColors.ok,
     };
     final Widget child;
     if (badge['kind'] == 'battery') {
@@ -299,7 +307,7 @@ class UsageBoxLabel extends StatelessWidget {
                   style: TextStyle(
                     color: switch ('${parts[i][1]}') {
                       'red' => scheme.error,
-                      'yellow' => Colors.amber.shade700,
+                      'yellow' => StatusColors.warn,
                       _ => scheme.onSurfaceVariant,
                     },
                   ),

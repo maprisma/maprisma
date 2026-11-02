@@ -335,9 +335,7 @@ class _PerformanceViewState extends State<PerformanceView> {
           ..._tips(context),
         ],
       ),
-      actions: [
-        TextButton(onPressed: widget.onClose, child: Text(tr('Close'))),
-      ],
+      actions: const [], // Back in the window's header leads out
     );
   }
 }

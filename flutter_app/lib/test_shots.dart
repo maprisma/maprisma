@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-/// F9: a picture of the app's own window and its note, in ~/Pictures/Maprisma,
+/// F12: a picture of the app's own window and its note, in ~/Pictures/Maprisma,
 /// while the setting screenshot_key is on (default).
 final class WindowShots {
   WindowShots(this.folder);
@@ -50,7 +50,7 @@ final class WindowShots {
   }
 }
 
-/// F9 in a recorded manual test (tools/test-session.sh): the picture and a
+/// F12 in a recorded manual test (tools/test-session.sh): the picture and a
 /// note, next to the protocol, whatever the setting says. Only while
 /// MAPRISMA_RECORD_PROTOCOL is set.
 final class TestShots {

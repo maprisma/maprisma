@@ -241,6 +241,27 @@ class CoreClient {
   Future<Map<String, dynamic>> detailsSkills({required String path}) =>
       transport.call('details.skills', {'path': path});
 
+  Future<Map<String, dynamic>> dictationRun({
+    required String action,
+    String? target,
+  }) => transport.call('dictation.run', {'action': action, 'target': ?target});
+
+  Future<Map<String, dynamic>> dictationSnapshot([
+    Map<String, dynamic> params = const {},
+  ]) => transport.call('dictation.snapshot', params);
+
+  Future<Map<String, dynamic>> dictationStart([
+    Map<String, dynamic> params = const {},
+  ]) => transport.call('dictation.start', params);
+
+  Future<Map<String, dynamic>> dictationStop({
+    bool? cancel,
+    String? recording,
+  }) => transport.call('dictation.stop', {
+    'cancel': ?cancel,
+    'recording': ?recording,
+  });
+
   Future<Map<String, dynamic>> existingApply([
     Map<String, dynamic> params = const {},
   ]) => transport.call('existing.apply', params);

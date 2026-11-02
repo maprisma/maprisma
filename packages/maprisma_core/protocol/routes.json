@@ -708,6 +708,79 @@
    },
    "source": "observed"
   },
+  "dictation.run": {
+   "area": "dictation",
+   "kind": "change",
+   "note": "Runs a dictation setup, update, model or removal action.",
+   "optional": [
+    "target"
+   ],
+   "params": {
+    "action": "string",
+    "target": "string"
+   },
+   "result": {
+    "ok": "bool"
+   },
+   "source": "manual"
+  },
+  "dictation.snapshot": {
+   "area": "dictation",
+   "kind": "read",
+   "note": "Voice dictation status across Omarchy dictation, local Whisper, local LLM speech models, and connected online providers.",
+   "params": {},
+   "result": {
+    "active": "string",
+    "active_label": "string",
+    "configured": "bool",
+    "cost_hint": "string",
+    "enabled": "bool",
+    "engine": "string",
+    "local": "object",
+    "omarchy": "object",
+    "online": "object",
+    "ready": "bool",
+    "recording": "bool",
+    "transcribing": "bool",
+    "whisper": "object",
+    "whisper_model": "string"
+   },
+   "source": "manual"
+  },
+  "dictation.start": {
+   "area": "dictation",
+   "kind": "change",
+   "note": "Starts microphone capture or Omarchy dictation (`mode`: `wav` or `omarchy`).",
+   "params": {},
+   "result": {
+    "engine": "string",
+    "mode": "string",
+    "recording": "string"
+   },
+   "source": "manual"
+  },
+  "dictation.stop": {
+   "area": "dictation",
+   "kind": "change",
+   "note": "Stops microphone capture or Omarchy dictation, transcribes the recorded WAV (unless `cancel` is true), deletes the temporary file, and returns the text.",
+   "optional": [
+    "cancel",
+    "recording"
+   ],
+   "params": {
+    "cancel": "bool",
+    "recording": "string"
+   },
+   "result": {
+    "cost_hint": "string",
+    "elapsed_ms": "int",
+    "engine": "string",
+    "mode": "string",
+    "text": "string",
+    "typed_by_desktop": "bool"
+   },
+   "source": "manual"
+  },
   "existing.apply": {
    "area": "existing",
    "kind": "change",
@@ -1092,10 +1165,10 @@
     "poll": "?"
    },
    "result": {
-    "nodes": [
+    "edges": [
      "object"
     ],
-    "edges": [
+    "nodes": [
      "object"
     ],
     "pending": "bool"
@@ -1448,6 +1521,10 @@
    "note": "",
    "params": {},
    "result": {
+    "action_rule_hints": "bool",
+    "action_rules": [
+     "object"
+    ],
     "addons_online": "bool",
     "agent_folder": "null|string",
     "ai_checks": "bool",
@@ -1456,6 +1533,9 @@
     "corners": "string",
     "cost_currency": "string",
     "cost_limit": "int",
+    "dictation": "bool",
+    "dictation_engine": "string",
+    "dictation_whisper_model": "string",
     "flutter_map_layout": {
      "cards": {
       "a": [
@@ -1480,6 +1560,9 @@
      "string"
     ],
     "providers_with_agents": "bool",
+    "screenshot_folder": "null|string",
+    "screenshot_key": "bool",
+    "smart_helper": "null|string",
     "subagents_kept": "int",
     "subagents_minutes": "int|number",
     "system_map_columns": [
@@ -1494,14 +1577,7 @@
     "warn_notify": "bool",
     "warn_red": "int",
     "warn_yellow": "int",
-    "window_mode": "string",
-    "screenshot_key": "bool",
-    "screenshot_folder": "null|string",
-    "action_rule_hints": "bool",
-    "action_rules": [
-     "object"
-    ],
-    "smart_helper": "null|string"
+    "window_mode": "string"
    },
    "source": "manual"
   },
@@ -1513,6 +1589,10 @@
     "values": "object"
    },
    "result": {
+    "action_rule_hints": "bool",
+    "action_rules": [
+     "object"
+    ],
     "addons_online": "bool",
     "agent_folder": "null|string",
     "ai_checks": "bool",
@@ -1521,6 +1601,9 @@
     "corners": "string",
     "cost_currency": "string",
     "cost_limit": "int",
+    "dictation": "bool",
+    "dictation_engine": "string",
+    "dictation_whisper_model": "string",
     "flutter_map_layout": {
      "cards": {
       "a": [
@@ -1548,6 +1631,9 @@
      "string"
     ],
     "providers_with_agents": "bool",
+    "screenshot_folder": "null|string",
+    "screenshot_key": "bool",
+    "smart_helper": "null|string",
     "subagents_kept": "int",
     "subagents_minutes": "int|number",
     "system_map_columns": [
@@ -1562,14 +1648,7 @@
     "warn_notify": "bool",
     "warn_red": "int",
     "warn_yellow": "int",
-    "window_mode": "string",
-    "screenshot_key": "bool",
-    "screenshot_folder": "null|string",
-    "action_rule_hints": "bool",
-    "action_rules": [
-     "object"
-    ],
-    "smart_helper": "null|string"
+    "window_mode": "string"
    },
    "source": "manual"
   },

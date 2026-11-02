@@ -32,6 +32,8 @@ void main() {
       scrollable: find.byType(Scrollable).first,
     );
     expect(find.byKey(const ValueKey('card-border-width-1')), findsNothing);
+    await tester.ensureVisible(toggle);
+    await tester.pumpAndSettle();
     await tester.tap(toggle);
     await tester.pumpWidget(view());
     expect(layout['card_border'], {'on': true});

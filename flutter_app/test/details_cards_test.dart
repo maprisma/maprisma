@@ -128,7 +128,8 @@ void main() {
     expect(find.text('NOTES_TOKEN = •••'), findsOneWidget);
     expect(find.text('lookup'), findsOneWidget);
     expect(find.text('Codex · draw a line'), findsOneWidget);
-    await tester.tap(find.text('Close'));
-    expect(closed, isTrue);
+    // Back in the window's header leads out; no second way at the bottom.
+    expect(find.text('Close'), findsNothing);
+    expect(closed, isFalse);
   });
 }

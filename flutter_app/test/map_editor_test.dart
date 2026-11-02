@@ -1234,7 +1234,7 @@ void main() {
 
       // When cut off at scale 1.0 in 1100 × 760, opening Models keeps board left at 922
       // and brings it into view through the transform.
-      await tester.tap(find.text('Close'));
+      await tester.tap(find.byKey(const ValueKey('smart-back')));
       await tester.pumpAndSettle();
       controller.value = Matrix4.identity();
       await tester.pump();
@@ -1344,7 +1344,7 @@ void main() {
         ),
         isTrue,
       );
-      await tester.tap(find.text('Close'));
+      await tester.tap(find.byKey(const ValueKey('smart-back')));
       await tester.pumpAndSettle();
       expect(tester.widget<MapSmartCard>(agentsCard).open, isFalse);
       expect(
@@ -1751,7 +1751,7 @@ void main() {
         'Ask AI',
         'Ask AI · {0}',
         'Ask for this column…',
-        'Collapse',
+        'Back',
         'Local, no tokens',
         'Uses plan/tokens',
         'Ask',
@@ -1760,7 +1760,7 @@ void main() {
         'Set up or tune a provider…',
         'Find or connect a model…',
         '{0} is checking {1}…',
-        '← Back',
+        'Ask again',
         'Move to {0}',
         'Try again',
         'PC: {0} VRAM · {1} RAM · {2} free',
@@ -1844,16 +1844,14 @@ void main() {
       expect(find.text('Lokal, keine Tokens'), findsOneWidget);
       expect(find.text('Modell finden oder verbinden…'), findsOneWidget);
       await tester.enterText(find.byType(TextField), 'qwen');
-      // Tab from TextField -> Close -> Ask ('Fragen'), then press Enter.
-      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
-      await tester.pump();
+      // Tab from TextField -> Ask ('Fragen'), then press Enter.
       await tester.sendKeyEvent(LogicalKeyboardKey.tab);
       await tester.pump();
       await tester.sendKeyEvent(LogicalKeyboardKey.enter);
       await tester.pumpAndSettle();
       expect(calls, contains('map.smart_ask'));
       expect(find.text('Nur Modelle.'), findsOneWidget);
-      expect(find.text('← Zurück'), findsOneWidget);
+      expect(find.text('Erneut fragen'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );
@@ -1970,7 +1968,7 @@ void main() {
       await tester.tap(find.text('Ask'));
       await tester.pump();
       expect(find.text('Local helper is checking Models…'), findsOneWidget);
-      await tester.tap(find.byTooltip('Collapse'));
+      await tester.tap(find.byKey(const ValueKey('smart-back')));
       await tester.pump();
       expect(isOpen, isFalse);
       expect(calls, contains('tasks.cancel'));
@@ -1996,7 +1994,7 @@ void main() {
 
       // Collapse via button while download is running -> no tasks.cancel sent.
       calls.clear();
-      await tester.tap(find.byTooltip('Collapse'));
+      await tester.tap(find.byKey(const ValueKey('smart-back')));
       await tester.pump();
       expect(isOpen, isFalse);
       expect(calls, isNot(contains('tasks.cancel')));
@@ -3132,7 +3130,7 @@ void main() {
         );
         tester.view.physicalSize = const Size(1500, 700);
         await tester.pump();
-        await tester.tap(find.text('Close'));
+        await tester.tap(find.byKey(const ValueKey('smart-back')));
         await tester.pumpAndSettle();
         await tester.tap(find.byKey(const ValueKey('map-column-3')));
         await tester.pump();
@@ -3264,7 +3262,7 @@ void main() {
         await tester.tap(find.byKey(const ValueKey('smart-status-mcp')));
         await tester.pumpAndSettle();
         expect(find.text('Nothing to fix.'), findsOneWidget);
-        await tester.tap(find.text('Ask AI · MCP servers and skills'));
+        await tester.tap(find.byKey(const ValueKey('smart-status-ask')));
         await tester.pumpAndSettle();
         expect(find.text('No AI helper is set up yet.'), findsOneWidget);
       },

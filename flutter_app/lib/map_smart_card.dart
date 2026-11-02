@@ -2,10 +2,12 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'app_look.dart' show AppSpace, WindowFooter, WindowHeader, StatusColors;
 import 'app_theme.dart' show corners;
 import 'backend.dart' show failureText;
 import 'connections_view.dart' show ConnectionReview;
 import 'agent_action_dialog.dart';
+import 'dictation_card.dart';
 import 'model_removal_dialog.dart';
 import 'overlay_window.dart';
 import 'core_client.g.dart';
@@ -121,41 +123,31 @@ class SmartMoveReview extends StatelessWidget {
   final VoidCallback onConfirm, onCancel;
 
   @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      Expanded(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(10),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                tr('Move model folder'),
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              ),
-              Text('$title $subtitle', style: const TextStyle(fontSize: 12)),
-              for (final note in plan['notes'] as List? ?? const [])
-                Text(tr('$note'), style: const TextStyle(fontSize: 12)),
-              for (final file in plan['files'] as List? ?? const [])
-                SelectableText(
-                  '${(file as Map)['path']}',
-                  style: const TextStyle(fontSize: 11),
-                ),
-            ],
+  Widget build(BuildContext context) => TaskReview(
+    title: Text(
+      tr('Move model folder'),
+      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+    ),
+    content: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('$title $subtitle', style: const TextStyle(fontSize: 12)),
+        for (final note in plan['notes'] as List? ?? const [])
+          Text(tr('$note'), style: const TextStyle(fontSize: 12)),
+        for (final file in plan['files'] as List? ?? const [])
+          SelectableText(
+            '${(file as Map)['path']}',
+            style: const TextStyle(fontSize: 11),
           ),
-        ),
-      ),
-      OverflowBar(
-        alignment: MainAxisAlignment.end,
-        children: [
-          TextButton(onPressed: onCancel, child: Text(tr('Cancel'))),
-          FilledButton(
-            key: const ValueKey('smart-move-confirm'),
-            onPressed: onConfirm,
-            child: Text(tr('Move model folder')),
-          ),
-        ],
+      ],
+    ),
+    actions: [
+      TextButton(onPressed: onCancel, child: Text(tr('Cancel'))),
+      FilledButton(
+        key: const ValueKey('smart-move-confirm'),
+        onPressed: onConfirm,
+        child: Text(tr('Move model folder')),
       ),
     ],
   );
@@ -184,8 +176,8 @@ class SmartStatusIcon extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     return switch (level) {
       'warn' => Icon(Icons.error, size: size, color: colors.error),
-      'hint' => Icon(Icons.warning, size: size, color: Colors.amber.shade800),
-      _ => Icon(Icons.check_circle, size: size, color: Colors.green),
+      'hint' => Icon(Icons.warning, size: size, color: StatusColors.warn),
+      _ => Icon(Icons.check_circle, size: size, color: StatusColors.ok),
     };
   }
 }
@@ -402,6 +394,27 @@ class _MapSmartCardState extends State<MapSmartCard> {
   String _runText = '';
   String _errorText = '';
   _SmartStep _errorReturnTo = _SmartStep.idle;
+  Map<String, dynamic>? _dictation;
+  bool _dictationRecording = false;
+  bool _dictationTranscribing = false;
+  String? _dictationHandle;
+  bool _showDictationSetup = false;
+  String _dictationError = '';
+
+  void _cancelDictationRecording() {
+    if (!_dictationRecording) return;
+    final handle = _dictationHandle;
+    _dictationRecording = false;
+    _dictationHandle = null;
+    final client = widget.client;
+    if (client != null) {
+      unawaited(
+        client
+            .dictationStop(recording: handle, cancel: true)
+            .then((_) {}, onError: (_) {}),
+      );
+    }
+  }
 
   Map<String, dynamic>? get _activeHelper {
     if (widget.helpers.isEmpty) return null;
@@ -421,7 +434,9 @@ class _MapSmartCardState extends State<MapSmartCard> {
   void _focusOpenCard() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !widget.open) return;
-      if (_step == _SmartStep.idle && widget.helpers.isNotEmpty) {
+      if (_step == _SmartStep.idle &&
+          widget.takesRequests &&
+          widget.helpers.isNotEmpty) {
         _fieldFocus.requestFocus();
       } else if (!_cardFocus.hasFocus) {
         _cardFocus.requestFocus();
@@ -433,6 +448,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
   void initState() {
     super.initState();
     smartHelperChosen.addListener(_helperChanged);
+    dictationChanged.addListener(_loadDictation);
     _portal.show();
     if (widget.initialPrompt != null && widget.initialPrompt!.isNotEmpty) {
       _prompt.text = widget.initialPrompt!;
@@ -465,6 +481,9 @@ class _MapSmartCardState extends State<MapSmartCard> {
     if (!oldWidget.open && widget.open) {
       _focusOpenCard();
     } else if (oldWidget.open && !widget.open) {
+      _cancelDictationRecording();
+      _showDictationSetup = false;
+      _dictationError = '';
       if (_step == _SmartStep.redirect) _step = _SmartStep.idle;
     }
   }
@@ -482,6 +501,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
       if (!widget.open) widget.onToggle();
       return;
     }
+    _cancelDictationRecording();
     if (!widget.open) {
       setState(() => _step = _SmartStep.status);
       widget.onToggle();
@@ -527,6 +547,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
   /// [refocus] false when what comes next takes the keyboard: a task card, a
   /// terminal, a page.
   void _close({bool refocus = true}) {
+    _cancelDictationRecording();
     if (_step == _SmartStep.working) {
       setState(_abortWorking);
     } else if (_step != _SmartStep.running && !_applyingConnect) {
@@ -1070,7 +1091,9 @@ class _MapSmartCardState extends State<MapSmartCard> {
 
   @override
   void dispose() {
+    _cancelDictationRecording();
     smartHelperChosen.removeListener(_helperChanged);
+    dictationChanged.removeListener(_loadDictation);
     if (_windowShown) _countWindow(-1);
     _runToken++;
     _prompt.dispose();
@@ -1169,13 +1192,16 @@ class _MapSmartCardState extends State<MapSmartCard> {
   /// The window's footer: what can be done at this step.
   List<Widget> _actions() {
     final tr = widget.tr;
-    final close = TextButton(onPressed: _close, child: Text(tr('Close')));
-    final back = TextButton(onPressed: _backToIdle, child: Text(tr('← Back')));
+    // Back in the header leaves the window; the footer only goes on.
+    final back = TextButton(
+      key: const ValueKey('smart-ask-again'),
+      onPressed: _backToIdle,
+      child: Text(tr('Ask again')),
+    );
     final onFirstAgent = widget.status?.onAction;
     return switch (_step) {
-      _SmartStep.idle when !widget.takesRequests => [close],
+      _SmartStep.idle when !widget.takesRequests => const [],
       _SmartStep.idle when widget.helpers.isEmpty => [
-        close,
         if (onFirstAgent != null)
           OutlinedButton(
             key: const ValueKey('smart-no-helper-action'),
@@ -1187,7 +1213,6 @@ class _MapSmartCardState extends State<MapSmartCard> {
           ),
       ],
       _SmartStep.idle => [
-        close,
         FilledButton(onPressed: () => _ask(), child: Text(tr('Ask'))),
       ],
       _SmartStep.status => [
@@ -1196,18 +1221,23 @@ class _MapSmartCardState extends State<MapSmartCard> {
           onPressed: widget.status?.onCheckAgain,
           child: Text(tr('Check again')),
         ),
-        close,
+        if (widget.takesRequests)
+          FilledButton(
+            key: const ValueKey('smart-status-ask'),
+            onPressed: _openOnPrompt,
+            child: Text(tr('Ask')),
+          ),
       ],
       _SmartStep.working => [
         TextButton(onPressed: _cancelTask, child: Text(tr('Cancel'))),
       ],
       _SmartStep.clarify ||
       _SmartStep.redirect ||
-      _SmartStep.proposal => [back, close],
+      _SmartStep.proposal => [back],
       _SmartStep.mcpForm => [
         TextButton(
           onPressed: () => setState(() => _step = _SmartStep.proposal),
-          child: Text(tr('← Back')),
+          child: Text(tr('Cancel')),
         ),
         FilledButton(
           key: const ValueKey('smart-mcp-review'),
@@ -1235,7 +1265,6 @@ class _MapSmartCardState extends State<MapSmartCard> {
         ),
       ],
       _SmartStep.error => [
-        close,
         FilledButton.tonal(onPressed: _tryAgain, child: Text(tr('Try again'))),
       ],
       _SmartStep.review || _SmartStep.connectReview => const [],
@@ -1255,6 +1284,185 @@ class _MapSmartCardState extends State<MapSmartCard> {
         )
       : _buildAsk(colors);
 
+  Future<void> _loadDictation() async {
+    final client = widget.client;
+    if (client == null) return;
+    try {
+      final snap = await client.dictationSnapshot();
+      if (!mounted) return;
+      setState(() {
+        _dictation = snap;
+        _dictationRecording = snap['recording'] == true;
+        _dictationTranscribing = snap['transcribing'] == true;
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _toggleDictation() async {
+    final client = widget.client;
+    if (client == null || _dictationTranscribing) return;
+    setState(() => _dictationError = '');
+    if (_dictation == null) {
+      await _loadDictation();
+      if (!mounted) return;
+    }
+    final snap = _dictation;
+    if (snap == null || snap['ready'] != true) {
+      setState(() => _showDictationSetup = !_showDictationSetup);
+      return;
+    }
+    if (!_dictationRecording) {
+      _fieldFocus.requestFocus();
+      try {
+        final started = await client.dictationStart();
+        if (!mounted) return;
+        setState(() {
+          _dictationRecording = true;
+          _dictationHandle = started['recording'] as String?;
+        });
+      } catch (e) {
+        if (!mounted) return;
+        setState(() => _dictationError = failureText(widget.tr, e));
+      }
+      return;
+    }
+    _fieldFocus.requestFocus();
+    final handle = _dictationHandle;
+    setState(() {
+      _dictationRecording = false;
+      _dictationHandle = null;
+      _dictationTranscribing = true;
+    });
+    try {
+      final stopped = await client.dictationStop(recording: handle);
+      if (!mounted) return;
+      final text = (stopped['text'] as String? ?? '').trim();
+      if (text.isNotEmpty) {
+        final current = _prompt.text.trim();
+        _prompt.text = current.isEmpty ? text : '$current $text';
+        _prompt.selection = TextSelection.fromPosition(
+          TextPosition(offset: _prompt.text.length),
+        );
+      }
+      setState(() {
+        _dictationTranscribing = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _dictationTranscribing = false;
+        _dictationError = failureText(widget.tr, e);
+      });
+    }
+  }
+
+  Future<void> _updateDictationEngine(String engine) async {
+    final client = widget.client;
+    if (client == null) return;
+    setState(() => _dictationError = '');
+    try {
+      await client.settingsUpdate(values: {'dictation_engine': engine});
+      dictationChanged.value++;
+      await _loadDictation();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _dictationError = failureText(widget.tr, e));
+    }
+  }
+
+  Future<void> _runDictationAction(String action, [String? target]) async {
+    final client = widget.client;
+    if (client == null) return;
+    setState(() => _dictationError = '');
+    try {
+      await client.dictationRun(action: action, target: target);
+      dictationChanged.value++;
+      await _loadDictation();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _dictationError = failureText(widget.tr, e));
+    }
+  }
+
+  Widget _buildDictationSuffix(ColorScheme colors, bool ready, String active) {
+    final Widget micIcon;
+    if (_dictationTranscribing) {
+      micIcon = const SizedBox(
+        key: ValueKey('smart-dictation-transcribing'),
+        width: 16,
+        height: 16,
+        child: CircularProgressIndicator(strokeWidth: 2),
+      );
+    } else if (_dictationRecording) {
+      micIcon = Icon(Icons.stop_circle, size: 20, color: colors.error);
+    } else if (!ready) {
+      micIcon = Stack(
+        clipBehavior: Clip.none,
+        children: const [
+          Icon(Icons.mic_none, size: 20),
+          Positioned(
+            right: -4,
+            top: -4,
+            child: SmartStatusIcon(
+              key: ValueKey('smart-dictation-unconfigured'),
+              level: 'hint',
+              size: 12,
+            ),
+          ),
+        ],
+      );
+    } else if (active == 'online') {
+      micIcon = Stack(
+        clipBehavior: Clip.none,
+        children: const [
+          Icon(Icons.mic, size: 20),
+          Positioned(
+            right: -4,
+            top: -4,
+            child: SmartStatusIcon(
+              key: ValueKey('smart-dictation-online-indicator'),
+              level: 'hint',
+              size: 12,
+            ),
+          ),
+        ],
+      );
+    } else {
+      micIcon = const Icon(Icons.mic, size: 20);
+    }
+
+    return ExcludeFocusTraversal(
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            key: const ValueKey('smart-dictation-mic'),
+            visualDensity: VisualDensity.compact,
+            tooltip: _dictationTranscribing
+                ? widget.tr('Transcribing…')
+                : _dictationRecording
+                ? widget.tr('Stop dictation')
+                : ready
+                ? widget.tr('Dictate')
+                : widget.tr('On · not set up yet'),
+            icon: micIcon,
+            onPressed: _dictationTranscribing ? null : _toggleDictation,
+          ),
+          IconButton(
+            key: const ValueKey('smart-dictation-manage'),
+            visualDensity: VisualDensity.compact,
+            tooltip: widget.tr('Dictation'),
+            icon: const Icon(Icons.tune, size: 16),
+            onPressed: () {
+              if (_dictation == null) unawaited(_loadDictation());
+              setState(() => _showDictationSetup = !_showDictationSetup);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildAsk(ColorScheme colors) {
     if (widget.helpers.isEmpty) {
       return Column(
@@ -1268,6 +1476,13 @@ class _MapSmartCardState extends State<MapSmartCard> {
         ],
       );
     }
+    final dict = _dictation;
+    final dictEnabled = dict == null ? true : dict['enabled'] != false;
+    final dictReady = dict?['ready'] == true;
+    final dictActive = dict?['active'] as String? ?? '';
+    final dictCostHint = dict?['cost_hint'] as String? ?? '';
+    final showMic = dictEnabled && widget.client != null;
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1281,10 +1496,84 @@ class _MapSmartCardState extends State<MapSmartCard> {
           style: const TextStyle(fontSize: 13),
           decoration: InputDecoration(
             isDense: true,
-            hintText: widget.tr(_columnHint(widget.column)),
+            hintText: _dictationTranscribing
+                ? widget.tr('Transcribing…')
+                : _dictationRecording
+                ? widget.tr('Listening… Click Stop when done.')
+                : widget.tr(_columnHint(widget.column)),
             border: const OutlineInputBorder(),
+            suffixIcon: showMic
+                ? _buildDictationSuffix(colors, dictReady, dictActive)
+                : null,
           ),
         ),
+        if (_dictationError.isNotEmpty) ...[
+          const SizedBox(height: AppSpace.xs),
+          Text(
+            _dictationError,
+            key: const ValueKey('smart-dictation-error'),
+            style: TextStyle(fontSize: 11, color: colors.error),
+          ),
+        ],
+        if (showMic && dictCostHint.isNotEmpty && !_showDictationSetup) ...[
+          const SizedBox(height: AppSpace.xs),
+          Row(
+            key: const ValueKey('smart-dictation-cost-hint'),
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Padding(
+                padding: EdgeInsets.only(top: 2, right: AppSpace.xs),
+                child: SmartStatusIcon(level: 'hint', size: 13),
+              ),
+              Expanded(
+                child: Text(
+                  dictCostHint,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: colors.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+        if (showMic && _showDictationSetup) ...[
+          const SizedBox(height: AppSpace.sm),
+          Material(
+            key: const ValueKey('smart-dictation-panel'),
+            color: colors.surfaceContainer,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(corners(context)),
+              side: BorderSide(color: colors.outlineVariant),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpace.sm),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    widget.tr(dictReady ? 'Dictation' : 'Set up dictation'),
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpace.xs),
+                  DictationControls(
+                    snapshot: dict ?? fallbackDictationSnapshot(const {}),
+                    busy: false,
+                    tr: widget.tr,
+                    compact: true,
+                    onEngineChanged: _updateDictationEngine,
+                    onAction: _runDictationAction,
+                    onRefresh: _loadDictation,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -1711,15 +2000,15 @@ class _MapSmartCardState extends State<MapSmartCard> {
         ],
         for (final c in candidates)
           Padding(
-            padding: const EdgeInsets.only(bottom: 6),
+            padding: const EdgeInsets.only(bottom: AppSpace.sm),
             child: DecoratedBox(
               decoration: BoxDecoration(
                 color: colors.surfaceContainer,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(corners(context)),
                 border: Border.all(color: colors.outlineVariant),
               ),
               child: Padding(
-                padding: const EdgeInsets.all(8),
+                padding: const EdgeInsets.all(AppSpace.md),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -1995,6 +2284,21 @@ class _MapSmartCardState extends State<MapSmartCard> {
 
   Widget _buildWindow(ColorScheme colors) {
     final actions = _actions();
+    // A step change can remove the control that had the keyboard; focus then
+    // falls back above the window and Esc would no longer reach it.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !widget.open || _cardFocus.hasFocus) return;
+      final now = FocusManager.instance.primaryFocus;
+      if (now == null || _cardFocus.ancestors.contains(now)) {
+        // Where opening puts it: the question field when it is shown.
+        (_step == _SmartStep.idle &&
+                    widget.takesRequests &&
+                    widget.helpers.isNotEmpty
+                ? _fieldFocus
+                : _cardFocus)
+            .requestFocus();
+      }
+    });
     return OverlayWindow(
       key: ValueKey('smart-window-${widget.column}'),
       child: Focus(
@@ -2011,73 +2315,37 @@ class _MapSmartCardState extends State<MapSmartCard> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(4, 4, 4, 4),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Semantics(
-                      button: _step == _SmartStep.status,
-                      child: InkWell(
-                        onTap: _step == _SmartStep.status
-                            ? _openOnPrompt
-                            : null,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 6),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.max,
-                            children: [
-                              Icon(
-                                Icons.auto_awesome,
-                                size: 15,
-                                color: colors.primary,
-                              ),
-                              const SizedBox(width: 6),
-                              Flexible(
-                                child: Text(
-                                  widget
-                                      .tr('Ask AI · {0}')
-                                      .replaceAll(
-                                        '{0}',
-                                        widget.tr(widget.title),
-                                      ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Flexible(child: _buildHelperChoice(colors)),
-                  IconButton(
-                    key: const ValueKey('smart-rules'),
-                    tooltip: widget.tr('What may be done'),
-                    // A review waits on what was checked when it opened.
-                    onPressed:
-                        _step == _SmartStep.review ||
-                            _step == _SmartStep.connectReview ||
-                            _step == _SmartStep.mcpForm
-                        ? null
-                        : smartOpenRules,
-                    icon: const Icon(Icons.rule, size: 18),
-                  ),
-                  IconButton(
-                    tooltip: widget.tr('Collapse'),
-                    onPressed: _close,
-                    icon: const Icon(Icons.expand_less, size: 18),
-                  ),
-                ],
-              ),
+            WindowHeader(
+              title: widget
+                  .tr('Ask AI · {0}')
+                  .replaceAll('{0}', widget.tr(widget.title)),
+              tr: widget.tr,
+              backKey: const ValueKey('smart-back'),
+              onBack: _close,
+              actions: [
+                // The helper's name and cost: never wider than a third.
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 300),
+                  child: _buildHelperChoice(colors),
+                ),
+                IconButton(
+                  key: const ValueKey('smart-rules'),
+                  tooltip: widget.tr('What may be done'),
+                  // A review waits on what was checked when it opened.
+                  onPressed:
+                      _step == _SmartStep.review ||
+                          _step == _SmartStep.connectReview ||
+                          _step == _SmartStep.mcpForm
+                      ? null
+                      : () {
+                          // One window at a time: the rules take its place.
+                          _close();
+                          smartOpenRules?.call();
+                        },
+                  icon: const Icon(Icons.rule),
+                ),
+              ],
             ),
-            const Divider(height: 1),
             if (_step == _SmartStep.review)
               Expanded(
                 child: _activeCandidate?['kind'] == 'agent_action'
@@ -2134,7 +2402,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
             else
               Expanded(
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(10),
+                  padding: const EdgeInsets.all(AppSpace.lg),
                   child: switch (_step) {
                     _SmartStep.status => _buildStatus(),
                     _SmartStep.idle => _buildIdle(colors),
@@ -2151,18 +2419,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
                   },
                 ),
               ),
-            if (actions.isNotEmpty) ...[
-              const Divider(height: 1),
-              Padding(
-                padding: const EdgeInsets.all(8),
-                child: Wrap(
-                  alignment: WrapAlignment.end,
-                  spacing: 8,
-                  runSpacing: 6,
-                  children: actions,
-                ),
-              ),
-            ],
+            if (actions.isNotEmpty) WindowFooter(children: actions),
           ],
         ),
       ),

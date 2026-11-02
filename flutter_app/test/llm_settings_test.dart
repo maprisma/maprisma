@@ -136,6 +136,8 @@ void main() {
       ),
     );
     await tester.scrollUntilVisible(find.text('Local helper'), 250);
+    await tester.ensureVisible(find.text('Local helper'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Off'));
     await tester.pumpAndSettle();
     expect(find.text('Pi · llama.cpp · big (suggested)').last, findsOneWidget);

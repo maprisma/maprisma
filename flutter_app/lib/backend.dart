@@ -29,9 +29,14 @@ DateTime? _refusedAt;
 
 /// The words for a failed action: the rule's when it was refused just now. A
 /// refusal nobody showed must not explain a later failure.
-String failureText(String Function(String) tr) {
+String failureText(String Function(String) tr, [Object? error]) {
   final refusal = lastRefusal, at = _refusedAt;
   lastRefusal = null;
+  if (error is ServiceError &&
+      error.reason != null &&
+      error.reason!.isNotEmpty) {
+    return error.reason!;
+  }
   final fresh =
       at != null && DateTime.now().difference(at) < const Duration(seconds: 3);
   return fresh && refusal != null
