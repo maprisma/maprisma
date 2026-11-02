@@ -189,3 +189,8 @@
 4. Fixed: agents and subtitle follow the pairs left.
 5. Fixed: `update(candidate)`, the page's own test.
 6. Fixed: the app keeps its own copy of the rules.
+
+
+## Round 4 (Antigravity, 2026-11-02, commit c9d581d)
+
+CLEAN
