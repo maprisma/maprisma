@@ -3272,5 +3272,6 @@
  "Say which rule refused something": "Decir qué regla rechazó algo",
  "Never decides: an allow rule names the same things.": "Nunca decide: una regla de permitir nombra lo mismo.",
  "This is not allowed here.": "Esto no está permitido aquí.",
- "{0}: not allowed by your rules": "{0}: no permitido por tus reglas"
+ "{0}: not allowed by your rules": "{0}: no permitido por tus reglas",
+ "No agent uses it, so there is nothing to disconnect.": "Ningún agente lo usa, así que no hay nada que desconectar."
 }

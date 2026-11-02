@@ -3010,6 +3010,19 @@ final class CoreService {
                   'models': rt.models.take(40).toList(),
                 },
           ],
+          'model_users': () {
+            reads.buildMap(); // Once, for all of them: a request sees today.
+            return [
+              for (final rt in reads.inventory.collect(agents).runtimes)
+                if (rt.installed && rt.models.isNotEmpty)
+                  {
+                    'key': rt.key,
+                    'name': rt.name,
+                    'used_by': reads.modelUsers(rt, fresh: false)
+                      ..removeWhere((_, users) => users.isEmpty),
+                  },
+            ];
+          }(),
           if (helper != null)
             'helper': {
               'provider': helper.provider,
@@ -3231,6 +3244,11 @@ final class CoreService {
         'item': action['server'],
         'remove': false,
       });
+    }
+    if (kind == 'model_disconnect') {
+      return edits.modelsDisconnect(action['key'] as String, [
+        for (final p in action['pairs'] as List) p as Map,
+      ], guardModel);
     }
     if (kind == 'mcp_disconnect') {
       final pairs = [for (final p in action['pairs'] as List) p as Map];
@@ -3881,10 +3899,24 @@ final class CoreService {
     final kept = <Map>[];
     for (final c in list.cast<Map>()) {
       final action = c['action'];
-      if (action is Map && action['kind'] == 'mcp_disconnect') {
+      if (action is Map &&
+          const {
+            'mcp_disconnect',
+            'model_disconnect',
+          }.contains(action['kind'])) {
+        final pairs = (action['pairs'] as List).cast<Map>();
+        // An agent leaves a local LLM whole: one refused model keeps it there.
+        final staying = action['kind'] == 'model_disconnect'
+            ? {
+                for (final p in pairs)
+                  if (!smartPairChecks(p).every(ok)) '${p['agent']}',
+              }
+            : const <String>{};
         final left = [
-          for (final p in (action['pairs'] as List).cast<Map>())
-            if (smartPairChecks(p).every(ok)) p,
+          for (final p in pairs)
+            if (smartPairChecks(p).every(ok) &&
+                !staying.contains('${p['agent']}'))
+              p,
         ];
         if (left.isNotEmpty) {
           final commands = {for (final p in left) '${p['agent']}'}.toList();
@@ -3892,7 +3924,8 @@ final class CoreService {
             ...c,
             'title': smartDisconnectTitle(left),
             'agents': commands,
-            'subtitle': [for (final a in commands) _nameOf(a)].join(', '),
+            if (action['kind'] == 'mcp_disconnect')
+              'subtitle': [for (final a in commands) _nameOf(a)].join(', '),
             'action': {...action, 'pairs': left},
           });
         }

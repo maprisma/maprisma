@@ -258,6 +258,7 @@ final class MapGraph {
       'skills',
     ],
     String animate = 'all',
+    int modelsShown = 10,
   }) {
     nodes.clear();
     edges.clear();
@@ -486,7 +487,7 @@ final class MapGraph {
     for (final rt in inv.runtimes.where((r) => r.installed)) {
       runtime(rt);
       final rid = 'runtime:${rt.key}';
-      for (final model in rt.models.take(10)) {
+      for (final model in rt.models.take(modelsShown)) {
         final id = 'model:$rid:${model.toLowerCase()}';
         node(
           id,
@@ -497,12 +498,14 @@ final class MapGraph {
         );
         link(rid, id, 'serves');
       }
-      if (rt.models.length > 10) {
+      if (rt.models.length > modelsShown) {
         final id = 'more:$rid';
         node(
           id,
           3,
-          i18n.text('+{0} more').replaceAll('{0}', '${rt.models.length - 10}'),
+          i18n
+              .text('+{0} more')
+              .replaceAll('{0}', '${rt.models.length - modelsShown}'),
           kind: 'more',
           dim: true,
           group: rt.modelsDir.isEmpty ? rt.name : rt.modelsDir,

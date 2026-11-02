@@ -1044,7 +1044,11 @@ class _MapSmartCardState extends State<MapSmartCard> {
           await Future<void>.delayed(const Duration(milliseconds: 200));
         }
       }
-      widget.onApplied?.call(result);
+      widget.onApplied?.call({
+        ...result,
+        if (_activeCandidate?['kind'] == 'model_disconnect')
+          'models_left': true,
+      });
       final done = _activeCandidate;
       if (done?['kind'] != null) {
         _nextOrClose(done!);
@@ -1774,8 +1778,9 @@ class _MapSmartCardState extends State<MapSmartCard> {
                                 '${c['title']}',
                               );
                             } else if ('${c['kind'] ?? ''}'.startsWith(
-                              'mcp_',
-                            )) {
+                                  'mcp_',
+                                ) ||
+                                c['kind'] == 'model_disconnect') {
                               _openMcp(proposal, c);
                             } else {
                               _openReview(proposal, c);

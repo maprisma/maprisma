@@ -129,7 +129,7 @@ const planMaxBytes = 24 * 1024 * 1024;
   }
 
   final actions = data['model_actions'] ?? [];
-  if (actions is! List || actions.length > 2) {
+  if (actions is! List || actions.length > maxModelActions) {
     throw const FormatException('Invalid model actions');
   }
   for (final action in actions) {
