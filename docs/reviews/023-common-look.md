@@ -73,3 +73,8 @@
 4. Fixed. The Ask AI window closes before the rules open, so one shade and one window. The test card is pinned under the list. Each field has an outline and its label (Action, Category, Item, Agent, translated); a field is made anew when its value changes.
 5. Fixed. A review leaves out a title that repeats its window's header. Help, details, security, performance and task results have no Close at the bottom: Back in the header leads out.
 6. Fixed. Cards in a card (theme choices, a provider's details and health) are one step stronger, the theme preview has an outline, the empty category card has only its dashed border, and with the desktop's colours the card tones step from its background.
+
+
+## Round 2 (Antigravity, 2026-11-02, commit ef9199f)
+
+CLEAN

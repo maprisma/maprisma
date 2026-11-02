@@ -75,3 +75,16 @@ Round 1 findings 1–7 are resolved. I checked each one in the code. The recorde
 1. Fixed: `download_whisper_model` and `install_whisper` now download to `<dest>.part` and run `mv -f <dest>.part <dest>` as a second step (`remove_whisper_model` also cleans up `<dest>.part`), and `isWhisperModelFile` / `_scanWhisper` ignore `*.part` so an incomplete or cancelled download is never listed or chosen.
 2. Fixed: Restored `translations/{de,es,fr,it,nl,pl,pt}.json` to their byte-identical 1-space indent from `ef9199f`, removed the old `F9` keys, and appended only the new keys.
 3. Fixed: Moved the screenshot shortcut from `F9` to `F12` (`LogicalKeyboardKey.f12`, still ignored while a terminal is visible) across `main.dart`, `test_shots.dart`, `agent_terminal.dart`, `settings_view.dart`, `settings_schema.py`, `tools/test-session.sh`, `task_cards_app_test.dart`, all 8 translation files, all 8 manuals (stamped `shortcuts`), and `docs/tasks/024-dictation.md`.
+
+## Round 3 (Claude, 2026-11-02, commit 2bbc81b)
+
+Status: CLEAN
+
+All 3 Round 2 points are resolved:
+1. **Downloads.** Downloads go to `<file>.part`, and `mv -f` runs as a separate step. `runStepsInTerminal` joins the steps with `&&` on both desktops, so a failed `curl -f` or a Ctrl-C never moves a partial file. The scan and `isWhisperModelFile` skip `*.part`, and removing a model also removes its `.part`. A saved preference for a file still being downloaded falls back to an existing model.
+2. **Translations.** `git diff ef9199f -- translations/` shows the 1-space format and +57/−5 lines per language: the 4 F9 texts removed, the trailing `"Item"` line given its comma, and the new keys appended.
+3. **F12.** It is used in the code, tests, `test-session.sh`, settings schema, texts and all 8 manuals. Outside the task/review history, no `F9` is left (`git grep -nI '\bF9\b'`). Omarchy's Hyprland defaults and `~/.config/hypr` do not bind F12. The key is still ignored while a terminal is visible.
+
+Tests run, all pass: core `dictation_test`, `write_path_test`; Flutter `dictation_test`, `task_cards_app_test`, `scan_settings_test`, `smart_window_test`; Python `test_provider_watch`; `tools/protocol.py check`; `bash -n tools/test-session.sh`. `tools/flutter-assets.py` and `tools/core-assets.py` regenerate without changes.
+
+Not tested: a real microphone, Omarchy dictation with a backend set up, and real Whisper or online transcription.
