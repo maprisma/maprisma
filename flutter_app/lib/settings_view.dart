@@ -224,7 +224,9 @@ class SettingsView extends StatelessWidget {
           child: Semantics(
             button: true,
             selected: chosen == value,
-            label: value,
+            label: value.startsWith('theme:')
+                ? tr(_themeNames[value.substring(6)]!)
+                : value,
             child: InkWell(
               key: ValueKey('$key-$value'),
               customBorder: const CircleBorder(),

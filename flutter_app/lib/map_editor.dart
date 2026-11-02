@@ -1144,7 +1144,8 @@ class _MapEditorState extends State<MapEditor>
     _phase.enabled = flowing;
     final seed = {..._selected, ?_hover};
     final pinned = {...(_saved['pins'] as List? ?? []).cast<String>()};
-    seed.retainWhere(layout.nodes.containsKey); // a hidden column has no lines
+    // A hidden column or a box a card leaves out has no lines to light.
+    seed.retainWhere(layout.boxes.containsKey);
     pinned.retainWhere(layout.nodes.containsKey);
     // A selection lights its neighbours; a pin only itself and its lines.
     final lit = {...seed, ...pinned};
@@ -1155,7 +1156,7 @@ class _MapEditorState extends State<MapEditor>
     }
     // A selection grays out what is not part of it; pins stay, as they do not
     // count as a selection and are lit themselves.
-    final dimming = _selected.any(layout.nodes.containsKey);
+    final dimming = _selected.any(layout.boxes.containsKey);
     return Focus(
       autofocus: true,
       onKeyEvent: (_, event) {
@@ -1528,8 +1529,8 @@ class _MapEditorState extends State<MapEditor>
                                       _clickedLine == _lineKey(c.edge)),
                             ))
                               Positioned(
-                                left: curve.hook.dx - 12,
-                                top: curve.hook.dy - 12,
+                                left: layout.hookOf(curve).dx - 12,
+                                top: layout.hookOf(curve).dy - 12,
                                 width: 24,
                                 height: 24,
                                 child: GestureDetector(
@@ -1838,7 +1839,7 @@ class _MapPaint extends CustomPainter {
         ),
       );
     }
-    for (final curve in layout.curves) {
+    void line(MapCurve curve) {
       final edge = curve.edge,
           related =
               lit.isEmpty ||
@@ -1862,7 +1863,15 @@ class _MapPaint extends CustomPainter {
       if (dimming && !related) paint.color = paint.color.withValues(alpha: .2);
       canvas.drawPath(curve.path, paint);
     }
+
+    for (final curve in layout.curves) {
+      if (curve.edge['kind'] != agentLink) line(curve);
+    }
     canvas.restore();
+    // Two agents in one card: their bend stays whole.
+    for (final curve in layout.curves) {
+      if (curve.edge['kind'] == agentLink) line(curve);
+    }
     if (source != null && cursor != null && layout.boxes[source] != null) {
       final rect = layout.boxes[source]!;
       final curve = MapCurve(const {}, rect.center, cursor!);

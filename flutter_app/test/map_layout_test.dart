@@ -58,6 +58,31 @@ void main() {
     expect(used.boxes.containsKey('agent:b'), isFalse);
   });
 
+  test('with borders: hooks where the line shows, no clicks in a card', () {
+    final bordered = MapLayout(fixtureGraph(), {
+      'card_border': {'on': true},
+    });
+    for (final curve in bordered.curves) {
+      expect(bordered.insideCard(bordered.hookOf(curve)), isFalse);
+    }
+    final card = bordered.cards.values.first.rect;
+    expect(bordered.lineAt(card.center), isNull);
+  });
+
+  test('used only: an empty card fits its header, order keeps the hidden', () {
+    final all = MapLayout(fixtureGraph(), {});
+    final mcp = all.cardOf['mcp:c']!, agents = all.cardOf['agent:a']!;
+    final used = MapLayout(fixtureGraph(), {
+      'used_only': [mcp, agents],
+      'order': {
+        agents: ['agent:b', 'agent:a'],
+      },
+    });
+    expect(used.cards[mcp]!.rect.height, 38);
+    final saved = reorderMapBox({}, used, 'agent:a', 0);
+    expect((saved['order'] as Map)[agents], ['agent:b', 'agent:a']);
+  });
+
   test('a colour is a hex value or one of the theme', () {
     final colors = ColorScheme.fromSeed(seedColor: const Color(0xff123456));
     expect(mapColor('theme:tertiary', colors), colors.tertiary);

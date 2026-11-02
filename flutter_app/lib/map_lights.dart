@@ -118,7 +118,11 @@ class MapLightTiles {
       tiles.clear();
       tileSize *= 2;
     }
-    occluders = layout.boxes.values.map((r) => r.inflate(radius)).toList();
+    occluders = [
+      ...layout.boxes.values.map((r) => r.inflate(radius)),
+      // Over a bordered card the line is not drawn, nor are its lights.
+      if (layout.bordered) ...layout.cards.values.map((c) => c.rect),
+    ];
   }
   static const radius = 4.0;
   static const maxTiles = 4096;

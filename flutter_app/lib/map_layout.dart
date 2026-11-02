@@ -77,9 +77,13 @@ class MapCardLayout {
     this.label,
     this.rect,
     this.nodes,
-    this.folded,
-  );
+    this.folded, {
+    List<String>? all,
+  }) : all = all ?? nodes;
   final String id, label;
+
+  /// Every box of the card, also those a used-only card leaves out.
+  final List<String> all;
   final int column;
   final Rect rect;
   final List<String> nodes;
@@ -140,6 +144,8 @@ class MapLayout {
     double? centerWidth,
   }) {
     _columns = columns;
+    bordered = (saved['card_border'] as Map?)?['on'] == true;
+
     // The shown columns sit in the middle of a wider window and grow to fill
     // the free space (column width 266..360, gap about 12% of the width, as far
     // as the columns' minimum leaves room).
@@ -229,18 +235,21 @@ class MapLayout {
       ...(saved['pins'] as List? ?? const []).cast<String>(),
     };
     for (final id in keys) {
-      final ids = usedOnly.contains(id)
-          ? grouped[id]!.where(linked.contains).toList()
-          : grouped[id]!;
-
       final order = ((saved['order'] as Map?)?[id] as List? ?? [])
           .cast<String>();
       final rank = {for (var i = 0; i < order.length; i++) order[i]: i};
-      ids.sort((a, b) => (rank[a] ?? 10000).compareTo(rank[b] ?? 10000));
+      final full = [...grouped[id]!]
+        ..sort((a, b) => (rank[a] ?? 10000).compareTo(rank[b] ?? 10000));
+      final ids = usedOnly.contains(id)
+          ? full.where(linked.contains).toList()
+          : full;
       final column = nodes[grouped[id]!.first]!['column'] as int;
       final folded = (saved['collapsed'] as List? ?? []).contains(id);
       final origin = Offset(columnX(column), heights[column] ?? startTop);
-      final height = folded ? 38.0 : 32 + ids.length * mapRowStep;
+      // An empty card is as tall as a folded one: its header still fits.
+      final height = folded || ids.isEmpty
+          ? 38.0
+          : 32 + ids.length * mapRowStep;
       final rect = origin & Size(columnWidthOf(column), height);
       final first = nodes[grouped[id]!.first]!;
       const labels = {
@@ -260,6 +269,7 @@ class MapLayout {
         rect,
         ids,
         folded,
+        all: full,
       );
       heights[column] = math.max(heights[column] ?? startTop, rect.bottom + 18);
       if (!folded) {
@@ -370,7 +380,25 @@ class MapLayout {
       .where((e) => e.value.contains(point))
       .map((e) => e.key)
       .firstOrNull;
+
+  /// Borders around the cards are on: lines show only between cards.
+  bool bordered = false;
+
+  bool insideCard(Offset point) =>
+      bordered && cards.values.any((c) => c.rect.contains(point));
+
+  /// Where a line's hook sits: near its end, but where the line shows.
+  Offset hookOf(MapCurve curve) {
+    if (!bordered || curve.edge['kind'] == agentLink) return curve.hook;
+    for (var t = .91; t > .09; t -= .02) {
+      final point = curve.point(t);
+      if (!insideCard(point)) return point;
+    }
+    return curve.hook;
+  }
+
   MapCurve? lineAt(Offset point, {double tolerance = 9}) {
+    if (insideCard(point)) return null; // the line is not drawn there
     MapCurve? result;
     var distance = tolerance;
     for (final curve in curves) {
@@ -390,7 +418,7 @@ class MapLayout {
             movable(c.edge) &&
             (selected.contains(c.edge['source']) ||
                 selected.contains(c.edge['target'])) &&
-            (c.hook - point).distance <= 12,
+            (hookOf(c) - point).distance <= 12,
       )
       .firstOrNull;
   bool movable(Map<String, dynamic> edge) =>
@@ -495,11 +523,18 @@ Map<String, dynamic> reorderMapBox(
   int index,
 ) {
   final card = layout.cardOf[id]!;
-  final ids = [...layout.cards[card]!.nodes]..remove(id);
+  final shown = layout.cards[card]!.nodes;
+  final ids = [...shown]..remove(id);
   ids.insert(index.clamp(0, ids.length), id);
+  // Boxes a used-only card leaves out keep their places between the others.
+  final all = [...layout.cards[card]!.all];
+  var next = 0;
+  for (var i = 0; i < all.length; i++) {
+    if (shown.contains(all[i])) all[i] = ids[next++];
+  }
   return {
     ...saved,
-    'order': {...?saved['order'] as Map?, card: ids},
+    'order': {...?saved['order'] as Map?, card: all},
   };
 }
 
