@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'app_look.dart';
 import 'app_theme.dart' show corners;
 import 'overlay_window.dart';
 
@@ -43,25 +44,11 @@ class TaskHost extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    spec.title,
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                ),
-                TextButton.icon(
-                  onPressed: spec.closable ? onClose : null,
-                  icon: const Icon(Icons.arrow_back),
-                  label: Text(tr('Back')),
-                ),
-              ],
-            ),
+          WindowHeader(
+            title: spec.title,
+            tr: tr,
+            onBack: spec.closable ? onClose : null,
           ),
-          const Divider(height: 1),
           Expanded(child: spec.child),
         ],
       ),
@@ -104,17 +91,18 @@ class TaskReview extends StatelessWidget {
     children: [
       Expanded(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(AppSpace.xl),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [?title, const SizedBox(height: 16), content],
+            children: [
+              ?title,
+              const SizedBox(height: AppSpace.lg),
+              content,
+            ],
           ),
         ),
       ),
-      Padding(
-        padding: const EdgeInsets.all(16),
-        child: Wrap(spacing: 8, runSpacing: 8, children: actions),
-      ),
+      WindowFooter(children: actions),
     ],
   );
 }

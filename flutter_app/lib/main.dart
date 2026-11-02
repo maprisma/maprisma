@@ -572,6 +572,8 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     }
     await showDialog<void>(
       context: _navigator.currentContext!,
+      // The window dims what is under it; a second shade would only darken.
+      barrierColor: Colors.transparent,
       builder: (_) => ActionRulesWindow(
         rules: (settings['action_rules'] as List? ?? const [])
             .cast<Map<String, dynamic>>(),

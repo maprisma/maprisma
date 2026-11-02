@@ -1941,7 +1941,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('smart-rules')));
     await settleService(tester);
     expect(find.byType(ActionRulesWindow), findsOneWidget);
-    await tester.tap(find.widgetWithText(TextButton, 'Close').last);
+    await tester.tap(find.byKey(const ValueKey('rule-back')));
     await settleService(tester);
     expect(find.byType(ActionRulesWindow), findsNothing);
     await tester.sendKeyEvent(LogicalKeyboardKey.f1);

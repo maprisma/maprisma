@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'app_look.dart';
 import 'overlay_window.dart';
 
 const ruleActions = [
@@ -140,14 +141,16 @@ class _ActionRulesWindowState extends State<ActionRulesWindow> {
     // A rule for what is gone stays visible and can be deleted.
     final known = entries.any((e) => e.value == value);
     return Expanded(
-      child: DropdownButton<String>(
-        key: ValueKey('rule-$field'),
-        isExpanded: true,
-        value: value,
-        items: [...entries, if (!known) _entry(value, value)],
-        onChanged: (v) {
-          if (v != null) changed(v);
-        },
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          key: ValueKey('rule-$field'),
+          isExpanded: true,
+          value: value,
+          items: [...entries, if (!known) _entry(value, value)],
+          onChanged: (v) {
+            if (v != null) changed(v);
+          },
+        ),
       ),
     );
   }
@@ -192,14 +195,14 @@ class _ActionRulesWindowState extends State<ActionRulesWindow> {
               _actions(),
               (v) => set({'action': v}),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: AppSpace.sm),
             _picker(
               'category',
               '${rule['category']}',
               _categories(),
               (v) => set({'category': v, 'item': '*'}),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: AppSpace.sm),
             if (rule['category'] == '*')
               const Spacer()
             else
@@ -209,7 +212,7 @@ class _ActionRulesWindowState extends State<ActionRulesWindow> {
                 _items('${rule['category']}'),
                 (v) => set({'item': v}),
               ),
-            const SizedBox(width: 8),
+            const SizedBox(width: AppSpace.sm),
             if (_hasAgent(rule))
               _picker(
                 'agent',
@@ -222,7 +225,7 @@ class _ActionRulesWindowState extends State<ActionRulesWindow> {
             IconButton(
               key: ValueKey('rule-delete-${rule['effect']}-$index'),
               tooltip: tr('Remove'),
-              icon: const Icon(Icons.close),
+              icon: const Icon(Icons.close, size: 18),
               onPressed: () {
                 setState(() => _rules.remove(rule));
                 _changed();
@@ -233,68 +236,69 @@ class _ActionRulesWindowState extends State<ActionRulesWindow> {
         if (_deadDeny(rule))
           Text(
             tr('Never decides: an allow rule names the same things.'),
-            style: const TextStyle(fontSize: 12),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.error,
+            ),
           ),
       ],
     );
   }
 
+  /// Allow or Deny: a card like the map's, + in its title band.
   Widget _list(String effect, String title) {
     final rows = _rules.where((r) => r['effect'] == effect).toList();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                title,
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-            ),
-            IconButton(
-              key: ValueKey('rule-add-$effect'),
-              tooltip: tr('Add'),
-              icon: const Icon(Icons.add),
-              onPressed: _rules.length >= 200
-                  ? null
-                  : () {
-                      setState(() => _rules.add(_rule(effect)));
-                      _changed();
-                    },
-            ),
+    return SectionCard(
+      title: title,
+      trailing: IconButton(
+        key: ValueKey('rule-add-$effect'),
+        tooltip: tr('Add'),
+        icon: const Icon(Icons.add, size: 18),
+        onPressed: _rules.length >= 200
+            ? null
+            : () {
+                setState(() => _rules.add(_rule(effect)));
+                _changed();
+              },
+      ),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpace.md,
+        vertical: AppSpace.xs,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final (i, rule) in rows.indexed) ...[
+            if (i > 0) const Divider(height: 1),
+            _row(rule, i),
           ],
-        ),
-        for (final (i, rule) in rows.indexed) _row(rule, i),
-      ],
+        ],
+      ),
     );
   }
 
   Widget _tester() => Row(
     children: [
-      Text(tr('Test a request')),
-      const SizedBox(width: 12),
       _picker(
         'test-action',
         _try['action']!,
         _actions().skip(1).toList(),
         (v) => setState(() => _try = {..._try, 'action': v}),
       ),
-      const SizedBox(width: 8),
+      const SizedBox(width: AppSpace.sm),
       _picker(
         'test-category',
         _try['category']!,
         _categories().skip(1).toList(),
         (v) => setState(() => _try = {..._try, 'category': v, 'item': '*'}),
       ),
-      const SizedBox(width: 8),
+      const SizedBox(width: AppSpace.sm),
       _picker(
         'test-item',
         _try['item']!,
         _items(_try['category']!),
         (v) => setState(() => _try = {..._try, 'item': v}),
       ),
-      const SizedBox(width: 8),
+      const SizedBox(width: AppSpace.sm),
       if (_tryHasAgent)
         _picker(
           'test-agent',
@@ -304,7 +308,7 @@ class _ActionRulesWindowState extends State<ActionRulesWindow> {
         )
       else
         const Spacer(),
-      const SizedBox(width: 8),
+      const SizedBox(width: AppSpace.sm),
       OutlinedButton(
         key: const ValueKey('rule-test'),
         onPressed: () async {
@@ -330,31 +334,24 @@ class _ActionRulesWindowState extends State<ActionRulesWindow> {
   );
 
   @override
-  Widget build(BuildContext context) => OverlayWindow(
-    child: Material(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    tr('What may be done'),
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                ),
-                TextButton(
-                  key: const ValueKey('rule-defaults'),
-                  onPressed: () {
-                    final before = _before ?? _rules;
-                    _rules = defaultRules();
-                    _changed();
-                    setState(() => _before = before);
-                  },
-                  child: Text(tr('Restore defaults')),
-                ),
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    final colors = Theme.of(context).colorScheme;
+    return OverlayWindow(
+      child: Material(
+        color: colors.surfaceContainer,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            WindowHeader(
+              title: tr('What may be done'),
+              subtitle: tr(
+                'The most specific rule decides; on a tie allow wins. A request no rule matches is refused.',
+              ),
+              tr: tr,
+              backKey: const ValueKey('rule-back'),
+              onBack: () => Navigator.pop(context),
+              actions: [
                 if (_before != null)
                   TextButton(
                     key: const ValueKey('rule-undo'),
@@ -367,54 +364,67 @@ class _ActionRulesWindowState extends State<ActionRulesWindow> {
                     },
                     child: Text(tr('Undo')),
                   ),
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: Text(tr('Close')),
-                ),
-              ],
-            ),
-          ),
-          const Divider(height: 1),
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                Text(
-                  tr(
-                    'The most specific rule decides; on a tie allow wins. A request no rule matches is refused.',
-                  ),
-                ),
-                const SizedBox(height: 12),
-                _list('allow', tr('Allow')),
-                const SizedBox(height: 16),
-                _list('deny', tr('Deny')),
-                SwitchListTile(
-                  key: const ValueKey('rule-hints'),
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(tr('Say which rule refused something')),
-                  value: _hints,
-                  onChanged: (v) {
-                    setState(() => _hints = v);
+                OutlinedButton(
+                  key: const ValueKey('rule-defaults'),
+                  onPressed: () {
+                    final before = _before ?? _rules;
+                    _rules = defaultRules();
                     _changed();
+                    setState(() => _before = before);
                   },
+                  child: Text(tr('Restore defaults')),
                 ),
               ],
             ),
-          ),
-          const Divider(height: 1),
-          Padding(padding: const EdgeInsets.all(12), child: _tester()),
-          if (_failed)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-              child: Text(tr('The action could not be completed.')),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.all(AppSpace.lg),
+                children: [
+                  _list('allow', tr('Allow')),
+                  const SizedBox(height: AppSpace.md),
+                  _list('deny', tr('Deny')),
+                  const SizedBox(height: AppSpace.md),
+                  SectionCard(
+                    child: SettingRow(
+                      title: tr('Say which rule refused something'),
+                      control: Switch(
+                        key: const ValueKey('rule-hints'),
+                        value: _hints,
+                        onChanged: (v) {
+                          setState(() => _hints = v);
+                          _changed();
+                        },
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpace.md),
+                  SectionCard(
+                    title: tr('Test a request'),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _tester(),
+                        if (_answer != null) ...[
+                          const SizedBox(height: AppSpace.sm),
+                          Text(_answer!, style: text.bodyMedium),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
-          if (_answer != null)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-              child: Text(_answer!),
-            ),
-        ],
+            if (_failed)
+              Padding(
+                padding: const EdgeInsets.all(AppSpace.md),
+                child: Text(
+                  tr('The action could not be completed.'),
+                  style: text.bodyMedium?.copyWith(color: colors.error),
+                ),
+              ),
+          ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 }
