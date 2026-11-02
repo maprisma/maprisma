@@ -39,3 +39,8 @@
 2. Fixed. After each build, if the keyboard has fallen back above the window, it goes back to where opening puts it: the question field, or the window. A dropdown menu or another window that has the keyboard is left alone. This also fixed a column that takes no requests: opening it asked for a question field it doesn't show, so Esc never worked there. Test: `smart_window_test` "Esc still leaves when the focused button goes away". It fails without the fix.
 3. Not a defect. `WindowHeader`'s Back reads "Back" (`app_look.dart:47`), with no "· Esc", and it sits at the right. In a terminal, Esc belongs to the program in it, as before.
 4. Fixed. Health's `warn` and the welcome steps' `hint` use `StatusColors.warn`.
+
+## Round 2 (Antigravity, 2026-11-02, commit 1423b8e)
+
+CLEAN
+
