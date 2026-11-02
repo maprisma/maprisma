@@ -140,17 +140,33 @@ class _ActionRulesWindowState extends State<ActionRulesWindow> {
   ) {
     // A rule for what is gone stays visible and can be deleted.
     final known = entries.any((e) => e.value == value);
+    // Each field says what it is, in an outline like the app's other fields.
+    final label = switch (field.replaceFirst('test-', '')) {
+      'action' => 'Action',
+      'category' => 'Category',
+      'item' => 'Item',
+      _ => 'Agent',
+    };
     return Expanded(
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          key: ValueKey('rule-$field'),
-          isExpanded: true,
-          value: value,
-          items: [...entries, if (!known) _entry(value, value)],
-          onChanged: (v) {
-            if (v != null) changed(v);
-          },
+      key: ValueKey('rule-$field'),
+      // A field reads its value when made: a new value makes a new field.
+      child: DropdownButtonFormField<String>(
+        key: ValueKey('$field|$value'),
+        isExpanded: true,
+        initialValue: value,
+        decoration: InputDecoration(
+          labelText: tr(label),
+          isDense: true,
+          border: const OutlineInputBorder(),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: AppSpace.md,
+            vertical: AppSpace.sm,
+          ),
         ),
+        items: [...entries, if (!known) _entry(value, value)],
+        onChanged: (v) {
+          if (v != null) changed(v);
+        },
       ),
     );
   }
@@ -268,9 +284,10 @@ class _ActionRulesWindowState extends State<ActionRulesWindow> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           for (final (i, rule) in rows.indexed) ...[
-            if (i > 0) const Divider(height: 1),
+            const SizedBox(height: AppSpace.sm),
             _row(rule, i),
           ],
+          if (rows.isNotEmpty) const SizedBox(height: AppSpace.sm),
         ],
       ),
     );
@@ -397,21 +414,25 @@ class _ActionRulesWindowState extends State<ActionRulesWindow> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: AppSpace.md),
-                  SectionCard(
-                    title: tr('Test a request'),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _tester(),
-                        if (_answer != null) ...[
-                          const SizedBox(height: AppSpace.sm),
-                          Text(_answer!, style: text.bodyMedium),
-                        ],
-                      ],
-                    ),
-                  ),
                 ],
+              ),
+            ),
+            // The test stays in sight while the rules scroll.
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.all(AppSpace.lg),
+              child: SectionCard(
+                title: tr('Test a request'),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _tester(),
+                    if (_answer != null) ...[
+                      const SizedBox(height: AppSpace.sm),
+                      Text(_answer!, style: text.bodyMedium),
+                    ],
+                  ],
+                ),
               ),
             ),
             if (_failed)

@@ -102,6 +102,8 @@ class _RuntimeDetailsCardState extends State<RuntimeDetailsCard> {
         _tiles(context, details['tiles'] as List),
         if (usage != null)
           Card(
+            // Inside a provider's card: one step stronger.
+            color: Theme.of(context).colorScheme.surfaceContainer,
             child: ExpansionTile(
               leading: const Icon(Icons.bar_chart),
               title: Text('${usage['title']}'),
@@ -126,6 +128,8 @@ class _RuntimeDetailsCardState extends State<RuntimeDetailsCard> {
           ),
         if (risks.isNotEmpty)
           Card(
+            // Inside a provider's card: one step stronger.
+            color: Theme.of(context).colorScheme.surfaceContainer,
             child: ExpansionTile(
               leading: const Icon(Icons.shield_outlined),
               title: Text(widget.tr('Risk management')),

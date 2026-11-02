@@ -113,28 +113,53 @@ class SettingsView extends StatelessWidget {
       Text(tr('Column widths')),
       for (var i = 0; i < mapColumnKeys.length; i++)
         Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          child: Row(
-            children: [
-              Expanded(child: Text(tr(mapSmartColumns[i].$2))),
-              for (final (list, label) in const [
-                ('column_widths', 'Current width'),
-                ('column_defaults', 'Default width'),
-              ]) ...[
-                const SizedBox(width: 12),
-                SizedBox(
-                  width: 150,
-                  child: _WidthField(
-                    key: ValueKey('$list-${mapColumnKeys[i]}'),
-                    label: tr(label),
-                    hint: tr('Automatic'),
-                    value: (layout[list] as Map?)?[mapColumnKeys[i]] as num?,
-                    enabled: !busy,
-                    onChanged: (width) => change(list, mapColumnKeys[i], width),
+          padding: const EdgeInsets.symmetric(vertical: AppSpace.xs),
+          // Narrow: the two fields go under the column's name.
+          child: LayoutBuilder(
+            builder: (context, box) {
+              final fields = [
+                for (final (list, label) in const [
+                  ('column_widths', 'Current width'),
+                  ('column_defaults', 'Default width'),
+                ])
+                  SizedBox(
+                    width: 150,
+                    child: _WidthField(
+                      key: ValueKey('$list-${mapColumnKeys[i]}'),
+                      label: tr(label),
+                      hint: tr('Automatic'),
+                      value: (layout[list] as Map?)?[mapColumnKeys[i]] as num?,
+                      enabled: !busy,
+                      onChanged: (width) =>
+                          change(list, mapColumnKeys[i], width),
+                    ),
                   ),
-                ),
-              ],
-            ],
+              ];
+              final name = Text(tr(mapSmartColumns[i].$2));
+              if (box.maxWidth < 480) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    name,
+                    const SizedBox(height: AppSpace.xs),
+                    Wrap(
+                      spacing: AppSpace.md,
+                      runSpacing: AppSpace.sm,
+                      children: fields,
+                    ),
+                  ],
+                );
+              }
+              return Row(
+                children: [
+                  Expanded(child: name),
+                  for (final field in fields) ...[
+                    const SizedBox(width: AppSpace.md),
+                    field,
+                  ],
+                ],
+              );
+            },
           ),
         ),
     ];
@@ -555,7 +580,11 @@ class SettingsView extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        WindowHeader(title: tr('Settings'), tr: tr, onBack: onBack),
+        WindowHeader(
+          title: tr('Settings'),
+          tr: tr,
+          onBack: busy ? null : onBack,
+        ),
         Expanded(
           child: Align(
             alignment: Alignment.topCenter,
@@ -587,7 +616,7 @@ class SettingsView extends StatelessWidget {
                             if (value != null) onUpdate({'language': value});
                           },
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: AppSpace.md),
                   _Heading(tr('Theme')),
                   const SizedBox(height: 12),
                   ThemeChoices(
@@ -600,7 +629,7 @@ class SettingsView extends StatelessWidget {
                   ),
                   const SizedBox(height: 12),
                   Text(tr('System follows the desktop appearance.')),
-                  const SizedBox(height: 24),
+                  _Heading(tr('Window')),
                   DropdownButtonFormField<String>(
                     key: ValueKey(
                       'window-mode-${settings['window_mode'] ?? 'auto'}',
@@ -634,7 +663,7 @@ class SettingsView extends StatelessWidget {
                       'The popup sits at the top right under the bar and closes with Esc or a click elsewhere; the bar icon or starting the app again brings it back. A change applies the next time the window opens.',
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: AppSpace.md),
                   DropdownButtonFormField<String>(
                     key: ValueKey(
                       'corners-${settings['corners'] ?? 'windows'}',
@@ -681,7 +710,7 @@ class SettingsView extends StatelessWidget {
                       "Corners of the window, its cards and the map's boxes. “Like windows” follows Hyprland's window rounding.",
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: AppSpace.md),
                   DropdownButtonFormField<int>(
                     key: ValueKey(
                       'map-light-fps-${settings['map_light_fps'] ?? 20}',
@@ -760,7 +789,7 @@ class SettingsView extends StatelessWidget {
                     trailing: const Icon(Icons.chevron_right),
                     onTap: busy ? null : onRules,
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: AppSpace.md),
                   _Heading(tr('Subagents')),
                   const SizedBox(height: 16),
                   DropdownButtonFormField<int>(
@@ -832,7 +861,7 @@ class SettingsView extends StatelessWidget {
                       'How many finished subagents it keeps, the newest first; working ones are always shown.',
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: AppSpace.md),
                   _Heading(tr('Local LLMs')),
                   SwitchListTile(
                     title: Text(tr('Start local LLMs with their agents')),
@@ -846,6 +875,7 @@ class SettingsView extends StatelessWidget {
                         ? null
                         : (value) => onUpdate({'providers_with_agents': value}),
                   ),
+                  const _Heading(),
                   SwitchListTile(
                     key: const ValueKey('terminal-tabs'),
                     title: Text(tr('Terminal tabs above the map')),
@@ -908,11 +938,11 @@ class SettingsView extends StatelessWidget {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: AppSpace.md),
                   _Heading(tr('Usage statistics box')),
                   const SizedBox(height: 8),
                   ..._usageBoxRows(),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: AppSpace.md),
                   _Heading(tr('Costs')),
                   const SizedBox(height: 16),
                   ..._costRows(),
@@ -929,7 +959,7 @@ class SettingsView extends StatelessWidget {
                         ? null
                         : (value) => onUpdate({'warn_notify': value}),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: AppSpace.md),
                   _Heading(tr('AI help')),
                   const SizedBox(height: 16),
                   if (checkers.isEmpty)
@@ -1013,7 +1043,7 @@ class SettingsView extends StatelessWidget {
                     ),
                   const SizedBox(height: 16),
                   ..._helperRows(),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: AppSpace.md),
                   _Heading(tr('Automatic map scans')),
                   const SizedBox(height: 16),
                   DropdownButtonFormField<int>(
@@ -1083,7 +1113,7 @@ class SettingsView extends StatelessWidget {
                     ),
                   Text(tr('Startup and Refresh scan all targets.')),
                   Text(tr('Updates apply only while the map is visible.')),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: AppSpace.md),
                   _Heading(tr('Map')),
                   ..._columnWidthRows(),
                   ..._cardBorderRows(context),
@@ -1102,33 +1132,28 @@ class SettingsView extends StatelessWidget {
                               onUpdate({'map_layers': next.toList()});
                             },
                     ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
-                    child: DropdownButtonFormField<String>(
-                      key: const ValueKey('map-lights'),
-                      initialValue:
-                          settings['map_animations'] as String? ?? 'all',
-                      decoration: InputDecoration(labelText: tr('Map lights')),
-                      items: [
-                        for (final e in const {
-                          'all': 'All lights',
-                          'agents': 'Agent lights',
-                          'off': 'Lights off',
-                        }.entries)
-                          DropdownMenuItem(
-                            value: e.key,
-                            child: Text(tr(e.value)),
-                          ),
-                      ],
-                      onChanged: busy
-                          ? null
-                          : (mode) => onUpdate({'map_animations': mode}),
-                    ),
+                  const SizedBox(height: AppSpace.sm),
+                  DropdownButtonFormField<String>(
+                    key: const ValueKey('map-lights'),
+                    initialValue:
+                        settings['map_animations'] as String? ?? 'all',
+                    decoration: InputDecoration(labelText: tr('Map lights')),
+                    items: [
+                      for (final e in const {
+                        'all': 'All lights',
+                        'agents': 'Agent lights',
+                        'off': 'Lights off',
+                      }.entries)
+                        DropdownMenuItem(
+                          value: e.key,
+                          child: Text(tr(e.value)),
+                        ),
+                    ],
+                    onChanged: busy
+                        ? null
+                        : (mode) => onUpdate({'map_animations': mode}),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: AppSpace.md),
                   ..._changeRows(context),
                 ]),
               ),

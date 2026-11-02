@@ -47,9 +47,17 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('rule-add-deny')));
     await tester.pumpAndSettle();
     expect(saved.last.where((r) => r['effect'] == 'deny'), hasLength(1));
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('rule-delete-deny-0')),
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('rule-delete-deny-0')));
     await tester.pumpAndSettle();
     expect(saved.last.where((r) => r['effect'] == 'deny'), isEmpty);
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('rule-delete-allow-0')),
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('rule-delete-allow-0')));
     await tester.pumpAndSettle();
     expect(saved.last, hasLength(defaultRules().length - 1));

@@ -1,4 +1,8 @@
 {
+  "Action": "Actie",
+  "Category": "Categorie",
+  "Item": "Onderdeel",
+  "Agent": "Agent",
   "Show all": "Alles tonen",
   "Show only what is connected or pinned": "Alleen verbonden of vastgezette tonen",
   "Line colours": "Lijnkleuren",

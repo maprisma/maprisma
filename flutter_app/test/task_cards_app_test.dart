@@ -262,7 +262,7 @@ void main() {
     await tester.tap(find.byTooltip('Load'));
     await settleService(tester);
     before = forcedScans(dir);
-    await tester.tap(find.widgetWithText(TextButton, 'Close'));
+    await tester.tap(find.byKey(const ValueKey('task-back')).last);
     await settleService(tester);
     expect(forcedScans(dir), before, reason: 'still on the page');
     await tester.tap(find.text('Back').last);
@@ -424,7 +424,7 @@ void main() {
         requests(dir).where((q) => q['method'] == 'map.snapshot').length,
         greaterThan(liveBefore),
       );
-      await tester.tap(find.widgetWithText(TextButton, 'Close'));
+      await tester.tap(find.byKey(const ValueKey('task-back')).last);
       await tester.pumpAndSettle();
       await tester.tap(find.text('Download model'));
       await tester.pumpAndSettle();
@@ -495,7 +495,7 @@ void main() {
         findsOneWidget,
       );
       expect(forcedScans(dir), scans + 1);
-      await tester.tap(find.widgetWithText(TextButton, 'Close'));
+      await tester.tap(find.byKey(const ValueKey('task-back')).last);
       await tester.pumpAndSettle();
       expect(
         tester.widget<EditableText>(find.byType(EditableText)).controller.text,
@@ -585,7 +585,7 @@ void main() {
         );
         expect(focus.entries!.single['preview'], 'catalog-2');
         expect(focus.entries!.single['action'], fails ? 'install' : '');
-        await tester.tap(find.widgetWithText(TextButton, 'Close'));
+        await tester.tap(find.byKey(const ValueKey('task-back')).last);
         await tester.pumpAndSettle();
         expect(
           find.text('The catalog loads only when you ask to look online.'),
@@ -708,7 +708,7 @@ void main() {
     await settleService(tester);
     await tester.tap(find.text('Apply'));
     await settleService(tester);
-    await tester.tap(find.widgetWithText(TextButton, 'Close'));
+    await tester.tap(find.byKey(const ValueKey('task-back')).last);
     await settleService(tester);
     await tester.tap(find.text('Test agent'));
     await tester.pumpAndSettle();
@@ -1944,6 +1944,11 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('rule-back')));
     await settleService(tester);
     expect(find.byType(ActionRulesWindow), findsNothing);
+    // The rules took the Ask AI window's place: open it again.
+    expect(find.byType(OverlayWindow), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('smart-status-agents')));
+    await settleService(tester);
+    expect(find.byType(OverlayWindow), findsOneWidget);
     await tester.sendKeyEvent(LogicalKeyboardKey.f1);
     await settleService(tester);
     expect(find.byKey(const ValueKey('help-manual')), findsNothing);

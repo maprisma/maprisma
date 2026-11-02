@@ -482,7 +482,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                 icon: const Icon(Icons.undo),
                 label: Text(tr('Undo')),
               ),
-            TextButton(onPressed: _closeCard, child: Text(tr('Close'))),
           ],
         ),
       ),

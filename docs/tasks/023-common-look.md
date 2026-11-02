@@ -11,6 +11,12 @@ Uwe, 2026-11-02: one recognisable layout for the whole app, especially the windo
 - `SectionCard`: the map's category card for everything else: `surfaceContainerLow`, the corners of Settings, an outline, an optional title band (`titleSmall`) with a control at its right.
 - `SettingRow`: words at the left, the control at the right.
 
+## Rules found in review 1
+- A window header puts its actions under the title when narrow (640 px).
+- Read-only windows have only Back, in the header.
+- A card inside a card is one step stronger (`surfaceContainer`).
+- One window at a time: the rules window replaces the Ask AI window.
+
 ## Steps
 1. The parts; `TaskHost` and `TaskReview` use them. Done.
 2. The rules window: header with its rule and Restore defaults, Allow and Deny as section cards with + in the band, the hint switch as a row, the test as its own card with the deciding rule. Rows without underlines. No second shade over the window. Done.

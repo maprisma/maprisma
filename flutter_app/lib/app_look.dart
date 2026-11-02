@@ -32,6 +32,25 @@ class WindowHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
     final colors = Theme.of(context).colorScheme;
+    final back = TextButton.icon(
+      key: backKey,
+      onPressed: onBack,
+      icon: const Icon(Icons.arrow_back),
+      label: Text(tr('Back')),
+    );
+    final heading = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: text.titleLarge),
+        if (subtitle != null) ...[
+          const SizedBox(height: AppSpace.xs),
+          Text(
+            subtitle!,
+            style: text.bodySmall?.copyWith(color: colors.onSurfaceVariant),
+          ),
+        ],
+      ],
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -42,37 +61,38 @@ class WindowHeader extends StatelessWidget {
             AppSpace.md,
             AppSpace.md,
           ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title, style: text.titleLarge),
-                    if (subtitle != null) ...[
-                      const SizedBox(height: AppSpace.xs),
-                      Text(
-                        subtitle!,
-                        style: text.bodySmall?.copyWith(
-                          color: colors.onSurfaceVariant,
-                        ),
-                      ),
+          // A narrow window or long words: the actions go under the title,
+          // so the title keeps its width.
+          child: LayoutBuilder(
+            builder: (context, box) {
+              final narrow = actions.isNotEmpty && box.maxWidth < 640;
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(child: heading),
+                      if (!narrow)
+                        for (final action in actions) ...[
+                          const SizedBox(width: AppSpace.sm),
+                          action,
+                        ],
+                      const SizedBox(width: AppSpace.sm),
+                      back,
                     ],
+                  ),
+                  if (narrow) ...[
+                    const SizedBox(height: AppSpace.sm),
+                    Wrap(
+                      spacing: AppSpace.sm,
+                      runSpacing: AppSpace.sm,
+                      alignment: WrapAlignment.end,
+                      children: actions,
+                    ),
                   ],
-                ),
-              ),
-              for (final action in actions) ...[
-                const SizedBox(width: AppSpace.sm),
-                action,
-              ],
-              const SizedBox(width: AppSpace.sm),
-              TextButton.icon(
-                key: backKey,
-                onPressed: onBack,
-                icon: const Icon(Icons.arrow_back),
-                label: Text(tr('Back')),
-              ),
-            ],
+                ],
+              );
+            },
           ),
         ),
         const Divider(height: 1),

@@ -3364,5 +3364,8 @@
  "Theme: main colour": "Motyw: kolor główny",
  "Theme: second colour": "Motyw: drugi kolor",
  "Theme: third colour": "Motyw: trzeci kolor",
- "Theme: outline": "Motyw: obrys"
+ "Theme: outline": "Motyw: obrys",
+ "Action": "Działanie",
+ "Category": "Kategoria",
+ "Item": "Element"
 }

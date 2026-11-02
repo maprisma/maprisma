@@ -62,7 +62,7 @@ class ItemDetailsView extends StatelessWidget {
           ],
         ],
       ),
-      actions: [FilledButton(onPressed: onClose, child: Text(tr('Close')))],
+      actions: const [], // Back in the window's header leads out
     );
   }
 }

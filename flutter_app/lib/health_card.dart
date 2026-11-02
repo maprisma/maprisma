@@ -76,6 +76,8 @@ class _HealthCardState extends State<HealthCard> {
       _ => Icons.info_outline,
     };
     return Card(
+      // Inside a provider's card: one step stronger.
+      color: Theme.of(context).colorScheme.surfaceContainer,
       key: ValueKey('health-${widget.method}'),
       child: ExpansionTile(
         initiallyExpanded: state != 'ok',

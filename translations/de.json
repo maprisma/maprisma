@@ -3283,5 +3283,8 @@
  "Theme: main colour": "Design: Hauptfarbe",
  "Theme: second colour": "Design: zweite Farbe",
  "Theme: third colour": "Design: dritte Farbe",
- "Theme: outline": "Design: Umriss"
+ "Theme: outline": "Design: Umriss",
+ "Action": "Aktion",
+ "Category": "Kategorie",
+ "Item": "Element"
 }

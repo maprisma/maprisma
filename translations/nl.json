@@ -3283,5 +3283,8 @@
  "Theme: main colour": "Thema: hoofdkleur",
  "Theme: second colour": "Thema: tweede kleur",
  "Theme: third colour": "Thema: derde kleur",
- "Theme: outline": "Thema: omlijning"
+ "Theme: outline": "Thema: omlijning",
+ "Action": "Actie",
+ "Category": "Categorie",
+ "Item": "Onderdeel"
 }

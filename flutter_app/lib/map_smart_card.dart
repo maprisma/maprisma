@@ -2066,7 +2066,11 @@ class _MapSmartCardState extends State<MapSmartCard> {
                             _step == _SmartStep.connectReview ||
                             _step == _SmartStep.mcpForm
                         ? null
-                        : smartOpenRules,
+                        : () {
+                            // One window at a time: the rules take its place.
+                            _close();
+                            smartOpenRules?.call();
+                          },
                     icon: const Icon(Icons.rule, size: 18),
                   ),
                   IconButton(

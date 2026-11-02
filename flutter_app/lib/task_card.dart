@@ -47,9 +47,12 @@ class TaskHost extends StatelessWidget {
           WindowHeader(
             title: spec.title,
             tr: tr,
+            backKey: const ValueKey('task-back'),
             onBack: spec.closable ? onClose : null,
           ),
-          Expanded(child: spec.child),
+          Expanded(
+            child: _HostTitle(title: spec.title, child: spec.child),
+          ),
         ],
       ),
     );
@@ -75,6 +78,22 @@ class TaskHost extends StatelessWidget {
   }
 }
 
+/// The title of the window a review sits in.
+class _HostTitle extends InheritedWidget {
+  const _HostTitle({required this.title, required super.child});
+  final String title;
+
+  static bool repeats(BuildContext context, Widget title) {
+    final host = context
+        .dependOnInheritedWidgetOfExactType<_HostTitle>()
+        ?.title;
+    return host != null && title is Text && title.data == host;
+  }
+
+  @override
+  bool updateShouldNotify(_HostTitle old) => title != old.title;
+}
+
 /// Reuses existing review contents while keeping actions inside the task card.
 class TaskReview extends StatelessWidget {
   const TaskReview({
@@ -95,8 +114,11 @@ class TaskReview extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              ?title,
-              const SizedBox(height: AppSpace.lg),
+              // The window's header already says it: no second heading.
+              if (title != null && !_HostTitle.repeats(context, title!)) ...[
+                title!,
+                const SizedBox(height: AppSpace.lg),
+              ],
               content,
             ],
           ),

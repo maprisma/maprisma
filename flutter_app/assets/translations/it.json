@@ -1,4 +1,8 @@
 {
+  "Action": "Azione",
+  "Category": "Categoria",
+  "Item": "Elemento",
+  "Agent": "Agente",
   "Show all": "Mostra tutto",
   "Show only what is connected or pinned": "Mostra solo ciò che è collegato o fissato",
   "Line colours": "Colori delle linee",

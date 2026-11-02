@@ -60,6 +60,12 @@ class MapGroupCard extends StatelessWidget {
           color: group.dummy
               ? colors.surfaceContainerLowest
               : colors.surfaceContainerHigh,
+          // The empty card has only its dashed border.
+          shape: group.dummy
+              ? RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(corners(context)),
+                )
+              : null,
           child: InkWell(
             onTap: onExpand,
             borderRadius: BorderRadius.circular(corners(context)),

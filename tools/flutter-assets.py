@@ -5,6 +5,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 KEYS = (
+    # The rules window: what each field is.
+    "Action",
+    "Category",
+    "Item",
+    "Agent",
     # Settings › Map: line colours; a card shows only what is used.
     "Show all",
     "Show only what is connected or pinned",

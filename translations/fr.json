@@ -3283,5 +3283,8 @@
  "Theme: main colour": "Thème : couleur principale",
  "Theme: second colour": "Thème : deuxième couleur",
  "Theme: third colour": "Thème : troisième couleur",
- "Theme: outline": "Thème : contour"
+ "Theme: outline": "Thème : contour",
+ "Action": "Action",
+ "Category": "Catégorie",
+ "Item": "Élément"
 }
