@@ -123,41 +123,31 @@ class SmartMoveReview extends StatelessWidget {
   final VoidCallback onConfirm, onCancel;
 
   @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      Expanded(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(10),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                tr('Move model folder'),
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              ),
-              Text('$title $subtitle', style: const TextStyle(fontSize: 12)),
-              for (final note in plan['notes'] as List? ?? const [])
-                Text(tr('$note'), style: const TextStyle(fontSize: 12)),
-              for (final file in plan['files'] as List? ?? const [])
-                SelectableText(
-                  '${(file as Map)['path']}',
-                  style: const TextStyle(fontSize: 11),
-                ),
-            ],
+  Widget build(BuildContext context) => TaskReview(
+    title: Text(
+      tr('Move model folder'),
+      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+    ),
+    content: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('$title $subtitle', style: const TextStyle(fontSize: 12)),
+        for (final note in plan['notes'] as List? ?? const [])
+          Text(tr('$note'), style: const TextStyle(fontSize: 12)),
+        for (final file in plan['files'] as List? ?? const [])
+          SelectableText(
+            '${(file as Map)['path']}',
+            style: const TextStyle(fontSize: 11),
           ),
-        ),
-      ),
-      OverflowBar(
-        alignment: MainAxisAlignment.end,
-        children: [
-          TextButton(onPressed: onCancel, child: Text(tr('Cancel'))),
-          FilledButton(
-            key: const ValueKey('smart-move-confirm'),
-            onPressed: onConfirm,
-            child: Text(tr('Move model folder')),
-          ),
-        ],
+      ],
+    ),
+    actions: [
+      TextButton(onPressed: onCancel, child: Text(tr('Cancel'))),
+      FilledButton(
+        key: const ValueKey('smart-move-confirm'),
+        onPressed: onConfirm,
+        child: Text(tr('Move model folder')),
       ),
     ],
   );
@@ -444,7 +434,9 @@ class _MapSmartCardState extends State<MapSmartCard> {
   void _focusOpenCard() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !widget.open) return;
-      if (_step == _SmartStep.idle && widget.helpers.isNotEmpty) {
+      if (_step == _SmartStep.idle &&
+          widget.takesRequests &&
+          widget.helpers.isNotEmpty) {
         _fieldFocus.requestFocus();
       } else if (!_cardFocus.hasFocus) {
         _cardFocus.requestFocus();
@@ -2292,6 +2284,21 @@ class _MapSmartCardState extends State<MapSmartCard> {
 
   Widget _buildWindow(ColorScheme colors) {
     final actions = _actions();
+    // A step change can remove the control that had the keyboard; focus then
+    // falls back above the window and Esc would no longer reach it.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !widget.open || _cardFocus.hasFocus) return;
+      final now = FocusManager.instance.primaryFocus;
+      if (now == null || _cardFocus.ancestors.contains(now)) {
+        // Where opening puts it: the question field when it is shown.
+        (_step == _SmartStep.idle &&
+                    widget.takesRequests &&
+                    widget.helpers.isNotEmpty
+                ? _fieldFocus
+                : _cardFocus)
+            .requestFocus();
+      }
+    });
     return OverlayWindow(
       key: ValueKey('smart-window-${widget.column}'),
       child: Focus(

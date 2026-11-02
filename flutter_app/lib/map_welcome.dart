@@ -38,7 +38,7 @@ class UseCaseCards extends StatelessWidget {
               ? scheme.error
               : level == 'ok'
               ? StatusColors.ok
-              : scheme.tertiary,
+              : StatusColors.warn,
         ),
       ),
       title: Text('${f['title']}'),

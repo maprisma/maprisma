@@ -10,7 +10,8 @@ void main() {
     {'command': 'b', 'name': 'Agent B', 'local': false},
   ];
 
-  Widget app({bool visible = true}) => MaterialApp(
+  var toggled = 0;
+  Widget app({bool visible = true, bool takesRequests = true}) => MaterialApp(
     home: Scaffold(
       body: Column(
         children: [
@@ -22,9 +23,10 @@ void main() {
               column: 'agents',
               title: 'Agents',
               open: true,
-              onToggle: () {},
+              onToggle: () => toggled++,
               tr: (s) => s,
               helpers: helpers,
+              takesRequests: takesRequests,
             ),
           ),
         ],
@@ -62,5 +64,25 @@ void main() {
       await tester.pump();
       expect(focusInWindow(tester), isTrue);
     }
+  });
+
+  testWidgets('Esc still leaves when the focused button goes away', (
+    tester,
+  ) async {
+    await tester.pumpWidget(app());
+    await tester.pumpAndSettle();
+    final ask = find.widgetWithText(FilledButton, 'Ask');
+    Focus.of(
+      tester.element(find.descendant(of: ask, matching: find.text('Ask'))),
+    ).requestFocus();
+    await tester.pump();
+    // The footer's Ask goes away with the step; the keyboard had it.
+    await tester.pumpWidget(app(takesRequests: false));
+    await tester.pumpAndSettle();
+    expect(ask, findsNothing);
+    toggled = 0;
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    expect(toggled, 1);
   });
 }

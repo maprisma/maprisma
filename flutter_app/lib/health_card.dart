@@ -67,7 +67,7 @@ class _HealthCardState extends State<HealthCard> {
     final state = '${report['state']}';
     Color colorOf(String s) => switch (s) {
       'missing' => scheme.error,
-      'warn' => scheme.tertiary,
+      'warn' => StatusColors.warn,
       'ok' => StatusColors.ok,
       _ => scheme.outline,
     };
