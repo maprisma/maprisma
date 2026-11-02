@@ -186,12 +186,7 @@ Map<String, dynamic>? smartRefused(Map facts, String action, String category) {
 /// What the agent is told about the runners: no paths of this PC.
 List<Map> _runners(Map facts) => [
   for (final r in facts['runtimes'] as List)
-    {
-      'key': (r as Map)['key'],
-      'name': r['name'],
-      'models': r['models'],
-      'used_by': r['used_by'] ?? const {},
-    },
+    {'key': (r as Map)['key'], 'name': r['name'], 'models': r['models']},
 ];
 
 /// Moving a folder is offered only when the System Map knows folders and disks.
@@ -220,8 +215,8 @@ String smartModelsPrompt(Map facts) {
       'when the request is to find or add a model for a runner.\n'
       '{"action": "remove", "runtime": "<key of a runner listed above>", "model": "<exact name in its models>"}\n'
       'when the request is to delete a model that is listed above.\n'
-      '{"action": "disconnect", "runtime": "<key of a runner listed above>", "models": ["<exact names in its models>"]}\n'
-      'when agents should stop using models, one, several or all of a runner: its used_by says which agents use which model. No file is deleted; the user sees one preview for all of it.\n'
+      '{"action": "disconnect", "runtime": "<key of a local LLM in use, listed next>", "models": ["<exact model names listed next>"]}\n'
+      'when agents should stop using models, one, several or all of a local LLM. Models in use, with their agents: ${jsonEncode(facts['model_users'] ?? const [])}. No file is deleted, and the agent leaves that local LLM; the user sees one preview for all of it.\n'
       '${_moveChoice(facts)}'
       '$_lookupChoice'
       '{"action": "clarify", "question": "<one short question>", "choices": ["<2 to 4 short answers>"]}\n'
@@ -713,6 +708,7 @@ Map<String, dynamic> smartChecked(
   Set<String> runtimes, {
   Set<String> folders = const {},
   Set<String> disks = const {},
+  Set<String> using = const {},
 }) {
   final action = answer['action'];
   if (action == 'lookup') {
@@ -761,7 +757,7 @@ Map<String, dynamic> smartChecked(
     if (models is! List ||
         models.isEmpty ||
         models.any((m) => m is! String) ||
-        !runtimes.contains(answer['runtime'])) {
+        !using.contains(answer['runtime'])) {
       throw const FormatException('no model');
     }
     return {
@@ -915,9 +911,13 @@ Future<Map<String, dynamic>> smartModels(
 ) async {
   final limits = facts['limits'] as Map;
   final runtimes = [for (final r in facts['runtimes'] as List) r as Map];
+  final users = [
+    for (final r in facts['model_users'] as List? ?? const []) r as Map,
+  ];
   final first = smartChecked(
     firstJson(await agent(smartModelsPrompt(facts)), 'action'),
     {for (final r in runtimes) '${r['key']}'},
+    using: {for (final r in users) '${r['key']}'},
     folders: {
       for (final f in facts['folders'] as List? ?? const [])
         '${(f as Map)['id']}',
@@ -974,12 +974,17 @@ Future<Map<String, dynamic>> smartModels(
     };
   }
   if (first['action'] == 'disconnect') {
-    final runtime = runtimes.firstWhere((r) => r['key'] == first['runtime']);
+    final runtime = users.firstWhere((r) => r['key'] == first['runtime']);
     final used = runtime['used_by'] as Map? ?? const {};
+    final asked = {
+      for (final m in first['models'] as List)
+        ...(used[m] as List? ?? const []),
+    };
+    // An agent leaves a local LLM whole: all it has there goes on the card.
     final pairs = <Map<String, dynamic>>[
-      for (final model in first['models'] as List)
-        for (final agent in used[model] as List? ?? const [])
-          {'model': model, 'agent': agent},
+      for (final e in used.entries)
+        for (final agent in e.value as List)
+          if (asked.contains(agent)) {'model': e.key, 'agent': agent},
     ];
     if (pairs.isEmpty) {
       return {

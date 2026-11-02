@@ -1,3 +1,4 @@
+import 'provider_scans.dart' show RuntimeRecord;
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -354,5 +355,28 @@ final class ReadService {
       layers: (settings.value(saved, 'map_layers') as List).cast<String>(),
       animate: settings.value(saved, 'map_animations') as String,
     );
+  }
+
+  /// Who is set to which model of a local LLM: fresh, with no layer hidden and
+  /// no model left out, unlike the map.
+  Map<String, List<String>> modelUsers(RuntimeRecord rt, {bool fresh = true}) {
+    if (fresh || _inventory == null) buildMap();
+    final built = graph.build(
+      _agents!,
+      _details!,
+      _inventory!,
+      running: _running!,
+      activity: _activity!,
+      modelsShown: 1 << 30,
+    );
+    return {
+      for (final model in rt.models)
+        model: [
+          for (final e in (built['edges'] as List).cast<Map>())
+            if (e['kind'] == 'default' &&
+                e['target'] == 'model:runtime:${rt.key}:${model.toLowerCase()}')
+              '${e['source']}'.substring('agent:'.length),
+        ],
+    };
   }
 }

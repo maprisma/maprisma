@@ -1,3 +1,4 @@
+import 'connect_apply.dart' show maxModelActions;
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -409,7 +410,7 @@ Future<List<Map<String, dynamic>>> validateActions(
   ProviderOps ops,
   dynamic actions,
 ) async {
-  if (actions is! List || actions.length > 2) {
+  if (actions is! List || actions.length > maxModelActions) {
     throw const FormatException('Invalid model actions');
   }
   final resolved = <Map<String, dynamic>>[];

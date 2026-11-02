@@ -1,3 +1,4 @@
+import 'provider_scans.dart' show RuntimeRecord;
 import 'dart:convert';
 import 'dart:io';
 import 'package:path/path.dart' as p;
@@ -461,9 +462,7 @@ final class MapEdits {
       if (!llm.supported(command) || fixed is String && fixed.isNotEmpty) {
         throw const FormatException('Agent cannot switch provider');
       }
-      if (switching && !reads.inventory.llm.active(adapter, rt.key)) {
-        throw const FormatException('Model users changed; refresh');
-      }
+      if (switching) _canLeave(command, rt, catalog);
       builders.add(
         () =>
             llm.plan(command, rt, name, name.isNotEmpty, remove: name.isEmpty),
@@ -503,17 +502,31 @@ final class MapEdits {
     );
   }
 
-  /// Ask AI: agents leave several models of a local LLM in one preview, one
-  /// backup and one Undo, as models.switch_preview does for one. The files stay.
+  /// An agent can leave a local LLM: both ways out ask the same.
+  void _canLeave(
+    String command,
+    RuntimeRecord rt,
+    Map<String, AgentRecord> catalog,
+  ) {
+    final adapter = catalog[command]?.adapter;
+    if (adapter == null) throw const FormatException('Agent unavailable');
+    final fixed = adapter.facts['fixed_provider'];
+    if (!llm.supported(command) || fixed is String && fixed.isNotEmpty) {
+      throw const FormatException('Agent cannot switch provider');
+    }
+    if (!reads.inventory.llm.active(adapter, rt.key)) {
+      throw const FormatException('Model users changed; refresh');
+    }
+  }
+
+  /// Ask AI: agents leave a local LLM in one preview, one backup and one Undo,
+  /// as models.switch_preview does for one model. The files stay. [pairs] says
+  /// who leaves; a model unloads when nobody stays on it.
   Map<String, dynamic> modelsDisconnect(
     String key,
-    List<String> models,
+    List<Map> pairs,
     void Function(String key, List<String> commands) guard,
   ) {
-    final graph = currentMap();
-    final nodes = {
-      for (final n in graph['nodes'] as List) n['id'] as String: n as Map,
-    };
     final catalog = {
       for (final a in reads.catalog.scan().where((a) => a.installed))
         a.command: a,
@@ -524,43 +537,49 @@ final class MapEdits {
         .where((r) => r.key == key && r.installed)
         .firstOrNull;
     if (rt == null) throw const FormatException('Runtime unavailable');
-    final pid = 'runtime:$key';
-    final users = <String, List<String>>{};
-    for (final model in {...models}) {
-      final old = 'model:$pid:${model.toLowerCase()}';
-      users[model] = [
-        for (final e in (graph['edges'] as List).cast<Map>())
-          if (e['target'] == old && e['kind'] == 'default')
-            '${e['source']}'.substring('agent:'.length),
-      ];
+    final users = reads.modelUsers(rt);
+    final selected = {for (final p in pairs) '${p['agent']}'}.toList();
+    if (selected.isEmpty) {
+      throw const FormatException('No editable model users');
     }
-    final selected = {for (final u in users.values) ...u}.toList();
+    final leaving = {for (final p in pairs) '${p['model']}'};
+    for (final p in pairs) {
+      if (users[p['model']]?.contains(p['agent']) != true) {
+        throw const FormatException('Model users changed; refresh');
+      }
+    }
+    // Leaving means the whole LLM: every model an agent has must be asked for.
+    for (final e in users.entries) {
+      if (e.value.any(selected.contains) && !leaving.contains(e.key)) {
+        throw const FormatException('Model users changed; refresh');
+      }
+    }
     final builders = <Plan Function()>[];
     for (final command in selected) {
-      final adapter = catalog[command]?.adapter;
-      if (adapter == null) throw const FormatException('Agent unavailable');
-      final fixed = adapter.facts['fixed_provider'];
-      if (!llm.supported(command) || fixed is String && fixed.isNotEmpty) {
-        throw const FormatException('Agent cannot switch provider');
-      }
+      _canLeave(command, rt, catalog);
       builders.add(() => llm.plan(command, rt, '', false, remove: true));
     }
     final actions = <Map<String, dynamic>>[], notes = <String>[];
     if ((providerFacts['engines'] as Map)[key]?['can_load'] == true) {
       guard(key, selected);
-      for (final e in users.entries) {
-        if (e.value.isEmpty) continue;
+      for (final model in leaving) {
+        if (!users[model]!.every(selected.contains)) continue;
         actions.add({
           'operation': 'model.unload',
           'key': key,
-          'model': e.key,
-          'agents': e.value,
+          'model': model,
+          'agents': users[model]!,
         });
       }
       notes.add(
         'Undo restores configuration files; runtime load and unload actions are not undone.',
       );
     }
+    final pid = 'runtime:$key';
+    final nodes = {
+      for (final n in currentMap()['nodes'] as List)
+        n['id'] as String: n as Map,
+    };
     return {
       ..._modelResult(
         builders,
@@ -569,16 +588,13 @@ final class MapEdits {
         nodes,
         {
           pid,
-          for (final m in users.keys) 'model:$pid:${m.toLowerCase()}',
+          for (final m in leaving) 'model:$pid:${m.toLowerCase()}',
           for (final c in selected) 'agent:$c',
         },
         selected,
         catalog,
       ),
-      'disconnects': [
-        for (final e in users.entries)
-          for (final c in e.value) '${e.key} → $c',
-      ],
+      'disconnects': [for (final p in pairs) '${p['model']} → ${p['agent']}'],
     };
   }
 

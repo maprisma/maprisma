@@ -42,6 +42,19 @@ void main() {
     expect(config.readAsStringSync(), '{}');
   });
 
+  test('a plan carries an unload per model', () {
+    final plan = Plan('claude', '', 'app');
+    for (var i = 0; i < 7; i++) {
+      plan.modelActions.add({
+        'operation': 'model.unload',
+        'key': 'llamacpp',
+        'model': 'm$i',
+        'agents': <String>[],
+      });
+    }
+    expect(() => decodePlan(encodePlan(plan, home.path)), returnsNormally);
+  });
+
   test('retired folders go after seven days, the backup stays', () {
     for (final name in ['20261001-120000-000000', '20261028-120000-000000']) {
       Directory('${home.path}/$name/retired-0-app').createSync(recursive: true);

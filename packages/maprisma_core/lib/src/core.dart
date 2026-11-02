@@ -3008,18 +3008,16 @@ final class CoreService {
                   'download': '${(engines[rt.key] as Map?)?['download'] ?? ''}',
                   'models_dir': rt.modelsDir,
                   'models': rt.models.take(40).toList(),
-                  'used_by': {
-                    for (final m in rt.models.take(40))
-                      m: [
-                        for (final e
-                            in (reads.map['edges'] as List? ?? const [])
-                                .cast<Map>())
-                          if (e['kind'] == 'default' &&
-                              e['target'] ==
-                                  'model:runtime:${rt.key}:${m.toLowerCase()}')
-                            '${e['source']}'.substring('agent:'.length),
-                      ],
-                  },
+                },
+          ],
+          'model_users': [
+            for (final rt in reads.inventory.collect(agents).runtimes)
+              if (rt.installed && rt.models.isNotEmpty)
+                {
+                  'key': rt.key,
+                  'name': rt.name,
+                  'used_by': reads.modelUsers(rt, fresh: false)
+                    ..removeWhere((_, users) => users.isEmpty),
                 },
           ],
           if (helper != null)
@@ -3246,7 +3244,7 @@ final class CoreService {
     }
     if (kind == 'model_disconnect') {
       return edits.modelsDisconnect(action['key'] as String, [
-        for (final p in (action['pairs'] as List).cast<Map>()) '${p['model']}',
+        for (final p in action['pairs'] as List) p as Map,
       ], guardModel);
     }
     if (kind == 'mcp_disconnect') {
@@ -3903,9 +3901,19 @@ final class CoreService {
             'mcp_disconnect',
             'model_disconnect',
           }.contains(action['kind'])) {
+        final pairs = (action['pairs'] as List).cast<Map>();
+        // An agent leaves a local LLM whole: one refused model keeps it there.
+        final staying = action['kind'] == 'model_disconnect'
+            ? {
+                for (final p in pairs)
+                  if (!smartPairChecks(p).every(ok)) '${p['agent']}',
+              }
+            : const <String>{};
         final left = [
-          for (final p in (action['pairs'] as List).cast<Map>())
-            if (smartPairChecks(p).every(ok)) p,
+          for (final p in pairs)
+            if (smartPairChecks(p).every(ok) &&
+                !staying.contains('${p['agent']}'))
+              p,
         ];
         if (left.isNotEmpty) {
           final commands = {for (final p in left) '${p['agent']}'}.toList();

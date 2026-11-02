@@ -15,6 +15,9 @@ final class Change {
   final String path, old, next;
 }
 
+/// Load and unload steps in one plan: Ask AI's disconnect unloads each model.
+const maxModelActions = 64;
+
 final class Plan {
   Plan(
     this.agent,

@@ -3692,6 +3692,22 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     return yes == true;
   }
 
+  /// As after a drawn line: what the LLM could not do, and its slots.
+  void _modelsLeft(Map<String, dynamic> result) {
+    if ((result['context_failures'] as num? ?? 0) > 0) {
+      ScaffoldMessenger.of(_navigator.currentContext!).showSnackBar(
+        SnackBar(
+          content: Text(
+            tr(
+              'Configuration saved; some model operations could not be completed.',
+            ),
+          ),
+        ),
+      );
+    }
+    unawaited(_syncSlots());
+  }
+
   void _appliedMessage() {
     final messenger = ScaffoldMessenger.of(_navigator.currentContext!);
     messenger.clearSnackBars();
@@ -4641,6 +4657,10 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                                                   _appliedMessage();
                                                 }
                                                 unawaited(_refresh());
+                                                if (result['models_left'] ==
+                                                    true) {
+                                                  _modelsLeft(result);
+                                                }
                                               },
                                             )
                                           : _viewHost(

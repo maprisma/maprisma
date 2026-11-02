@@ -1095,15 +1095,15 @@ void main() {
   group('models leave their agents', () {
     Map facts() => {
       'limits': {'ram': 1, 'vram': 1},
-      'runtimes': [
+      'runtimes': <Map>[],
+      'model_users': [
         {
-          'key': 'llamacpp',
-          'name': 'llama.cpp',
-          'models': ['a', 'b', 'c'],
+          'key': 'jan',
+          'name': 'Jan',
           'used_by': {
             'a': ['pi'],
             'b': ['pi', 'codex'],
-            'c': <String>[],
+            'd': ['aider'],
           },
         },
       ],
@@ -1115,29 +1115,30 @@ void main() {
       (_, _) async => [],
     );
 
-    test('all of a runner is one candidate, what nobody uses is left', () async {
-      final result = await ask(
-        '{"action": "disconnect", "runtime": "llamacpp", "models": ["a", "b", "c"]}',
-      );
-      final candidate = (result['candidates'] as List).single as Map;
-      expect(candidate['kind'], 'model_disconnect');
-      expect(candidate['agents'], ['pi', 'codex']);
-      expect(candidate['title'], 'a, b');
-      expect(
-        smartCandidateChecks(
-          candidate,
-        ).map((c) => (c.category, c.item, c.agent)),
-        [
-          ('models', 'a', 'pi'),
-          ('models', 'b', 'pi'),
-          ('models', 'b', 'codex'),
-        ],
-      );
-    });
+    test(
+      'all of a runner is one candidate, what nobody uses is left',
+      () async {
+        final result = await ask(
+          '{"action": "disconnect", "runtime": "jan", "models": ["a", "c"]}',
+        );
+        final candidate = (result['candidates'] as List).single as Map;
+        expect(candidate['kind'], 'model_disconnect');
+        // pi leaves the LLM whole, so its second model is on the card; codex
+        // stays on b, aider on d.
+        expect(candidate['agents'], ['pi']);
+        expect(candidate['title'], 'a, b');
+        expect(
+          smartCandidateChecks(
+            candidate,
+          ).map((c) => (c.category, c.item, c.agent)),
+          [('models', 'a', 'pi'), ('models', 'b', 'pi')],
+        );
+      },
+    );
 
     test('nobody uses it: says so', () async {
       final result = await ask(
-        '{"action": "disconnect", "runtime": "llamacpp", "models": ["c"]}',
+        '{"action": "disconnect", "runtime": "jan", "models": ["c"]}',
       );
       expect(result['instead']['hint'], smartNoUsers);
     });
