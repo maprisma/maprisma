@@ -17,27 +17,27 @@ No High or Medium finding.
    only told four windows apart; now it is one window whose content changes. Keep one key for the central
    window (e.g. `smart-window` / `smart-card` while `!showBar`) and find the active category in tests by the
    selected chip or the title instead.
-   > Author:
+   > Author: Fixed: the central window (no bar) keys as `smart-window` / `smart-card`; bar cards keep the per-column keys. Tests find the category by the selected chip or the title. Test: smart_window_test "a category chip keeps the same window".
 
 2. **Low** `flutter_app/lib/map_smart_card.dart:1490` The prompt view's category chips are wrapped in
    `ExcludeFocusTraversal`, so with the keyboard alone the category cannot be changed any more (on main each
    column's bar was reachable with Tab). The status view's chips (`:1898`) are not excluded. Let the prompt
    chips take part in Tab order too (they come after the field, so typing is not disturbed).
-   > Author:
+   > Author: Fixed: `ExcludeFocusTraversal` removed from the prompt view's chips. Test: smart_window_test, Tab reaches a category chip.
 
 3. **Low** `flutter_app/lib/main.dart` (the `ask-ai-open` button) The button is enabled while `_busy`, but
    `_openAskAi` returns at once when `_busy` (`main.dart`, `_openAskAi`): a click then does nothing and says
    nothing. The task doc says it is disabled while `_keysBlocked || _busy`; the code disables it for
    `_keysBlocked || _snapshot == null`. Add `_busy` to the condition (or have the doc say what the code does).
-   > Author:
+   > Author: Fixed: the header button is disabled while `_busy` too (`_keysBlocked || _busy || _snapshot == null`).
 
 4. **Low** `docs/tasks/026-centralize-ask-ai.md` The doc says the tooltip is `tr('Ask AI…')`; the code uses
    `tr('Ask AI')`. One of the two should change so they agree.
-   > Author:
+   > Author: Fixed in the doc: the tooltip is `tr('Ask AI')` (an existing key in all 8 languages).
 
 5. **Low** `flutter_app/test/task_cards_app_test.dart` The new test covers the header button, the four prompt
    chips (title and hint) and Esc. Three acceptance points of the task have no test: switching categories
    with the status chips (`smart-status-<col>`), a chip enabling that category's map layers
    (`_neededLayersForColumn` → `map_layers`), and "Move to …" switching the category in place while keeping
    the question (`map_smart_card.dart:2034-2046`).
-   > Author:
+   > Author: Added: task_cards_app_test "the status chips switch the category in the same window, and a category shows the columns it needs" (status chips, `map_layers` via `settings.update`) and smart_window_test "Move to switches the category in place and keeps the question".

@@ -10,7 +10,7 @@ None (`tools/routes.json` unchanged).
 
 ## UI
 - `flutter_app/lib/main.dart`:
-  - The app header bar shows an `IconButton` with `Icons.auto_awesome` (`key: ValueKey('ask-ai-open')`, tooltip `tr('Ask AI…')`, disabled while `_keysBlocked || _busy`) next to the health status button (`health-open`).
+  - The app header bar shows an `IconButton` with `Icons.auto_awesome` (`key: ValueKey('ask-ai-open')`, tooltip `tr('Ask AI')`, disabled while `_keysBlocked || _busy` or before the first snapshot) next to the health status button (`health-open`).
   - `MapEditor` on the main map is rendered with `smartCards: false`; a single app-level `MapSmartCard` (`key: ValueKey('ask-ai-card')`, `showBar: false`) hosts the overlay window.
   - `_openAskAi([String? column])` opens the centralized Ask AI window on the requested (or active) category in prompt mode (`_askPromptSeq++`), ensuring the category's map layers are enabled.
   - `_openProblems([String? column])` opens the centralized Ask AI window in status mode (`_smartStatusSeq++`) on the requested (or first concerned) category.

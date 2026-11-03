@@ -4318,7 +4318,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                           : null,
                     ),
                   ),
-                  onPressed: _keysBlocked || _snapshot == null
+                  onPressed: _keysBlocked || _busy || _snapshot == null
                       ? null
                       : () => _openAskAi(),
                 ),
