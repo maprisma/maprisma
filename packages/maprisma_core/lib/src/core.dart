@@ -3595,8 +3595,9 @@ final class CoreService {
           store,
           addons.dirs,
         );
+        // The preview names the add-on, so the app can say which agent
+        // holds it; only the install is refused.
         _enforce([ruleAddonFileCheck(shown)]);
-        guardAddonLock([shown['id']]);
         return {...shown, 'focus': <String>[]};
       } on InstallError catch (error) {
         throw FormatException(error.message);

@@ -194,5 +194,57 @@ class DartAddonLockParityTest(unittest.TestCase):
         self.assertEqual(dart[11], ['agent-hermes'])
 
 
+
+@unittest.skipIf(DART is None or not ADDONS.is_dir(), 'native Dart SDK or maprisma-addons not available')
+class DartAddonFileLockTest(unittest.TestCase):
+    """Task 028, Dart core only (the reference has no file install): while claude runs, a file of
+    agent-claude is previewed (the app needs its id to say why) but not installed; another add-on is."""
+
+    def test_file_install_of_the_running_agents_add_on_waits(self):
+        import zipfile
+        with tempfile.TemporaryDirectory() as temp:
+            home = Path(temp) / 'dart'
+            home.mkdir()
+            seed(home)
+            (home / 'work').mkdir()
+            program = home / '.local/bin/claude'
+            program.parent.mkdir(parents=True)
+            program.write_text('#!/bin/sh\necho READY\nexec sleep 60\n')
+            program.chmod(0o755)
+            zips = {}
+            for name in ('agent-claude', 'agent-goose'):
+                zips[name] = home / f'{name}.zip'
+                with zipfile.ZipFile(zips[name], 'w') as archive:
+                    for path in sorted((ADDONS / name).rglob('*')):
+                        if path.is_file():
+                            archive.write(path, f'{name}/{path.relative_to(ADDONS / name)}')
+            env = {'HOME': str(home), 'PATH': f'{home}/.local/bin:/usr/bin:/bin', 'LANG': 'C.UTF-8',
+                   'XDG_CONFIG_HOME': str(home / '.config'), 'XDG_CACHE_HOME': str(home / '.cache'),
+                   'XDG_DATA_HOME': str(home / '.local/share'), 'MAPRISMA_DESKTOP': 'generic',
+                   'MAPRISMA_FLUTTER_DEVEL': '1'}
+            runner = Side([DART, '--disable-dart-dev', '--packages=.dart_tool/package_config.json',
+                           'bin/maprisma-core.dart'], ROOT / 'packages/maprisma_core', env)
+            try:
+                session = runner.call('sessions.start', {'command': 'claude', 'path': str(home / 'work'),
+                                                         'outside': False}).get('session')
+                self.assertTrue(session)
+                for _ in range(100):
+                    read = runner.call('sessions.read', {'session': session})
+                    if 'READY' in read.get('text', '') or read.get('ended'):
+                        break
+                    time.sleep(0.05)
+                self.assertFalse(read.get('ended'))
+                held = runner.call('addons.file_preview', {'path': str(zips['agent-claude'])})
+                self.assertEqual(held.get('id'), 'agent-claude')
+                self.assertEqual(runner.call('addons.file_install', {'preview': held['preview']}),
+                                 {'error': 'refused'})
+                other = runner.call('addons.file_preview', {'path': str(zips['agent-goose'])})
+                self.assertEqual(other.get('id'), 'agent-goose')
+                self.assertIn('task', runner.call('addons.file_install', {'preview': other['preview']}))
+                runner.call('sessions.stop', {'session': session})
+            finally:
+                runner.close()
+
+
 if __name__ == '__main__':
     unittest.main()

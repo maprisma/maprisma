@@ -36,7 +36,8 @@ No new or changed route, params or result shape. The refusal text of the core st
 - `addons.set_enabled`: only with `enabled: false` for a locked id.
 - `setup.apply`: only when the selection switches a locked add-on off.
 - `addons.install`: only when the catalog record's id is a locked add-on (an update); a new add-on installs.
-- `addons.file_preview` / `addons.file_install`: only when the file's add-on id is locked.
+- `addons.file_install`: only when the file's add-on id is locked. `addons.file_preview` is not refused:
+  it names the add-on, so the app can say which agent holds it.
 - `addons.remove_preview` / `addons.remove_apply`: only for a locked id. `addons.remove_undo` (puts an
   add-on back) is always allowed.
 Dart core and Python reference both; `tools/diff-core.py` stays equal.
