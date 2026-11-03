@@ -1487,28 +1487,28 @@ class _MapSmartCardState extends State<MapSmartCard> {
     );
   }
 
-  Widget _buildCategoryChips() => ExcludeFocusTraversal(
-    child: Wrap(
-      spacing: 6,
-      runSpacing: 6,
-      children: [
-        for (final (col, colTitle) in mapSmartColumns)
-          ChoiceChip(
-            key: ValueKey('smart-category-$col'),
-            visualDensity: VisualDensity.compact,
-            selected: _column == col,
-            label: Text(
-              widget.tr(colTitle),
-              style: const TextStyle(fontSize: 12),
-            ),
-            onSelected: (_) {
-              setState(() => _column = col);
-              widget.onColumnChanged?.call(col);
-              if (widget.helpers.isNotEmpty) _fieldFocus.requestFocus();
-            },
+  // In Tab order like the status view's chips; they come after the field, so typing is not
+  // disturbed.
+  Widget _buildCategoryChips() => Wrap(
+    spacing: 6,
+    runSpacing: 6,
+    children: [
+      for (final (col, colTitle) in mapSmartColumns)
+        ChoiceChip(
+          key: ValueKey('smart-category-$col'),
+          visualDensity: VisualDensity.compact,
+          selected: _column == col,
+          label: Text(
+            widget.tr(colTitle),
+            style: const TextStyle(fontSize: 12),
           ),
-      ],
-    ),
+          onSelected: (_) {
+            setState(() => _column = col);
+            widget.onColumnChanged?.call(col);
+            if (widget.helpers.isNotEmpty) _fieldFocus.requestFocus();
+          },
+        ),
+    ],
   );
 
   Widget _buildAsk(ColorScheme colors) {
@@ -2407,8 +2407,10 @@ class _MapSmartCardState extends State<MapSmartCard> {
             .requestFocus();
       }
     });
+    // The central window (no bar) is one window whose category changes: one key, so a
+    // category switch keeps its size and the question field. Bar cards are one per column.
     final window = OverlayWindow(
-      key: ValueKey('smart-window-$_column'),
+      key: ValueKey(widget.showBar ? 'smart-window-$_column' : 'smart-window'),
       child: Focus(
         focusNode: _cardFocus,
         autofocus: true,
@@ -2533,7 +2535,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
       ),
     );
     return !widget.showBar
-        ? KeyedSubtree(key: ValueKey('smart-card-$_column'), child: window)
+        ? KeyedSubtree(key: const ValueKey('smart-card'), child: window)
         : window;
   }
 }

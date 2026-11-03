@@ -940,7 +940,7 @@ void main() {
     await settleService(tester);
     await tester.tap(
       find.descendant(
-        of: find.byKey(const ValueKey('smart-card-agents')),
+        of: find.byKey(const ValueKey('smart-card')),
         matching: find.widgetWithText(OutlinedButton, 'Details'),
       ),
     );
@@ -1918,7 +1918,7 @@ void main() {
       // Hide Models column (column 3) via the filter chip.
       await tester.tap(find.byKey(const ValueKey('map-column-3')));
       await settleService(tester);
-      expect(find.byKey(const ValueKey('smart-card-models')), findsNothing);
+      expect(find.byKey(const ValueKey('smart-card')), findsNothing);
 
       // Header status icon still has level 2 (red warn) because of the hidden column.
       final headerIcon = tester.widget<SmartStatusIcon>(
@@ -1932,7 +1932,15 @@ void main() {
       // Clicking the header symbol reveals Models and opens its smart card on the status list.
       await tester.tap(find.byKey(const ValueKey('problems-open')));
       await settleService(tester);
-      expect(find.byKey(const ValueKey('smart-card-models')), findsOneWidget);
+      expect(find.byKey(const ValueKey('smart-card')), findsOneWidget);
+      expect(
+        tester
+            .widget<ChoiceChip>(
+              find.byKey(const ValueKey('smart-status-models')),
+            )
+            .selected,
+        isTrue,
+      );
       expect(find.text('Hidden model problem'), findsOneWidget);
       expect(tester.takeException(), isNull);
       await unmountApp(tester);
@@ -2006,6 +2014,56 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       await settleService(tester);
       expect(find.byType(OverlayWindow), findsNothing);
+      expect(tester.takeException(), isNull);
+      await unmountApp(tester);
+    },
+  );
+
+  testWidgets(
+    'the status chips switch the category in the same window, and a category shows the columns it needs',
+    (tester) async {
+      final dir = await mountApp(
+        tester,
+        beforeStart: (d) =>
+            File('${d.path}/smart_helpers').writeAsStringSync('1'),
+      );
+      await settleService(tester);
+      // Models hidden: asking about models brings its column (and Providers) back.
+      await tester.tap(find.byKey(const ValueKey('map-column-3')));
+      await settleService(tester);
+      await tester.tap(find.byKey(const ValueKey('ask-ai-open')));
+      await settleService(tester);
+      final window = tester.state(find.byType(OverlayWindow));
+      await tester.tap(find.byKey(const ValueKey('smart-category-models')));
+      await settleService(tester);
+      expect(find.text('Ask AI · Models'), findsOneWidget);
+      expect(tester.state(find.byType(OverlayWindow)), same(window));
+      final layers =
+          requests(
+                dir,
+              ).lastWhere((q) => q['method'] == 'settings.update')['params']
+              as Map;
+      expect(
+        (layers['values'] as Map)['map_layers'],
+        containsAll(['models', 'online', 'local']),
+      );
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await settleService(tester);
+
+      await tester.tap(find.byKey(const ValueKey('problems-open')));
+      await settleService(tester);
+      final status = tester.state(find.byType(OverlayWindow));
+      for (final col in const ['mcp', 'agents', 'providers', 'models']) {
+        await tester.tap(find.byKey(ValueKey('smart-status-$col')));
+        await settleService(tester);
+        expect(
+          tester
+              .widget<ChoiceChip>(find.byKey(ValueKey('smart-status-$col')))
+              .selected,
+          isTrue,
+        );
+        expect(tester.state(find.byType(OverlayWindow)), same(status));
+      }
       expect(tester.takeException(), isNull);
       await unmountApp(tester);
     },
