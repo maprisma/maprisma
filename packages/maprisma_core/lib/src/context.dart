@@ -334,6 +334,59 @@ final class ContextReader {
     return (RegExp(r'^\d+$').hasMatch(ctx) ? int.parse(ctx) : 0, cache);
   }
 
+  /// context_ctl.llama_own_context: the ctx-size of the model's own section
+  /// (0: none; "[*]" does not count).
+  int llamaOwnContext(String name) {
+    String text;
+    try {
+      text = File(modelsIni).readAsStringSync();
+    } on FileSystemException {
+      text = '';
+    }
+    final ctx = iniSections(text)[name]?['ctx-size'] ?? '';
+    return RegExp(r'^\d+$').hasMatch(ctx) ? int.parse(ctx) : 0;
+  }
+
+  /// context_ctl.SIZED: what the app sets along with a context it worked
+  /// out, where nothing is set yet (own section or "[*]"): a q8_0 KV cache
+  /// (half the memory of f16) and flash attention, which a quantized KV
+  /// cache needs. A setting the user chose stays.
+  static const sized = [
+    ('cache-type-k', 'q8_0'),
+    ('cache-type-v', 'q8_0'),
+    ('flash-attn', 'on'),
+  ];
+
+  /// context_ctl.llama_effective: "[*]", then the model's own section.
+  static Map<String, String> llamaEffective(String text, String name) {
+    final sections = iniSections(text);
+    return {...?sections['*'], ...?sections[name]};
+  }
+
+  /// context_ctl.llama_auto_cache: the KV cache type a worked-out context is
+  /// sized for: the one set, else q8_0.
+  String llamaAutoCache(String name) {
+    String text;
+    try {
+      text = File(modelsIni).readAsStringSync();
+    } on FileSystemException {
+      text = '';
+    }
+    final set = llamaEffective(text, name)['cache-type-k'] ?? '';
+    return set.isEmpty ? 'q8_0' : set;
+  }
+
+  /// context_ctl.llama_sized_text: the model's ctx-size, and [sized] where
+  /// nothing is set; the rest stays.
+  static String llamaSizedText(String old, String name, int ctx) {
+    final have = llamaEffective(old, name);
+    var text = iniText(old, name, 'ctx-size', '$ctx');
+    for (final (key, value) in sized) {
+      if ((have[key] ?? '').isEmpty) text = iniText(text, name, key, value);
+    }
+    return text;
+  }
+
   static String iniText(String old, String section, String key, String value) {
     if (!RegExp(r'^[^\[\]\x00-\x1f\x7f]{1,200}$').hasMatch(section) ||
         !RegExp(r'^[a-z0-9][a-z0-9-]{0,40}$').hasMatch(key) ||
@@ -816,7 +869,10 @@ final class ContextReader {
       final String cache;
       final String? file;
       if (rt.key == 'llamacpp') {
-        (now, cache) = llamaSettings(model);
+        // Only the model's own section counts: "[*] ctx-size" is a fallback,
+        // not its context (task 029). Sized for a q8_0 KV cache, set along.
+        now = llamaOwnContext(model);
+        cache = llamaAutoCache(model);
         file = llamaModelFile(folder, model);
       } else {
         final env = readEnv(p.join(home, '.config/ollama/server.env'));
@@ -845,13 +901,7 @@ final class ContextReader {
       final before = config.read(modelsIni);
       return (
         {model: best},
-        [
-          Change(
-            modelsIni,
-            before,
-            iniText(before, model, 'ctx-size', '$best'),
-          ),
-        ],
+        [Change(modelsIni, before, llamaSizedText(before, model, best))],
         <Map<String, dynamic>>[],
       );
     } on FormatException {

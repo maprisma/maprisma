@@ -40,6 +40,19 @@ class Engine(llm_engine.LlamaRouter):
         now, cache = context_ctl.llama_settings(name)
         return now, cache, context_ctl.llama_model_file(folder, name)
 
+    def auto_context_now(self, rt, folder, name):
+        # Only the model's own section counts: "[*] ctx-size" is a fallback, not its context (task 029).
+        # Sized for the KV cache set, else q8_0, which is then set along with the context.
+        import context_ctl
+        return (context_ctl.llama_own_context(name), context_ctl.llama_auto_cache(name),
+                context_ctl.llama_model_file(folder, name))
+
+    def auto_context_changes(self, rt, name, ctx):
+        import connect
+        import context_ctl
+        before = connect._read(context_ctl.MODELS_INI)
+        return [connect.Change(context_ctl.MODELS_INI, before, context_ctl.llama_sized_text(before, name, ctx))]
+
     def context_changes(self, rt, name, ctx):
         # Like a connection: written with a backup, and Undo puts it back.
         import connect
