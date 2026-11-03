@@ -59,6 +59,8 @@ import 'provider_facts.dart';
 import 'mcp_catalog.dart';
 import 'skills_web.dart';
 import 'llm_tuning.dart';
+import 'local_llm.dart' show LocalLlm;
+import 'llama_tune.dart' show tunedIniText;
 import 'core_jobs.dart';
 import 'setup_checks.dart';
 import 'health_report.dart';
@@ -149,6 +151,7 @@ const portedRoutes = {
   'models.tuning',
   'models.tuning_preview',
   'models.tuning_ask',
+  'models.tune',
   'jobs.list',
   'jobs.continue',
   'jobs.discard',
@@ -2220,6 +2223,78 @@ final class CoreService {
     };
   }
 
+  /// llama_tune's measurement as a preview: models.ini (each measured
+  /// model's section, with its marker) and the context in every agent
+  /// connected to llama.cpp, for all its models; applied with
+  /// connections.apply (backup, Undo).
+  Map<String, dynamic> _tunePreview(
+    RuntimeRecord rt,
+    Map<String, dynamic> measured,
+  ) {
+    final reader = ContextReader(reads.files, config);
+    final before = config.read(reader.modelsIni);
+    final rows = [
+      for (final m in measured['models'] as List? ?? const [])
+        Map<String, dynamic>.from(m as Map),
+    ];
+    var ini = before;
+    for (final m in rows) {
+      ini = tunedIniText(ini, m, '${measured['mark']}');
+    }
+    final changes = <Change>[
+      if (ini != before) Change(reader.modelsIni, before, ini),
+    ];
+    // The agents get every model's context as it will be: the new one, or
+    // what the model runs with now ("[*]" included).
+    final sections = ContextReader.iniSections(ini);
+    final contexts = <String, int>{
+      for (final name in rt.models)
+        name:
+            int.tryParse(
+              sections[name]?['ctx-size'] ?? sections['*']?['ctx-size'] ?? '',
+            ) ??
+            0,
+    }..removeWhere((_, v) => v <= 0);
+    final local = LocalLlm(reads.files);
+    if (rows.isNotEmpty) {
+      for (final adapter in addons.adapters) {
+        if (!llm.supported(adapter.command) ||
+            !local.connected(adapter, rt.key)) {
+          continue;
+        }
+        final paths = llm.files(adapter.command);
+        final old = [for (final path in paths) config.read(path)];
+        final next = llm.transform(
+          adapter.command,
+          old,
+          rt,
+          '',
+          false,
+          false,
+          contexts,
+        );
+        for (var i = 0; i < paths.length; i++) {
+          if (next[i] != old[i]) changes.add(Change(paths[i], old[i], next[i]));
+        }
+      }
+    }
+    if (changes.any((c) => FileSystemEntity.isLinkSync(c.path))) {
+      throw const FormatException('Configuration is a symbolic link');
+    }
+    return {
+      ...connections.keep(Plan(rt.name, rt.key, '', changes: changes)),
+      'item': rt.name,
+      'build': measured['build'],
+      'build_path': measured['build_path'],
+      'version': measured['version'],
+      'models': rows,
+      'skipped': measured['skipped'] ?? const [],
+      'notes': [
+        'Changes apply when the runtime next starts. Running services are not restarted.',
+      ],
+    };
+  }
+
   /// models.tuning / models.tuning_preview (llm_tuning and the GTK
   /// Performance card): a local LLM's facts, read in the worker; one tuning
   /// setting, or a model's context, changed with a backup and Undo.
@@ -2259,6 +2334,30 @@ final class CoreService {
             ],
           };
         }),
+        'focus': taskFocus(reads.map, {'runtime': rt.key}),
+      };
+    }
+    if (method == 'models.tune') {
+      final models = params['models'];
+      if (params.length != 2 ||
+          rt.key != 'llamacpp' ||
+          models != null &&
+              (models is! List ||
+                  models.isEmpty ||
+                  models.length > 64 ||
+                  models.any((m) => m is! String || !rt.models.contains(m)))) {
+        throw const FormatException('Invalid tuning request');
+      }
+      final names = models == null
+          ? [...rt.models]
+          : [for (final m in models as List) m as String];
+      if (names.isEmpty) throw const FormatException('No model to measure');
+      return {
+        ...tasks.start('models.tune', {
+          'models': names,
+          'models_dir': rt.modelsDir,
+          'address': rt.address,
+        }, (measured) => _tunePreview(rt, measured)),
         'focus': taskFocus(reads.map, {'runtime': rt.key}),
       };
     }
@@ -4381,7 +4480,8 @@ final class CoreService {
     }
     if (method == 'models.tuning' ||
         method == 'models.tuning_preview' ||
-        method == 'models.tuning_ask') {
+        method == 'models.tuning_ask' ||
+        method == 'models.tune') {
       return tuningRoute(method, params);
     }
     if (method == 'agents.security' || method == 'agents.security_preview') {

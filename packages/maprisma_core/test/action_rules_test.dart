@@ -162,6 +162,7 @@ void main() {
       'm',
     ),
     'models.tuning_preview': ({'key': 'o'}, 'update', 'providers', 'o'),
+    'models.tune': ({'key': 'o'}, 'update', 'providers', 'o'),
     'models.slots_preview': (const {}, 'update', 'providers', ''),
     'agents.security_preview': ({'command': 'pi'}, 'update', 'agents', 'pi'),
     'agents.action_preview': (

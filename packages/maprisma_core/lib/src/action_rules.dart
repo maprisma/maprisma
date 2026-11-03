@@ -273,6 +273,7 @@ List<ActionCheck> actionChecks(
     case 'models.remove_preview':
       return [ActionCheck('remove', 'models', text('model'))];
     case 'models.tuning_preview':
+    case 'models.tune':
       return [ActionCheck('update', 'providers', text('key'))];
     case 'models.slots_preview':
       return const [ActionCheck('update', 'providers', '')];

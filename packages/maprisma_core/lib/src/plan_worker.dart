@@ -32,6 +32,7 @@ import 'llm_tuning.dart';
 import 'health_report.dart' show pcInfo;
 import 'agent_updates.dart' show AgentUpdates;
 import 'context.dart' show ContextReader;
+import 'llama_tune.dart' show LlamaTuner, untunedModels;
 import 'model_hub.dart' show netFetch;
 import 'model_downloads.dart' show DownloadError;
 import 'provider_ops.dart';
@@ -614,7 +615,62 @@ Future<int> runWorker(List<String> args) async {
             await detectGpu(),
             llamaVersion: () async => installer.currentVersion(),
           );
+      // Task 029: the binary the service runs, and the models not measured
+      // for it (the app tunes those when the card is idle).
+      if (rt.key == 'llamacpp') {
+        final built = await LlamaTuner(
+          home: identity.home,
+          environment: identity.environment,
+        ).build();
+        String ini;
+        try {
+          ini = File(
+            ContextReader(files, ConfigFiles(posix, identity.home)).modelsIni,
+          ).readAsStringSync();
+        } on FileSystemException {
+          ini = '';
+        }
+        facts['build_path'] = built?.binary ?? '';
+        facts['untuned'] = built == null
+            ? <String>[]
+            : untunedModels(ini, rt.models, built.mark);
+      }
       send({'type': 'result', 'result': facts});
+      return 0;
+    }
+    // llama_tune (task 029): llama.cpp models measured on this card with the
+    // build the service runs; numbers only, the core makes the preview.
+    if (args.isEmpty && request['operation'] == 'models.tune') {
+      final params = request['params'] as Map;
+      if (params.length != 3 ||
+          params['models'] is! List ||
+          params['models_dir'] is! String ||
+          params['address'] is! String) {
+        throw const FormatException('Invalid worker request');
+      }
+      final identity = AppIdentity();
+      final reader = ContextReader(
+        ScanFiles(identity),
+        ConfigFiles(Posix(), identity.home),
+      );
+      String ini;
+      try {
+        ini = File(reader.modelsIni).readAsStringSync();
+      } on FileSystemException {
+        ini = '';
+      }
+      final result =
+          await LlamaTuner(
+            home: identity.home,
+            environment: identity.environment,
+          ).measure(
+            [for (final m in params['models'] as List) '$m'],
+            ScanFiles(identity).expand(params['models_dir'] as String),
+            params['address'] as String,
+            ini,
+            reader.llamaModelFile,
+          );
+      send({'type': 'result', 'result': result});
       return 0;
     }
     // agent_updates.check: mise outdated, an agent's own channel, the app's
