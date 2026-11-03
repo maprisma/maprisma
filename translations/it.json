@@ -3338,5 +3338,7 @@
  "F12 saves a screenshot": "F12 salva uno screenshot",
  "A picture of this window goes to Pictures/Maprisma. Not while a terminal is showing: programs there may use F12.": "Un’immagine di questa finestra va in Pictures/Maprisma. Non mentre è visibile un terminale: i programmi lì possono usare F12.",
  "A picture of this window goes to Pictures/Maprisma. In a terminal, use the camera symbol below it: programs there may use F12.": "Un’immagine di questa finestra va in Pictures/Maprisma. In un terminale usa il simbolo della fotocamera sotto: i programmi lì possono usare F12.",
- "A picture of this window is saved, with a note if you like. In a terminal, use the camera symbol below it: programs there may use F12.": "Viene salvata un’immagine di questa finestra, con una nota se vuoi. In un terminale usa il simbolo della fotocamera sotto: i programmi possono usare F12."
+ "A picture of this window is saved, with a note if you like. In a terminal, use the camera symbol below it: programs there may use F12.": "Viene salvata un’immagine di questa finestra, con una nota se vuoi. In un terminale usa il simbolo della fotocamera sotto: i programmi possono usare F12.",
+ "{0} is running in a terminal. Add-ons can be changed when it has finished.": "{0} è in esecuzione in un terminale. Potrai modificare i componenti aggiuntivi quando avrà finito.",
+ "{0} are running in terminals. Add-ons can be changed when they have finished.": "{0} sono in esecuzione nei terminali. Potrai modificare i componenti aggiuntivi quando avranno finito."
 }

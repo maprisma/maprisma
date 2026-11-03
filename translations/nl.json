@@ -3338,5 +3338,7 @@
  "F12 saves a screenshot": "F12 slaat een schermafbeelding op",
  "A picture of this window goes to Pictures/Maprisma. Not while a terminal is showing: programs there may use F12.": "Een afbeelding van dit venster gaat naar Pictures/Maprisma. Niet zolang een terminal zichtbaar is: programma’s daar kunnen F12 zelf gebruiken.",
  "A picture of this window goes to Pictures/Maprisma. In a terminal, use the camera symbol below it: programs there may use F12.": "Een afbeelding van dit venster gaat naar Pictures/Maprisma. Gebruik in een terminal het camerasymbool eronder: programma’s daar kunnen F12 zelf gebruiken.",
- "A picture of this window is saved, with a note if you like. In a terminal, use the camera symbol below it: programs there may use F12.": "Een afbeelding van dit venster wordt opgeslagen, desgewenst met een notitie. Gebruik in een terminal het camerasymbool eronder: programma’s kunnen F12 zelf gebruiken."
+ "A picture of this window is saved, with a note if you like. In a terminal, use the camera symbol below it: programs there may use F12.": "Een afbeelding van dit venster wordt opgeslagen, desgewenst met een notitie. Gebruik in een terminal het camerasymbool eronder: programma’s kunnen F12 zelf gebruiken.",
+ "{0} is running in a terminal. Add-ons can be changed when it has finished.": "{0} draait in een terminal. Je kunt uitbreidingen wijzigen zodra die klaar is.",
+ "{0} are running in terminals. Add-ons can be changed when they have finished.": "{0} draaien in terminals. Je kunt uitbreidingen wijzigen zodra die klaar zijn."
 }

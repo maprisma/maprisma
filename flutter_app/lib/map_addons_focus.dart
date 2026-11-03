@@ -1,6 +1,20 @@
 import 'package:flutter/material.dart';
 import 'addon_details.dart';
+import 'app_look.dart';
 import 'map_groups.dart';
+
+/// Why add-ons cannot be changed now: the agents running in the app's
+/// terminals, by name (the general line when no name is known).
+String addonsLockedText(String Function(String) tr, List<String> agents) =>
+    agents.isEmpty
+    ? tr('Finish running agents before changing add-ons.')
+    : agents.length == 1
+    ? tr(
+        '{0} is running in a terminal. Add-ons can be changed when it has finished.',
+      ).replaceAll('{0}', agents.single)
+    : tr(
+        '{0} are running in terminals. Add-ons can be changed when they have finished.',
+      ).replaceAll('{0}', agents.join(', '));
 
 /// Focused management uses service metadata; it never adds nodes to graph facts.
 class MapAddonsFocus extends StatefulWidget {
@@ -35,6 +49,8 @@ class MapAddonsFocus extends StatefulWidget {
     this.onLater,
     this.onLogin,
     this.onNodeMenu,
+    this.runningAgents = const [],
+    this.onShowTerminal,
   });
   final bool hosted;
   final int category;
@@ -52,6 +68,12 @@ class MapAddonsFocus extends StatefulWidget {
   final ValueChanged<Map<String, dynamic>> onInstall, onNode;
   final void Function(BuildContext, Map<String, dynamic>) onMenu;
   final Future<void> Function(List<String>)? onApply;
+
+  /// The names of the agents running in the app's terminals while [running].
+  final List<String> runningAgents;
+
+  /// Brings the first running agent's terminal to the front.
+  final VoidCallback? onShowTerminal;
   @override
   State<MapAddonsFocus> createState() => _MapAddonsFocusState();
 }
@@ -93,6 +115,44 @@ class _MapAddonsFocusState extends State<MapAddonsFocus> {
   bool matches(Map<String, dynamic> item) => widget.category == 1
       ? item['kind'] == 'agent'
       : widget.category == 2 && item['kind'] != 'agent';
+
+  String get lockedText => addonsLockedText(widget.tr, widget.runningAgents);
+
+  /// A control that running agents lock says why, not only by being grey.
+  Widget explained(Widget child) =>
+      widget.running ? Tooltip(message: lockedText, child: child) : child;
+
+  /// A menu entry locked by running agents, with the reason under its label.
+  Widget menuLabel(String label) => widget.running
+      ? Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(label),
+            Text(lockedText, style: Theme.of(context).textTheme.bodySmall),
+          ],
+        )
+      : Text(label);
+
+  Widget lockedBanner() => SectionCard(
+    key: const ValueKey('addons-locked'),
+    child: Row(
+      children: [
+        const Icon(Icons.lock_clock, color: StatusColors.warn),
+        const SizedBox(width: AppSpace.md),
+        Expanded(child: Text(lockedText)),
+        if (widget.onShowTerminal != null) ...[
+          const SizedBox(width: AppSpace.sm),
+          TextButton(
+            key: const ValueKey('addons-locked-show'),
+            onPressed: widget.onShowTerminal,
+            child: Text(widget.tr('Show terminal')),
+          ),
+        ],
+      ],
+    ),
+  );
+
   Widget addon(Map<String, dynamic> item) {
     final blocked = widget.busy || widget.running;
     final update = (widget.entries ?? [])
@@ -119,16 +179,18 @@ class _MapAddonsFocusState extends State<MapAddonsFocus> {
               ),
               onTap: () => widget.onMenu(context, item),
               trailing: widget.welcome && item['kind'] == 'agent'
-                  ? Checkbox(
-                      value: selected.contains(item['id']),
-                      onChanged: blocked || !eligible(item)
-                          ? null
-                          : (on) => setState(() {
-                              touched.add(item['id'] as String);
-                              on == true
-                                  ? selected.add(item['id'] as String)
-                                  : selected.remove(item['id']);
-                            }),
+                  ? explained(
+                      Checkbox(
+                        value: selected.contains(item['id']),
+                        onChanged: blocked || !eligible(item)
+                            ? null
+                            : (on) => setState(() {
+                                touched.add(item['id'] as String);
+                                on == true
+                                    ? selected.add(item['id'] as String)
+                                    : selected.remove(item['id']);
+                              }),
+                      ),
                     )
                   : PopupMenuButton<String>(
                       tooltip: widget.tr('Actions'),
@@ -153,7 +215,7 @@ class _MapAddonsFocusState extends State<MapAddonsFocus> {
                               !blocked &&
                               item['supported'] == true &&
                               (eligible(item) || item['enabled'] == true),
-                          child: Text(
+                          child: menuLabel(
                             widget.tr(
                               item['enabled'] == true
                                   ? 'Switch off'
@@ -168,7 +230,7 @@ class _MapAddonsFocusState extends State<MapAddonsFocus> {
                                 !blocked &&
                                 widget.online &&
                                 item['supported'] == true,
-                            child: Text(
+                            child: menuLabel(
                               widget
                                   .tr('Update add-on to {0}')
                                   .replaceAll(
@@ -241,11 +303,15 @@ class _MapAddonsFocusState extends State<MapAddonsFocus> {
                     child: Text(tr('Later')),
                   ),
                   const SizedBox(width: 12),
-                  FilledButton(
-                    onPressed: widget.busy || widget.running || widget.detecting
-                        ? null
-                        : () => widget.onApply?.call(selected.toList()..sort()),
-                    child: Text(tr('Switch on')),
+                  explained(
+                    FilledButton(
+                      onPressed:
+                          widget.busy || widget.running || widget.detecting
+                          ? null
+                          : () =>
+                                widget.onApply?.call(selected.toList()..sort()),
+                      child: Text(tr('Switch on')),
+                    ),
                   ),
                 ],
               ),
@@ -254,6 +320,11 @@ class _MapAddonsFocusState extends State<MapAddonsFocus> {
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          // First, so the reason is seen before any greyed-out switch.
+          if (widget.running) ...[
+            lockedBanner(),
+            const SizedBox(height: AppSpace.md),
+          ],
           if (widget.onDetect != null)
             Align(
               alignment: Alignment.centerRight,
@@ -269,8 +340,6 @@ class _MapAddonsFocusState extends State<MapAddonsFocus> {
             tr('Only add-ons signed by Uwe Bruckhaus are offered and loaded.'),
           ),
           Text(tr('New add-ons stay switched off until you enable them.')),
-          if (widget.running)
-            Text(tr('Finish running agents before changing add-ons.')),
           if (widget.welcome)
             Text(
               tr(
@@ -349,9 +418,14 @@ class _MapAddonsFocusState extends State<MapAddonsFocus> {
                 ),
               ),
               if (widget.onFile != null)
-                TextButton(
-                  onPressed: widget.busy ? null : widget.onFile,
-                  child: Text(tr('Install from file…')),
+                explained(
+                  TextButton(
+                    key: const ValueKey('addons-install-file'),
+                    onPressed: widget.busy || widget.running
+                        ? null
+                        : widget.onFile,
+                    child: Text(tr('Install from file…')),
+                  ),
                 ),
             ],
           ),
@@ -366,16 +440,18 @@ class _MapAddonsFocusState extends State<MapAddonsFocus> {
                     padding: const EdgeInsets.all(16),
                     child: AddonDetails(item: item, tr: tr),
                   ),
-                  FilledButton(
-                    onPressed:
-                        widget.busy ||
-                            widget.running ||
-                            !widget.online ||
-                            item['supported'] != true ||
-                            item['preview'] == null
-                        ? null
-                        : () => widget.onInstall(item),
-                    child: Text(tr('Get add-on')),
+                  explained(
+                    FilledButton(
+                      onPressed:
+                          widget.busy ||
+                              widget.running ||
+                              !widget.online ||
+                              item['supported'] != true ||
+                              item['preview'] == null
+                          ? null
+                          : () => widget.onInstall(item),
+                      child: Text(tr('Get add-on')),
+                    ),
                   ),
                 ],
               ),

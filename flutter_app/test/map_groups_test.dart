@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:maprisma/agent_map.dart';
 import 'package:maprisma/map_groups.dart';
 import 'package:maprisma/map_welcome.dart';
@@ -27,6 +28,8 @@ Widget focus({
   bool welcome = false,
   bool detecting = false,
   bool running = false,
+  List<String> runningAgents = const [],
+  VoidCallback? showTerminal,
   List<Map<String, dynamic>> items = const [],
   List<Map<String, dynamic>> nodes = const [],
   Set<String> detected = const {},
@@ -44,6 +47,8 @@ Widget focus({
       entries: null,
       busy: false,
       running: running,
+      runningAgents: runningAgents,
+      onShowTerminal: showTerminal,
       online: true,
       tr: (k) => k,
       welcome: welcome,
@@ -257,6 +262,143 @@ void main() {
       expect(calls, [false]);
     },
   );
+  test('the lock text names the running agents', () {
+    String tr(String k) => k;
+    expect(
+      addonsLockedText(tr, const []),
+      'Finish running agents before changing add-ons.',
+    );
+    expect(
+      addonsLockedText(tr, const ['Claude Code']),
+      'Claude Code is running in a terminal. Add-ons can be changed when it has finished.',
+    );
+    expect(
+      addonsLockedText(tr, const ['Claude Code', 'Pi']),
+      'Claude Code, Pi are running in terminals. Add-ons can be changed when they have finished.',
+    );
+  });
+  test('every text of the add-ons page is in the app\'s translations', () {
+    // The app reads assets/translations, which tools/flutter-assets.py fills
+    // only with its KEYS: a text missing there shows in English.
+    final source = File('lib/map_addons_focus.dart').readAsStringSync();
+    final texts = {
+      for (final m in RegExp(r"tr\(\s*'((?:[^'\\]|\\.)*)'").allMatches(source))
+        m.group(1)!.replaceAll(r"\'", "'"),
+      'Show terminal',
+    };
+    expect(texts, contains('Show terminal'));
+    expect(
+      texts,
+      contains(
+        '{0} is running in a terminal. Add-ons can be changed when it has finished.',
+      ),
+    );
+    for (final code in ['de', 'es', 'fr', 'it', 'nl', 'pl', 'pt']) {
+      final strings =
+          jsonDecode(File('assets/translations/$code.json').readAsStringSync())
+              as Map<String, dynamic>;
+      expect(
+        texts.where((t) => !strings.containsKey(t)),
+        isEmpty,
+        reason: 'missing in $code',
+      );
+    }
+  });
+  testWidgets(
+    'running agents: a banner names them, shows their terminal and explains each locked control',
+    (tester) async {
+      var shown = 0;
+      final calls = <bool>[];
+      const reason =
+          'Claude Code is running in a terminal. Add-ons can be changed when it has finished.';
+      await tester.pumpWidget(
+        focus(
+          items: [adapter('first', enabled: true)],
+          running: true,
+          runningAgents: const ['Claude Code'],
+          showTerminal: () => shown++,
+          nodes: [
+            {'label': 'Node', 'detail': ''},
+          ],
+          toggle: (_, on) async => calls.add(on),
+        ),
+      );
+      final banner = find.byKey(const ValueKey('addons-locked'));
+      expect(banner, findsOneWidget);
+      expect(
+        find.descendant(of: banner, matching: find.text(reason)),
+        findsOneWidget,
+      );
+      // The old general line is replaced, not shown twice.
+      expect(
+        find.text('Finish running agents before changing add-ons.'),
+        findsNothing,
+      );
+      await tester.tap(find.byKey(const ValueKey('addons-locked-show')));
+      await tester.pumpAndSettle();
+      expect(shown, 1);
+      await tester.tap(find.byType(PopupMenuButton<String>).first);
+      await tester.pumpAndSettle();
+      final item = find.widgetWithText(PopupMenuItem<String>, 'Switch off');
+      expect(tester.widget<PopupMenuItem<String>>(item).enabled, isFalse);
+      expect(
+        find.descendant(of: item, matching: find.text(reason)),
+        findsOneWidget,
+      );
+      expect(calls, isEmpty);
+    },
+  );
+  testWidgets('without running agents there is no banner and no reason', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      focus(
+        items: [adapter('first', enabled: true)],
+        nodes: [
+          {'label': 'Node', 'detail': ''},
+        ],
+      ),
+    );
+    expect(find.byKey(const ValueKey('addons-locked')), findsNothing);
+    await tester.tap(find.byType(PopupMenuButton<String>).first);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Add-ons can be changed when'), findsNothing);
+  });
+  testWidgets('the welcome checkboxes and Switch on explain the lock', (
+    tester,
+  ) async {
+    const reason =
+        'Pi is running in a terminal. Add-ons can be changed when it has finished.';
+    await tester.pumpWidget(
+      focus(
+        welcome: true,
+        running: true,
+        runningAgents: const ['Pi'],
+        items: [adapter('first')],
+        detected: {'first'},
+      ),
+    );
+    final box = tester.widget<Checkbox>(find.byType(Checkbox));
+    expect(box.onChanged, isNull);
+    expect(
+      find.ancestor(
+        of: find.byType(Checkbox),
+        matching: find.byWidgetPredicate(
+          (w) => w is Tooltip && w.message == reason,
+        ),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.ancestor(
+        of: find.widgetWithText(FilledButton, 'Switch on'),
+        matching: find.byWidgetPredicate(
+          (w) => w is Tooltip && w.message == reason,
+        ),
+      ),
+      findsOneWidget,
+    );
+  });
   testWidgets(
     'Welcome Agents reopens its first-use focus with the fixed footer',
     (tester) async {

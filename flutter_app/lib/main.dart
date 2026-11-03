@@ -735,7 +735,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
           tr: tr,
         );
         setState(() {
-          _terminals.add(terminal);
+          _terminals.add(_track(terminal));
           _visibleTerminal = terminal;
         });
       }
@@ -1023,6 +1023,63 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   // Only sessions owned by this app depend on its currently loaded adapters.
   bool get _agentsRunning => _terminals.any((t) => !t.ended);
 
+  /// A terminal's agent as the map names it (its command when unknown).
+  String _terminalName(AgentTerminal terminal) =>
+      _catalog
+              .where((a) => a['command'] == terminal.command)
+              .firstOrNull?['name']
+          as String? ??
+      terminal.command;
+
+  /// The agents that keep add-ons locked, each name once, in tab order.
+  List<String> get _runningAgentNames => [
+    ...{
+      for (final t in _terminals)
+        if (!t.ended) _terminalName(t),
+    },
+  ];
+
+  /// Brings a terminal to the front and gives it the keyboard.
+  void _showTerminal(AgentTerminal terminal) {
+    // Terminals switch, not what another window shows.
+    if (_navigationBlocked || _card != null) return;
+    setState(() => _visibleTerminal = terminal);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_visibleTerminal != null) _terminalKeys.requestFocus();
+    });
+  }
+
+  /// A new terminal: when it ends, what it locked (add-ons, the tab state)
+  /// is redrawn at once, not at the next unrelated rebuild.
+  AgentTerminal _track(AgentTerminal terminal) {
+    terminal.addListener(() {
+      if (mounted && terminal.ended) setState(() {});
+    });
+    return terminal;
+  }
+
+  void _showRunningTerminal() {
+    final running = _terminals.where((t) => !t.ended).firstOrNull;
+    if (running != null) _showTerminal(running);
+  }
+
+  /// An add-on change asked for while agents run: say why nothing happens.
+  void _addonsLocked() {
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(_navigator.currentContext!);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        key: const ValueKey('addons-locked-message'),
+        content: Text(addonsLockedText(tr, _runningAgentNames)),
+        action: SnackBarAction(
+          label: tr('Show terminal'),
+          onPressed: _showRunningTerminal,
+        ),
+      ),
+    );
+  }
+
   Map<String, dynamic> get _mapGraph =>
       _welcome && !_addons.any((i) => i['enabled'] == true)
       ? {'nodes': <dynamic>[], 'edges': <dynamic>[]}
@@ -1078,10 +1135,11 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         action: SnackBarAction(
           label: tr('Undo'),
           onPressed: () async {
-            if (_busy || _agentsRunning) {
+            if (_busy) {
               _actionFailed();
               return;
             }
+            if (_agentsRunning) return _addonsLocked();
             setState(() => _busy = true);
             try {
               await undo();
@@ -1112,6 +1170,8 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       entries: _addonEntries,
       busy: _busy,
       running: _agentsRunning,
+      runningAgents: _runningAgentNames,
+      onShowTerminal: _showRunningTerminal,
       online: (_snapshot?['settings'] as Map?)?['addons_online'] != false,
       tr: tr,
       welcome: _welcome && category == 1,
@@ -1160,106 +1220,128 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
               e['preview'] != null,
         )
         .firstOrNull;
-    final blocked = _busy || _agentsRunning;
-    await _review(
-      () => showModalBottomSheet<void>(
+    // The sheet follows the terminals: when the last agent ends, it unlocks
+    // while it is open.
+    final terminals = Listenable.merge(_terminals);
+    final choice = await _review(
+      () => showModalBottomSheet<String>(
         context: context,
         isScrollControlled: true,
-        builder: (sheet) => ConstrainedBox(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.sizeOf(sheet).height * .85,
-          ),
-          child: ListView(
-            shrinkWrap: true,
-            padding: const EdgeInsets.all(24),
-            children: [
-              Text(
-                '${item['name']} · ${item['version']}',
-                style: Theme.of(sheet).textTheme.titleLarge,
+        builder: (sheet) => ListenableBuilder(
+          listenable: terminals,
+          builder: (sheet, _) {
+            final blocked = _busy || _agentsRunning;
+            return ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(sheet).height * .85,
               ),
-              AddonDetails(item: item, tr: tr),
-              if (_agentsRunning)
-                Text(tr('Finish running agents before changing add-ons.')),
-              TextButton(
-                onPressed:
-                    blocked ||
-                        item['supported'] != true ||
-                        (item['verified'] != true && item['enabled'] != true)
-                    ? null
-                    : () {
-                        Navigator.pop(sheet);
-                        _toggleAddon(
-                          item['id'] as String,
-                          item['enabled'] != true,
-                        );
-                      },
-                child: Text(
-                  tr(item['enabled'] == true ? 'Switch off' : 'Switch on'),
-                ),
-              ),
-              if (update != null)
-                TextButton(
-                  onPressed: blocked
-                      ? null
-                      : () {
-                          Navigator.pop(sheet);
-                          _installAddon(update);
-                        },
-                  child: Text(
-                    tr(
-                      'Update add-on to {0}',
-                    ).replaceAll('{0}', update['version'] as String),
+              child: ListView(
+                shrinkWrap: true,
+                padding: const EdgeInsets.all(24),
+                children: [
+                  Text(
+                    '${item['name']} · ${item['version']}',
+                    style: Theme.of(sheet).textTheme.titleLarge,
                   ),
-                ),
-              for (final agent in item['sign_ins'] as List? ?? [])
-                TextButton(
-                  onPressed: _busy
-                      ? null
-                      : () {
-                          Navigator.pop(sheet);
-                          _agentAction(agent['command'] as String, 'login');
-                        },
-                  child: Text(
-                    tr(
-                      'Sign in to {0}…',
-                    ).replaceAll('{0}', agent['name'] as String),
+                  AddonDetails(item: item, tr: tr),
+                  if (_agentsRunning) ...[
+                    Text(
+                      addonsLockedText(tr, _runningAgentNames),
+                      key: const ValueKey('addon-sheet-locked'),
+                    ),
+                    TextButton(
+                      key: const ValueKey('addon-sheet-show-terminal'),
+                      // Shown after the sheet is gone: while it is open,
+                      // navigation is blocked and nothing would happen.
+                      onPressed: () => Navigator.pop(sheet, 'terminal'),
+                      child: Text(tr('Show terminal')),
+                    ),
+                  ],
+                  TextButton(
+                    onPressed:
+                        blocked ||
+                            item['supported'] != true ||
+                            (item['verified'] != true &&
+                                item['enabled'] != true)
+                        ? null
+                        : () {
+                            Navigator.pop(sheet);
+                            _toggleAddon(
+                              item['id'] as String,
+                              item['enabled'] != true,
+                            );
+                          },
+                    child: Text(
+                      tr(item['enabled'] == true ? 'Switch off' : 'Switch on'),
+                    ),
                   ),
-                ),
-              if (item['kind'] == 'agent')
-                for (final command in item['provides'] as List? ?? [])
-                  if (_catalog.any((a) => a['command'] == command))
+                  if (update != null)
+                    TextButton(
+                      onPressed: blocked
+                          ? null
+                          : () {
+                              Navigator.pop(sheet);
+                              _installAddon(update);
+                            },
+                      child: Text(
+                        tr(
+                          'Update add-on to {0}',
+                        ).replaceAll('{0}', update['version'] as String),
+                      ),
+                    ),
+                  for (final agent in item['sign_ins'] as List? ?? [])
                     TextButton(
                       onPressed: _busy
                           ? null
                           : () {
                               Navigator.pop(sheet);
-                              _selectAgent(command as String);
+                              _agentAction(agent['command'] as String, 'login');
                             },
-                      child: Text(tr('Details')),
+                      child: Text(
+                        tr(
+                          'Sign in to {0}…',
+                        ).replaceAll('{0}', agent['name'] as String),
+                      ),
                     ),
-              if (item['removable'] == true)
-                TextButton(
-                  onPressed: blocked
-                      ? null
-                      : () {
-                          Navigator.pop(sheet);
-                          _removeAddon(item);
-                        },
-                  child: Text(tr('Remove')),
-                ),
-              TextButton(
-                onPressed: () => Navigator.pop(sheet),
-                child: Text(tr('Close')),
+                  if (item['kind'] == 'agent')
+                    for (final command in item['provides'] as List? ?? [])
+                      if (_catalog.any((a) => a['command'] == command))
+                        TextButton(
+                          onPressed: _busy
+                              ? null
+                              : () {
+                                  Navigator.pop(sheet);
+                                  _selectAgent(command as String);
+                                },
+                          child: Text(tr('Details')),
+                        ),
+                  if (item['removable'] == true)
+                    TextButton(
+                      onPressed: blocked
+                          ? null
+                          : () {
+                              Navigator.pop(sheet);
+                              _removeAddon(item);
+                            },
+                      child: Text(tr('Remove')),
+                    ),
+                  TextButton(
+                    onPressed: () => Navigator.pop(sheet),
+                    child: Text(tr('Close')),
+                  ),
+                ],
               ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );
+    if (choice == 'terminal') _showRunningTerminal();
   }
 
   Future<void> _removeAddon(Map<String, dynamic> item) async {
-    if (_busy || _agentsRunning) return;
+    if (_busy) return;
+    if (_agentsRunning) return _addonsLocked();
     try {
       final plan = await _client.addonsRemovePreview(id: item['id']);
       if (!mounted) return;
@@ -1293,7 +1375,9 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   }
 
   Future<void> _toggleAddon(String id, bool on) async {
-    if (_busy || _agentsRunning) return;
+    if (_busy) return;
+    // Never silently: a click that arrives while agents run says why.
+    if (_agentsRunning) return _addonsLocked();
     final before =
         _addons.where((i) => i['id'] == id).firstOrNull?['enabled'] == true;
     setState(() => _busy = true);
@@ -1702,7 +1786,8 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   Future<void> _updateAllAddons(Map<String, dynamic> line) async {
     final updates = (line['updates'] as List? ?? const [])
         .cast<Map<String, dynamic>>();
-    if (updates.isEmpty || _busy || _agentsRunning) return;
+    if (updates.isEmpty || _busy) return;
+    if (_agentsRunning) return _addonsLocked();
     final yes = await _cardReview(
       tr('Update all'),
       (yes, no) => TaskReview(
@@ -2210,7 +2295,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         tr: tr,
       );
       setState(() {
-        _terminals.add(terminal);
+        _terminals.add(_track(terminal));
         _visibleTerminal = terminal;
       });
     }
@@ -2597,7 +2682,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       tr: tr,
     );
     setState(() {
-      _terminals.add(terminal);
+      _terminals.add(_track(terminal));
       _visibleTerminal = terminal;
     });
   }
@@ -2702,6 +2787,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   /// reviewed like a catalog entry before the worker installs it.
   Future<void> _installAddonFile() async {
     if (_busy) return;
+    if (_agentsRunning) return _addonsLocked();
     final file = await PopupGuard.around(
       () => openFile(
         acceptedTypeGroups: [
@@ -2752,6 +2838,8 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
 
   Future<void> _installAddon(Map<String, dynamic> entry) async {
     if (_busy) return;
+    // Get add-on and a single update, like Update all.
+    if (_agentsRunning) return _addonsLocked();
     final confirmed = await _cardReview(
       tr('Add-ons'),
       (yes, no) =>
@@ -3146,7 +3234,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         if (_guideReturn) _guideTerminals.add(terminal);
         setState(() {
           _card = null;
-          _terminals.add(terminal);
+          _terminals.add(_track(terminal));
           _visibleTerminal = terminal;
           _showGuide = false;
         });
@@ -3908,7 +3996,8 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   }
 
   Future<void> _finishSetup(List<String>? selected) async {
-    if (_busy || (selected != null && _agentsRunning)) return;
+    if (_busy) return;
+    if (selected != null && _agentsRunning) return _addonsLocked();
     final before = _addons
         .where((i) => i['enabled'] == true)
         .map((i) => i['id'] as String)
@@ -4395,13 +4484,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                     tabs: [
                       for (final terminal in _terminals)
                         (
-                          _catalog
-                                      .where(
-                                        (a) => a['command'] == terminal.command,
-                                      )
-                                      .firstOrNull?['name']
-                                  as String? ??
-                              terminal.command,
+                          _terminalName(terminal),
                           terminal.ended
                               ? 'ended'
                               : ((_graph?['activity']
@@ -4416,17 +4499,8 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                         ? null
                         : _terminals.indexOf(_visibleTerminal!),
                     tr: tr,
-                    onSelect: (i) {
-                      // Tabs switch terminals, not what another window shows.
-                      if (_navigationBlocked || _card != null) return;
-                      setState(() => _visibleTerminal = _terminals[i]);
-                      // The click took the keyboard to the tab.
-                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        if (_visibleTerminal != null) {
-                          _terminalKeys.requestFocus();
-                        }
-                      });
-                    },
+                    // The click took the keyboard to the tab; showing gives it back.
+                    onSelect: (i) => _showTerminal(_terminals[i]),
                   ),
                 Expanded(
                   child: LayoutBuilder(
