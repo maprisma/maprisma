@@ -17,3 +17,7 @@
 4. **Medium** `flutter_app/lib/main.dart:1223` The add-on details sheet (`_addonMenu`) computes `final blocked = _busy || _agentsRunning;` once before opening `showModalBottomSheet`, and the modal sheet's builder does not rebuild when `_track` calls `setState(() {})` on `_MaprismaAppState` (`flutter_app/lib/main.dart:1056`). If the last running agent terminal finishes while the details sheet is open, the `addon-sheet-locked` banner remains visible and `Switch on`/`Switch off`, `Update add-on to {0}`, and `Remove` stay disabled until the sheet is closed and reopened.
    - **How to reproduce:** Start an agent in an embedded terminal, open an add-on card's details sheet in `Add-ons` so the lock banner and disabled buttons are shown, and let the terminal finish (`session_ended`). The sheet stays locked until dismissed and reopened.
    > Author: Fixed in 5073b1a: the sheet is built in a `ListenableBuilder` on `Listenable.merge(_terminals)` and computes `blocked` and its text on each build, so it unlocks when the last agent ends. Covered by task_cards_app_test "while an agent runs, add-on changes say why and the lock lifts when it ends" (an open sheet unlocks after `session_ended`).
+
+## Round 2 (Antigravity, 2026-11-03, commit 6ef76b2)
+
+CLEAN
