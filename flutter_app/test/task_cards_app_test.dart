@@ -160,6 +160,7 @@ for line in sys.stdin:
  elif m=='mcp.tools_cached':r={'cached':None}
  elif m=='mcp.tools':tasks['tools']={'status':'ok','checked':'2026-10-29T12:00:00','server':'known 1','tools':[{'name':'lookup','description':'Looks up'}],'prompts':[]};r={'task':'tools'}
  elif m=='mcp.option_preview':r={'plan':'opaque-catalog','empty':False,'files':[],'links_add':[],'links_remove':[],'kind':'mcp','agents':['Test agent'],'focus':['agent:test']}
+ elif m=='map.smart_helpers':r={'helpers':[{'command':'local-helper','name':'Local helper','local':True}] if Path('smart_helpers').exists() else []}
  elif m=='tasks.status':r=({'state':'failed'} if p['task']=='install' and install_fails else {'state':'done','result':tasks[p['task']]})
  else:r={}
  with out:print(json.dumps({'id':q['id'],'result':r}),flush=True)
@@ -1543,6 +1544,8 @@ void main() {
       ).firstWhere((q) => q['method'] == 'checks.mcp_check')['params'],
       {'force': false},
     ); // the daily check, asked quietly at start
+    await tester.tap(find.byKey(const ValueKey('problems-open')));
+    await settleService(tester);
     await tester.tap(find.byKey(const ValueKey('smart-status-mcp')));
     await settleService(tester);
     expect(
@@ -1575,6 +1578,8 @@ void main() {
     tester,
   ) async {
     final dir = await mountApp(tester);
+    await settleService(tester);
+    await tester.tap(find.byKey(const ValueKey('problems-open')));
     await settleService(tester);
     await tester.tap(find.byKey(const ValueKey('smart-status-mcp')));
     await settleService(tester);
@@ -1646,6 +1651,8 @@ void main() {
     tester,
   ) async {
     final dir = await mountApp(tester);
+    await settleService(tester);
+    await tester.tap(find.byKey(const ValueKey('problems-open')));
     await settleService(tester);
     await tester.tap(find.byKey(const ValueKey('smart-status-mcp')));
     await settleService(tester);
@@ -1859,6 +1866,8 @@ void main() {
         ('providers', 'Provider finding in column 2'),
         ('models', 'Model finding in column 3'),
       ]) {
+        await tester.tap(find.byKey(const ValueKey('problems-open')));
+        await settleService(tester);
         await tester.tap(find.byKey(ValueKey('smart-status-$col')));
         await settleService(tester);
         expect(find.text(expected), findsOneWidget);
@@ -1935,7 +1944,7 @@ void main() {
   ) async {
     final dir = await mountApp(tester);
     await settleService(tester);
-    await tester.tap(find.byKey(const ValueKey('smart-status-agents')));
+    await tester.tap(find.byKey(const ValueKey('problems-open')));
     await settleService(tester);
     expect(find.byType(OverlayWindow), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('smart-rules')));
@@ -1946,7 +1955,7 @@ void main() {
     expect(find.byType(ActionRulesWindow), findsNothing);
     // The rules took the Ask AI window's place: open it again.
     expect(find.byType(OverlayWindow), findsNothing);
-    await tester.tap(find.byKey(const ValueKey('smart-status-agents')));
+    await tester.tap(find.byKey(const ValueKey('problems-open')));
     await settleService(tester);
     expect(find.byType(OverlayWindow), findsOneWidget);
     await tester.sendKeyEvent(LogicalKeyboardKey.f1);
@@ -1961,7 +1970,7 @@ void main() {
     expect(find.byKey(const ValueKey('help-manual')), findsOneWidget);
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await settleService(tester);
-    await tester.tap(find.byKey(const ValueKey('smart-status-agents')));
+    await tester.tap(find.byKey(const ValueKey('problems-open')));
     await settleService(tester);
     await tester.tap(find.widgetWithText(OutlinedButton, 'Update').first);
     await settleService(tester);
@@ -1970,6 +1979,37 @@ void main() {
     expect(tester.takeException(), isNull);
     await unmountApp(tester);
   });
+
+  testWidgets(
+    'the header Ask AI button opens the centralized Ask AI page with category proposal buttons',
+    (tester) async {
+      await mountApp(
+        tester,
+        beforeStart: (d) =>
+            File('${d.path}/smart_helpers').writeAsStringSync('1'),
+      );
+      await settleService(tester);
+      await tester.tap(find.byKey(const ValueKey('ask-ai-open')));
+      await settleService(tester);
+      expect(find.byType(OverlayWindow), findsOneWidget);
+      for (final (col, title, hint) in const [
+        ('mcp', 'MCP servers and skills', 'Find an MCP server or skill…'),
+        ('agents', 'Agents', 'Set up or connect an agent…'),
+        ('providers', 'Providers', 'Set up or tune a provider…'),
+        ('models', 'Models', 'Find or connect a model…'),
+      ]) {
+        await tester.tap(find.byKey(ValueKey('smart-category-$col')));
+        await settleService(tester);
+        expect(find.text('Ask AI · $title'), findsOneWidget);
+        expect(find.text(hint), findsOneWidget);
+      }
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await settleService(tester);
+      expect(find.byType(OverlayWindow), findsNothing);
+      expect(tester.takeException(), isNull);
+      await unmountApp(tester);
+    },
+  );
 
   testWidgets('the use cases stay reachable in Help', (tester) async {
     await mountApp(tester);
