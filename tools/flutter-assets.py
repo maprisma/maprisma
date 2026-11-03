@@ -721,6 +721,12 @@ KEYS = (
     "{0} is running in a terminal. Add-ons can be changed when it has finished.",
     "{0} are running in terminals. Add-ons can be changed when they have finished.",
     "Show terminal",
+    # Measure and tune local models (task 029).
+    "Measure and tune",
+    "Not measured for this build yet",
+    "Measured for this card: {0}",
+    "{0}: context {1} · {2} tokens/s prompt · {3} tokens/s answer",
+    "Not measured: {0}",
 )
 
 

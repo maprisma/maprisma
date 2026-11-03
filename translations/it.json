@@ -3340,5 +3340,10 @@
  "A picture of this window goes to Pictures/Maprisma. In a terminal, use the camera symbol below it: programs there may use F12.": "Un’immagine di questa finestra va in Pictures/Maprisma. In un terminale usa il simbolo della fotocamera sotto: i programmi lì possono usare F12.",
  "A picture of this window is saved, with a note if you like. In a terminal, use the camera symbol below it: programs there may use F12.": "Viene salvata un’immagine di questa finestra, con una nota se vuoi. In un terminale usa il simbolo della fotocamera sotto: i programmi possono usare F12.",
  "{0} is running in a terminal. Add-ons can be changed when it has finished.": "{0} è in esecuzione in un terminale. Potrai modificare i componenti aggiuntivi quando avrà finito.",
- "{0} are running in terminals. Add-ons can be changed when they have finished.": "{0} sono in esecuzione nei terminali. Potrai modificare i componenti aggiuntivi quando avranno finito."
+ "{0} are running in terminals. Add-ons can be changed when they have finished.": "{0} sono in esecuzione nei terminali. Potrai modificare i componenti aggiuntivi quando avranno finito.",
+ "Measure and tune": "Misura e regola",
+ "Not measured for this build yet": "Non ancora misurato per questa build",
+ "Measured for this card: {0}": "Misurato per questa scheda: {0}",
+ "{0}: context {1} · {2} tokens/s prompt · {3} tokens/s answer": "{0}: contesto {1} · {2} token/s in ingresso · {3} token/s di risposta",
+ "Not measured: {0}": "Non misurato: {0}"
 }

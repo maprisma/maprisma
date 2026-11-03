@@ -1488,6 +1488,8 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     }
     if (!mounted) return;
     (String, String, String)? change;
+    List<String>? tune;
+    var tuneAsked = false;
     await _cardReview(
       '${tr('Performance')} · ${runtime['name']}',
       (yes, no) => PerformanceView(
@@ -1506,9 +1508,17 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
           change = (section, setting, value);
           no();
         },
+        onTune: key == 'llamacpp'
+            ? (models) {
+                tune = models;
+                tuneAsked = true;
+                no();
+              }
+            : null,
         onClose: no,
       ),
     );
+    if (tuneAsked && mounted) return _measureAndTune(key, tune);
     final chosen = change;
     if (!mounted || chosen == null) return;
     await _connectionPreview({
@@ -3262,6 +3272,12 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         params: params,
         title: title,
       );
+      // A new llama.cpp model is measured for this card (task 029).
+      if (result != null &&
+          operation == 'models.download' &&
+          params['key'] == 'llamacpp') {
+        _tuneAfterBusy = true;
+      }
       return result;
     } finally {
       if (mounted) {
@@ -3270,6 +3286,113 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
           _busy = false;
         });
       }
+      if (_tuneAfterBusy && mounted) {
+        _tuneAfterBusy = false;
+        unawaited(_tuneUntuned());
+      }
+    }
+  }
+
+  bool _tuneAfterBusy = false, _tuning = false;
+
+  /// The measurement's lines for the review and the message.
+  List<String> _tuneLines(Map<String, dynamic> plan) => [
+    for (final m in (plan['models'] as List? ?? const []).cast<Map>())
+      tr('{0}: context {1} · {2} tokens/s prompt · {3} tokens/s answer')
+          .replaceAll('{0}', '${m['name']}')
+          .replaceAll('{1}', shortNumber(m['ctx']))
+          .replaceAll('{2}', '${m['pp']}')
+          .replaceAll('{3}', '${m['tg']}'),
+    for (final s in (plan['skipped'] as List? ?? const []).cast<Map>())
+      tr(
+        'Not measured: {0}',
+      ).replaceAll('{0}', '${s['name']} (${s['reason']})'),
+  ];
+
+  /// Measure and tune, asked for in the Performance view: the measurement
+  /// runs with its progress shown, then the preview to apply (backup, Undo).
+  Future<void> _measureAndTune(String key, List<String>? models) async {
+    if (_busy) return;
+    final title = tr('Measure and tune');
+    Map<String, dynamic>? plan;
+    setState(() => _busy = true);
+    try {
+      final started = await _client.modelsTune(key: key, models: models);
+      if (!mounted) return;
+      plan = await _runTask(
+        operation: 'models.tune',
+        existingTask: started['task'] as String,
+        title: title,
+      );
+    } catch (_) {
+      if (mounted) _actionFailed();
+      return;
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+    if (!mounted || plan == null || plan['plan'] is! String) return;
+    await _connectionPreview(
+      const {},
+      ready: {
+        ...plan,
+        'notes': [..._tuneLines(plan), ...(plan['notes'] as List? ?? const [])],
+      },
+    );
+  }
+
+  /// Task 029: llama.cpp models not measured for the build the service runs
+  /// (new ones, or all of them after the build changed) are measured and
+  /// tuned in the background when the card is idle; a message offers Undo.
+  /// A busy card, a failure or no llama.cpp (models.tuning is refused)
+  /// waits for the next time.
+  Future<void> _tuneUntuned() async {
+    if (_tuning) return;
+    _tuning = true;
+    try {
+      final facts = await _quietTask('models.tuning', {'key': 'llamacpp'});
+      final untuned = (facts['untuned'] as List? ?? const []).cast<String>();
+      if (untuned.isEmpty || !mounted) return;
+      final plan = await _quietTask('models.tune', {
+        'key': 'llamacpp',
+        'models': untuned,
+      });
+      if (!mounted ||
+          _busy ||
+          plan['plan'] is! String ||
+          (plan['models'] as List? ?? const []).isEmpty) {
+        return;
+      }
+      _mapStale = true;
+      var result = await _client.connectionsApply(plan: plan['plan'] as String);
+      if (result['task'] is String) {
+        result = await _awaitTask('connections.apply', result);
+      }
+      _connectionUndo = result['undo'] as String?;
+      if (!mounted) return;
+      final messenger = ScaffoldMessenger.of(_navigator.currentContext!);
+      messenger.showSnackBar(
+        SnackBar(
+          key: const ValueKey('tuned-message'),
+          duration: const Duration(seconds: 12),
+          content: Text(
+            tr(
+              'Measured for this card: {0}',
+            ).replaceAll('{0}', _tuneLines(plan).join('; ')),
+          ),
+          action: _connectionUndo == null
+              ? null
+              : SnackBarAction(
+                  label: tr('Undo'),
+                  onPressed: () {
+                    if (!_keysBlocked) unawaited(_undoConnection());
+                  },
+                ),
+        ),
+      );
+    } catch (_) {
+      lastRefusal = null; // In the background: nobody asked for it.
+    } finally {
+      _tuning = false;
     }
   }
 
@@ -3645,28 +3768,34 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     String? method,
     String? plainDisconnect,
     bool confirmed = false,
+    Map<String, dynamic>? ready,
   }) async {
     setState(() => _busy = true);
     var applied = false;
     try {
-      final plan = method != null
-          ? await _backend!.call(method, params)
-          : author
-          ? await _client.connectionsAuthorPreview(
-              agents: params['agents'],
-              entry: params['entry'],
-              folder: params['folder'] as String?,
-              kind: params['kind'] as String,
-              name: params['name'] as String?,
-            )
-          : await _client.connectionsPreview(
-              command: params['command'] as String,
-              item: params['item'] as String,
-              kind: params['kind'] as String,
-              model: params['model'] as String?,
-              remove: params['remove'] as bool,
-              useNow: params['use_now'] as bool?,
-            );
+      final Map<String, dynamic> plan;
+      if (ready != null) {
+        plan = ready;
+      } else {
+        plan = method != null
+            ? await _backend!.call(method, params)
+            : author
+            ? await _client.connectionsAuthorPreview(
+                agents: params['agents'],
+                entry: params['entry'],
+                folder: params['folder'] as String?,
+                kind: params['kind'] as String,
+                name: params['name'] as String?,
+              )
+            : await _client.connectionsPreview(
+                command: params['command'] as String,
+                item: params['item'] as String,
+                kind: params['kind'] as String,
+                model: params['model'] as String?,
+                remove: params['remove'] as bool,
+                useNow: params['use_now'] as bool?,
+              );
+      }
       if (!mounted) return;
       // A line taken away with nothing to warn about needs only a yes.
       final quiet =
@@ -4137,6 +4266,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         unawaited(_checkHealth());
         unawaited(_checkUpdates());
         unawaited(_checkMcp());
+        unawaited(_tuneUntuned());
         _mcpTimer ??= Timer.periodic(
           const Duration(hours: 1),
           (_) => unawaited(_checkMcp()),

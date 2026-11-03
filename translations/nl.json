@@ -3340,5 +3340,10 @@
  "A picture of this window goes to Pictures/Maprisma. In a terminal, use the camera symbol below it: programs there may use F12.": "Een afbeelding van dit venster gaat naar Pictures/Maprisma. Gebruik in een terminal het camerasymbool eronder: programma’s daar kunnen F12 zelf gebruiken.",
  "A picture of this window is saved, with a note if you like. In a terminal, use the camera symbol below it: programs there may use F12.": "Een afbeelding van dit venster wordt opgeslagen, desgewenst met een notitie. Gebruik in een terminal het camerasymbool eronder: programma’s kunnen F12 zelf gebruiken.",
  "{0} is running in a terminal. Add-ons can be changed when it has finished.": "{0} draait in een terminal. Je kunt uitbreidingen wijzigen zodra die klaar is.",
- "{0} are running in terminals. Add-ons can be changed when they have finished.": "{0} draaien in terminals. Je kunt uitbreidingen wijzigen zodra die klaar zijn."
+ "{0} are running in terminals. Add-ons can be changed when they have finished.": "{0} draaien in terminals. Je kunt uitbreidingen wijzigen zodra die klaar zijn.",
+ "Measure and tune": "Meten en afstellen",
+ "Not measured for this build yet": "Nog niet gemeten voor deze build",
+ "Measured for this card: {0}": "Gemeten voor deze kaart: {0}",
+ "{0}: context {1} · {2} tokens/s prompt · {3} tokens/s answer": "{0}: context {1} · {2} tokens/s invoer · {3} tokens/s antwoord",
+ "Not measured: {0}": "Niet gemeten: {0}"
 }

@@ -750,5 +750,10 @@
   "No AUR helper (yay or paru) was found to install whisper.cpp.": "Nessun helper AUR (yay o paru) trovato per installare whisper.cpp.",
   "{0} is running in a terminal. Add-ons can be changed when it has finished.": "{0} è in esecuzione in un terminale. Potrai modificare i componenti aggiuntivi quando avrà finito.",
   "{0} are running in terminals. Add-ons can be changed when they have finished.": "{0} sono in esecuzione nei terminali. Potrai modificare i componenti aggiuntivi quando avranno finito.",
-  "Show terminal": "Mostra terminale"
+  "Show terminal": "Mostra terminale",
+  "Measure and tune": "Misura e regola",
+  "Not measured for this build yet": "Non ancora misurato per questa build",
+  "Measured for this card: {0}": "Misurato per questa scheda: {0}",
+  "{0}: context {1} · {2} tokens/s prompt · {3} tokens/s answer": "{0}: contesto {1} · {2} token/s in ingresso · {3} token/s di risposta",
+  "Not measured: {0}": "Non misurato: {0}"
 }

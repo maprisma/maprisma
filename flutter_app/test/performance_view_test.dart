@@ -113,6 +113,66 @@ void main() {
     },
   );
 
+  testWidgets('Measure and tune: all models or one; untuned ones say so', (
+    tester,
+  ) async {
+    final asked = <List<String>?>[];
+    await tester.binding.setSurfaceSize(const Size(1400, 1400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: PerformanceView(
+            facts: {
+              ..._facts('llamacpp'),
+              'untuned': ['room'],
+            },
+            tr: (k) => k,
+            onChange: (_, _, _) {},
+            onClose: () {},
+            onTune: asked.add,
+          ),
+        ),
+      ),
+    );
+    expect(
+      find.textContaining('Not measured for this build yet'),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('context-room')),
+        matching: find.textContaining('Not measured for this build yet'),
+      ),
+      findsOneWidget,
+    );
+    // Set to stays next to it.
+    expect(find.text('Set to {0}'.replaceAll('{0}', '64k')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('tune-all')));
+    await tester.tap(find.byKey(const ValueKey('tune-room')));
+    expect(asked, [
+      null,
+      ['room'],
+    ]);
+  });
+
+  testWidgets('Ollama has no Measure and tune', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: PerformanceView(
+            facts: _facts('ollama'),
+            tr: (k) => k,
+            onChange: (_, _, _) {},
+            onClose: () {},
+            onTune: (_) {},
+          ),
+        ),
+      ),
+    );
+    expect(find.text('Measure and tune'), findsNothing);
+  });
+
   testWidgets('tips from an agent: asked, checked ones shown, applied', (
     tester,
   ) async {

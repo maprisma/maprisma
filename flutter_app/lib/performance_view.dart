@@ -36,6 +36,7 @@ class PerformanceView extends StatefulWidget {
     required this.onClose,
     this.onAsk,
     this.answer,
+    this.onTune,
   });
   final Map<String, dynamic> facts;
   final String Function(String) tr;
@@ -47,6 +48,10 @@ class PerformanceView extends StatefulWidget {
 
   /// The last answer for this local LLM, kept while the app runs.
   final Map<String, dynamic>? answer;
+
+  /// Measure and tune (models.tune, llama.cpp): the models named, or all
+  /// (null), measured on this card with the build the service runs.
+  final void Function(List<String>? models)? onTune;
 
   @override
   State<PerformanceView> createState() => _PerformanceViewState();
@@ -245,9 +250,24 @@ class _PerformanceViewState extends State<PerformanceView> {
             ],
           ),
           const SizedBox(height: 12),
-          Text(tr('Context per model'), style: text.titleMedium),
+          Row(
+            children: [
+              Expanded(
+                child: Text(tr('Context per model'), style: text.titleMedium),
+              ),
+              if (widget.onTune != null && contextSettable)
+                FilledButton.tonal(
+                  key: const ValueKey('tune-all'),
+                  onPressed: () => widget.onTune!(null),
+                  child: Text(tr('Measure and tune')),
+                ),
+            ],
+          ),
           for (final model in (facts['models'] as List).cast<Map>())
             () {
+              final untuned = (facts['untuned'] as List? ?? const []).contains(
+                model['name'],
+              );
               final best = model['best'] as int, now = model['context'] as int;
               final over = best != 0 && now > best;
               final room = best != 0 && now != 0 && best > now;
@@ -262,6 +282,8 @@ class _PerformanceViewState extends State<PerformanceView> {
                   tr(
                     'trained for {0}',
                   ).replaceAll('{0}', shortNumber(model['trained'])),
+                if (untuned && contextSettable)
+                  tr('Not measured for this build yet'),
               ].join(' · ');
               return ListTile(
                 key: ValueKey('context-${model['name']}'),
@@ -292,13 +314,32 @@ class _PerformanceViewState extends State<PerformanceView> {
                         ),
                   child: Text(line),
                 ),
-                trailing: (over || room) && contextSettable
-                    ? TextButton(
-                        onPressed: () =>
-                            onChange('${model['name']}', 'ctx-size', '$best'),
-                        child: Text(
-                          tr('Set to {0}').replaceAll('{0}', shortNumber(best)),
-                        ),
+                trailing:
+                    contextSettable && (over || room || widget.onTune != null)
+                    ? Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (over || room)
+                            TextButton(
+                              onPressed: () => onChange(
+                                '${model['name']}',
+                                'ctx-size',
+                                '$best',
+                              ),
+                              child: Text(
+                                tr(
+                                  'Set to {0}',
+                                ).replaceAll('{0}', shortNumber(best)),
+                              ),
+                            ),
+                          if (widget.onTune != null)
+                            TextButton(
+                              key: ValueKey('tune-${model['name']}'),
+                              onPressed: () =>
+                                  widget.onTune!(['${model['name']}']),
+                              child: Text(tr('Measure and tune')),
+                            ),
+                        ],
                       )
                     : null,
               );
