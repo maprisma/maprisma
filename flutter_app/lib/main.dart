@@ -46,8 +46,10 @@ import 'item_details_view.dart';
 import 'map_layout.dart' show withAgentLinks;
 import 'map_editor.dart' show mapColumnLayers;
 import 'action_rules_window.dart';
+import 'app_look.dart' show StatusColors;
 import 'map_smart_card.dart'
     show
+        MapSmartCard,
         SmartStatusData,
         SmartStatusIcon,
         mapSmartColumns,
@@ -2096,7 +2098,9 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   }
 
   int _smartStatusSeq = 0;
-  (int, String)? _smartStatusTarget;
+  int _askPromptSeq = 0;
+  bool _askOpen = false;
+  String _askColumn = 'agents';
 
   SmartStatusData get _smartStatusData => SmartStatusData(
     report: _healthReport,
@@ -2127,12 +2131,9 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     },
   );
 
-  Future<void> _openProblems() async {
-    if (_busy) return;
-    final targetCol = _smartStatusData.firstConcernedColumn;
+  List<String>? _neededLayersForColumn(String targetCol) {
     final colIndex = mapSmartColumns.indexWhere((c) => c.$1 == targetCol);
     final rawLayers = (_snapshot?['settings'] as Map?)?['map_layers'] as List?;
-    List<String>? updatedLayers;
     if (colIndex >= 0 && rawLayers != null) {
       const needs = {0: 1, 3: 2};
       final current = rawLayers.cast<String>();
@@ -2141,9 +2142,16 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         if (needs[colIndex] case final other?) ...mapColumnLayers[other],
       ];
       if (needed.any((l) => !current.contains(l))) {
-        updatedLayers = {...current, ...needed}.toList();
+        return {...current, ...needed}.toList();
       }
     }
+    return null;
+  }
+
+  Future<void> _openProblems([String? column]) async {
+    if (_busy) return;
+    final targetCol = column ?? _smartStatusData.firstConcernedColumn;
+    final updatedLayers = _neededLayersForColumn(targetCol);
     setState(() {
       _card = null;
       _browser = null;
@@ -2157,11 +2165,65 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       if (updatedLayers != null && _snapshot?['settings'] is Map) {
         (_snapshot!['settings'] as Map)['map_layers'] = updatedLayers;
       }
-      _smartStatusTarget = (++_smartStatusSeq, targetCol);
+      _askColumn = targetCol;
+      _smartStatusSeq++;
+      _askOpen = true;
     });
     if (updatedLayers != null) {
       unawaited(_updateSettings({'map_layers': updatedLayers}));
     }
+  }
+
+  void _openAskAi([String? column]) {
+    if (_busy) return;
+    final targetCol = column ?? _askColumn;
+    final updatedLayers = _neededLayersForColumn(targetCol);
+    setState(() {
+      _card = null;
+      _browser = null;
+      _focusCategory = null;
+      _showMap = true;
+      _showGuide = false;
+      _showSettings = false;
+      _showProviders = false;
+      _showConnections = false;
+      _visibleTerminal = null;
+      if (updatedLayers != null && _snapshot?['settings'] is Map) {
+        (_snapshot!['settings'] as Map)['map_layers'] = updatedLayers;
+      }
+      _askColumn = targetCol;
+      _askPromptSeq++;
+      _askOpen = true;
+    });
+    if (updatedLayers != null) {
+      unawaited(_updateSettings({'map_layers': updatedLayers}));
+    }
+  }
+
+  void _onSmartApplied(Map<String, dynamic> result) {
+    if (result['session'] != null) {
+      final terminal = AgentTerminal(
+        _backend!,
+        result['session'] as String,
+        result['command'] as String,
+        result['path'] as String,
+        tr: tr,
+      );
+      setState(() {
+        _terminals.add(terminal);
+        _visibleTerminal = terminal;
+      });
+    }
+    if (result['move_undo'] is String) {
+      setState(() => _moveUndo = result['move_undo'] as String);
+      unawaited(_refreshSystem(false, quiet: true));
+    }
+    if (result['undo'] is String) {
+      _connectionUndo = result['undo'] as String;
+      _appliedMessage();
+    }
+    // The map first: the slots read it.
+    unawaited(result['models_left'] == true ? _modelsLeft(result) : _refresh());
   }
 
   /// ai_popup.health_action: each finding opens where it is fixed.
@@ -4239,6 +4301,27 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                     ),
                     onPressed: _keysBlocked ? null : _openProblems,
                   ),
+                IconButton(
+                  key: const ValueKey('ask-ai-open'),
+                  tooltip: tr('Ask AI'),
+                  icon: Badge(
+                    isLabelVisible: _smartHelpers.isEmpty,
+                    smallSize: 7,
+                    backgroundColor: StatusColors.warn,
+                    child: Icon(
+                      _smartHelpers.isNotEmpty
+                          ? Icons.auto_awesome
+                          : Icons.auto_awesome_outlined,
+                      size: 18,
+                      color: _smartHelpers.isNotEmpty
+                          ? Theme.of(context).colorScheme.primary
+                          : null,
+                    ),
+                  ),
+                  onPressed: _keysBlocked || _snapshot == null
+                      ? null
+                      : () => _openAskAi(),
+                ),
                 MapLegendButton(tr: tr, enabled: !_keysBlocked),
                 IconButton(
                   key: const ValueKey('help-open'),
@@ -4609,64 +4692,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                                               onExpandGroup: (col) => setState(
                                                 () => _focusCategory = col,
                                               ),
-                                              smartAskColumns: const {
-                                                'mcp',
-                                                'agents',
-                                                'providers',
-                                                'models',
-                                              },
-                                              onSmartProvider: _smartProvider,
-                                              onSmartTask: _smartTask,
-                                              smartCards: true,
-                                              smartHelpers: _smartHelpers,
-                                              smartStatus: _smartStatusData,
-                                              smartStatusTarget:
-                                                  _smartStatusTarget,
                                               client: _maybeClient,
-                                              onSmartApplied: (result) {
-                                                if (result['session'] != null) {
-                                                  final terminal =
-                                                      AgentTerminal(
-                                                        _backend!,
-                                                        result['session']
-                                                            as String,
-                                                        result['command']
-                                                            as String,
-                                                        result['path']
-                                                            as String,
-                                                        tr: tr,
-                                                      );
-                                                  setState(() {
-                                                    _terminals.add(terminal);
-                                                    _visibleTerminal = terminal;
-                                                  });
-                                                }
-                                                if (result['move_undo']
-                                                    is String) {
-                                                  setState(
-                                                    () => _moveUndo =
-                                                        result['move_undo']
-                                                            as String,
-                                                  );
-                                                  unawaited(
-                                                    _refreshSystem(
-                                                      false,
-                                                      quiet: true,
-                                                    ),
-                                                  );
-                                                }
-                                                if (result['undo'] is String) {
-                                                  _connectionUndo =
-                                                      result['undo'] as String;
-                                                  _appliedMessage();
-                                                }
-                                                // The map first: the slots read it.
-                                                unawaited(
-                                                  result['models_left'] == true
-                                                      ? _modelsLeft(result)
-                                                      : _refresh(),
-                                                );
-                                              },
                                             )
                                           : _viewHost(
                                               const [
@@ -4701,6 +4727,48 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                                       },
                                     ),
                             ),
+                          MapSmartCard(
+                            key: const ValueKey('ask-ai-card'),
+                            showBar: false,
+                            column: _askColumn,
+                            title:
+                                mapSmartColumns
+                                    .where((c) => c.$1 == _askColumn)
+                                    .firstOrNull
+                                    ?.$2 ??
+                                'Agents',
+                            open: _askOpen,
+                            onToggle: () =>
+                                setState(() => _askOpen = !_askOpen),
+                            onColumnChanged: (col) {
+                              final updatedLayers = _neededLayersForColumn(col);
+                              setState(() {
+                                _askColumn = col;
+                                if (updatedLayers != null &&
+                                    _snapshot?['settings'] is Map) {
+                                  (_snapshot!['settings']
+                                          as Map)['map_layers'] =
+                                      updatedLayers;
+                                }
+                              });
+                              if (updatedLayers != null) {
+                                unawaited(
+                                  _updateSettings({
+                                    'map_layers': updatedLayers,
+                                  }),
+                                );
+                              }
+                            },
+                            tr: tr,
+                            helpers: _smartHelpers,
+                            status: _smartStatusData,
+                            statusTrigger: _smartStatusSeq,
+                            promptTrigger: _askPromptSeq,
+                            client: _maybeClient,
+                            onProvider: _smartProvider,
+                            onTask: _smartTask,
+                            onApplied: _onSmartApplied,
+                          ),
                           if (_card != null)
                             _host(_card!, _closeCard, overlay: true),
                           if (_visibleTerminal != null &&
