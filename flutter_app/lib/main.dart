@@ -1220,113 +1220,123 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
               e['preview'] != null,
         )
         .firstOrNull;
-    final blocked = _busy || _agentsRunning;
-    await _review(
-      () => showModalBottomSheet<void>(
+    // The sheet follows the terminals: when the last agent ends, it unlocks
+    // while it is open.
+    final terminals = Listenable.merge(_terminals);
+    final choice = await _review(
+      () => showModalBottomSheet<String>(
         context: context,
         isScrollControlled: true,
-        builder: (sheet) => ConstrainedBox(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.sizeOf(sheet).height * .85,
-          ),
-          child: ListView(
-            shrinkWrap: true,
-            padding: const EdgeInsets.all(24),
-            children: [
-              Text(
-                '${item['name']} · ${item['version']}',
-                style: Theme.of(sheet).textTheme.titleLarge,
+        builder: (sheet) => ListenableBuilder(
+          listenable: terminals,
+          builder: (sheet, _) {
+            final blocked = _busy || _agentsRunning;
+            return ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(sheet).height * .85,
               ),
-              AddonDetails(item: item, tr: tr),
-              if (_agentsRunning) ...[
-                Text(
-                  addonsLockedText(tr, _runningAgentNames),
-                  key: const ValueKey('addon-sheet-locked'),
-                ),
-                TextButton(
-                  onPressed: () {
-                    Navigator.pop(sheet);
-                    _showRunningTerminal();
-                  },
-                  child: Text(tr('Show terminal')),
-                ),
-              ],
-              TextButton(
-                onPressed:
-                    blocked ||
-                        item['supported'] != true ||
-                        (item['verified'] != true && item['enabled'] != true)
-                    ? null
-                    : () {
-                        Navigator.pop(sheet);
-                        _toggleAddon(
-                          item['id'] as String,
-                          item['enabled'] != true,
-                        );
-                      },
-                child: Text(
-                  tr(item['enabled'] == true ? 'Switch off' : 'Switch on'),
-                ),
-              ),
-              if (update != null)
-                TextButton(
-                  onPressed: blocked
-                      ? null
-                      : () {
-                          Navigator.pop(sheet);
-                          _installAddon(update);
-                        },
-                  child: Text(
-                    tr(
-                      'Update add-on to {0}',
-                    ).replaceAll('{0}', update['version'] as String),
+              child: ListView(
+                shrinkWrap: true,
+                padding: const EdgeInsets.all(24),
+                children: [
+                  Text(
+                    '${item['name']} · ${item['version']}',
+                    style: Theme.of(sheet).textTheme.titleLarge,
                   ),
-                ),
-              for (final agent in item['sign_ins'] as List? ?? [])
-                TextButton(
-                  onPressed: _busy
-                      ? null
-                      : () {
-                          Navigator.pop(sheet);
-                          _agentAction(agent['command'] as String, 'login');
-                        },
-                  child: Text(
-                    tr(
-                      'Sign in to {0}…',
-                    ).replaceAll('{0}', agent['name'] as String),
+                  AddonDetails(item: item, tr: tr),
+                  if (_agentsRunning) ...[
+                    Text(
+                      addonsLockedText(tr, _runningAgentNames),
+                      key: const ValueKey('addon-sheet-locked'),
+                    ),
+                    TextButton(
+                      key: const ValueKey('addon-sheet-show-terminal'),
+                      // Shown after the sheet is gone: while it is open,
+                      // navigation is blocked and nothing would happen.
+                      onPressed: () => Navigator.pop(sheet, 'terminal'),
+                      child: Text(tr('Show terminal')),
+                    ),
+                  ],
+                  TextButton(
+                    onPressed:
+                        blocked ||
+                            item['supported'] != true ||
+                            (item['verified'] != true &&
+                                item['enabled'] != true)
+                        ? null
+                        : () {
+                            Navigator.pop(sheet);
+                            _toggleAddon(
+                              item['id'] as String,
+                              item['enabled'] != true,
+                            );
+                          },
+                    child: Text(
+                      tr(item['enabled'] == true ? 'Switch off' : 'Switch on'),
+                    ),
                   ),
-                ),
-              if (item['kind'] == 'agent')
-                for (final command in item['provides'] as List? ?? [])
-                  if (_catalog.any((a) => a['command'] == command))
+                  if (update != null)
+                    TextButton(
+                      onPressed: blocked
+                          ? null
+                          : () {
+                              Navigator.pop(sheet);
+                              _installAddon(update);
+                            },
+                      child: Text(
+                        tr(
+                          'Update add-on to {0}',
+                        ).replaceAll('{0}', update['version'] as String),
+                      ),
+                    ),
+                  for (final agent in item['sign_ins'] as List? ?? [])
                     TextButton(
                       onPressed: _busy
                           ? null
                           : () {
                               Navigator.pop(sheet);
-                              _selectAgent(command as String);
+                              _agentAction(agent['command'] as String, 'login');
                             },
-                      child: Text(tr('Details')),
+                      child: Text(
+                        tr(
+                          'Sign in to {0}…',
+                        ).replaceAll('{0}', agent['name'] as String),
+                      ),
                     ),
-              if (item['removable'] == true)
-                TextButton(
-                  onPressed: blocked
-                      ? null
-                      : () {
-                          Navigator.pop(sheet);
-                          _removeAddon(item);
-                        },
-                  child: Text(tr('Remove')),
-                ),
-              TextButton(
-                onPressed: () => Navigator.pop(sheet),
-                child: Text(tr('Close')),
+                  if (item['kind'] == 'agent')
+                    for (final command in item['provides'] as List? ?? [])
+                      if (_catalog.any((a) => a['command'] == command))
+                        TextButton(
+                          onPressed: _busy
+                              ? null
+                              : () {
+                                  Navigator.pop(sheet);
+                                  _selectAgent(command as String);
+                                },
+                          child: Text(tr('Details')),
+                        ),
+                  if (item['removable'] == true)
+                    TextButton(
+                      onPressed: blocked
+                          ? null
+                          : () {
+                              Navigator.pop(sheet);
+                              _removeAddon(item);
+                            },
+                      child: Text(tr('Remove')),
+                    ),
+                  TextButton(
+                    onPressed: () => Navigator.pop(sheet),
+                    child: Text(tr('Close')),
+                  ),
+                ],
               ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );
+    if (choice == 'terminal') _showRunningTerminal();
   }
 
   Future<void> _removeAddon(Map<String, dynamic> item) async {
@@ -2777,6 +2787,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   /// reviewed like a catalog entry before the worker installs it.
   Future<void> _installAddonFile() async {
     if (_busy) return;
+    if (_agentsRunning) return _addonsLocked();
     final file = await PopupGuard.around(
       () => openFile(
         acceptedTypeGroups: [
@@ -2827,6 +2838,8 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
 
   Future<void> _installAddon(Map<String, dynamic> entry) async {
     if (_busy) return;
+    // Get add-on and a single update, like Update all.
+    if (_agentsRunning) return _addonsLocked();
     final confirmed = await _cardReview(
       tr('Add-ons'),
       (yes, no) =>

@@ -717,6 +717,10 @@ KEYS = (
     "No terminal was found to run this setup step.",
     "Monologue is not installed.",
     "No AUR helper (yay or paru) was found to install whisper.cpp.",
+    # Add-ons locked while agents run in the app's terminals (task 027).
+    "{0} is running in a terminal. Add-ons can be changed when it has finished.",
+    "{0} are running in terminals. Add-ons can be changed when they have finished.",
+    "Show terminal",
 )
 
 

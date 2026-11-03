@@ -353,8 +353,72 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('terminal-back')));
       await settleService(tester);
 
+      // Get add-on, a single update and Install from file say why too
+      // (review 027 round 1, finding 3).
+      int installs() =>
+          requests(dir).where((q) => q['method'] == 'addons.install').length;
+      ScaffoldMessenger.of(
+        tester.element(find.byType(MapAddonsFocus)),
+      ).hideCurrentSnackBar();
+      await settleService(tester);
+      unawaited(
+        Future.sync(
+          () => page().onInstall({
+            'id': 'catalog-addon',
+            'name': 'Catalog adapter',
+            'version': '2.0',
+            'kind': 'agent',
+            'action': 'update',
+            'preview': 'catalog-1',
+          }),
+        ),
+      );
+      await settleService(tester);
+      expect(message, findsOneWidget);
+      expect(find.byType(OverlayWindow), findsNothing);
+      page().onFile!();
+      await settleService(tester);
+      expect(message, findsOneWidget);
+      expect(installs(), 0);
+      expect(
+        tester
+            .widget<TextButton>(
+              find.byKey(const ValueKey('addons-install-file')),
+            )
+            .onPressed,
+        isNull,
+      );
+
+      // The details sheet: Show terminal really shows it (finding 2).
+      final item = page().items.firstWhere((i) => i['id'] == 'fixture-addon');
+      final sheet = find.byType(BottomSheet);
+      page().onMenu(tester.element(find.byType(MapAddonsFocus)), item);
+      await settleService(tester);
+      expect(find.byKey(const ValueKey('addon-sheet-locked')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('addon-sheet-show-terminal')));
+      await settleService(tester);
+      expect(sheet, findsNothing);
+      expect(find.byType(TerminalView), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('terminal-back')));
+      await settleService(tester);
+
+      // An open sheet unlocks when the agent ends (finding 4).
+      page().onMenu(tester.element(find.byType(MapAddonsFocus)), item);
+      await settleService(tester);
+      final switchOn = find.descendant(
+        of: sheet,
+        matching: find.widgetWithText(TextButton, 'Switch on'),
+      );
+      expect(tester.widget<TextButton>(switchOn).onPressed, isNull);
+
       // The agent ends: the page unlocks without a restart.
       File('${dir.path}/session_ended').writeAsStringSync('');
+      await settleService(tester);
+      expect(find.byKey(const ValueKey('addon-sheet-locked')), findsNothing);
+      expect(tester.widget<TextButton>(switchOn).onPressed, isNotNull);
+      await tester.tap(
+        find.descendant(of: sheet, matching: find.text('Close')),
+      );
       await settleService(tester);
       expect(page().running, isFalse);
       expect(find.byKey(const ValueKey('addons-locked')), findsNothing);

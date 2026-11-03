@@ -747,5 +747,8 @@
   "Local Whisper transcription failed.": "Lokalna transkrypcja Whisper nie powiodła się.",
   "No terminal was found to run this setup step.": "Nie znaleziono terminala do wykonania tego kroku konfiguracji.",
   "Monologue is not installed.": "Monologue nie jest zainstalowany.",
-  "No AUR helper (yay or paru) was found to install whisper.cpp.": "Nie znaleziono pomocnika AUR (yay lub paru) do zainstalowania whisper.cpp."
+  "No AUR helper (yay or paru) was found to install whisper.cpp.": "Nie znaleziono pomocnika AUR (yay lub paru) do zainstalowania whisper.cpp.",
+  "{0} is running in a terminal. Add-ons can be changed when it has finished.": "{0} działa w terminalu. Dodatki można zmienić, gdy skończy pracę.",
+  "{0} are running in terminals. Add-ons can be changed when they have finished.": "{0} działają w terminalach. Dodatki można zmienić, gdy skończą pracę.",
+  "Show terminal": "Pokaż terminal"
 }

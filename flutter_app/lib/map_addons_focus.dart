@@ -418,9 +418,14 @@ class _MapAddonsFocusState extends State<MapAddonsFocus> {
                 ),
               ),
               if (widget.onFile != null)
-                TextButton(
-                  onPressed: widget.busy ? null : widget.onFile,
-                  child: Text(tr('Install from file…')),
+                explained(
+                  TextButton(
+                    key: const ValueKey('addons-install-file'),
+                    onPressed: widget.busy || widget.running
+                        ? null
+                        : widget.onFile,
+                    child: Text(tr('Install from file…')),
+                  ),
                 ),
             ],
           ),

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:maprisma/agent_map.dart';
 import 'package:maprisma/map_groups.dart';
 import 'package:maprisma/map_welcome.dart';
@@ -275,6 +276,33 @@ void main() {
       addonsLockedText(tr, const ['Claude Code', 'Pi']),
       'Claude Code, Pi are running in terminals. Add-ons can be changed when they have finished.',
     );
+  });
+  test('every text of the add-ons page is in the app\'s translations', () {
+    // The app reads assets/translations, which tools/flutter-assets.py fills
+    // only with its KEYS: a text missing there shows in English.
+    final source = File('lib/map_addons_focus.dart').readAsStringSync();
+    final texts = {
+      for (final m in RegExp(r"tr\(\s*'((?:[^'\\]|\\.)*)'").allMatches(source))
+        m.group(1)!.replaceAll(r"\'", "'"),
+      'Show terminal',
+    };
+    expect(texts, contains('Show terminal'));
+    expect(
+      texts,
+      contains(
+        '{0} is running in a terminal. Add-ons can be changed when it has finished.',
+      ),
+    );
+    for (final code in ['de', 'es', 'fr', 'it', 'nl', 'pl', 'pt']) {
+      final strings =
+          jsonDecode(File('assets/translations/$code.json').readAsStringSync())
+              as Map<String, dynamic>;
+      expect(
+        texts.where((t) => !strings.containsKey(t)),
+        isEmpty,
+        reason: 'missing in $code',
+      );
+    }
   });
   testWidgets(
     'running agents: a banner names them, shows their terminal and explains each locked control',
