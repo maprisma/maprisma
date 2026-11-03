@@ -2974,7 +2974,6 @@
  "Input buffer full; paste was rejected": "Invoerbuffer vol; plakken is geweigerd",
  "Service disconnected; agent session ended": "Verbinding met dienst verbroken; agentsessie beëindigd",
  "New add-ons stay switched off until you enable them.": "Nieuwe uitbreidingen blijven uitgeschakeld totdat je ze inschakelt.",
- "Finish running agents before changing add-ons.": "Beëindig actieve agenten voordat je uitbreidingen wijzigt.",
  "Your Asterism settings could not be copied. Maprisma starts with its default settings.": "Je Asterism-instellingen konden niet worden gekopieerd. Maprisma start met de standaardinstellingen.",
  "Automatic map scans": "Automatische kaartscans",
  "Manual only": "Alleen handmatig",
@@ -3339,6 +3338,6 @@
  "A picture of this window goes to Pictures/Maprisma. Not while a terminal is showing: programs there may use F12.": "Een afbeelding van dit venster gaat naar Pictures/Maprisma. Niet zolang een terminal zichtbaar is: programma’s daar kunnen F12 zelf gebruiken.",
  "A picture of this window goes to Pictures/Maprisma. In a terminal, use the camera symbol below it: programs there may use F12.": "Een afbeelding van dit venster gaat naar Pictures/Maprisma. Gebruik in een terminal het camerasymbool eronder: programma’s daar kunnen F12 zelf gebruiken.",
  "A picture of this window is saved, with a note if you like. In a terminal, use the camera symbol below it: programs there may use F12.": "Een afbeelding van dit venster wordt opgeslagen, desgewenst met een notitie. Gebruik in een terminal het camerasymbool eronder: programma’s kunnen F12 zelf gebruiken.",
- "{0} is running in a terminal. Add-ons can be changed when it has finished.": "{0} draait in een terminal. Je kunt uitbreidingen wijzigen zodra die klaar is.",
- "{0} are running in terminals. Add-ons can be changed when they have finished.": "{0} draaien in terminals. Je kunt uitbreidingen wijzigen zodra die klaar zijn."
+ "{0} is running in a terminal. Its add-on can be switched off, updated or removed when it has finished.": "{0} draait in een terminal. Je kunt de uitbreiding ervan uitschakelen, bijwerken of verwijderen zodra die klaar is.",
+ "{0} are running in terminals. Their add-ons can be switched off, updated or removed when they have finished.": "{0} draaien in terminals. Je kunt hun uitbreidingen uitschakelen, bijwerken of verwijderen zodra die klaar zijn."
 }

@@ -306,15 +306,19 @@ void main() {
   });
 
   testWidgets(
-    'while an agent runs, add-on changes say why and the lock lifts when it ends',
+    'while an agent runs, only its own add-on waits, says why, and unlocks when it ends',
     (tester) async {
       final dir = await mountApp(tester);
       int setEnabled() => requests(
         dir,
       ).where((q) => q['method'] == 'addons.set_enabled').length;
+      int installs() =>
+          requests(dir).where((q) => q['method'] == 'addons.install').length;
       MapAddonsFocus page() => tester.widget<MapAddonsFocus>(
         find.byType(MapAddonsFocus, skipOffstage: false),
       );
+      const reason =
+          'Test agent is running in a terminal. Its add-on can be switched off, updated or removed when it has finished.';
       tester
           .widget<IconButton>(find.byKey(const ValueKey('start-agent-test')))
           .onPressed!();
@@ -326,23 +330,25 @@ void main() {
       tester.widget<AgentMap>(find.byType(AgentMap)).onExpandGroup!(1);
       await settleService(tester);
 
-      expect(page().running, isTrue);
-      expect(page().runningAgents, ['Test agent']);
+      // fixture-addon provides `test`, the running agent: it is held.
+      expect(page().locked, {
+        'fixture-addon': ['Test agent'],
+      });
       expect(find.byKey(const ValueKey('addons-locked')), findsOneWidget);
 
-      // A change that still arrives (a click racing the terminal) is not silent.
+      // Switching on is allowed while the agent runs (task 028).
       unawaited(page().onToggle('fixture-addon', true));
       await settleService(tester);
-      expect(setEnabled(), 0);
+      expect(setEnabled(), 1);
+
+      // Switching it off is not, and never silently.
+      unawaited(page().onToggle('fixture-addon', false));
+      await settleService(tester);
+      expect(setEnabled(), 1);
       final message = find.byKey(const ValueKey('addons-locked-message'));
       expect(message, findsOneWidget);
       expect(
-        find.descendant(
-          of: message,
-          matching: find.text(
-            'Test agent is running in a terminal. Add-ons can be changed when it has finished.',
-          ),
-        ),
+        find.descendant(of: message, matching: find.text(reason)),
         findsOneWidget,
       );
       await tester.tap(
@@ -353,10 +359,7 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('terminal-back')));
       await settleService(tester);
 
-      // Get add-on, a single update and Install from file say why too
-      // (review 027 round 1, finding 3).
-      int installs() =>
-          requests(dir).where((q) => q['method'] == 'addons.install').length;
+      // An update of the held add-on waits too; Install from file stays open.
       ScaffoldMessenger.of(
         tester.element(find.byType(MapAddonsFocus)),
       ).hideCurrentSnackBar();
@@ -364,8 +367,8 @@ void main() {
       unawaited(
         Future.sync(
           () => page().onInstall({
-            'id': 'catalog-addon',
-            'name': 'Catalog adapter',
+            'id': 'fixture-addon',
+            'name': 'Fixture adapter',
             'version': '2.0',
             'kind': 'agent',
             'action': 'update',
@@ -376,9 +379,6 @@ void main() {
       await settleService(tester);
       expect(message, findsOneWidget);
       expect(find.byType(OverlayWindow), findsNothing);
-      page().onFile!();
-      await settleService(tester);
-      expect(message, findsOneWidget);
       expect(installs(), 0);
       expect(
         tester
@@ -386,11 +386,14 @@ void main() {
               find.byKey(const ValueKey('addons-install-file')),
             )
             .onPressed,
-        isNull,
+        isNotNull,
       );
 
-      // The details sheet: Show terminal really shows it (finding 2).
-      final item = page().items.firstWhere((i) => i['id'] == 'fixture-addon');
+      // The details sheet: Show terminal really shows it (review 027).
+      final item = {
+        ...page().items.firstWhere((i) => i['id'] == 'fixture-addon'),
+        'enabled': true,
+      };
       final sheet = find.byType(BottomSheet);
       page().onMenu(tester.element(find.byType(MapAddonsFocus)), item);
       await settleService(tester);
@@ -402,29 +405,29 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('terminal-back')));
       await settleService(tester);
 
-      // An open sheet unlocks when the agent ends (finding 4).
+      // An open sheet unlocks when the agent ends.
       page().onMenu(tester.element(find.byType(MapAddonsFocus)), item);
       await settleService(tester);
-      final switchOn = find.descendant(
+      final switchOff = find.descendant(
         of: sheet,
-        matching: find.widgetWithText(TextButton, 'Switch on'),
+        matching: find.widgetWithText(TextButton, 'Switch off'),
       );
-      expect(tester.widget<TextButton>(switchOn).onPressed, isNull);
+      expect(tester.widget<TextButton>(switchOff).onPressed, isNull);
 
       // The agent ends: the page unlocks without a restart.
       File('${dir.path}/session_ended').writeAsStringSync('');
       await settleService(tester);
       expect(find.byKey(const ValueKey('addon-sheet-locked')), findsNothing);
-      expect(tester.widget<TextButton>(switchOn).onPressed, isNotNull);
+      expect(tester.widget<TextButton>(switchOff).onPressed, isNotNull);
       await tester.tap(
         find.descendant(of: sheet, matching: find.text('Close')),
       );
       await settleService(tester);
-      expect(page().running, isFalse);
+      expect(page().locked, isEmpty);
       expect(find.byKey(const ValueKey('addons-locked')), findsNothing);
-      unawaited(page().onToggle('fixture-addon', true));
+      unawaited(page().onToggle('fixture-addon', false));
       await settleService(tester);
-      expect(setEnabled(), 1);
+      expect(setEnabled(), 2);
       expect(tester.takeException(), isNull);
       await unmountApp(tester);
     },

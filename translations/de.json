@@ -2974,7 +2974,6 @@
  "Input buffer full; paste was rejected": "Eingabepuffer voll; Einfügen wurde abgelehnt",
  "Service disconnected; agent session ended": "Dienst getrennt; Agentensitzung beendet",
  "New add-ons stay switched off until you enable them.": "Neue Add-ons bleiben ausgeschaltet, bis du sie aktivierst.",
- "Finish running agents before changing add-ons.": "Beende laufende Agenten, bevor du Add-ons änderst.",
  "Your Asterism settings could not be copied. Maprisma starts with its default settings.": "Deine Asterism-Einstellungen konnten nicht kopiert werden. Maprisma startet mit den Standardeinstellungen.",
  "Automatic map scans": "Automatische Kartenscans",
  "Manual only": "Nur manuell",
@@ -3339,6 +3338,6 @@
  "A picture of this window goes to Pictures/Maprisma. Not while a terminal is showing: programs there may use F12.": "Ein Bild dieses Fensters kommt nach Bilder/Maprisma (Pictures/Maprisma). Nicht, solange ein Terminal sichtbar ist: Programme dort können F12 selbst nutzen.",
  "A picture of this window goes to Pictures/Maprisma. In a terminal, use the camera symbol below it: programs there may use F12.": "Ein Bild dieses Fensters kommt nach Bilder/Maprisma (Pictures/Maprisma). Im Terminal nutze das Kamerasymbol darunter: Programme dort können F12 selbst nutzen.",
  "A picture of this window is saved, with a note if you like. In a terminal, use the camera symbol below it: programs there may use F12.": "Ein Bild dieses Fensters wird gespeichert, auf Wunsch mit Notiz. Im Terminal nutze das Kamerasymbol darunter: Programme dort können F12 selbst verwenden.",
- "{0} is running in a terminal. Add-ons can be changed when it has finished.": "{0} läuft in einem Terminal. Add-ons kannst du ändern, sobald der Agent beendet ist.",
- "{0} are running in terminals. Add-ons can be changed when they have finished.": "{0} laufen in Terminals. Add-ons kannst du ändern, sobald sie beendet sind."
+ "{0} is running in a terminal. Its add-on can be switched off, updated or removed when it has finished.": "{0} läuft in einem Terminal. Sein Add-on kannst du ausschalten, aktualisieren oder entfernen, sobald der Agent beendet ist.",
+ "{0} are running in terminals. Their add-ons can be switched off, updated or removed when they have finished.": "{0} laufen in Terminals. Ihre Add-ons kannst du ausschalten, aktualisieren oder entfernen, sobald sie beendet sind."
 }
