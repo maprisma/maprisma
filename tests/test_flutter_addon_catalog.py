@@ -146,15 +146,29 @@ class FlutterAddonCatalogTest(unittest.TestCase):
                 service.dispatch('addons.install', params)
 
     def test_running_owned_session_blocks_install_without_consuming_preview(self):
+        # Task 028: an update of the running agent's own add-on waits.
         service = flutter_backend.Service(self.path)
-        service.adapters = mock.Mock(items=[])
+        installed = mock.Mock(id=self.entry.id, kind='agent', provides=['test-agent'])
+        service.adapters = mock.Mock(items=[installed])
         token = service.addon_catalog.register({'records':[self.record], 'online':True})['entries'][0]['preview']
-        service.sessions.items = {'agent':mock.Mock(process=mock.Mock(poll=lambda: None))}
+        service.sessions.items = {'agent':mock.Mock(command='test-agent')}
+        service.sessions.poll = mock.Mock(return_value=None)
         with mock.patch.object(service.tasks, 'start_addon_install') as start:
             with self.assertRaises(ValueError):
                 service.dispatch('addons.install', {'preview':token})
         start.assert_not_called()
         self.assertIn(token, service.addon_catalog.previews)
+
+    def test_another_running_agent_does_not_block_install(self):
+        service = flutter_backend.Service(self.path)
+        service.adapters = mock.Mock(items=[])
+        token = service.addon_catalog.register({'records':[self.record], 'online':True})['entries'][0]['preview']
+        service.sessions.items = {'agent':mock.Mock(command='other')}
+        service.sessions.poll = mock.Mock(return_value=None)
+        with mock.patch.object(service.tasks, 'start_addon_install', return_value={'task':'t'}) as start, \
+                mock.patch.object(ai_core, 'load_settings', return_value={'addons_online': True}):
+            service.dispatch('addons.install', {'preview':token})
+        start.assert_called_once()
 
     def test_running_install_blocks_new_sessions_and_registry_changes(self):
         service = flutter_backend.Service(self.path)

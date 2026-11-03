@@ -428,6 +428,8 @@ class Service:
             field = 'id' if method.endswith('_preview') else 'preview' if method.endswith('_apply') else 'undo'
             if set(params)!={field} or not isinstance(params[field],str) or self.adapters is None:
                 raise ValueError('Invalid add-on removal')
+            if field=='id':self.guard_addon_lock([params[field]])
+            if field=='preview':self.guard_addon_lock([(self.addon_actions.previews.get(params[field]) or (0,None))[1]])
             if field=='id':return self.addon_actions.preview(self.adapters, params[field])
             if field=='preview':return self.addon_actions.apply(params[field],self.adapters,self.settings_path)
             return self.addon_actions.undo(params[field],self.adapters,self.settings_path)
@@ -440,14 +442,15 @@ class Service:
             if (set(params) != {'preview'} or not isinstance(params['preview'], str)
                     or self.adapters is None):
                 raise ValueError('Invalid add-on preview')
-            if any(self.sessions.poll(session) is None for session in self.sessions.items.values()):
-                raise ValueError('Finish running agents before changing add-ons')
             if self.addon_installing():
                 raise ValueError('An add-on installation is already running')
             if not settings_schema.value(ai_core.load_settings(self.settings_path), 'addons_online'):
                 raise ValueError('Online add-on access disabled')
-            return self.addon_catalog.apply(params['preview'], lambda record:
-                self.tasks.start_addon_install(record, self.settings_path, self.finish_addon_install))
+            def queue(record):
+                # An update of a locked add-on waits; a new one installs.
+                self.guard_addon_lock([(record.get('entry') or {}).get('id')])
+                return self.tasks.start_addon_install(record, self.settings_path, self.finish_addon_install)
+            return self.addon_catalog.apply(params['preview'], queue)
         if method in ('setup.detect', 'setup.apply', 'setup.later'):
             if self.adapters is None:
                 raise ValueError('Add-on service unavailable')
@@ -458,7 +461,8 @@ class Service:
                 if set(params) != {'enabled'}:
                     raise ValueError('Invalid setup request')
                 import flutter_setup
-                return flutter_setup.apply(self.adapters, self.settings_path, params['enabled'])
+                return flutter_setup.apply(self.adapters, self.settings_path, params['enabled'],
+                                           self.locked_addons())
             if params:
                 raise ValueError('Unexpected setup parameters')
             if method == 'setup.detect':
@@ -481,6 +485,8 @@ class Service:
             if item is None or item.kind not in ("agent", "provider") or (
                     params["enabled"] and item.state not in ("verified", "loaded")):
                 raise ValueError("Add-on unavailable")
+            if not params["enabled"]:
+                self.guard_addon_lock([item.id])
             enabled = self.enabled_addons()
             if params["enabled"]:
                 enabled.add(item.id)
@@ -695,7 +701,16 @@ class Service:
 
     def guard_addon_changes(self):
         if self.addon_installing():raise ValueError('An installation is already running')
-        if any(self.sessions.poll(session) is None for session in self.sessions.items.values()):
+
+    def locked_addons(self) -> set:
+        """The agent add-ons that provide the command of a running session. A session uses its
+        adapter only at start, so only switching its own add-on off, updating or removing it waits."""
+        running = {s.command for s in self.sessions.items.values() if self.sessions.poll(s) is None}
+        return {a.id for a in (self.adapters.items if self.adapters else [])
+                if a.kind == 'agent' and running.intersection(a.provides)}
+
+    def guard_addon_lock(self, ids):
+        if self.locked_addons().intersection(ids):
             raise ValueError('Finish running agents before changing add-ons')
 
     def addon_installing(self) -> bool:

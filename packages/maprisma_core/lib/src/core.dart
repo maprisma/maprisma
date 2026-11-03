@@ -280,11 +280,6 @@ final class CoreService {
       }
       return addons.snapshot(enabledAddons(), addonSignIns, addonUserDir);
     }
-    if (starter.sessions.items.values.any(starter.sessions.running)) {
-      throw const FormatException(
-        'Finish running agents before changing add-ons',
-      );
-    }
     if (params.length != 2 ||
         params['id'] is! String ||
         params['enabled'] is! bool) {
@@ -297,6 +292,7 @@ final class CoreService {
         on && !const {'verified', 'loaded'}.contains(item.state)) {
       throw const FormatException('Add-on unavailable');
     }
+    if (!on) guardAddonLock([item.id]);
     final before = enabledAddons(), enabled = {...before};
     on ? enabled.add(item.id) : enabled.remove(item.id);
     try {
@@ -1960,6 +1956,7 @@ final class CoreService {
       for (final i in addons.items)
         if (supportedKinds.contains(i.kind)) i.id,
     };
+    guardAddonLock(before.intersection(managed).difference(selected.toSet()));
     // Feature and extension choices, and add-ons not here, stay.
     final enabled = {...before.difference(managed), ...selected.cast<String>()};
     try {
@@ -3459,7 +3456,26 @@ final class CoreService {
     if (addonInstalling) {
       throw const FormatException('An installation is already running');
     }
-    if (starter.sessions.items.values.any(starter.sessions.running)) {
+  }
+
+  /// locked_addons: the agent add-ons that provide the command of a running
+  /// session. A session uses its adapter only at start, so only switching
+  /// its own add-on off, updating or removing it waits (task 028).
+  Set<String> lockedAddons() {
+    final running = {
+      for (final s in starter.sessions.items.values)
+        if (starter.sessions.running(s)) s.command,
+    };
+    return {
+      for (final a in addons.items)
+        if (a.kind == 'agent' && a.provides.any(running.contains)) a.id,
+    };
+  }
+
+  /// guard_addon_lock: refused when one of [ids] is locked.
+  void guardAddonLock(Iterable<Object?> ids) {
+    final locked = lockedAddons();
+    if (ids.any(locked.contains)) {
       throw const FormatException(
         'Finish running agents before changing add-ons',
       );
@@ -3580,6 +3596,7 @@ final class CoreService {
           addons.dirs,
         );
         _enforce([ruleAddonFileCheck(shown)]);
+        guardAddonLock([shown['id']]);
         return {...shown, 'focus': <String>[]};
       } on InstallError catch (error) {
         throw FormatException(error.message);
@@ -3588,6 +3605,7 @@ final class CoreService {
     if (params.length != 1 || !params.containsKey('preview')) {
       throw const FormatException('Invalid add-on preview');
     }
+    guardAddonLock([addonFiles.idOf(params['preview'])]);
     final List<int> body;
     try {
       body = addonFiles.apply(params['preview']);
@@ -3623,6 +3641,7 @@ final class CoreService {
         throw const FormatException('Add-on preview expired');
       }
       _enforce([ruleCatalogCheck(kept.$2)]);
+      guardAddonLock([(kept.$2['entry'] as Map)['id']]);
       final body = utf8.encode(
         pyJsonDumps({
           'record': kept.$2,
@@ -3645,6 +3664,10 @@ final class CoreService {
       throw const FormatException('Invalid add-on removal');
     }
     final value = params[field] as String;
+    if (method == 'addons.remove_preview') guardAddonLock([value]);
+    if (method == 'addons.remove_apply') {
+      guardAddonLock([addonActions.idOf(value)]);
+    }
     return switch (method) {
       'addons.remove_preview' => {
         ...addonActions.preview(addons.items, value),

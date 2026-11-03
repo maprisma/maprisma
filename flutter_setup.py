@@ -8,7 +8,7 @@ import settings_schema
 from flutter_addons import SUPPORTED, AdapterRegistry
 
 
-def apply(registry: AdapterRegistry, path: Path | None, selected) -> dict:
+def apply(registry: AdapterRegistry, path: Path | None, selected, locked=frozenset()) -> dict:
     if (not isinstance(selected, list) or len(selected) > 200
             or not all(isinstance(item, str) for item in selected) or len(set(selected)) != len(selected)):
         raise ValueError('Invalid setup selection')
@@ -18,6 +18,9 @@ def apply(registry: AdapterRegistry, path: Path | None, selected) -> dict:
         raise ValueError('Unavailable setup selection')
     before = set(settings_schema.value(ai_core.load_settings(path), 'addons_enabled'))
     managed = {item.id for item in registry.items if item.kind in SUPPORTED}
+    if ((before & managed) - set(selected)) & set(locked):
+        # A running agent's own add-on is not switched off.
+        raise ValueError('Finish running agents before changing add-ons')
     # Preserve feature/extension choices and add-ons absent from this installation.
     enabled = (before - managed) | set(selected)
     try:

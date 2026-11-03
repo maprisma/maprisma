@@ -615,6 +615,9 @@ final class AddonActions {
     return st == null ? '' : st.identity.join(':');
   }
 
+  /// The add-on a removal preview is for, or null.
+  String? idOf(String token) => _previews[token]?.$2;
+
   bool _isUsers(String folder) =>
       p.dirname(folder) == userDir &&
       FileSystemEntity.typeSync(folder, followLinks: false) ==
@@ -822,6 +825,9 @@ final class AddonFileImports {
       'action': old.isEmpty ? 'install' : 'update',
     };
   }
+
+  /// The add-on a file preview is for, or null.
+  String? idOf(dynamic token) => token is String ? _previews[token]?.$4 : null;
 
   /// The worker's request: the file, the reviewed bytes' digest and id.
   List<int> apply(dynamic token) {

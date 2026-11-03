@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -119,6 +120,78 @@ class DartAddonsParityTest(unittest.TestCase):
         self.assertNotIn('goose', agents)          # verified but off: hidden, as the reference does
         self.assertNotIn('jan', local)
         self.assertTrue(online)
+
+
+
+@unittest.skipIf(DART is None or not ADDONS.is_dir(), 'native Dart SDK or maprisma-addons not available')
+class DartAddonLockParityTest(unittest.TestCase):
+    """Task 028: while claude runs in a terminal, only its own add-on (agent-claude) cannot be switched
+    off, set up away or removed; switching on and other add-ons work; after the session it unlocks."""
+
+    def test_only_the_running_agents_add_on_is_locked(self):
+        sides = {}
+        with tempfile.TemporaryDirectory() as temp:
+            for side in ('python', 'dart'):
+                home = Path(temp) / side
+                home.mkdir()
+                seed(home)
+                (home / 'work').mkdir()
+                program = home / '.local/bin/claude'
+                program.parent.mkdir(parents=True)
+                program.write_text('#!/bin/sh\necho READY\nexec sleep 60\n')
+                program.chmod(0o755)
+                env = {'HOME': str(home), 'PATH': f'{home}/.local/bin:/usr/bin:/bin', 'LANG': 'C.UTF-8',
+                       'XDG_CONFIG_HOME': str(home / '.config'), 'XDG_CACHE_HOME': str(home / '.cache'),
+                       'XDG_DATA_HOME': str(home / '.local/share'), 'MAPRISMA_DESKTOP': 'generic',
+                       'MAPRISMA_FLUTTER_DEVEL': '1'}
+                runner = (Side([sys.executable, '-c', PYTHON_SERVICE, str(ROOT)], ROOT, env) if side == 'python' else
+                          Side([DART, '--disable-dart-dev', '--packages=.dart_tool/package_config.json',
+                                'bin/maprisma-core.dart'], ROOT / 'packages/maprisma_core', env))
+                answers = []
+
+                def enabled(result):
+                    return sorted(a['id'] for a in result['addons'] if a['enabled']) if 'addons' in result else result
+
+                try:
+                    session = runner.call('sessions.start', {'command': 'claude', 'path': str(home / 'work'),
+                                                             'outside': False}).get('session')
+                    answers.append(bool(session))
+                    for _ in range(100):
+                        read = runner.call('sessions.read', {'session': session})
+                        if 'READY' in read.get('text', '') or read.get('ended'):
+                            break
+                        time.sleep(0.05)
+                    answers.append(read.get('ended'))
+                    # Locked: agent-claude off, removed, or left out of a setup.
+                    answers.append(enabled(runner.call('addons.set_enabled', {'id': 'agent-claude', 'enabled': False})))
+                    answers.append(runner.call('addons.remove_preview', {'id': 'agent-claude'}))
+                    answers.append(enabled(runner.call('setup.apply', {'enabled': ['agent-hermes']})))
+                    # Allowed: switching on, other add-ons, a setup that keeps agent-claude.
+                    answers.append(enabled(runner.call('addons.set_enabled', {'id': 'agent-goose', 'enabled': True})))
+                    answers.append(enabled(runner.call('addons.set_enabled', {'id': 'agent-hermes', 'enabled': False})))
+                    answers.append(enabled(runner.call('addons.set_enabled', {'id': 'providers-online', 'enabled': False})))
+                    answers.append(enabled(runner.call('addons.set_enabled', {'id': 'agent-claude', 'enabled': True})))
+                    answers.append(sorted(runner.call('addons.remove_preview', {'id': 'llm-jan'})))
+                    answers.append(enabled(runner.call('setup.apply', {'enabled': ['agent-claude', 'agent-hermes']})))
+                    # The session ends: agent-claude unlocks.
+                    runner.call('sessions.stop', {'session': session})
+                    for _ in range(100):
+                        if runner.call('sessions.read', {'session': session}).get('ended'):
+                            break
+                        time.sleep(0.05)
+                    answers.append(enabled(runner.call('addons.set_enabled', {'id': 'agent-claude', 'enabled': False})))
+                finally:
+                    runner.close()
+                sides[side] = answers
+        python, dart = sides['python'], sides['dart']
+        self.assertEqual(python, dart)
+        refused = {'error': 'refused'}
+        self.assertEqual(dart[:5], [True, False, refused, refused, refused])
+        self.assertEqual(dart[5], ['agent-claude', 'agent-goose', 'agent-hermes', 'providers-online'])
+        self.assertEqual(dart[7], ['agent-claude', 'agent-goose'])
+        self.assertIn('preview', dart[9])
+        self.assertEqual(dart[10], ['agent-claude', 'agent-hermes'])
+        self.assertEqual(dart[11], ['agent-hermes'])
 
 
 if __name__ == '__main__':
