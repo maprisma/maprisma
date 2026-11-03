@@ -735,7 +735,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
           tr: tr,
         );
         setState(() {
-          _terminals.add(terminal);
+          _terminals.add(_track(terminal));
           _visibleTerminal = terminal;
         });
       }
@@ -1023,6 +1023,63 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   // Only sessions owned by this app depend on its currently loaded adapters.
   bool get _agentsRunning => _terminals.any((t) => !t.ended);
 
+  /// A terminal's agent as the map names it (its command when unknown).
+  String _terminalName(AgentTerminal terminal) =>
+      _catalog
+              .where((a) => a['command'] == terminal.command)
+              .firstOrNull?['name']
+          as String? ??
+      terminal.command;
+
+  /// The agents that keep add-ons locked, each name once, in tab order.
+  List<String> get _runningAgentNames => [
+    ...{
+      for (final t in _terminals)
+        if (!t.ended) _terminalName(t),
+    },
+  ];
+
+  /// Brings a terminal to the front and gives it the keyboard.
+  void _showTerminal(AgentTerminal terminal) {
+    // Terminals switch, not what another window shows.
+    if (_navigationBlocked || _card != null) return;
+    setState(() => _visibleTerminal = terminal);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_visibleTerminal != null) _terminalKeys.requestFocus();
+    });
+  }
+
+  /// A new terminal: when it ends, what it locked (add-ons, the tab state)
+  /// is redrawn at once, not at the next unrelated rebuild.
+  AgentTerminal _track(AgentTerminal terminal) {
+    terminal.addListener(() {
+      if (mounted && terminal.ended) setState(() {});
+    });
+    return terminal;
+  }
+
+  void _showRunningTerminal() {
+    final running = _terminals.where((t) => !t.ended).firstOrNull;
+    if (running != null) _showTerminal(running);
+  }
+
+  /// An add-on change asked for while agents run: say why nothing happens.
+  void _addonsLocked() {
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(_navigator.currentContext!);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        key: const ValueKey('addons-locked-message'),
+        content: Text(addonsLockedText(tr, _runningAgentNames)),
+        action: SnackBarAction(
+          label: tr('Show terminal'),
+          onPressed: _showRunningTerminal,
+        ),
+      ),
+    );
+  }
+
   Map<String, dynamic> get _mapGraph =>
       _welcome && !_addons.any((i) => i['enabled'] == true)
       ? {'nodes': <dynamic>[], 'edges': <dynamic>[]}
@@ -1078,10 +1135,11 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         action: SnackBarAction(
           label: tr('Undo'),
           onPressed: () async {
-            if (_busy || _agentsRunning) {
+            if (_busy) {
               _actionFailed();
               return;
             }
+            if (_agentsRunning) return _addonsLocked();
             setState(() => _busy = true);
             try {
               await undo();
@@ -1112,6 +1170,8 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       entries: _addonEntries,
       busy: _busy,
       running: _agentsRunning,
+      runningAgents: _runningAgentNames,
+      onShowTerminal: _showRunningTerminal,
       online: (_snapshot?['settings'] as Map?)?['addons_online'] != false,
       tr: tr,
       welcome: _welcome && category == 1,
@@ -1178,8 +1238,19 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                 style: Theme.of(sheet).textTheme.titleLarge,
               ),
               AddonDetails(item: item, tr: tr),
-              if (_agentsRunning)
-                Text(tr('Finish running agents before changing add-ons.')),
+              if (_agentsRunning) ...[
+                Text(
+                  addonsLockedText(tr, _runningAgentNames),
+                  key: const ValueKey('addon-sheet-locked'),
+                ),
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(sheet);
+                    _showRunningTerminal();
+                  },
+                  child: Text(tr('Show terminal')),
+                ),
+              ],
               TextButton(
                 onPressed:
                     blocked ||
@@ -1259,7 +1330,8 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   }
 
   Future<void> _removeAddon(Map<String, dynamic> item) async {
-    if (_busy || _agentsRunning) return;
+    if (_busy) return;
+    if (_agentsRunning) return _addonsLocked();
     try {
       final plan = await _client.addonsRemovePreview(id: item['id']);
       if (!mounted) return;
@@ -1293,7 +1365,9 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   }
 
   Future<void> _toggleAddon(String id, bool on) async {
-    if (_busy || _agentsRunning) return;
+    if (_busy) return;
+    // Never silently: a click that arrives while agents run says why.
+    if (_agentsRunning) return _addonsLocked();
     final before =
         _addons.where((i) => i['id'] == id).firstOrNull?['enabled'] == true;
     setState(() => _busy = true);
@@ -1702,7 +1776,8 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   Future<void> _updateAllAddons(Map<String, dynamic> line) async {
     final updates = (line['updates'] as List? ?? const [])
         .cast<Map<String, dynamic>>();
-    if (updates.isEmpty || _busy || _agentsRunning) return;
+    if (updates.isEmpty || _busy) return;
+    if (_agentsRunning) return _addonsLocked();
     final yes = await _cardReview(
       tr('Update all'),
       (yes, no) => TaskReview(
@@ -2210,7 +2285,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         tr: tr,
       );
       setState(() {
-        _terminals.add(terminal);
+        _terminals.add(_track(terminal));
         _visibleTerminal = terminal;
       });
     }
@@ -2597,7 +2672,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       tr: tr,
     );
     setState(() {
-      _terminals.add(terminal);
+      _terminals.add(_track(terminal));
       _visibleTerminal = terminal;
     });
   }
@@ -3146,7 +3221,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         if (_guideReturn) _guideTerminals.add(terminal);
         setState(() {
           _card = null;
-          _terminals.add(terminal);
+          _terminals.add(_track(terminal));
           _visibleTerminal = terminal;
           _showGuide = false;
         });
@@ -3908,7 +3983,8 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   }
 
   Future<void> _finishSetup(List<String>? selected) async {
-    if (_busy || (selected != null && _agentsRunning)) return;
+    if (_busy) return;
+    if (selected != null && _agentsRunning) return _addonsLocked();
     final before = _addons
         .where((i) => i['enabled'] == true)
         .map((i) => i['id'] as String)
@@ -4395,13 +4471,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                     tabs: [
                       for (final terminal in _terminals)
                         (
-                          _catalog
-                                      .where(
-                                        (a) => a['command'] == terminal.command,
-                                      )
-                                      .firstOrNull?['name']
-                                  as String? ??
-                              terminal.command,
+                          _terminalName(terminal),
                           terminal.ended
                               ? 'ended'
                               : ((_graph?['activity']
@@ -4416,17 +4486,8 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                         ? null
                         : _terminals.indexOf(_visibleTerminal!),
                     tr: tr,
-                    onSelect: (i) {
-                      // Tabs switch terminals, not what another window shows.
-                      if (_navigationBlocked || _card != null) return;
-                      setState(() => _visibleTerminal = _terminals[i]);
-                      // The click took the keyboard to the tab.
-                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        if (_visibleTerminal != null) {
-                          _terminalKeys.requestFocus();
-                        }
-                      });
-                    },
+                    // The click took the keyboard to the tab; showing gives it back.
+                    onSelect: (i) => _showTerminal(_terminals[i]),
                   ),
                 Expanded(
                   child: LayoutBuilder(

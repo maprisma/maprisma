@@ -37,13 +37,16 @@ time a Claude session that Maprisma's Ask AI had started was running in one of t
    details sheet button get the same reason as a tooltip or subtitle, not just a greyed state.
 3. `_toggleAddon`, `_removeAddon` and the update path never return silently. If they are reached while
    agents run (a race between a click and a terminal starting), they show the banner text as a snack bar.
-4. The lock lifts by itself when the last terminal ends: the page rebuilds without a restart. This should
-   already happen through `_refresh`; the task adds a test for it.
+4. The lock lifts by itself when the last terminal ends: the page rebuilds without a restart.
+   Found while testing: it did not. `AgentTerminal` notifies when it ends, but `main.dart` never listened,
+   so the page (and the tab's "ended" state) changed only at the next unrelated rebuild. Every new terminal
+   now goes through `_track()`, which rebuilds when it ends.
 
 **Part B (decision for Uwe, not done here): how narrow should the lock be?**
-The reason for the lock is not written down. Plausible reasons: an agent add-on switched off while its
-agent runs takes the agent off the map under its own terminal; and an add-on change makes the map rebuild
-while a terminal reads the agent's session files. Options:
+The only written reason is the comment on `_agentsRunning` (`main.dart:1023`): "Only sessions owned by
+this app depend on its currently loaded adapters." So a running terminal relies on its agent's adapter;
+switching that adapter off (or replacing it by an update or a removal) while it runs is the risk. Nothing
+says why switching on an unrelated add-on must wait. Options:
 - (a) Keep the lock for every add-on (only Part A).
 - (b) Lock only the add-ons of agents that are running (and the provider add-ons they use); switching
   *on* anything else is always allowed.
@@ -63,7 +66,8 @@ comes from the snapshot's agents.
   `_toggleAddon` / `_removeAddon` / update; details sheet text uses the same wording.
 - New texts in all 8 languages (`translations/*.json`, appended, source order kept):
   "{0} is running in a terminal. Add-ons can be changed when it has finished.",
-  "{0} are running in terminals. Add-ons can be changed when they have finished.", "Show terminal".
+  "{0} are running in terminals. Add-ons can be changed when they have finished." ("Show terminal" is
+  already translated everywhere.)
   The old line "Finish running agents before changing add-ons." stays as long as another view uses it.
 - Manual: the add-ons part of the Map chapter (`docs/manual/`, all languages) gets one sentence: "While an
   agent runs in one of Maprisma's terminals (Ask AI included), add-ons cannot be changed; the page says
