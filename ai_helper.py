@@ -17,6 +17,7 @@ import json
 import os
 import shutil
 import threading
+from pathlib import Path
 
 import plugin_ai
 from plugin_ai import Usage, parse_output  # noqa: F401  (the app's modules use them from here)
