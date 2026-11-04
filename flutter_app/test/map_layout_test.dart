@@ -172,6 +172,31 @@ void main() {
       ],
     }, {});
     expect(offered.curves.where((c) => c.edge['kind'] == 'offer'), isEmpty);
+    // A provider's own choice of model: its line shows without any agent, it
+    // counts for the filter, and a choice the provider does not serve shows
+    // nothing.
+    final chosen = MapLayout(
+      {
+        ...fixtureGraph(),
+        'provider_models': {'runtime:r': 'model:r:n', 'runtime:s': 'model:r:m'},
+      },
+      {
+        'used_only': [MapLayout(fixtureGraph(), {}).cardOf['model:r:n']!],
+      },
+    );
+    expect(chosen.chosenModels, {'model:r:n'});
+    expect(
+      chosen.curves.where(
+        (c) =>
+            c.edge['source'] == 'runtime:r' && c.edge['target'] == 'model:r:n',
+      ),
+      hasLength(1),
+    );
+    expect(
+      chosen.curves.where((c) => c.edge['source'] == 'runtime:s'),
+      isEmpty,
+    );
+    expect(chosen.boxes.containsKey('model:r:n'), isTrue);
     expect(layout.movable(layout.curves.last.edge), isTrue);
     expect(layout.providerFor('model:r:m'), 'runtime:r');
     expect(layout.targetOk('agent:a', 'model:r:n'), true);

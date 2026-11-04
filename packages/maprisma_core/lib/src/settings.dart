@@ -270,6 +270,7 @@ final class SettingsStore {
       case 'map_zoom':
         return v is num;
       case 'agent_projects':
+      case 'provider_models':
         return v is Map && v.values.every((e) => e is String);
       case 'agent_project_history':
         return v is Map && v.values.every(texts);

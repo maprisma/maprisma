@@ -1135,6 +1135,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       ? {'nodes': <dynamic>[], 'edges': <dynamic>[]}
       : {
           ...withAgentLinks(_graph!),
+          'provider_models': _providerModels,
           'agent_badges': {..._agentBadges, ..._gpuBadges},
           'usage_boxes': _usageBoxes,
           'usage_box_size': _usageBoxSize,
@@ -3682,9 +3683,10 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     }
     if (_busy) return;
     if (edit['forget'] case final String id) {
-      return _connectionPreview({
+      await _connectionPreview({
         'name': id.substring('mcp:'.length),
       }, method: 'connections.forget_preview');
+      return;
     }
     Map<String, dynamic>? edge = edit['edge'] as Map<String, dynamic>?;
     if (edit['failure'] != null) {
@@ -3716,13 +3718,14 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       if (mounted) setState(() => _busy = false);
       if (!chosen) return;
       if (repair) {
-        return _connectionPreview(
+        await _connectionPreview(
           {'agent': edge['source'], 'target': edge['target']},
           method: 'connections.repair_preview',
           mapDraw: true,
           mapLine:
               '${nodes[edge['source']]?['label']} → ${nodes[edge['target']]?['label']}',
         );
+        return;
       }
       // Disconnect was the answer: no second question.
       setState(() => _card = null);
@@ -3744,8 +3747,31 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       }
       if (['runtime', 'cloud'].contains(source['kind']) &&
           old?['kind'] == 'model') {
-        await _connectionPreview(
-          {'provider': source['id'], 'old': old!['id'], 'new': target?['id']},
+        final chosen = _providerModels[source['id']] == old!['id'];
+        final users = (_mapGraph['edges'] as List).cast<Map>().any(
+          (e) => e['kind'] == 'default' && e['target'] == old['id'],
+        );
+        if (chosen && !users) {
+          // Only the provider's choice: one short step.
+          final yes =
+              confirmed ||
+              await _askMapChange(
+                tr(target == null ? 'Disconnect' : 'Connect'),
+                '${source['label']} → ${target?['label'] ?? old['label']}',
+              );
+          if (!yes) return;
+          if (target != null && !_chatModel('${target['label']}')) {
+            _mapNote(tr('This model cannot be connected here.'));
+            return;
+          }
+          await _setProviderModel(
+            source['id'] as String,
+            target?['id'] as String?,
+          );
+          return;
+        }
+        final moved = await _connectionPreview(
+          {'provider': source['id'], 'old': old['id'], 'new': target?['id']},
           method: 'models.switch_preview',
           plainDisconnect: target == null
               ? '${source['label']} → ${old['label']}'
@@ -3754,6 +3780,17 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
           mapDraw: true,
           mapLine: '${source['label']} → ${target?['label'] ?? old['label']}',
         );
+        // The provider's choice follows its agents.
+        if (moved && chosen && mounted) {
+          await _updateSettings({
+            'provider_models': {
+              for (final e in _providerModels.entries)
+                if (e.key != source['id']) e.key: e.value,
+              if (target != null)
+                source['id'] as String: target['id'] as String,
+            },
+          });
+        }
         return;
       }
       if (source['kind'] == 'agent' && old?['kind'] == 'model') {
@@ -3807,43 +3844,46 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         if (agent != null) (agent['id'] as String).substring(6),
       };
       if (agent == null) {
-        final candidates = nodes.values
-            .where((n) => n['kind'] == 'agent')
-            .toList();
-        final chosen = await _cardReview(
-          tr('Agents'),
-          (yes, no) => StatefulBuilder(
-            builder: (context, update) => TaskReview(
-              content: SingleChildScrollView(
-                child: Column(
-                  children: [
-                    for (final n in candidates)
-                      CheckboxListTile(
-                        title: Text(n['label'] as String),
-                        value: selected.contains(
-                          (n['id'] as String).substring(6),
-                        ),
-                        onChanged: (v) => update(() {
-                          final c = (n['id'] as String).substring(6);
-                          if (v == true) {
-                            selected.add(c);
-                          } else {
-                            selected.remove(c);
-                          }
-                        }),
-                      ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(onPressed: no, child: Text(tr('Cancel'))),
-                FilledButton(onPressed: yes, child: Text(tr('Preview'))),
-              ],
-            ),
-          ),
-        );
-        if (mounted) setState(() => _busy = false);
-        if (!chosen) return;
+        final source = nodes[provider['source']];
+        if (source?['kind'] == 'runtime') {
+          // A provider uses a model: one short step. Agents connected to the
+          // provider later get it; nothing else changes now.
+          if (!_chatModel('${item['label']}')) {
+            _mapNote(tr('This model cannot be connected here.'));
+            return;
+          }
+          if (_providerModels[provider['source']] == item['id']) {
+            _mapNote(tr('No changes to apply'));
+            return;
+          }
+          if (!await _askMapChange(
+            tr('Connect'),
+            '${source?['label']} → ${item['label']}',
+          )) {
+            return;
+          }
+          await _setProviderModel(
+            provider['source'] as String,
+            item['id'] as String,
+          );
+          return;
+        }
+        // Online: the agents that already use this provider get the model.
+        selected.addAll({
+          for (final e in (_mapGraph['edges'] as List).cast<Map>())
+            if (e['target'] == provider['source'] &&
+                const {'uses', 'available'}.contains(e['kind']) &&
+                '${e['source']}'.startsWith('agent:'))
+              '${e['source']}'.substring(6),
+        });
+        if (selected.isEmpty) {
+          _mapNote(
+            tr('Connect {0} to {1} first, then choose this model.')
+                .replaceAll('{0}', tr('Agent'))
+                .replaceAll('{1}', '${source?['label']}'),
+          );
+          return;
+        }
       }
       await _connectionPreview(
         {
@@ -3865,6 +3905,10 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     }
     final kind = item['kind'] == 'runtime' ? 'provider' : item['kind'];
     if (!['provider', 'mcp', 'skills'].contains(kind)) return;
+    final chosenLabel = kind == 'provider'
+        ? '${nodes[_providerModels[item['id']]]?['label'] ?? ''}'
+        : '';
+    final chosenModel = _chatModel(chosenLabel) ? chosenLabel : '';
     await _connectionPreview(
       {
         'kind': kind,
@@ -3873,15 +3917,18 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
           (item['kind'] as String).length + 1,
         ),
         'remove': false,
-        if (kind == 'provider') 'model': '',
-        if (kind == 'provider') 'use_now': false,
+        // The provider's chosen model, when it has one an agent can use.
+        if (kind == 'provider') 'model': chosenModel,
+        if (kind == 'provider') 'use_now': chosenModel.isNotEmpty,
       },
       mapDraw: true,
-      mapLine: '${agent['label']} → ${item['label']}',
+      mapLine: chosenModel.isEmpty
+          ? '${agent['label']} → ${item['label']}'
+          : '${agent['label']} → ${item['label']} → $chosenModel',
     );
   }
 
-  Future<void> _connectionPreview(
+  Future<bool> _connectionPreview(
     Map<String, dynamic> params, {
     bool author = false,
     String? method,
@@ -3917,7 +3964,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                 useNow: params['use_now'] as bool?,
               );
       }
-      if (!mounted) return;
+      if (!mounted) return false;
       // A line taken away with nothing to warn about needs only a yes.
       final quiet =
           plainDisconnect != null &&
@@ -3933,7 +3980,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
           (plan['model_actions'] as List? ?? const []).isEmpty;
       if (mapDraw && plan['empty'] == true) {
         _mapNote(tr('No changes to apply'));
-        return;
+        return false;
       }
       final verb = method == 'connections.repair_preview'
           ? 'Repair'
@@ -3976,7 +4023,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
             title: tr('Apply'),
             quiet: quiet,
           );
-          if (finished == null) return;
+          if (finished == null) return false;
           result = finished;
         }
         if (!queued) {
@@ -4033,6 +4080,51 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
             method == null && !author && params['kind'] == 'provider')) {
       await _syncSlots();
     }
+    return applied;
+  }
+
+  /// Settings › provider_models: the model each provider uses (map ids).
+  Map<String, String> get _providerModels => {
+    for (final e
+        in ((_snapshot?['settings'] as Map?)?['provider_models'] as Map? ??
+                const {})
+            .entries)
+      '${e.key}': '${e.value}',
+  };
+
+  /// connect.chat_models: what an agent can talk to.
+  static bool _chatModel(String name) => !RegExp(
+    r'tts|tokenizer|embed|whisper|rerank',
+    caseSensitive: false,
+  ).hasMatch(name);
+
+  /// One step: a provider uses [model] (null: none), with a note and Undo.
+  Future<void> _setProviderModel(String provider, String? model) async {
+    final before = _providerModels;
+    final next = {...before};
+    if (model == null) {
+      next.remove(provider);
+    } else {
+      next[provider] = model;
+    }
+    await _updateSettings({'provider_models': next});
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(_navigator.currentContext!);
+    messenger
+      ..clearSnackBars()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(tr('Succeeded')),
+          action: SnackBarAction(
+            label: tr('Undo'),
+            onPressed: () {
+              if (!_keysBlocked) {
+                unawaited(_updateSettings({'provider_models': before}));
+              }
+            },
+          ),
+        ),
+      );
   }
 
   Future<void> _syncSlots() async {

@@ -200,6 +200,7 @@ class MapLayout {
     double? centerWidth,
   }) {
     _columns = columns;
+    _providerModelsRaw = graph['provider_models'] as Map?;
     bordered = (saved['card_border'] as Map?)?['on'] == true;
 
     // The shown columns sit in the middle of a wider window and grow to fill
@@ -287,9 +288,13 @@ class MapLayout {
     };
     final linked = <String>{
       // Only real connections: a model merely present in a provider's folder
-      // or catalog ("serves") does not count, nor does an offer.
+      // or catalog ("serves") does not count, nor does an offer; a
+      // provider's chosen model does.
       for (final e in (graph['edges'] as List? ?? []).cast<Map>())
-        if (e['kind'] != 'offer' && e['kind'] != 'serves') ...[
+        if (e['kind'] != 'offer' &&
+            (e['kind'] != 'serves' ||
+                (graph['provider_models'] as Map?)?[e['source']] ==
+                    e['target'])) ...[
           '${e['source']}',
           '${e['target']}',
         ],
@@ -519,10 +524,24 @@ class MapLayout {
         );
   }
 
-  /// Models some agent uses through their provider.
+  /// Models some agent uses through their provider, and each provider's own
+  /// choice (Settings › provider_models) when that provider serves it.
   late final Set<String> modelsInUse = {
     for (final e in allEdges)
       if (viaProvider(e)) '${e['target']}',
+    ...chosenModels,
+  };
+
+  /// A provider's chosen model that it really serves.
+  late final Set<String> chosenModels = {
+    for (final e in allEdges)
+      if (e['kind'] == 'serves' && providerModels[e['source']] == e['target'])
+        '${e['target']}',
+  };
+  Map? _providerModelsRaw;
+  late final Map<String, String> providerModels = {
+    for (final e in (_providerModelsRaw ?? const {}).entries)
+      '${e.key}': '${e.value}',
   };
   String? providerFor(String model) => allEdges
       .where((e) => e['kind'] == 'serves' && e['target'] == model)

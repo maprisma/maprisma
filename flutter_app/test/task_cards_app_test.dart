@@ -60,7 +60,7 @@ for line in sys.stdin:
  elif m=='app.theme':r={'theme':json.loads(Path('theme.json').read_text()) if Path('theme.json').exists() else {}}
  elif m=='addons.list':r={'addons':[addon]+([new_addon] if installed else [])}
  elif m=='system.cached':r={'nodes':[],'edges':[],'notes':[],'helpers':[]}
- elif m=='map.snapshot':r={'nodes':[({**n,'status':'running'} if n['id']=='agent:test' and Path('agent_running').exists() else n) for n in nodes],'edges':[{'source':'agent:test','target':'mcp:known-server','kind':'mcp'}] if connected else [],'activity':{},'pending':Path('pending').exists()}
+ elif m=='map.snapshot':r={'nodes':[({**n,'status':'running'} if n['id']=='agent:test' and Path('agent_running').exists() else n) for n in nodes],'edges':([{'source':'agent:test','target':'mcp:known-server','kind':'mcp'}] if connected else [])+([{'source':'runtime:fixture','target':'model:runtime:fixture:example-model','kind':'serves'}] if Path('serves').exists() else []),'activity':{},'pending':Path('pending').exists()}
  elif m=='agents.traffic':r={'available':True,'agents':{}}
  elif m=='agents.halt_preview':r={'instances':[{'label':'PID 42','preview':'halt-42'}]}
  elif m=='system.refresh':
@@ -1024,6 +1024,71 @@ void main() {
     expect(tester.takeException(), isNull);
     await unmountApp(tester);
   });
+  testWidgets(
+    'provider to model is one short step; an agent connected later gets the model',
+    (tester) async {
+      final dir = await mountApp(
+        tester,
+        beforeStart: (d) => File('${d.path}/serves').writeAsStringSync(''),
+      );
+      Future<void> draw(String from, String to) async {
+        final a = tester.getCenter(find.text(from)),
+            b = tester.getCenter(find.text(to));
+        await tester.dragFrom(a, b - a);
+        await settleService(tester);
+      }
+
+      List<Map<String, dynamic>> updates() => [
+        for (final q in requests(dir))
+          if (q['method'] == 'settings.update' &&
+              (q['params']['values'] as Map).containsKey('provider_models'))
+            q['params']['values'] as Map<String, dynamic>,
+      ];
+      await draw('Fixture provider', 'example-model');
+      final dialog = find.byKey(const ValueKey('map-change-dialog'));
+      expect(dialog, findsOneWidget);
+      expect(
+        find.descendant(
+          of: dialog,
+          matching: find.text('Fixture provider → example-model'),
+        ),
+        findsOneWidget,
+      );
+      // No list of agents to choose from.
+      expect(find.byType(CheckboxListTile), findsNothing);
+      await tester.tap(
+        find.descendant(of: dialog, matching: find.text('Apply')),
+      );
+      await settleService(tester);
+      expect(updates().last['provider_models'], {
+        'runtime:fixture': 'model:runtime:fixture:example-model',
+      });
+      expect(
+        requests(dir).where((q) => q['method'] == 'models.attach_preview'),
+        isEmpty,
+      );
+      final undo = find.widgetWithText(SnackBarAction, 'Undo');
+      expect(undo, findsOneWidget);
+      await tester.tap(undo);
+      await settleService(tester);
+      expect(updates().last['provider_models'], isEmpty);
+      // Chosen again, then the agent drawn to the provider gets that model.
+      await draw('Fixture provider', 'example-model');
+      await tester.tap(
+        find.descendant(of: dialog, matching: find.text('Apply')),
+      );
+      await settleService(tester);
+      await draw('Test agent', 'Fixture provider');
+      final preview = requests(
+        dir,
+      ).lastWhere((q) => q['method'] == 'connections.preview');
+      expect(preview['params']['kind'], 'provider');
+      expect(preview['params']['model'], 'example-model');
+      expect(preview['params']['use_now'], isTrue);
+      expect(tester.takeException(), isNull);
+      await unmountApp(tester);
+    },
+  );
   for (final pending in [false, true]) {
     testWidgets(
       'live scans retain equal snapshots and map widgets (pending=$pending)',

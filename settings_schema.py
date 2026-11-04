@@ -114,6 +114,7 @@ SCHEMA: dict[str, Setting] = {
     "screenshot_folder": Setting(None, _text, "Settings › Screenshots go to: empty is ~/Pictures/Maprisma"),
     "agent_folder": Setting(None, _text, "Settings › Agents start in: the folder agents start in"),
     "agent_projects": Setting({}, _text_mapping, "Start: the optional project folder pinned as each agent's default"),
+    "provider_models": Setting({}, _text_mapping, "Map: the model each provider uses, drawn provider to model; an agent connected to the provider later gets it"),
     "agent_project_history": Setting({}, _history_mapping, "Project folders used to start each agent, newest first"),
     # The map
     "flutter_map_layout": Setting({}, lambda v: __import__("flutter_map_editor").valid_layout(v),
