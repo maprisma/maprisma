@@ -1058,7 +1058,7 @@
   "map.smart_ask": {
    "area": "map",
    "kind": "read",
-   "note": "column: mcp, agents, providers, models. Spends the user's tokens: only on their click. tasks.status result: status proposal, clarify, redirect or error; helper, local, summary, question, choices, instead {hint, column, request}, limits {gpu_name, vram, ram, free_disk}, proposal, candidates [{id, title, subtitle, reason, fit (ok, tight, too_large), size}, and for the MCP column kind (mcp_add, mcp_connect, mcp_disconnect), agents, needs [{name, description, secret, value, hint}]].",
+   "note": "column: mcp, agents, providers, models. Spends the user's tokens only on their click. tasks.status result: status proposal, clarify, redirect or error; helper, local, summary, question, choices, instead {hint, column, request}, limits {gpu_name, vram, ram, free_disk}, proposal, candidates [{id, title, subtitle, reason, fit (ok, tight, too_large), size, kind, agents}]. A map_edit candidate names a checked manual map preview route and its parameters; no write occurs until preview and Apply.",
    "optional": [
     "answer"
    ],
@@ -1106,7 +1106,7 @@
   "map.smart_plan": {
    "area": "map",
    "kind": "preview",
-   "note": "An approved MCP candidate as the app's normal preview: a plan for ConnectionReview, then connections.apply. agents and values come from the user; a secret goes no further than the preview.",
+   "note": "An approved MCP or map_edit candidate as the app's normal preview: a plan for ConnectionReview, then connections.apply. For map_edit the core validates the selected route, its parameters and the current action rules before calling the same preview as a manual map edit. agents and values come from the user; a secret goes no further than the preview.",
    "params": {
     "agents": [
      "string"
