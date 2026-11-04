@@ -25,6 +25,15 @@
   <url type="bugtracker">https://github.com/uBruckhaus/Asterism/issues</url>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.13.1" date="2026-11-04">
+      <description>
+        <p>Fixes the map that turned grey whenever one agent used another. The map now reads skills or
+        MCP → agent → provider → model, one line per step and only real connections; the "only what is
+        connected or pinned" filter hides models nobody uses. Drawing a local provider onto one of its
+        models is one short step, and an agent connected to that provider later gets the model. Tasks
+        handed to an agent ("Do it with …") stay in a private file instead of the command line.</p>
+      </description>
+    </release>
     <release version="0.13.0" date="2026-11-04">
       <description>
         <p>A calmer map: lines show only real connections, red only marks a real problem, and agents

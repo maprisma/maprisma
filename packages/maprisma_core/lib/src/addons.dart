@@ -18,7 +18,7 @@ import 'sshsig.dart';
 const signingKey =
     'AAAAC3NzaC1lZDI1NTE5AAAAIFfDZiRAvEhdsjhLIlYc6SfP80I533WGiSw6/tzqQtYA';
 const signingNamespace = 'maprisma-addon';
-const maprismaVersion = '0.13.0';
+const maprismaVersion = '0.13.1';
 const apiVersion = 1;
 const addonKinds = {'feature', 'agent', 'provider', 'extension'};
 const addonCapabilities = {'agent', 'provider', 'installer', 'updater'};
