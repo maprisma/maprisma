@@ -702,12 +702,12 @@ class Service:
     def guard_addon_changes(self):
         if self.addon_installing():raise ValueError('An installation is already running')
 
-    def locked_addons(self) -> set:
+    def locked_addons(self) -> frozenset:
         """The agent add-ons that provide the command of a running session. A session uses its
         adapter only at start, so only switching its own add-on off, updating or removing it waits."""
         running = {s.command for s in self.sessions.items.values() if self.sessions.poll(s) is None}
-        return {a.id for a in (self.adapters.items if self.adapters else [])
-                if a.kind == 'agent' and running.intersection(a.provides)}
+        return frozenset(a.id for a in (self.adapters.items if self.adapters else [])
+                         if a.kind == 'agent' and running.intersection(a.provides))
 
     def guard_addon_lock(self, ids):
         if self.locked_addons().intersection(ids):
