@@ -387,6 +387,7 @@ class SystemMap:
         env.pop('MAPRISMA_PAGE', None)
         env.pop('MAPRISMA_VIEW', None)
         path = str(Path.home())
+        ai_helper.write_task_prompt(prompt)
         session = sessions.start(command, argv, path, env)
         try:ai_helper.record_task('smart-fix' if topic=='fix' else 'setup-help',command)
         except Exception:pass  # Logging must not lose an already-owned terminal session.

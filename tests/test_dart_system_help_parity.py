@@ -133,6 +133,8 @@ class DartSystemHelpParityTest(unittest.TestCase):
                 stdin = (home / 'claude-stdin.txt').read_text() if (home / 'claude-stdin.txt').exists() else ''
                 text = json.dumps([answers, runs, args, stdin]).replace(str(home), '$HOME')
                 text = re.sub(r'"(core-)?[0-9a-f]{32}"', '"<handle>"', text)
+                # The task file is named by the prompt's hash; each side's prompt holds its own $HOME.
+                text = re.sub(r'/maprisma/tasks/[0-9a-f]{32}\.md', '/maprisma/tasks/<hash>.md', text)
                 text = re.sub(r'"(when|checked_at)": "?[0-9T:.e+-]+"?', r'"\1": 0', text)
                 sides[side] = json.loads(text)
         self.maxDiff = None
@@ -147,6 +149,9 @@ class DartSystemHelpParityTest(unittest.TestCase):
         self.assertEqual([f['node'] for f in analysis['findings']], ['', ''])
         self.assertIn('--permission-mode', '\n'.join(args))
         self.assertIn('PC_FACTS_JSON', results['overview']['prompt'])
+        # The task stays off the command line (other accounts can read it): only a pointer to its file.
+        self.assertNotIn('PC_FACTS_JSON', '\n'.join(args))
+        self.assertIn('/maprisma/tasks/<hash>.md', '\n'.join(args))
         self.assertEqual([r['task'] for r in runs['runs']], ['setup-help', 'setup-analysis', 'smart-fix'])
 
 

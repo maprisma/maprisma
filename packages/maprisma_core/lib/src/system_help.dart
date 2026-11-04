@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' show Random;
+import 'package:crypto/crypto.dart' show sha256;
 import 'package:path/path.dart' as p;
 import 'package:toml/toml.dart';
 import 'adapters.dart';
@@ -161,8 +162,38 @@ List<String> guardTask(
   ]);
 }
 
-/// ai_helper.task_argv: the agent started with the prompt as its first
-/// message, closed in (null: it takes no tasks).
+/// ai_helper.task_prompt_path: where a task's text waits for its agent, in
+/// this account's cache (inside the home folder the session starts in, so the
+/// agent may read it): named by the prompt's hash, so preview and apply agree.
+String taskPromptPath(String prompt, Map<String, String> env, String home) {
+  final configured = env['XDG_CACHE_HOME'] ?? '';
+  final root = configured.isNotEmpty && p.isAbsolute(configured)
+      ? configured
+      : p.join(home, '.cache');
+  final name = sha256.convert(utf8.encode(prompt)).toString().substring(0, 32);
+  return p.join(root, 'maprisma', 'tasks', '$name.md');
+}
+
+/// ai_helper.task_instruction: all that goes on the command line, which other
+/// accounts can read; the task itself stays in the private file.
+String taskInstruction(String prompt, Map<String, String> env, String home) =>
+    'Your task is in ${taskPromptPath(prompt, env, home)}. '
+    'Read that file and follow it.';
+
+/// ai_helper.write_task_prompt: the task's text, readable only by this
+/// account (folder 0700, file 0600, never through a link), just before the
+/// session starts.
+void writeTaskPrompt(String prompt, Map<String, String> env, String home) {
+  final path = taskPromptPath(prompt, env, home);
+  final dir = p.dirname(path);
+  Directory(dir).createSync(recursive: true);
+  final posix = Posix();
+  posix.chmodPath(dir, 0x1c0);
+  posix.atomicWrite(path, utf8.encode(prompt));
+}
+
+/// ai_helper.task_argv: the agent started with a first message that points to
+/// its task file, closed in (null: it takes no tasks).
 List<String>? taskArgv(
   Adapter? adapter,
   String command,
@@ -178,7 +209,11 @@ List<String>? taskArgv(
   return guardTask(
     adapter,
     command,
-    [binary, for (final a in task.skip(1)) a == '{prompt}' ? prompt : a],
+    [
+      binary,
+      for (final a in task.skip(1))
+        a == '{prompt}' ? taskInstruction(prompt, env, home) : a,
+    ],
     env,
     home,
   );

@@ -1651,6 +1651,9 @@ final class CoreService {
       ..['MAPRISMA_NO_PROVIDERS'] = '1'
       ..remove('MAPRISMA_PAGE')
       ..remove('MAPRISMA_VIEW');
+    // The task's text goes to a private file; the command line only points to
+    // it (other accounts can read command lines).
+    writeTaskPrompt(prompt, env, home);
     final session = starter.sessions.start(command, argv, home, sessionEnv);
     try {
       recordRun(
