@@ -3345,5 +3345,10 @@
  "Not measured for this build yet": "Non ancora misurato per questa build",
  "Measured for this card: {0}": "Misurato per questa scheda: {0}",
  "{0}: context {1} · {2} tokens/s prompt · {3} tokens/s answer": "{0}: contesto {1} · {2} token/s in ingresso · {3} token/s di risposta",
- "Not measured: {0}": "Non misurato: {0}"
+ "Not measured: {0}": "Non misurato: {0}",
+ "The card is in use: a model is loaded in llama.cpp. Measure again when it is idle.": "La scheda grafica è occupata: in llama.cpp è caricato un modello. Misura di nuovo quando è libera.",
+ "The card is in use: a model is loaded in Ollama. Measure again when it is idle.": "La scheda grafica è occupata: in Ollama è caricato un modello. Misura di nuovo quando è libera.",
+ "llama.cpp is not installed": "llama.cpp non è installato",
+ "llama-bench is not next to the llama.cpp the service runs": "llama-bench non si trova accanto al llama.cpp eseguito dal servizio",
+ "llama.cpp is started by a script: start its service, then measure again": "llama.cpp viene avviato da uno script: avvia il suo servizio, poi misura di nuovo"
 }

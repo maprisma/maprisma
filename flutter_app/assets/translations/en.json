@@ -755,5 +755,10 @@
   "Not measured for this build yet": "Not measured for this build yet",
   "Measured for this card: {0}": "Measured for this card: {0}",
   "{0}: context {1} · {2} tokens/s prompt · {3} tokens/s answer": "{0}: context {1} · {2} tokens/s prompt · {3} tokens/s answer",
-  "Not measured: {0}": "Not measured: {0}"
+  "Not measured: {0}": "Not measured: {0}",
+  "The card is in use: a model is loaded in llama.cpp. Measure again when it is idle.": "The card is in use: a model is loaded in llama.cpp. Measure again when it is idle.",
+  "The card is in use: a model is loaded in Ollama. Measure again when it is idle.": "The card is in use: a model is loaded in Ollama. Measure again when it is idle.",
+  "llama.cpp is not installed": "llama.cpp is not installed",
+  "llama-bench is not next to the llama.cpp the service runs": "llama-bench is not next to the llama.cpp the service runs",
+  "llama.cpp is started by a script: start its service, then measure again": "llama.cpp is started by a script: start its service, then measure again"
 }

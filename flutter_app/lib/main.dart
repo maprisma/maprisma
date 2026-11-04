@@ -63,6 +63,14 @@ import 'connections_view.dart';
 import 'model_removal_dialog.dart';
 import 'subagents_dialog.dart';
 
+/// When the background tuning (task 029) first looks after the start, and
+/// how often it tries again while the core is busy with other tasks; tests
+/// shorten them.
+@visibleForTesting
+Duration tuneDelay = const Duration(seconds: 30);
+@visibleForTesting
+int tuneTries = 5;
+
 void main(List<String> args) async {
   if (args.isNotEmpty && args.first.startsWith('--map-benchmark')) {
     final options = MapBenchmarkOptions.parse(args);
@@ -2545,11 +2553,15 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     try {
       final started = await _client.jobsContinue(id: job['id']);
       if (!mounted) return;
-      await _runTask(
+      final done = await _runTask(
         operation: job['kind'] == 'pull' ? 'models.pull' : 'models.download',
         existingTask: started['task'] as String,
         title: '${job['title']}',
       );
+      // A finished llama.cpp download is measured for this card (task 029;
+      // models.tuning lists only llama.cpp models, so another runtime's
+      // download finds nothing to measure).
+      if (done != null && job['kind'] != 'pull') _tuneAfterBusy = true;
       await _refresh();
     } catch (_) {
       _actionFailed();
@@ -2559,6 +2571,10 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
           _taskActive = false;
           _busy = false;
         });
+      }
+      if (_tuneAfterBusy && mounted) {
+        _tuneAfterBusy = false;
+        unawaited(_tuneUntuned());
       }
     }
   }
@@ -3294,6 +3310,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   }
 
   bool _tuneAfterBusy = false, _tuning = false;
+  Timer? _tuneTimer;
 
   /// The measurement's lines for the review and the message.
   List<String> _tuneLines(Map<String, dynamic> plan) => [
@@ -3330,7 +3347,18 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
-    if (!mounted || plan == null || plan['plan'] is! String) return;
+    if (!mounted || plan == null) return;
+    if (plan['refused'] is String) {
+      // The card is in use, no llama-bench, …: why, and nothing changed.
+      ScaffoldMessenger.of(_navigator.currentContext!).showSnackBar(
+        SnackBar(
+          key: const ValueKey('tune-refused'),
+          content: Text(tr(plan['refused'] as String)),
+        ),
+      );
+      return;
+    }
+    if (plan['plan'] is! String) return;
     await _connectionPreview(
       const {},
       ready: {
@@ -3349,7 +3377,17 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     if (_tuning) return;
     _tuning = true;
     try {
-      final facts = await _quietTask('models.tuning', {'key': 'llamacpp'});
+      // Refused while the core runs four tasks: tried again a few times.
+      Map<String, dynamic>? facts;
+      for (var tries = 0; facts == null; tries++) {
+        try {
+          facts = await _quietTask('models.tuning', {'key': 'llamacpp'});
+        } on BackendError {
+          lastRefusal = null;
+          if (tries + 1 >= tuneTries || !mounted) rethrow;
+          await Future<void>.delayed(tuneDelay);
+        }
+      }
       final untuned = (facts['untuned'] as List? ?? const []).cast<String>();
       if (untuned.isEmpty || !mounted) return;
       final plan = await _quietTask('models.tune', {
@@ -3358,6 +3396,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       });
       if (!mounted ||
           _busy ||
+          plan['refused'] is String ||
           plan['plan'] is! String ||
           (plan['models'] as List? ?? const []).isEmpty) {
         return;
@@ -3367,7 +3406,10 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       if (result['task'] is String) {
         result = await _awaitTask('connections.apply', result);
       }
-      _connectionUndo = result['undo'] as String?;
+      if (!mounted) return;
+      // The views show the new contexts and the Undo (as after any apply).
+      setState(() => _connectionUndo = result['undo'] as String?);
+      if (!_busy) await _refresh();
       if (!mounted) return;
       final messenger = ScaffoldMessenger.of(_navigator.currentContext!);
       messenger.showSnackBar(
@@ -4266,7 +4308,9 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         unawaited(_checkHealth());
         unawaited(_checkUpdates());
         unawaited(_checkMcp());
-        unawaited(_tuneUntuned());
+        // After the other start-up checks: the core runs at most four
+        // tasks at once (task 029 review).
+        _tuneTimer ??= Timer(tuneDelay, () => unawaited(_tuneUntuned()));
         _mcpTimer ??= Timer.periodic(
           const Duration(hours: 1),
           (_) => unawaited(_checkMcp()),
@@ -4348,6 +4392,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     _limitsTimer?.cancel();
     _usageTimer?.cancel();
     _mcpTimer?.cancel();
+    _tuneTimer?.cancel();
     _blurHide?.cancel();
     windowManager.removeListener(this);
     _liveTimer?.cancel();

@@ -31,9 +31,12 @@ again when the build changes. Uwe's choices (2026-11-03): measure; KV cache q8_0
    `batch-size`. The calculated context (no measurement yet) assumes q8_0.
 3. **Measured.** `models.tune` (new, Dart core; the reference has no tuning routes) measures in the
    worker, for each model asked:
-   - the build in use: the binary of the `llama-server` service (`systemctl --user show llama-server`
-     ExecStart, its Environment and EnvironmentFiles), else `llama-server` on PATH; `llama-bench` from the
-     same folder, run with the service's environment; the build's kind from `--list-devices`;
+   - the build in use: while the `llama-server` service runs, the program and environment of its main
+     process (`/proc/<MainPID>/exe` and `environ`: a wrapper script that execs the real binary counts,
+     with its exports); else its ExecStart with links resolved, Environment and EnvironmentFiles, else
+     `llama-server` on PATH. A wrapper script read while the service is stopped is not a build: tuning is
+     refused ("start its service") and no model counts as untuned. `llama-bench` from the binary's
+     folder, run with that environment; the build's kind from `--list-devices`;
    - `llama-bench -ngl 99 -fa 1 -ctk q8_0 -ctv q8_0 -b 2048 -ub 512,1024,2048 -p 2048 -n 64 -r 2 -o json`;
      the fastest prompt processing wins (a tie within 3 %: the smaller ubatch, it needs less memory);
    - the card's video memory used, sampled from sysfs (`mem_info_vram_used` of the card with the most
@@ -42,6 +45,7 @@ again when the build changes. Uwe's choices (2026-11-03): measure; KV cache q8_0
      at most the trained context, at least 4096;
    - refused while a local LLM holds the card (the llama-server service active with a model loaded, or
      Ollama with a model loaded): the numbers would be wrong. The answer says so; nothing is changed.
+   A refusal is the task's result (`refused`, a text the app shows), not a failure.
    The result is a preview (like `models.tuning_preview`): models.ini changes with backup and Undo, plus
    the context in the configs of the agents connected to that model (as a connection writes it), applied
    with `connections.apply`.
@@ -50,10 +54,12 @@ again when the build changes. Uwe's choices (2026-11-03): measure; KV cache q8_0
    `models.tuning` reports `untuned`: llama.cpp models with no record, or one for another build.
 
 ## When it runs
-- After a llama.cpp download finishes (the app's job strip): the app asks `models.tune` for that model
-  and applies the result; a message names the context and speed and offers Undo.
+- After a llama.cpp download finishes (started, or continued from the app's job strip): the app asks
+  `models.tune` for the untuned models (the new one, plus any other not measured for this build) and
+  applies the result; a message names the context and speed and offers Undo.
 - When `models.tuning` reports untuned models and no local LLM holds the card: the same, for all of
-  them (the build changed, or models came in another way).
+  them (the build changed, or models came in another way). At start this waits 30 s for the other
+  start-up tasks (the core runs four at once) and tries again a few times while the core is busy.
 - On request: the Performance view gets "Measure and tune" (all models, or one).
 - Connecting a model that was never measured: the calculated context (rule 1 and 2) as today's preview.
 
