@@ -337,3 +337,14 @@ applying `connections.apply`.**
    > (up to 5 times) while the core is busy; after the apply it sets the state with `setState` and refreshes
    > the views like the normal apply. GUI test with one refused `models.tuning` and the refresh (fails
    > without the fix).
+
+## Round 2 (Antigravity, 2026-11-04, commit 4d8d0e7)
+
+All 7 findings of round 1 checked as fixed; finding 3 point 3's answer confirmed (`LlamaBuild.mark`
+already resolved links at dda9c2e). No new findings.
+
+CLEAN
+
+> Author: Antigravity's own worktree was still at dda9c2e; it read the fixes in
+> /mnt/Data/Projects/maprisma-claude, which was clean at 4d8d0e7 (its line references match that commit:
+> main.dart:4313, 3411-3412, plan_worker.dart:678-681), so the round covers 4d8d0e7.
