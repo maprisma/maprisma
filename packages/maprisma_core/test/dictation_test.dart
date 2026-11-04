@@ -295,11 +295,19 @@ void main() {
             'echo "Transcribed by online curl"\n',
       );
 
+      final environment = {
+        'HOME': temp.path,
+        'PATH': '$binDir:/usr/bin:/bin',
+        'MAPRISMA_DESKTOP': 'omarchy',
+      };
+      // The readiness checks without this PC's local LLMs: a running llama.cpp
+      // or Ollama with a voice model would make the local engine ready.
       final core = CoreService(
         environment: {
-          'HOME': temp.path,
-          'PATH': '$binDir:/usr/bin:/bin',
-          'MAPRISMA_DESKTOP': 'omarchy',
+          ...environment,
+          'MAPRISMA_TEST_DICTATION': jsonEncode({
+            'local': {'ready': false},
+          }),
         },
       );
 
@@ -328,12 +336,14 @@ void main() {
       expect((snap['omarchy'] as Map)['default_tool'], 'voxtype');
       expect((snap['online'] as Map)['ready'], isTrue);
 
-      // Online transcription pipes Authorization header via curl -K - stdin.
-      await core.dispatchAsync('settings.update', {
+      // Online transcription pipes Authorization header via curl -K - stdin
+      // (a real start and stop: no fixture).
+      final live = CoreService(environment: environment);
+      await live.dispatchAsync('settings.update', {
         'values': {'dictation_engine': 'online'},
       });
-      final started = await core.dispatchAsync('dictation.start', {});
-      final stopped = await core.dispatchAsync('dictation.stop', {
+      final started = await live.dispatchAsync('dictation.start', {});
+      final stopped = await live.dispatchAsync('dictation.stop', {
         'recording': started['recording'],
       });
       expect(stopped['text'], 'Transcribed by online curl');
@@ -357,13 +367,13 @@ void main() {
             'echo "\$@" >> "${termArgsFile.path}"\n',
       );
       writeExecutable(binDir, 'yay', '#!/bin/sh\nexit 0\n');
-      await core.dispatchAsync('dictation.run', {'action': 'update_omarchy'});
-      await core.dispatchAsync('dictation.run', {'action': 'install_whisper'});
-      await core.dispatchAsync('dictation.run', {
+      await live.dispatchAsync('dictation.run', {'action': 'update_omarchy'});
+      await live.dispatchAsync('dictation.run', {'action': 'install_whisper'});
+      await live.dispatchAsync('dictation.run', {
         'action': 'download_whisper_model',
         'target': 'small',
       });
-      await core.dispatchAsync('dictation.run', {'action': 'update_whisper'});
+      await live.dispatchAsync('dictation.run', {'action': 'update_whisper'});
       for (
         var i = 0;
         i < 20 &&
