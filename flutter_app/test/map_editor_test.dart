@@ -861,7 +861,8 @@ void main() {
       final hooks = find.byTooltip(
         'Move this connection to another compatible box, or to empty space to disconnect.',
       );
-      expect(hooks, findsNWidgets(2));
+      // Its provider line only: its model hangs off the provider (r → m).
+      expect(hooks, findsOneWidget);
       await tester.drag(hooks.first, const Offset(0, 300));
       await tester.pump();
       expect(edits.single['target'], isNull);
@@ -2748,12 +2749,12 @@ void main() {
         ),
       );
       await tester.pump();
-      await tester.tap(find.text('agent:a'));
+      // The model in use hangs off its provider: runtime:r → model:r:m.
+      await tester.tap(find.text('model:r:m'));
       await tester.pumpAndSettle();
       final hooks = find.byTooltip(
         'Move this connection to another compatible box, or to empty space to disconnect.',
       );
-      // Second hook on agent:a is the default model connection to model:r:m.
       await tester.tap(hooks.last);
       await tester.pump();
       expect(find.text('Disconnect'), findsOneWidget);

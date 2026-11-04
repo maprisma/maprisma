@@ -56,6 +56,12 @@ void main() {
     expect(used.boxes.containsKey('mcp:d'), isTrue, reason: 'pinned');
     expect(used.boxes.containsKey('agent:a'), isTrue);
     expect(used.boxes.containsKey('agent:b'), isFalse);
+    // A model only present in its provider's folder is no connection.
+    final models = MapLayout(fixtureGraph(), {
+      'used_only': [MapLayout(fixtureGraph(), {}).cardOf['model:r:n']!],
+    });
+    expect(models.boxes.containsKey('model:r:m'), isTrue, reason: 'in use');
+    expect(models.boxes.containsKey('model:r:n'), isFalse, reason: 'unused');
   });
 
   test('with borders: hooks where the line shows, no clicks in a card', () {
@@ -142,16 +148,22 @@ void main() {
     expect(l.hookAt(curve.hook, {}), isNull);
     expect(l.nodeAt(l.boxes['agent:a']!.center), 'agent:a');
   });
-  test('provider model availability is retained without a drawn line', () {
+  test('agent → provider → model: one line each; unused models have none', () {
     final layout = MapLayout(fixtureGraph(), {});
     expect(
       layout.allEdges.where((edge) => edge['kind'] == 'serves'),
-      isNotEmpty,
+      hasLength(2),
     );
+    // model:r:m is agent:a's model through runtime:r; model:r:n is unused.
     expect(
-      layout.curves.where((curve) => curve.edge['kind'] == 'serves'),
-      isEmpty,
+      [
+        for (final c in layout.curves)
+          '${c.edge['source']} ${c.edge['kind']} ${c.edge['target']}',
+      ],
+      unorderedEquals(['agent:a uses runtime:r', 'runtime:r serves model:r:m']),
     );
+    expect(layout.modelsInUse, {'model:r:m'});
+    expect(layout.movable(layout.curves.last.edge), isTrue);
     expect(layout.providerFor('model:r:m'), 'runtime:r');
     expect(layout.targetOk('agent:a', 'model:r:n'), true);
   });

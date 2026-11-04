@@ -286,8 +286,13 @@ class MapLayout {
       ...(saved['used_only'] as List? ?? const []).cast<String>(),
     };
     final linked = <String>{
+      // Only real connections: a model merely present in a provider's folder
+      // or catalog ("serves") does not count, nor does an offer.
       for (final e in (graph['edges'] as List? ?? []).cast<Map>())
-        if (e['kind'] != 'offer') ...['${e['source']}', '${e['target']}'],
+        if (e['kind'] != 'offer' && e['kind'] != 'serves') ...[
+          '${e['source']}',
+          '${e['target']}',
+        ],
       ...(saved['pins'] as List? ?? const []).cast<String>(),
     };
     for (final id in keys) {
@@ -343,9 +348,11 @@ class MapLayout {
       (graph['edges'] as List? ?? []).cast<Map<String, dynamic>>(),
     );
     for (final e in allEdges) {
-      // "serves" describes a model present in a provider's catalog or folder.
-      // It is not a configured connection and must not be drawn as one.
-      if (e['kind'] == 'serves') continue;
+      // One line per step: agent → provider → model. A model an agent uses
+      // through its provider hangs off that provider; a model nobody uses
+      // has no line (being in a folder or catalog is not a connection).
+      if (e['kind'] == 'serves' && !modelsInUse.contains(e['target'])) continue;
+      if (viaProvider(e)) continue;
       final a = boxes[e['source']], b = boxes[e['target']];
       if (a == null || b == null) continue;
       if (e['kind'] == agentLink) {
@@ -482,15 +489,38 @@ class MapLayout {
       .firstOrNull;
   bool movable(Map<String, dynamic> edge) =>
       '${edge['fixed'] ?? ''}'.isEmpty &&
-      nodes[edge['source']]?['kind'] == 'agent' &&
-      [
-        'uses',
-        'available',
-        'mcp',
-        'skills',
-        'failed',
-        'default',
-      ].contains(edge['kind']);
+      (nodes[edge['source']]?['kind'] == 'agent' &&
+              [
+                'uses',
+                'available',
+                'mcp',
+                'skills',
+                'failed',
+                'default',
+              ].contains(edge['kind']) ||
+          // A provider's line to a model in use: move it to another model of
+          // that provider (every agent that uses it switches).
+          edge['kind'] == 'serves' && modelsInUse.contains(edge['target']));
+
+  /// An agent's model line that runs through the agent's own line to the
+  /// model's provider: drawn as provider → model instead.
+  bool viaProvider(Map e) {
+    if (e['kind'] != 'default') return false;
+    final provider = providerFor('${e['target']}');
+    return provider != null &&
+        allEdges.any(
+          (p) =>
+              p['source'] == e['source'] &&
+              p['target'] == provider &&
+              const {'uses', 'available', 'failed'}.contains(p['kind']),
+        );
+  }
+
+  /// Models some agent uses through their provider.
+  late final Set<String> modelsInUse = {
+    for (final e in allEdges)
+      if (viaProvider(e)) '${e['target']}',
+  };
   String? providerFor(String model) => allEdges
       .where((e) => e['kind'] == 'serves' && e['target'] == model)
       .map((e) => e['source'] as String)

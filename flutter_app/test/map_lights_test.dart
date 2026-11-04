@@ -81,7 +81,8 @@ void main() {
     final ordinary = MapLightTiles(layout, 'all', collaboration: false);
     final collaborative = MapLightTiles(layout, 'all', collaboration: true);
     expect(collaborative.curves, hasLength(1));
-    expect(ordinary.curves, isEmpty);
+    expect(collaborative.curves.single.edge['collab'], isTrue);
+    expect(ordinary.curves.where((c) => c.edge['collab'] == true), isEmpty);
     ordinary.dispose();
     collaborative.dispose();
   });
