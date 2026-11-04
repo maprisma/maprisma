@@ -3048,6 +3048,11 @@ final class CoreService {
       }
       final helper = command == 'local-helper' ? localHelpers().$3 : null;
       final agents = reads.catalog.scan();
+      final mapGraph = reads.buildMap(const {
+        'activity',
+        'agents',
+        'inventory',
+      }, true);
       final engines = providerFacts['engines'] as Map;
       final body = utf8.encode(
         pyJsonDumps({
@@ -3060,6 +3065,24 @@ final class CoreService {
           'action_rules': _rulesForHelper(column),
           'rule_hints': settings.value(settings.load(), 'action_rule_hints'),
           'settings_path': identity.settingsPath,
+          'map_nodes': [
+            for (final node in (mapGraph['nodes'] as List).cast<Map>())
+              if (node['kind'] != 'more' && node['kind'] != 'skills')
+                {
+                  'id': node['id'],
+                  'kind': node['kind'],
+                  'label': node['label'],
+                },
+          ],
+          'map_edges': [
+            for (final edge in (mapGraph['edges'] as List).cast<Map>())
+              if (edge['kind'] != 'serves' && edge['kind'] != 'skills')
+                {
+                  'source': edge['source'],
+                  'target': edge['target'],
+                  'kind': edge['kind'],
+                },
+          ],
           if (column == 'providers')
             'providers': [
               for (final rt
@@ -3073,6 +3096,7 @@ final class CoreService {
                   'update': lastUpdates.any((u) => u['key'] == rt['key']),
                   'start': rt['can_control'] == true && rt['running'] != true,
                   'stop': rt['can_control'] == true && rt['running'] == true,
+                  'performance': rt['installed'] == true,
                 },
             ],
           if (column == 'agents')
@@ -3088,6 +3112,12 @@ final class CoreService {
                     'install': !a.installed && can['install'] == true,
                     'update': can['update'] == true,
                     'remove': can['uninstall'] == true,
+                    'login': can['login'] == true,
+                    'logout':
+                        a.installed &&
+                        (a.adapter.table('access')['logout'] as List? ??
+                                const [])
+                            .isNotEmpty,
                   };
                 }(),
             ],
@@ -3192,7 +3222,18 @@ final class CoreService {
     }
     final candidate = smartProposals.candidate(params);
     // Rules can have changed since it was proposed.
-    _enforce(smartCandidateChecks(candidate));
+    if ((candidate['action'] as Map?)?['kind'] == 'map_edit') {
+      final edit = candidate['action'] as Map;
+      _enforce(
+        actionChecks(
+          edit['method'] as String,
+          Map<String, dynamic>.from(edit['params'] as Map),
+          _ruleFacts,
+        ),
+      );
+    } else {
+      _enforce(smartCandidateChecks(candidate));
+    }
     final action = candidate['action'] as Map;
     if (action['kind'] == 'agent_task') {
       final task = action['command'] as String;
@@ -3348,15 +3389,28 @@ final class CoreService {
         params['proposal'] is! String ||
         params['candidate'] is! String ||
         agents is! List ||
-        agents.isEmpty ||
         agents.any((a) => a is! String) ||
         values is! Map) {
       throw const FormatException('Invalid request');
     }
     final candidate = smartProposals.candidate(params);
-    _enforce(smartCandidateChecks(candidate));
     final action = candidate['action'] as Map;
     final kind = action['kind'];
+    if (kind == 'map_edit') {
+      final method = action['method'];
+      final expected = candidate['agents'] as List? ?? const [];
+      if (!smartMapMethods.contains(method) ||
+          values.isNotEmpty ||
+          agents.length != expected.length ||
+          !agents.every((agent) => expected.contains(agent))) {
+        throw const FormatException('Invalid map edit');
+      }
+      final edit = Map<String, dynamic>.from(action['params'] as Map);
+      _enforce(actionChecks(method as String, edit, _ruleFacts));
+      return dispatch(method, edit);
+    }
+    if (agents.isEmpty) throw const FormatException('Choose an agent');
+    _enforce(smartCandidateChecks(candidate));
     if (kind == 'mcp_add') {
       final server = Map<String, dynamic>.from(action['server'] as Map);
       final option = smartMcpOption(server);
@@ -3380,6 +3434,17 @@ final class CoreService {
         'kind': 'mcp',
         'command': action['agent'],
         'item': action['server'],
+        'remove': false,
+      });
+    }
+    if (kind == 'skill_connect') {
+      if (agents.length != 1 || agents.single != action['agent']) {
+        throw const FormatException('Invalid request');
+      }
+      return dispatch('connections.preview', {
+        'kind': 'skills',
+        'command': action['agent'],
+        'item': action['folder'],
         'remove': false,
       });
     }
@@ -4094,6 +4159,13 @@ final class CoreService {
             'action': {...action, 'pairs': left},
           });
         }
+      } else if (action is Map && action['kind'] == 'map_edit') {
+        final checks = actionChecks(
+          action['method'] as String,
+          Map<String, dynamic>.from(action['params'] as Map),
+          _ruleFacts,
+        );
+        if (checks.isNotEmpty && checks.every(ok)) kept.add(c);
       } else if (smartCandidateChecks(c).every(ok)) {
         kept.add(c);
       }

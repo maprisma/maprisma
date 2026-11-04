@@ -320,6 +320,7 @@ final class ReadService {
 
   Map<String, dynamic> buildMap([
     Set<String> targets = const {'activity', 'agents', 'inventory'},
+    bool allLayers = false,
   ]) {
     if (_agents == null || targets.contains('agents')) {
       _agents = catalog.scan();
@@ -352,7 +353,10 @@ final class ReadService {
       _inventory!,
       running: _running!,
       activity: _activity!,
-      layers: (settings.value(saved, 'map_layers') as List).cast<String>(),
+      layers: allLayers
+          ? const ['agents', 'online', 'local', 'models', 'mcp', 'skills']
+          : (settings.value(saved, 'map_layers') as List).cast<String>(),
+      modelsShown: allLayers ? 40 : 10,
       animate: settings.value(saved, 'map_animations') as String,
     );
   }

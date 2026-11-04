@@ -60,6 +60,161 @@ Map facts() => {
 };
 
 void main() {
+  test('Ask AI map edits use only known preview routes and visible ids', () {
+    final facts = {
+      'map_nodes': [
+        {'id': 'agent:pi', 'kind': 'agent', 'label': 'Pi'},
+        {'id': 'runtime:llamacpp', 'kind': 'runtime', 'label': 'llama.cpp'},
+        {'id': 'model:runtime:llamacpp:chat', 'kind': 'model', 'label': 'chat'},
+      ],
+    };
+    final proposal = smartMapEdit({
+      'method': 'models.attach_preview',
+      'params': {
+        'provider': 'runtime:llamacpp',
+        'model': 'model:runtime:llamacpp:chat',
+        'agents': ['pi'],
+      },
+      'title': 'Use chat with Pi',
+    }, facts);
+    final candidate = (proposal['candidates'] as List).single as Map;
+    expect(candidate['kind'], 'map_edit');
+    expect(candidate['agents'], ['pi']);
+    expect(
+      () => smartMapEdit({
+        'method': 'providers.run',
+        'params': {},
+        'title': 'bad',
+      }, facts),
+      throwsFormatException,
+    );
+    expect(
+      () => smartMapEdit({
+        'method': 'models.attach_preview',
+        'params': {
+          'provider': 'runtime:missing',
+          'model': 'model:runtime:llamacpp:chat',
+          'agents': ['pi'],
+        },
+        'title': 'bad',
+      }, facts),
+      throwsFormatException,
+    );
+    expect(
+      () => smartMapEdit({
+        'method': 'connections.preview',
+        'params': {'kind': 'provider', 'command': 'pi', 'remove': true},
+        'title': 'Disconnect Pi',
+      }, facts),
+      throwsFormatException,
+    );
+  });
+  test('an Ask AI provider connection has exactly the route\'s fields', () {
+    final facts = {
+      'map_nodes': [
+        {'id': 'agent:pi', 'kind': 'agent', 'label': 'Pi'},
+        {'id': 'runtime:llamacpp', 'kind': 'runtime', 'label': 'llama.cpp'},
+        {'id': 'model:runtime:llamacpp:chat', 'kind': 'model', 'label': 'Chat'},
+        {
+          'id': 'model:runtime:llamacpp:embed',
+          'kind': 'model',
+          'label': 'nomic-embed-text',
+        },
+        for (final name in [
+          'whisper-large',
+          'tts-voice',
+          'bge-reranker',
+          'tokenizer.json',
+          '-bad name',
+        ])
+          {
+            'id': 'model:runtime:llamacpp:$name',
+            'kind': 'model',
+            'label': name,
+          },
+        {'id': 'mcp:fs', 'kind': 'mcp', 'label': 'fs'},
+      ],
+    };
+    Map params(Map p) =>
+        ((smartMapEdit({
+                      'method': 'connections.preview',
+                      'params': p,
+                      'title': 'Connect',
+                    }, facts)['candidates']
+                    as List)
+                .single
+            as Map)['action']['params'];
+    const base = {'kind': 'provider', 'command': 'pi', 'item': 'llamacpp'};
+    // Left out, empty, a map id or a label: the route gets a model name.
+    expect(params({...base, 'remove': false}), {
+      ...base,
+      'remove': false,
+      'model': '',
+      'use_now': false,
+    });
+    expect(params({...base, 'remove': false, 'model': '', 'use_now': true}), {
+      ...base,
+      'remove': false,
+      'model': '',
+      'use_now': false,
+    });
+    for (final model in ['model:runtime:llamacpp:chat', 'Chat']) {
+      expect(
+        params({...base, 'remove': false, 'model': model, 'use_now': true}),
+        {...base, 'remove': false, 'model': 'Chat', 'use_now': true},
+      );
+    }
+    expect(params({...base, 'remove': true, 'model': 'Chat'}), {
+      ...base,
+      'remove': true,
+      'model': '',
+      'use_now': false,
+    });
+    expect(
+      () => params({...base, 'remove': false, 'model': 'other'}),
+      throwsFormatException,
+    );
+    for (final model in [
+      'nomic-embed-text',
+      'model:runtime:llamacpp:embed',
+      'whisper-large',
+      'tts-voice',
+      'bge-reranker',
+      'tokenizer.json',
+      '-bad name',
+    ]) {
+      expect(
+        () => params({...base, 'remove': false, 'model': model}),
+        throwsFormatException,
+      );
+    }
+    expect(
+      smartWorded({
+        'status': 'error',
+        'summary': smartMapChatModel,
+      }, (text) => 'translated: $text')['summary'],
+      'translated: $smartMapChatModel',
+    );
+    expect(
+      smartWorded({
+        'status': 'error',
+        'summary': smartMapUnavailable,
+      }, (text) => 'translated: $text')['summary'],
+      'translated: $smartMapUnavailable',
+    );
+    // An MCP connection takes no model fields.
+    expect(
+      params({
+        'kind': 'mcp',
+        'command': 'pi',
+        'item': 'fs',
+        'remove': false,
+        'model': null,
+        'use_now': null,
+      }),
+      {'kind': 'mcp', 'command': 'pi', 'item': 'fs', 'remove': false},
+    );
+  });
   test('only a known action passes, with a known runner', () {
     const runners = {'ollama'};
     expect(
@@ -284,6 +439,28 @@ void main() {
         expect(() => check(bad), throwsFormatException);
       }
     });
+    test(
+      'an existing skill folder can be connected without revealing its path',
+      () async {
+        final local = {
+          ...facts,
+          'skills': {'s1': <String>[]},
+          'skill_paths': {'s1': '/private/skills'},
+        };
+        final found = await smartMcp(
+          local,
+          answers([
+            '{"action":"connect_skill","skill":"s1","agents":["claude"]}',
+          ], []),
+          (_) async => [],
+        );
+        final candidate = (found['candidates'] as List).single as Map;
+        expect(candidate['kind'], 'skill_connect');
+        expect(candidate['title'], 'skills');
+        expect(candidate['action']['folder'], '/private/skills');
+        expect(smartMcpPrompt(local), isNot(contains('/private/skills')));
+      },
+    );
 
     test('nothing to change is said, not an empty proposal', () async {
       final result = await smartMcp(

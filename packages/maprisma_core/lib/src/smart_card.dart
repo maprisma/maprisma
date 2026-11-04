@@ -5,12 +5,14 @@ import 'adapters.dart' show Adapter;
 import 'desktop.dart' show whichIn;
 import 'health_report.dart' show pcInfo;
 import 'installers.dart' show koboldConfigName;
+import 'inventory.dart' show chatModels;
 import 'local_helper.dart';
 import 'mcp_catalog.dart' show secretInArgs;
 import 'map_graph.dart' show graphModelKey;
 import 'model_downloads.dart' show ModelFiles;
 import 'model_hub.dart';
 import 'posix_ffi.dart';
+import 'provider_ops.dart' show modelKey;
 import 'system_help.dart'
     show
         errorText,
@@ -44,6 +46,9 @@ const smartNotYet = 'This column does not take requests yet.',
     smartLocalDown =
         'The local helper did not answer: its local LLM is probably not running. Start it on the map, or choose another helper above.',
     smartNoHelper = 'This helper is not available.';
+const smartMapUnavailable =
+        "I can't make that map change. Try another item or ask again.",
+    smartMapChatModel = 'Choose an available chat model.';
 
 /// What one line of an answer may be, for the card.
 String _line(dynamic value, [int limit = 300]) {
@@ -127,6 +132,10 @@ List<ActionCheck> smartCandidateChecks(Map candidate) {
   String text(String key) => '${action[key] ?? ''}';
   final kind = action['kind'] ?? candidate['kind'];
   return switch (kind) {
+    'map_edit' => actionChecks(
+      text('method'),
+      Map<String, dynamic>.from(action['params'] as Map? ?? const {}),
+    ),
     'mcp_add' => [
       ActionCheck(
         'install',
@@ -136,6 +145,9 @@ List<ActionCheck> smartCandidateChecks(Map candidate) {
     ],
     'mcp_connect' => [
       ActionCheck('connect', 'mcp', text('server'), text('agent')),
+    ],
+    'skill_connect' => [
+      ActionCheck('connect', 'skills', text('folder'), text('agent')),
     ],
     'mcp_disconnect' || 'model_disconnect' => [
       for (final p in (action['pairs'] as List? ?? const []).cast<Map>())
@@ -148,6 +160,7 @@ List<ActionCheck> smartCandidateChecks(Map candidate) {
       'action': text('step'),
       'command': text('command'),
     }),
+    'provider_action' when candidate['step'] == 'performance' => const [],
     'provider_action' => [
       ActionCheck(
         _providerSteps[candidate['step']] ?? '${candidate['step']}',
@@ -159,6 +172,186 @@ List<ActionCheck> smartCandidateChecks(Map candidate) {
       'operation': text('operation'),
       'params': action['params'],
     }),
+  };
+}
+
+const smartMapMethods = {
+  'connections.preview',
+  'connections.move_preview',
+  'connections.repair_preview',
+  'connections.forget_preview',
+  'models.switch_preview',
+  'models.attach_preview',
+};
+
+String smartMapChoice(Map facts) =>
+    '\nFor an edit the user can draw on the map, choose '
+    '{"action":"map_edit","method":"<route>","params":{},"title":"<short plain description>"}. '
+    'Routes and params: connections.preview {kind:"provider|mcp",command:"agent command",item:"provider key or MCP name",remove:bool,model:"for a provider: the label of one of its chat models, or empty",use_now:"bool, true to make that model the agent model now"}; use the MCP column connect_skill action for skill folders. '
+    'connections.move_preview {agent:"agent:id",old:"target id",new:"target id or null"}; '
+    'connections.repair_preview {agent:"agent:id",target:"target id"}; '
+    'connections.forget_preview {name:"MCP name"}; '
+    'models.switch_preview {provider:"provider id",old:"model id",new:"model id or null"}; '
+    'models.attach_preview {provider:"provider id",model:"model id",agents:["agent command"]}. '
+    'Use only ids and names in these map facts: '
+    '${jsonEncode(facts['map_nodes'] ?? const [])}; connections: '
+    '${jsonEncode(facts['map_edges'] ?? const [])}. '
+    'Use connections.preview for provider and MCP connections; '
+    'models.attach_preview to choose an existing model; '
+    'models.switch_preview to move all users of one model. '
+    'Never use a serves line as a connection to disconnect. '
+    'For repair use connections.repair_preview; for an unused MCP server use '
+    'connections.forget_preview. If the intended item is unclear, clarify.\n';
+
+Map<String, dynamic> smartMapEdit(Map answer, Map facts) {
+  final method = answer['method'];
+  final params = answer['params'];
+  final nodes = {
+    for (final n in facts['map_nodes'] as List? ?? const [])
+      '${(n as Map)['id']}',
+  };
+  if (!smartMapMethods.contains(method) ||
+      params is! Map ||
+      params.keys.any((key) => key is! String) ||
+      params.values.any(
+        (value) =>
+            value is! String &&
+            value is! bool &&
+            value is! List &&
+            value != null,
+      )) {
+    throw const FormatException(smartMapUnavailable);
+  }
+  final checked = Map<String, dynamic>.from(params);
+  final expected = switch (method) {
+    'connections.preview' => {
+      'kind',
+      'command',
+      'item',
+      'remove',
+      'model',
+      'use_now',
+    },
+    'connections.move_preview' => {'agent', 'old', 'new'},
+    'connections.repair_preview' => {'agent', 'target'},
+    'connections.forget_preview' => {'name'},
+    'models.switch_preview' => {'provider', 'old', 'new'},
+    'models.attach_preview' => {'provider', 'model', 'agents'},
+    _ => <String>{},
+  };
+  if (checked.keys.any((key) => !expected.contains(key))) {
+    throw const FormatException(smartMapUnavailable);
+  }
+  final required = switch (method) {
+    'connections.preview' => {'kind', 'command', 'item', 'remove'},
+    'connections.move_preview' => {'agent', 'old', 'new'},
+    'connections.repair_preview' => {'agent', 'target'},
+    'connections.forget_preview' => {'name'},
+    'models.switch_preview' => {'provider', 'old', 'new'},
+    'models.attach_preview' => {'provider', 'model', 'agents'},
+    _ => <String>{},
+  };
+  if (!checked.keys.toSet().containsAll(required)) {
+    throw const FormatException(smartMapUnavailable);
+  }
+  // connections.preview names a provider's model by its name, the other
+  // routes by its map id.
+  final ids = [
+    'agent',
+    'target',
+    'old',
+    'new',
+    'provider',
+    if (method != 'connections.preview') 'model',
+  ];
+  for (final key in ids) {
+    final value = checked[key];
+    if (value != null && !nodes.contains(value)) {
+      throw const FormatException(smartMapUnavailable);
+    }
+  }
+  final agents = [
+    if (checked['command'] is String) checked['command'] as String,
+    if (checked['agent'] is String)
+      (checked['agent'] as String).replaceFirst('agent:', ''),
+    for (final agent
+        in checked['agents'] is List ? checked['agents'] as List : const [])
+      if (agent is String) agent,
+  ];
+  if (checked['agents'] is List &&
+      (checked['agents'] as List).any((a) => a is! String)) {
+    throw const FormatException(smartMapUnavailable);
+  }
+  if (agents.any((agent) => !nodes.contains('agent:$agent'))) {
+    throw const FormatException(smartMapUnavailable);
+  }
+  if (method == 'connections.preview') {
+    final kind = checked['kind'];
+    final item = checked['item'];
+    if (!const {'provider', 'mcp'}.contains(kind) ||
+        checked['remove'] is! bool ||
+        item is! String ||
+        !nodes.contains('${kind == 'provider' ? 'runtime' : 'mcp'}:$item') ||
+        checked['model'] != null && checked['model'] is! String ||
+        checked['use_now'] != null && checked['use_now'] is! bool) {
+      throw const FormatException(smartMapUnavailable);
+    }
+    // The route takes exactly these fields: model and use_now only for a
+    // provider, and there always.
+    if (kind == 'provider') {
+      final remove = checked['remove'] == true;
+      var model = remove ? '' : '${checked['model'] ?? ''}';
+      if (model.isNotEmpty) {
+        final prefix = 'model:runtime:$item:';
+        final served = {
+          for (final n in facts['map_nodes'] as List? ?? const [])
+            if ('${(n as Map)['id']}'.startsWith(prefix))
+              '${n['id']}': '${n['label']}',
+        };
+        final name =
+            served[model] ??
+            served.values.where((label) => label == model).firstOrNull;
+        // The map also shows embedding, speech and tokenizer models, but the
+        // connection preview accepts only chat models with valid model names.
+        if (name == null ||
+            !modelKey.hasMatch(name) ||
+            chatModels([name]).isEmpty) {
+          throw const FormatException(smartMapChatModel);
+        }
+        model = name;
+      }
+      checked['model'] = model;
+      checked['use_now'] = !remove && model.isNotEmpty
+          ? checked['use_now'] == true
+          : false;
+    } else {
+      checked
+        ..remove('model')
+        ..remove('use_now');
+    }
+  }
+  if (method == 'connections.forget_preview' &&
+      !nodes.contains('mcp:${checked['name']}')) {
+    throw const FormatException(smartMapUnavailable);
+  }
+  final title = _line(answer['title']);
+  if (title.isEmpty) throw const FormatException(smartMapUnavailable);
+  return {
+    'status': 'proposal',
+    'summary': '',
+    'candidates': [
+      {
+        'id': 'c1',
+        'kind': 'map_edit',
+        'title': title,
+        'subtitle': '',
+        'reason': '',
+        'fit': 'ok',
+        'size': 0,
+        'agents': agents,
+        'action': {'kind': 'map_edit', 'method': method, 'params': checked},
+      },
+    ],
   };
 }
 
@@ -210,6 +403,7 @@ String smartModelsPrompt(Map facts) {
       'Column: Models. Local LLM runners here: ${jsonEncode(_runners(facts))}.\n'
       'This PC: ${jsonEncode(facts['limits'])} (bytes).\n'
       '${_request(facts)}\n'
+      '${smartMapChoice(facts)}'
       'Choose one:\n'
       '{"action": "search", "query": "<words for a Hugging Face GGUF search, at most 80 characters>", "runtime": "<key of a runner listed above>"}\n'
       'when the request is to find or add a model for a runner.\n'
@@ -222,7 +416,7 @@ String smartModelsPrompt(Map facts) {
       '{"action": "clarify", "question": "<one short question>", "choices": ["<2 to 4 short answers>"]}\n'
       'when you cannot tell what is meant, for example which runner, or whether "image" means understanding or generating images.\n'
       '{"action": "redirect", "hint": "<what works instead, one sentence>", "column": "<agents, providers or mcp, or null>", "request": "<the request for that column, or null>"}\n'
-      'when this column cannot do it, or the request makes no sense here.';
+      'when no listed action or map_edit can do it, or the request makes no sense here.';
 }
 
 /// The second step: the agent picks from real search results.
@@ -275,18 +469,21 @@ String smartMcpPrompt(Map facts) {
   return '$_rules ${_language(facts)}\n\n'
       'Column: MCP servers and skills.\n${_mcpFacts(facts)}'
       '${_request(facts)}\n'
+      '${smartMapChoice(facts)}'
       'Choose one:\n'
       '{"action": "search", "query": "<words for a search in the MCP registry, at most 80 characters>", "agents": ["<commands of the agents that should use it>"]}\n'
       'when the request is to find or add a new MCP server.\n'
       '{"action": "connect", "server": "<exact name listed above>", "agents": ["<commands>"]}\n'
       'when an agent should use a server that is already here.\n'
+      '{"action": "connect_skill", "skill": "<short id of a skill folder listed above>", "agents": ["<commands>"]}\n'
+      'when an agent should use an existing skill folder.\n'
       '{"action": "disconnect", "servers": ["<exact server names listed above>"], "skills": ["<short ids of skill folders listed above>"], "agents": ["<commands>"]}\n'
       'when agents should stop using servers or skill folders: name every one meant, all of them for "all"; the user sees one preview for all of it.\n'
       '$_lookupChoice'
       '{"action": "clarify", "question": "<one short question>", "choices": ["<2 to 4 short answers>"]}\n'
       'when you cannot tell what is meant, for example which agents.\n'
       '{"action": "redirect", "hint": "<what works instead, one sentence>", "column": "<agents, providers or models, or null>", "request": "<the request for that column, or null>"}\n'
-      'for anything else: this column cannot manage models, agents or providers, cannot add or update skills, cannot update or install programs, and cannot delete a server from the PC.';
+      'for anything else beyond the listed actions and map_edit: this column cannot update or install programs or delete a server from the PC.';
 }
 
 /// The second step: the agent picks from real registry results.
@@ -308,6 +505,9 @@ const smartStepNames = {
   'remove': 'Remove',
   'start': 'Start',
   'stop': 'Stop',
+  'login': 'Sign in',
+  'logout': 'Sign out',
+  'performance': 'Performance',
 };
 
 /// The Agents column: one fixed step, nothing to search.
@@ -316,16 +516,19 @@ String smartAgentsPrompt(Map facts) {
       'Column: Agents. Agents and what can be done with each: '
       '${jsonEncode(facts['agents'])}.\n'
       '${_request(facts)}\n'
+      '${smartMapChoice(facts)}'
       'Choose one:\n'
       '{"action": "install", "agents": ["<commands>"]}\n'
       '{"action": "update", "agents": ["<commands>"]}\n'
       '{"action": "remove", "agents": ["<commands>"]}\n'
+      '{"action": "login", "agents": ["<commands>"]}\n'
+      '{"action": "logout", "agents": ["<commands>"]}\n'
       'naming only agents for which that action is true above.\n'
       '$_lookupChoice'
       '{"action": "clarify", "question": "<one short question>", "choices": ["<2 to 4 short answers>"]}\n'
       'when you cannot tell which agent is meant.\n'
       '{"action": "redirect", "hint": "<what works instead, one sentence>", "column": "<mcp, providers or models, or null>", "request": "<the request for that column, or null>"}\n'
-      'for anything else: this column cannot manage models, providers, MCP servers or skills, and cannot run an agent or change its settings.';
+      'for anything else beyond the listed actions and map_edit: this column cannot run an agent or change its settings.';
 }
 
 /// The Agents column: one answer of the agent.
@@ -333,6 +536,7 @@ Future<Map<String, dynamic>> smartAgents(Map facts, SmartAgent agent) async {
   final agents = [for (final a in facts['agents'] as List) a as Map];
   final answer = firstJson(await agent(smartAgentsPrompt(facts)), 'action');
   final action = answer['action'];
+  if (action == 'map_edit') return smartMapEdit(answer, facts);
   if (action == 'lookup') {
     return {
       'status': 'lookup',
@@ -361,6 +565,8 @@ Future<Map<String, dynamic>> smartAgents(Map facts, SmartAgent agent) async {
     'install': 'install',
     'update': 'update',
     'remove': 'uninstall',
+    'login': 'login',
+    'logout': 'logout',
   };
   final step = names[action];
   final raw = answer['agents'];
@@ -401,18 +607,21 @@ String smartProvidersPrompt(Map facts) {
       'Column: Providers. Local LLM programs and what can be done with each: '
       '${jsonEncode(facts['providers'])}.\n'
       '${_request(facts)}\n'
+      '${smartMapChoice(facts)}'
       'Choose one:\n'
       '{"action": "install", "provider": "<key>"}\n'
       '{"action": "update", "provider": "<key>"}\n'
       '{"action": "start", "provider": "<key>"}\n'
       '{"action": "stop", "provider": "<key>"}\n'
+      '{"action": "performance", "provider": "<key>"}\n'
+      'when the user asks about speed, GPU memory, context size, Vulkan, ROCm or other local LLM performance; the Performance page checks the actual hardware and build and offers reviewed tuning actions.\n'
       'only when that action is true for that provider above.\n'
       '$_lookupChoice'
       '{"action": "clarify", "question": "<one short question>", "choices": ["<2 to 4 short answers>"]}\n'
       'when you cannot tell which provider is meant.\n'
       '{"action": "redirect", "hint": "<what works instead, one sentence>", "column": "<mcp, agents or models, or null>", "request": "<the request for that column, or null>"}\n'
       'when models should be disconnected or deleted use redirect with column models and the request. '
-      'for anything else: this column cannot manage models, agents, MCP servers or skills, and cannot uninstall a provider or sign in to an online one.';
+      'for anything else beyond the listed actions and map_edit: this column cannot uninstall a provider.';
 }
 
 /// The Providers column: one answer. Each action has its own page with its
@@ -421,6 +630,7 @@ Future<Map<String, dynamic>> smartProviders(Map facts, SmartAgent agent) async {
   final providers = [for (final p in facts['providers'] as List) p as Map];
   final answer = firstJson(await agent(smartProvidersPrompt(facts)), 'action');
   final action = answer['action'];
+  if (action == 'map_edit') return smartMapEdit(answer, facts);
   if (action == 'lookup') {
     return {
       'status': 'lookup',
@@ -448,7 +658,13 @@ Future<Map<String, dynamic>> smartProviders(Map facts, SmartAgent agent) async {
   final found = providers
       .where((p) => p['key'] == answer['provider'] && p[action] == true)
       .firstOrNull;
-  if (!const {'install', 'update', 'start', 'stop'}.contains(action) ||
+  if (!const {
+        'install',
+        'update',
+        'start',
+        'stop',
+        'performance',
+      }.contains(action) ||
       found == null) {
     throw const FormatException('not possible for this provider');
   }
@@ -505,6 +721,13 @@ Map<String, dynamic> smartMcpChecked(
     }
     return {'action': action, 'server': server, 'agents': unique};
   }
+  if (action == 'connect_skill') {
+    final skill = answer['skill'];
+    if (!skills.contains(skill) || unique.isEmpty) {
+      throw const FormatException('no skill folder');
+    }
+    return {'action': action, 'skill': skill, 'agents': unique};
+  }
   if (action == 'disconnect') {
     final named = answer['servers'] ?? const [];
     final folders = answer['skills'] ?? const [];
@@ -539,8 +762,10 @@ Future<Map<String, dynamic>> smartMcp(
   );
   final paths = facts['skill_paths'] as Map? ?? const {};
   final names = {for (final a in agents) '${a['command']}': '${a['name']}'};
+  final initial = firstJson(await agent(smartMcpPrompt(facts)), 'action');
+  if (initial['action'] == 'map_edit') return smartMapEdit(initial, facts);
   final first = smartMcpChecked(
-    firstJson(await agent(smartMcpPrompt(facts)), 'action'),
+    initial,
     names.keys.toSet(),
     used.keys.toSet(),
     folders.keys.toSet(),
@@ -567,7 +792,7 @@ Future<Map<String, dynamic>> smartMcp(
     };
   }
   // Only skills reach an agent without MCP.
-  if (action != 'disconnect') {
+  if (action != 'disconnect' && action != 'connect_skill') {
     first['agents'] = [
       for (final c in first['agents'] as List)
         if (!agents.any((a) => a['command'] == c && a['mcp'] == false)) c,
@@ -639,6 +864,39 @@ Future<Map<String, dynamic>> smartMcp(
       };
     }
     return {'status': 'proposal', 'summary': '', 'candidates': candidates};
+  }
+  if (action == 'connect_skill') {
+    final skill = first['skill'] as String;
+    final using = (folders[skill] as List? ?? const []).toSet();
+    final candidates = [
+      for (final (i, command) in (first['agents'] as List).indexed)
+        if (!using.contains(command))
+          {
+            'id': 'c${i + 1}',
+            'kind': 'skill_connect',
+            'agents': [command],
+            'title': _line('${paths[skill]}'.split('/').last),
+            'subtitle': names[command],
+            'reason': '',
+            'fit': 'ok',
+            'size': 0,
+            'action': {
+              'kind': 'skill_connect',
+              'folder': paths[skill],
+              'agent': command,
+            },
+          },
+    ];
+    return candidates.isEmpty
+        ? {
+            'status': 'redirect',
+            'instead': {
+              'hint': smartNothingToDo,
+              'column': null,
+              'request': null,
+            },
+          }
+        : {'status': 'proposal', 'summary': '', 'candidates': candidates};
   }
   if (smartRefused(facts, 'install', 'mcp') case final refused?) return refused;
   final servers = [
@@ -913,8 +1171,10 @@ Future<Map<String, dynamic>> smartModels(
   final users = [
     for (final r in facts['model_users'] as List? ?? const []) r as Map,
   ];
+  final initial = firstJson(await agent(smartModelsPrompt(facts)), 'action');
+  if (initial['action'] == 'map_edit') return smartMapEdit(initial, facts);
   final first = smartChecked(
-    firstJson(await agent(smartModelsPrompt(facts)), 'action'),
+    initial,
     {for (final r in runtimes) '${r['key']}'},
     using: {for (final r in users) '${r['key']}'},
     folders: {
@@ -1359,7 +1619,13 @@ Future<Map<String, dynamic>> smartAsk(
   Map<String, dynamic> failed(Object error) => {
     ...answer,
     'status': 'error',
-    'summary': local ? smartLocalDown : _line(errorText(error)),
+    'summary':
+        error is FormatException &&
+            {smartMapUnavailable, smartMapChatModel}.contains(error.message)
+        ? error.message
+        : local
+        ? smartLocalDown
+        : _line(errorText(error)),
   };
   if (column == 'mcp') {
     if (adapter == null) {
@@ -1483,6 +1749,8 @@ Map<String, dynamic> smartWorded(
     smartNothingToDo,
     smartNotAllowed,
     smartNoUsers,
+    smartMapUnavailable,
+    smartMapChatModel,
   };
   final instead = result['instead'];
   return {
