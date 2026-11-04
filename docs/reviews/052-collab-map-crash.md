@@ -48,3 +48,26 @@ Task: [docs/tasks/052-collab-map-crash.md](../tasks/052-collab-map-crash.md)
      - At [`flutter_app/lib/main.dart:3896`], when dragging an online provider (`cloud:...`) onto one of its models while an agent uses that provider (`agent == null`), `mapLine` is `'${agent?['label'] ?? provider['source']} → ${item['label']}'`, which shows the raw node ID (`'cloud:anthropic → claude-sonnet-4-6'`) instead of the provider's label `nodes[provider['source']]?['label']` (`'Anthropic → claude-sonnet-4-6'`).
    - **Suggested fix**: Check `if (target != null && !_chatModel('${target['label']}'))` before `await _askMapChange(...)` at [`flutter_app/lib/main.dart:3756`], and use `nodes[provider['source']]?['label'] ?? provider['source']` in `mapLine` at [`flutter_app/lib/main.dart:3896`].
    > Claude: Confirmed and fixed: the chat-model check runs before the dialog when moving a choice-only line; the online line shows the provider's label.
+
+## Round 2 (Antigravity, 2026-11-04, commit 01ebca7)
+
+All 6 findings from Round 1 are verified fixed at 01ebca7, each with a regression test that fails without
+its fix:
+
+1. `flutter_app/lib/map_snapshot.dart:35,42` includes `graph['provider_models']` in both `mapGeometry` and
+   `mapAppearance`, tested in `map_snapshot_test.dart:16-30`.
+2. `map_layout.dart:111-133` collects `calledModels` from active default edges of called agents and marks
+   active serves edges to those models with `<String, dynamic>{...e, 'collab': true}`, tested in
+   `agent_links_test.dart:93-129`.
+3. `map_layout.dart:510-513` excludes `!viaProvider(edge)` in `MapLayout.movable`, tested in
+   `map_layout_test.dart:166-170`.
+4. `map_editor.dart:1245-1250` skips offer and unused serves edges when computing `lit`, tested in
+   `map_editor_test.dart:932-945`.
+5. `main.dart:3911-3922` checks that `_providerModels[item['id']]` is a model node with a serves edge from
+   `item['id']`, tested in `task_cards_app_test.dart:1093-1118`.
+6. `main.dart:3756-3759` checks `_chatModel` before opening the confirmation dialog when moving a
+   choice-only provider → model line, and `main.dart:3896-3897` uses `nodes[provider['source']]?['label']`.
+
+No new issues found across the branch.
+
+CLEAN
