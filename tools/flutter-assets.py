@@ -550,7 +550,7 @@ KEYS = (
     'This runs in a separate terminal; passwords are entered there. Refresh when it finishes.',
     'Automatic map scans', 'Manual only', 'Every {0} seconds', 'Pause scans while unfocused', 'Automatic scan targets', 'Activity and subagents', 'Agent details', 'Models, MCP servers and skills', 'Startup and Refresh scan all targets.', 'Updates apply only while the map is visible.',
     'Your Asterism settings could not be copied. Maprisma starts with its default settings.',
-    'New add-ons stay switched off until you enable them.', 'Finish running agents before changing add-ons.',
+    'New add-ons stay switched off until you enable them.',
     'Installed add-ons', 'Available', 'Get add-on', 'Look for add-ons online', 'Nothing matches.',
     'Only add-ons signed by Uwe Bruckhaus are offered and loaded.', 'Install', 'Update', 'Install {0}?', 'Update {0}?',
     'Numbers only', 'Session titles', 'Titles and a summary by Claude', 'Privacy level: {0}',
@@ -717,9 +717,9 @@ KEYS = (
     "No terminal was found to run this setup step.",
     "Monologue is not installed.",
     "No AUR helper (yay or paru) was found to install whisper.cpp.",
-    # Add-ons locked while agents run in the app's terminals (task 027).
-    "{0} is running in a terminal. Add-ons can be changed when it has finished.",
-    "{0} are running in terminals. Add-ons can be changed when they have finished.",
+    # A running agent's own add-on waits (tasks 027 and 028).
+    "{0} is running in a terminal. Its add-on can be switched off, updated or removed when it has finished.",
+    "{0} are running in terminals. Their add-ons can be switched off, updated or removed when they have finished.",
     "Show terminal",
 )
 

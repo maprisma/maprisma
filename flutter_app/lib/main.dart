@@ -1020,8 +1020,25 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     }
   }
 
-  // Only sessions owned by this app depend on its currently loaded adapters.
-  bool get _agentsRunning => _terminals.any((t) => !t.ended);
+  /// The add-ons a running terminal depends on: the agent add-on that
+  /// provides its command, with the names of its running agents. A session
+  /// uses its adapter only at start, so only these cannot be switched off,
+  /// updated or removed (task 028); the core refuses the same.
+  Map<String, List<String>> get _lockedAddons {
+    final locked = <String, List<String>>{};
+    for (final t in _terminals.where((t) => !t.ended)) {
+      for (final a in _addons) {
+        if (a['kind'] != 'agent' ||
+            !(a['provides'] as List? ?? const []).contains(t.command)) {
+          continue;
+        }
+        final names = locked.putIfAbsent(a['id'] as String, () => []);
+        final name = _terminalName(t);
+        if (!names.contains(name)) names.add(name);
+      }
+    }
+    return locked;
+  }
 
   /// A terminal's agent as the map names it (its command when unknown).
   String _terminalName(AgentTerminal terminal) =>
@@ -1031,7 +1048,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
           as String? ??
       terminal.command;
 
-  /// The agents that keep add-ons locked, each name once, in tab order.
+  /// The agents running in the app's terminals, each name once, in tab order.
   List<String> get _runningAgentNames => [
     ...{
       for (final t in _terminals)
@@ -1058,23 +1075,37 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     return terminal;
   }
 
-  void _showRunningTerminal() {
-    final running = _terminals.where((t) => !t.ended).firstOrNull;
-    if (running != null) _showTerminal(running);
+  /// Brings the terminal of an agent that holds add-on [id] to the front
+  /// (with no id, one that holds any add-on; else the first running one).
+  void _showRunningTerminal([String? id]) {
+    final provides = {
+      for (final a in _addons)
+        if (a['kind'] == 'agent' &&
+            (id == null ? _lockedAddons.containsKey(a['id']) : a['id'] == id))
+          ...(a['provides'] as List? ?? const []),
+    };
+    final running = _terminals.where((t) => !t.ended);
+    final terminal =
+        running.where((t) => provides.contains(t.command)).firstOrNull ??
+        running.firstOrNull;
+    if (terminal != null) _showTerminal(terminal);
   }
 
-  /// An add-on change asked for while agents run: say why nothing happens.
-  void _addonsLocked() {
+  /// A change to add-on [id] asked for while its agent runs: say why
+  /// nothing happens, never return silently.
+  void _addonsLocked(String id) {
     if (!mounted) return;
     final messenger = ScaffoldMessenger.of(_navigator.currentContext!);
     messenger.hideCurrentSnackBar();
     messenger.showSnackBar(
       SnackBar(
         key: const ValueKey('addons-locked-message'),
-        content: Text(addonsLockedText(tr, _runningAgentNames)),
+        content: Text(
+          addonsLockedText(tr, _lockedAddons[id] ?? _runningAgentNames),
+        ),
         action: SnackBarAction(
           label: tr('Show terminal'),
-          onPressed: _showRunningTerminal,
+          onPressed: () => _showRunningTerminal(id),
         ),
       ),
     );
@@ -1139,7 +1170,8 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
               _actionFailed();
               return;
             }
-            if (_agentsRunning) return _addonsLocked();
+            // No lock check here: only the core knows what the Undo changes,
+            // and it refuses to switch off a running agent's add-on.
             setState(() => _busy = true);
             try {
               await undo();
@@ -1169,8 +1201,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
           .toList(),
       entries: _addonEntries,
       busy: _busy,
-      running: _agentsRunning,
-      runningAgents: _runningAgentNames,
+      locked: _lockedAddons,
       onShowTerminal: _showRunningTerminal,
       online: (_snapshot?['settings'] as Map?)?['addons_online'] != false,
       tr: tr,
@@ -1230,7 +1261,8 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         builder: (sheet) => ListenableBuilder(
           listenable: terminals,
           builder: (sheet, _) {
-            final blocked = _busy || _agentsRunning;
+            final lock = _lockedAddons[item['id']];
+            final blocked = _busy || lock != null;
             return ConstrainedBox(
               constraints: BoxConstraints(
                 maxHeight: MediaQuery.sizeOf(sheet).height * .85,
@@ -1244,9 +1276,9 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                     style: Theme.of(sheet).textTheme.titleLarge,
                   ),
                   AddonDetails(item: item, tr: tr),
-                  if (_agentsRunning) ...[
+                  if (lock != null) ...[
                     Text(
-                      addonsLockedText(tr, _runningAgentNames),
+                      addonsLockedText(tr, lock),
                       key: const ValueKey('addon-sheet-locked'),
                     ),
                     TextButton(
@@ -1258,8 +1290,10 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                     ),
                   ],
                   TextButton(
+                    // Switching on is always allowed; off waits for the agent.
                     onPressed:
-                        blocked ||
+                        _busy ||
+                            lock != null && item['enabled'] == true ||
                             item['supported'] != true ||
                             (item['verified'] != true &&
                                 item['enabled'] != true)
@@ -1336,12 +1370,13 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         ),
       ),
     );
-    if (choice == 'terminal') _showRunningTerminal();
+    if (choice == 'terminal') _showRunningTerminal(item['id'] as String);
   }
 
   Future<void> _removeAddon(Map<String, dynamic> item) async {
     if (_busy) return;
-    if (_agentsRunning) return _addonsLocked();
+    final id = item['id'] as String;
+    if (_lockedAddons.containsKey(id)) return _addonsLocked(id);
     try {
       final plan = await _client.addonsRemovePreview(id: item['id']);
       if (!mounted) return;
@@ -1376,8 +1411,8 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
 
   Future<void> _toggleAddon(String id, bool on) async {
     if (_busy) return;
-    // Never silently: a click that arrives while agents run says why.
-    if (_agentsRunning) return _addonsLocked();
+    // Never silently: switching off a running agent's add-on says why.
+    if (!on && _lockedAddons.containsKey(id)) return _addonsLocked(id);
     final before =
         _addons.where((i) => i['id'] == id).firstOrNull?['enabled'] == true;
     setState(() => _busy = true);
@@ -1784,10 +1819,13 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   /// update_all_addons: every add-on with a newer version, one after the
   /// other; one message says what happened.
   Future<void> _updateAllAddons(Map<String, dynamic> line) async {
-    final updates = (line['updates'] as List? ?? const [])
+    final all = (line['updates'] as List? ?? const [])
         .cast<Map<String, dynamic>>();
-    if (updates.isEmpty || _busy) return;
-    if (_agentsRunning) return _addonsLocked();
+    if (all.isEmpty || _busy) return;
+    // A running agent's own add-on waits; the others are updated.
+    final locked = _lockedAddons;
+    final updates = all.where((u) => !locked.containsKey(u['id'])).toList();
+    if (updates.isEmpty) return _addonsLocked(all.first['id'] as String);
     final yes = await _cardReview(
       tr('Update all'),
       (yes, no) => TaskReview(
@@ -2787,7 +2825,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   /// reviewed like a catalog entry before the worker installs it.
   Future<void> _installAddonFile() async {
     if (_busy) return;
-    if (_agentsRunning) return _addonsLocked();
     final file = await PopupGuard.around(
       () => openFile(
         acceptedTypeGroups: [
@@ -2804,6 +2841,10 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       return;
     }
     if (!mounted) return;
+    // An update of a running agent's own add-on waits (the core refuses
+    // its install too); the preview names the add-on.
+    final id = preview['id'] as String?;
+    if (id != null && _lockedAddons.containsKey(id)) return _addonsLocked(id);
     final confirmed = await _cardReview(
       tr('Add-ons'),
       (yes, no) => AddonInstallReview(
@@ -2838,8 +2879,9 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
 
   Future<void> _installAddon(Map<String, dynamic> entry) async {
     if (_busy) return;
-    // Get add-on and a single update, like Update all.
-    if (_agentsRunning) return _addonsLocked();
+    // An update of a running agent's own add-on waits; Get add-on is new.
+    final id = entry['id'] as String?;
+    if (id != null && _lockedAddons.containsKey(id)) return _addonsLocked(id);
     final confirmed = await _cardReview(
       tr('Add-ons'),
       (yes, no) =>
@@ -3997,7 +4039,17 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
 
   Future<void> _finishSetup(List<String>? selected) async {
     if (_busy) return;
-    if (selected != null && _agentsRunning) return _addonsLocked();
+    // A running agent's add-on left out would be switched off: it waits.
+    final held = selected == null
+        ? null
+        : _lockedAddons.keys
+              .where(
+                (id) =>
+                    !selected.contains(id) &&
+                    _addons.any((i) => i['id'] == id && i['enabled'] == true),
+              )
+              .firstOrNull;
+    if (held != null) return _addonsLocked(held);
     final before = _addons
         .where((i) => i['enabled'] == true)
         .map((i) => i['id'] as String)
@@ -4028,7 +4080,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       await _refresh();
       if (enabled != null) {
         _offerAddonUndo(() async {
-          if (_agentsRunning) return;
           await _client.setupApply(enabled: before);
           await _refresh();
         });

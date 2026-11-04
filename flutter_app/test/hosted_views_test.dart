@@ -47,7 +47,6 @@ void main() {
           entries: const [],
           detected: const {},
           busy: false,
-          running: false,
           online: true,
           tr: (s) => s,
           onBack: () {},

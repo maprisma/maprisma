@@ -504,7 +504,6 @@
   "Updates apply only while the map is visible.": "Aktualizacje odbywają się tylko wtedy, gdy mapa jest widoczna.",
   "Your Asterism settings could not be copied. Maprisma starts with its default settings.": "Nie udało się skopiować ustawień Asterism. Maprisma uruchamia się z ustawieniami domyślnymi.",
   "New add-ons stay switched off until you enable them.": "Nowe dodatki pozostają wyłączone, dopóki ich nie włączysz.",
-  "Finish running agents before changing add-ons.": "Zakończ działających agentów przed zmianą dodatków.",
   "Installed add-ons": "Zainstalowane dodatki",
   "Available": "Dostępne",
   "Get add-on": "Pobierz dodatek",
@@ -748,7 +747,7 @@
   "No terminal was found to run this setup step.": "Nie znaleziono terminala do wykonania tego kroku konfiguracji.",
   "Monologue is not installed.": "Monologue nie jest zainstalowany.",
   "No AUR helper (yay or paru) was found to install whisper.cpp.": "Nie znaleziono pomocnika AUR (yay lub paru) do zainstalowania whisper.cpp.",
-  "{0} is running in a terminal. Add-ons can be changed when it has finished.": "{0} działa w terminalu. Dodatki można zmienić, gdy skończy pracę.",
-  "{0} are running in terminals. Add-ons can be changed when they have finished.": "{0} działają w terminalach. Dodatki można zmienić, gdy skończą pracę.",
+  "{0} is running in a terminal. Its add-on can be switched off, updated or removed when it has finished.": "{0} działa w terminalu. Jego dodatek można wyłączyć, zaktualizować lub usunąć, gdy skończy pracę.",
+  "{0} are running in terminals. Their add-ons can be switched off, updated or removed when they have finished.": "{0} działają w terminalach. Ich dodatki można wyłączyć, zaktualizować lub usunąć, gdy skończą pracę.",
   "Show terminal": "Pokaż terminal"
 }

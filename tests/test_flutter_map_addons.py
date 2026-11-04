@@ -57,12 +57,26 @@ class MapAddonsTests(unittest.TestCase):
         with self.assertRaises(ValueError):self.actions.apply(plan['preview'],self.registry,self.settings)
 
     def test_switch_and_batch_and_removal_are_guarded_while_owned_agent_runs(self):
+        # Task 028: only the running agent's own add-on (provides its command) is locked.
         service=Service(self.settings);service.adapters=self.registry
-        service.sessions.items={'fixture':Mock()};service.sessions.poll=Mock(return_value=None)
+        service.sessions.items={'fixture':Mock(command='fixture')};service.sessions.poll=Mock(return_value=None)
         for method,params in [('addons.set_enabled',{'id':'fixture','enabled':False}),('setup.apply',{'enabled':[]}),('addons.remove_preview',{'id':'fixture'}),('addons.install',{'preview':'x'})]:
             with self.subTest(method=method),patch('provider_watch.agent_instances',return_value={}):
                 with self.assertRaises(ValueError):service.dispatch(method,params)
         self.assertTrue(self.folder.exists());self.registry.reload.assert_not_called()
+
+    def test_another_running_agent_does_not_lock_the_add_on(self):
+        service=Service(self.settings);service.adapters=self.registry
+        service.sessions.items={'other':Mock(command='other')};service.sessions.poll=Mock(return_value=None)
+        service.dispatch('addons.set_enabled',{'id':'fixture','enabled':False})
+        self.assertEqual(ai_core.load_settings(self.settings)['addons_enabled'],['unrelated'])
+
+    def test_switching_on_is_allowed_while_the_agent_runs(self):
+        self.settings.write_text('{"addons_enabled":["unrelated"]}');self.item.state='verified'
+        service=Service(self.settings);service.adapters=self.registry
+        service.sessions.items={'fixture':Mock(command='fixture')};service.sessions.poll=Mock(return_value=None)
+        service.dispatch('addons.set_enabled',{'id':'fixture','enabled':True})
+        self.assertEqual(ai_core.load_settings(self.settings)['addons_enabled'],['fixture','unrelated'])
 
     def test_external_instances_do_not_block_addon_changes(self):
         service=Service(self.settings);service.adapters=self.registry

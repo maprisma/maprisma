@@ -27,8 +27,7 @@ Map<String, dynamic> adapter(
 Widget focus({
   bool welcome = false,
   bool detecting = false,
-  bool running = false,
-  List<String> runningAgents = const [],
+  Map<String, List<String>> locked = const {},
   VoidCallback? showTerminal,
   List<Map<String, dynamic>> items = const [],
   List<Map<String, dynamic>> nodes = const [],
@@ -46,8 +45,7 @@ Widget focus({
       detected: detected,
       entries: null,
       busy: false,
-      running: running,
-      runningAgents: runningAgents,
+      locked: locked,
       onShowTerminal: showTerminal,
       online: true,
       tr: (k) => k,
@@ -225,7 +223,7 @@ void main() {
     expect(applied, isEmpty);
   });
   testWidgets(
-    'normal switching acts immediately and is guarded while agents run',
+    'normal switching acts immediately and is guarded while its agent runs',
     (tester) async {
       final calls = <bool>[];
       final item = adapter('first', enabled: true);
@@ -246,7 +244,9 @@ void main() {
       await tester.pumpWidget(
         focus(
           items: [item],
-          running: true,
+          locked: const {
+            'first': ['Claude Code'],
+          },
           nodes: [
             {'label': 'Node', 'detail': ''},
           ],
@@ -265,16 +265,12 @@ void main() {
   test('the lock text names the running agents', () {
     String tr(String k) => k;
     expect(
-      addonsLockedText(tr, const []),
-      'Finish running agents before changing add-ons.',
-    );
-    expect(
       addonsLockedText(tr, const ['Claude Code']),
-      'Claude Code is running in a terminal. Add-ons can be changed when it has finished.',
+      'Claude Code is running in a terminal. Its add-on can be switched off, updated or removed when it has finished.',
     );
     expect(
       addonsLockedText(tr, const ['Claude Code', 'Pi']),
-      'Claude Code, Pi are running in terminals. Add-ons can be changed when they have finished.',
+      'Claude Code, Pi are running in terminals. Their add-ons can be switched off, updated or removed when they have finished.',
     );
   });
   test('every text of the add-ons page is in the app\'s translations', () {
@@ -290,7 +286,7 @@ void main() {
     expect(
       texts,
       contains(
-        '{0} is running in a terminal. Add-ons can be changed when it has finished.',
+        '{0} is running in a terminal. Its add-on can be switched off, updated or removed when it has finished.',
       ),
     );
     for (final code in ['de', 'es', 'fr', 'it', 'nl', 'pl', 'pt']) {
@@ -305,17 +301,21 @@ void main() {
     }
   });
   testWidgets(
-    'running agents: a banner names them, shows their terminal and explains each locked control',
+    'a running agent: the banner names it, shows its terminal, and only its add-on is locked',
     (tester) async {
       var shown = 0;
       final calls = <bool>[];
       const reason =
-          'Claude Code is running in a terminal. Add-ons can be changed when it has finished.';
+          'Claude Code is running in a terminal. Its add-on can be switched off, updated or removed when it has finished.';
       await tester.pumpWidget(
         focus(
-          items: [adapter('first', enabled: true)],
-          running: true,
-          runningAgents: const ['Claude Code'],
+          items: [
+            adapter('first', enabled: true),
+            adapter('second', enabled: true),
+          ],
+          locked: const {
+            'first': ['Claude Code'],
+          },
           showTerminal: () => shown++,
           nodes: [
             {'label': 'Node', 'detail': ''},
@@ -346,6 +346,55 @@ void main() {
         findsOneWidget,
       );
       expect(calls, isEmpty);
+      // Another agent's add-on is not held: it switches off at once.
+      await tester.tapAt(Offset.zero);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(PopupMenuButton<String>).at(1));
+      await tester.pumpAndSettle();
+      final other = find.widgetWithText(PopupMenuItem<String>, 'Switch off');
+      expect(tester.widget<PopupMenuItem<String>>(other).enabled, isTrue);
+      expect(
+        find.descendant(of: other, matching: find.text(reason)),
+        findsNothing,
+      );
+      await tester.tap(other);
+      await tester.pumpAndSettle();
+      expect(calls, [false]);
+    },
+  );
+  testWidgets(
+    'switching on is never locked, and there is no banner without a held add-on',
+    (tester) async {
+      final calls = <bool>[];
+      await tester.pumpWidget(
+        focus(
+          items: [adapter('first')],
+          locked: const {
+            'first': ['Claude Code'],
+          },
+          nodes: [
+            {'label': 'Node', 'detail': ''},
+          ],
+          toggle: (_, on) async => calls.add(on),
+        ),
+      );
+      await tester.tap(find.byType(PopupMenuButton<String>).first);
+      await tester.pumpAndSettle();
+      final item = find.widgetWithText(PopupMenuItem<String>, 'Switch on');
+      expect(tester.widget<PopupMenuItem<String>>(item).enabled, isTrue);
+      await tester.tap(item);
+      await tester.pumpAndSettle();
+      expect(calls, [true]);
+      // Agents run, but none holds an add-on of this page: no banner.
+      await tester.pumpWidget(
+        focus(
+          items: [adapter('second', enabled: true)],
+          locked: const {
+            'first': ['Claude Code'],
+          },
+        ),
+      );
+      expect(find.byKey(const ValueKey('addons-locked')), findsNothing);
     },
   );
   testWidgets('without running agents there is no banner and no reason', (
@@ -362,24 +411,26 @@ void main() {
     expect(find.byKey(const ValueKey('addons-locked')), findsNothing);
     await tester.tap(find.byType(PopupMenuButton<String>).first);
     await tester.pumpAndSettle();
-    expect(find.textContaining('Add-ons can be changed when'), findsNothing);
+    expect(find.textContaining('can be switched off, updated'), findsNothing);
   });
-  testWidgets('the welcome checkboxes and Switch on explain the lock', (
+  testWidgets('a held welcome checkbox cannot be unticked and says why', (
     tester,
   ) async {
     const reason =
-        'Pi is running in a terminal. Add-ons can be changed when it has finished.';
+        'Pi is running in a terminal. Its add-on can be switched off, updated or removed when it has finished.';
     await tester.pumpWidget(
       focus(
         welcome: true,
-        running: true,
-        runningAgents: const ['Pi'],
-        items: [adapter('first')],
-        detected: {'first'},
+        locked: const {
+          'first': ['Pi'],
+        },
+        items: [adapter('first'), adapter('second')],
+        detected: {'first', 'second'},
       ),
     );
-    final box = tester.widget<Checkbox>(find.byType(Checkbox));
-    expect(box.onChanged, isNull);
+    final boxes = find.byType(Checkbox);
+    expect(tester.widget<Checkbox>(boxes.at(0)).onChanged, isNull);
+    expect(tester.widget<Checkbox>(boxes.at(1)).onChanged, isNotNull);
     expect(
       find.ancestor(
         of: find.byType(Checkbox),
@@ -389,14 +440,12 @@ void main() {
       ),
       findsOneWidget,
     );
+    // Switch on keeps the held add-on ticked, so it is not locked.
     expect(
-      find.ancestor(
-        of: find.widgetWithText(FilledButton, 'Switch on'),
-        matching: find.byWidgetPredicate(
-          (w) => w is Tooltip && w.message == reason,
-        ),
-      ),
-      findsOneWidget,
+      tester
+          .widget<FilledButton>(find.widgetWithText(FilledButton, 'Switch on'))
+          .onPressed,
+      isNotNull,
     );
   });
   testWidgets(
@@ -427,7 +476,6 @@ void main() {
                             nodes: const [],
                             entries: null,
                             busy: false,
-                            running: false,
                             online: true,
                             tr: (k) => k,
                             welcome: true,
