@@ -352,6 +352,9 @@ class MapLayout {
       // through its provider hangs off that provider; a model nobody uses
       // has no line (being in a folder or catalog is not a connection).
       if (e['kind'] == 'serves' && !modelsInUse.contains(e['target'])) continue;
+      // A model the agent's picker could choose from an online provider is
+      // no connection either: skills/MCP → agent → provider → model only.
+      if (e['kind'] == 'offer') continue;
       if (viaProvider(e)) continue;
       final a = boxes[e['source']], b = boxes[e['target']];
       if (a == null || b == null) continue;

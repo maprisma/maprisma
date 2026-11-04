@@ -163,6 +163,15 @@ void main() {
       unorderedEquals(['agent:a uses runtime:r', 'runtime:r serves model:r:m']),
     );
     expect(layout.modelsInUse, {'model:r:m'});
+    // An offer (a model the agent could pick online) is not drawn.
+    final offered = MapLayout({
+      ...fixtureGraph(),
+      'edges': [
+        ...fixtureGraph()['edges'] as List,
+        {'source': 'agent:b', 'target': 'runtime:s', 'kind': 'offer'},
+      ],
+    }, {});
+    expect(offered.curves.where((c) => c.edge['kind'] == 'offer'), isEmpty);
     expect(layout.movable(layout.curves.last.edge), isTrue);
     expect(layout.providerFor('model:r:m'), 'runtime:r');
     expect(layout.targetOk('agent:a', 'model:r:n'), true);
