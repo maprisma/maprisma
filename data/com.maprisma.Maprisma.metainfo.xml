@@ -25,6 +25,15 @@
   <url type="bugtracker">https://github.com/uBruckhaus/Asterism/issues</url>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.13.0" date="2026-11-04">
+      <description>
+        <p>A calmer map: lines show only real connections, red only marks a real problem, and agents
+        working together get their own colour with an arrow to the agent they use. Drawing a line asks
+        in a small dialog and confirms with a note and Undo; a drop that cannot work says why. Ask AI
+        can make every change you can draw on the map, through the same preview, and suggests example
+        questions for each part of the map.</p>
+      </description>
+    </release>
     <release version="0.12.0" date="2026-10-30">
       <description>
         <p>Asterism is now Maprisma: a Flutter app with its service in Dart, nothing of Python in it.
