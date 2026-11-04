@@ -163,6 +163,11 @@ void main() {
       unorderedEquals(['agent:a uses runtime:r', 'runtime:r serves model:r:m']),
     );
     expect(layout.modelsInUse, {'model:r:m'});
+    // The hidden agent → model line is not offered for moving; the provider's
+    // line is.
+    final hidden = layout.allEdges.firstWhere((e) => e['kind'] == 'default');
+    expect(layout.viaProvider(hidden), isTrue);
+    expect(layout.movable(hidden), isFalse);
     // An offer (a model the agent could pick online) is not drawn.
     final offered = MapLayout({
       ...fixtureGraph(),

@@ -90,6 +90,42 @@ void main() {
         layout.curves.where((c) => c.edge['collab'] == true),
         hasLength(2),
       );
+      // A called agent's model hangs off its provider: that step is marked too.
+      final chained = withAgentLinks(<String, dynamic>{
+        ...graph,
+        'nodes': [
+          ...graph['nodes'] as List,
+          {
+            'id': 'model:runtime:r:m',
+            'kind': 'model',
+            'column': 3,
+            'label': 'm',
+            'detail': '',
+          },
+        ],
+        'edges': [
+          ...graph['edges'] as List,
+          <String, dynamic>{
+            'source': 'runtime:r',
+            'target': 'model:runtime:r:m',
+            'kind': 'serves',
+            'active': true,
+            'activity': 'agent',
+          },
+          <String, dynamic>{
+            'source': 'agent:codex',
+            'target': 'model:runtime:r:m',
+            'kind': 'default',
+            'active': true,
+            'activity': 'agent',
+          },
+        ],
+      });
+      final step = (chained['edges'] as List).cast<Map>().firstWhere(
+        (e) => e['kind'] == 'serves',
+      );
+      expect(step['collab'], isTrue);
+      expect(step, isA<Map<String, dynamic>>());
     },
   );
 

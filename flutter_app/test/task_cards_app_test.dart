@@ -32,6 +32,7 @@ installed=False
 installed_runtime=False
 catalog_loads=0
 settings={'map_scan_interval':6,'map_light_fps':20,'flutter_theme_mode':'system','map_layers':['agents','online','local','models','mcp','skills'],'system_map_columns':['pc','disks','programs','tools','folders'],'language':'en'}
+if Path('start-settings.json').exists():settings.update(json.loads(Path('start-settings.json').read_text()))
 if Path('window_popup').exists():settings['window_mode']='popup'
 addon={'id':'fixture-addon','name':'Fixture adapter','version':'1.0','summary':'Summary',
  'kind':'agent','state':'verified','enabled':False,'supported':True,'verified':True,'provides':['test']}
@@ -1089,6 +1090,32 @@ void main() {
       await unmountApp(tester);
     },
   );
+  testWidgets('a stale provider choice is not sent to an agent', (
+    tester,
+  ) async {
+    final dir = await mountApp(
+      tester,
+      beforeStart: (d) {
+        File('${d.path}/serves').writeAsStringSync('');
+        File('${d.path}/start-settings.json').writeAsStringSync(
+          jsonEncode({
+            'provider_models': {'runtime:fixture': 'mcp:known-server'},
+          }),
+        );
+      },
+    );
+    final a = tester.getCenter(find.text('Test agent')),
+        b = tester.getCenter(find.text('Fixture provider'));
+    await tester.dragFrom(a, b - a);
+    await settleService(tester);
+    final preview = requests(
+      dir,
+    ).lastWhere((q) => q['method'] == 'connections.preview');
+    expect(preview['params']['model'], '');
+    expect(preview['params']['use_now'], isFalse);
+    expect(tester.takeException(), isNull);
+    await unmountApp(tester);
+  });
   for (final pending in [false, true]) {
     testWidgets(
       'live scans retain equal snapshots and map widgets (pending=$pending)',

@@ -13,6 +13,21 @@ Map<String, dynamic> copy(Map<String, dynamic> graph) =>
 String label(String s) => s;
 Future<void> edit(Map<String, dynamic> _) async {}
 void main() {
+  test('a new provider choice is a new layout (its line is drawn)', () {
+    final before = fixtureGraph();
+    final after = {
+      ...fixtureGraph(),
+      'provider_models': {'runtime:r': 'model:r:n'},
+    };
+    expect(sameMapJson(mapGeometry(before), mapGeometry(after)), isFalse);
+    expect(sameMapJson(mapAppearance(before), mapAppearance(after)), isFalse);
+    final layout = MapLayout(before, {});
+    expect(layout.updateGraph(after), isFalse);
+    expect(
+      MapLayout(after, {}).curves.where((c) => c.edge['target'] == 'model:r:n'),
+      hasLength(1),
+    );
+  });
   test(
     'equal nested snapshots retain identity; pending transitions are not lost',
     () {

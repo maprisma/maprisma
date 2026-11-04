@@ -1242,6 +1242,12 @@ class _MapEditorState extends State<MapEditor>
     // A selection lights its neighbours; a pin only itself and its lines.
     final lit = {...seed, ...pinned};
     for (final e in layout.allEdges) {
+      // Not a connection: an offer, or a model merely in a provider's folder.
+      // (A hidden agent → model line still lights the model: the chain.)
+      if (e['kind'] == 'offer' ||
+          e['kind'] == 'serves' && !layout.modelsInUse.contains(e['target'])) {
+        continue;
+      }
       if (seed.contains(e['source']) || seed.contains(e['target'])) {
         lit.addAll([e['source'] as String, e['target'] as String]);
       }

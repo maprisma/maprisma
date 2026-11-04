@@ -31,12 +31,15 @@ Object mapGeometry(Map<String, dynamic> graph) => [
     for (final edge in graph['edges'] as List? ?? [])
       [edge['source'], edge['target'], edge['kind']],
   ],
+  // A provider's chosen model is drawn: a new choice is a new layout.
+  graph['provider_models'] ?? const {},
 ];
 
 /// Only activity fields visible on a box are part of the static bitmap.
 /// Working/activity flags drive the separate light layer.
 Object mapAppearance(Map<String, dynamic> graph) => [
   graph['nodes'],
+  graph['provider_models'],
   graph['agent_badges'],
   graph['usage_boxes'],
   graph['usage_box_size'],

@@ -3753,6 +3753,10 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         );
         if (chosen && !users) {
           // Only the provider's choice: one short step.
+          if (target != null && !_chatModel('${target['label']}')) {
+            _mapNote(tr('This model cannot be connected here.'));
+            return;
+          }
           final yes =
               confirmed ||
               await _askMapChange(
@@ -3760,10 +3764,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                 '${source['label']} → ${target?['label'] ?? old['label']}',
               );
           if (!yes) return;
-          if (target != null && !_chatModel('${target['label']}')) {
-            _mapNote(tr('This model cannot be connected here.'));
-            return;
-          }
           await _setProviderModel(
             source['id'] as String,
             target?['id'] as String?,
@@ -3893,7 +3893,8 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         },
         method: 'models.attach_preview',
         mapDraw: true,
-        mapLine: '${agent?['label'] ?? provider['source']} → ${item['label']}',
+        mapLine:
+            '${agent?['label'] ?? nodes[provider['source']]?['label'] ?? provider['source']} → ${item['label']}',
       );
       return;
     }
@@ -3905,9 +3906,19 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     }
     final kind = item['kind'] == 'runtime' ? 'provider' : item['kind'];
     if (!['provider', 'mcp', 'skills'].contains(kind)) return;
-    final chosenLabel = kind == 'provider'
-        ? '${nodes[_providerModels[item['id']]]?['label'] ?? ''}'
-        : '';
+    // Only a model this provider really serves (a stale or foreign entry is
+    // ignored).
+    final chosenId = _providerModels[item['id']];
+    final serves =
+        kind == 'provider' &&
+        nodes[chosenId]?['kind'] == 'model' &&
+        (_mapGraph['edges'] as List).cast<Map>().any(
+          (e) =>
+              e['kind'] == 'serves' &&
+              e['source'] == item['id'] &&
+              e['target'] == chosenId,
+        );
+    final chosenLabel = serves ? '${nodes[chosenId]?['label'] ?? ''}' : '';
     final chosenModel = _chatModel(chosenLabel) ? chosenLabel : '';
     await _connectionPreview(
       {

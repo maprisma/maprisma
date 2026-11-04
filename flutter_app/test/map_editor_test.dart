@@ -929,6 +929,20 @@ void main() {
     expect(outline('agent:a'), 3);
     expect(outline('agent:b'), 1);
 
+    // A provider lights its model in use, not models merely in its folder.
+    await tester.tap(find.byKey(const ValueKey('pin-agent:b')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('runtime:r'));
+    await tester.pumpAndSettle();
+    expect(shade('model:r:m'), 1);
+    expect(shade('model:r:n'), lessThan(1));
+    await tester.tap(find.text('runtime:r'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('pin-agent:b')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('agent:a'));
+    await tester.pumpAndSettle();
+
     // A pin lights itself, not its neighbours.
     await tester.tap(find.byKey(const ValueKey('pin-agent:b')));
     await tester.tap(find.byKey(const ValueKey('pin-agent:a')));

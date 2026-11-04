@@ -108,14 +108,26 @@ Map<String, dynamic> withAgentLinks(Map<String, dynamic> graph) {
           },
   ];
   if (links.isEmpty) return graph;
+  final calledModels = {
+    for (final e in graph['edges'] as List? ?? const [])
+      if (e is Map &&
+          e['kind'] == 'default' &&
+          e['active'] == true &&
+          '${e['source']}'.startsWith('agent:') &&
+          called.contains('${e['source']}'.substring(6)))
+        e['target'],
+  };
   return {
     ...graph,
     'edges': [
       for (final e in graph['edges'] as List? ?? const [])
         if (e is Map &&
-            '${e['source']}'.startsWith('agent:') &&
-            called.contains('${e['source']}'.substring(6)) &&
-            e['active'] == true)
+            e['active'] == true &&
+            ('${e['source']}'.startsWith('agent:') &&
+                    called.contains('${e['source']}'.substring(6)) ||
+                // The called agent's model is drawn from its provider: that
+                // step of the chain takes the collaboration colour too.
+                e['kind'] == 'serves' && calledModels.contains(e['target'])))
           // Typed: the layout casts every edge to Map<String, dynamic>; an
           // untyped literal here blanked the whole map (0.13.0).
           <String, dynamic>{...e, 'collab': true}
@@ -497,6 +509,8 @@ class MapLayout {
       .firstOrNull;
   bool movable(Map<String, dynamic> edge) =>
       '${edge['fixed'] ?? ''}'.isEmpty &&
+      // Drawn as provider → model instead: that line is the one to move.
+      !viaProvider(edge) &&
       (nodes[edge['source']]?['kind'] == 'agent' &&
               [
                 'uses',
