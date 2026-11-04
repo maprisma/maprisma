@@ -1358,7 +1358,7 @@
   "models.tune": {
    "area": "models",
    "kind": "read",
-   "note": "Measures llama.cpp models on this card with the build the service runs (llama-bench in the worker); the task result is a preview applied with connections.apply.",
+   "note": "Measures llama.cpp models on this card with the build the service runs (llama-bench in the worker); the task result is a preview applied with connections.apply, or refused (a text: the card is in use, no llama-bench, a wrapper script while the service is stopped) with nothing changed. Each measurement is kept in llm-tuning.json (state folder, owner only).",
    "params": {
     "key": "string",
     "models": "null|[string]"
@@ -1374,7 +1374,7 @@
   "models.tuning": {
    "area": "models",
    "kind": "read",
-   "note": "The task result: the local LLM's facts, with build_path (the binary its service runs) and untuned (llama.cpp models not measured for that build).",
+   "note": "The task result: the local LLM's facts, with build_path (the binary its service runs) and untuned (llama.cpp models with no measurement in llm-tuning.json for that build).",
    "params": {
     "key": "string"
    },
