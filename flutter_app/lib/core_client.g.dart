@@ -486,9 +486,13 @@ class CoreClient {
     'provider': provider,
   });
 
-  Future<Map<String, dynamic>> modelsTuning([
-    Map<String, dynamic> params = const {},
-  ]) => transport.call('models.tuning', params);
+  Future<Map<String, dynamic>> modelsTune({
+    required String key,
+    required Object? models,
+  }) => transport.call('models.tune', {'key': key, 'models': models});
+
+  Future<Map<String, dynamic>> modelsTuning({required String key}) =>
+      transport.call('models.tuning', {'key': key});
 
   Future<Map<String, dynamic>> modelsTuningAsk([
     Map<String, dynamic> params = const {},

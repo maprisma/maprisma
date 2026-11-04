@@ -749,5 +749,15 @@
   "No AUR helper (yay or paru) was found to install whisper.cpp.": "Er is geen AUR-helper (yay of paru) gevonden om whisper.cpp te installeren.",
   "{0} is running in a terminal. Its add-on can be switched off, updated or removed when it has finished.": "{0} draait in een terminal. Je kunt de uitbreiding ervan uitschakelen, bijwerken of verwijderen zodra die klaar is.",
   "{0} are running in terminals. Their add-ons can be switched off, updated or removed when they have finished.": "{0} draaien in terminals. Je kunt hun uitbreidingen uitschakelen, bijwerken of verwijderen zodra die klaar zijn.",
-  "Show terminal": "Terminal tonen"
+  "Show terminal": "Terminal tonen",
+  "Measure and tune": "Meten en afstellen",
+  "Not measured for this build yet": "Nog niet gemeten voor deze build",
+  "Measured for this card: {0}": "Gemeten voor deze kaart: {0}",
+  "{0}: context {1} · {2} tokens/s prompt · {3} tokens/s answer": "{0}: context {1} · {2} tokens/s invoer · {3} tokens/s antwoord",
+  "Not measured: {0}": "Niet gemeten: {0}",
+  "The card is in use: a model is loaded in llama.cpp. Measure again when it is idle.": "De videokaart is bezet: er is een model geladen in llama.cpp. Meet opnieuw wanneer ze vrij is.",
+  "The card is in use: a model is loaded in Ollama. Measure again when it is idle.": "De videokaart is bezet: er is een model geladen in Ollama. Meet opnieuw wanneer ze vrij is.",
+  "llama.cpp is not installed": "llama.cpp is niet geïnstalleerd",
+  "llama-bench is not next to the llama.cpp the service runs": "llama-bench staat niet naast de llama.cpp die de service uitvoert",
+  "llama.cpp is started by a script: start its service, then measure again": "llama.cpp wordt via een script gestart: start de service en meet daarna opnieuw"
 }

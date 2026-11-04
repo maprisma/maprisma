@@ -71,7 +71,7 @@ for line in sys.stdin:
  elif m=='existing.preview':r={'plan':'opaque-existing','files':[],'notes':[],'empty':False}
  elif m=='existing.apply':tasks['existing']={'ok':True};r={'task':'existing'}
  elif m=='setup.detect':tasks['detect']={'installed':['fixture-addon']};r={'task':'detect'}
- elif m=='providers.snapshot':r={'local':[runtime],'online':[],'folders':[]}
+ elif m=='providers.snapshot':r={'local':[runtime]+([{**runtime,'key':'llamacpp','name':'llama.cpp','models':['Big'],'focus':['runtime:llamacpp']}] if Path('llama').exists() else []),'online':[],'folders':[]}
  elif m=='connections.snapshot':r={'agents':[{'command':'test','name':'Test agent','mcp':True,'skills':False}],
   'providers':[],'skills':[],'mcp':[{'id':'known-server','name':'Known server','target':'example.test','agents':['test'] if connected else []}], 'focus':['agent:test']}
  elif m=='connections.author_preview':r={'plan':'opaque','empty':False,'files':[],'links_add':[],'links_remove':[],'kind':p['kind'],'agents':['Test agent'],'focus':['agent:test']}
@@ -79,6 +79,7 @@ for line in sys.stdin:
   'command':'test','item':'known-server','remove':False,'focus':['agent:test','mcp:known-server']}
  elif m=='connections.move_preview':r={'plan':'opaque-remove','empty':False,'files':[],'links_add':[],'links_remove':[],'focus':['agent:test','mcp:known-server']}
  elif m=='connections.undo':connected=False;r={'restored':['fixture']}
+ elif m=='connections.apply' and p['plan']=='opaque-measure':Path('tuned').touch();tasks['connect']={'ok':True,'undo':'undo-tuned'};r={'task':'connect'}
  elif m=='connections.apply':connected=p['plan']!='opaque-remove';tasks['connect']={'ok':True,'undo':'undo-token'};r={'task':'connect'}
  elif m=='providers.run':
   op=p['operation'];tasks[op]=({'repos':[{'id':'owner/repo'}]} if op=='models.search' else
@@ -118,6 +119,10 @@ for line in sys.stdin:
     'publisher':{'kind':'','who':''},'options':[{'option':'opt-time','kind':'pypi','label':'pypi · mcp-server-time 1.0','runnable':True,'command':'uvx',
      'args':['mcp-server-time==1.0'],'env':[],'url':'','headers':[],'needs':[],'on_command_line':[]}]}}]}
   r={'task':'mcpcat'}
+ elif m=='models.tuning' and Path('slots_full').exists():Path('slots_full').unlink();print(json.dumps({'id':q['id'],'error':{'code':'operation_failed'}}),flush=True);continue
+ elif m=='models.tuning' and p.get('key')=='llamacpp' and Path('llama').exists():tasks['tune']={'runtime':'llama.cpp','key':'llamacpp','gpu':'GPU','vram':24<<30,'stacks':['Vulkan'],'build':'vulkan','builds':[],'devices':'','settings':{'*':{}},'tuning':{},'per_model':True,'models':[],'loaded':[],'vram_used':0,'helpers':[],'build_path':'/x/llama-server','untuned':[] if Path('tuned').exists() else ['Big']};r={'task':'tune'}
+ elif m=='models.tune' and Path('card_busy').exists():tasks['measure']={'refused':'The card is in use: a model is loaded in llama.cpp. Measure again when it is idle.','item':'llama.cpp','models':[],'skipped':[],'notes':[]};r={'task':'measure'}
+ elif m=='models.tune':tasks['measure']={'plan':'opaque-measure','empty':False,'files':[{'path':'~/.config/llama.cpp/models.ini','added':5,'removed':1}],'links_add':[],'links_remove':[],'item':'llama.cpp','build':'vulkan','models':[{'name':'Big','ctx':131072,'ubatch':1024,'batch':2048,'pp':8500,'tg':235}],'skipped':[],'notes':[],'focus':['runtime:llamacpp']};r={'task':'measure'}
  elif m=='models.tuning':tasks['tune']={'runtime':'Fixture provider','key':'fixture','gpu':'GPU','vram':8<<30,'stacks':[],'build':'','builds':[],'devices':'','settings':{'*':{}},'tuning':{'mode':['a|b','A mode']},'per_model':False,'models':[],'loaded':[],'vram_used':0,'helpers':[{'command':'test','name':'Test agent'}]};r={'task':'tune'}
  elif m=='models.tuning_ask':tasks['ask']={'summary':'One thing.','agent':p['command'],'suggestions':[{'kind':'setting','title':'Use b','why':'Faster.','model':'*','key':'mode','value':'b'}]};r={'task':'ask'}
  elif m=='models.tuning_preview':r={'plan':'opaque-tune','empty':False,'files':[{'path':'~/.config/x.ini','added':1,'removed':0}],'links_add':[],'links_remove':[],'item':'Fixture provider','notes':[],'focus':['runtime:fixture']}
@@ -151,7 +156,7 @@ for line in sys.stdin:
  elif m=='agents.health':r={'state':'warn','summary':'Works, one thing to look at: No model chosen','checks':[{'state':'warn','title':'No model chosen','detail':'','step':'Select it on the map.','command':'','sign_in':''}]}
  elif m=='help.snapshot':r={'manual':True}
  elif m=='help.open_manual':r={'opened':True}
- elif m=='jobs.list':r={'jobs':[{'id':'aaaaaaaaaaaa','kind':'model','title':'m.gguf · Fixture provider','state':'interrupted','fraction':0.4}] if interrupted else []}
+ elif m=='jobs.list':r={'jobs':[{'id':'aaaaaaaaaaaa','kind':'download' if Path('llama').exists() else 'model','title':'m.gguf · Fixture provider','state':'interrupted','fraction':0.4}] if interrupted else []}
  elif m=='jobs.discard':interrupted=False;r={'ok':True}
  elif m=='jobs.continue':interrupted=False;tasks['cont']={'ok':True};r={'task':'cont','focus':['runtime:fixture']}
  elif m=='skills.web_search':tasks['sks']={'skills':[{'name':'pdf','skill_id':'pdf','repo':'a/skills','installs':3}]};r={'task':'sks'}
@@ -247,6 +252,11 @@ Future<void> openFromHelp(WidgetTester tester, String tab) async {
 }
 
 void main() {
+  setUp(() {
+    tuneDelay = const Duration(milliseconds: 10);
+    tuneTries = 3;
+  });
+
   testWidgets('leaving Providers and models brings the map up to date', (
     tester,
   ) async {
@@ -432,6 +442,115 @@ void main() {
       await unmountApp(tester);
     },
   );
+
+  testWidgets(
+    'llama.cpp models not measured for the build are tuned once at start, with Undo',
+    (tester) async {
+      final dir = await mountApp(
+        tester,
+        beforeStart: (dir) => File('${dir.path}/llama').writeAsStringSync(''),
+      );
+      List<Map> calls(String method) =>
+          requests(dir).where((q) => q['method'] == method).toList();
+      // The background check runs after the first snapshot.
+      for (var i = 0; i < 40 && calls('connections.apply').isEmpty; i++) {
+        await settleService(tester);
+      }
+      expect(calls('models.tune').single['params'], {
+        'key': 'llamacpp',
+        'models': ['Big'],
+      });
+      expect(calls('connections.apply').single['params'], {
+        'plan': 'opaque-measure',
+      });
+      await settleService(tester);
+      final message = find.byKey(const ValueKey('tuned-message'));
+      expect(message, findsOneWidget);
+      expect(
+        find.descendant(
+          of: message,
+          matching: find.textContaining(
+            'Big: context 128k · 8500 tokens/s prompt · 235 tokens/s answer',
+          ),
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(
+        find.descendant(of: message, matching: find.text('Undo')),
+      );
+      await settleService(tester);
+      expect(calls('connections.undo').single['params'], {
+        'undo': 'undo-tuned',
+      });
+      expect(tester.takeException(), isNull);
+      await unmountApp(tester);
+    },
+  );
+
+  testWidgets(
+    'background tuning waits while the core is busy, then refreshes the views',
+    (tester) async {
+      final dir = await mountApp(
+        tester,
+        beforeStart: (dir) {
+          File('${dir.path}/llama').writeAsStringSync('');
+          File('${dir.path}/slots_full').writeAsStringSync('');
+        },
+      );
+      List<Map> calls(String method) =>
+          requests(dir).where((q) => q['method'] == method).toList();
+      for (var i = 0; i < 60 && calls('connections.apply').isEmpty; i++) {
+        await settleService(tester);
+      }
+      // Refused once (four tasks running), asked again, then measured.
+      expect(
+        calls('models.tuning').where((q) => q['params']['key'] == 'llamacpp'),
+        hasLength(2),
+      );
+      expect(calls('models.tune'), hasLength(1));
+      final applied = requests(
+        dir,
+      ).indexWhere((q) => q['method'] == 'connections.apply');
+      await settleService(tester);
+      // The views were read again after the apply.
+      expect(
+        requests(
+          dir,
+        ).skip(applied + 1).where((q) => q['method'] == 'app.snapshot'),
+        isNotEmpty,
+      );
+      expect(find.byKey(const ValueKey('tuned-message')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await unmountApp(tester);
+    },
+  );
+
+  testWidgets('a llama.cpp download continued from the job strip is measured', (
+    tester,
+  ) async {
+    final dir = await mountApp(
+      tester,
+      beforeStart: (dir) {
+        File('${dir.path}/llama').writeAsStringSync('');
+        File('${dir.path}/tuned').writeAsStringSync(''); // nothing at start
+      },
+      interrupted: true,
+    );
+    List<Map> calls(String method) =>
+        requests(dir).where((q) => q['method'] == method).toList();
+    for (var i = 0; i < 20; i++) {
+      await settleService(tester);
+    }
+    final before = calls('models.tuning').length;
+    await tester.tap(find.text('Continue').first);
+    for (var i = 0; i < 20; i++) {
+      await settleService(tester);
+    }
+    expect(calls('jobs.continue'), hasLength(1));
+    expect(calls('models.tuning').length, greaterThan(before));
+    expect(tester.takeException(), isNull);
+    await unmountApp(tester);
+  });
 
   testWidgets('an open terminal keeps the keyboard and the app its keys', (
     tester,
@@ -994,6 +1113,76 @@ void main() {
         dir,
       ).lastWhere((q) => q['method'] == 'connections.apply')['params'],
       {'plan': 'opaque-tune'},
+    );
+    expect(tester.takeException(), isNull);
+    await unmountApp(tester);
+  });
+
+  testWidgets('Measure and tune says why when the card is in use', (
+    tester,
+  ) async {
+    final dir = await mountApp(
+      tester,
+      beforeStart: (dir) {
+        File('${dir.path}/llama').writeAsStringSync('');
+        File('${dir.path}/tuned').writeAsStringSync('');
+        File('${dir.path}/card_busy').writeAsStringSync('');
+      },
+    );
+    await openFromHelp(tester, 'Providers and models');
+    await tester.tap(find.byKey(const ValueKey('performance-llamacpp')));
+    await settleService(tester);
+    await tester.tap(find.byKey(const ValueKey('tune-all')));
+    await settleService(tester);
+    final refused = find.byKey(const ValueKey('tune-refused'));
+    expect(refused, findsOneWidget);
+    expect(
+      find.descendant(
+        of: refused,
+        matching: find.textContaining('a model is loaded in llama.cpp'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      requests(dir).where((q) => q['method'] == 'connections.apply'),
+      isEmpty,
+    );
+    expect(tester.takeException(), isNull);
+    await unmountApp(tester);
+  });
+
+  testWidgets('Measure and tune shows the measurement, then the preview', (
+    tester,
+  ) async {
+    final dir = await mountApp(
+      tester,
+      beforeStart: (dir) {
+        File('${dir.path}/llama').writeAsStringSync('');
+        File('${dir.path}/tuned').writeAsStringSync(''); // nothing untuned
+      },
+    );
+    await openFromHelp(tester, 'Providers and models');
+    await tester.tap(find.byKey(const ValueKey('performance-llamacpp')));
+    await settleService(tester);
+    await tester.tap(find.byKey(const ValueKey('tune-all')));
+    await settleService(tester);
+    expect(
+      requests(dir).lastWhere((q) => q['method'] == 'models.tune')['params'],
+      {'key': 'llamacpp', 'models': null},
+    );
+    expect(
+      find.textContaining(
+        'Big: context 128k · 8500 tokens/s prompt · 235 tokens/s answer',
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.widgetWithText(FilledButton, 'Apply'));
+    await settleService(tester);
+    expect(
+      requests(
+        dir,
+      ).lastWhere((q) => q['method'] == 'connections.apply')['params'],
+      {'plan': 'opaque-measure'},
     );
     expect(tester.takeException(), isNull);
     await unmountApp(tester);

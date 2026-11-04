@@ -198,7 +198,7 @@ class Engine:
         if folder is None and self.own_model_folder:
             return 0, []                          # no model folder: no model file to size it from
         try:
-            found = self.context_now(rt, folder, name)
+            found = self.auto_context_now(rt, folder, name)
         except (OSError, ValueError, KeyError, TypeError):
             return 0, []
         if found is None:
@@ -218,7 +218,7 @@ class Engine:
         if best <= 0:
             return 0, []
         try:
-            return best, self.context_changes(rt, name, best)
+            return best, self.auto_context_changes(rt, name, best)
         except (OSError, ValueError):
             return 0, []
 
@@ -309,6 +309,14 @@ class Engine:
         """The settings changes (connect.Change) that give `name` the context ctx (backup, Undo);
         None when it is set another way (set_context). Raises ValueError when it cannot."""
         return None
+
+    def auto_context_now(self, rt, folder, name: str) -> tuple | None:
+        """As context_now, for auto_context: only a context the model has of its own counts."""
+        return self.context_now(rt, folder, name)
+
+    def auto_context_changes(self, rt, name: str, ctx: int):
+        """As context_changes, for a context the app worked out (it may bring settings along)."""
+        return self.context_changes(rt, name, ctx)
 
     def set_context(self, rt, name: str, ctx: int):
         raise ValueError("the context is set in the local LLM itself")

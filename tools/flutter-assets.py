@@ -721,6 +721,18 @@ KEYS = (
     "{0} is running in a terminal. Its add-on can be switched off, updated or removed when it has finished.",
     "{0} are running in terminals. Their add-ons can be switched off, updated or removed when they have finished.",
     "Show terminal",
+    # Measure and tune local models (task 029).
+    "Measure and tune",
+    "Not measured for this build yet",
+    "Measured for this card: {0}",
+    "{0}: context {1} · {2} tokens/s prompt · {3} tokens/s answer",
+    "Not measured: {0}",
+    # Why Measure and tune is refused (task 029 review).
+    "The card is in use: a model is loaded in llama.cpp. Measure again when it is idle.",
+    "The card is in use: a model is loaded in Ollama. Measure again when it is idle.",
+    "llama.cpp is not installed",
+    "llama-bench is not next to the llama.cpp the service runs",
+    "llama.cpp is started by a script: start its service, then measure again",
 )
 
 

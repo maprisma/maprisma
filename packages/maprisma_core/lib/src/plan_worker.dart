@@ -32,6 +32,7 @@ import 'llm_tuning.dart';
 import 'health_report.dart' show pcInfo;
 import 'agent_updates.dart' show AgentUpdates;
 import 'context.dart' show ContextReader;
+import 'llama_tune.dart' show LlamaTuner, readTuningRecord, untunedModels;
 import 'model_hub.dart' show netFetch;
 import 'model_downloads.dart' show DownloadError;
 import 'provider_ops.dart';
@@ -604,6 +605,13 @@ Future<int> runWorker(List<String> args) async {
       if (rt == null) throw const FormatException('Unknown local provider');
       final posix = Posix();
       final installer = LlamaCppInstaller(InstallHost(identity.home, posix));
+      // Task 029: the build the service runs (its program and environment).
+      final built = rt.key == 'llamacpp'
+          ? await LlamaTuner(
+              home: identity.home,
+              environment: identity.environment,
+            ).build()
+          : null;
       final facts =
           await LlmTuning(
             ContextReader(files, ConfigFiles(posix, identity.home)),
@@ -613,8 +621,65 @@ Future<int> runWorker(List<String> args) async {
             rt,
             await detectGpu(),
             llamaVersion: () async => installer.currentVersion(),
+            llamaBuild: built == null || built.script
+                ? null
+                : (built.kind, built.devices),
           );
+      // The binary the service runs, and the models with no measurement for
+      // it (llm-tuning.json; the app tunes those when the card is idle). A
+      // wrapper script read while the service is stopped: not known yet.
+      if (rt.key == 'llamacpp') {
+        facts['build_path'] = built?.binary ?? '';
+        facts['untuned'] = built == null || built.script
+            ? <String>[]
+            : untunedModels(
+                readTuningRecord(p.join(identity.stateDir, 'llm-tuning.json')),
+                rt.models,
+                built.mark,
+              );
+      }
       send({'type': 'result', 'result': facts});
+      return 0;
+    }
+    // llama_tune (task 029): llama.cpp models measured on this card with the
+    // build the service runs; numbers only, the core makes the preview.
+    if (args.isEmpty && request['operation'] == 'models.tune') {
+      final params = request['params'] as Map;
+      if (params.length != 3 ||
+          params['models'] is! List ||
+          params['models_dir'] is! String ||
+          params['address'] is! String) {
+        throw const FormatException('Invalid worker request');
+      }
+      final identity = AppIdentity();
+      final reader = ContextReader(
+        ScanFiles(identity),
+        ConfigFiles(Posix(), identity.home),
+      );
+      String ini;
+      try {
+        ini = File(reader.modelsIni).readAsStringSync();
+      } on FileSystemException {
+        ini = '';
+      }
+      Map<String, dynamic> result;
+      try {
+        result =
+            await LlamaTuner(
+              home: identity.home,
+              environment: identity.environment,
+            ).measure(
+              [for (final m in params['models'] as List) '$m'],
+              ScanFiles(identity).expand(params['models_dir'] as String),
+              params['address'] as String,
+              ini,
+              reader.llamaModelFile,
+            );
+      } on FormatException catch (refused) {
+        // The card is in use, no llama-bench, …: the answer says why (rule 3).
+        result = {'refused': refused.message};
+      }
+      send({'type': 'result', 'result': result});
       return 0;
     }
     // agent_updates.check: mise outdated, an agent's own channel, the app's

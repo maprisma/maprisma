@@ -749,5 +749,15 @@
   "No AUR helper (yay or paru) was found to install whisper.cpp.": "Nessun helper AUR (yay o paru) trovato per installare whisper.cpp.",
   "{0} is running in a terminal. Its add-on can be switched off, updated or removed when it has finished.": "{0} è in esecuzione in un terminale. Potrai disattivare, aggiornare o rimuovere il suo componente aggiuntivo quando avrà finito.",
   "{0} are running in terminals. Their add-ons can be switched off, updated or removed when they have finished.": "{0} sono in esecuzione nei terminali. Potrai disattivare, aggiornare o rimuovere i loro componenti aggiuntivi quando avranno finito.",
-  "Show terminal": "Mostra terminale"
+  "Show terminal": "Mostra terminale",
+  "Measure and tune": "Misura e regola",
+  "Not measured for this build yet": "Non ancora misurato per questa build",
+  "Measured for this card: {0}": "Misurato per questa scheda: {0}",
+  "{0}: context {1} · {2} tokens/s prompt · {3} tokens/s answer": "{0}: contesto {1} · {2} token/s in ingresso · {3} token/s di risposta",
+  "Not measured: {0}": "Non misurato: {0}",
+  "The card is in use: a model is loaded in llama.cpp. Measure again when it is idle.": "La scheda grafica è occupata: in llama.cpp è caricato un modello. Misura di nuovo quando è libera.",
+  "The card is in use: a model is loaded in Ollama. Measure again when it is idle.": "La scheda grafica è occupata: in Ollama è caricato un modello. Misura di nuovo quando è libera.",
+  "llama.cpp is not installed": "llama.cpp non è installato",
+  "llama-bench is not next to the llama.cpp the service runs": "llama-bench non si trova accanto al llama.cpp eseguito dal servizio",
+  "llama.cpp is started by a script: start its service, then measure again": "llama.cpp viene avviato da uno script: avvia il suo servizio, poi misura di nuovo"
 }

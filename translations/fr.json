@@ -3339,5 +3339,15 @@
  "A picture of this window goes to Pictures/Maprisma. In a terminal, use the camera symbol below it: programs there may use F12.": "Une image de cette fenêtre va dans Pictures/Maprisma. Dans un terminal, utilise le symbole d’appareil photo en dessous : les programmes qui s’y trouvent peuvent utiliser F12.",
  "A picture of this window is saved, with a note if you like. In a terminal, use the camera symbol below it: programs there may use F12.": "Une image de cette fenêtre est enregistrée, avec une note si vous voulez. Dans un terminal, utilisez le symbole d’appareil photo en dessous : les programmes peuvent utiliser F12.",
  "{0} is running in a terminal. Its add-on can be switched off, updated or removed when it has finished.": "{0} tourne dans un terminal. Vous pourrez désactiver, mettre à jour ou retirer son module quand il aura terminé.",
- "{0} are running in terminals. Their add-ons can be switched off, updated or removed when they have finished.": "{0} tournent dans des terminaux. Vous pourrez désactiver, mettre à jour ou retirer leurs modules quand ils auront terminé."
+ "{0} are running in terminals. Their add-ons can be switched off, updated or removed when they have finished.": "{0} tournent dans des terminaux. Vous pourrez désactiver, mettre à jour ou retirer leurs modules quand ils auront terminé.",
+ "Measure and tune": "Mesurer et régler",
+ "Not measured for this build yet": "Pas encore mesuré pour cette version",
+ "Measured for this card: {0}": "Mesuré pour cette carte : {0}",
+ "{0}: context {1} · {2} tokens/s prompt · {3} tokens/s answer": "{0} : contexte {1} · {2} jetons/s en entrée · {3} jetons/s en réponse",
+ "Not measured: {0}": "Non mesuré : {0}",
+ "The card is in use: a model is loaded in llama.cpp. Measure again when it is idle.": "La carte graphique est occupée : un modèle est chargé dans llama.cpp. Mesure à nouveau quand elle est libre.",
+ "The card is in use: a model is loaded in Ollama. Measure again when it is idle.": "La carte graphique est occupée : un modèle est chargé dans Ollama. Mesure à nouveau quand elle est libre.",
+ "llama.cpp is not installed": "llama.cpp n’est pas installé",
+ "llama-bench is not next to the llama.cpp the service runs": "llama-bench ne se trouve pas à côté du llama.cpp que le service exécute",
+ "llama.cpp is started by a script: start its service, then measure again": "llama.cpp est lancé par un script : démarre son service, puis mesure à nouveau"
 }

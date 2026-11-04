@@ -228,7 +228,8 @@ A parameter written `name?` may be left out.
 | `models.slots_preview` | preview | — | ? |
 | `models.slots_reload` | change | — | ? |
 | `models.switch_preview` | preview | `new`: null|string, `old`: string, `provider`: string | `agents`, `contexts`, `empty`, `files`, `focus`, `links_add`, `links_remove`, `model_actions`, `notes`, `plan` |
-| `models.tuning` | read | — | ? |
+| `models.tune` | read | `key`: string, `models`: null|[string] | `focus`, `task` Measures llama.cpp models on this card with the build the service runs (llama-bench in the worker); the task result is a preview applied with connections.apply, or refused (a text: the card is in use, no llama-bench, a wrapper script while the service is stopped) with nothing changed. Each measurement is kept in llm-tuning.json (state folder, owner only). |
+| `models.tuning` | read | `key`: string | `focus`, `task` The task result: the local LLM's facts, with build_path (the binary its service runs) and untuned (llama.cpp models with no measurement in llm-tuning.json for that build). |
 | `models.tuning_ask` | read | — | ? |
 | `models.tuning_preview` | preview | — | ? |
 
