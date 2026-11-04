@@ -116,7 +116,9 @@ Map<String, dynamic> withAgentLinks(Map<String, dynamic> graph) {
             '${e['source']}'.startsWith('agent:') &&
             called.contains('${e['source']}'.substring(6)) &&
             e['active'] == true)
-          {...e, 'collab': true}
+          // Typed: the layout casts every edge to Map<String, dynamic>; an
+          // untyped literal here blanked the whole map (0.13.0).
+          <String, dynamic>{...e, 'collab': true}
         else
           e,
       ...links,

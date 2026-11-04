@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:maprisma/map_layout.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -36,6 +38,60 @@ void main() {
     final plain = {..._graph(), 'activity': <String, dynamic>{}};
     expect(identical(withAgentLinks(plain), plain), isTrue);
   });
+
+  test(
+    'a called agent with an active line still lays out (0.13.0 blank map)',
+    () {
+      // As the core sends it: decoded JSON, a working agent that uses another
+      // one whose own line is active.
+      final graph =
+          (jsonDecode(
+                    jsonEncode({
+                      'nodes': [
+                        for (final (id, kind, col) in [
+                          ('agent:claude', 'agent', 1),
+                          ('agent:codex', 'agent', 1),
+                          ('runtime:r', 'runtime', 2),
+                        ])
+                          {
+                            'id': id,
+                            'kind': kind,
+                            'column': col,
+                            'label': id,
+                            'detail': '',
+                          },
+                      ],
+                      'edges': [
+                        {
+                          'source': 'agent:codex',
+                          'target': 'runtime:r',
+                          'kind': 'uses',
+                          'active': true,
+                          'activity': 'agent',
+                        },
+                      ],
+                      'activity': {
+                        'claude': {
+                          'working': true,
+                          'uses': ['codex'],
+                        },
+                        'codex': {'working': true},
+                      },
+                    }),
+                  )
+                  as Map)
+              .cast<String, dynamic>();
+      final linked = withAgentLinks(graph);
+      final edges = linked['edges'] as List;
+      expect(edges, everyElement(isA<Map<String, dynamic>>()));
+      expect(edges.first['collab'], isTrue);
+      final layout = MapLayout(linked, {});
+      expect(
+        layout.curves.where((c) => c.edge['collab'] == true),
+        hasLength(2),
+      );
+    },
+  );
 
   test('called agents at every depth tint only their active paths', () {
     final graph = {

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:maprisma/map_layout.dart' show withAgentLinks;
 import 'package:maprisma/agent_action_dialog.dart';
 import 'package:maprisma/agent_map.dart';
 import 'package:maprisma/agent_usage.dart';
@@ -684,6 +685,40 @@ void main() {
       find.text('Connect agent:a to runtime:r first, then choose this model.'),
       findsNothing,
     );
+  });
+  testWidgets('a working agent that calls another one keeps the map (0.13.0)', (
+    tester,
+  ) async {
+    // The graph as the app hands it over: decoded JSON plus withAgentLinks.
+    final graph =
+        (jsonDecode(
+                  jsonEncode({
+                    ...fixtureGraph(active: true),
+                    'activity': {
+                      'a': {
+                        'working': true,
+                        'uses': ['b'],
+                      },
+                      'b': {'working': true},
+                    },
+                    'edges': [
+                      ...fixtureGraph(active: true)['edges'] as List,
+                      {
+                        'source': 'agent:b',
+                        'target': 'runtime:s',
+                        'kind': 'uses',
+                        'active': true,
+                        'activity': 'agent',
+                      },
+                    ],
+                  }),
+                )
+                as Map)
+            .cast<String, dynamic>();
+    await mount(tester, edits: [], graph: withAgentLinks(graph));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(tester.takeException(), isNull);
+    expect(find.text('agent:b'), findsOneWidget);
   });
   test('the column counts what is on, not what only stays known', () {
     final groups = MapGroup.fromGraph(
