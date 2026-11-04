@@ -46,9 +46,11 @@ List<int> gguf(int trained) {
 /// Task 029: llama_tune measures with the build the service runs.
 void main() {
   late Directory root;
-  late String binary, used;
+  late String binary, used, execPath;
   late List<(List<String>, Map<String, String>)> runs;
-  String? routerAnswer;
+  String? routerAnswer, ollamaAnswer;
+  var mainPid = 0;
+  var memoryRunFails = false;
 
   setUp(() {
     root = Directory.systemTemp.createTempSync('llama-tune-');
@@ -73,6 +75,10 @@ void main() {
     File('${root.path}/models/Big.gguf').writeAsBytesSync(gguf(1048576));
     runs = [];
     routerAnswer = null;
+    ollamaAnswer = null;
+    mainPid = 0;
+    memoryRunFails = false;
+    execPath = binary;
   });
   tearDown(() => root.deleteSync(recursive: true));
 
@@ -80,15 +86,19 @@ void main() {
     home: root.path,
     environment: {'PATH': '/usr/bin:/bin', 'HOME': root.path},
     sysfs: '${root.path}/drm',
+    proc: '${root.path}/proc',
     sample: const Duration(milliseconds: 5),
-    fetch: (url) async => url.endsWith('/models') ? routerAnswer : null,
+    fetch: (url) async => url.endsWith('/models')
+        ? routerAnswer
+        : (url.endsWith('/api/ps') ? ollamaAnswer : null),
     run: (argv, env, timeout) async {
       runs.add((argv, env));
       if (argv.contains('show')) {
         return (
-          'ExecStart={ path=$binary ; argv[]=$binary --models-preset x ; ignore_errors=no }\n'
+          'ExecStart={ path=$execPath ; argv[]=$execPath --models-preset x ; ignore_errors=no }\n'
               'Environment=LD_LIBRARY_PATH=/opt/rocm/lib\n'
-              'EnvironmentFiles=${root.path}/server.env (ignore_errors=no)\n',
+              'EnvironmentFiles=${root.path}/server.env (ignore_errors=no)\n'
+              'MainPID=$mainPid\n',
           true,
         );
       }
@@ -122,7 +132,7 @@ void main() {
       File(used).writeAsStringSync('${7 * gib}\n');
       await Future<void>.delayed(const Duration(milliseconds: 30));
       File(used).writeAsStringSync('${1 * gib}\n');
-      return ('[]', true);
+      return ('[]', !memoryRunFails);
     },
   );
 
@@ -134,7 +144,63 @@ void main() {
     expect(built.environment['LD_LIBRARY_PATH'], '/opt/rocm/lib');
     expect(built.environment['GGML_VK_VISIBLE_DEVICES'], '0');
     expect(built.mark, 'vulkan ${root.path}/llama b12078');
+    expect(built.script, isFalse);
   });
+
+  test('a link in ExecStart: llama-bench next to the real binary', () async {
+    Directory('${root.path}/bin').createSync();
+    execPath = '${root.path}/bin/llama-server';
+    Link(execPath).createSync(binary);
+    final built = (await tuner().build())!;
+    expect(built.binary, binary);
+    expect(built.script, isFalse);
+  });
+
+  test(
+    'a wrapper script: the running service\'s program and environment',
+    () async {
+      Directory('${root.path}/bin').createSync();
+      execPath = '${root.path}/bin/llama-server';
+      File(execPath).writeAsStringSync(
+        '#!/usr/bin/env bash\nexport LD_LIBRARY_PATH=/rocm/lib\nexec $binary "\$@"\n',
+      );
+      // Stopped: the script is all there is; its build is not known.
+      var built = (await tuner().build())!;
+      expect(built.script, isTrue);
+      await expectLater(
+        tuner().measure(
+          ['Big'],
+          '${root.path}/models',
+          '127.0.0.1:8080',
+          '',
+          (folder, name) => '$folder/$name.gguf',
+        ),
+        throwsA(
+          isA<FormatException>().having(
+            (e) => e.message,
+            'message',
+            contains('started by a script'),
+          ),
+        ),
+      );
+      // Running: the script exec'd the real binary, with its exports.
+      mainPid = 4242;
+      Directory('${root.path}/proc/4242').createSync(recursive: true);
+      Link('${root.path}/proc/4242/exe').createSync(binary);
+      File('${root.path}/proc/4242/environ').writeAsStringSync(
+        'PATH=/usr/bin\x00LD_LIBRARY_PATH=/rocm/lib\x00ROCM_PATH=/rocm\x00',
+      );
+      built = (await tuner().build())!;
+      expect(built.binary, binary);
+      expect(built.script, isFalse);
+      expect(built.environment['ROCM_PATH'], '/rocm');
+      expect(built.environment['LD_LIBRARY_PATH'], '/rocm/lib');
+      expect(built.devices, contains('Vulkan0: AMD Radeon RX 7900 XTX'));
+      final version = runs.lastWhere((r) => r.$1.contains('--version'));
+      expect(version.$1.first, binary);
+      expect(version.$2['ROCM_PATH'], '/rocm');
+    },
+  );
 
   test(
     'the fastest batch size, the context from the measured memory',
@@ -177,17 +243,50 @@ void main() {
         '',
         (folder, name) => '$folder/$name.gguf',
       ),
-      throwsA(isA<FormatException>()),
+      throwsA(
+        isA<FormatException>().having(
+          (e) => e.message,
+          'message',
+          'The card is in use: a model is loaded in llama.cpp. Measure again when it is idle.',
+        ),
+      ),
     );
     expect(runs.where((r) => r.$1.first.endsWith('llama-bench')), isEmpty);
   });
 
-  test('the section written, marked, and untuned models found', () {
+  test('something else on Ollama\'s port does not stop it', () async {
+    ollamaAnswer = '<html>not ollama</html>';
+    final result = await tuner().measure(
+      ['Big'],
+      '${root.path}/models',
+      '127.0.0.1:8080',
+      '',
+      (folder, name) => '$folder/$name.gguf',
+    );
+    expect((result['models'] as List).single['name'], 'Big');
+  });
+
+  test('a memory run that does not finish: skipped, no context', () async {
+    memoryRunFails = true;
+    final result = await tuner().measure(
+      ['Big'],
+      '${root.path}/models',
+      '127.0.0.1:8080',
+      '',
+      (folder, name) => '$folder/$name.gguf',
+    );
+    expect(result['models'], isEmpty);
+    expect(
+      (result['skipped'] as List).single['reason'],
+      'llama-bench did not finish',
+    );
+  });
+
+  test('the section written', () {
     final m = {'name': 'Big', 'ctx': 131072, 'ubatch': 1024, 'batch': 2048};
-    final text = tunedIniText('[*]\nctx-size = 8192\n', m, 'vulkan /x b12078');
+    final text = tunedIniText('[*]\nctx-size = 8192\n', m);
     final section = text.split('[Big]')[1];
     for (final line in [
-      '$tunedMarker vulkan /x b12078',
       'ctx-size = 131072',
       'ubatch-size = 1024',
       'batch-size = 2048',
@@ -196,12 +295,44 @@ void main() {
     ]) {
       expect(section, contains(line));
     }
-    // Measured again: one marker, the new one.
-    final again = tunedIniText(text, m, 'rocm /y b12100');
-    expect(tunedMarker.allMatches(again).length, 1);
-    expect(untunedModels(again, ['Big', 'Other'], 'rocm /y b12100'), ['Other']);
-    expect(untunedModels(again, ['Big'], 'vulkan /x b12078'), ['Big']);
-    // The ini parser does not read the marker as a setting.
-    expect(ContextReader.iniSections(again)['Big']!.keys, isNot(contains(';')));
+  });
+
+  test('the record: measured and skipped models count, per build', () {
+    final at = DateTime.utc(2026, 11, 4);
+    var record = withMeasurement(
+      {'models': {}},
+      {
+        'mark': 'vulkan /x b12078',
+        'build': 'vulkan',
+        'build_path': '/x/llama-server',
+        'version': 'b12078',
+        'models': [
+          {'name': 'Big', 'ctx': 131072, 'ubatch': 1024, 'pp': 8500, 'tg': 235},
+        ],
+        'skipped': [
+          {'name': 'Whisper', 'reason': 'its memory per token is not known'},
+        ],
+      },
+      at,
+    );
+    final big = (record['models'] as Map)['Big'] as Map;
+    expect(big['ctx'], 131072);
+    expect(big['date'], '2026-11-04T00:00:00.000Z');
+    expect(
+      untunedModels(record, ['Big', 'Whisper', 'New'], 'vulkan /x b12078'),
+      ['New'],
+    );
+    // Another build: all of them again.
+    expect(untunedModels(record, ['Big', 'Whisper'], 'rocm /y b12100'), [
+      'Big',
+      'Whisper',
+    ]);
+    // Written and read back.
+    final path = '${root.path}/state/llm-tuning.json';
+    Directory('${root.path}/state').createSync();
+    File(path).writeAsStringSync(jsonEncode(record));
+    record = readTuningRecord(path);
+    expect(untunedModels(record, ['Big'], 'vulkan /x b12078'), isEmpty);
+    expect(readTuningRecord('${root.path}/none.json'), {'models': {}});
   });
 }

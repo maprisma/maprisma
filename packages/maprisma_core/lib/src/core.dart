@@ -60,7 +60,7 @@ import 'mcp_catalog.dart';
 import 'skills_web.dart';
 import 'llm_tuning.dart';
 import 'local_llm.dart' show LocalLlm;
-import 'llama_tune.dart' show tunedIniText;
+import 'llama_tune.dart' show readTuningRecord, tunedIniText, withMeasurement;
 import 'core_jobs.dart';
 import 'setup_checks.dart';
 import 'health_report.dart';
@@ -2231,6 +2231,36 @@ final class CoreService {
     RuntimeRecord rt,
     Map<String, dynamic> measured,
   ) {
+    // Refused (the card is in use, no llama-bench, …): the answer says why;
+    // nothing is changed or recorded.
+    if (measured['refused'] is String) {
+      return {
+        'refused': measured['refused'],
+        'item': rt.name,
+        'models': const [],
+        'skipped': const [],
+        'notes': [measured['refused']],
+      };
+    }
+    // The record (llm-tuning.json, owner only): each model is measured once
+    // per build, also when it was skipped or the change is undone.
+    final recordPath = p.join(identity.stateDir, 'llm-tuning.json');
+    try {
+      Posix().atomicWrite(
+        recordPath,
+        utf8.encode(
+          jsonEncode(
+            withMeasurement(
+              readTuningRecord(recordPath),
+              measured,
+              DateTime.now(),
+            ),
+          ),
+        ),
+      );
+    } on Object {
+      // Not kept: the models are measured again next time.
+    }
     final reader = ContextReader(reads.files, config);
     final before = config.read(reader.modelsIni);
     final rows = [
@@ -2239,7 +2269,7 @@ final class CoreService {
     ];
     var ini = before;
     for (final m in rows) {
-      ini = tunedIniText(ini, m, '${measured['mark']}');
+      ini = tunedIniText(ini, m);
     }
     final changes = <Change>[
       if (ini != before) Change(reader.modelsIni, before, ini),

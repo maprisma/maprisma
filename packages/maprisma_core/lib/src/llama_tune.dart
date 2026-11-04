@@ -11,11 +11,8 @@ import 'model_hub.dart' show boundedOutput;
 /// llama-bench tries three batch sizes with the model's KV cache and flash
 /// attention, the fastest prompt processing wins, and the context is what
 /// the card's video memory leaves after the measured use. Numbers and
-/// names only; nothing is written here (the core turns it into a preview).
-
-/// The marker line in a model's models.ini section: which build it was
-/// measured for. Undo of the change puts the old marker back too.
-const tunedMarker = '; maprisma tuned:';
+/// names only; nothing is written here (the core turns it into a preview
+/// and keeps the record, llm-tuning.json in the app's state folder).
 
 /// llama-bench's batch sizes tried, the batch, the prompt and generation
 /// lengths of a run, and the memory kept free for the desktop and growth.
@@ -23,14 +20,24 @@ const tuneUbatches = [512, 1024, 2048];
 const tuneBatch = 2048, tunePrompt = 2048, tuneGen = 64, tuneMemGen = 16;
 const tuneMargin = 512 * 1024 * 1024;
 
-/// What runs the llama-server service: its binary, environment, and kind.
+/// What runs the llama-server service: its binary, environment, kind and
+/// device lines. [script] marks a wrapper script read while the service was
+/// not running: the build it starts and its environment are not known.
 final class LlamaBuild {
-  LlamaBuild(this.binary, this.environment, this.kind, this.version);
-  final String binary, kind, version;
+  LlamaBuild(
+    this.binary,
+    this.environment,
+    this.kind,
+    this.version, {
+    this.devices = '',
+    this.script = false,
+  });
+  final String binary, kind, version, devices;
   final Map<String, String> environment;
+  final bool script;
 
-  /// The marker value: the binary's real folder (a "current" link moved to
-  /// a new build changes it) and its version.
+  /// The build's mark in llm-tuning.json: its kind, the binary's real
+  /// folder (a "current" link moved to a new build changes it) and version.
   String get mark {
     var folder = p.dirname(binary);
     try {
@@ -93,12 +100,13 @@ final class LlamaTuner {
     required this.home,
     required this.environment,
     this.sysfs = '/sys/class/drm',
+    this.proc = '/proc',
     TuneRun? run,
     Future<String?> Function(String url)? fetch,
     this.sample = const Duration(milliseconds: 200),
   }) : run = run ?? _run,
        fetch = fetch ?? _fetch;
-  final String home, sysfs;
+  final String home, sysfs, proc;
   final Map<String, String> environment;
   final TuneRun run;
   final Future<String?> Function(String url) fetch;
@@ -124,10 +132,13 @@ final class LlamaTuner {
     }
   }
 
-  /// The build the llama-server service runs (its ExecStart, Environment and
-  /// EnvironmentFiles), else llama-server on PATH; null when none is found.
+  /// The build the llama-server service runs: while it runs, the program
+  /// and environment of its main process (a wrapper script that execs the
+  /// real binary included); else its ExecStart (links resolved), Environment
+  /// and EnvironmentFiles, else llama-server on PATH; null when none is found.
   Future<LlamaBuild?> build() async {
     var binary = '';
+    var pid = 0;
     final env = {...environment};
     final (shown, _) = await run(
       [
@@ -135,7 +146,7 @@ final class LlamaTuner {
         '--user',
         'show',
         'llama-server',
-        '--property=ExecStart,Environment,EnvironmentFiles',
+        '--property=ExecStart,Environment,EnvironmentFiles,MainPID',
       ],
       environment,
       const Duration(seconds: 10),
@@ -143,6 +154,8 @@ final class LlamaTuner {
     for (final line in const LineSplitter().convert(shown)) {
       if (line.startsWith('ExecStart=')) {
         binary = RegExp(r'path=([^ ;]+)').firstMatch(line)?.group(1) ?? '';
+      } else if (line.startsWith('MainPID=')) {
+        pid = int.tryParse(line.substring('MainPID='.length).trim()) ?? 0;
       } else if (line.startsWith('EnvironmentFiles=')) {
         for (final file in RegExp(
           r'(/\S+) \(ignore_errors=\w+\)',
@@ -153,10 +166,25 @@ final class LlamaTuner {
         env.addAll(unitEnvironment(line.substring('Environment='.length)));
       }
     }
-    if (binary.isEmpty) {
-      binary = whichIn('llama-server', environment['PATH']) ?? '';
+    final running = pid > 0 ? _process(pid) : null;
+    var script = false;
+    if (running != null) {
+      binary = running.$1;
+      env
+        ..clear()
+        ..addAll(running.$2);
+    } else {
+      if (binary.isEmpty) {
+        binary = whichIn('llama-server', environment['PATH']) ?? '';
+      }
+      if (binary.isEmpty) return null;
+      try {
+        binary = File(binary).resolveSymbolicLinksSync();
+      } on FileSystemException {
+        return null;
+      }
+      script = _isScript(binary);
     }
-    if (binary.isEmpty) return null;
     final (devices, _) = await run(
       [binary, '--list-devices'],
       env,
@@ -182,7 +210,50 @@ final class LlamaTuner {
       env,
       first == null ? 'cpu' : first.group(1)!.toLowerCase(),
       version.isEmpty ? '' : 'b$version',
+      devices: [
+        for (final l in const LineSplitter().convert(devices))
+          if (RegExp(r'^\s+(ROCm|Vulkan|CUDA|Metal|SYCL|CPU)\d*:').hasMatch(l))
+            l.trim(),
+      ].join('\n'),
+      script: script,
     );
+  }
+
+  /// The running service's program and environment, when its main process
+  /// is a llama-server (a wrapper script that execs it counts).
+  (String, Map<String, String>)? _process(int pid) {
+    try {
+      var exe = Link('$proc/$pid/exe').targetSync();
+      if (exe.endsWith(' (deleted)')) return null; // replaced since it started
+      if (!p.basename(exe).startsWith('llama-server') ||
+          !File(exe).existsSync()) {
+        return null;
+      }
+      final environ = File('$proc/$pid/environ').readAsBytesSync();
+      final env = <String, String>{};
+      for (final entry
+          in utf8.decode(environ, allowMalformed: true).split('\x00')) {
+        final at = entry.indexOf('=');
+        if (at > 0) env[entry.substring(0, at)] = entry.substring(at + 1);
+      }
+      return (exe, env);
+    } on FileSystemException {
+      return null;
+    }
+  }
+
+  static bool _isScript(String path) {
+    try {
+      final file = File(path).openSync();
+      try {
+        final head = file.readSync(2);
+        return head.length == 2 && head[0] == 0x23 && head[1] == 0x21; // #!
+      } finally {
+        file.closeSync();
+      }
+    } on FileSystemException {
+      return false;
+    }
   }
 
   /// The card with the most video memory: (total, used) in bytes, or null.
@@ -207,18 +278,24 @@ final class LlamaTuner {
     return best;
   }
 
-  /// What holds the card now, or '' when it is free: a model loaded in the
-  /// llama.cpp router or in Ollama.
+  /// What holds the card now (the refusal's text), or '' when it is free: a
+  /// model loaded in the llama.cpp router or in Ollama.
   Future<String> busy(String address) async {
     final router = await fetch('http://$address/models');
     if (router != null && RegExp(r'"value"\s*:\s*"loaded"').hasMatch(router)) {
-      return 'a model is loaded in llama.cpp';
+      return 'The card is in use: a model is loaded in llama.cpp. Measure again when it is idle.';
     }
     final ollama = await fetch('http://127.0.0.1:11434/api/ps');
     if (ollama != null) {
-      final models = (jsonDecode(ollama) as Map?)?['models'];
+      Object? models;
+      try {
+        final data = jsonDecode(ollama);
+        models = data is Map ? data['models'] : null;
+      } on FormatException {
+        models = null; // not Ollama on that port
+      }
       if (models is List && models.isNotEmpty) {
-        return 'a model is loaded in Ollama';
+        return 'The card is in use: a model is loaded in Ollama. Measure again when it is idle.';
       }
     }
     return '';
@@ -236,6 +313,11 @@ final class LlamaTuner {
     if (built == null) {
       throw const FormatException('llama.cpp is not installed');
     }
+    if (built.script) {
+      throw const FormatException(
+        'llama.cpp is started by a script: start its service, then measure again',
+      );
+    }
     final bench = p.join(p.dirname(built.binary), 'llama-bench');
     if (!File(bench).existsSync()) {
       throw const FormatException(
@@ -243,11 +325,7 @@ final class LlamaTuner {
       );
     }
     final holder = await busy(address);
-    if (holder.isNotEmpty) {
-      throw FormatException(
-        'The card is in use ($holder); tune when it is idle',
-      );
-    }
+    if (holder.isNotEmpty) throw FormatException(holder);
     final measured = <Map<String, dynamic>>[];
     final skipped = <Map<String, dynamic>>[];
     for (final name in names) {
@@ -351,21 +429,26 @@ final class LlamaTuner {
       }
     }
     if (winner == 0) return {'name': name, 'reason': 'llama-bench failed'};
-    // Memory: one short run with the winner, the card's use sampled.
-    final before = card.$2;
+    // Memory: one short run with the winner, the card's use sampled from
+    // just before it.
+    final before = vram()?.$2 ?? card.$2;
     var peak = before;
     final timer = Timer.periodic(sample, (_) {
       final now = vram();
       if (now != null && now.$2 > peak) peak = now.$2;
     });
+    bool memDone;
     try {
-      await run(
+      (_, memDone) = await run(
         argv([winner], tuneMemGen, 1),
         built.environment,
         const Duration(minutes: 5),
       );
     } finally {
       timer.cancel();
+    }
+    if (!memDone) {
+      return {'name': name, 'reason': 'llama-bench did not finish'};
     }
     final now = vram();
     if (now != null && now.$2 > peak) peak = now.$2;
@@ -410,50 +493,65 @@ final class LlamaTuner {
 }
 
 /// models.ini with a measured model's section: ctx-size, the batch sizes,
-/// the KV cache and flash attention where nothing is set, and the marker.
-String tunedIniText(String old, Map<String, dynamic> m, String mark) {
+/// and the KV cache and flash attention where nothing is set.
+String tunedIniText(String old, Map<String, dynamic> m) {
   final name = m['name'] as String;
   var text = ContextReader.llamaSizedText(old, name, m['ctx'] as int);
   text = ContextReader.iniText(text, name, 'ubatch-size', '${m['ubatch']}');
-  text = ContextReader.iniText(text, name, 'batch-size', '${m['batch']}');
-  return markSection(text, name, '$tunedMarker $mark');
+  return ContextReader.iniText(text, name, 'batch-size', '${m['batch']}');
 }
 
-/// [text] with the marker line in [section] set to [line] (the section
-/// exists: tunedIniText made it).
-String markSection(String text, String section, String line) {
-  final lines = text.split('\n');
-  final start = lines.indexWhere(
-    (l) => RegExp('^\\s*\\[${RegExp.escape(section)}\\]\\s*\$').hasMatch(l),
-  );
-  if (start < 0) return text;
-  var end = lines.indexWhere((l) => RegExp(r'^\s*\[').hasMatch(l), start + 1);
-  if (end < 0) end = lines.length;
-  final at = lines
-      .sublist(start + 1, end)
-      .indexWhere((l) => l.startsWith(tunedMarker));
-  if (at >= 0) {
-    lines[start + 1 + at] = line;
-  } else {
-    lines.insert(start + 1, line);
-  }
-  return lines.join('\n');
-}
-
-/// The models of [names] whose section has no marker for [mark].
-List<String> untunedModels(String ini, List<String> names, String mark) {
-  final marks = <String, String>{};
-  String? section;
-  for (final line in ini.split('\n')) {
-    final head = RegExp(r'^\s*\[(.+)\]\s*$').firstMatch(line);
-    if (head != null) {
-      section = head.group(1);
-    } else if (section != null && line.startsWith(tunedMarker)) {
-      marks[section] = line.substring(tunedMarker.length).trim();
+/// llm-tuning.json in the app's state folder: each model's last
+/// measurement, `{"models": {name: {mark, build_path, version, kind, ctx,
+/// ubatch, pp, tg, date} or {mark, reason, date}}}`. Undo of the models.ini
+/// change keeps it: a model is measured once per build, also when skipped.
+Map<String, dynamic> readTuningRecord(String path) {
+  try {
+    final data = jsonDecode(File(path).readAsStringSync());
+    if (data is Map && data['models'] is Map) {
+      return Map<String, dynamic>.from(data);
     }
+  } on Object {
+    // none, or unreadable: nothing measured yet
   }
+  return {'models': <String, dynamic>{}};
+}
+
+/// [record] with [measured]'s models and skipped models added.
+Map<String, dynamic> withMeasurement(
+  Map<String, dynamic> record,
+  Map<String, dynamic> measured,
+  DateTime now,
+) {
+  final models = Map<String, dynamic>.from(record['models'] as Map? ?? {});
+  final common = {
+    'mark': measured['mark'],
+    'build_path': measured['build_path'],
+    'version': measured['version'],
+    'kind': measured['build'],
+    'date': now.toUtc().toIso8601String(),
+  };
+  for (final m in (measured['models'] as List? ?? const []).cast<Map>()) {
+    models['${m['name']}'] = {
+      ...common,
+      for (final k in const ['ctx', 'ubatch', 'pp', 'tg']) k: m[k],
+    };
+  }
+  for (final m in (measured['skipped'] as List? ?? const []).cast<Map>()) {
+    models['${m['name']}'] = {...common, 'reason': m['reason']};
+  }
+  return {'models': models};
+}
+
+/// The models of [names] with no record for the build [mark].
+List<String> untunedModels(
+  Map<String, dynamic> record,
+  List<String> names,
+  String mark,
+) {
+  final models = record['models'] as Map? ?? const {};
   return [
     for (final n in names)
-      if (marks[n] != mark) n,
+      if ((models[n] as Map?)?['mark'] != mark) n,
   ];
 }

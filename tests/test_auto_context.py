@@ -63,6 +63,15 @@ class AutoContextTest(unittest.TestCase):
         section = changes[0].new.split("[Qwen]", 1)[1]
         self.assertEqual(section.strip(), "ctx-size = 65536")                 # nothing chosen is overridden
 
+    def test_set_to_brings_q8_0_and_is_sized_for_it(self):
+        # Task 029 rule 2, the Performance view's "Set to": the same sizing as a worked-out context.
+        self.ini.write_text("version = 1\n\n[*]\nctx-size = 8192\n")
+        engine = provider_llamacpp.PROVIDER.engine
+        self.assertEqual(engine.context_now(self.llama, Path("/m"), "Qwen")[:2], (8192, "q8_0"))
+        section = engine.context_changes(self.llama, "Qwen", 65536)[0].new.split("[Qwen]", 1)[1]
+        for line in ("ctx-size = 65536", "cache-type-k = q8_0", "cache-type-v = q8_0", "flash-attn = on"):
+            self.assertIn(line, section)
+
     def test_a_context_already_set_is_kept(self):
         self.ini.write_text("[Qwen]\nctx-size = 32768\n")
         engine = provider_llamacpp.PROVIDER.engine

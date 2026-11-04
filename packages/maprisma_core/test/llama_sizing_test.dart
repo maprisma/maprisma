@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:maprisma_core/src/connect_apply.dart';
 import 'package:maprisma_core/src/context.dart';
 import 'package:maprisma_core/src/identity.dart';
+import 'package:maprisma_core/src/llm_tuning.dart';
 import 'package:maprisma_core/src/posix_ffi.dart';
 import 'package:maprisma_core/src/scan_files.dart';
 import 'package:test/test.dart';
@@ -63,4 +64,24 @@ void main() {
     );
     expect(chosen.split('[Qwen]')[1].trim(), 'ctx-size = 65536');
   });
+
+  test(
+    'Set to … brings q8_0 and flash attention like a worked-out context',
+    () {
+      ini('version = 1\n\n[*]\nctx-size = 8192\n');
+      final change = LlmTuning(
+        reader,
+        home.path,
+      ).contextChanges('llamacpp', 'Qwen', 65536).single;
+      final section = change.next.split('[Qwen]')[1];
+      for (final line in [
+        'ctx-size = 65536',
+        'cache-type-k = q8_0',
+        'cache-type-v = q8_0',
+        'flash-attn = on',
+      ]) {
+        expect(section, contains(line));
+      }
+    },
+  );
 }

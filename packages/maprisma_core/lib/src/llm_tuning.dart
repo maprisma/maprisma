@@ -227,7 +227,9 @@ final class LlmTuning {
       Change(
         context.modelsIni,
         before,
-        ContextReader.iniText(before, model, 'ctx-size', '$ctx'),
+        // As a context the app works out: q8_0 and flash attention where
+        // nothing is set (task 029, rule 2).
+        ContextReader.llamaSizedText(before, model, ctx),
       ),
     ];
   }
@@ -287,8 +289,14 @@ final class LlmTuning {
     String name,
   ) {
     if (rt.key == 'llamacpp') {
-      final (now, cache) = context.llamaSettings(name);
-      return (now, cache, context.llamaModelFile(folder, name));
+      // The context set now; what fits is sized for the KV cache Set to …
+      // writes: the one set, else q8_0 (task 029, rule 2).
+      final (now, _) = context.llamaSettings(name);
+      return (
+        now,
+        context.llamaAutoCache(name),
+        context.llamaModelFile(folder, name),
+      );
     }
     if (rt.key == 'ollama') {
       final env = context.readEnv(ollamaEnv);
@@ -307,6 +315,7 @@ final class LlmTuning {
     RuntimeRecord rt,
     Gpu gpu, {
     Future<String> Function()? llamaVersion,
+    (String, String)? llamaBuild,
   }) async {
     final engine = engineFacts(rt.key);
     final builds = [
@@ -315,7 +324,10 @@ final class LlmTuning {
     ];
     final stacks = stacksHere(path);
     var build = '', devices = '';
-    if (rt.key == 'llamacpp') {
+    if (rt.key == 'llamacpp' && llamaBuild != null) {
+      // The build the service runs, with its environment (task 029).
+      (build, devices) = llamaBuild;
+    } else if (rt.key == 'llamacpp') {
       final found = await llamaDevices(path);
       devices = found.$2;
       try {
