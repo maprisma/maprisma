@@ -105,7 +105,13 @@ void main() {
   testWidgets(
     'activity updates retain layout, tiles, sprite and static cache; visible changes thaw',
     (tester) async {
-      final graph = ValueNotifier(fixtureGraph(active: true));
+      // The agent's line to its model stays lit: a provider's "serves" line
+      // is not drawn, so it cannot keep the lights on.
+      final start = copy(fixtureGraph(active: true));
+      (start['edges'] as List).last
+        ..['active'] = true
+        ..['activity'] = 'agent';
+      final graph = ValueNotifier(start);
       final editor = ValueListenableBuilder<Map<String, dynamic>>(
         valueListenable: graph,
         builder: (_, g, _) =>

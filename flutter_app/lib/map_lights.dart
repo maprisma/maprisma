@@ -108,7 +108,7 @@ class MapLightTile extends ChangeNotifier {
 }
 
 class MapLightTiles {
-  MapLightTiles(this.layout, this.mode) {
+  MapLightTiles(this.layout, this.mode, {this.collaboration}) {
     // Avoid allocating an unbounded grid for a very large saved layout. Retry
     // with coarser tiles as soon as the budget is reached, before building UI.
     while (!_makeTiles()) {
@@ -129,10 +129,13 @@ class MapLightTiles {
   static const maxTiles = 4096;
   final MapLayout layout;
   String mode;
+  final bool? collaboration;
   List<MapCurve> get curves => layout.curves
       .where(
         (c) =>
             c.edge['active'] == true &&
+            (collaboration == null ||
+                (c.edge['collab'] == true) == collaboration) &&
             (mode == 'all' || c.edge['activity'] == 'agent'),
       )
       .toList();
@@ -228,12 +231,14 @@ class MapLightLayer extends StatefulWidget {
     required this.clock,
     required this.color,
     required this.mode,
+    this.collaboration,
     this.style = defaultMapLightStyle,
   });
   final MapLayout layout;
   final ValueListenable<double> clock;
   final Color color;
   final String mode;
+  final bool? collaboration;
   final MapLightStyle style;
   @override
   State<MapLightLayer> createState() => _MapLightLayerState();
@@ -250,8 +255,11 @@ class _MapLightLayerState extends State<MapLightLayer> {
   }
 
   void _create() {
-    _tiles = MapLightTiles(widget.layout, widget.mode)
-      ..update(widget.clock.value);
+    _tiles = MapLightTiles(
+      widget.layout,
+      widget.mode,
+      collaboration: widget.collaboration,
+    )..update(widget.clock.value);
     _makeSprite();
   }
 
@@ -275,7 +283,8 @@ class _MapLightLayerState extends State<MapLightLayer> {
       old.clock.removeListener(_frame);
       widget.clock.addListener(_frame);
     }
-    if (old.layout != widget.layout) {
+    if (old.layout != widget.layout ||
+        old.collaboration != widget.collaboration) {
       _tiles.dispose();
       _create();
     } else {

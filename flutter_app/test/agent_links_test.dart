@@ -24,6 +24,7 @@ void main() {
         'source': 'agent:claude',
         'target': 'agent:pi',
         'kind': agentLink,
+        'collab': true,
         'activity': 'agent',
         'active': false,
       },
@@ -34,6 +35,52 @@ void main() {
     );
     final plain = {..._graph(), 'activity': <String, dynamic>{}};
     expect(identical(withAgentLinks(plain), plain), isTrue);
+  });
+
+  test('called agents at every depth tint only their active paths', () {
+    final graph = {
+      'nodes': [
+        for (final id in ['claude', 'pi', 'codex'])
+          {'id': 'agent:$id', 'column': 1, 'kind': 'agent', 'label': id},
+        {'id': 'runtime:r', 'column': 2, 'kind': 'runtime', 'label': 'r'},
+      ],
+      'edges': [
+        for (final id in ['claude', 'pi', 'codex'])
+          {
+            'source': 'agent:$id',
+            'target': 'runtime:r',
+            'kind': 'uses',
+            'active': true,
+          },
+      ],
+      'activity': {
+        'claude': {
+          'working': true,
+          'uses': ['pi'],
+        },
+        'pi': {
+          'working': true,
+          'uses': ['codex'],
+        },
+        'codex': {'working': true, 'uses': <String>[]},
+      },
+    };
+    final edges = (withAgentLinks(graph)['edges'] as List).cast<Map>();
+    expect(edges.where((e) => e['kind'] == agentLink).length, 2);
+    expect(
+      edges
+          .where((e) => e['source'] == 'agent:claude' && e['kind'] == 'uses')
+          .single['collab'],
+      isNull,
+    );
+    for (final id in ['pi', 'codex']) {
+      expect(
+        edges
+            .where((e) => e['source'] == 'agent:$id' && e['kind'] == 'uses')
+            .single['collab'],
+        true,
+      );
+    }
   });
 
   test('the arrow bends to the right and cannot be picked or moved', () {

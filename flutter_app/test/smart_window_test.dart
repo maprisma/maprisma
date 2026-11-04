@@ -104,30 +104,74 @@ void main() {
       ),
     );
 
-    testWidgets('a category chip keeps the same window and is in Tab order', (
+    test(
+      'a prompt prefix selects its category and is removed before sending',
+      () {
+        expect(
+          smartPromptRequest('Models: Find a small model', 'agents', (s) => s),
+          (column: 'models', request: 'Find a small model'),
+        );
+        expect(smartPromptRequest('MCP: Find a server', 'agents', (s) => s), (
+          column: 'mcp',
+          request: 'Find a server',
+        ));
+        expect(smartPromptRequest('Help me', 'agents', (s) => s), (
+          column: 'agents',
+          request: 'Help me',
+        ));
+      },
+    );
+
+    testWidgets('an example fills the prompt and keeps the same window', (
       tester,
     ) async {
       final changes = <String>[];
       await tester.pumpWidget(central(null, changes));
       await tester.pumpAndSettle();
       final window = tester.state(find.byType(OverlayWindow));
-      await tester.tap(find.byKey(const ValueKey('smart-category-models')));
+      expect(
+        find.byKey(const ValueKey('smart-prompt-examples')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('smart-category-models')), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('smart-example-0')));
       await tester.pumpAndSettle();
-      expect(find.text('Ask AI · Models'), findsOneWidget);
+      expect(find.text('Ask AI · MCP servers and skills'), findsOneWidget);
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller?.text,
+        'MCP servers and skills: Find an MCP server for my notes',
+      );
       expect(tester.state(find.byType(OverlayWindow)), same(window));
       expect(find.byKey(const ValueKey('smart-card')), findsOneWidget);
-      expect(changes, ['models']);
+      expect(changes, ['mcp']);
+    });
 
-      var reached = false;
-      for (var i = 0; i < 20 && !reached; i++) {
-        await tester.sendKeyEvent(LogicalKeyboardKey.tab);
-        await tester.pump();
-        reached =
-            tester.binding.focusManager.primaryFocus?.context
-                ?.findAncestorWidgetOfExactType<ChoiceChip>() !=
-            null;
-      }
-      expect(reached, isTrue);
+    testWidgets('an example sends only its question after Ask', (tester) async {
+      final sent = <Map<String, dynamic>>[];
+      final client = CoreClient(
+        _FakeTransport((method, params) async {
+          if (method == 'map.smart_ask') {
+            sent.add(params);
+            return {'task': 'ask'};
+          }
+          return {
+            'state': 'done',
+            'result': {
+              'status': 'redirect',
+              'instead': {'hint': 'Nothing to change.'},
+            },
+          };
+        }),
+      );
+      await tester.pumpWidget(central(client, []));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('smart-example-0')));
+      await tester.pumpAndSettle();
+      expect(sent, isEmpty);
+      await tester.tap(find.widgetWithText(FilledButton, 'Ask'));
+      await tester.pumpAndSettle();
+      expect(sent.single['column'], 'mcp');
+      expect(sent.single['request'], 'Find an MCP server for my notes');
     });
 
     testWidgets(
@@ -167,7 +211,7 @@ void main() {
         expect(find.text('Ask AI · Models'), findsOneWidget);
         expect(
           tester.widget<TextField>(find.byType(TextField)).controller?.text,
-          'install qwencoder',
+          'Models: install qwencoder',
         );
         expect(changes.last, 'models');
         expect(calls, isEmpty); // nothing is asked again by itself

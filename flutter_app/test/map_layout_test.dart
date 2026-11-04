@@ -1,7 +1,7 @@
 import 'dart:ui';
 
 import 'package:maprisma/map_layout.dart';
-import 'package:flutter/material.dart' show ColorScheme;
+import 'package:flutter/material.dart' show ColorScheme, HSLColor;
 import 'package:flutter_test/flutter_test.dart';
 
 Map<String, dynamic> fixtureGraph({bool active = false}) => {
@@ -141,6 +141,44 @@ void main() {
     expect(l.hookAt(curve.hook, {'agent:a'}), curve);
     expect(l.hookAt(curve.hook, {}), isNull);
     expect(l.nodeAt(l.boxes['agent:a']!.center), 'agent:a');
+  });
+  test('provider model availability is retained without a drawn line', () {
+    final layout = MapLayout(fixtureGraph(), {});
+    expect(
+      layout.allEdges.where((edge) => edge['kind'] == 'serves'),
+      isNotEmpty,
+    );
+    expect(
+      layout.curves.where((curve) => curve.edge['kind'] == 'serves'),
+      isEmpty,
+    );
+    expect(layout.providerFor('model:r:m'), 'runtime:r');
+    expect(layout.targetOk('agent:a', 'model:r:n'), true);
+  });
+  test('collaboration lines never take the error colour', () {
+    double apart(Color a, Color b) {
+      final d = (HSLColor.fromColor(a).hue - HSLColor.fromColor(b).hue).abs();
+      return d > 180 ? 360 - d : d;
+    }
+
+    // Tokyo Night, Catppuccin, Kanagawa (blue), Material purple, Gruvbox.
+    for (final primary in const [
+      Color(0xFF7AA2F7),
+      Color(0xFF89B4FA),
+      Color(0xFF7E9CD8),
+      Color(0xFF6750A4),
+      Color(0xFFD79921),
+    ]) {
+      for (final brightness in Brightness.values) {
+        final colors = ColorScheme.fromSeed(
+          seedColor: primary,
+          brightness: brightness,
+        ).copyWith(primary: primary);
+        final collab = mapCollaborationColor(colors);
+        expect(apart(collab, colors.error), greaterThanOrEqualTo(45));
+        expect(apart(collab, primary), greaterThanOrEqualTo(45));
+      }
+    }
   });
   test('folding does not change connection semantics', () {
     final l = MapLayout(fixtureGraph(), {

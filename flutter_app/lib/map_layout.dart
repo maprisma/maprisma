@@ -1,6 +1,8 @@
 import 'dart:math' as math;
+
 import 'package:flutter/material.dart' show ColorScheme;
 import 'package:flutter/painting.dart';
+
 import 'map_snapshot.dart';
 
 /// The saved layout's names for the four columns, in order.
@@ -23,6 +25,31 @@ Color? mapColor(String? value, ColorScheme colors) {
   }
   final number = int.tryParse(value?.replaceFirst('#', '') ?? '', radix: 16);
   return number == null ? null : Color(0xFF000000 | number);
+}
+
+/// Keep collaboration paths distinct from the theme's normal active paths.
+/// The hue stays well away from the error colour, which is reserved for broken
+/// connections: with a blue primary a fixed offset would land on red.
+Color mapCollaborationColor(ColorScheme colors) {
+  final primary = HSLColor.fromColor(colors.primary);
+  final error = HSLColor.fromColor(colors.error).hue;
+  double apart(double a, double b) {
+    final d = (a - b).abs() % 360;
+    return math.min(d, 360 - d);
+  }
+
+  var hue = (primary.hue + 145) % 360;
+  for (final offset in const [145.0, 180.0, -145.0, 110.0, -110.0]) {
+    final candidate = (primary.hue + offset) % 360;
+    if (apart(candidate, error) >= 45) {
+      hue = candidate;
+      break;
+    }
+  }
+  return primary
+      .withHue(hue)
+      .withSaturation(math.max(primary.saturation, .65))
+      .toColor();
 }
 
 /// Which line a colour of Settings › Map is for.
@@ -49,6 +76,22 @@ Map<String, dynamic> withAgentLinks(Map<String, dynamic> graph) {
   final nodes = {
     for (final n in (graph['nodes'] as List? ?? const []).cast<Map>()) n['id'],
   };
+  final called = <String>{};
+  void visit(String command, Set<String> path) {
+    if (!path.add(command)) return;
+    for (final used
+        in ((activity[command] as Map?)?['uses'] as List? ?? const [])) {
+      if (nodes.contains('agent:$used')) {
+        called.add('$used');
+        visit('$used', path);
+      }
+    }
+    path.remove(command);
+  }
+
+  for (final command in activity.keys) {
+    visit('$command', <String>{});
+  }
   final links = <Map<String, dynamic>>[
     for (final e in activity.entries)
       for (final used in ((e.value as Map?)?['uses'] as List? ?? const []))
@@ -57,6 +100,7 @@ Map<String, dynamic> withAgentLinks(Map<String, dynamic> graph) {
             'source': 'agent:${e.key}',
             'target': 'agent:$used',
             'kind': agentLink,
+            'collab': true,
             'activity': 'agent',
             'active':
                 (e.value as Map)['working'] == true ||
@@ -66,7 +110,17 @@ Map<String, dynamic> withAgentLinks(Map<String, dynamic> graph) {
   if (links.isEmpty) return graph;
   return {
     ...graph,
-    'edges': [...(graph['edges'] as List? ?? const []), ...links],
+    'edges': [
+      for (final e in graph['edges'] as List? ?? const [])
+        if (e is Map &&
+            '${e['source']}'.startsWith('agent:') &&
+            called.contains('${e['source']}'.substring(6)) &&
+            e['active'] == true)
+          {...e, 'collab': true}
+        else
+          e,
+      ...links,
+    ],
   };
 }
 
@@ -287,6 +341,9 @@ class MapLayout {
       (graph['edges'] as List? ?? []).cast<Map<String, dynamic>>(),
     );
     for (final e in allEdges) {
+      // "serves" describes a model present in a provider's catalog or folder.
+      // It is not a configured connection and must not be drawn as one.
+      if (e['kind'] == 'serves') continue;
       final a = boxes[e['source']], b = boxes[e['target']];
       if (a == null || b == null) continue;
       if (e['kind'] == agentLink) {
@@ -423,17 +480,15 @@ class MapLayout {
       .firstOrNull;
   bool movable(Map<String, dynamic> edge) =>
       '${edge['fixed'] ?? ''}'.isEmpty &&
-          nodes[edge['source']]?['kind'] == 'agent' &&
-          [
-            'uses',
-            'available',
-            'mcp',
-            'skills',
-            'failed',
-            'default',
-          ].contains(edge['kind']) ||
-      ['runtime', 'cloud'].contains(nodes[edge['source']]?['kind']) &&
-          edge['kind'] == 'serves';
+      nodes[edge['source']]?['kind'] == 'agent' &&
+      [
+        'uses',
+        'available',
+        'mcp',
+        'skills',
+        'failed',
+        'default',
+      ].contains(edge['kind']);
   String? providerFor(String model) => allEdges
       .where((e) => e['kind'] == 'serves' && e['target'] == model)
       .map((e) => e['source'] as String)

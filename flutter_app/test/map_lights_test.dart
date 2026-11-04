@@ -74,6 +74,17 @@ void main() {
     expect(tiles.tileSize, 64);
     tiles.dispose();
   });
+  test('collaboration lights follow only collaboration paths', () {
+    final graph = fixtureGraph(active: true);
+    (graph['edges'] as List).first['collab'] = true;
+    final layout = MapLayout(graph, {});
+    final ordinary = MapLightTiles(layout, 'all', collaboration: false);
+    final collaborative = MapLightTiles(layout, 'all', collaboration: true);
+    expect(collaborative.curves, hasLength(1));
+    expect(ordinary.curves, isEmpty);
+    ordinary.dispose();
+    collaborative.dispose();
+  });
   test(
     'tiles remain bounded for distant nodes and filter agent-only activity',
     () {

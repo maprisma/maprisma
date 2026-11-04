@@ -545,7 +545,8 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
 
   String tr(String key) => _strings[key] ?? key;
 
-  void _actionFailed() {
+  /// [error] gives the service's reason when it sent one.
+  void _actionFailed([Object? error]) {
     if (!mounted) return;
     setState(() {
       _busy = false;
@@ -553,7 +554,15 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     });
     ScaffoldMessenger.of(
       _navigator.currentContext!,
-    ).showSnackBar(SnackBar(content: Text(failureText(tr))));
+    ).showSnackBar(SnackBar(content: Text(failureText(tr, error))));
+  }
+
+  /// A short note at the bottom, in place of a dialog.
+  void _mapNote(String text) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(_navigator.currentContext!)
+      ..clearSnackBars()
+      ..showSnackBar(SnackBar(content: Text(text)));
   }
 
   /// Settings › What may be done: saved as it changes.
@@ -1964,6 +1973,16 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
             'status': step == 'stop' ? 'running' : 'stopped',
           }),
         );
+      case 'performance':
+        final runtime = (_providers['local'] as List? ?? const [])
+            .cast<Map>()
+            .where((r) => r['key'] == key)
+            .firstOrNull;
+        if (runtime != null) {
+          unawaited(_performance(Map<String, dynamic>.from(runtime)));
+        } else {
+          _actionFailed();
+        }
       default:
         _actionFailed();
     }
@@ -3697,10 +3716,13 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       if (mounted) setState(() => _busy = false);
       if (!chosen) return;
       if (repair) {
-        return _connectionPreview({
-          'agent': edge['source'],
-          'target': edge['target'],
-        }, method: 'connections.repair_preview');
+        return _connectionPreview(
+          {'agent': edge['source'], 'target': edge['target']},
+          method: 'connections.repair_preview',
+          mapDraw: true,
+          mapLine:
+              '${nodes[edge['source']]?['label']} → ${nodes[edge['target']]?['label']}',
+        );
       }
       // Disconnect was the answer: no second question.
       setState(() => _card = null);
@@ -3729,6 +3751,8 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
               ? '${source['label']} → ${old['label']}'
               : null,
           confirmed: confirmed,
+          mapDraw: true,
+          mapLine: '${source['label']} → ${target?['label'] ?? old['label']}',
         );
         return;
       }
@@ -3755,6 +3779,8 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
             ? '${source['label']} → ${old?['label'] ?? edge['target']}'
             : null,
         confirmed: confirmed,
+        mapDraw: true,
+        mapLine: '${source['label']} → ${target?['label'] ?? old?['label']}',
       );
       return;
     }
@@ -3819,11 +3845,16 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         if (mounted) setState(() => _busy = false);
         if (!chosen) return;
       }
-      await _connectionPreview({
-        'provider': provider['source'],
-        'model': item['id'],
-        'agents': selected.toList(),
-      }, method: 'models.attach_preview');
+      await _connectionPreview(
+        {
+          'provider': provider['source'],
+          'model': item['id'],
+          'agents': selected.toList(),
+        },
+        method: 'models.attach_preview',
+        mapDraw: true,
+        mapLine: '${agent?['label'] ?? provider['source']} → ${item['label']}',
+      );
       return;
     }
     if (agent == null) return;
@@ -3834,16 +3865,20 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     }
     final kind = item['kind'] == 'runtime' ? 'provider' : item['kind'];
     if (!['provider', 'mcp', 'skills'].contains(kind)) return;
-    await _connectionPreview({
-      'kind': kind,
-      'command': command,
-      'item': (item['id'] as String).substring(
-        (item['kind'] as String).length + 1,
-      ),
-      'remove': false,
-      if (kind == 'provider') 'model': '',
-      if (kind == 'provider') 'use_now': false,
-    });
+    await _connectionPreview(
+      {
+        'kind': kind,
+        'command': command,
+        'item': (item['id'] as String).substring(
+          (item['kind'] as String).length + 1,
+        ),
+        'remove': false,
+        if (kind == 'provider') 'model': '',
+        if (kind == 'provider') 'use_now': false,
+      },
+      mapDraw: true,
+      mapLine: '${agent['label']} → ${item['label']}',
+    );
   }
 
   Future<void> _connectionPreview(
@@ -3852,6 +3887,8 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     String? method,
     String? plainDisconnect,
     bool confirmed = false,
+    bool mapDraw = false,
+    String? mapLine,
     Map<String, dynamic>? ready,
   }) async {
     setState(() => _busy = true);
@@ -3886,8 +3923,30 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
           plainDisconnect != null &&
           plan['empty'] != true &&
           (plan['notes'] as List? ?? const []).isEmpty &&
-          (plan['contexts'] as List? ?? const []).isEmpty;
-      final apply = quiet
+          (plan['contexts'] as List? ?? const []).isEmpty &&
+          (plan['model_actions'] as List? ?? const []).isEmpty;
+      final compact =
+          mapDraw &&
+          plan['empty'] != true &&
+          (plan['notes'] as List? ?? const []).isEmpty &&
+          (plan['contexts'] as List? ?? const []).isEmpty &&
+          (plan['model_actions'] as List? ?? const []).isEmpty;
+      if (mapDraw && plan['empty'] == true) {
+        _mapNote(tr('No changes to apply'));
+        return;
+      }
+      final verb = method == 'connections.repair_preview'
+          ? 'Repair'
+          : params['remove'] == true ||
+                params['new'] == null && params['old'] != null
+          ? 'Disconnect'
+          : 'Connect';
+      final apply = compact
+          ? confirmed ||
+                (plainDisconnect != null
+                    ? await _askDisconnect(plainDisconnect, plan)
+                    : await _askMapChange(tr(verb), mapLine ?? ''))
+          : quiet
           ? confirmed || await _askDisconnect(plainDisconnect, plan)
           : await _cardReview(
               tr('Preview'),
@@ -3904,7 +3963,12 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
           plan: plan['plan'] as String,
         );
         final queued = result['task'] != null;
-        if (queued && mounted) {
+        if (compact && queued) {
+          result = await _awaitMapTask(result);
+          _mapStale = true;
+          _connectionUndo = result['undo'] as String?;
+          await _refresh(refreshMap: true);
+        } else if (queued && mounted) {
           final finished = await _runTask(
             operation: 'connections.apply',
             params: const {},
@@ -3918,10 +3982,22 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         if (!queued) {
           _connectionUndo = result['undo'] as String?;
           await _refresh(refreshMap: true);
-          if (!quiet) _taskResult(tr('Apply'), result);
+          if (!quiet && !compact) _taskResult(tr('Apply'), result);
         }
-        if (quiet && mounted) _appliedMessage();
-        applied = true;
+        if (compact && mounted) {
+          // Routine: a short note with Undo, or what went wrong.
+          applied = result['ok'] != false;
+          if (applied) {
+            _appliedMessage();
+          } else {
+            _mapNote(failureText(tr));
+          }
+        } else if (quiet && mounted) {
+          _appliedMessage();
+          applied = true;
+        } else {
+          applied = true;
+        }
         if ((result['context_failures'] as num? ?? 0) > 0 && mounted) {
           ScaffoldMessenger.of(_navigator.currentContext!).showSnackBar(
             SnackBar(
@@ -3934,8 +4010,8 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
           );
         }
       }
-    } catch (_) {
-      _actionFailed();
+    } catch (error) {
+      _actionFailed(error);
     } finally {
       if (mounted) {
         setState(() {
@@ -4054,6 +4130,53 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       ),
     );
     return yes == true;
+  }
+
+  Future<bool> _askMapChange(String title, String line) async =>
+      await _review(
+        () => showDialog<bool>(
+          context: _navigator.currentContext!,
+          builder: (context) => AlertDialog(
+            key: const ValueKey('map-change-dialog'),
+            title: Text(title),
+            content: Text(line),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text(tr('Cancel')),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: Text(tr('Apply')),
+              ),
+            ],
+          ),
+        ),
+      ) ==
+      true;
+
+  Future<Map<String, dynamic>> _awaitMapTask(
+    Map<String, dynamic> started,
+  ) async {
+    final pending = showDialog<void>(
+      context: _navigator.currentContext!,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Text(tr('Apply')),
+        content: const SizedBox(
+          height: 48,
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      ),
+    );
+    try {
+      return await _awaitTask('connections.apply', started);
+    } finally {
+      if (mounted) {
+        Navigator.of(_navigator.currentContext!, rootNavigator: true).pop();
+      }
+      await pending;
+    }
   }
 
   /// As after a drawn line: what the LLM could not do, and its slots.

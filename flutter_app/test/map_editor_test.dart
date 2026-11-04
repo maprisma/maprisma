@@ -635,6 +635,56 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+  testWidgets('a refused drop says why in a short note', (tester) async {
+    final edits = <Map<String, dynamic>>[];
+    await mount(tester, edits: edits);
+    // agent:b has no line to runtime:r, which serves model:r:n.
+    await tester.dragFrom(
+      tester.getCenter(find.text('agent:b')),
+      tester.getCenter(find.text('model:r:n')) -
+          tester.getCenter(find.text('agent:b')),
+    );
+    await tester.pump();
+    expect(edits, isEmpty);
+    expect(
+      find.text('Connect agent:b to runtime:r first, then choose this model.'),
+      findsOneWidget,
+    );
+    // Two agents cannot be joined by a line.
+    await tester.dragFrom(
+      tester.getCenter(find.text('agent:a')),
+      tester.getCenter(find.text('agent:b')) -
+          tester.getCenter(find.text('agent:a')),
+    );
+    await tester.pump();
+    expect(edits, isEmpty);
+    expect(find.text('These two boxes cannot be connected.'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('a missing model does not ask for an existing provider link', (
+    tester,
+  ) async {
+    final edits = <Map<String, dynamic>>[];
+    final graph = fixtureGraph();
+    final model = (graph['nodes'] as List)
+        .cast<Map<String, dynamic>>()
+        .where((node) => node['id'] == 'model:r:m')
+        .single;
+    model['status'] = 'missing';
+    await mount(tester, edits: edits, graph: graph);
+    await tester.dragFrom(
+      tester.getCenter(find.text('agent:a')),
+      tester.getCenter(find.text('model:r:m')) -
+          tester.getCenter(find.text('agent:a')),
+    );
+    await tester.pump();
+    expect(edits, isEmpty);
+    expect(find.text('This model is no longer on this PC.'), findsOneWidget);
+    expect(
+      find.text('Connect agent:a to runtime:r first, then choose this model.'),
+      findsNothing,
+    );
+  });
   test('the column counts what is on, not what only stays known', () {
     final groups = MapGroup.fromGraph(
       {
@@ -668,6 +718,43 @@ void main() {
     expect(layouts.last['used_only'], isEmpty);
   });
 
+  testWidgets('moving a model line onto a missing model says it is gone', (
+    tester,
+  ) async {
+    final edits = <Map<String, dynamic>>[];
+    final graph = fixtureGraph();
+    (graph['nodes'] as List).cast<Map<String, dynamic>>().singleWhere(
+      (node) => node['id'] == 'model:r:n',
+    )['status'] = 'missing';
+    await mount(tester, edits: edits, graph: graph);
+    await tester.tap(find.text('agent:a'));
+    await tester.pumpAndSettle();
+    // agent:a's line to model:r:m: the hook nearest that model.
+    final model = tester.getCenter(find.text('model:r:m'));
+    final hook =
+        find
+            .byTooltip(
+              'Move this connection to another compatible box, or to empty space to disconnect.',
+            )
+            .evaluate()
+            .map((e) => tester.getCenter(find.byWidget(e.widget)))
+            .toList()
+          ..sort(
+            (a, b) => (a - model).distance.compareTo((b - model).distance),
+          );
+    await tester.dragFrom(
+      hook.first,
+      tester.getCenter(find.text('model:r:n')) - hook.first,
+    );
+    await tester.pump();
+    expect(edits, isEmpty);
+    expect(find.text('This model is no longer on this PC.'), findsOneWidget);
+    expect(
+      find.text('Only a model from runtime:r can replace this one.'),
+      findsNothing,
+    );
+    expect(tester.takeException(), isNull);
+  });
   testWidgets('a line that is not ours has no hook and says why', (
     tester,
   ) async {

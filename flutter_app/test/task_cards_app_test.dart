@@ -914,7 +914,7 @@ void main() {
     },
   );
   testWidgets(
-    'map drag opens review, Cancel has no apply, Apply and Undo restore connection',
+    'a simple drawn line asks in a small dialog; Cancel has no apply, Apply shows a note with Undo',
     (tester) async {
       final dir = await mountApp(tester);
       Future<void> draw() async {
@@ -925,18 +925,34 @@ void main() {
       }
 
       await draw();
-      expect(find.byType(ConnectionReview), findsOneWidget);
-      await tester.tap(find.text('Cancel'));
+      final dialog = find.byKey(const ValueKey('map-change-dialog'));
+      expect(dialog, findsOneWidget);
+      expect(find.byType(ConnectionReview), findsNothing);
+      expect(
+        find.descendant(
+          of: dialog,
+          matching: find.text('Test agent → Known server'),
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(
+        find.descendant(of: dialog, matching: find.text('Cancel')),
+      );
       await settleService(tester);
       expect(
         requests(dir).where((q) => q['method'] == 'connections.apply'),
         isEmpty,
       );
       await draw();
-      await tester.tap(find.text('Apply'));
+      await tester.tap(
+        find.descendant(of: dialog, matching: find.text('Apply')),
+      );
       await settleService(tester);
-      expect(find.text('Undo'), findsOneWidget);
-      await tester.tap(find.text('Undo'));
+      expect(dialog, findsNothing);
+      expect(find.text('Succeeded'), findsOneWidget);
+      final undo = find.widgetWithText(SnackBarAction, 'Undo');
+      expect(undo, findsOneWidget);
+      await tester.tap(undo);
       await settleService(tester);
       expect(
         requests(dir).where((q) => q['method'] == 'connections.undo').length,
@@ -954,9 +970,12 @@ void main() {
         to = tester.getCenter(find.text('Known server'));
     await tester.dragFrom(from, to - from);
     await settleService(tester);
-    await tester.tap(find.text('Apply'));
-    await settleService(tester);
-    await tester.tap(find.byKey(const ValueKey('task-back')).last);
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(const ValueKey('map-change-dialog')),
+        matching: find.text('Apply'),
+      ),
+    );
     await settleService(tester);
     await tester.tap(find.text('Test agent'));
     await tester.pumpAndSettle();
@@ -2306,7 +2325,7 @@ void main() {
   });
 
   testWidgets(
-    'the header Ask AI button opens the centralized Ask AI page with category proposal buttons',
+    'the header Ask AI button opens examples that fill categorized prompts',
     (tester) async {
       await mountApp(
         tester,
@@ -2317,17 +2336,38 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('ask-ai-open')));
       await settleService(tester);
       expect(find.byType(OverlayWindow), findsOneWidget);
-      for (final (col, title, hint) in const [
-        ('mcp', 'MCP servers and skills', 'Find an MCP server or skill…'),
-        ('agents', 'Agents', 'Set up or connect an agent…'),
-        ('providers', 'Providers', 'Set up or tune a provider…'),
-        ('models', 'Models', 'Find or connect a model…'),
+      final examples = find.descendant(
+        of: find.byKey(const ValueKey('smart-prompt-examples')),
+        matching: find.byType(Scrollable),
+      );
+      for (final (index, title, text) in const [
+        (0, 'MCP servers and skills', 'Find an MCP server for my notes'),
+        (2, 'Agents', 'Which agents need sign-in?'),
+        (4, 'Providers', 'Why is my local LLM slow?'),
+        (6, 'Models', 'Find a model that fits my PC'),
       ]) {
-        await tester.tap(find.byKey(ValueKey('smart-category-$col')));
+        await tester.scrollUntilVisible(
+          find.byKey(ValueKey('smart-example-$index')),
+          100,
+          scrollable: examples,
+        );
+        await tester.tap(find.byKey(ValueKey('smart-example-$index')));
         await settleService(tester);
         expect(find.text('Ask AI · $title'), findsOneWidget);
-        expect(find.text(hint), findsOneWidget);
+        expect(
+          tester
+              .widget<TextField>(
+                find.descendant(
+                  of: find.byKey(const ValueKey('smart-card')),
+                  matching: find.byType(TextField),
+                ),
+              )
+              .controller
+              ?.text,
+          '$title: $text',
+        );
       }
+      expect(find.byKey(const ValueKey('smart-category-models')), findsNothing);
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       await settleService(tester);
       expect(find.byType(OverlayWindow), findsNothing);
@@ -2351,7 +2391,18 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('ask-ai-open')));
       await settleService(tester);
       final window = tester.state(find.byType(OverlayWindow));
-      await tester.tap(find.byKey(const ValueKey('smart-category-models')));
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('smart-example-6')),
+        100,
+        scrollable: find.descendant(
+          of: find.byKey(const ValueKey('smart-prompt-examples')),
+          matching: find.byType(Scrollable),
+        ),
+      );
+      // The examples scroll inside the window, which scrolls too.
+      await tester.ensureVisible(find.byKey(const ValueKey('smart-example-6')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('smart-example-6')));
       await settleService(tester);
       expect(find.text('Ask AI · Models'), findsOneWidget);
       expect(tester.state(find.byType(OverlayWindow)), same(window));

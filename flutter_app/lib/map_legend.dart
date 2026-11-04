@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'map_groups.dart' show AgentBadge;
+import 'map_layout.dart' show mapCollaborationColor;
 
 /// What the marks on the map mean (the ⓘ in the header).
 class MapLegendButton extends StatelessWidget {
@@ -98,6 +99,10 @@ class MapLegend extends StatelessWidget {
               _row(
                 _line(colors.primary, 2),
                 'A connection. Moving lights show it is in use.',
+              ),
+              _row(
+                _line(mapCollaborationColor(colors), 3),
+                "Agents working together: the arrow points from the agent that hands out work to the agent it uses (e.g. Claude Code asking Codex). While they work, the used agent's lines take this colour and light flows; afterwards the arrow stays dim.",
               ),
               _row(
                 _line(colors.outlineVariant, 1),

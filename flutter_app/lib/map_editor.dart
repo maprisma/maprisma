@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/gestures.dart' show GestureBinding, PointerScrollEvent;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
 import 'core_client.g.dart';
 import 'map_groups.dart';
 import 'map_layout.dart';
@@ -496,6 +497,14 @@ class _MapEditorState extends State<MapEditor>
       return;
     }
     if (target != null && !layout.targetOk(source, target, moving: moving)) {
+      final why = target == source || target == moving?['target']
+          ? null
+          : _whyNot(layout, source, target, moving);
+      if (why != null) {
+        ScaffoldMessenger.of(context)
+          ..clearSnackBars()
+          ..showSnackBar(SnackBar(content: Text(why)));
+      }
       _cancel();
       return;
     }
@@ -503,6 +512,70 @@ class _MapEditorState extends State<MapEditor>
     if (target != null || moving != null) {
       widget.onEdit({'source': source, 'target': target, 'edge': ?moving});
     }
+  }
+
+  /// Why a drop was refused, in words a newcomer can act on.
+  String _whyNot(
+    MapLayout layout,
+    String source,
+    String target,
+    Map<String, dynamic>? moving,
+  ) {
+    String label(String? id) => '${layout.nodes[id]?['label'] ?? id ?? ''}';
+    String kind(String? id) => '${layout.nodes[id]?['kind'] ?? ''}';
+    String fill(String key, List<String> args) {
+      var text = widget.tr(key);
+      for (final (i, a) in args.indexed) {
+        text = text.replaceAll('{$i}', a);
+      }
+      return text;
+    }
+
+    // A box that is gone says so, whatever line was dropped on it.
+    if (kind(target) == 'model' &&
+        layout.nodes[target]?['status'] == 'missing') {
+      return widget.tr('This model is no longer on this PC.');
+    }
+    final old = moving?['target'] as String?;
+    if (old != null && kind(old) == 'model') {
+      final provider = layout.providerFor(old);
+      if (provider != null) {
+        return fill('Only a model from {0} can replace this one.', [
+          label(provider),
+        ]);
+      }
+    }
+    if (moving != null) {
+      return widget.tr(
+        'To change this connection, drop it on empty space, then draw the new one.',
+      );
+    }
+    final model = kind(source) == 'model'
+        ? source
+        : kind(target) == 'model'
+        ? target
+        : null;
+    final agent = kind(source) == 'agent'
+        ? source
+        : kind(target) == 'agent'
+        ? target
+        : null;
+    if (model != null) {
+      if (layout.nodes[model]?['status'] == 'missing') {
+        return widget.tr('This model is no longer on this PC.');
+      }
+      final provider = layout.providerFor(model);
+      if (agent != null &&
+          provider != null &&
+          !layout.connected(agent, provider)) {
+        return fill('Connect {0} to {1} first, then choose this model.', [
+          label(agent),
+          label(provider),
+        ]);
+      }
+      return widget.tr('This model cannot be connected here.');
+    }
+    return widget.tr('These two boxes cannot be connected.');
   }
 
   void _choose(String id) {
@@ -647,6 +720,8 @@ class _MapEditorState extends State<MapEditor>
     final command = id.startsWith('agent:') ? id.substring(6) : '';
     final activity = (widget.graph['activity'] as Map?)?[command] as Map?;
     final children = activity?['children'] as List? ?? [];
+    final activeSubagents =
+        (activity?['active_subagents'] as num?)?.toInt() ?? 0;
     final hasSubagents =
         node['kind'] == 'agent' &&
         widget.onSubagents != null &&
@@ -922,16 +997,29 @@ class _MapEditorState extends State<MapEditor>
                                                     mainAxisSize:
                                                         MainAxisSize.min,
                                                     children: [
-                                                      const Icon(
+                                                      Icon(
                                                         Icons
                                                             .account_tree_outlined,
                                                         size: 14,
+                                                        color:
+                                                            activeSubagents > 0
+                                                            ? mapCollaborationColor(
+                                                                colors,
+                                                              )
+                                                            : colors.outline,
                                                       ),
                                                       const SizedBox(width: 2),
                                                       Text(
                                                         '${children.length}',
-                                                        style: const TextStyle(
+                                                        style: TextStyle(
                                                           fontSize: 11,
+                                                          color:
+                                                              activeSubagents >
+                                                                  0
+                                                              ? mapCollaborationColor(
+                                                                  colors,
+                                                                )
+                                                              : colors.outline,
                                                         ),
                                                       ),
                                                     ],
@@ -1135,6 +1223,10 @@ class _MapEditorState extends State<MapEditor>
               c.edge['active'] == true &&
               (widget.animate == 'all' || c.edge['activity'] == 'agent'),
         );
+    // A second light layer only while a cooperation path is active.
+    final collaborating = layout.curves.any(
+      (c) => c.edge['collab'] == true && c.edge['active'] == true,
+    );
     final flowing =
         active &&
         TickerMode.valuesOf(context).enabled &&
@@ -1496,6 +1588,19 @@ class _MapEditorState extends State<MapEditor>
                                   color: colors.primary,
                                   mode: widget.animate,
                                   style: widget.lightStyle,
+                                  // Only split while agents work together.
+                                  collaboration: collaborating ? false : null,
+                                ),
+                              ),
+                            if (flowing && collaborating)
+                              Positioned.fill(
+                                child: MapLightLayer(
+                                  layout: layout,
+                                  clock: _phase,
+                                  color: mapCollaborationColor(colors),
+                                  mode: widget.animate,
+                                  style: widget.lightStyle,
+                                  collaboration: true,
                                 ),
                               ),
                             for (final col in _shownColumns)
@@ -1846,22 +1951,61 @@ class _MapPaint extends CustomPainter {
               lit.contains(edge['source']) && lit.contains(edge['target']) ||
               pinned.contains(edge['source']) ||
               pinned.contains(edge['target']);
+      final error =
+          edge['failed'] == 'error' ||
+          (edge['hints'] as List? ?? const []).any(
+            (hint) => hint is Map && hint['level'] == 'error',
+          );
       final kind = mapLineKind('${edge['kind']}');
       final own = kind == null
           ? null
           : mapColor(lineColors[kind] as String?, colors);
+      // Working together now: strong; an agent link after the work: calm.
+      final working = edge['collab'] == true && edge['active'] == true;
+      final link = edge['kind'] == agentLink;
       paint
         ..style = PaintingStyle.stroke
-        ..strokeWidth = related ? 2 : 1
-        ..color =
-            edge['kind'] == 'failed' ||
-                (edge['hints'] as List? ?? []).isNotEmpty
+        ..strokeWidth = working
+            ? 2.8
+            : related
+            ? 2
+            : 1
+        ..color = error
             ? colors.error
+            : working
+            ? mapCollaborationColor(colors)
+            : link
+            ? mapCollaborationColor(colors).withValues(alpha: .45)
             : related
             ? own ?? colors.primary
             : own?.withValues(alpha: .45) ?? colors.outlineVariant;
       if (dimming && !related) paint.color = paint.color.withValues(alpha: .2);
       canvas.drawPath(curve.path, paint);
+      // Who hands work to whom: an arrow into the agent that is used.
+      if (link) {
+        final tip = curve.end, back = curve.point(.9);
+        final dir = tip - back;
+        final unit = dir.distance == 0
+            ? const Offset(-1, 0)
+            : dir / dir.distance;
+        final normal = Offset(-unit.dy, unit.dx);
+        canvas.drawPath(
+          Path()
+            ..moveTo(tip.dx, tip.dy)
+            ..lineTo(
+              tip.dx - unit.dx * 8 + normal.dx * 4,
+              tip.dy - unit.dy * 8 + normal.dy * 4,
+            )
+            ..lineTo(
+              tip.dx - unit.dx * 8 - normal.dx * 4,
+              tip.dy - unit.dy * 8 - normal.dy * 4,
+            )
+            ..close(),
+          Paint()
+            ..style = PaintingStyle.fill
+            ..color = paint.color,
+        );
+      }
     }
 
     for (final curve in layout.curves) {

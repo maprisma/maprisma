@@ -40,6 +40,39 @@ String _columnHint(String column) => switch (column) {
   _ => 'Ask for this column…',
 };
 
+/// A category written at the start of the question chooses its checked
+/// workflow. The category is UI guidance; the service gets the question only.
+({String column, String request}) smartPromptRequest(
+  String text,
+  String fallback,
+  String Function(String) tr,
+) {
+  final request = text.trim();
+  for (final (column, title) in mapSmartColumns) {
+    for (final label in {tr(title), title, if (column == 'mcp') 'MCP'}) {
+      final prefix = '$label:';
+      if (request.toLowerCase().startsWith(prefix.toLowerCase())) {
+        return (
+          column: column,
+          request: request.substring(prefix.length).trim(),
+        );
+      }
+    }
+  }
+  return (column: fallback, request: request);
+}
+
+const smartPromptExamples = <(String, IconData, String)>[
+  ('mcp', Icons.extension_outlined, 'Find an MCP server for my notes'),
+  ('mcp', Icons.folder_outlined, 'Connect a skill folder to an agent'),
+  ('agents', Icons.person_outline, 'Which agents need sign-in?'),
+  ('agents', Icons.link_outlined, 'Connect an agent to a provider'),
+  ('providers', Icons.speed_outlined, 'Why is my local LLM slow?'),
+  ('providers', Icons.memory_outlined, 'Check GPU and context settings'),
+  ('models', Icons.search_outlined, 'Find a model that fits my PC'),
+  ('models', Icons.link_off_outlined, 'Disconnect a model from an agent'),
+];
+
 String smartFitLabel(String? fit, String Function(String) tr) => switch (fit) {
   'ok' => tr('Fits in VRAM'),
   'tight' => tr('Uses RAM offload'),
@@ -165,7 +198,7 @@ const smartActionLabels = {
 };
 
 /// A column's or header's state: check mark in green circle ('ok'),
-/// '!' in yellow triangle ('hint'), '!' in red circle ('warn').
+/// Tips and updates are information; only actionable problems use an alarm.
 class SmartStatusIcon extends StatelessWidget {
   const SmartStatusIcon({super.key, required this.level, this.size = 16});
   final String level;
@@ -176,7 +209,7 @@ class SmartStatusIcon extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     return switch (level) {
       'warn' => Icon(Icons.error, size: size, color: colors.error),
-      'hint' => Icon(Icons.warning, size: size, color: StatusColors.warn),
+      'hint' => Icon(Icons.info_outline, size: size, color: colors.primary),
       _ => Icon(Icons.check_circle, size: size, color: StatusColors.ok),
     };
   }
@@ -270,6 +303,8 @@ class SmartStatusData {
 
   String columnLevel(String column) {
     final colFindings = findingsFor(column);
+    // The core marks only real problems 'warn' (no agent, not signed in, a
+    // broken connection, a full disk); tips and updates stay information.
     if (colFindings.any((f) => f['level'] == 'warn')) return 'warn';
     if (colFindings.isNotEmpty ||
         updatesFor(column).isNotEmpty ||
@@ -383,6 +418,7 @@ class MapSmartCard extends StatefulWidget {
 
 class _MapSmartCardState extends State<MapSmartCard> {
   final _prompt = TextEditingController();
+  final _examplesScroll = ScrollController();
   final _barFocus = FocusNode();
   final _cardFocus = FocusNode();
   final _fieldFocus = FocusNode();
@@ -394,6 +430,20 @@ class _MapSmartCardState extends State<MapSmartCard> {
   String get _columnTitle =>
       mapSmartColumns.where((c) => c.$1 == _column).firstOrNull?.$2 ??
       widget.title;
+
+  void _retargetPrefixedPrompt(String column) {
+    final current = _prompt.text.trim();
+    final parsed = smartPromptRequest(current, _column, widget.tr);
+    if (parsed.request == current) return;
+    final title = mapSmartColumns.where((c) => c.$1 == column).firstOrNull?.$2;
+    if (title == null) return;
+    final text = '${widget.tr(title)}: ${parsed.request}';
+    _prompt.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+  }
+
   String? _activeTask;
   int _runToken = 0;
   Map<String, dynamic> _reply = const {};
@@ -479,6 +529,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
   void didUpdateWidget(covariant MapSmartCard oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.column != oldWidget.column && !_atWork) {
+      _retargetPrefixedPrompt(widget.column);
       _column = widget.column;
     }
     if (widget.initialPrompt != null &&
@@ -635,10 +686,15 @@ class _MapSmartCardState extends State<MapSmartCard> {
   }
 
   Future<void> _ask({String? answer}) async {
-    final request = _prompt.text.trim();
+    final parsed = smartPromptRequest(_prompt.text, _column, widget.tr);
+    final request = parsed.request;
     final helper = _activeHelper;
     final client = widget.client;
     if (request.isEmpty || helper == null || client == null) return;
+    if (parsed.column != _column) {
+      setState(() => _column = parsed.column);
+      widget.onColumnChanged?.call(parsed.column);
+    }
     final token = ++_runToken;
     setState(() {
       _step = _SmartStep.working;
@@ -649,7 +705,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
     _focusOpenCard();
     try {
       final started = await client.mapSmartAsk(
-        column: _column,
+        column: parsed.column,
         command: '${helper['command']}',
         request: request,
         answer: answer,
@@ -751,6 +807,10 @@ class _MapSmartCardState extends State<MapSmartCard> {
     _activeProposal = proposal;
     _activeCandidate = candidate;
     if (candidate['kind'] != 'mcp_add') {
+      for (final field in _mcpFields.values) {
+        field.dispose();
+      }
+      _mcpFields.clear();
       unawaited(
         _planMcp([
           for (final a in candidate['agents'] as List? ?? const []) '$a',
@@ -793,10 +853,10 @@ class _MapSmartCardState extends State<MapSmartCard> {
         _connectPlan = plan;
         _step = _SmartStep.connectReview;
       });
-    } catch (_) {
+    } catch (error) {
       if (!mounted || token != _runToken) return;
       setState(() {
-        _errorText = failureText(widget.tr);
+        _errorText = failureText(widget.tr, error);
         _step = _SmartStep.error;
       });
     }
@@ -1101,11 +1161,11 @@ class _MapSmartCardState extends State<MapSmartCard> {
       }
       setState(() => _step = _SmartStep.idle);
       if (widget.open) _close();
-    } catch (_) {
+    } catch (error) {
       if (!mounted || token != _runToken) return;
       _activeTask = null;
       setState(() {
-        _errorText = failureText(widget.tr);
+        _errorText = failureText(widget.tr, error);
         _step = _SmartStep.error;
       });
     } finally {
@@ -1121,6 +1181,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
     if (_windowShown) _countWindow(-1);
     _runToken++;
     _prompt.dispose();
+    _examplesScroll.dispose();
     for (final field in _mcpFields.values) {
       field.dispose();
     }
@@ -1487,28 +1548,72 @@ class _MapSmartCardState extends State<MapSmartCard> {
     );
   }
 
-  // In Tab order like the status view's chips; they come after the field, so typing is not
-  // disturbed.
-  Widget _buildCategoryChips() => Wrap(
-    spacing: 6,
-    runSpacing: 6,
-    children: [
-      for (final (col, colTitle) in mapSmartColumns)
-        ChoiceChip(
-          key: ValueKey('smart-category-$col'),
-          visualDensity: VisualDensity.compact,
-          selected: _column == col,
-          label: Text(
-            widget.tr(colTitle),
-            style: const TextStyle(fontSize: 12),
+  Widget _buildPromptExamples(ColorScheme colors) => Material(
+    key: const ValueKey('smart-prompt-examples'),
+    color: colors.surfaceContainerLow,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(corners(context)),
+      side: BorderSide(color: colors.outlineVariant),
+    ),
+    child: Padding(
+      padding: const EdgeInsets.all(AppSpace.sm),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            widget.tr('Try asking Ask AI'),
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
           ),
-          onSelected: (_) {
-            setState(() => _column = col);
-            widget.onColumnChanged?.call(col);
-            if (widget.helpers.isNotEmpty) _fieldFocus.requestFocus();
-          },
-        ),
-    ],
+          const SizedBox(height: AppSpace.xs),
+          Text(
+            widget.tr(
+              'Choose an example or start with a category. Only Ask sends the question.',
+            ),
+            style: TextStyle(fontSize: 11, color: colors.onSurfaceVariant),
+          ),
+          const SizedBox(height: AppSpace.xs),
+          SizedBox(
+            height: 176,
+            child: Scrollbar(
+              controller: _examplesScroll,
+              thumbVisibility: true,
+              child: ListView.builder(
+                controller: _examplesScroll,
+                primary: false,
+                itemCount: smartPromptExamples.length,
+                itemBuilder: (context, index) {
+                  final (column, icon, example) = smartPromptExamples[index];
+                  final title = mapSmartColumns
+                      .where((entry) => entry.$1 == column)
+                      .first
+                      .$2;
+                  final prompt = '${widget.tr(title)}: ${widget.tr(example)}';
+                  return ListTile(
+                    key: ValueKey('smart-example-$index'),
+                    dense: true,
+                    visualDensity: VisualDensity.compact,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+                    leading: Icon(icon, size: 17, color: colors.primary),
+                    title: Text(prompt, style: const TextStyle(fontSize: 12)),
+                    onTap: () {
+                      setState(() {
+                        _column = column;
+                        _prompt.text = prompt;
+                        _prompt.selection = TextSelection.collapsed(
+                          offset: prompt.length,
+                        );
+                      });
+                      widget.onColumnChanged?.call(column);
+                      _fieldFocus.requestFocus();
+                    },
+                  );
+                },
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
   );
 
   Widget _buildAsk(ColorScheme colors) {
@@ -1521,10 +1626,6 @@ class _MapSmartCardState extends State<MapSmartCard> {
             widget.tr('No AI helper is set up yet.'),
             style: const TextStyle(fontSize: 12),
           ),
-          if (!widget.showBar) ...[
-            const SizedBox(height: AppSpace.sm),
-            _buildCategoryChips(),
-          ],
         ],
       );
     }
@@ -1552,7 +1653,9 @@ class _MapSmartCardState extends State<MapSmartCard> {
                 ? widget.tr('Transcribing…')
                 : _dictationRecording
                 ? widget.tr('Listening… Click Stop when done.')
-                : widget.tr(_columnHint(_column)),
+                : widget.showBar
+                ? widget.tr(_columnHint(_column))
+                : '${widget.tr(_columnTitle)}: ${widget.tr(_columnHint(_column))}',
             border: const OutlineInputBorder(),
             suffixIcon: showMic
                 ? _buildDictationSuffix(colors, dictReady, dictActive)
@@ -1561,7 +1664,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
         ),
         if (!widget.showBar) ...[
           const SizedBox(height: AppSpace.sm),
-          _buildCategoryChips(),
+          _buildPromptExamples(colors),
         ],
         if (_dictationError.isNotEmpty) ...[
           const SizedBox(height: AppSpace.xs),
@@ -1914,7 +2017,10 @@ class _MapSmartCardState extends State<MapSmartCard> {
                       style: const TextStyle(fontSize: 12),
                     ),
                     onSelected: (_) {
-                      setState(() => _column = col);
+                      setState(() {
+                        _retargetPrefixedPrompt(col);
+                        _column = col;
+                      });
                       widget.onColumnChanged?.call(col);
                     },
                   ),
@@ -2034,11 +2140,19 @@ class _MapSmartCardState extends State<MapSmartCard> {
                 if (widget.onMoveToColumn != null) {
                   widget.onMoveToColumn!(targetCol, req);
                 } else {
+                  final question = smartPromptRequest(
+                    req,
+                    _column,
+                    widget.tr,
+                  ).request;
+                  final prefixed = question.isEmpty
+                      ? ''
+                      : '${widget.tr(targetTitle)}: $question';
                   setState(() {
                     _column = targetCol;
-                    _prompt.text = req;
+                    _prompt.text = prefixed;
                     _prompt.selection = TextSelection.collapsed(
-                      offset: req.length,
+                      offset: prefixed.length,
                     );
                     _step = _SmartStep.idle;
                   });
@@ -2166,7 +2280,9 @@ class _MapSmartCardState extends State<MapSmartCard> {
                             } else if ('${c['kind'] ?? ''}'.startsWith(
                                   'mcp_',
                                 ) ||
-                                c['kind'] == 'model_disconnect') {
+                                c['kind'] == 'model_disconnect' ||
+                                c['kind'] == 'skill_connect' ||
+                                c['kind'] == 'map_edit') {
                               _openMcp(proposal, c);
                             } else {
                               _openReview(proposal, c);
