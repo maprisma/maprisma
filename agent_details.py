@@ -407,9 +407,20 @@ def plan_limits_signed_in(command: str, root: Path | None = None, environ=None) 
     record's validity go by this."""
     environ = os.environ if environ is None else environ
     root = HOME if root is None else root
-    if any(path.is_file() for path in access_paths(command, root, environ)):
-        return True
-    return _store_elsewhere(command, root, environ) and program_answer(command, root, environ) is not False
+    said = program_answer(command, root, environ)
+    files = [path for path in access_paths(command, root, environ) if path.is_file()]
+    if files:
+        # A sign-in file the program said is no sign-in (expired, revoked) is none, until the file
+        # changes after that answer (a new sign-in).
+        if said is not False:
+            return True
+        record = native_usage_dir() / f"{command}.json"
+        try:
+            written = record.stat().st_mtime
+        except OSError:
+            return True
+        return any(path.stat().st_mtime > written for path in files)
+    return _store_elsewhere(command, root, environ) and said is not False
 
 
 def _store_elsewhere(command: str, root: Path, environ) -> bool:

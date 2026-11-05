@@ -404,6 +404,54 @@ void main() {
       },
     );
 
+    test(
+      'R4 #2: Repair rewrites the agent\'s own name for the moved LLM',
+      () async {
+        final (:home, :core) = llamaSetup('qwen');
+        moved(home);
+        final (models, _) = piLlmTexts(
+          '',
+          '',
+          'workstation',
+          'http://127.0.0.1:8080/v1',
+          ['qwen'],
+          const {},
+          'qwen',
+          false,
+          false,
+        );
+        final file = File('${home.path}/.pi/agent/models.json')
+          ..writeAsStringSync(models);
+        File('${home.path}/.pi/agent/settings.json').writeAsStringSync(
+          jsonEncode({'defaultProvider': 'openai', 'defaultModel': 'gpt-5'}),
+        );
+        final line = failedLine(await mapOf(core), 'agent:pi');
+        expect(line['provider'], 'workstation');
+        final preview = core.dispatch('connections.repair_preview', {
+          'agent': 'agent:pi',
+          'target': 'runtime:llamacpp',
+        });
+        await apply(core, preview['plan'] as String);
+        final providers =
+            (jsonDecode(file.readAsStringSync()) as Map)['providers'] as Map;
+        expect(providers.keys, ['workstation']);
+        expect('${providers['workstation']}', contains('127.0.0.1:9090'));
+        // A name the agent does not have is refused.
+        expect(
+          () => core.dispatch('connections.preview', {
+            'kind': 'provider',
+            'command': 'pi',
+            'item': 'llamacpp',
+            'remove': false,
+            'model': 'qwen',
+            'use_now': false,
+            'name': 'elsewhere',
+          }),
+          throwsA(anything),
+        );
+      },
+    );
+
     test('#8: Claude Code\'s moved endpoint is not offered a Repair', () async {
       final (:home, :core) = llamaSetup('qwen');
       moved(home);

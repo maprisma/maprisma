@@ -488,11 +488,15 @@ final class LlmPlans {
     String model,
     bool useNow,
     bool remove,
-    Map context,
-  ) {
+    Map context, {
+    // An entry of the agent's own name for this LLM (a Repair of Pi's
+    // "workstation"): that entry, not the app's usual one.
+    String? name,
+  }) {
     final provider =
-        (visibleProviderFacts['connect_keys'] as Map)[rt.key] as String;
+        name ?? (visibleProviderFacts['connect_keys'] as Map)[rt.key] as String;
     final label =
+        name ??
         (visibleProviderFacts['connect_labels'] as Map)[rt.key] as String;
     final url = baseUrl(rt.address);
     final chat = chatModels(rt.models);
@@ -582,12 +586,13 @@ final class LlmPlans {
     bool useNow, {
     bool remove = false,
     RuntimeRecord? replaces,
+    String? name,
   }) {
     if (!supported(agent)) throw FormatException(agent);
     final result = Plan(
       agent,
       rt.key,
-      (visibleProviderFacts['connect_keys'] as Map)[rt.key] as String,
+      name ?? (visibleProviderFacts['connect_keys'] as Map)[rt.key] as String,
     );
     var context = const <String, int>{};
     final extra = <Change>[];
@@ -608,7 +613,16 @@ final class LlmPlans {
     if (replaces != null && replaces.key != rt.key) {
       texts = transform(agent, texts, replaces, '', false, true, const {});
     }
-    texts = transform(agent, texts, rt, model, useNow, remove, context);
+    texts = transform(
+      agent,
+      texts,
+      rt,
+      model,
+      useNow,
+      remove,
+      context,
+      name: name,
+    );
     for (var i = 0; i < paths.length; i++) {
       if (texts[i] != old[i]) {
         result.changes.add(Change(paths[i], old[i], texts[i]));

@@ -678,6 +678,10 @@ final class MapEdits {
           ? edge['dangling'] as String
           : '${entry?['target'] ?? ''}';
       request.addAll({'model': model, 'use_now': model.isNotEmpty});
+      // A moved LLM the agent knows by its own name: that entry is repaired.
+      if ('${edge['provider'] ?? ''}'.isNotEmpty) {
+        request['name'] = edge['provider'];
+      }
     }
     final result = preview(request);
     final plan = connections.take(result['plan'] as String);

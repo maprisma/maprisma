@@ -129,6 +129,7 @@ class Edge:
     failed: str = ""         # "error" / "warning": the connection did not pass its check (dotted red / yellow)
     fixed: str = ""          # why this line cannot be taken away here (skills reached through another folder)
     dangling: str = ""       # the model the agent is set to on a local LLM it has no provider for any more
+    provider: str = ""       # a moved local LLM's line: the agent's own name for that entry (Repair rewrites it)
 
 
 @dataclass
@@ -325,16 +326,17 @@ def build(agent_list, details: dict, inventory, labels: dict | None = None, fail
                            status=runtime_status(dangling)))
             edge = Edge(aid, rid, "failed", "error", fixed=unfixable(dangling))
             edge.dangling = model
+            edge.provider = model_provider if stale.get(model_provider) is not None else ""
             graph.edges.append(edge)
         # Every other local provider whose LLM moved (an inactive one too): a broken line, no default;
         # Repair rewrites its address.
-        for moved in stale.values():
+        for name, moved in stale.items():
             rid = f"runtime:{moved.key}"
             if moved is dangling or any(e.source == aid and e.target == rid for e in graph.edges):
                 continue
             graph.add(Node(rid, 2, moved.name, runtime_detail(moved, labels), "runtime",
                            status=runtime_status(moved)))
-            graph.edges.append(Edge(aid, rid, "failed", "error", fixed=unfixable(moved)))
+            graph.edges.append(Edge(aid, rid, "failed", "error", fixed=unfixable(moved), provider=name))
 
         # The cloud service: the configured provider when it is not local, else the agent's own.
         cloud = ""

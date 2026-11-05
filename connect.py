@@ -201,14 +201,16 @@ def is_connected(agent: str, runtime: str) -> bool:
         return False
 
 
-def _transform(agent: str, texts: list, runtime, model: str, use_now: bool, remove: bool, context: dict) -> list:
-    provider = KEYS[runtime.key]
+def _transform(agent: str, texts: list, runtime, model: str, use_now: bool, remove: bool, context: dict,
+               name: str | None = None) -> list:
+    # name: the agent's own name for an entry of this LLM (a Repair of Pi's "workstation"): that entry.
+    provider = name or KEYS[runtime.key]
     url = base_url(runtime.address)
     models = chat_models(runtime.models) or ([model] if model else [])
     # Without a model there is nothing to switch to: "<provider>/" would break the agent.
     use_now = use_now and bool(model)
-    return list(_llm(agent).transform(texts, provider, LABELS[runtime.key], url, models, context, model, use_now,
-                                      remove))
+    return list(_llm(agent).transform(texts, provider, name or LABELS[runtime.key], url, models, context, model,
+                                      use_now, remove))
 
 
 def is_active(agent: str, runtime: str) -> bool:
@@ -228,13 +230,13 @@ def is_active(agent: str, runtime: str) -> bool:
 
 
 def plan(agent: str, runtime, model: str, use_now: bool, remove: bool = False, context: dict | None = None,
-         replaces=None) -> Plan:
+         replaces=None, name: str | None = None) -> Plan:
     """runtime: inventory.Runtime. replaces: a runtime whose provider goes in the
     same step (a connection moved on the map). Raises ValueError for an agent
     we cannot set up."""
     if agent not in SUPPORTED:
         raise ValueError(agent)
-    result = Plan(agent, runtime.key, KEYS[runtime.key], connected=is_connected(agent, runtime.key))
+    result = Plan(agent, runtime.key, name or KEYS[runtime.key], connected=is_connected(agent, runtime.key))
     extra = []
     if model and not remove:
         # What the local LLM brings along (LM Studio: the model's context in its own settings, in
@@ -251,7 +253,7 @@ def plan(agent: str, runtime, model: str, use_now: bool, remove: bool = False, c
     texts = list(old)
     if replaces is not None and replaces.key != runtime.key:
         texts = _transform(agent, texts, replaces, "", False, True, {})
-    texts = _transform(agent, texts, runtime, model, use_now, remove, context or {})
+    texts = _transform(agent, texts, runtime, model, use_now, remove, context or {}, name)
     result.changes = [Change(p, o, n) for p, o, n in zip(files, old, texts) if o != n] + extra
     return result
 

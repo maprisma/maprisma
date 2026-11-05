@@ -45,7 +45,7 @@ class Connections:
     def preview(self, params: dict) -> dict:
         fields = {'kind', 'command', 'item', 'remove'}
         if params.get('kind') == 'provider':
-            fields |= {'model', 'use_now'}
+            fields |= {'model', 'use_now'} | ({'name'} if 'name' in params else set())
         if set(params) != fields or params['kind'] not in ('mcp', 'skills', 'provider') \
                 or type(params['remove']) is not bool or not isinstance(params['command'], str) \
                 or not isinstance(params['item'], str):
@@ -65,8 +65,15 @@ class Connections:
             if not params['remove'] and ((model and (not llm_engine.MODEL_KEY.fullmatch(model) or model not in connect.chat_models(rt.models)))
                                         or (params['use_now'] and not model)):
                 raise ValueError('Choose an available chat model')
+            name = params.get('name')
+            if name is not None:      # the agent's own entry for this LLM, by its own name (Repair of a moved one)
+                import agent_details
+                known = agent_details.details_for(command).providers
+                if not isinstance(name, str) or not any(p.name == name and p.local for p in known):
+                    raise ValueError('Provider unavailable')
             plan = connect.plan(command, rt, '' if params['remove'] else model,
-                                False if params['remove'] else params['use_now'], remove=params['remove'])
+                                False if params['remove'] else params['use_now'], remove=params['remove'],
+                                **({'name': name} if name is not None else {}))
         elif params['kind'] == 'mcp':
             # The map's id: the name, or name~2 for another server of that name.
             server = next((item for item in inv.mcp if item.id == params['item']), None)

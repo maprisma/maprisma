@@ -278,6 +278,8 @@ def repair_preview(params, graph, connections, settings_path=None):
         # The adapter validates the saved model against fresh chat-model inventory.
         model = edge.get('dangling') or (entry or {}).get('target', '')
         request.update(model=model, use_now=bool(model))
+        if edge.get('provider'):          # a moved LLM the agent knows by its own name: that entry is repaired
+            request['name'] = edge['provider']
     result = connections.preview(request)
     _, plan = connections.plans.pop(result['plan'])
     if entry:

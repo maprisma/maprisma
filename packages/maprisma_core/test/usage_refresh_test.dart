@@ -476,6 +476,30 @@ sleep 60
     });
 
     test(
+      'R4 #3: a sign-in file Codex says is no sign-in is none, until it changes',
+      () async {
+        final d = readers(generic);
+        final auth = File('${root.path}/.codex/auth.json')
+          ..createSync(recursive: true)
+          ..writeAsStringSync('{}');
+        auth.setLastModifiedSync(
+          DateTime.now().subtract(const Duration(hours: 1)),
+        );
+        expect(d.limitsSignedIn(codex), isTrue); // not asked yet
+        fake(authFailure);
+        await ask(d, generic);
+        expect(d.programAnswer(codex), isFalse);
+        expect(d.limitsSignedIn(codex), isFalse); // the program said so
+        expect(d.limitsProbeable(codex), isTrue); // still asked next time
+        // A new sign-in: the file changes after that answer.
+        auth.setLastModifiedSync(
+          DateTime.now().add(const Duration(minutes: 1)),
+        );
+        expect(d.limitsSignedIn(codex), isTrue);
+      },
+    );
+
+    test(
       '#10: a keyring store may be asked; its answer says signed in',
       () async {
         final d = readers(generic);
@@ -562,6 +586,38 @@ sleep 60
           '{"limits":[{"label":"x","percent":0.5}],"limitsFetchedAt":${DateTime.now().millisecondsSinceEpoch}}',
         );
         expect(da.read(codex).limits, isEmpty);
+      },
+    );
+
+    test(
+      'R4 #1: Omarchy\'s record with its collector gone is not another home\'s',
+      () async {
+        final omarchyEnv = {...generic, 'OMARCHY_PATH': '${root.path}/omarchy'};
+        File('${root.path}/.codex/auth.json')
+          ..createSync(recursive: true)
+          ..writeAsStringSync('not read');
+        File('${root.path}/state/omarchy/agents/usage/codex.json')
+          ..createSync(recursive: true)
+          ..writeAsStringSync(
+            '{"limits":[{"label":"Old","percent":0.9}],'
+            '"limitsFetchedAt":${DateTime.now().millisecondsSinceEpoch}}',
+          );
+        // The usual home: Omarchy's record, as before.
+        expect(
+          readers(omarchyEnv, omarchy: true).read(codex).limits,
+          isNotEmpty,
+        );
+        // Another CODEX_HOME, signed in there: not that account's numbers.
+        final other = Directory('${root.path}/other-codex')..createSync();
+        File('${other.path}/auth.json').writeAsStringSync('not read');
+        final moved = {...omarchyEnv, 'CODEX_HOME': other.path};
+        expect(readers(moved, omarchy: true).read(codex).limits, isEmpty);
+        // CODEX_HOME naming the usual folder is the usual home.
+        final same = {...omarchyEnv, 'CODEX_HOME': '${root.path}/.codex'};
+        expect(readers(same, omarchy: true).read(codex).limits, isNotEmpty);
+        // Signed out: none either.
+        File('${root.path}/.codex/auth.json').deleteSync();
+        expect(readers(omarchyEnv, omarchy: true).read(codex).limits, isEmpty);
       },
     );
 

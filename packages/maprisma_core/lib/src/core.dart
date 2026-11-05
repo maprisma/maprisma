@@ -4163,6 +4163,7 @@ final class CoreService {
     final fields = {
       'kind', 'command', 'item', 'remove', //
       if (params['kind'] == 'provider') ...['model', 'use_now'],
+      if (params['kind'] == 'provider' && params.containsKey('name')) 'name',
     };
     if (params.length != fields.length ||
         !params.keys.every(fields.contains) ||
@@ -4205,12 +4206,24 @@ final class CoreService {
               params['use_now'] == true && model.isEmpty)) {
         throw const FormatException('Choose an available chat model');
       }
+      // The agent's own entry for this LLM, by its own name (Repair of a
+      // moved one): only one the agent really has, pointing at a local LLM.
+      final name = params['name'];
+      if (name != null &&
+          (name is! String ||
+              !reads.details
+                  .read(agents.firstWhere((a) => a.command == command).adapter)
+                  .providers
+                  .any((p) => p['name'] == name && p['local'] == true))) {
+        throw const FormatException('Provider unavailable');
+      }
       plan = llm.plan(
         command,
         rt,
         remove ? '' : model,
         remove ? false : params['use_now'] as bool,
         remove: remove,
+        name: name as String?,
       );
     } else if (params['kind'] == 'mcp') {
       final server = inventory.mcp

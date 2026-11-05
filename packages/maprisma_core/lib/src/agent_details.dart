@@ -874,11 +874,17 @@ final class DetailReaders {
     if (!RegExp(r'^[a-z0-9-]{1,64}$').hasMatch(command)) return {};
     final path = usagePath(command, adapter);
     final record = files.json(path);
-    if (adapter != null &&
-        path == nativeUsagePath(command, files.identity.environment) &&
-        adapter.table('plan_limits').isNotEmpty &&
-        (record['home'] != usageHome(adapter) || !limitsSignedIn(adapter))) {
-      return {};
+    if (adapter != null && adapter.table('plan_limits').isNotEmpty) {
+      if (path == nativeUsagePath(command, files.identity.environment)) {
+        if (record['home'] != usageHome(adapter) || !limitsSignedIn(adapter)) {
+          return {};
+        }
+      } else if (!hasUsageCollector(command) &&
+          (_otherHome(adapter) || !limitsSignedIn(adapter))) {
+        // Omarchy's record with its collector gone: written for the agent's
+        // usual home, so not for another one, and not after a sign-out.
+        return {};
+      }
     }
     return Map<String, dynamic>.from(record);
   }
@@ -930,6 +936,24 @@ final class DetailReaders {
 
   /// The folder an agent's plan_limits.home_env moves its home to
   /// (CODEX_HOME), or null while it is not set.
+  /// The agent keeps its sign-in in a home other than its usual one
+  /// (CODEX_HOME set to another folder than ~/.codex).
+  bool _otherHome(Adapter adapter) {
+    final moved = _movedHome(adapter);
+    if (moved == null) return false;
+    final usual = (adapter.table('access')['files'] as List? ?? const [])
+        .whereType<String>()
+        .map(
+          (f) => p.dirname(
+            f.startsWith('~') || f.startsWith('/')
+                ? files.expand(f)
+                : p.join(files.identity.home, f),
+          ),
+        )
+        .firstOrNull;
+    return usual == null || p.normalize(moved) != p.normalize(usual);
+  }
+
   String? _movedHome(Adapter adapter) {
     final name = adapter.table('plan_limits')['home_env'];
     final moved = name is String && name.isNotEmpty
@@ -972,8 +996,27 @@ final class DetailReaders {
   /// in. The map's line (MapGraph.signedIn), the battery and the record's
   /// validity all go by this.
   bool limitsSignedIn(Adapter adapter) {
-    if (_accessFileThere(adapter)) return true;
-    return _storeElsewhere(adapter) && programAnswer(adapter) != false;
+    final said = programAnswer(adapter);
+    // A sign-in file the program said is no sign-in (expired, revoked) is
+    // none, until the file changes after that answer (a new sign-in).
+    if (_accessFileThere(adapter)) {
+      return said != false || _accessNewerThanAnswer(adapter);
+    }
+    return _storeElsewhere(adapter) && said != false;
+  }
+
+  /// One of the agent's access files changed after Maprisma's own record of
+  /// the program's answer was written (a stat of each, never a read).
+  bool _accessNewerThanAnswer(Adapter adapter) {
+    final record = File(
+      nativeUsagePath(adapter.command, files.identity.environment),
+    );
+    if (!record.existsSync()) return true;
+    final written = record.statSync().modified;
+    return accessPaths(adapter).any((path) {
+      final file = File(path);
+      return file.existsSync() && file.statSync().modified.isAfter(written);
+    });
   }
 
   /// What the agent's own program last said for this home ([usageHome]):

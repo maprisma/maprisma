@@ -101,6 +101,7 @@ final class MapGraph {
     String failed = '',
     String dangling = '',
     String fixed = '',
+    String provider = '',
   }) {
     if (edges.any((e) => e['source'] == source && e['target'] == target)) {
       return;
@@ -112,6 +113,7 @@ final class MapGraph {
       'failed': failed,
       'fixed': fixed,
       'dangling': dangling,
+      'provider': provider,
     });
   }
 
@@ -426,11 +428,14 @@ final class MapGraph {
           failed: 'error',
           dangling: model,
           fixed: unfixable(dangling),
+          // The agent's own name for it (Pi's "workstation"): Repair
+          // rewrites that entry, not the app's usual one.
+          provider: stale[modelProvider] != null ? modelProvider : '',
         );
       }
       // Every other local provider whose LLM moved (an inactive one too):
       // a broken line, no default; Repair rewrites its address.
-      for (final moved in stale.values) {
+      for (final MapEntry(key: name, value: moved) in stale.entries) {
         if (identical(moved, dangling)) continue;
         runtime(moved);
         link(
@@ -439,6 +444,7 @@ final class MapGraph {
           'failed',
           failed: 'error',
           fixed: unfixable(moved),
+          provider: name,
         );
       }
       var cloud = '';
