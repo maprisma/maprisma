@@ -489,6 +489,7 @@ class MapSmartCard extends StatefulWidget {
     this.takesRequests = true,
     this.showBar = true,
     this.onProvider,
+    this.onMenu,
     this.performancePage,
     this.onTask,
     required this.column,
@@ -518,6 +519,11 @@ class MapSmartCard extends StatefulWidget {
 
   /// A provider step the user chose: (install, update, start or stop, key).
   final void Function(String step, String key, String name)? onProvider;
+
+  /// A menu action Ask AI proposed (kind menu_action: area, step, key,
+  /// model): the app opens that menu itself, with its own preview, review
+  /// and Undo.
+  final ValueChanged<Map<String, dynamic>>? onMenu;
 
   /// A local LLM's Performance as a page of this window (Ask AI keeps it
   /// open): aside runs a review in the window's place (a change, a
@@ -2555,6 +2561,10 @@ class _MapSmartCardState extends State<MapSmartCard> {
                     Text(
                       (c['size'] as int? ?? 0) > 0
                           ? '${c['title']} · ${modelSize(c['size'] as int)}'
+                          // A page of the app, named by the core in English.
+                          : c['kind'] == 'menu_action' &&
+                                '${c['key'] ?? ''}'.isEmpty
+                          ? widget.tr('${c['title']}')
                           : '${c['title']}',
                       style: const TextStyle(
                         fontSize: 12,
@@ -2564,7 +2574,8 @@ class _MapSmartCardState extends State<MapSmartCard> {
                     if ('${c['subtitle'] ?? ''}'.isNotEmpty)
                       Text(
                         c['kind'] == 'agent_action' ||
-                                c['kind'] == 'provider_action'
+                                c['kind'] == 'provider_action' ||
+                                c['kind'] == 'menu_action'
                             ? widget.tr('${c['subtitle']}')
                             : '${c['subtitle']}',
                         style: TextStyle(
@@ -2603,6 +2614,12 @@ class _MapSmartCardState extends State<MapSmartCard> {
                                 widget.performancePage != null) {
                               // Shown here: the window stays open.
                               _openPerformance('${c['key']}');
+                            } else if (c['kind'] == 'menu_action') {
+                              // The app's own menu, with its own review.
+                              _close(refocus: false);
+                              widget.onMenu?.call(
+                                Map<String, dynamic>.from(c as Map),
+                              );
                             } else if (c['kind'] == 'provider_action') {
                               // Its own page has the review.
                               _close(refocus: false);
@@ -2655,9 +2672,10 @@ class _MapSmartCardState extends State<MapSmartCard> {
 
   Widget _buildDone() {
     final title = '${_activeCandidate?['title'] ?? ''}';
+    // The agents the manual Connect offers for a local LLM, from the core.
     final connectAgents = [
-      for (final h in widget.helpers)
-        if (h['command'] != 'local-helper') h,
+      for (final a in _activeCandidate?['connect'] as List? ?? const [])
+        if (a is Map) a,
     ];
     return Column(
       mainAxisSize: MainAxisSize.min,

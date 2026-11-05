@@ -2189,6 +2189,106 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     }
   }
 
+  /// A menu action from Ask AI (task 063d): the same menu the user would
+  /// open, so its preview, rule check, review and Undo are the manual ones.
+  void _smartMenu(Map<String, dynamic> c) {
+    final key = '${c['key'] ?? ''}', model = c['model'] as String?;
+    final addon = _addons.where((a) => a['id'] == key).firstOrNull;
+    Future<void> catalog(String action) async {
+      Map<String, dynamic>? entry() => (_addonEntries ?? [])
+          .where(
+            (e) =>
+                e['id'] == key && e['action'] == action && e['preview'] != null,
+          )
+          .firstOrNull;
+      if (entry() == null) await _loadAddonCatalog();
+      final found = entry();
+      if (!mounted) return;
+      found == null ? _actionFailed() : await _installAddon(found);
+    }
+
+    switch ((c['area'], c['step'])) {
+      case ('agents', 'key' || 'security'):
+        unawaited(_agentAction(key, '${c['step']}'));
+      case ('agents', 'start'):
+        final projects = (_snapshot?['projects'] as Map?)?[key] as Map?;
+        if (projects == null) {
+          _selectAgent(key);
+        } else {
+          unawaited(
+            _start({
+              'command': key,
+              'path': projects['default'],
+              'outside': false,
+            }),
+          );
+        }
+      case ('agents', 'halt'):
+        unawaited(_haltMapAgent(key));
+      case ('agents', 'configure'):
+        _guideAction(key, 'connections');
+      case ('agents', 'details'):
+        _selectAgent(key);
+      case ('addons', 'details') when addon != null:
+        unawaited(_addonMenu(_navigator.currentContext!, addon));
+      case ('addons', 'on' || 'off') when addon != null:
+        unawaited(_toggleAddon(key, c['step'] == 'on'));
+      case ('addons', 'remove') when addon != null:
+        unawaited(_removeAddon(addon));
+      case ('addons', 'install' || 'update'):
+        unawaited(catalog('${c['step']}'));
+      case ('models', 'import'):
+        unawaited(() async {
+          final file = await PopupGuard.around(
+            () => openFile(
+              acceptedTypeGroups: [
+                const XTypeGroup(label: 'GGUF', extensions: ['gguf']),
+              ],
+            ),
+          );
+          if (file == null || !mounted) return;
+          await _providerOperation('model.import', {
+            'key': key,
+            'path': file.path,
+          }, tr('Import model'));
+        }());
+      case ('models', 'load' || 'unload') when model != null:
+        final step = c['step'] == 'load' ? 'Load' : 'Unload';
+        unawaited(() async {
+          // As the runtime's own Start and Stop on the map: one question.
+          final yes = await _cardReview(
+            tr(step),
+            (confirm, cancel) => TaskReview(
+              content: Text('${tr(step)} $model?'),
+              actions: [
+                TextButton(onPressed: cancel, child: Text(tr('Cancel'))),
+                FilledButton(onPressed: confirm, child: Text(tr(step))),
+              ],
+            ),
+          );
+          if (!yes || !mounted) return;
+          await _providerOperation(
+            c['step'] == 'load' ? 'model.load' : 'model.unload',
+            {'key': key, 'model': model},
+            tr(step),
+          );
+        }());
+      case ('models', 'choose'):
+        unawaited(_setProviderModel('runtime:$key', model));
+      case ('existing', _):
+        unawaited(_openExisting());
+      case ('mcp', _):
+        setState(() {
+          _showConnections = true;
+          _showFound = true;
+          _showProviders = false;
+        });
+        unawaited(_refresh());
+      default:
+        _actionFailed();
+    }
+  }
+
   /// Whether a provider box gets the Performance symbol: the providers list
   /// says so (read once in the background when the map shows first).
   bool _tunable(Map node) {
@@ -4055,16 +4155,10 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
             _mapNote(tr('This model cannot be connected here.'));
             return;
           }
-          final yes =
-              confirmed ||
-              await _askMapChange(
-                tr(target == null ? 'Disconnect' : 'Connect'),
-                '${source['label']} → ${target?['label'] ?? old['label']}',
-              );
-          if (!yes) return;
           await _setProviderModel(
             source['id'] as String,
             target?['id'] as String?,
+            confirmed: confirmed,
           );
           return;
         }
@@ -4148,16 +4242,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
           // provider later get it; nothing else changes now.
           if (!_chatModel('${item['label']}')) {
             _mapNote(tr('This model cannot be connected here.'));
-            return;
-          }
-          if (_providerModels[provider['source']] == item['id']) {
-            _mapNote(tr('No changes to apply'));
-            return;
-          }
-          if (!await _askMapChange(
-            tr('Connect'),
-            '${source?['label']} → ${item['label']}',
-          )) {
             return;
           }
           await _setProviderModel(
@@ -4408,16 +4492,59 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   ).hasMatch(name);
 
   /// One step: a provider uses [model] (null: none), with a note and Undo.
-  Future<void> _setProviderModel(String provider, String? model) async {
-    final before = _providerModels;
-    final next = {...before};
-    if (model == null) {
-      next.remove(provider);
-    } else {
-      next[provider] = model;
+  /// The core previews it with the same rules as a model switch on the map
+  /// (models.choose_preview); [confirmed] when the user said yes already.
+  Future<void> _setProviderModel(
+    String provider,
+    String? model, {
+    bool confirmed = false,
+  }) async {
+    if (_busy) return;
+    Map<String, dynamic> preview;
+    try {
+      preview = await _client.modelsChoosePreview(
+        provider: provider,
+        model: model,
+      );
+    } catch (error) {
+      _actionFailed(error);
+      return;
     }
-    await _updateSettings({'provider_models': next});
     if (!mounted) return;
+    if (preview['empty'] == true) {
+      _mapNote(tr('No changes to apply'));
+      return;
+    }
+    if (!confirmed &&
+        !await _askMapChange(
+          tr(model == null ? 'Disconnect' : 'Connect'),
+          '${preview['line']}',
+        )) {
+      return;
+    }
+    Map<String, dynamic> applied;
+    try {
+      applied = await _client.modelsChooseApply(
+        preview: preview['preview'] as String,
+      );
+    } catch (error) {
+      _actionFailed(error);
+      return;
+    }
+    _mapStale = true;
+    if (!mounted) return;
+    setState(() {
+      final settings = _snapshot?['settings'] as Map?;
+      if (settings != null) {
+        settings['provider_models'] = {
+          for (final e in _providerModels.entries)
+            if (e.key != provider) e.key: e.value,
+          provider: ?model,
+        };
+      }
+    });
+    unawaited(_refresh());
+    final undo = applied['undo'] as String;
     final messenger = ScaffoldMessenger.of(_navigator.currentContext!);
     messenger
       ..clearSnackBars()
@@ -4427,9 +4554,16 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
           action: SnackBarAction(
             label: tr('Undo'),
             onPressed: () {
-              if (!_keysBlocked) {
-                unawaited(_updateSettings({'provider_models': before}));
-              }
+              if (_keysBlocked) return;
+              unawaited(() async {
+                try {
+                  _mapStale = true;
+                  await _client.modelsChooseUndo(undo: undo);
+                } catch (error) {
+                  _actionFailed(error);
+                }
+                if (mounted) await _refresh();
+              }());
             },
           ),
         ),
@@ -5650,6 +5784,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                             promptTrigger: _askPromptSeq,
                             client: _maybeClient,
                             onProvider: _smartProvider,
+                            onMenu: _smartMenu,
                             performancePage: _performancePage,
                             onTask: _smartTask,
                             onApplied: _onSmartApplied,
