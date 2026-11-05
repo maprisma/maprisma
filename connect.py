@@ -178,7 +178,12 @@ def _top_block(text: str, key: str):
 # A two-space entry key of a YAML providers block: bare, "double" (no escapes) or 'single' quoted, spaces
 # allowed before the colon. Anything else (escapes, flow or complex keys, anchors) is not guessed at.
 _ENTRY_KEY = re.compile(r"""  (?:"([^"\\\n]*)"|'((?:[^'\n]|'')*)'|([^\s"'#?&*!|>%@`{}\[\],:-][^\n:#]*?))[ \t]*:(?:[ \t]|$)""")
-_BARE_KEY = re.compile(r"""[^\s"'#?&*!|>%@`{}\[\],:-][^\n:#]*""")
+# A name the writers put down bare: a plain identifier YAML reads back as the same string (not a boolean,
+# null or number); anything else is refused rather than quoted.
+_BARE_KEY = re.compile(r"[A-Za-z_][A-Za-z0-9_.-]*")
+_NOT_STRINGS = {"true", "false", "yes", "no", "on", "off", "y", "n", "null"}
+# A providers header the writers may append under: block style, or an empty inline map.
+_PROVIDERS_HEADER = re.compile(r"providers:[ \t]*(?:\{[ \t]*\})?[ \t]*(?:#.*)?")
 
 
 def provider_entries(body: str):
@@ -224,7 +229,7 @@ def provider_keys(text: str):
 def providers_entry_replaced(text: str, entry_text: str, provider: str, remove: bool) -> str:
     """The providers block with `provider`'s entry (whatever its key spelling) removed, then `entry_text`
     appended unless `remove`. Shared by Hermes and Oh My Pi."""
-    if not remove and (not _BARE_KEY.fullmatch(provider) or provider != provider.strip()):
+    if not remove and (not _BARE_KEY.fullmatch(provider) or provider.lower() in _NOT_STRINGS):
         raise ValueError("providers entry not readable; edit it by hand")
     block = _top_block(text, "providers")
     if block is None:
@@ -233,12 +238,14 @@ def providers_entry_replaced(text: str, entry_text: str, provider: str, remove: 
         return text + ("" if text.endswith("\n") or not text else "\n") + "providers:\n" + entry_text
     start, end = block
     header, _nl, rest = text[start:end].partition("\n")
+    if not _PROVIDERS_HEADER.fullmatch(header.rstrip("\r")):
+        raise ValueError("providers entry not readable; edit it by hand")
     for e_start, e_end, key in reversed(provider_entries(rest)):
         if key == provider:
             rest = rest[:e_start] + rest[e_end:]
     if not remove:
         rest = rest.rstrip("\n") + ("\n" if rest.strip() else "") + entry_text
-    header = "providers:" if header.strip() in ("providers: {}", "providers:{}") else header
+    header = "providers:" if "{" in header.partition("#")[0] else header
     body = header + "\n" + rest if rest.strip() else ("" if remove else header + "\n")
     return text[:start] + body + text[end:]
 

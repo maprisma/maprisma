@@ -118,4 +118,37 @@ void main() {
     expect(providers.keys.toSet(), {'workstation', 'workstation2'});
     expect('${providers['workstation']}', contains('127.0.0.1:9090'));
   });
+
+  test(
+    'round 7: inline maps and names YAML reads as no string are refused',
+    () {
+      String w(String text, String name) => hermesLlmText(
+        text,
+        name,
+        name,
+        'http://127.0.0.1:9090/v1',
+        ['qwen'],
+        const {},
+        'qwen',
+        false,
+        false,
+      );
+      expect(
+        () => w('providers: {workstation: {api: x}}\n', 'workstation'),
+        throwsFormatException,
+      );
+      for (final name in ['true', 'No', 'null', '1.5', '0x1f', '2001-12-14']) {
+        expect(
+          () => w('providers:\n  "$name":\n    api: x\n', name),
+          throwsFormatException,
+          reason: name,
+        );
+      }
+      final after = w('providers: {}  # none yet\n', 'llama-local');
+      expect(((loadYaml(after) as Map)['providers'] as Map).keys, [
+        'llama-local',
+      ]);
+      expect(LocalLlm.providerKeys(after), ['llama-local']);
+    },
+  );
 }

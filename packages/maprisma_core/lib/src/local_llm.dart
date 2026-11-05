@@ -41,11 +41,21 @@ final class LocalLlm {
   static final _entryKey = RegExp(
     r'''^  (?:"([^"\\\n]*)"|'((?:[^'\n]|'')*)'|([^\s"'#?&*!|>%@`{}\[\],:-][^\n:#]*?))[ \t]*:(?:[ \t]|$)''',
   );
-  static final _bareKey = RegExp(r'''^[^\s"'#?&*!|>%@`{}\[\],:-][^\n:#]*$''');
+  // connect._BARE_KEY / _NOT_STRINGS: a plain identifier YAML reads back as
+  // the same string (not a boolean, null or number).
+  static final _bareKey = RegExp(r'^[A-Za-z_][A-Za-z0-9_.-]*$');
+  static const _notStrings = {
+    'true', 'false', 'yes', 'no', 'on', 'off', 'y', 'n', 'null', //
+  };
+
+  /// connect._PROVIDERS_HEADER: block style, or an empty inline map.
+  static final providersHeader = RegExp(
+    r'^providers:[ \t]*(?:\{[ \t]*\})?[ \t]*(?:#.*)?$',
+  );
 
   /// A provider name the writers can put down as a bare key.
   static bool bareProviderKey(String name) =>
-      _bareKey.hasMatch(name) && name == name.trim();
+      _bareKey.hasMatch(name) && !_notStrings.contains(name.toLowerCase());
 
   /// connect.provider_entries: (start, end, key) of each entry in a providers
   /// block's body (after its header line), with its deeper and blank lines.

@@ -69,13 +69,18 @@ String _providersBlock(
   }
   final body = _block(text, 'providers'), end = start + body.length;
   var (header, rest) = _partition(body);
+  if (!LocalLlm.providersHeader.hasMatch(
+    header.replaceFirst(RegExp(r'\r$'), ''),
+  )) {
+    throw const FormatException(
+      'providers entry not readable; edit it by hand',
+    );
+  }
   rest = _entryRemoved(rest, provider);
   if (!remove) {
     rest = _trimEnd(rest) + (rest.trim().isNotEmpty ? '\n' : '') + entryText;
   }
-  if (header.trim() == 'providers: {}' || header.trim() == 'providers:{}') {
-    header = 'providers:';
-  }
+  if (header.split('#').first.contains('{')) header = 'providers:';
   final newBody = rest.trim().isNotEmpty
       ? '$header\n$rest'
       : (remove ? '' : '$header\n');

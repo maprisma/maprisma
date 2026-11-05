@@ -65,5 +65,17 @@ class ProviderKeyReaderTest(unittest.TestCase):
             hermes.llm_text("", "a: b", "x", "http://h/v1", [], {}, "", False)
 
 
+    def test_round7_inline_maps_and_non_string_names_are_refused(self):
+        import connect
+        args = ("http://127.0.0.1:9090/v1", ["qwen"], {}, "qwen", False)
+        with self.assertRaises(ValueError):
+            hermes.llm_text("providers: {workstation: {api: x}}\n", "workstation", "workstation", *args)
+        for name in ("true", "No", "null", "1.5", "0x1f", "2001-12-14"):
+            with self.subTest(name=name), self.assertRaises(ValueError):
+                hermes.llm_text(f'providers:\n  "{name}":\n    api: x\n', name, name, *args)
+        after = hermes.llm_text("providers: {}  # none yet\n", "llama-local", "llama.cpp", *args)
+        self.assertEqual(list(yaml.safe_load(after)["providers"]), ["llama-local"])
+        self.assertEqual(connect.provider_keys(after), ["llama-local"])
+
 if __name__ == "__main__":
     unittest.main()
