@@ -53,7 +53,8 @@ class FactsTest(unittest.TestCase):
             "cursor-agent": "approvalMode", "hermes": "approvals.mode", "opencode": "permission.bash",
             "pi": "defaultTools", "agy": "toolPermission"})
         self.assertEqual(set(self.facts("details")), {"claude", "codex", "copilot", "cursor-agent", "opencode",
-                                                      "pi", "omp", "hermes", "dsh", "bionic", "openclaw", "goose"})
+                                                      "pi", "omp", "hermes", "dsh", "bionic", "openclaw", "goose",
+                                                      "agy", "gemini", "grok", "crush"})
         self.assertEqual(self.facts("home")["pi"], "~/.pi/agent")
         self.assertEqual(self.facts("tools_setting"), {"pi": ("~/.pi/agent/settings.json", "defaultTools"),
                                                        "omp": ("~/.omp/agent/settings.json", "defaultTools")})
