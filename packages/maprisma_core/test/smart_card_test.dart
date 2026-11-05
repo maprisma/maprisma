@@ -1309,6 +1309,39 @@ void main() {
     expect(groups, {'agent:claude': '', 'agent:pi': 'local'});
   });
 
+  test('Antigravity CLI uses Google, its own provider', () async {
+    final home = Directory.systemTemp.createTempSync('smart');
+    addTearDown(() => home.deleteSync(recursive: true));
+    final bin = Directory('${home.path}/bin')..createSync();
+    File('${bin.path}/agy').writeAsStringSync('#!/bin/sh\necho 1.4.12\n');
+    Process.runSync('chmod', ['+x', '${bin.path}/agy']);
+    final core = CoreService(
+      environment: {
+        'HOME': home.path,
+        'PATH': bin.path,
+        'MAPRISMA_DESKTOP': 'generic',
+      },
+    );
+    var graph = core.dispatch('map.snapshot', {'force': true});
+    for (var i = 0; i < 100 && graph['pending'] == true; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      graph = core.dispatch('map.snapshot', {'poll': true});
+    }
+    expect(
+      (graph['edges'] as List).cast<Map>().where(
+        (e) => e['source'] == 'agent:agy',
+      ),
+      [containsPair('target', 'cloud:google')],
+    );
+    // Connect on the map (agent onto Google) signs in with its Google account.
+    final login = core.dispatch('agents.action_preview', {
+      'command': 'agy',
+      'action': 'login',
+    });
+    expect(login['runnable'], isTrue);
+    expect(login['commands'], [endsWith('/bin/agy')]);
+  });
+
   test('a known server without agents stays on the map', () async {
     final home = Directory.systemTemp.createTempSync('smart');
     addTearDown(() => home.deleteSync(recursive: true));
