@@ -106,4 +106,41 @@ void main() {
       }
     },
   );
+
+  test(
+    '#2: its server and engine only inside its own folders, as real paths',
+    () {
+      final data = '${home.path}/.local/share/strata';
+      final python = '$data/terminal/0.1.57/python/bin/python3.12';
+      final binary = '$data/components/engine/0.1.57-linux-x86_64-cuda/strata';
+      final elsewhere =
+          '${home.path}/tmp/strata/terminal/0.1.57/python/bin/python3.12';
+      for (final path in [python, binary, elsewhere]) {
+        File(path)
+          ..createSync(recursive: true)
+          ..writeAsStringSync('');
+      }
+      final insideLink = '${home.path}/link-python';
+      Link(insideLink).createSync(python);
+      final outsideLink = '$data/terminal/0.1.57/python/bin/evil';
+      Link(outsideLink).createSync(elsewhere);
+      const server = ['-m', 'serve.server', '--config', '/x'];
+      expect(strata.owns(python), isTrue);
+      expect(strata.owns(binary), isTrue);
+      expect(strata.owns(insideLink), isTrue);
+      expect(strata.isServer([python, ...server]), isTrue);
+      for (final exe in [
+        elsewhere,
+        outsideLink,
+        '/usr/bin/strata',
+        'relative/strata/terminal/x',
+        '$data/terminal/../../elsewhere/strata/terminal/x',
+        '$data/terminal/missing',
+      ]) {
+        expect(strata.owns(exe), isFalse, reason: exe);
+        expect(strata.isServer([exe, ...server]), isFalse, reason: exe);
+      }
+      expect(strata.isServer([binary, ...server]), isFalse);
+    },
+  );
 }

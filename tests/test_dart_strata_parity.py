@@ -114,9 +114,17 @@ class DartStrataParityTest(unittest.TestCase):
                 (module / '__init__.py').write_text('')
                 (module / 'server.py').write_text(SERVER)
                 python = home / '.local/share/strata/terminal/0.1.57/python/bin/python3.12'
+                python.parent.mkdir(parents=True)
+                python.write_text('')                  # its own Python, as a real path inside the terminal
                 server = subprocess.Popen([str(python), '-m', 'serve.server', '--config', str(run_config),
                                            '--ready-file', str(home / 'ready.json')],
                                           executable=sys.executable, cwd=home / 'srv', env=env)
+                fake = home / 'tmp/strata/terminal/0.1.57/python/bin/python3.12'
+                fake.parent.mkdir(parents=True)
+                fake.write_text('')
+                # Its argv looks like a server (serve.server within argv[1:4]); only its path is elsewhere.
+                lookalike = subprocess.Popen([str(fake), '-c', 'import time; time.sleep(60)', 'serve.server'],
+                                             executable=sys.executable, env=env)
                 try:
                     for _ in range(100):
                         with socket.socket() as s:
@@ -124,6 +132,7 @@ class DartStrataParityTest(unittest.TestCase):
                                 break
                         time.sleep(0.05)
                     env['MAPRISMA_SCAN_PROC'] = own_proc(home, server.pid)
+                    own_proc(home, lookalike.pid)
                     runner = (Side([sys.executable, '-c', PYTHON_SERVICE, str(ROOT)], ROOT, env) if side == 'python'
                               else Side([DART, '--disable-dart-dev', '--packages=.dart_tool/package_config.json',
                                          'bin/maprisma-core.dart'], ROOT / 'packages/maprisma_core', env))
@@ -152,8 +161,9 @@ class DartStrataParityTest(unittest.TestCase):
                     sides[side] = json.loads(json.dumps([strata, results, logs])
                                              .replace(str(home), '$HOME').replace(str(port), '$PORT'))
                 finally:
-                    server.kill()
-                    server.wait()
+                    for process in (server, lookalike):
+                        process.kill()
+                        process.wait()
         self.assertEqual(sides['python'], sides['dart'])
         strata, results, logs = sides['dart']
         self.assertEqual(len(strata), 1, strata)

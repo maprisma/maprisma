@@ -145,11 +145,31 @@ final class StrataFacts {
     return best;
   }
 
-  /// provider_strata.is_server: `… -m serve.server` from its terminal.
-  static bool isServer(List<String> argv) =>
+  /// provider_strata._inside: `path` (absolute) is a file inside `folder`,
+  /// both resolved as real paths (links followed, both must exist).
+  static bool _inside(String path, String folder) {
+    if (!path.startsWith('/')) return false;
+    try {
+      final real = File(path).resolveSymbolicLinksSync();
+      final root = Directory(folder).resolveSymbolicLinksSync();
+      return real != root && p.isWithin(root, real);
+    } on FileSystemException {
+      return false;
+    }
+  }
+
+  /// provider_strata.owns: its terminal's executables and its engine binary,
+  /// inside this user's own $XDG_DATA_HOME/strata.
+  bool owns(String exe) =>
+      _inside(exe, p.join(dataDir, 'terminal')) ||
+      _inside(exe, p.join(dataDir, 'components'));
+
+  /// provider_strata.is_server: `… -m serve.server` from its terminal's own
+  /// Python.
+  bool isServer(List<String> argv) =>
       argv.isNotEmpty &&
-      argv.first.contains('/strata/terminal/') &&
-      argv.skip(1).take(3).contains('serve.server');
+      argv.skip(1).take(3).contains('serve.server') &&
+      _inside(argv.first, p.join(dataDir, 'terminal'));
 
   /// provider_strata.server_port: the first --port N (1-5 ASCII digits,
   /// 1..65535; any other value is skipped), else its run config's port.
@@ -170,9 +190,4 @@ final class StrataFacts {
     }
     return defaultPort;
   }
-
-  /// provider_strata.Engine.owns_process: its terminal's Python and its
-  /// engine binary.
-  static bool ownsPath(String exe) =>
-      exe.contains('/strata/terminal/') || exe.contains('/strata/components/');
 }

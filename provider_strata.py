@@ -128,10 +128,27 @@ def last_preset() -> tuple[str, int]:
     return best
 
 
+def _inside(path: str, folder: Path) -> bool:
+    """`path` (absolute) is a file inside `folder`, both resolved as real paths (links followed, both
+    must exist): a path that merely contains "/strata/terminal/" elsewhere is not."""
+    if not isinstance(path, str) or not path.startswith("/"):
+        return False
+    try:
+        real, root = Path(path).resolve(strict=True), folder.resolve(strict=True)
+    except (OSError, RuntimeError):
+        return False
+    return real != root and real.is_relative_to(root)
+
+
+def owns(exe: str) -> bool:
+    """Its terminal's executables (its Python: server, supervisor) and its engine binary, inside this
+    user's own $XDG_DATA_HOME/strata."""
+    return _inside(exe, data_dir() / "terminal") or _inside(exe, data_dir() / "components")
+
+
 def is_server(argv: list) -> bool:
-    """Strata's API server: its own Python (`… -m serve.server …`) from its terminal folder."""
-    exe = argv[0] if argv else ""
-    return "/strata/terminal/" in exe and "serve.server" in argv[1:4]
+    """Strata's API server: its terminal's own Python (`… -m serve.server …`)."""
+    return bool(argv) and "serve.server" in argv[1:4] and _inside(argv[0], data_dir() / "terminal")
 
 
 def server_port(argv: list) -> int:
@@ -167,9 +184,8 @@ class Engine(llm_engine.Engine):
     starts_with_agents = False          # the provider watcher has no control for it: started on the map
 
     def owns_process(self, comm, argv):
-        exe = argv[0] if argv else ""
-        # Its terminal's Python (the server, the supervisor) and its engine binary.
-        return llm_engine.BY_PATH if "/strata/terminal/" in exe or "/strata/components/" in exe else 0
+        # Its terminal's Python (the server, the supervisor) and its engine binary, by real path.
+        return llm_engine.BY_PATH if argv and owns(argv[0]) else 0
 
     def can_control(self, rt):
         return bool(rt.installed and strata_binary() and last_preset()[0])

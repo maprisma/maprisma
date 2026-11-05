@@ -119,6 +119,8 @@ class FindTest(unittest.TestCase):
             config = h.home / "run.json"
             config.write_text(json.dumps({"port": 8123}))
             exe = str(h.data / "terminal/0.1.57/python/bin/python3.12")
+            Path(exe).parent.mkdir(parents=True)
+            Path(exe).write_text("")
             server = [exe, "-m", "serve.server", "--config", str(config)]
             self.assertTrue(ps.is_server(server))
             self.assertFalse(ps.is_server(["/usr/bin/python3", "-m", "serve.server"]))
@@ -136,11 +138,33 @@ class FindTest(unittest.TestCase):
             rt = inventory.strata([(1, "python3.12", server)])
             self.assertEqual((rt.running, rt.installed, rt.address), (True, True, "127.0.0.1:8123"))
 
-    def test_ownership_by_path(self):
-        engine = ps.Engine()
-        self.assertEqual(engine.owns_process("python3.12", ["/h/.local/share/strata/terminal/0.1.57/python/bin/p"]), 2)
-        self.assertEqual(engine.owns_process("strata", ["/h/.local/share/strata/components/engine/x/strata"]), 2)
-        self.assertEqual(engine.owns_process("strata", ["/usr/bin/strata"]), 0)
+    def test_ownership_only_inside_its_own_folders(self):
+        """Review 064 #2: its server and engine are the executables inside this user's own Strata
+        folders, compared as resolved paths; another path that merely contains /strata/terminal/ is not."""
+        with Home() as h:
+            engine = ps.Engine()
+            python = h.data / "terminal/0.1.57/python/bin/python3.12"
+            binary = h.data / "components/engine/0.1.57-linux-x86_64-cuda/strata"
+            for path in (python, binary):
+                path.parent.mkdir(parents=True)
+                path.write_text("")
+            elsewhere = h.home / "tmp/strata/terminal/0.1.57/python/bin/python3.12"
+            elsewhere.parent.mkdir(parents=True)
+            elsewhere.write_text("")
+            inside_link = h.home / "link-python"
+            inside_link.symlink_to(python)
+            outside_link = h.data / "terminal/0.1.57/python/bin/evil"
+            outside_link.symlink_to(elsewhere)
+            server = ["-m", "serve.server", "--config", "/x"]
+            self.assertEqual(engine.owns_process("python3.12", [str(python)]), 2)
+            self.assertEqual(engine.owns_process("strata", [str(binary)]), 2)
+            self.assertEqual(engine.owns_process("python3.12", [str(inside_link)]), 2)
+            self.assertTrue(ps.is_server([str(python), *server]))
+            for exe in (str(elsewhere), str(outside_link), "/usr/bin/strata", "relative/strata/terminal/x",
+                        str(h.data / "terminal/../../elsewhere/strata/terminal/x"), str(h.data / "terminal/missing")):
+                self.assertEqual(engine.owns_process("python3.12", [exe]), 0, exe)
+                self.assertFalse(ps.is_server([exe, *server]), exe)
+            self.assertFalse(ps.is_server([str(binary), *server]))      # the engine is no server
 
 
 class SharedPortTest(unittest.TestCase):

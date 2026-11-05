@@ -668,7 +668,7 @@ final class ProviderScans {
           rt.installed = strata.binary() != null;
           var port = 0;
           for (final process in processesNow) {
-            if (StrataFacts.isServer(process.argv)) {
+            if (strata.isServer(process.argv)) {
               rt.running = rt.installed = true;
               if (port == 0) port = strata.serverPort(process.argv);
             }
