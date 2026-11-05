@@ -6,6 +6,7 @@ import 'local_llm.dart';
 import 'skill_plans.dart' show hermesSkillDirs;
 import 'agent_catalog.dart';
 import 'agent_details.dart';
+import 'map_graph.dart' show graphModelKey;
 import 'provider_scans.dart';
 import 'scan_files.dart';
 import 'provider_facts.dart';
@@ -13,7 +14,11 @@ import 'provider_facts.dart';
 final class InventorySnapshot {
   final runtimes = <RuntimeRecord>[],
       mcp = <Map<String, dynamic>>[],
-      skillSets = <Map<String, dynamic>>[];
+      skillSets = <Map<String, dynamic>>[],
+          // Folders saved by "Reuse model folder" that no local LLM lists: each
+          // {path, models}, drawn as a model folder of its own.
+          modelFolders =
+          <Map<String, dynamic>>[];
   final agentMcp = <String, List<String>>{},
       agentSkills = <String, List<String>>{},
       agentTools = <String, List<String>>{};
@@ -21,6 +26,7 @@ final class InventorySnapshot {
     'runtimes': runtimes.map((r) => r.toJson()).toList(),
     'mcp': mcp,
     'skill_sets': skillSets,
+    'model_folders': modelFolders,
     'agent_mcp': agentMcp,
     'agent_skills': agentSkills,
     'agent_tools': agentTools,
@@ -231,16 +237,33 @@ final class InventoryReader {
   )?
   knownServers;
 
-  InventorySnapshot collect(List<AgentRecord> agents, {bool remember = true}) {
+  InventorySnapshot collect(
+    List<AgentRecord> agents, {
+    bool remember = true,
+    List<String> modelFolders = const [],
+  }) {
     final inv = InventorySnapshot();
     inv.runtimes.addAll(providers.scan());
+    // Keyed by id: a server's name, or for another server of the same name
+    // (another command or address, in another agent) name~2, name~3, … ("~"
+    // is no part of a name): two servers, two boxes, one label.
     final serversByName = <String, Map<String, dynamic>>{},
         sets = <String, Map<String, dynamic>>{};
     void addServers(Map mapping, String command) {
       for (final (name, kind, target) in servers(mapping)) {
+        var id = name;
+        for (var n = 2; ; n++) {
+          final known = serversByName[id];
+          if (known == null ||
+              known['kind'] == kind && known['target'] == target) {
+            break;
+          }
+          id = '$name~$n';
+        }
         final server = serversByName.putIfAbsent(
-          name,
+          id,
           () => {
+            'id': id,
             'name': name,
             'kind': kind,
             'target': target,
@@ -257,15 +280,11 @@ final class InventoryReader {
     for (final agent in agents.where((a) => a.installed)) {
       final command = agent.command, info = details.read(agent.adapter);
       for (final provider in info.providers) {
-        if (provider['local'] != true) continue;
-        for (final rt in inv.runtimes) {
-          if (rt.name == provider['runtime']) {
-            if (!rt.agents.contains(command)) rt.agents.add(command);
-            if (provider['active'] == true &&
-                !rt.activeAgents.contains(command)) {
-              rt.activeAgents.add(command);
-            }
-          }
+        final rt = localRuntime(provider, inv.runtimes);
+        if (rt == null) continue;
+        if (!rt.agents.contains(command)) rt.agents.add(command);
+        if (provider['active'] == true && !rt.activeAgents.contains(command)) {
+          rt.activeAgents.add(command);
         }
       }
       final mcp = rawMcp(agent.adapter);
@@ -311,7 +330,8 @@ final class InventoryReader {
     if (knownServers != null) {
       library = knownServers!({
         for (final e in serversByName.entries)
-          e.key: [for (final a in e.value['agents'] as List) a as String],
+          if (e.key == e.value['name'])
+            e.key: [for (final a in e.value['agents'] as List) a as String],
       }, remember);
     } else {
       library = mapOf(
@@ -334,6 +354,7 @@ final class InventoryReader {
               : {'url': entry['url']},
         );
         serversByName[e.key] = {
+          'id': e.key,
           'name': e.key,
           'kind': kind,
           'target': target,
@@ -343,8 +364,8 @@ final class InventoryReader {
     }
     inv.mcp.addAll(serversByName.values);
     inv.mcp.sort(
-      (a, b) => (a['name'] as String).toLowerCase().compareTo(
-        (b['name'] as String).toLowerCase(),
+      (a, b) => (a['id'] as String).toLowerCase().compareTo(
+        (b['id'] as String).toLowerCase(),
       ),
     );
     inv.skillSets.addAll(sets.values);
@@ -358,6 +379,26 @@ final class InventoryReader {
       (set['skills'] as List<String>).sort(
         (a, b) => a.toLowerCase().compareTo(b.toLowerCase()),
       );
+    }
+    // Reused model folders: their models, unless a local LLM lists them.
+    final listed = {
+      for (final rt in inv.runtimes.where((r) => r.installed))
+        for (final m in rt.models) graphModelKey(m),
+    };
+    final served = {
+      for (final rt in inv.runtimes.where((r) => r.installed))
+        if (rt.modelsDir.isNotEmpty) files.expand(rt.modelsDir),
+    };
+    for (final folder in modelFolders.take(50)) {
+      final path = files.expand(folder);
+      if (served.contains(path)) continue;
+      final models = [
+        for (final m in providers.ggufNames(path))
+          if (!listed.contains(graphModelKey(m))) m,
+      ];
+      if (models.isNotEmpty) {
+        inv.modelFolders.add({'path': tilde(files, path), 'models': models});
+      }
     }
     return inv;
   }
@@ -378,7 +419,7 @@ final class InventoryReader {
           },
       ],
       'mcp': [
-        for (final s in inv.mcp) {'id': s['name'], ...s},
+        for (final s in inv.mcp) {...s, 'id': s['id']},
       ],
       'skills': [
         for (final s in inv.skillSets)

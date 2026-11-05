@@ -575,4 +575,23 @@ void main() {
     expect(folded.cards['3:model:']!.add, isNull);
     expect(folded.cards['3:model:']!.rect.height, 38);
   });
+  test('an online provider takes only its own agent (review 063 F1)', () {
+    final graph = fixtureGraph();
+    final nodes = [
+      for (final n in graph['nodes'] as List) Map<String, dynamic>.from(n),
+    ];
+    graph['nodes'] = nodes;
+    nodes.firstWhere((n) => n['id'] == 'agent:a')['own_provider'] =
+        'cloud:openai';
+    nodes.addAll([
+      for (final id in ['cloud:openai', 'cloud:google'])
+        {'id': id, 'kind': 'cloud', 'column': 2, 'label': id, 'detail': ''},
+    ]);
+    final l = MapLayout(graph, {});
+    expect(l.targetOk('agent:a', 'cloud:openai'), isTrue);
+    expect(l.targetOk('cloud:openai', 'agent:a'), isTrue);
+    expect(l.targetOk('agent:a', 'cloud:google'), isFalse);
+    expect(l.targetOk('cloud:google', 'agent:a'), isFalse);
+    expect(l.targetOk('agent:b', 'cloud:openai'), isFalse);
+  });
 }

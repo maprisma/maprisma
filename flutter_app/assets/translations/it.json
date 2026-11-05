@@ -819,5 +819,7 @@
   "Rules": "Regole",
   "Terminals and screenshots": "Terminali e screenshot",
   "Online agents": "Agenti online",
-  "Local agents": "Agenti locali"
+  "Local agents": "Agenti locali",
+  "{0} cannot use {1}.": "{0} non può usare {1}.",
+  "To switch {0} to {1}, draw the line to one of its models.": "Per passare {0} a {1}, traccia la linea verso uno dei suoi modelli."
 }

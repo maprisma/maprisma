@@ -5,6 +5,7 @@ import 'adapters.dart';
 import 'dsh_profile.dart';
 import 'agent_catalog.dart';
 import 'agent_details.dart';
+import 'first_agent.dart' show credentialsPresent;
 import 'inventory.dart';
 import 'provider_scans.dart';
 import 'scan_files.dart';
@@ -59,6 +60,7 @@ final class MapGraph {
     bool dim = false,
     String status = '',
     String group = '',
+    String ownProvider = '',
   }) {
     final existing = nodes.firstWhereOrNull((n) => n['id'] == id);
     if (existing != null) return existing;
@@ -74,6 +76,9 @@ final class MapGraph {
       'status': status,
       'group': group,
       'active': false,
+      // Agents: the id of their own online provider (provider facts), the
+      // one dragging the agent onto signs in to; "" for none.
+      'own_provider': ownProvider,
     };
     nodes.add(value);
     return value;
@@ -98,6 +103,19 @@ final class MapGraph {
       'fixed': fixed,
       'dangling': dangling,
     });
+  }
+
+  /// An agent's sign-in to its own online provider is there: a key in the
+  /// environment or a sign-in file (a stat, never a read). An adapter that
+  /// names no sign-in file cannot tell: signed in.
+  bool signedIn(AgentRecord agent) {
+    final access = agent.adapter.table('access');
+    if ((access['files'] as List? ?? const []).isEmpty) return true;
+    return credentialsPresent(
+      access,
+      files.identity.home,
+      files.identity.environment,
+    );
   }
 
   String providerName(String raw) =>
@@ -259,13 +277,17 @@ final class MapGraph {
     ],
     String animate = 'all',
     int modelsShown = 10,
+    Map<String, String> providerModels = const {},
   }) {
     nodes.clear();
     edges.clear();
     final live = <String, List<String>>{},
         clouds = mapOf(visibleProviderFacts['cloud']),
         names = mapOf(visibleProviderFacts['connect_keys']);
-    final runtimes = {for (final rt in inv.runtimes) rt.name: rt};
+    final runtimes = {for (final rt in inv.runtimes) rt.name: rt},
+            // A local model an agent is set to: its name as the agent has it.
+            labels =
+            <String, String>{};
     String status(RuntimeRecord rt) => rt.running
         ? rt.serverOff
               ? 'noserver'
@@ -291,7 +313,8 @@ final class MapGraph {
       final a = agent.toJson(),
           aid = 'agent:${agent.command}',
           instances = running[agent.command] ?? [],
-          info = details[agent.command];
+          info = details[agent.command],
+          own = clouds[agent.command] as String? ?? '';
       final runningText = instances.length == 1
           ? i18n.text('running')
           : i18n.text('{0} running').replaceAll('{0}', '${instances.length}');
@@ -312,6 +335,7 @@ final class MapGraph {
         // Made for a local LLM (its adapter connects one): the map's Local
         // agents card; the others are online agents.
         group: agent.adapter.table('local_llm').isEmpty ? '' : 'local',
+        ownProvider: own.isEmpty ? '' : 'cloud:${own.toLowerCase()}',
       );
       var (model, modelProvider) = splitModel(info?.model ?? '');
       final local = <String, String>{};
@@ -322,8 +346,9 @@ final class MapGraph {
           ),
         );
       for (final provider in providers) {
-        final rt = runtimes[provider['runtime']];
-        if (provider['local'] == true && rt != null) {
+        // Joined by its configured port to the runtime detected there.
+        final rt = localRuntime(provider, inv.runtimes);
+        if (rt != null) {
           local[provider['name']] = rt.name;
           runtime(rt);
           link(
@@ -332,6 +357,15 @@ final class MapGraph {
             provider['active'] == true ? 'uses' : 'available',
           );
         }
+      }
+      // A model with no provider of its own, while the agent's one provider
+      // is a local LLM (Claude Code with a local ANTHROPIC_BASE_URL): that
+      // LLM's model, not one of the agent's own online provider.
+      final active = providers.where((p) => p['active'] == true).toList();
+      if (modelProvider.isEmpty &&
+          active.length == 1 &&
+          local.containsKey(active.single['name'])) {
+        modelProvider = active.single['name'] as String;
       }
       final dangling = inv.runtimes.firstWhereOrNull(
         (rt) =>
@@ -364,7 +398,9 @@ final class MapGraph {
       if (cloud.isNotEmpty) {
         final cid = 'cloud:${cloud.toLowerCase()}';
         node(cid, 2, cloud, kind: 'cloud');
-        link(aid, cid, 'uses');
+        // Its own provider, while it is not signed in: one it can use
+        // (drawing the agent onto it signs in), not one it uses.
+        link(aid, cid, cloud == own && !signedIn(agent) ? 'available' : 'uses');
         if (model.isNotEmpty) {
           final mid = 'model:$cid:${model.toLowerCase()}';
           node(mid, 3, model, kind: 'model');
@@ -379,11 +415,10 @@ final class MapGraph {
           }
         }
       } else if (model.isNotEmpty && local.containsKey(modelProvider)) {
-        link(
-          aid,
-          'model:runtime:${runtimes[local[modelProvider]]!.key}:${model.toLowerCase()}',
-          'default',
-        );
+        final mid =
+            'model:runtime:${runtimes[local[modelProvider]]!.key}:${model.toLowerCase()}';
+        labels[mid] = model;
+        link(aid, mid, 'default');
       }
       for (final choice in choices(
         agent.adapter,
@@ -412,10 +447,12 @@ final class MapGraph {
         link(cid, mid, 'serves');
       }
       for (final chosen in instances) {
-        final (name, provider) = chosen.isEmpty
+        var (name, provider) = chosen.isEmpty
             ? (model, modelProvider)
             : splitModel(chosen);
         if (name.isEmpty) continue;
+        // `--model qwen` names no provider: the agent's configured one.
+        if (provider.isEmpty) provider = modelProvider;
         String mid;
         if (local.containsKey(provider)) {
           mid =
@@ -433,8 +470,16 @@ final class MapGraph {
         if (!users.contains(a['name'])) users.add(a['name']);
       }
       for (final name in inv.agentMcp[agent.command] ?? []) {
-        final server = inv.mcp.firstWhereOrNull((s) => s['name'] == name);
-        final id = 'mcp:$name';
+        // This agent's server of that name (another of the same name is
+        // another box, name~2).
+        final server =
+            inv.mcp.firstWhereOrNull(
+              (s) =>
+                  s['name'] == name &&
+                  (s['agents'] as List).contains(agent.command),
+            ) ??
+            inv.mcp.firstWhereOrNull((s) => s['name'] == name);
+        final id = 'mcp:${server?['id'] ?? name}';
         node(
           id,
           0,
@@ -478,7 +523,7 @@ final class MapGraph {
     // A known server without agents stays, to draw a line to it again.
     for (final server in inv.mcp) {
       node(
-        'mcp:${server['name']}',
+        'mcp:${server['id'] ?? server['name']}',
         0,
         server['name'] as String,
         kind: 'mcp',
@@ -487,10 +532,28 @@ final class MapGraph {
         dim: true,
       );
     }
+    // What an agent is set to or runs, and each provider's chosen model:
+    // drawn even past the first [modelsShown] models.
+    final wanted = {
+      for (final e in edges)
+        if (e['kind'] == 'default') '${e['target']}',
+      ...live.keys,
+      ...providerModels.values,
+    };
     for (final rt in inv.runtimes.where((r) => r.installed)) {
       runtime(rt);
       final rid = 'runtime:${rt.key}';
-      for (final model in rt.models.take(modelsShown)) {
+      final keys = {
+        for (final id in wanted)
+          if (id.startsWith('model:$rid:'))
+            graphModelKey(id.substring('model:$rid:'.length)),
+      };
+      final shown = [
+        ...rt.models.take(modelsShown),
+        for (final model in rt.models.skip(modelsShown))
+          if (keys.contains(graphModelKey(model))) model,
+      ];
+      for (final model in shown) {
         final id = 'model:$rid:${model.toLowerCase()}';
         node(
           id,
@@ -501,19 +564,45 @@ final class MapGraph {
         );
         link(rid, id, 'serves');
       }
-      if (rt.models.length > modelsShown) {
+      if (rt.models.length > shown.length) {
         final id = 'more:$rid';
         node(
           id,
           3,
           i18n
               .text('+{0} more')
-              .replaceAll('{0}', '${rt.models.length - modelsShown}'),
+              .replaceAll('{0}', '${rt.models.length - shown.length}'),
           kind: 'more',
           dim: true,
           group: rt.modelsDir.isEmpty ? rt.name : rt.modelsDir,
         );
         link(rid, id, 'serves');
+      }
+    }
+    // Reused model folders no local LLM lists: a folder card of their own.
+    for (final folder in inv.modelFolders) {
+      final path = folder['path'] as String,
+          models = (folder['models'] as List).cast<String>();
+      for (final model in models.take(modelsShown)) {
+        node(
+          'model:folder:$path:${model.toLowerCase()}',
+          3,
+          model,
+          kind: 'model',
+          group: path,
+        );
+      }
+      if (models.length > modelsShown) {
+        node(
+          'more:folder:$path',
+          3,
+          i18n
+              .text('+{0} more')
+              .replaceAll('{0}', '${models.length - modelsShown}'),
+          kind: 'more',
+          dim: true,
+          group: path,
+        );
       }
     }
     final ids = nodes.map((n) => n['id']).toSet(), byKey = <String, String>{};
@@ -535,6 +624,27 @@ final class MapGraph {
 
     for (final e in edges) {
       e['target'] = listed(e['target']);
+    }
+    // An agent set to a model its local LLM no longer has: the model stays,
+    // marked missing, so its line and the way to repair it stay too.
+    for (final e in edges.where((e) => e['kind'] == 'default').toList()) {
+      final id = e['target'] as String;
+      if (ids.contains(id) || !id.startsWith('model:runtime:')) continue;
+      final rt = inv.runtimes.firstWhereOrNull(
+        (r) => r.key == id.split(':')[2],
+      );
+      if (rt == null || !ids.contains('runtime:${rt.key}')) continue;
+      node(
+        id,
+        3,
+        labels[id] ?? id.split(':').skip(3).join(':'),
+        kind: 'model',
+        status: 'missing',
+        detail: i18n.text('This model is no longer on this PC.'),
+        group: rt.modelsDir.isEmpty ? rt.name : rt.modelsDir,
+      );
+      link('runtime:${rt.key}', id, 'serves');
+      ids.add(id);
     }
     for (final id in live.keys.toList()) {
       final found = listed(id);

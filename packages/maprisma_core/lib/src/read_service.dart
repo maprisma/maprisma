@@ -289,6 +289,7 @@ final class ReadService {
         'language',
         'models_root',
         'model_folders',
+        'provider_models',
         'mcp_folders',
         'skill_folders',
       ])
@@ -332,10 +333,18 @@ final class ReadService {
     if (_inventory == null ||
         targets.contains('inventory') ||
         targets.contains('agents')) {
-      _inventory = inventory.collect(_agents!);
+      final folders = settings.load()['model_folders'];
+      _inventory = inventory.collect(
+        _agents!,
+        modelFolders: [
+          for (final f in folders is List ? folders : const [])
+            if (f is String) f,
+        ],
+      );
       onInventory?.call(_inventory!, _agents!);
     }
     final saved = settings.load();
+    final chosen = settings.value(saved, 'provider_models') as Map;
     if (_activity == null ||
         targets.contains('activity') ||
         targets.contains('agents')) {
@@ -358,6 +367,9 @@ final class ReadService {
           : (settings.value(saved, 'map_layers') as List).cast<String>(),
       modelsShown: allLayers ? 40 : 10,
       animate: settings.value(saved, 'map_animations') as String,
+      providerModels: {
+        for (final e in chosen.entries) '${e.key}': '${e.value}',
+      },
     );
   }
 

@@ -690,6 +690,50 @@ void main() {
       findsNothing,
     );
   });
+  testWidgets('an online provider not its own says why (review 063 F1)', (
+    tester,
+  ) async {
+    final edits = <Map<String, dynamic>>[];
+    final graph = fixtureGraph();
+    final nodes = [
+      for (final n in graph['nodes'] as List) Map<String, dynamic>.from(n),
+    ];
+    graph['nodes'] = nodes;
+    nodes.firstWhere((n) => n['id'] == 'agent:a')['own_provider'] =
+        'cloud:openai';
+    nodes.addAll([
+      for (final id in ['cloud:openai', 'cloud:google'])
+        {'id': id, 'kind': 'cloud', 'column': 2, 'label': id, 'detail': ''},
+    ]);
+    graph['edges'] = [
+      ...graph['edges'] as List,
+      {'source': 'agent:b', 'target': 'cloud:google', 'kind': 'offer'},
+    ];
+    await mount(tester, edits: edits, graph: graph);
+    Future<void> draw(String from, String to) async {
+      await tester.dragFrom(
+        tester.getCenter(find.text(from)),
+        tester.getCenter(find.text(to)) - tester.getCenter(find.text(from)),
+      );
+      await tester.pump();
+    }
+
+    await draw('agent:a', 'cloud:google');
+    expect(edits, isEmpty);
+    expect(find.text('agent:a cannot use cloud:google.'), findsOneWidget);
+    await draw('agent:b', 'cloud:google');
+    expect(edits, isEmpty);
+    expect(
+      find.text(
+        'To switch agent:b to cloud:google, draw the line to one of its models.',
+      ),
+      findsOneWidget,
+    );
+    // Its own provider: the edit (a sign-in) goes ahead.
+    await draw('agent:a', 'cloud:openai');
+    expect(edits.single['target'], 'cloud:openai');
+    expect(tester.takeException(), isNull);
+  });
   testWidgets('a working agent that calls another one keeps the map (0.13.0)', (
     tester,
   ) async {

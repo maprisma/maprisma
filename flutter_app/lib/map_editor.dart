@@ -586,6 +586,19 @@ class _MapEditorState extends State<MapEditor>
       }
       return widget.tr('This model cannot be connected here.');
     }
+    final cloud = kind(source) == 'cloud'
+        ? source
+        : kind(target) == 'cloud'
+        ? target
+        : null;
+    if (agent != null && cloud != null) {
+      return fill(
+        layout.connected(agent, cloud)
+            ? 'To switch {0} to {1}, draw the line to one of its models.'
+            : '{0} cannot use {1}.',
+        [label(agent), label(cloud)],
+      );
+    }
     return widget.tr('These two boxes cannot be connected.');
   }
 

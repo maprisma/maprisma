@@ -51,6 +51,30 @@ final class RuntimeRecord {
   };
 }
 
+/// The port of a runtime's address ("127.0.0.1:9090", "http://host:9090/"),
+/// or null.
+int? addressPort(String address) {
+  final m = RegExp(r':(\d{1,5})/?$').firstMatch(address.trim());
+  return m == null ? null : int.parse(m[1]!);
+}
+
+/// The local LLM an agent's local provider points at: the installed one
+/// whose detected address has the configured port, else the one whose usual
+/// port it is (the provider's `runtime`, from the facts).
+RuntimeRecord? localRuntime(Map provider, Iterable<RuntimeRecord> runtimes) {
+  if (provider['local'] != true) return null;
+  final port = provider['port'];
+  if (port is int) {
+    for (final rt in runtimes) {
+      if (rt.installed && addressPort(rt.address) == port) return rt;
+    }
+  }
+  for (final rt in runtimes) {
+    if (rt.name == provider['runtime']) return rt;
+  }
+  return null;
+}
+
 final class ProviderScans {
   ProviderScans(this.files);
   final ScanFiles files;
@@ -371,7 +395,12 @@ final class ProviderScans {
         case 'lmstudio':
           final root = files.expand('~/.lmstudio');
           rt.installed = Directory(root).existsSync() || which('lms');
-          rt.address = '127.0.0.1:1234';
+          // Its server's port, when set in the app (Developer › Settings).
+          final server = files.json('$root/.internal/http-server-config.json');
+          final port = server['port'] is int && server['port'] > 0
+              ? server['port'] as int
+              : 1234;
+          rt.address = '127.0.0.1:$port';
           for (final process in processesNow) {
             if (process.comm.toLowerCase().startsWith('lm studio') ||
                 process.comm == 'lm-studio' ||
@@ -422,7 +451,7 @@ final class ProviderScans {
             }
           }
           rt.models = dedupe(ids.isNotEmpty ? ids : names);
-          if (rt.running) rt.serverOff = !listeners(1234);
+          if (rt.running) rt.serverOff = !listeners(port);
         case 'vllm':
           rt.installed = which('vllm');
           rt.address = '127.0.0.1:8000';
@@ -455,8 +484,13 @@ final class ProviderScans {
             }
           }
         case 'jan':
-          rt.address = '127.0.0.1:6767';
           rt.service = unit('jan', named: true).$1;
+          // The port its service starts the engine on, else the usual one.
+          var port = RegExp(r'--port[= ]+(\d{1,5})\b').firstMatch(
+            rt.service.isEmpty
+                ? ''
+                : files.text('~/.config/systemd/user/jan.service') ?? '',
+          )?[1];
           final root = files.expand('~/.local/share/Jan');
           rt.installed =
               rt.service.isNotEmpty ||
@@ -467,9 +501,18 @@ final class ProviderScans {
                 process.argv.isNotEmpty &&
                     p.basename(process.argv[0]) == 'jan-llama-worker') {
               rt.installed = true;
-              if (arg(process.argv, ['--port']) == '6767') rt.running = true;
+              // The router (it has a preset; a model's own worker has none)
+              // on whatever port it was started.
+              final at = arg(process.argv, ['--port']);
+              if (RegExp(r'^\d{1,5}$').hasMatch(at) &&
+                  (at == (port ?? '6767') ||
+                      arg(process.argv, ['--preset']).isNotEmpty)) {
+                rt.running = true;
+                port = at;
+              }
             }
           }
+          rt.address = '127.0.0.1:${port ?? 6767}';
           final value = files.json('$root/settings.json')['data_folder'];
           final folder = value is String && value.trim().isNotEmpty
               ? (p.isAbsolute(files.expand(value.trim()))

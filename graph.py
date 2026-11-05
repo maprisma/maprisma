@@ -113,6 +113,8 @@ class Node:
                              # "online" for one at a URL (a card of its own on the map); agents: "local"
                              # for one made for a local LLM (its adapter has local_llm)
     active: bool = False     # models: an agent's model, or one an open agent runs
+    own_provider: str = ""   # agents: the id of their own online provider (CLOUD), the one drawing the
+                             # agent onto signs in to; "" for none
 
 
 @dataclass
@@ -188,6 +190,14 @@ def runtime_detail(rt, labels: dict) -> str:
     return " · ".join([rt.address, labels["server_off"]]) if runtime_status(rt) == "noserver" else rt.address
 
 
+def signed_in(command: str) -> bool:
+    """An agent's sign-in to its own online provider is there: a key in the environment or a sign-in
+    file (a stat, never a read). An agent whose access facts name no sign-in file cannot tell: signed in."""
+    import agent_status
+    access = agent_status.access_table().get(command)
+    return access is None or not access.files or agent_status.credentials_present(access, agent_status.HOME)
+
+
 def provider_name(raw: str) -> str:
     raw = (raw or "").strip()
     return PROVIDER_NAMES.get(raw.lower(), raw)
@@ -230,13 +240,14 @@ def split_model(model: str) -> tuple[str, str]:
 
 
 def build(agent_list, details: dict, inventory, labels: dict | None = None, failures: dict | None = None,
-          running: dict | None = None, available=()) -> Graph:
+          running: dict | None = None, available=(), provider_models: dict | None = None) -> Graph:
     """Only what is set up: installed agents and local LLMs, the MCP servers and skill
     sets agents use, models. agent_list: agents.Agent (installed ones are drawn); details: command ->
     agent_details.Details; labels: functions n -> translated text ("skills", "more");
     running: command -> the model of each open instance ("" = its settings');
     available: (kind, ident, label, detail) of MCP servers and skill sets on this PC that no agent
-    uses yet: a faded box without lines, so a line drawn to it sets it up."""
+    uses yet: a faded box without lines, so a line drawn to it sets it up; provider_models: Settings ›
+    provider_models (provider id -> its chosen model's id), drawn even past the first models."""
     labels = {"skills": "{0} skills".format, "more": "+{0} more".format, "running": lambda n: "running" if n == 1
               else f"{n} running", "in_use": "in use · {0}".format,
               "server_off": "server off", **(labels or {})}
@@ -244,6 +255,7 @@ def build(agent_list, details: dict, inventory, labels: dict | None = None, fail
     graph = Graph()
     runtimes = {rt.name: rt for rt in inventory.runtimes}
     live = {}                # model node id -> names of the agents running with it now
+    model_labels = {}        # a local model an agent is set to -> its name as the agent has it
 
     for agent in agent_list:
         if not agent.installed:
@@ -253,24 +265,35 @@ def build(agent_list, details: dict, inventory, labels: dict | None = None, fail
         # Made for a local LLM (its adapter connects one): the map's Local agents card.
         harness = harnesses.get(agent.command)
         local = "local" if harness and harness.local_llm else ""
+        own = CLOUD.get(agent.command, "")
+        own_id = f"cloud:{own.lower()}" if own else ""
         if instances:
             graph.add(Node(aid, 1, agent.name, " · ".join(filter(None, [agent.version, labels["running"](len(instances))])),
-                           "agent", agent.icon, agent.icon_font, status="running", group=local))
+                           "agent", agent.icon, agent.icon_font, status="running", group=local, own_provider=own_id))
         else:
-            graph.add(Node(aid, 1, agent.name, agent.version, "agent", agent.icon, agent.icon_font, group=local))
+            graph.add(Node(aid, 1, agent.name, agent.version, "agent", agent.icon, agent.icon_font, group=local,
+                           own_provider=own_id))
         info = details.get(agent.command)
         model, model_provider = split_model(info.model if info else "")
 
         # Local runtimes the agent's providers point at.
         local_names = {}
         # Active providers first, so an agent's line to a runtime is solid when any is in use.
+        import inventory as inventory_mod
         for provider in sorted(info.providers if info else [], key=lambda p: not p.active):
-            if provider.local and provider.runtime in runtimes:
-                local_names[provider.name] = provider.runtime
-                rt = runtimes[provider.runtime]
+            # Joined by its configured port to the runtime detected there.
+            rt = inventory_mod.local_runtime(provider, inventory.runtimes)
+            if rt is not None:
+                local_names[provider.name] = rt.name
                 rid = f"runtime:{rt.key}"
                 graph.add(Node(rid, 2, rt.name, runtime_detail(rt, labels), "runtime", status=runtime_status(rt)))
                 graph.link(aid, rid, "uses" if provider.active else "available")
+
+        # A model with no provider of its own, while the agent's one provider is a local LLM (Claude
+        # Code with a local ANTHROPIC_BASE_URL): that LLM's model, not one of its own online provider.
+        active = [p for p in (info.providers if info else []) if p.active]
+        if not model_provider and len(active) == 1 and active[0].name in local_names:
+            model_provider = active[0].name
 
         # A model that points at a local LLM's provider the agent no longer has (removed by hand, or by
         # an older disconnect): not an online service, a broken line to that local LLM.
@@ -296,7 +319,9 @@ def build(agent_list, details: dict, inventory, labels: dict | None = None, fail
         if cloud:
             cid = f"cloud:{cloud.lower()}"
             graph.add(Node(cid, 2, cloud, "", "cloud"))
-            graph.link(aid, cid, "uses")
+            # Its own provider, while it is not signed in: one it can use (drawing the agent onto it
+            # signs in), not one it uses.
+            graph.link(aid, cid, "available" if cloud == own and not signed_in(agent.command) else "uses")
             implicit = False
             if not model and LAST_MODEL is not None:
                 # Its settings name no model: it uses its own default, which its latest session says.
@@ -319,7 +344,9 @@ def build(agent_list, details: dict, inventory, labels: dict | None = None, fail
                         graph.link(cid, oid, "serves")
         elif model and model_provider in local_names:
             rt = runtimes[local_names[model_provider]]
-            graph.link(aid, f"model:runtime:{rt.key}:{model.lower()}", "default")
+            mid = f"model:runtime:{rt.key}:{model.lower()}"
+            model_labels[mid] = model
+            graph.link(aid, mid, "default")
         online_choices(graph, agent, aid, model, model_provider, local_names, runtimes)
 
         # The model each open instance runs with: its own --model, else the settings'.
@@ -327,6 +354,7 @@ def build(agent_list, details: dict, inventory, labels: dict | None = None, fail
             name, provider = split_model(chosen) if chosen else (model, model_provider)
             if not name:
                 continue
+            provider = provider or model_provider     # `--model qwen` names none: the agent's configured one
             if provider in local_names:
                 mid = f"model:runtime:{runtimes[local_names[provider]].key}:{name.lower()}"
             else:
@@ -342,8 +370,10 @@ def build(agent_list, details: dict, inventory, labels: dict | None = None, fail
                 live[mid].append(agent.name)
 
         for name in inventory.agent_mcp.get(agent.command, []):
-            server = next((s for s in inventory.mcp if s.name == name), None)
-            mid = f"mcp:{name}"
+            # This agent's server of that name (another of the same name is another box, name~2).
+            server = next((s for s in inventory.mcp if s.name == name and agent.command in s.agents),
+                          next((s for s in inventory.mcp if s.name == name), None))
+            mid = f"mcp:{server.id if server else name}"
             graph.add(Node(mid, 0, name, server.target if server else "", "mcp",
                            group="online" if server and server.kind == "url" else ""))
             graph.link(aid, mid, "mcp")
@@ -365,17 +395,21 @@ def build(agent_list, details: dict, inventory, labels: dict | None = None, fail
 
     # A known server without agents stays, to draw a line to it again.
     for server in inventory.mcp:
-        if not any(n.id == f"mcp:{server.name}" for n in graph.nodes):
-            graph.add(Node(f"mcp:{server.name}", 0, server.name, server.target, "mcp", dim=True,
+        if not any(n.id == f"mcp:{server.id}" for n in graph.nodes):
+            graph.add(Node(f"mcp:{server.id}", 0, server.name, server.target, "mcp", dim=True,
                            group="online" if server.kind == "url" else ""))
 
+    # What an agent is set to or runs, and each provider's chosen model: drawn even past the first ones.
+    wanted = {e.target for e in graph.edges if e.kind == "default"} | set(live) | set((provider_models or {}).values())
     # Every installed local runtime (something to connect agents to), with its models.
     for rt in inventory.runtimes:
         if not rt.installed:
             continue
         rid = f"runtime:{rt.key}"
         graph.add(Node(rid, 2, rt.name, runtime_detail(rt, labels), "runtime", status=runtime_status(rt)))
+        keys = {model_key(i[len(f"model:{rid}:"):]) for i in wanted if i.startswith(f"model:{rid}:")}
         shown = rt.models[:MAX_MODELS_PER_PROVIDER]
+        shown += [m for m in rt.models[MAX_MODELS_PER_PROVIDER:] if model_key(m) in keys]
         for model in shown:
             mid = f"model:{rid}:{model.lower()}"
             graph.add(Node(mid, 3, model, "", "model", group=rt.models_dir or rt.name))
@@ -385,6 +419,13 @@ def build(agent_list, details: dict, inventory, labels: dict | None = None, fail
             graph.add(Node(mid, 3, labels["more"](len(rt.models) - len(shown)), "", "more", dim=True,
                            group=rt.models_dir or rt.name))
             graph.link(rid, mid, "serves")
+    # Reused model folders no local LLM lists: a folder card of their own.
+    for path, models in getattr(inventory, "model_folders", []):
+        for model in models[:MAX_MODELS_PER_PROVIDER]:
+            graph.add(Node(f"model:folder:{path}:{model.lower()}", 3, model, "", "model", group=path))
+        if len(models) > MAX_MODELS_PER_PROVIDER:
+            graph.add(Node(f"more:folder:{path}", 3, labels["more"](len(models) - MAX_MODELS_PER_PROVIDER), "",
+                           "more", dim=True, group=path))
 
     # A link to a runtime's model under another spelling of its name (folders while LM Studio is
     # not running, files in llama.cpp's folder): to the model the runtime lists.
@@ -403,6 +444,19 @@ def build(agent_list, details: dict, inventory, labels: dict | None = None, fail
 
     for edge in graph.edges:
         edge.target = listed(edge.target)
+    # An agent set to a model its local LLM no longer has: the model stays, marked missing, so its line
+    # and the way to repair it stay too.
+    for edge in [e for e in graph.edges if e.kind == "default"]:
+        if edge.target in known or not edge.target.startswith("model:runtime:"):
+            continue
+        rt = next((r for r in inventory.runtimes if r.key == edge.target.split(":")[2]), None)
+        if rt is None or f"runtime:{rt.key}" not in known:
+            continue
+        graph.add(Node(edge.target, 3, model_labels.get(edge.target, edge.target.split(":", 3)[3]),
+                       _("This model is no longer on this PC."), "model", status="missing",
+                       group=rt.models_dir or rt.name))
+        graph.link(f"runtime:{rt.key}", edge.target, "serves")
+        known.add(edge.target)
     for model_id in list(live):
         found = listed(model_id)
         if found != model_id:
