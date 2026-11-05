@@ -94,6 +94,7 @@ const portedRoutes = {
   'rules.test',
   'addons.list',
   'addons.set_enabled',
+  'addons.enable_found',
   'addons.catalog',
   'addons.install',
   'addons.remove_preview',
@@ -304,7 +305,12 @@ final class CoreService {
           !addons.items.any((a) => a.id == item.id && a.state == 'loaded')) {
         throw const FormatException('An adapter could not be loaded');
       }
-      settings.saveOwn({'addons_enabled': enabled.toList()..sort()});
+      final off = switchedOff();
+      on ? off.remove(item.id) : off.add(item.id);
+      settings.saveOwn({
+        'addons_enabled': enabled.toList()..sort(),
+        'addons_off': off.toList()..sort(),
+      });
     } catch (_) {
       addons.reload(before);
       reads.catalog.adapters = addons.adapters;
@@ -312,6 +318,66 @@ final class CoreService {
     }
     reads.catalog.adapters = addons.adapters;
     return addons.snapshot(enabled, addonSignIns, addonUserDir);
+  }
+
+  /// The add-ons the user switched off (Add-ons page, or left unticked at
+  /// setup): never switched on again by [enableFound].
+  Set<String> switchedOff() => {
+    for (final x in settings.value(settings.load(), 'addons_off') as List)
+      x as String,
+  };
+
+  /// addons.enable_found: at the start, the add-ons of what setup.detect
+  /// found on this PC (agents, local LLMs, the online providers) are switched
+  /// on, so that everything installed shows on the map. One the user switched
+  /// off stays off; nothing is switched off here.
+  Map<String, dynamic> enableFound(Map<String, dynamic> params) {
+    guardAddonChanges();
+    final ids = params['ids'];
+    if (params.length != 1 ||
+        ids is! List ||
+        ids.length > 200 ||
+        ids.any((x) => x is! String)) {
+      throw const FormatException('Invalid add-on request');
+    }
+    final before = enabledAddons(), off = switchedOff();
+    final wanted = {
+      for (final i in addons.items)
+        if (ids.contains(i.id) &&
+            supportedKinds.contains(i.kind) &&
+            const {'verified', 'loaded'}.contains(i.state) &&
+            !before.contains(i.id) &&
+            !off.contains(i.id))
+          i.id,
+    };
+    if (wanted.isEmpty) {
+      return {
+        ...addons.snapshot(before, addonSignIns, addonUserDir),
+        'switched_on': <String>[],
+      };
+    }
+    final enabled = {...before, ...wanted};
+    try {
+      addons.reload(enabled);
+      // One that cannot be loaded is left out, not the others with it.
+      final loaded = {
+        for (final i in addons.items)
+          if (i.state == 'loaded') i.id,
+      };
+      enabled.removeWhere((id) => wanted.contains(id) && !loaded.contains(id));
+      wanted.retainAll(loaded);
+      addons.reload(enabled);
+      settings.saveOwn({'addons_enabled': enabled.toList()..sort()});
+    } catch (_) {
+      addons.reload(before);
+      reads.catalog.adapters = addons.adapters;
+      rethrow;
+    }
+    reads.catalog.adapters = addons.adapters;
+    return {
+      ...addons.snapshot(enabled, addonSignIns, addonUserDir),
+      'switched_on': wanted.toList()..sort(),
+    };
   }
 
   late final addonActions = AddonActions(Posix(), addonUserDir);
@@ -1938,10 +2004,16 @@ final class CoreService {
     }
     // setup.apply: the agents' and local LLMs' add-ons chosen on first run.
     guardAddonChanges();
-    if (params.length != 1 || !params.containsKey('enabled')) {
+    if (!params.containsKey('enabled') ||
+        params.keys.any((k) => k != 'enabled' && k != 'declined')) {
       throw const FormatException('Invalid setup request');
     }
-    final selected = params['enabled'];
+    final selected = params['enabled'], declined = params['declined'] ?? [];
+    if (declined is! List ||
+        declined.length > 200 ||
+        declined.any((x) => x is! String)) {
+      throw const FormatException('Invalid setup selection');
+    }
     if (selected is! List ||
         selected.length > 200 ||
         selected.any((x) => x is! String) ||
@@ -1974,8 +2046,18 @@ final class CoreService {
       if (selected.any((x) => !loaded.contains(x))) {
         throw const FormatException('An adapter could not be loaded');
       }
+      // What was found but left unticked counts as switched off; what is
+      // ticked no longer does.
+      final off = switchedOff()
+        ..removeAll(selected)
+        ..addAll(
+          declined.cast<String>().where(
+            (id) => managed.contains(id) && !selected.contains(id),
+          ),
+        );
       settings.saveOwn({
         'addons_enabled': enabled.toList()..sort(),
+        'addons_off': off.toList()..sort(),
         'setup_done': true,
       });
     } catch (_) {
@@ -4283,6 +4365,7 @@ final class CoreService {
     if (method == 'addons.list' || method == 'addons.set_enabled') {
       return addonRoute(method, params);
     }
+    if (method == 'addons.enable_found') return enableFound(params);
     if (method == 'addons.file_preview' || method == 'addons.file_install') {
       return addonFileRoute(method, params);
     }

@@ -205,6 +205,14 @@ void main() {
       'providers',
       'ollama',
     ),
+    'addons.enable_found': (
+      {
+        'ids': ['agent-a'],
+      },
+      'install',
+      'agents',
+      'a',
+    ),
     'setup.apply': (
       {
         'enabled': ['agent-a'],

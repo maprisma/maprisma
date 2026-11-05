@@ -350,6 +350,14 @@ List<ActionCheck> actionChecks(
           ruleAddonItem(text('id')),
         ),
       ];
+    case 'addons.enable_found':
+      final now = facts.enabled?.call() ?? const <String>{};
+      if (p['ids'] is! List) return const [];
+      return [
+        for (final id in {...(p['ids'] as List).map((e) => '$e')})
+          if (!now.contains(id))
+            ActionCheck('install', ruleAddonCategory(id), ruleAddonItem(id)),
+      ];
     case 'setup.apply':
       final wanted = {...(p['enabled'] as List? ?? const []).map((e) => '$e')};
       final now = facts.enabled?.call() ?? const <String>{};

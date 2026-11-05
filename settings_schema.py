@@ -182,6 +182,7 @@ SCHEMA: dict[str, Setting] = {
     "mcp_list": Setting(True, _bool, "Settings › Keep the MCP server list (mcp_registry.refresh_list on start)"),
     # Add-ons (Maprisma)
     "addons_enabled": Setting([], _texts, "the add-ons switched on"),
+    "addons_off": Setting([], _texts, "the add-ons the user switched off: never switched on again at the start"),
     "addons_online": Setting(True, _bool, "Settings › Look for add-ons online"),
     "installs_in_window": Setting(True, _bool, "add-on page: installs run in a terminal inside the window"),
 }
