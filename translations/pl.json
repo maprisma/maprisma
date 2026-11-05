@@ -3506,5 +3506,7 @@
  "Set up a model": "Skonfiguruj model",
  "What is serving": "Co jest teraz udostępniane",
  "Strata's own screens: choose a model, download it and serve it.": "Własne ekrany Strata: wybierz model, pobierz go i udostępnij.",
- "set one up in Strata's own screens: run strata launch in a terminal.": "skonfiguruj go na ekranach Strata: uruchom strata launch w terminalu."
+ "set one up in Strata's own screens: run strata launch in a terminal.": "skonfiguruj go na ekranach Strata: uruchom strata launch w terminalu.",
+ "set one up in Strata's own screens: run ~/.local/bin/strata launch in a terminal.": "skonfiguruj go na ekranach Strata: uruchom ~/.local/bin/strata launch w terminalu.",
+ "start a model in Strata (~/.local/bin/strata launch) before working with {0}.": "uruchom model w Strata (~/.local/bin/strata launch), zanim zaczniesz pracę z {0}."
 }

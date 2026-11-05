@@ -1257,7 +1257,7 @@ class Strata(Installer):
         if folder.is_symlink() or (folder.exists() and not folder.is_dir()):
             raise RuntimeError(f"{folder} is not a folder of its own; nothing was installed")
         if folder.is_dir() and any(folder.iterdir()) and self.marker(folder) is None:
-            raise RuntimeError(f"Strata is installed already in {folder}; update it with `strata update`")
+            raise RuntimeError(f"Strata is installed already in {folder}; update it with `~/.local/bin/strata update`")
         name, url, size = release.assets[0]
         with tempfile.TemporaryDirectory(prefix="maprisma-strata-") as work:
             script = Path(work) / name

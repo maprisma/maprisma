@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
+import 'provider_scans.dart' show portNumber;
 import 'scan_files.dart';
 
 /// provider_strata: Strata's folders, its own `strata`, its run configs and
@@ -144,13 +145,34 @@ final class StrataFacts {
     return best;
   }
 
-  /// provider_strata.is_server: `… -m serve.server` from its terminal.
-  static bool isServer(List<String> argv) =>
-      argv.isNotEmpty &&
-      argv.first.contains('/strata/terminal/') &&
-      argv.skip(1).take(3).contains('serve.server');
+  /// provider_strata._inside: `path` (absolute) is a file inside `folder`,
+  /// both resolved as real paths (links followed, both must exist).
+  static bool _inside(String path, String folder) {
+    if (!path.startsWith('/')) return false;
+    try {
+      final real = File(path).resolveSymbolicLinksSync();
+      final root = Directory(folder).resolveSymbolicLinksSync();
+      return real != root && p.isWithin(root, real);
+    } on FileSystemException {
+      return false;
+    }
+  }
 
-  /// provider_strata.server_port: --port, else its run config's port.
+  /// provider_strata.owns: its terminal's executables and its engine binary,
+  /// inside this user's own $XDG_DATA_HOME/strata.
+  bool owns(String exe) =>
+      _inside(exe, p.join(dataDir, 'terminal')) ||
+      _inside(exe, p.join(dataDir, 'components'));
+
+  /// provider_strata.is_server: `… -m serve.server` from its terminal's own
+  /// Python.
+  bool isServer(List<String> argv) =>
+      argv.isNotEmpty &&
+      argv.skip(1).take(3).contains('serve.server') &&
+      _inside(argv.first, p.join(dataDir, 'terminal'));
+
+  /// provider_strata.server_port: the first --port N (1-5 ASCII digits,
+  /// 1..65535; any other value is skipped), else its run config's port.
   int serverPort(List<String> argv) {
     for (var i = 0; i < argv.length; i++) {
       final value = argv[i] == '--port' && i + 1 < argv.length
@@ -158,15 +180,7 @@ final class StrataFacts {
           : argv[i].startsWith('--port=')
           ? argv[i].substring(7)
           : null;
-      if (value == null) continue;
-      final digits = value.trim().replaceFirst(RegExp(r'^-+'), '');
-      if (RegExp(r'^[0-9]+$').hasMatch(digits)) {
-        final port = int.parse(
-          value.trim().startsWith('-') ? '-$digits' : digits,
-        );
-        if (port > 0 && port < 65536) return port;
-        break;
-      }
+      if (value != null && portNumber(value) != 0) return portNumber(value);
     }
     for (var i = 0; i + 1 < argv.length; i++) {
       if (argv[i] == '--config' && argv[i + 1].startsWith('/')) {
@@ -176,9 +190,4 @@ final class StrataFacts {
     }
     return defaultPort;
   }
-
-  /// provider_strata.Engine.owns_process: its terminal's Python and its
-  /// engine binary.
-  static bool ownsPath(String exe) =>
-      exe.contains('/strata/terminal/') || exe.contains('/strata/components/');
 }

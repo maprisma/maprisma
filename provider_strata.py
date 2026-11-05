@@ -12,6 +12,7 @@ import os
 import re
 from pathlib import Path
 
+import gpu_usage
 import llm_engine
 from harnesses import Configure, Way
 from providers import Provider
@@ -127,20 +128,37 @@ def last_preset() -> tuple[str, int]:
     return best
 
 
+def _inside(path: str, folder: Path) -> bool:
+    """`path` (absolute) is a file inside `folder`, both resolved as real paths (links followed, both
+    must exist): a path that merely contains "/strata/terminal/" elsewhere is not."""
+    if not isinstance(path, str) or not path.startswith("/"):
+        return False
+    try:
+        real, root = Path(path).resolve(strict=True), folder.resolve(strict=True)
+    except (OSError, RuntimeError):
+        return False
+    return real != root and real.is_relative_to(root)
+
+
+def owns(exe: str) -> bool:
+    """Its terminal's executables (its Python: server, supervisor) and its engine binary, inside this
+    user's own $XDG_DATA_HOME/strata."""
+    return _inside(exe, data_dir() / "terminal") or _inside(exe, data_dir() / "components")
+
+
 def is_server(argv: list) -> bool:
-    """Strata's API server: its own Python (`… -m serve.server …`) from its terminal folder."""
-    exe = argv[0] if argv else ""
-    return "/strata/terminal/" in exe and "serve.server" in argv[1:4]
+    """Strata's API server: its terminal's own Python (`… -m serve.server …`)."""
+    return bool(argv) and "serve.server" in argv[1:4] and _inside(argv[0], data_dir() / "terminal")
 
 
 def server_port(argv: list) -> int:
-    """The port of a running server: --port, else its run config's "port" (--config), else 8080."""
-    try:
-        port = llm_engine.arg_number(argv, "--port")
-    except ValueError:                   # "--port --8080"
-        port = None
-    if port and 0 < port < 65536:
-        return port
+    """The port of a running server: the first --port N (1-5 ASCII digits, 1..65535; any other value is
+    skipped), else its run config's "port" (--config), else 8080."""
+    for i, arg in enumerate(argv):
+        value = argv[i + 1] if arg == "--port" and i + 1 < len(argv) else \
+            arg[len("--port="):] if arg.startswith("--port=") else None
+        if value is not None and gpu_usage.port_number(value):
+            return gpu_usage.port_number(value)
     for i, arg in enumerate(argv):
         if arg == "--config" and i + 1 < len(argv) and argv[i + 1].startswith("/"):
             return _port(_json(Path(argv[i + 1])).get("port")) or DEFAULT_PORT
@@ -160,15 +178,18 @@ def _installer():
 class Engine(llm_engine.Engine):
     """No user service: its own CLI starts the last launch preset and stops it."""
     ports = (DEFAULT_PORT,)
-    start_command = "strata launch"
+    start_command = "~/.local/bin/strata launch"
     models_page = False                 # models come from Strata's own screens
     own_model_folder = False
     starts_with_agents = False          # the provider watcher has no control for it: started on the map
 
     def owns_process(self, comm, argv):
-        exe = argv[0] if argv else ""
-        # Its terminal's Python (the server, the supervisor) and its engine binary.
-        return llm_engine.BY_PATH if "/strata/terminal/" in exe or "/strata/components/" in exe else 0
+        # Its terminal's Python (the server, the supervisor) and its engine binary, by real path.
+        return llm_engine.BY_PATH if argv and owns(argv[0]) else 0
+
+    def resolve_program(self, name):
+        """Only its own verified strata (strata_binary), never /usr/bin/strata, the file manager."""
+        return strata_binary() if name == "strata" else None
 
     def can_control(self, rt):
         return bool(rt.installed and strata_binary() and last_preset()[0])
@@ -179,7 +200,7 @@ class Engine(llm_engine.Engine):
         if not binary:
             return False, "strata not found"
         if not preset:
-            return False, "no saved launch preset; start one model with `strata launch` first"
+            return False, "no saved launch preset; start one model with `~/.local/bin/strata launch` first"
         out, ok = ai_core.read_bounded_output([binary, "launch", "--preset", preset, "--yes", "--no-tui"],
                                               max_bytes=64 * 1024, timeout=START_TIMEOUT, merge_stderr=True)
         lines = out.decode("utf-8", "replace").strip().splitlines()
@@ -199,11 +220,11 @@ class Engine(llm_engine.Engine):
 
     def add_model_step(self, rt):
         from i18n import _
-        return _("set one up in Strata's own screens: run strata launch in a terminal.")
+        return _("set one up in Strata's own screens: run ~/.local/bin/strata launch in a terminal.")
 
     def start_step(self, rt, agent_name):
         from i18n import _
-        return _("start a model in Strata (strata launch) before working with {0}.").format(agent_name)
+        return _("start a model in Strata (~/.local/bin/strata launch) before working with {0}.").format(agent_name)
 
 
 PROVIDER = Provider("strata", "Strata", "local", detect=_detect, installer=_installer, engine=Engine(),

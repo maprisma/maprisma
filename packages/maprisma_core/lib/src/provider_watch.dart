@@ -146,7 +146,7 @@ String watchConfigText(List<RuntimeRecord> runtimes, Set<String> selfServed) {
     final port = rt.address.substring(rt.address.lastIndexOf(':') + 1);
     out[rt.key] = {
       'service': rt.service,
-      'port': RegExp(r'^\d+$').hasMatch(port) ? int.parse(port) : 0,
+      'port': portNumber(port),
       if (control.isNotEmpty && rt.service.isEmpty) 'control': control,
     };
     final facts =

@@ -181,7 +181,11 @@ final class GpuUsage {
 
   /// llm_engine.runtime_of: which local LLM a process belongs to (the surest
   /// claim of the engines, in providers.local() order).
-  static String runtimeOf(String comm, List<String> argv) {
+  static String runtimeOf(
+    String comm,
+    List<String> argv, {
+    bool Function(String exe)? strata,
+  }) {
     final exe = argv.isEmpty ? '' : argv.first, base = p.basename(exe);
     final claims = <String, int>{
       'llamacpp': comm.startsWith('llama-') || base == 'llama-server' ? 1 : 0,
@@ -205,7 +209,7 @@ final class GpuUsage {
           ? 1
           : 0,
       'koboldcpp': comm == 'koboldcpp' || base.startsWith('koboldcpp') ? 1 : 0,
-      'strata': StrataFacts.ownsPath(exe) ? 2 : 0,
+      'strata': exe.isNotEmpty && strata != null && strata(exe) ? 2 : 0,
     };
     var best = 0, key = '';
     for (final e in claims.entries) {
@@ -217,6 +221,7 @@ final class GpuUsage {
   /// runtime_pids: key -> the runtime's own processes and all their children.
   Map<String, Set<int>> runtimePids(List<ProcessRecord> processes) {
     final parent = <int, int>{}, roots = <int, String>{};
+    final strataOwns = StrataFacts(files).owns;
     for (final process in processes) {
       final stat =
           files.text(
@@ -232,7 +237,7 @@ final class GpuUsage {
       if (fields.length > 1 && RegExp(r'^\d+$').hasMatch(fields[1])) {
         parent[process.pid] = int.parse(fields[1]);
       }
-      final key = runtimeOf(process.comm, process.argv);
+      final key = runtimeOf(process.comm, process.argv, strata: strataOwns);
       if (key.isNotEmpty) roots[process.pid] = key;
     }
     // A process belongs to the outermost local LLM above it.

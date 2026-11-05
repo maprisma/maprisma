@@ -21,6 +21,7 @@
   "models.search",
   "runtime.start",
   "runtime.stop",
+  "serve.server",
   "system.analyze"
  ],
  "protocol": 2,

@@ -23,7 +23,7 @@ class Engine(llm_engine.Engine):
 
     def loaded_models(self, rt):
         found = {}
-        for row in (llm_engine._http(rt, "/api/ps") or {}).get("models", [])[:100]:
+        for row in llm_engine.rows(llm_engine._http(rt, "/api/ps"), "models", 100):
             if isinstance(row, dict) and row.get("name"):
                 found[str(row["name"]).lower()] = "loaded"
         return found
@@ -39,8 +39,8 @@ class Engine(llm_engine.Engine):
         return (True, "") if self._keep(rt, model, 0, 30) else (False, "it did not unload the model")
 
     def unload_all(self, rt):
-        rows = (llm_engine._http(rt, "/api/ps") or {}).get("models", [])
-        ids = [str(r.get("name")) for r in rows if isinstance(r, dict) and r.get("name")]
+        listed = llm_engine.rows(llm_engine._http(rt, "/api/ps"), "models", 100)
+        ids = [str(r.get("name")) for r in listed if isinstance(r, dict) and r.get("name")]
         failed = [i for i in ids if not self._keep(rt, i, 0, 30)]
         return (False, f"could not unload {', '.join(failed)[:200]}") if failed else (True, "")
 

@@ -3425,5 +3425,7 @@
  "Set up a model": "Configurar um modelo",
  "What is serving": "O que está a ser servido",
  "Strata's own screens: choose a model, download it and serve it.": "Os ecrãs próprios do Strata: escolhe um modelo, transfere-o e serve-o.",
- "set one up in Strata's own screens: run strata launch in a terminal.": "configura um nos ecrãs próprios do Strata: executa strata launch num terminal."
+ "set one up in Strata's own screens: run strata launch in a terminal.": "configura um nos ecrãs próprios do Strata: executa strata launch num terminal.",
+ "set one up in Strata's own screens: run ~/.local/bin/strata launch in a terminal.": "configura um nos ecrãs próprios do Strata: executa ~/.local/bin/strata launch num terminal.",
+ "start a model in Strata (~/.local/bin/strata launch) before working with {0}.": "inicia um modelo no Strata (~/.local/bin/strata launch) antes de trabalhar com {0}."
 }

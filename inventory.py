@@ -16,6 +16,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 import agent_details as ad
+import gpu_usage
 import harnesses
 import mcp_ctl
 import providers
@@ -596,7 +597,7 @@ def koboldcpp(processes) -> Runtime:
             rt.running = rt.installed = True
             served.append(arg_value(argv, "--model", "--model_param"))
             port = arg_value(argv, "--port")
-            if port.isdigit():
+            if gpu_usage.port_number(port):
                 rt.address = f"127.0.0.1:{port}"
     folder = env.get("KOBOLDCPP_MODELS") or ""
     if folder:
@@ -784,9 +785,9 @@ def collect(agent_list, *, remember: bool = True, model_folders=()) -> Inventory
     inv.runtimes = [p.detect(processes) for p in providers.local() if p.detect is not None]
     by_port = {}
     for rt in inv.runtimes:
-        port = rt.address.rsplit(":", 1)[-1]
-        if port.isdigit():
-            by_port[int(port)] = rt
+        port = gpu_usage.port_number(rt.address.rsplit(":", 1)[-1])
+        if port:
+            by_port[port] = rt
 
     servers: dict[str, McpServer] = {}
     sets: dict[str, SkillSet] = {}

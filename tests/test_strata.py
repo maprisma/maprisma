@@ -119,6 +119,8 @@ class FindTest(unittest.TestCase):
             config = h.home / "run.json"
             config.write_text(json.dumps({"port": 8123}))
             exe = str(h.data / "terminal/0.1.57/python/bin/python3.12")
+            Path(exe).parent.mkdir(parents=True)
+            Path(exe).write_text("")
             server = [exe, "-m", "serve.server", "--config", str(config)]
             self.assertTrue(ps.is_server(server))
             self.assertFalse(ps.is_server(["/usr/bin/python3", "-m", "serve.server"]))
@@ -128,14 +130,41 @@ class FindTest(unittest.TestCase):
             self.assertEqual(ps.server_port(server + ["--port=70000"]), 8123)
             self.assertEqual(ps.server_port([exe, "-m", "serve.server", "--port", "--8080"]), ps.DEFAULT_PORT)
             self.assertEqual(ps.server_port([exe, "-m", "serve.server", "--config", "relative.json"]), ps.DEFAULT_PORT)
+            # Review 064 #1: an oversized, signed or non-ASCII --port never breaks the scan; the config wins.
+            for odd in ("9" * 5000, "99999999999999999999", "-8080", "８０８０", "²", "0", "65536", "1e3", " 80"):
+                self.assertEqual(ps.server_port(server + ["--port", odd]), 8123, odd)
+                self.assertEqual(ps.server_port(server + [f"--port={odd}"]), 8123, odd)
+            self.assertEqual(ps.server_port(server + ["--port", "x", "--port", "9001"]), 9001)
             rt = inventory.strata([(1, "python3.12", server)])
             self.assertEqual((rt.running, rt.installed, rt.address), (True, True, "127.0.0.1:8123"))
 
-    def test_ownership_by_path(self):
-        engine = ps.Engine()
-        self.assertEqual(engine.owns_process("python3.12", ["/h/.local/share/strata/terminal/0.1.57/python/bin/p"]), 2)
-        self.assertEqual(engine.owns_process("strata", ["/h/.local/share/strata/components/engine/x/strata"]), 2)
-        self.assertEqual(engine.owns_process("strata", ["/usr/bin/strata"]), 0)
+    def test_ownership_only_inside_its_own_folders(self):
+        """Review 064 #2: its server and engine are the executables inside this user's own Strata
+        folders, compared as resolved paths; another path that merely contains /strata/terminal/ is not."""
+        with Home() as h:
+            engine = ps.Engine()
+            python = h.data / "terminal/0.1.57/python/bin/python3.12"
+            binary = h.data / "components/engine/0.1.57-linux-x86_64-cuda/strata"
+            for path in (python, binary):
+                path.parent.mkdir(parents=True)
+                path.write_text("")
+            elsewhere = h.home / "tmp/strata/terminal/0.1.57/python/bin/python3.12"
+            elsewhere.parent.mkdir(parents=True)
+            elsewhere.write_text("")
+            inside_link = h.home / "link-python"
+            inside_link.symlink_to(python)
+            outside_link = h.data / "terminal/0.1.57/python/bin/evil"
+            outside_link.symlink_to(elsewhere)
+            server = ["-m", "serve.server", "--config", "/x"]
+            self.assertEqual(engine.owns_process("python3.12", [str(python)]), 2)
+            self.assertEqual(engine.owns_process("strata", [str(binary)]), 2)
+            self.assertEqual(engine.owns_process("python3.12", [str(inside_link)]), 2)
+            self.assertTrue(ps.is_server([str(python), *server]))
+            for exe in (str(elsewhere), str(outside_link), "/usr/bin/strata", "relative/strata/terminal/x",
+                        str(h.data / "terminal/../../elsewhere/strata/terminal/x"), str(h.data / "terminal/missing")):
+                self.assertEqual(engine.owns_process("python3.12", [exe]), 0, exe)
+                self.assertFalse(ps.is_server([exe, *server]), exe)
+            self.assertFalse(ps.is_server([str(binary), *server]))      # the engine is no server
 
 
 class SharedPortTest(unittest.TestCase):
@@ -224,6 +253,51 @@ class EngineTest(unittest.TestCase):
             self.assertEqual(calls, [([str(h.home / ".local/bin/strata"), "launch", "--preset", "office", "--yes",
                                        "--no-tui"], ps.START_TIMEOUT)])
             self.assertFalse(engine.starts_with_agents)
+
+
+class PortTextTest(unittest.TestCase):
+    """Review 064 #1, the class: a port written as text never fails a scan, the watcher's config or an
+    address (gpu_usage.port_number, its copy in provider_watch)."""
+
+    def test_port_number(self):
+        import gpu_usage
+        for text, port in (("8080", 8080), ("65535", 65535), ("1", 1), ("²", 0), ("８０", 0), ("-1", 0),
+                           ("+80", 0), (" 80", 0), ("0", 0), ("65536", 0), ("9" * 5000, 0), ("", 0)):
+            self.assertEqual(gpu_usage.port_number(text), port, text)
+        for address in ("127.0.0.1:²", "127.0.0.1:" + "9" * 30, "127.0.0.1:-1", "nothing"):
+            self.assertEqual(gpu_usage.port_of(NS(address=address)), 0, address)
+
+    def test_the_watcher_config_takes_any_address(self):
+        import provider_watch
+        for address in ("127.0.0.1:²", "127.0.0.1:" + "9" * 30):
+            rts = [NS(key="koboldcpp", installed=True, agents=["pi"], active_agents=["pi"], service="koboldcpp",
+                      address=address)]
+            with tempfile.TemporaryDirectory() as tmp:
+                path = Path(tmp) / "c.json"
+                self.assertTrue(provider_watch.write_config(NS(runtimes=rts), path))
+                self.assertEqual(json.loads(path.read_text())["runtimes"]["koboldcpp"]["port"], 0)
+
+
+class ConfigureTest(unittest.TestCase):
+    """Review 064 #3: Configure… and its --help fallback run Strata's own strata, never one by name
+    (/usr/bin/strata is a file manager)."""
+
+    def test_configure_runs_the_verified_binary(self):
+        import configure_ctl
+        with Home() as h:
+            other = h.home / "usr/bin"
+            other.mkdir(parents=True)
+            (other / "strata").write_text("#!/bin/sh\n")
+            os.chmod(other / "strata", 0o755)
+            os.environ["PATH"] = f"{other}:{h.home / '.local/bin'}"
+            self.assertEqual(configure_ctl.for_runtime("strata"), [])      # only the file manager here
+            self.assertEqual(configure_ctl.provider_program("strata"), "")
+            h.terminal()
+            own = str(h.home / ".local/bin/strata")
+            entries = configure_ctl.for_runtime("strata")
+            self.assertEqual([e.argv for e in entries], [(own, "launch"), (own, "launch", "--status")])
+            self.assertTrue(all(own in configure_ctl.script(e, "done") for e in entries))
+            self.assertEqual(configure_ctl.provider_program("strata"), own)
 
 
 if __name__ == "__main__":

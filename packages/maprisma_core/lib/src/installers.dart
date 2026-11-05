@@ -1524,7 +1524,7 @@ final class StrataInstaller extends Installer {
         Directory(folder).listSync(followLinks: false).isNotEmpty &&
         readMarker(folder) == null) {
       throw StateError(
-        'Strata is installed already in $folder; update it with `strata update`',
+        'Strata is installed already in $folder; update it with `~/.local/bin/strata update`',
       );
     }
     final (asset, url, size) = release.assets.first;
