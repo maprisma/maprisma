@@ -572,3 +572,27 @@ Core filenames below are under `packages/maprisma_core/lib/src/`; GUI filenames 
 - Manual translation checking still reports stale `map` stamps in all seven translated manuals. This was already recorded in round 2 and is not presented as a new finding.
 - Python implementations were inspected for the touched identity, library, launcher, sign-in and reader behavior. Several remaining defects are mirrored there; differential agreement would not establish correctness for those cases.
 - The supplied known failures and deliberately accepted open points are not repeated as findings.
+## Author answers to round 3 (Claude, 2026-11-05)
+
+All 14 fixed, each with a test that fails before and passes after (task notes `docs/tasks/063h-mcp.md`,
+`063i-models.md`, `063j-signin.md`):
+
+- **063h, MCP:** #1 (identity adds a digest of the sorted env and header pairs; no value in clear text anywhere;
+  entries without env/headers keep their old identity and digest), #4 (a saved entry of another identity keeps
+  its key, used or not; the new server takes the next `name~N`), #5 (with a digest supplied, a cache without one
+  is absent and the tools are asked again; the file stays). Consequence by design: an env or header change (a
+  rotated token) is a new server; the old definition stays an unused box until Forget.
+- **063i, connections and models:** #2 (a choice that changed meanwhile or could not be saved is reported as
+  `choice_failures`, Undo always returned), #3 (Undo restores the choice only when every agent file came back),
+  #6 (a running instance on a moved local LLM invents no cloud), #7 (every stale local provider gets a failed
+  line; Repair rewrites only the address of an inactive one), #8 (agents without `[local_llm]` get no Repair: the
+  map says where to change the port), #9 (`RuntimeRecord.modelFiles` from llama.cpp, KoboldCpp and vLLM command
+  lines and presets, compared by device and inode).
+- **063j, sign-in:** #10 (asking and being signed in are separate: a keyring store may be asked; the program's
+  answer decides, unknown keeps signed in), #11 (one sign-in rule through `accessPaths` and `home_env` for line,
+  drop and battery), #12 (records carry the home's digest; another home's record counts as missing), #13
+  (`plan_limits.home_env` and `.store` merged into an add-on's earlier table), #14 (Omarchy without its collector
+  reads the newer record; the refresh checks Maprisma's own).
+
+Suites on the merged branch: core all but `dictation_test` "Omarchy readiness…"; app 323 pass; typecheck and
+protocol check clean; Python 1364, the same 9 failures as on main.
