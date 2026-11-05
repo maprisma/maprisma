@@ -187,10 +187,14 @@ class _MapAddonsFocusState extends State<MapAddonsFocus> {
             ListTile(
               title: Text('${item['name']} · ${item['version']}'),
               subtitle: Text(
-                item['supported'] != true
-                    ? widget.tr('Not available in this version')
+                item['legacy'] == true
+                    ? widget.tr(
+                        "Made for Asterism, this app's old name, and never loaded. Remove it: Maprisma brings its own copy.",
+                      )
                     : item['verified'] != true || item['state'] == 'failed'
                     ? widget.tr('This add-on could not be verified or loaded.')
+                    : item['supported'] != true
+                    ? widget.tr('Not available in this version')
                     : item['summary'] as String? ?? '',
               ),
               onTap: () => widget.onMenu(context, item),

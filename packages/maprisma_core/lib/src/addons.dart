@@ -18,6 +18,13 @@ import 'sshsig.dart';
 const signingKey =
     'AAAAC3NzaC1lZDI1NTE5AAAAIFfDZiRAvEhdsjhLIlYc6SfP80I533WGiSw6/tzqQtYA';
 const signingNamespace = 'maprisma-addon';
+
+/// addons.LEGACY_*: add-ons signed for Asterism (this app's old name) with its
+/// old key are never loaded, but recognised, so their card says what they are.
+const legacyNamespace = 'asterism-addon';
+const legacyKey =
+    'AAAAC3NzaC1lZDI1NTE5AAAAIEIPZnfPIkyy+IX1J0jfB5g/U8U5jjJTapOogzlKrxlo';
+const legacyReason = "made for Asterism, this app's old name";
 const maprismaVersion = '0.14.1';
 const apiVersion = 1;
 const addonKinds = {'feature', 'agent', 'provider', 'extension'};
@@ -278,7 +285,12 @@ final class AddonVerifier {
       return _refuse(addon, 'the signature files cannot be read safely');
     }
     if (!sshSignatureOk(manifest, signature, signingNamespace, signingKey)) {
-      return _refuse(addon, 'not signed by Uwe Bruckhaus');
+      return _refuse(
+        addon,
+        sshSignatureOk(manifest, signature, legacyNamespace, legacyKey)
+            ? legacyReason
+            : 'not signed by Uwe Bruckhaus',
+      );
     }
     final listed = <String, String>{};
     for (final line in const LineSplitter().convert(
@@ -668,6 +680,7 @@ final class AddonRegistry {
           'capabilities': item.capabilities,
           'provides': item.provides,
           'sign_ins': signIns(item),
+          'legacy': item.reason == legacyReason,
           'removable':
               p.dirname(item.folder) == userDir &&
               FileSystemEntity.typeSync(item.folder, followLinks: false) !=

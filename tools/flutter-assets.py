@@ -580,6 +580,7 @@ KEYS = (
     'Online', 'Local', 'MCP servers', 'Skills', 'Model', 'Plan', 'Limits',
     'Today', 'Prompts', 'Tokens', 'Sessions',
     'Add-ons', 'Details', 'No add-ons installed', 'Not available in this version',
+    "Made for Asterism, this app's old name, and never loaded. Remove it: Maprisma brings its own copy.",
     'This add-on could not be verified or loaded.', 'Reads', 'Sends',
     'Providers and models', 'Running', 'Stopped', 'Import model', 'Download model', 'Search models',
     'Search Hugging Face', 'Model files', 'Load', 'Unload', 'Download', 'Continue',

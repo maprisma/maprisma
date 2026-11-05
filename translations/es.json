@@ -3427,5 +3427,6 @@
  "Strata's own screens: choose a model, download it and serve it.": "Las pantallas propias de Strata: elige un modelo, descárgalo y sírvelo.",
  "set one up in Strata's own screens: run strata launch in a terminal.": "configura uno en las pantallas propias de Strata: ejecuta strata launch en un terminal.",
  "set one up in Strata's own screens: run ~/.local/bin/strata launch in a terminal.": "configura uno en las pantallas propias de Strata: ejecuta ~/.local/bin/strata launch en un terminal.",
- "start a model in Strata (~/.local/bin/strata launch) before working with {0}.": "inicia un modelo en Strata (~/.local/bin/strata launch) antes de trabajar con {0}."
+ "start a model in Strata (~/.local/bin/strata launch) before working with {0}.": "inicia un modelo en Strata (~/.local/bin/strata launch) antes de trabajar con {0}.",
+ "Made for Asterism, this app's old name, and never loaded. Remove it: Maprisma brings its own copy.": "Hecho para Asterism, el nombre antiguo de esta app, y nunca cargado. Quítalo: Maprisma trae su propia copia."
 }

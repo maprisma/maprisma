@@ -210,6 +210,20 @@ class AddonsTest(unittest.TestCase):
         (system / "insights").mkdir()
         self.assertEqual(addons.find((self.root, system)), [self.root / "insights"])
 
+    def test_an_asterism_era_addon_is_recognised_never_loaded(self):
+        # A real add-on signed for Asterism (the old name and key), as copied into the user folder at the rename.
+        fixture = Path(__file__).resolve().parent.parent / "packages/maprisma_core/test/fixtures/addons/legacy/agent-goose"
+        folder = self.root / "agent-goose"
+        shutil.copytree(fixture, folder)
+        for path in [folder, *folder.iterdir()]:
+            path.chmod(0o755 if path.is_dir() else 0o644)
+        item = addons.verify(folder)
+        self.assertEqual((item.state, item.reason), ("refused", addons.LEGACY_REASON))
+        # A changed manifest is no longer signed by either key: an ordinary refusal.
+        (folder / "MANIFEST.sha256").write_text((folder / "MANIFEST.sha256").read_text() + "\n")
+        item = addons.verify(folder)
+        self.assertEqual((item.state, item.reason), ("refused", "not signed by Uwe Bruckhaus"))
+
     def test_translations(self):
         api = addon_api.AddonAPI("insights", edition.TITLES, addons.strings(self.verify(self.build())))
         with mock.patch("i18n.current", return_value="de"):

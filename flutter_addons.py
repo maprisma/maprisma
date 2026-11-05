@@ -52,6 +52,7 @@ class AdapterRegistry:
             "provides": item.provides,
             "sign_ins": sign_ins(item),
             "removable": item.folder.parent == addons.USER_DIR and not item.folder.is_symlink(),
+            "legacy": item.reason == addons.LEGACY_REASON,
         } for item in self.items]}
 
     def installed(self, enabled: set[str]) -> set[str]:

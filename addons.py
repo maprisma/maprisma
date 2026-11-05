@@ -41,6 +41,12 @@ ALLOWED_SIGNERS = ('addons@maprisma namespaces="maprisma-addon" '
                    'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFfDZiRAvEhdsjhLIlYc6SfP80I533WGiSw6/tzqQtYA')
 PRINCIPAL = "addons@maprisma"
 NAMESPACE = "maprisma-addon"
+# Add-ons signed for Asterism (this app's old name) with its old key: never loaded, but recognised, so the card
+# can say what they are instead of "not signed" (they were copied into the user folder at the rename).
+LEGACY_NAMESPACE = "asterism-addon"
+LEGACY_SIGNERS = (f'{PRINCIPAL} namespaces="{LEGACY_NAMESPACE}" '
+                  'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEIPZnfPIkyy+IX1J0jfB5g/U8U5jjJTapOogzlKrxlo')
+LEGACY_REASON = "made for Asterism, this app's old name"
 
 USER_DIR = Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local/share") / "maprisma/addons"
 # The add-ons that come with the app (signed like any other), next to its own files: /usr/lib/maprisma/
@@ -177,7 +183,8 @@ def homepage(value) -> str:
     return value
 
 
-def signature_ok(manifest: bytes, signature: bytes, signers: str = ALLOWED_SIGNERS) -> bool:
+def signature_ok(manifest: bytes, signature: bytes, signers: str = ALLOWED_SIGNERS,
+                 namespace: str = NAMESPACE) -> bool:
     """Does `signature` sign `manifest` by a key in `signers`? (ssh-keygen -Y verify)"""
     keygen = shutil.which("ssh-keygen")
     if keygen is None:
@@ -187,7 +194,7 @@ def signature_ok(manifest: bytes, signature: bytes, signers: str = ALLOWED_SIGNE
         signers_file.write_text(signers + "\n")
         signature_file.write_bytes(signature)
         _out, ok = ai_core.read_bounded_output(
-            [keygen, "-Y", "verify", "-f", str(signers_file), "-I", PRINCIPAL, "-n", NAMESPACE,
+            [keygen, "-Y", "verify", "-f", str(signers_file), "-I", PRINCIPAL, "-n", namespace,
              "-s", str(signature_file)], max_bytes=4096, timeout=VERIFY_TIMEOUT, stdin=manifest)
     return ok
 
@@ -220,6 +227,8 @@ def verify(folder: Path, signers: str = ALLOWED_SIGNERS, uid: int | None = None)
     if not signature_ok(manifest, signature, signers):
         reason = "not signed by Uwe Bruckhaus" if shutil.which("ssh-keygen") else \
             "ssh-keygen (OpenSSH) is missing, so the signature cannot be checked"
+        if shutil.which("ssh-keygen") and signature_ok(manifest, signature, LEGACY_SIGNERS, LEGACY_NAMESPACE):
+            reason = LEGACY_REASON
         return _refuse(addon, reason)
     listed = {}
     for line in manifest.decode("utf-8", "replace").splitlines():
