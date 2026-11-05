@@ -128,6 +128,11 @@ class FindTest(unittest.TestCase):
             self.assertEqual(ps.server_port(server + ["--port=70000"]), 8123)
             self.assertEqual(ps.server_port([exe, "-m", "serve.server", "--port", "--8080"]), ps.DEFAULT_PORT)
             self.assertEqual(ps.server_port([exe, "-m", "serve.server", "--config", "relative.json"]), ps.DEFAULT_PORT)
+            # Review 064 #1: an oversized, signed or non-ASCII --port never breaks the scan; the config wins.
+            for odd in ("9" * 5000, "99999999999999999999", "-8080", "８０８０", "²", "0", "65536", "1e3", " 80"):
+                self.assertEqual(ps.server_port(server + ["--port", odd]), 8123, odd)
+                self.assertEqual(ps.server_port(server + [f"--port={odd}"]), 8123, odd)
+            self.assertEqual(ps.server_port(server + ["--port", "x", "--port", "9001"]), 9001)
             rt = inventory.strata([(1, "python3.12", server)])
             self.assertEqual((rt.running, rt.installed, rt.address), (True, True, "127.0.0.1:8123"))
 
@@ -224,6 +229,29 @@ class EngineTest(unittest.TestCase):
             self.assertEqual(calls, [([str(h.home / ".local/bin/strata"), "launch", "--preset", "office", "--yes",
                                        "--no-tui"], ps.START_TIMEOUT)])
             self.assertFalse(engine.starts_with_agents)
+
+
+class PortTextTest(unittest.TestCase):
+    """Review 064 #1, the class: a port written as text never fails a scan, the watcher's config or an
+    address (gpu_usage.port_number, its copy in provider_watch)."""
+
+    def test_port_number(self):
+        import gpu_usage
+        for text, port in (("8080", 8080), ("65535", 65535), ("1", 1), ("²", 0), ("８０", 0), ("-1", 0),
+                           ("+80", 0), (" 80", 0), ("0", 0), ("65536", 0), ("9" * 5000, 0), ("", 0)):
+            self.assertEqual(gpu_usage.port_number(text), port, text)
+        for address in ("127.0.0.1:²", "127.0.0.1:" + "9" * 30, "127.0.0.1:-1", "nothing"):
+            self.assertEqual(gpu_usage.port_of(NS(address=address)), 0, address)
+
+    def test_the_watcher_config_takes_any_address(self):
+        import provider_watch
+        for address in ("127.0.0.1:²", "127.0.0.1:" + "9" * 30):
+            rts = [NS(key="koboldcpp", installed=True, agents=["pi"], active_agents=["pi"], service="koboldcpp",
+                      address=address)]
+            with tempfile.TemporaryDirectory() as tmp:
+                path = Path(tmp) / "c.json"
+                self.assertTrue(provider_watch.write_config(NS(runtimes=rts), path))
+                self.assertEqual(json.loads(path.read_text())["runtimes"]["koboldcpp"]["port"], 0)
 
 
 if __name__ == "__main__":

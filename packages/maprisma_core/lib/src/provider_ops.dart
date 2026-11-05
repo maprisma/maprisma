@@ -54,7 +54,7 @@ bool ownPort(int port, int uid, {String proc = '/proc/net'}) {
 
 int portOf(RuntimeRecord rt) {
   final at = rt.address.lastIndexOf(':');
-  return int.tryParse(at < 0 ? '' : rt.address.substring(at + 1)) ?? 0;
+  return at < 0 ? 0 : portNumber(rt.address.substring(at + 1));
 }
 
 /// gpu_usage.http_json: a JSON reply from our own server on 127.0.0.1, or null.

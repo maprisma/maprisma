@@ -12,6 +12,7 @@ import os
 import re
 from pathlib import Path
 
+import gpu_usage
 import llm_engine
 from harnesses import Configure, Way
 from providers import Provider
@@ -134,13 +135,13 @@ def is_server(argv: list) -> bool:
 
 
 def server_port(argv: list) -> int:
-    """The port of a running server: --port, else its run config's "port" (--config), else 8080."""
-    try:
-        port = llm_engine.arg_number(argv, "--port")
-    except ValueError:                   # "--port --8080"
-        port = None
-    if port and 0 < port < 65536:
-        return port
+    """The port of a running server: the first --port N (1-5 ASCII digits, 1..65535; any other value is
+    skipped), else its run config's "port" (--config), else 8080."""
+    for i, arg in enumerate(argv):
+        value = argv[i + 1] if arg == "--port" and i + 1 < len(argv) else \
+            arg[len("--port="):] if arg.startswith("--port=") else None
+        if value is not None and gpu_usage.port_number(value):
+            return gpu_usage.port_number(value)
     for i, arg in enumerate(argv):
         if arg == "--config" and i + 1 < len(argv) and argv[i + 1].startswith("/"):
             return _port(_json(Path(argv[i + 1])).get("port")) or DEFAULT_PORT

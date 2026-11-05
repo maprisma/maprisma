@@ -58,6 +58,16 @@ final class RuntimeRecord {
   };
 }
 
+final _portText = RegExp(r'^[0-9]{1,5}$');
+
+/// gpu_usage.port_number: a port written as text, 1-5 ASCII digits in
+/// 1..65535; 0 for anything else, so no scan or address fails on it.
+int portNumber(String text) {
+  if (!_portText.hasMatch(text)) return 0;
+  final port = int.parse(text);
+  return port > 0 && port < 65536 ? port : 0;
+}
+
 /// The port of a runtime's address ("127.0.0.1:9090", "http://host:9090/"),
 /// or null.
 int? addressPort(String address) {
@@ -625,9 +635,7 @@ final class ProviderScans {
               rt.running = rt.installed = true;
               servedFiles.add(arg(process.argv, ['--model', '--model_param']));
               final port = arg(process.argv, ['--port']);
-              if (RegExp(r'^[0-9]+$').hasMatch(port)) {
-                rt.address = '127.0.0.1:$port';
-              }
+              if (portNumber(port) != 0) rt.address = '127.0.0.1:$port';
             }
           }
           if (env['KOBOLDCPP_MODELS'] != null) {

@@ -150,7 +150,9 @@ def write_config(inventory, path: Path = CONFIG) -> bool:
         if not rt.installed or not rt.agents or not (rt.service or control):
             continue
         port = rt.address.rpartition(":")[2]
-        runtimes[rt.key] = {"service": rt.service, "port": int(port) if port.isdigit() else 0,
+        # As gpu_usage.port_number (this script stays stdlib only): 1-5 ASCII digits, 1..65535.
+        port = int(port) if re.fullmatch(r"[0-9]{1,5}", port) and 0 < int(port) < 65536 else 0
+        runtimes[rt.key] = {"service": rt.service, "port": port,
                             **({"control": control} if control and not rt.service else {})}
         provider = providers.get(rt.key)
         if provider is not None and provider.stays_up and provider.unload:

@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
+import 'provider_scans.dart' show portNumber;
 import 'scan_files.dart';
 
 /// provider_strata: Strata's folders, its own `strata`, its run configs and
@@ -150,7 +151,8 @@ final class StrataFacts {
       argv.first.contains('/strata/terminal/') &&
       argv.skip(1).take(3).contains('serve.server');
 
-  /// provider_strata.server_port: --port, else its run config's port.
+  /// provider_strata.server_port: the first --port N (1-5 ASCII digits,
+  /// 1..65535; any other value is skipped), else its run config's port.
   int serverPort(List<String> argv) {
     for (var i = 0; i < argv.length; i++) {
       final value = argv[i] == '--port' && i + 1 < argv.length
@@ -158,15 +160,7 @@ final class StrataFacts {
           : argv[i].startsWith('--port=')
           ? argv[i].substring(7)
           : null;
-      if (value == null) continue;
-      final digits = value.trim().replaceFirst(RegExp(r'^-+'), '');
-      if (RegExp(r'^[0-9]+$').hasMatch(digits)) {
-        final port = int.parse(
-          value.trim().startsWith('-') ? '-$digits' : digits,
-        );
-        if (port > 0 && port < 65536) return port;
-        break;
-      }
+      if (value != null && portNumber(value) != 0) return portNumber(value);
     }
     for (var i = 0; i + 1 < argv.length; i++) {
       if (argv[i] == '--config' && argv[i + 1].startsWith('/')) {

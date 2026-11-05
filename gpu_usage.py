@@ -211,9 +211,20 @@ def http_json(port: int, path: str, method: str = "GET", body: dict | None = Non
         return None
 
 
+_PORT_TEXT = re.compile(r"[0-9]{1,5}")
+
+
+def port_number(text: str) -> int:
+    """A port written as text: 1-5 ASCII digits, 1..65535; 0 for anything else ("²", "-1", a huge
+    number), so no scan or address ever fails on it."""
+    if not isinstance(text, str) or not _PORT_TEXT.fullmatch(text):
+        return 0
+    port = int(text)
+    return port if 0 < port < 65536 else 0
+
+
 def port_of(rt) -> int:
-    port = (rt.address or "").rpartition(":")[2]
-    return int(port) if port.isdigit() else 0
+    return port_number((rt.address or "").rpartition(":")[2])
 
 
 def loaded_models(rt) -> dict:
