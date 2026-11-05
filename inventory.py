@@ -50,6 +50,10 @@ class McpServer:
     kind: str = ""           # "command" or "url"
     target: str = ""         # command name / package, or the URL's host
     agents: list = field(default_factory=list)
+    id: str = ""             # the map's id: the name, or name~2 for another server of that name
+
+    def __post_init__(self):
+        self.id = self.id or self.name
 
 
 @dataclass
@@ -67,6 +71,26 @@ class Inventory:
     agent_mcp: dict = field(default_factory=dict)      # command -> [server names]
     agent_skills: dict = field(default_factory=dict)   # command -> [skill set paths]
     agent_tools: dict = field(default_factory=dict)    # command -> [built-in tool names], where configured
+    model_folders: list = field(default_factory=list)  # reused model folders no runtime lists: (path, [models])
+
+
+def address_port(address: str):
+    """The port of a runtime's address ("127.0.0.1:9090", "http://host:9090/"), or None."""
+    found = re.search(r":(\d{1,5})/?$", (address or "").strip())
+    return int(found.group(1)) if found else None
+
+
+def local_runtime(provider, runtimes):
+    """The runtime a local provider points at: the installed one detected on its configured port,
+    else the one whose usual port it is (provider.runtime, from the facts)."""
+    if not provider.local:
+        return None
+    port = getattr(provider, "port", None)
+    if port is not None:
+        for rt in runtimes:
+            if rt.installed and address_port(rt.address) == port:
+                return rt
+    return next((rt for rt in runtimes if rt.name == provider.runtime), None)
 
 
 def tilde(path) -> str:
@@ -341,15 +365,18 @@ def has_model_files(folder: Path) -> bool:
 
 def lmstudio(processes) -> Runtime:
     root = HOME / ".lmstudio"
+    # Its server's port, when set in the app (Developer › Settings).
+    port = ad.read_json(root / ".internal/http-server-config.json").get("port")
+    port = port if isinstance(port, int) and not isinstance(port, bool) and port > 0 else 1234
     rt = Runtime("lmstudio", "LM Studio", installed=root.is_dir() or bool(shutil.which("lms")),
-                 address="127.0.0.1:1234")
+                 address=f"127.0.0.1:{port}")
     for _pid, comm, argv in processes:
         exe = Path(argv[0]).name.lower() if argv else ""
         if comm.lower().startswith("lm studio") or comm == "lm-studio" or exe in ("lm-studio", "lm studio"):
             rt.running = True
     if rt.running:
         import models_ctl
-        owners = models_ctl.loopback_listeners(1234)
+        owners = models_ctl.loopback_listeners(port)
         rt.server_off = not owners or any(uid != os.getuid() for uid in owners)
     settings = ad.read_json(root / "settings.json")
     folder = settings.get("downloadsFolder") if isinstance(settings.get("downloadsFolder"), str) else ""
@@ -475,14 +502,22 @@ def jan_model_ids(models: Path) -> list[str]:
 def jan(processes) -> Runtime:
     """Jan's engine (jan-llama-worker, a llama.cpp router) run headless as the
     user service jan.service on JAN_PORT, serving the models of Jan's data folder."""
-    rt = Runtime("jan", "Jan", address=f"127.0.0.1:{JAN_PORT}")
+    rt = Runtime("jan", "Jan")
     rt.service, _env = unit_named("jan")
     rt.installed = bool(rt.service) or JAN_ROOT.is_dir() or bool(shutil.which("jan"))
+    # The port its service starts the engine on, else the usual one.
+    unit = ad._read(HOME / ".config/systemd/user/jan.service") or "" if rt.service else ""
+    found = re.search(r"--port[= ]+(\d{1,5})\b", unit)
+    port = found.group(1) if found else None
     for _pid, comm, argv in processes:
         if comm == "jan-llama-worke" or (argv and Path(argv[0]).name == "jan-llama-worker"):
             rt.installed = True
-            if arg_value(argv, "--port") == str(JAN_PORT):
+            # The router (it has a preset; a model's own worker has none) on whatever port it was started.
+            at = arg_value(argv, "--port")
+            if re.fullmatch(r"\d{1,5}", at) and (at == (port or str(JAN_PORT)) or arg_value(argv, "--preset")):
                 rt.running = True
+                port = at
+    rt.address = f"127.0.0.1:{port or JAN_PORT}"
     data = jan_data_folder()
     preset = data / "llamacpp/router.preset.ini"
     names = [s for s in re.findall(r"^\[([^\]\n]{1,120})\]", ad._read(preset) or "", re.MULTILINE) if s != "*"]
@@ -625,7 +660,35 @@ def skills_in(folder: Path, depth: int = 0) -> list[tuple[Path, Path]]:
 
 # --- all together -----------------------------------------------------------------------
 
-def collect(agent_list, *, remember: bool = True) -> Inventory:
+def add_server(servers: dict, name: str, kind: str, target: str) -> McpServer:
+    """The server of that name, kind and target; another of the same name gets the id name~2, …."""
+    ident, n = name, 2
+    while ident in servers and (servers[ident].kind, servers[ident].target) != (kind, target):
+        ident, n = f"{name}~{n}", n + 1
+    return servers.setdefault(ident, McpServer(name, kind, target, id=ident))
+
+
+def reused_folders(runtimes, folders) -> list:
+    """Reused model folders (settings model_folders) no installed runtime lists: (path, [models])."""
+    listed = {graph_key(m) for rt in runtimes if rt.installed for m in rt.models}
+    served = {os.path.expanduser(rt.models_dir) for rt in runtimes if rt.installed and rt.models_dir}
+    found = []
+    for folder in list(folders)[:50]:
+        path = Path(os.path.expanduser(folder))
+        if str(path) in served:
+            continue
+        models = [m for m in gguf_names(path) if graph_key(m) not in listed]
+        if models:
+            found.append((tilde(path), models))
+    return found
+
+
+def graph_key(name: str) -> str:
+    import graph
+    return graph.model_key(name)
+
+
+def collect(agent_list, *, remember: bool = True, model_folders=()) -> Inventory:
     inv = Inventory()
     processes = own_processes()
     inv.runtimes = [p.detect(processes) for p in providers.local() if p.detect is not None]
@@ -644,15 +707,15 @@ def collect(agent_list, *, remember: bool = True) -> Inventory:
         # Local runtimes this agent talks to (its providers' addresses).
         info = ad.details_for(command)
         for provider in info.providers:
-            if provider.local:
-                for rt in inv.runtimes:
-                    if rt.name == provider.runtime and command not in rt.agents:
-                        rt.agents.append(command)
-                    if rt.name == provider.runtime and provider.active and command not in rt.active_agents:
-                        rt.active_agents.append(command)
+            rt = local_runtime(provider, inv.runtimes)
+            if rt is not None:
+                if command not in rt.agents:
+                    rt.agents.append(command)
+                if provider.active and command not in rt.active_agents:
+                    rt.active_agents.append(command)
         names = []
         for name, kind, target in mcp_for(command):
-            server = servers.setdefault(name, McpServer(name, kind, target))
+            server = add_server(servers, name, kind, target)
             if command not in server.agents:
                 server.agents.append(command)
             names.append(name)
@@ -677,13 +740,15 @@ def collect(agent_list, *, remember: bool = True) -> Inventory:
     # Local LLMs with MCP servers of their own (their chat uses them, e.g. LM Studio).
     for key in mcp_ctl.llm_clients():
         for name, kind, target in servers_in(mcp_ctl.raw_entries(key)):
-            server = servers.setdefault(name, McpServer(name, kind, target))
+            server = add_server(servers, name, kind, target)
             if key not in server.agents:
                 server.agents.append(key)
     # The servers Maprisma knows: remember what is in use, list the rest too (no agents).
     import mcp_library
     used = {}
     for name, server in servers.items():
+        if server.id != server.name:
+            continue                      # another server of that name: the library keeps the first
         _source, entry = mcp_ctl.entry_from(server.agents, name)
         used[name] = entry
     if remember:
@@ -698,7 +763,8 @@ def collect(agent_list, *, remember: bool = True) -> Inventory:
             else:
                 kind, target = server_target({"url": entry["url"]})
             servers[name] = McpServer(name, kind, target)
-    inv.mcp = sorted(servers.values(), key=lambda s: s.name.lower())
+    inv.mcp = sorted(servers.values(), key=lambda s: s.id.lower())
+    inv.model_folders = reused_folders(inv.runtimes, model_folders)
     inv.skill_sets = sorted(sets.values(), key=lambda s: (-len(s.agents), s.path))
     for skill_set in inv.skill_sets:
         skill_set.skills.sort(key=str.lower)

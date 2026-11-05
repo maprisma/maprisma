@@ -285,7 +285,10 @@ final class MapEdits {
       }
       builders.add(() => llm.plan(command, before, '', false, remove: true));
     } else if (target['kind'] == 'mcp') {
-      final name = old.substring('mcp:'.length);
+      // mcp:<name>, or mcp:<name>~2 for another server of that name.
+      final name = old
+          .substring('mcp:'.length)
+          .replaceFirst(RegExp(r'~\d+$'), '');
       if (!mcp.rawEntries(command).containsKey(name)) {
         throw const FormatException('Connection unavailable');
       }

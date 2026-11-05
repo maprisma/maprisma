@@ -184,11 +184,15 @@ final class DetailReaders {
         ports.putIfAbsent(port as int, () => p['name'] as String);
       }
     }
-    final runtime = local ? ports[uri.hasPort ? uri.port : null] ?? '' : '';
+    final port = local && uri.hasPort ? uri.port : null;
+    final runtime = local ? ports[port] ?? '' : '';
     return {
       'name': boundedText(name, 40),
       'local': local,
       'runtime': runtime,
+      // The configured port: the map joins it to the local LLM detected
+      // there (localRuntime), the usual ports above only when none is.
+      'port': port,
       'models': models,
       'active': active,
     };

@@ -238,10 +238,12 @@ class GraphTest(unittest.TestCase):
         self.assertTrue(nodes[folder].active)
         self.assertEqual(nodes[folder].status, "running")
         self.assertFalse(nodes["model:runtime:lmstudio:qwen3.8-27b-gguf"].active)
-        # Another model is not taken for it.
+        # Another model is not taken for it: the one it is set to is missing (review 063 F6).
         details["hermes"] = ad.Details(model="gemma-4-12b-it (lmstudio-local)", providers=details["hermes"].providers)
         g = graph.build([hermes], details, inv)
-        self.assertFalse([e for e in g.edges if e.source == "agent:hermes" and e.kind == "default"])
+        self.assertEqual([e.target for e in g.edges if e.source == "agent:hermes" and e.kind == "default"],
+                         ["model:runtime:lmstudio:gemma-4-12b-it"])
+        self.assertEqual({n.id: n for n in g.nodes}["model:runtime:lmstudio:gemma-4-12b-it"].status, "missing")
 
     def test_a_provider_that_is_gone_is_a_broken_line_not_a_cloud(self):
         """Hermes set to a model on "llama-local", but no llama-local provider any more: a red
@@ -371,3 +373,114 @@ class LmStudioIdsTest(unittest.TestCase):
                 {"domain": "llm", "defaultIdentifier": "gone", "entryPoint": {"absPath": f"{root}/gone.gguf"}}]}))
             self.assertEqual(inventory.lmstudio_identifiers(Path(root)), ["gemma-4-12b-it-qat"])
             self.assertEqual(inventory.lmstudio_identifiers(Path(root, "missing")), [])
+
+
+class ReviewChainTest(unittest.TestCase):
+    """Review 063 (Codex): the agent → provider → model chain."""
+    setUp, write, agent = InventoryTest.setUp, InventoryTest.write, InventoryTest.agent
+
+    def edges(self, g):
+        return {(e.source, e.target, e.kind) for e in g.edges}
+
+    def test_a_configured_port_finds_the_runtime_detected_there(self):
+        """F4: Pi set to llama.cpp on port 9090 (not its usual 8080)."""
+        pi = self.agent("pi", "Pi")
+        provider = ad.provider_for_url("llama", "http://127.0.0.1:9090/v1")
+        self.assertEqual((provider.runtime, provider.port), ("", 9090))
+        inv = invmod.Inventory(runtimes=[invmod.Runtime("llamacpp", "llama.cpp", True, True,
+                                                        address="127.0.0.1:9090", models=["qwen"])])
+        g = graph.build([pi], {"pi": ad.Details(model="qwen (llama)", providers=[provider])}, inv)
+        self.assertIn(("agent:pi", "runtime:llamacpp", "uses"), self.edges(g))
+        self.assertIn(("agent:pi", "model:runtime:llamacpp:qwen", "default"), self.edges(g))
+        # The usual port still finds it when no runtime is detected on the configured one.
+        usual = ad.provider_for_url("llama", "http://127.0.0.1:8080/v1")
+        inv.runtimes[0].address = ""
+        self.assertIs(invmod.local_runtime(usual, inv.runtimes), inv.runtimes[0])
+
+    def test_an_unqualified_model_on_a_local_endpoint_is_that_runtimes(self):
+        """F5 and F7: Claude Code with ANTHROPIC_BASE_URL on localhost, model qwen (also as --model)."""
+        claude = self.agent("claude", "Claude Code")
+        provider = ad.provider_for_url("Anthropic API", "http://localhost:8080")
+        inv = invmod.Inventory(runtimes=[invmod.Runtime("llamacpp", "llama.cpp", True, True,
+                                                        address="127.0.0.1:8080", models=["qwen", "gemma"])])
+        g = graph.build([claude], {"claude": ad.Details(model="qwen", providers=[provider])}, inv,
+                        running={"claude": ["gemma"]})
+        self.assertIn(("agent:claude", "model:runtime:llamacpp:qwen", "default"), self.edges(g))
+        self.assertFalse([n for n in g.nodes if n.kind == "cloud"])
+        self.assertEqual({n.id: n for n in g.nodes}["model:runtime:llamacpp:gemma"].status, "running")
+
+    def test_the_models_in_use_are_drawn_past_the_first_ten(self):
+        """F6: the eleventh model, used; a model no longer there stays, missing."""
+        pi = self.agent("pi", "Pi")
+        provider = ad.Provider("llama", True, "llama.cpp")
+        models = [f"m{i:02}" for i in range(12)]
+        inv = invmod.Inventory(runtimes=[invmod.Runtime("llamacpp", "llama.cpp", True, True,
+                                                        address="127.0.0.1:8080", models=models)])
+        g = graph.build([pi], {"pi": ad.Details(model="m10 (llama)", providers=[provider])}, inv,
+                        provider_models={"runtime:llamacpp": "model:runtime:llamacpp:m11"})
+        nodes = {n.id: n for n in g.nodes}
+        self.assertIn(("agent:pi", "model:runtime:llamacpp:m10", "default"), self.edges(g))
+        self.assertIn("model:runtime:llamacpp:m11", nodes)
+        self.assertNotIn("more:runtime:llamacpp", nodes)
+        g = graph.build([pi], {"pi": ad.Details(model="gone (llama)", providers=[provider])}, inv)
+        nodes = {n.id: n for n in g.nodes}
+        self.assertEqual(nodes["model:runtime:llamacpp:gone"].status, "missing")
+        self.assertEqual(nodes["model:runtime:llamacpp:gone"].label, "gone")
+        self.assertIn(("runtime:llamacpp", "model:runtime:llamacpp:gone", "serves"), self.edges(g))
+        self.assertIn(("agent:pi", "model:runtime:llamacpp:gone", "default"), self.edges(g))
+        self.assertEqual(nodes["more:runtime:llamacpp"].label, "+2 more")
+
+    def test_an_own_provider_without_sign_in_is_available(self):
+        """F17: Codex signed out: OpenAI is a provider it can use, not one it uses."""
+        import agent_status
+        codex = self.agent("codex", "Codex")
+        with mock.patch.object(agent_status, "HOME", self.home), mock.patch.dict(os.environ, {}, clear=True):
+            g = graph.build([codex], {"codex": ad.Details(model="gpt-6.1-sol")}, invmod.Inventory())
+            self.assertIn(("agent:codex", "cloud:openai", "available"), self.edges(g))
+            self.assertEqual({n.id: n for n in g.nodes}["agent:codex"].own_provider, "cloud:openai")
+            self.write(".codex/auth.json", "{}")
+            g = graph.build([codex], {"codex": ad.Details(model="gpt-6.1-sol")}, invmod.Inventory())
+            self.assertIn(("agent:codex", "cloud:openai", "uses"), self.edges(g))
+
+    def test_servers_of_one_name_but_other_commands_stay_two(self):
+        """F2: Claude's and Codex's "filesystem" run different programs."""
+        self.write(".claude.json", json.dumps({"mcpServers": {"filesystem": {"command": "fs-a"}}}))
+        self.write(".codex/config.toml", '[mcp_servers.filesystem]\ncommand = "fs-b"\n')
+        claude, codex = self.agent("claude", "Claude Code"), self.agent("codex", "Codex")
+        with mock.patch.object(ad, "details_for", lambda c: ad.Details()):
+            inv = invmod.collect([claude, codex], remember=False)
+        servers = {s.id: (s.name, s.target, s.agents) for s in inv.mcp}
+        self.assertEqual(servers["filesystem"], ("filesystem", "fs-a", ["claude"]))
+        self.assertEqual(servers["filesystem~2"], ("filesystem", "fs-b", ["codex"]))
+        g = graph.build([claude, codex], {}, inv)
+        self.assertIn(("agent:claude", "mcp:filesystem", "mcp"), self.edges(g))
+        self.assertIn(("agent:codex", "mcp:filesystem~2", "mcp"), self.edges(g))
+        self.assertEqual({n.id: n.label for n in g.nodes}["mcp:filesystem~2"], "filesystem")
+
+    def test_lm_studio_and_jan_on_other_ports(self):
+        """F8: LM Studio's server port from its settings, Jan's from its service or its router."""
+        self.write(".lmstudio/.internal/http-server-config.json", json.dumps({"port": 4321}))
+        self.assertEqual(invmod.lmstudio([]).address, "127.0.0.1:4321")
+        self.write(".lmstudio/.internal/http-server-config.json", "{}")
+        self.assertEqual(invmod.lmstudio([]).address, "127.0.0.1:1234")
+        self.assertEqual(invmod.jan([]).address, "127.0.0.1:6767")
+        self.write(".config/systemd/user/jan.service", "[Service]\nExecStart=/bin/sh -c 'exec w --port 7001'\n")
+        self.assertEqual((invmod.jan([]).address, invmod.jan([]).running), ("127.0.0.1:7001", False))
+        worker = [(9, "jan-llama-worke", ["jan-llama-worker", "--preset", "p.ini", "--port", "7002"])]
+        rt = invmod.jan(worker)
+        self.assertEqual((rt.address, rt.running), ("127.0.0.1:7002", True))
+
+    def test_a_reused_model_folder_is_on_the_map(self):
+        """F11: a folder saved by Reuse model folder that no local LLM lists."""
+        folder = self.home / "Old/models"
+        self.write("Old/models/qwen-7b-Q4_K_M.gguf", "")
+        self.write("Old/models/served.gguf", "")
+        llama = invmod.Runtime("llamacpp", "llama.cpp", True, False, models=["served"])
+        found = invmod.reused_folders([llama], [str(folder)])
+        self.assertEqual(found, [("~/Old/models", ["qwen-7b-Q4_K_M"])])
+        g = graph.build([], {}, invmod.Inventory(runtimes=[llama], model_folders=found))
+        node = {n.id: n for n in g.nodes}["model:folder:~/Old/models:qwen-7b-q4_k_m"]
+        self.assertEqual((node.kind, node.group), ("model", "~/Old/models"))
+        # A folder a runtime already lists its models from is that runtime's.
+        llama.models_dir = "~/Old/models"
+        self.assertEqual(invmod.reused_folders([llama], [str(folder)]), [])

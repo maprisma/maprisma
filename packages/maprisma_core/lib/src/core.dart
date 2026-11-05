@@ -681,9 +681,12 @@ final class CoreService {
     String notSet(List<String> missing) =>
         '${missing.join(', ')} · ${tr('draw a line from the agent to this box on the map to add it.')}';
     if (method == 'details.mcp') {
-      final name = params['name'] as String;
-      final server = inventory.mcp.where((m) => m['name'] == name).firstOrNull;
+      // The map's id: the name, or name~2 for another server of that name.
+      final server = inventory.mcp
+          .where((m) => m['id'] == params['name'])
+          .firstOrNull;
       if (server == null) throw const FormatException('Unknown MCP server');
+      final name = server['name'] as String;
       final users = [
         for (final a in server['agents'] as List? ?? const []) '$a',
       ];
@@ -4068,7 +4071,7 @@ final class CoreService {
       );
     } else if (params['kind'] == 'mcp') {
       final server = inventory.mcp
-          .where((s) => s['name'] == params['item'])
+          .where((s) => s['id'] == params['item'])
           .firstOrNull;
       if (server == null || !mcp.supported(command)) {
         throw const FormatException('MCP server unavailable');

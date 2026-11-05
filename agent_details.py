@@ -51,6 +51,7 @@ class Provider:
     runtime: str = ""        # llama.cpp, Ollama, … for local ones
     models: int = 0
     active: bool = True      # the agent uses it now; False: set up, ready to switch to
+    port: int | None = None  # a local one's configured port: joined to the runtime detected there
 
 
 @dataclass
@@ -189,7 +190,8 @@ def provider_for_url(name: str, url, models: int = 0, active: bool = True) -> Pr
         host, port = None, None
     local = host in LOCAL_HOSTS
     runtime = local_ports().get(port, "") if local else ""
-    return Provider(name=_text(name, 40), local=local, runtime=runtime, models=models, active=active)
+    return Provider(name=_text(name, 40), local=local, runtime=runtime, models=models, active=active,
+                    port=port if local else None)
 
 
 def _model_count(value) -> int:
