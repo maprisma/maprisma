@@ -3403,5 +3403,7 @@
  "No setting matches “{0}”": "Geen instelling komt overeen met ‘{0}’",
  "Rules": "Regels",
  "Terminals and screenshots": "Terminals en schermafbeeldingen",
- "Local agents": "Lokale agents"
+ "Local agents": "Lokale agents",
+ "{0} cannot use {1}.": "{0} kan {1} niet gebruiken.",
+ "To switch {0} to {1}, draw the line to one of its models.": "Om {0} naar {1} over te zetten, trek je de lijn naar een van zijn modellen."
 }

@@ -3403,5 +3403,7 @@
  "No setting matches “{0}”": "Aucun réglage ne correspond à « {0} »",
  "Rules": "Règles",
  "Terminals and screenshots": "Terminaux et captures d'écran",
- "Local agents": "Agents locaux"
+ "Local agents": "Agents locaux",
+ "{0} cannot use {1}.": "{0} ne peut pas utiliser {1}.",
+ "To switch {0} to {1}, draw the line to one of its models.": "Pour passer {0} à {1}, tracez la ligne vers l’un de ses modèles."
 }

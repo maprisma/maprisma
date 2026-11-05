@@ -4199,6 +4199,16 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     if (agent == null) return;
     final command = (agent['id'] as String).substring(6);
     if (item['kind'] == 'cloud') {
+      // Only its own provider: that sign-in is the agent's (another
+      // provider's is not, and the map refuses that line).
+      if (agent['own_provider'] != item['id']) {
+        _mapNote(
+          tr('{0} cannot use {1}.')
+              .replaceAll('{0}', '${agent['label']}')
+              .replaceAll('{1}', '${item['label']}'),
+        );
+        return;
+      }
       await _agentAction(command, 'login');
       return;
     }

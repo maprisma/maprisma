@@ -797,6 +797,9 @@ KEYS = (
     # The map's agents in two cards (task 060).
     "Online agents",
     "Local agents",
+    # An agent dropped on an online provider that is not its own (review 063).
+    "{0} cannot use {1}.",
+    "To switch {0} to {1}, draw the line to one of its models.",
 )
 
 

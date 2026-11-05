@@ -663,6 +663,11 @@ class MapLayout {
         e['target'] == provider &&
         ['uses', 'available', 'offer'].contains(e['kind']),
   );
+
+  /// An agent's own online provider (the core's own_provider): the one
+  /// drawing the agent onto signs in to.
+  bool ownProvider(String agent, String provider) =>
+      '${nodes[agent]?['own_provider'] ?? ''}' == provider;
   bool targetOk(String source, String target, {Map<String, dynamic>? moving}) {
     final a = nodes[source], b = nodes[target];
     if (a == null ||
@@ -684,12 +689,20 @@ class MapLayout {
       return false;
     }
     if (a['kind'] == 'agent' &&
-        ['mcp', 'skills', 'runtime', 'cloud'].contains(b['kind'])) {
+        ['mcp', 'skills', 'runtime'].contains(b['kind'])) {
       return true;
     }
     if (b['kind'] == 'agent' &&
-        ['mcp', 'skills', 'runtime', 'cloud'].contains(a['kind'])) {
+        ['mcp', 'skills', 'runtime'].contains(a['kind'])) {
       return a['status'] != 'missing';
+    }
+    // An online provider takes only the agent it belongs to (a sign-in);
+    // another provider an agent can use is chosen through its models.
+    if (a['kind'] == 'agent' && b['kind'] == 'cloud') {
+      return ownProvider(source, target);
+    }
+    if (b['kind'] == 'agent' && a['kind'] == 'cloud') {
+      return ownProvider(target, source);
     }
     if (['runtime', 'cloud'].contains(a['kind']) && b['kind'] == 'model') {
       return providerFor(target) == source;
