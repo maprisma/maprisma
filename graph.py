@@ -198,8 +198,11 @@ def signed_in(command: str) -> bool:
     tell: signed in."""
     import agent_status
     access = agent_status.access_table().get(command)
-    return (access is None or not access.files and not access.env
-            or agent_status.credentials_present(access, agent_status.HOME))
+    if access is None or not access.files and not access.env \
+            or agent_status.credentials_present(access, agent_status.HOME):
+        return True
+    import agent_details                     # a keyring store or a moved home only its program can tell
+    return agent_details.plan_limits_signed_in(command)
 
 
 def provider_name(raw: str) -> str:

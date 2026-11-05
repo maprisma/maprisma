@@ -1447,6 +1447,44 @@ void main() {
     ], isNot(contains('model:cloud:anthropic:claude-opus-5-5')));
   });
 
+  test('a Codex signed in through its keyring uses its own provider', () async {
+    final home = Directory.systemTemp.createTempSync('smart');
+    addTearDown(() => home.deleteSync(recursive: true));
+    final bin = Directory('${home.path}/bin')..createSync();
+    File('${bin.path}/codex').writeAsStringSync('#!/bin/sh\necho 1.0.0\n');
+    Process.runSync('chmod', ['+x', '${bin.path}/codex']);
+    final config = File('${home.path}/.codex/config.toml')
+      ..createSync(recursive: true)
+      ..writeAsStringSync('[tui]\n');
+    Future<String?> line() async {
+      final core = CoreService(
+        environment: {
+          'HOME': home.path,
+          'PATH': bin.path,
+          'MAPRISMA_DESKTOP': 'generic',
+        },
+      );
+      var graph = core.dispatch('map.snapshot', {'force': true});
+      for (var i = 0; i < 100 && graph['pending'] == true; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        graph = core.dispatch('map.snapshot', {'poll': true});
+      }
+      return (graph['edges'] as List)
+              .cast<Map>()
+              .where(
+                (e) =>
+                    e['source'] == 'agent:codex' &&
+                    e['target'] == 'cloud:openai',
+              )
+              .firstOrNull?['kind']
+          as String?;
+    }
+
+    expect(await line(), 'available'); // no sign-in at all
+    config.writeAsStringSync('cli_auth_credentials_store = "keyring"\n');
+    expect(await line(), 'uses');
+  });
+
   test('a known server without agents stays on the map', () async {
     final home = Directory.systemTemp.createTempSync('smart');
     addTearDown(() => home.deleteSync(recursive: true));

@@ -41,6 +41,11 @@ String graphModelKey(String model) {
 final class MapGraph {
   MapGraph(this.files, this.i18n);
 
+  /// A sign-in that only the agent's own program can tell (a keyring store,
+  /// a moved home: DetailReaders.limitsSignedIn), beside [signedIn]'s files
+  /// and keys.
+  bool Function(Adapter adapter)? programSignIn;
+
   /// Why an agent keeps a skill folder that nothing here can take away.
   String Function(String command, String path)? skillWay;
   Object? _waysOf;
@@ -119,10 +124,11 @@ final class MapGraph {
       return true;
     }
     return credentialsPresent(
-      access,
-      files.identity.home,
-      files.identity.environment,
-    );
+          access,
+          files.identity.home,
+          files.identity.environment,
+        ) ||
+        programSignIn?.call(agent.adapter) == true;
   }
 
   String providerName(String raw) =>
