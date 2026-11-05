@@ -205,6 +205,7 @@ class CoreClient {
     required String item,
     required String kind,
     String? model,
+    String? name,
     required bool remove,
     bool? useNow,
   }) => transport.call('connections.preview', {
@@ -212,6 +213,7 @@ class CoreClient {
     'item': item,
     'kind': kind,
     'model': ?model,
+    'name': ?name,
     'remove': remove,
     'use_now': ?useNow,
   });

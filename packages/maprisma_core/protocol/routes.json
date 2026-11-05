@@ -554,9 +554,10 @@
   "connections.preview": {
    "area": "connections",
    "kind": "preview",
-   "note": "",
+   "note": "name (provider only): the agent's own name for an entry of this local LLM (Repair of a moved one rewrites that entry, not the usual one); only one the agent has, pointing at a local LLM.",
    "optional": [
     "model",
+    "name",
     "use_now"
    ],
    "params": {
@@ -564,6 +565,7 @@
     "item": "string",
     "kind": "string",
     "model": "string",
+    "name": "string",
     "remove": "bool",
     "use_now": "bool"
    },
