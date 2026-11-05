@@ -33,8 +33,10 @@ Object mapGeometry(Map<String, dynamic> graph) => [
   ],
   // A provider's chosen model is drawn: a new choice is a new layout.
   graph['provider_models'] ?? const {},
-  // A program to install takes a row at the end of the Agents card.
+  // A program to install takes a row at the end of its card.
   [for (final m in graph['missing'] as List? ?? []) m['command']],
+  // Just switched on: shown in a card set to only what is connected.
+  graph['fresh'] ?? const [],
 ];
 
 /// Only activity fields visible on a box are part of the static bitmap.

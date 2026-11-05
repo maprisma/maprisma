@@ -89,7 +89,7 @@ class MapEditor extends StatefulWidget {
   /// 'model') and, for a model, the local LLM serving that folder.
   final void Function(String kind, String target)? onAdd;
 
-  /// A missing program's card at the end of the Agents card: 'install',
+  /// A missing program's card at the end of an agents or providers card: 'install',
   /// 'details' (its add-on) or 'off' (switch the add-on off).
   final void Function(BuildContext, String action, Map<String, dynamic>)?
   onMissing;

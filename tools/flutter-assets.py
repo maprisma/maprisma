@@ -794,6 +794,9 @@ KEYS = (
     # The headings of the General groups (task 058).
     "Rules",
     "Terminals and screenshots",
+    # The map's agents in two cards (task 060).
+    "Online agents",
+    "Local agents",
 )
 
 

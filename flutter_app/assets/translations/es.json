@@ -817,5 +817,7 @@
   "Find in Settings": "Buscar en Ajustes",
   "No setting matches “{0}”": "Ningún ajuste coincide con «{0}»",
   "Rules": "Reglas",
-  "Terminals and screenshots": "Terminales y capturas de pantalla"
+  "Terminals and screenshots": "Terminales y capturas de pantalla",
+  "Online agents": "Agentes en línea",
+  "Local agents": "Agentes locales"
 }

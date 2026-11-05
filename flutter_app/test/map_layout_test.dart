@@ -89,42 +89,118 @@ void main() {
     expect((saved['order'] as Map)[agents], ['agent:b', 'agent:a']);
   });
 
-  test(
-    'programs to install end the first Agents card, unless folded or used only',
-    () {
-      final graph = {
-        ...fixtureGraph(),
-        'missing': [
-          {'command': 'codex', 'name': 'Codex', 'addon': 'agent-codex'},
-          {'command': 'goose', 'name': 'Goose', 'addon': 'agent-goose'},
-        ],
-      };
-      final plain = MapLayout(fixtureGraph(), {}).cards['1:agent:']!;
-      final l = MapLayout(graph, {});
-      final card = l.cards['1:agent:']!;
-      expect(card.missing.map((m) => m.$2['command']), ['codex', 'goose']);
-      expect(card.rect.height, plain.rect.height + 2 * mapAddStep);
-      final first = card.missing.first.$1, last = card.missing.last.$1;
-      expect(first.top - l.boxes['agent:b']!.bottom, 12);
-      expect(last.top - first.top, mapAddStep);
-      expect(card.rect.bottom - last.bottom, 12);
-      expect(first.left, l.boxes['agent:b']!.left);
-      expect(first.width, l.boxes['agent:b']!.width);
-      // Other cards have none; a new one is a new layout.
-      expect(l.cards['0:mcp:']!.missing, isEmpty);
-      expect(l.updateGraph(fixtureGraph()), false);
-      for (final saved in [
+  test('programs to install end the online agents card, unless folded', () {
+    final graph = {
+      ...fixtureGraph(),
+      'missing': [
+        {'command': 'codex', 'name': 'Codex', 'addon': 'agent-codex'},
+        {'command': 'goose', 'name': 'Goose', 'addon': 'agent-goose'},
+      ],
+    };
+    final plain = MapLayout(fixtureGraph(), {}).cards['1:agent:']!;
+    final l = MapLayout(graph, {});
+    final card = l.cards['1:agent:']!;
+    expect(card.missing.map((m) => m.$2['command']), ['codex', 'goose']);
+    expect(card.rect.height, plain.rect.height + 2 * mapAddStep);
+    final first = card.missing.first.$1, last = card.missing.last.$1;
+    expect(first.top - l.boxes['agent:b']!.bottom, 12);
+    expect(last.top - first.top, mapAddStep);
+    expect(card.rect.bottom - last.bottom, 12);
+    expect(first.left, l.boxes['agent:b']!.left);
+    expect(first.width, l.boxes['agent:b']!.width);
+    // Other cards have none; a new one is a new layout.
+    expect(l.cards['0:mcp:']!.missing, isEmpty);
+    expect(l.updateGraph(fixtureGraph()), false);
+    expect(
+      MapLayout(graph, {
+        'collapsed': ['1:agent:'],
+      }).cards['1:agent:']!.missing,
+      isEmpty,
+    );
+    // Just switched on: they show in a card set to only what is connected.
+    expect(
+      MapLayout(graph, {
+        'used_only': ['1:agent:'],
+      }).cards['1:agent:']!.missing.length,
+      2,
+    );
+  });
+
+  test('agents made for a local LLM get a card of their own, below the online '
+      'ones; programs to install go to the online card', () {
+    final base = fixtureGraph();
+    final graph = {
+      ...base,
+      'nodes': [
+        for (final n in base['nodes'] as List<Map<String, dynamic>>)
+          n['id'] == 'agent:a' ? {...n, 'group': 'local'} : n,
+      ],
+      'missing': [
+        {'command': 'codex', 'name': 'Codex', 'addon': 'agent-codex'},
+      ],
+    };
+    final l = MapLayout(graph, {});
+    final online = l.cards['1:agent:']!, local = l.cards['1:agent:local']!;
+    expect(online.nodes, ['agent:b']);
+    expect(local.nodes, ['agent:a']);
+    expect(online.label, 'Online agents');
+    expect(local.label, 'Local agents');
+    expect(local.rect.top, greaterThan(online.rect.bottom));
+    expect(online.missing.map((m) => m.$2['command']), ['codex']);
+    expect(local.missing, isEmpty);
+    // Moved by hand: the saved order wins.
+    final moved = MapLayout(graph, {
+      'card_order': ['1:agent:local', '1:agent:'],
+    });
+    expect(
+      moved.cards['1:agent:local']!.rect.top,
+      lessThan(moved.cards['1:agent:']!.rect.top),
+    );
+    // Only local agents: programs to install end their card.
+    final onlyLocal = {
+      ...graph,
+      'nodes': [
+        for (final n in graph['nodes'] as List<Map<String, dynamic>>)
+          if (n['kind'] == 'agent') {...n, 'group': 'local'} else n,
+      ],
+    };
+    expect(MapLayout(onlyLocal, {}).cards['1:agent:local']!.missing.length, 1);
+  });
+
+  test('a local LLM to install ends the local providers card', () {
+    final graph = {
+      ...fixtureGraph(),
+      'missing': [
         {
-          'collapsed': ['1:agent:'],
+          'command': 'vllm',
+          'name': 'vLLM',
+          'addon': 'llm-vllm',
+          'kind': 'runtime',
         },
-        {
-          'used_only': ['1:agent:'],
-        },
-      ]) {
-        expect(MapLayout(graph, saved).cards['1:agent:']!.missing, isEmpty);
-      }
-    },
-  );
+      ],
+    };
+    final l = MapLayout(graph, {});
+    final card = l.cards['2:runtime:']!;
+    expect(card.missing.map((m) => m.$2['command']), ['vllm']);
+    expect(card.missing.single.$1.top - l.boxes['runtime:s']!.bottom, 12);
+    expect(l.cards['1:agent:']!.missing, isEmpty);
+  });
+
+  test('a box just switched on shows in a card set to used only', () {
+    final saved = {
+      'used_only': [MapLayout(fixtureGraph(), {}).cardOf['runtime:s']!],
+    };
+    expect(
+      MapLayout(fixtureGraph(), saved).boxes,
+      isNot(contains('runtime:s')),
+    );
+    final l = MapLayout({
+      ...fixtureGraph(),
+      'fresh': ['runtime:s', 'agent:nothing'],
+    }, saved);
+    expect(l.boxes, contains('runtime:s'));
+    expect(l.updateGraph(fixtureGraph()), false);
+  });
   test('a colour is a hex value or one of the theme', () {
     final colors = ColorScheme.fromSeed(seedColor: const Color(0xff123456));
     expect(mapColor('theme:tertiary', colors), colors.tertiary);

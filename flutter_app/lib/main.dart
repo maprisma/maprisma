@@ -218,6 +218,10 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   bool _setupDetectionFailed = false;
   int _setupRevision = 0;
   Set<String> _setupDetected = {};
+
+  /// Add-ons switched on in this session: their boxes show even in a card
+  /// set to only what is connected.
+  final Set<String> _switchedOn = {};
   bool _startupChecked = false;
   List<Map<String, dynamic>> _addons = [];
   List<Map<String, dynamic>>? _addonEntries;
@@ -1144,10 +1148,17 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
           'usage_box_size': _usageBoxSize,
           'traffic': _agentTraffic,
           'missing': _missingPrograms,
+          'fresh': [
+            for (final addon in _addons)
+              if (_switchedOn.contains(addon['id']) && addon['enabled'] == true)
+                for (final name in (addon['provides'] as List? ?? const []))
+                  if (name is String) ...['agent:$name', 'runtime:$name'],
+          ],
         };
 
-  /// Agents whose add-on is on but whose program is not on this PC: dashed
-  /// cards at the end of the map's Agents card, with Install.
+  /// Agents and local LLMs whose add-on is on but whose program is not on
+  /// this PC: dashed cards at the end of the map's online agents card and
+  /// its local providers card, with Install.
   List<Map<String, dynamic>> get _missingPrograms {
     final known = {for (final a in _catalog) a['command'] as String: a};
     final onMap = {
@@ -1169,6 +1180,24 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                 'command': command,
                 'name': agent['name'] ?? addon['name'],
                 'addon': addon['id'],
+                'kind': 'agent',
+              },
+      // A local LLM add-on installs its program (capability installer); an
+      // installed one is always a box on the map.
+      for (final addon in _addons)
+        if (addon['kind'] == 'provider' &&
+            addon['enabled'] == true &&
+            addon['loaded'] == true &&
+            (addon['capabilities'] as List? ?? const []).contains('installer'))
+          for (final key in (addon['provides'] as List? ?? const []))
+            if (key is String &&
+                !onMap.contains('runtime:$key') &&
+                seen.add('runtime:$key'))
+              {
+                'command': key,
+                'name': addon['name'] ?? key,
+                'addon': addon['id'],
+                'kind': 'runtime',
               },
     ];
   }
@@ -1182,6 +1211,8 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   ) async {
     final addon = _addons.where((a) => a['id'] == item['addon']).firstOrNull;
     switch (action) {
+      case 'install' when item['kind'] == 'runtime':
+        await _installProgram('runtime', item['command'] as String);
       case 'install':
         await _agentAction(item['command'] as String, 'install');
       case 'details' when addon != null:
@@ -1497,6 +1528,11 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       await _client.addonsSetEnabled(id: id, enabled: on);
       if (!mounted) return;
       setState(() {
+        if (on) {
+          _switchedOn.add(id);
+        } else {
+          _switchedOn.remove(id);
+        }
         _selected = null;
         _agentInfo = null;
       });

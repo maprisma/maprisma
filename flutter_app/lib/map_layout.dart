@@ -165,9 +165,9 @@ class MapCardLayout {
   /// LLM that serves this folder (its runtime key).
   final String addKind, addTarget;
 
-  /// Programs to install (agent add-on on, program not on this PC), each a
-  /// dashed card with its place; only at the end of the first Agents card,
-  /// not when it is folded or shows only what is used.
+  /// Programs to install (agent or local LLM add-on on, program not on this
+  /// PC), each a dashed card with its place: at the end of the online agents
+  /// card or the local providers card, not when it is folded.
   final List<(Rect, Map<String, dynamic>)> missing;
 
   /// Every box of the card, also those a used-only card leaves out.
@@ -305,6 +305,7 @@ class MapLayout {
       cardOf[node['id'] as String] = id;
     }
     final cardOrder = (saved['card_order'] as List? ?? []).cast<String>();
+    const localAgents = '1:agent:local';
     final keys = grouped.keys.toList()
       ..sort((a, b) {
         final col = (nodes[grouped[a]!.first]!['column'] as int).compareTo(
@@ -312,7 +313,10 @@ class MapLayout {
         );
         if (col != 0) return col;
         final ai = cardOrder.indexOf(a), bi = cardOrder.indexOf(b);
-        return (ai < 0 ? 10000 : ai).compareTo(bi < 0 ? 10000 : bi);
+        final saved = (ai < 0 ? 10000 : ai).compareTo(bi < 0 ? 10000 : bi);
+        if (saved != 0) return saved;
+        // Not placed by hand: the online agents above the local ones.
+        return (a == localAgents ? 1 : 0).compareTo(b == localAgents ? 1 : 0);
       });
     final heights = <int, double>{};
     // A card set to "only what is used" leaves out boxes with no line.
@@ -332,10 +336,23 @@ class MapLayout {
           '${e['target']}',
         ],
       ...(saved['pins'] as List? ?? const []).cast<String>(),
+      // Just switched on (its add-on): shown like a pinned box.
+      ...(graph['fresh'] as List? ?? const []).cast<String>(),
     };
     final missing = (graph['missing'] as List? ?? const [])
         .cast<Map<String, dynamic>>();
-    var missingPlaced = false;
+    // Programs to install: an agent in the online agents card (the local one
+    // when there is no other), a local LLM in the local providers card (the
+    // online one when there is no other).
+    String? cardFor(List<String> choices) =>
+        choices.where(grouped.containsKey).firstOrNull;
+    final installCards = <String, List<Map<String, dynamic>>>{};
+    for (final item in missing) {
+      final card = item['kind'] == 'runtime'
+          ? cardFor(['2:runtime:', '2:cloud:'])
+          : cardFor(['1:agent:', localAgents]);
+      if (card != null) installCards.putIfAbsent(card, () => []).add(item);
+    }
     for (final id in keys) {
       final order = ((saved['order'] as Map?)?[id] as List? ?? [])
           .cast<String>();
@@ -353,14 +370,9 @@ class MapLayout {
       final (addKind, addTarget) = _addOf(first['kind'] as String?, full);
       final withAdd = addKind.isNotEmpty && !folded && ids.isNotEmpty;
       final toInstall =
-          first['kind'] == 'agent' &&
-              !missingPlaced &&
-              !folded &&
-              !usedOnly.contains(id) &&
-              ids.isNotEmpty
-          ? missing
+          installCards.containsKey(id) && !folded && ids.isNotEmpty
+          ? installCards[id]!
           : const <Map<String, dynamic>>[];
-      if (first['kind'] == 'agent') missingPlaced = true;
       // An empty card is as tall as a folded one: its header still fits.
       final height = folded || ids.isEmpty
           ? 38.0
@@ -380,7 +392,11 @@ class MapLayout {
       cards[id] = MapCardLayout(
         id,
         column,
-        (first['group'] as String? ?? '').isNotEmpty
+        first['kind'] == 'agent'
+            ? first['group'] == 'local'
+                  ? 'Local agents'
+                  : 'Online agents'
+            : (first['group'] as String? ?? '').isNotEmpty
             ? first['group'] as String
             : labels[first['kind']] ?? first['kind'] as String,
         rect,

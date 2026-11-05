@@ -3483,5 +3483,6 @@
  "Find in Settings": "Szukaj w ustawieniach",
  "No setting matches “{0}”": "Żadne ustawienie nie pasuje do „{0}”",
  "Rules": "Reguły",
- "Terminals and screenshots": "Terminale i zrzuty ekranu"
+ "Terminals and screenshots": "Terminale i zrzuty ekranu",
+ "Local agents": "Agenci lokalni"
 }

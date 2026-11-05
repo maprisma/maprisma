@@ -1133,7 +1133,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(edits.single, {'source': 'agent:a', 'target': 'runtime:s'});
       edits.clear();
-      await tester.drag(find.text('Agents'), const Offset(40, 60));
+      await tester.drag(find.text('Online agents'), const Offset(40, 60));
       await tester.pumpAndSettle();
       expect((saved.last['card_order'] as List), contains('1:agent:'));
       expect(saved.last.containsKey('cards'), false);
@@ -3098,7 +3098,7 @@ void main() {
           final agentsHeader = tester.widget<Positioned>(
             find
                 .ancestor(
-                  of: find.text('Agents').last,
+                  of: find.text('Online agents'),
                   matching: find.byType(Positioned),
                 )
                 .first,

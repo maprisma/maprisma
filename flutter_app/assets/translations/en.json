@@ -817,5 +817,7 @@
   "Find in Settings": "Find in Settings",
   "No setting matches “{0}”": "No setting matches “{0}”",
   "Rules": "Rules",
-  "Terminals and screenshots": "Terminals and screenshots"
+  "Terminals and screenshots": "Terminals and screenshots",
+  "Online agents": "Online agents",
+  "Local agents": "Local agents"
 }
