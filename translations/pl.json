@@ -3500,9 +3500,9 @@
  "This local LLM now listens on another port. Repair or remove this connection.": "Ten lokalny LLM nasłuchuje teraz na innym porcie. Napraw lub usuń to połączenie.",
  "Applied, but the local LLM's own model stayed as it was: it changed meanwhile or could not be saved.": "Zastosowano, ale własny model lokalnego LLM pozostał bez zmian: w międzyczasie się zmienił lub nie dało się go zapisać.",
  "The local LLM's own model was not put back: a file or the model changed since.": "Własny model lokalnego LLM nie został przywrócony: plik lub model zmienił się od tego czasu.",
- "start a model in Strata (strata launch) before working with {0}.": "uruchom model w Strata (strata launch), zanim zaczniesz pracę z {0}.",
  "Set up a model": "Skonfiguruj model",
  "What is serving": "Co jest teraz udostępniane",
  "Strata's own screens: choose a model, download it and serve it.": "Własne ekrany Strata: wybierz model, pobierz go i udostępnij.",
- "set one up in Strata's own screens: run strata launch in a terminal.": "skonfiguruj go na ekranach Strata: uruchom strata launch w terminalu."
+ "set one up in Strata's own screens: run ~/.local/bin/strata launch in a terminal.": "skonfiguruj go na ekranach Strata: uruchom ~/.local/bin/strata launch w terminalu.",
+ "start a model in Strata (~/.local/bin/strata launch) before working with {0}.": "uruchom model w Strata (~/.local/bin/strata launch), zanim zaczniesz pracę z {0}."
 }

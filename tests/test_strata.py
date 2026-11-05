@@ -278,5 +278,27 @@ class PortTextTest(unittest.TestCase):
                 self.assertEqual(json.loads(path.read_text())["runtimes"]["koboldcpp"]["port"], 0)
 
 
+class ConfigureTest(unittest.TestCase):
+    """Review 064 #3: Configure… and its --help fallback run Strata's own strata, never one by name
+    (/usr/bin/strata is a file manager)."""
+
+    def test_configure_runs_the_verified_binary(self):
+        import configure_ctl
+        with Home() as h:
+            other = h.home / "usr/bin"
+            other.mkdir(parents=True)
+            (other / "strata").write_text("#!/bin/sh\n")
+            os.chmod(other / "strata", 0o755)
+            os.environ["PATH"] = f"{other}:{h.home / '.local/bin'}"
+            self.assertEqual(configure_ctl.for_runtime("strata"), [])      # only the file manager here
+            self.assertEqual(configure_ctl.provider_program("strata"), "")
+            h.terminal()
+            own = str(h.home / ".local/bin/strata")
+            entries = configure_ctl.for_runtime("strata")
+            self.assertEqual([e.argv for e in entries], [(own, "launch"), (own, "launch", "--status")])
+            self.assertTrue(all(own in configure_ctl.script(e, "done") for e in entries))
+            self.assertEqual(configure_ctl.provider_program("strata"), own)
+
+
 if __name__ == "__main__":
     unittest.main()

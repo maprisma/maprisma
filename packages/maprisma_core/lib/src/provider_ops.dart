@@ -225,7 +225,7 @@ final class ProviderOps {
     if (preset.isEmpty) {
       return (
         false,
-        'no saved launch preset; start one model with `strata launch` first',
+        'no saved launch preset; start one model with `~/.local/bin/strata launch` first',
       );
     }
     return runCommand([

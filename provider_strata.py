@@ -178,7 +178,7 @@ def _installer():
 class Engine(llm_engine.Engine):
     """No user service: its own CLI starts the last launch preset and stops it."""
     ports = (DEFAULT_PORT,)
-    start_command = "strata launch"
+    start_command = "~/.local/bin/strata launch"
     models_page = False                 # models come from Strata's own screens
     own_model_folder = False
     starts_with_agents = False          # the provider watcher has no control for it: started on the map
@@ -186,6 +186,10 @@ class Engine(llm_engine.Engine):
     def owns_process(self, comm, argv):
         # Its terminal's Python (the server, the supervisor) and its engine binary, by real path.
         return llm_engine.BY_PATH if argv and owns(argv[0]) else 0
+
+    def resolve_program(self, name):
+        """Only its own verified strata (strata_binary), never /usr/bin/strata, the file manager."""
+        return strata_binary() if name == "strata" else None
 
     def can_control(self, rt):
         return bool(rt.installed and strata_binary() and last_preset()[0])
@@ -196,7 +200,7 @@ class Engine(llm_engine.Engine):
         if not binary:
             return False, "strata not found"
         if not preset:
-            return False, "no saved launch preset; start one model with `strata launch` first"
+            return False, "no saved launch preset; start one model with `~/.local/bin/strata launch` first"
         out, ok = ai_core.read_bounded_output([binary, "launch", "--preset", preset, "--yes", "--no-tui"],
                                               max_bytes=64 * 1024, timeout=START_TIMEOUT, merge_stderr=True)
         lines = out.decode("utf-8", "replace").strip().splitlines()
@@ -216,11 +220,11 @@ class Engine(llm_engine.Engine):
 
     def add_model_step(self, rt):
         from i18n import _
-        return _("set one up in Strata's own screens: run strata launch in a terminal.")
+        return _("set one up in Strata's own screens: run ~/.local/bin/strata launch in a terminal.")
 
     def start_step(self, rt, agent_name):
         from i18n import _
-        return _("start a model in Strata (strata launch) before working with {0}.").format(agent_name)
+        return _("start a model in Strata (~/.local/bin/strata launch) before working with {0}.").format(agent_name)
 
 
 PROVIDER = Provider("strata", "Strata", "local", detect=_detect, installer=_installer, engine=Engine(),

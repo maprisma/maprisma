@@ -99,6 +99,12 @@ class Engine:
         exe = basename(argv[0]) if argv else ""
         return BY_NAME if comm in self.programs or exe in self.programs else 0
 
+    def resolve_program(self, name: str) -> str | None:
+        """Its own program called `name` as it is run (Configure…, its --help); None when it is not
+        here. By name from PATH, unless the engine knows its own path (Strata: only its own strata)."""
+        import shutil
+        return name if name and shutil.which(name) else None
+
     # --- start and stop ------------------------------------------------------------------------
 
     def can_control(self, rt) -> bool:
