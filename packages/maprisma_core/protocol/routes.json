@@ -642,17 +642,18 @@
    "area": "connections",
    "handle": "undo",
    "kind": "handle",
-   "note": "",
+   "note": "restored: the files put back (one changed again since is skipped). choice_failures: the local LLMs' own models (Settings › provider_models) the apply moved that were not put back: an agent file was skipped, or the choice changed since.",
    "params": {
     "undo": "string"
    },
    "result": {
+    "choice_failures": "int",
     "ok": "bool",
     "restored": [
      "string"
     ]
    },
-   "source": "observed"
+   "source": "manual"
   },
   "costs.rate": {
    "area": "costs",
@@ -1175,7 +1176,7 @@
   "map.snapshot": {
    "area": "map",
    "kind": "read",
-   "note": "nodes: dim marks a known server without agents; an agent's own_provider is the id of its own online provider (\"\" for none); own_login: the app can start its sign-in there (a drop onto that provider signs it in only then); a model with status missing is one an agent is set to that its local LLM no longer has; a model:folder:<path>:<name> model is in a reused model folder no local LLM lists. mcp:<name>~2 is another server of that name. edges: fixed says why a line cannot be taken away here; available from an agent to its own online provider: not signed in.",
+   "note": "nodes: dim marks a known server without agents; an agent's own_provider is the id of its own online provider (\"\" for none); own_login: the app can start its sign-in there (a drop onto that provider signs it in only then); a model with status missing is one an agent is set to that its local LLM no longer has; a model:folder:<path>:<name> model is in a reused model folder no local LLM lists. mcp:<name>~2 is another server of that name. edges: fixed says why a line cannot be taken away here; a failed agent → runtime line with no recorded failure is a local provider whose LLM moved (dangling: the model the agent is set to there, \"\" for an inactive one), repaired by connections.repair_preview unless fixed says where to change it instead; available from an agent to its own online provider: not signed in.",
    "optional": [
     "force",
     "poll"
@@ -1967,7 +1968,7 @@
    "area": "tasks",
    "handle": "task",
    "kind": "handle",
-   "note": "",
+   "note": "result: the operation's own result. For connections.apply: undo, context_failures, and choice_failures, the local LLMs' own models (Settings › provider_models) the plan moves that were not changed after its files (changed meanwhile, or the settings could not be saved); the Undo of the files is there all the same.",
    "params": {
     "task": "string"
    },
@@ -1975,6 +1976,7 @@
     "fraction": "number",
     "operation": "string",
     "result": {
+     "choice_failures": "int",
      "context_failures": "int",
      "ok": "bool",
      "undo": "string"
@@ -1983,7 +1985,7 @@
     "task": "string",
     "text": "string"
    },
-   "source": "observed"
+   "source": "manual"
   },
   "updates.check": {
    "area": "updates",
