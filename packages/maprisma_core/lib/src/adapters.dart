@@ -305,6 +305,15 @@ final class Adapter {
     if (start.isNotEmpty && !configureOk([command, ...start], command)) {
       throw const AdapterError('Invalid start');
     }
+    if (data.containsKey('plan_limits')) {
+      check('plan_limits', 'PLAN_LIMITS', ['rpc', 'argv']);
+      if (!(adapterSchema['LIMIT_RPCS'] as List).contains(
+            t('plan_limits')['rpc'],
+          ) ||
+          !configureOk(t('plan_limits')['argv'] as List, command)) {
+        throw const AdapterError('Invalid plan_limits');
+      }
+    }
     check('sessions', 'SESSIONS');
     if (t('sessions').containsKey('reader')) {
       _named(t('sessions')['reader'], 'READERS', empty: false);

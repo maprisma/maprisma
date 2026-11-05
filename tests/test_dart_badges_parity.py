@@ -28,7 +28,9 @@ now = dt.datetime.fromisoformat(case['now'])
 out = {'batteries': [], 'costs': []}
 for c in case['batteries']:
     limits = [agent_details.Limit(label=l.get('label', ''), percent=l['percent'],
-                                  resets_at=dt.datetime.fromisoformat(l['resets_at']) if l.get('resets_at') else None)
+                                  resets_at=dt.datetime.fromisoformat(l['resets_at']) if l.get('resets_at') else None,
+                                  measured_at=dt.datetime.fromisoformat(l['measured_at']) if l.get('measured_at') else None,
+                                  stale=l.get('stale') is True)
               for l in c['limits']]
     b = agent_details.battery(limits, now, tuple(c['levels']))
     out['batteries'].append([list(b) if b else None, agent_details.battery_tip(limits, now)])
@@ -41,6 +43,9 @@ for usd, limit, currency, rate, (yellow, red) in case['costs']:
                       "(estimated from the tokens of its sessions active today).").format(text) + "\n"
                     + _("A day's limit: {0} (Settings › Costs).").format(limit_text),
              'colour': colour}
+    if limit > 0:     # what is left of the day's limit, for its battery
+        badge['left'] = agent_details._charge(max(0.0, min(1.0, 1 - plugin_costs.in_currency(usd, currency, rate)[0] / limit)),
+                                              (yellow, red))[0]
     if colour == 'red':
         badge['red_body'] = _("About {0} today, {1} % of the day's limit ({2}).").format(
             text, round(100 * plugin_costs.in_currency(usd, currency, rate)[0] / limit), limit_text)
@@ -63,6 +68,13 @@ class DartBadgesParityTest(unittest.TestCase):
             {'limits': [{'label': 'Old', 'percent': 1.0, 'resets_at': '2026-10-29T09:00:00+00:00'}],
              'levels': levels},                                                               # past its reset
             {'limits': [{'label': 'Tie', 'percent': 0.125}, {'label': 'Over', 'percent': 1.7}], 'levels': [0.5, 0.6]},
+            {'limits': [{'label': 'Old', 'percent': 0.3, 'measured_at': '2026-10-30T08:00:00+00:00'}],
+             'levels': levels},                                                               # no reset, too old
+            {'limits': [{'label': 'Week', 'percent': 0.3, 'resets_at': '2026-11-02T15:00:00+00:00',
+                         'measured_at': '2026-10-30T08:00:00+00:00'},
+                        {'label': '5 h', 'percent': 0.1, 'measured_at': '2026-10-30T08:55:00+00:00'}],
+             'levels': levels},                                                               # old, still to reset
+            {'limits': [{'label': 'Kept', 'percent': 0.5, 'stale': True}], 'levels': levels},  # the collector's flag
         ]
         costs = [[1.5, 100, 'usd', None, levels], [80, 100, 'usd', None, levels], [95, 100, 'usd', None, levels],
                  [130, 100, 'eur', 1.08, levels], [0.004, 10, 'eur', None, levels], [9.25, 10, 'usd', None, [0.5, 0.925]]]
@@ -85,6 +97,11 @@ class DartBadgesParityTest(unittest.TestCase):
         self.assertEqual(python['batteries'][2][0], [0.1, 'red'])
         self.assertIsNone(python['batteries'][3][0])
         self.assertEqual([c['colour'] for c in python['costs']], ['green', 'yellow', 'red', 'red', 'green', 'red'])
+        self.assertIsNone(python['batteries'][5][0])
+        self.assertEqual(python['batteries'][6][1].splitlines()[-1],
+                         'Measured Fri 09:00: these numbers may be out of date.')
+        self.assertEqual(python['batteries'][7][1].splitlines()[-1], 'These numbers may be out of date.')
+        self.assertEqual([c['left'] for c in python['costs']][:3], [0.985, 0.2, 0.05])
 
 
 if __name__ == '__main__':

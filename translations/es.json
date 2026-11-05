@@ -3408,5 +3408,11 @@
  "To switch {0} to {1}, draw the line to one of its models.": "Para cambiar {0} a {1}, traza la línea hasta uno de sus modelos.",
  "{0} uses {1} through its own settings. Change it there.": "{0} usa {1} mediante sus propios ajustes. Cámbialo allí.",
  "An agent can only sign in to its own online provider.": "Un agente solo puede iniciar sesión en su propio proveedor en línea.",
- "This agent has no sign-in that the app can start.": "Este agente no tiene un inicio de sesión que la aplicación pueda iniciar."
+ "This agent has no sign-in that the app can start.": "Este agente no tiene un inicio de sesión que la aplicación pueda iniciar.",
+ "Green: what is left of an agent's plan limits or of a day's limit (paid per token), or free GPU memory on a running local LLM.": "Verde: lo que queda de los límites del plan de un agente o del límite diario (pago por token), o memoria GPU libre en un LLM local en marcha.",
+ "Yellow: {0} % or less is left.": "Amarillo: queda un {0} % o menos.",
+ "Red: {0} % or less is left.": "Rojo: queda un {0} % o menos.",
+ "Faded: its numbers may be out of date (its tooltip says when they were measured).": "Atenuada: sus cifras pueden estar desactualizadas (su información emergente dice cuándo se midieron).",
+ "These numbers may be out of date.": "Estas cifras pueden estar desactualizadas.",
+ "Measured {0}: these numbers may be out of date.": "Medido {0}: estas cifras pueden estar desactualizadas."
 }

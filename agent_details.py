@@ -6,7 +6,11 @@ Sources, all read-only and size-capped:
 - The desktop's usage records (desktop.usage_dir(); on Omarchy
   ~/.local/state/omarchy/agents/usage/<agent>.json, written by `omarchy agent
   usage update`): plan, rate limits, today's usage. Only the desktop talks to
-  the providers; refresh_usage() asks it to (desktop.refresh_usage).
+  the providers; refresh_usage() asks it to (desktop.refresh_usage). Where
+  no collector of an agent is, one whose adapter names a protocol for its
+  plan limits ([plan_limits]) is asked itself (native_usage): its own
+  program answers for its own sign-in, the answer kept in
+  ~/.local/state/maprisma/usage/<agent>.json.
 - Each agent's own settings files for the model and its providers. Never
   their credential files: secrets are not read, and nothing here is shown
   that could contain one (only names, model ids and local addresses).
@@ -36,6 +40,10 @@ MAX_SCAN = 3000              # directory entries looked at for "last used"
 DATE_DEPTH = 2               # levels below those followed into the last-named subfolder (YYYY/MM/DD trees)
 USAGE_MAX_AGE = 10 * 60      # seconds before an expanded card asks Omarchy for fresh usage
 USAGE_TIMEOUT = 90
+# Limits measured longer ago than this no longer look current: three times USAGE_MAX_AGE (after which
+# the details ask for fresh usage), so two refreshes in a row may fail or be skipped before a battery
+# says so. One without a valid reset is left out then (nothing says when its numbers ran out).
+LIMITS_MAX_AGE = 3 * USAGE_MAX_AGE
 
 LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1", "0.0.0.0"}
 
@@ -59,6 +67,8 @@ class Limit:
     label: str
     percent: float           # 0..1
     resets_at: dt.datetime | None = None
+    measured_at: dt.datetime | None = None   # when its numbers were measured (limitsFetchedAt, else updatedAt)
+    stale: bool = False      # the collector kept its numbers past a failed probe (limitsStale)
 
 
 @dataclass
@@ -218,6 +228,17 @@ def _time(value) -> dt.datetime | None:
     return moment.astimezone() if moment is not None and moment.tzinfo is None else moment
 
 
+def _usage_time(value) -> dt.datetime | None:
+    """A usage record's time: an ISO text, or seconds or milliseconds since 1970 (collectors write both)."""
+    if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0:
+        seconds = value / 1000 if value > 1e11 else value
+        try:
+            return dt.datetime.fromtimestamp(seconds, dt.timezone.utc) if seconds <= 8e12 else None
+        except (OverflowError, OSError, ValueError):
+            return None
+    return _time(value) if isinstance(value, str) and value else None
+
+
 def _count(value) -> int | None:
     return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else None
 
@@ -265,6 +286,7 @@ def apply_usage(details: Details, record: dict):
     details.usage_updated = _time(record.get("updatedAt"))
     details.usage_note = _text(record.get("usageStatusText"), 120)
     limits = record.get("limits")
+    measured = _usage_time(record.get("limitsFetchedAt")) or _usage_time(record.get("updatedAt"))
     if isinstance(limits, list):
         for item in limits[:8]:
             if not isinstance(item, dict):
@@ -273,14 +295,17 @@ def apply_usage(details: Details, record: dict):
             if isinstance(percent, (int, float)) and not isinstance(percent, bool):
                 details.limits.append(Limit(label=_text(item.get("title") or item.get("label"), 40),
                                             percent=max(0.0, min(1.0, float(percent))),
-                                            resets_at=_time(item.get("resetsAt"))))
+                                            resets_at=_time(item.get("resetsAt")), measured_at=measured,
+                                            stale=record.get("limitsStale") is True))
 
 
 def usage_is_stale(command: str, usage_dir: Path = USAGE_DIR, root: Path = HOME) -> bool:
     """True when Omarchy collects usage for this agent and its record is old (or missing), or older
     than the agent's sign-in (a new sign-in, a changed plan: the record still tells the old one)."""
     if not has_usage_collector(command):
-        return False
+        if plan_limits_rpc(command, root) is None:
+            return False
+        usage_dir = native_usage_dir()       # asked of the agent itself (native_usage)
     try:
         written = (usage_dir / f"{command}.json").stat().st_mtime
     except OSError:
@@ -307,9 +332,203 @@ def has_usage_collector(command: str) -> bool:
     return desktop.has_usage_collector(command)
 
 
+def native_usage_dir() -> Path:
+    """Where Maprisma keeps the usage records it asked an agent's own program for."""
+    state = os.environ.get("XDG_STATE_HOME", "")
+    return (Path(state) if state.startswith("/") else HOME / ".local/state") / "maprisma/usage"
+
+
+def plan_limits_rpc(command: str, root: Path = HOME) -> tuple | None:
+    """(rpc, argv) of an agent whose plan limits may be asked of its own program: its adapter names
+    how ([plan_limits]), no collector of it is found, and it is signed in (one of its access files is
+    there: only that, never what is in it). Else None."""
+    import harnesses
+    import agent_status
+    harness = harnesses.get(command)
+    if harness is None or not harness.plan_limits or has_usage_collector(command):
+        return None
+    access = agent_status.access_table().get(command)
+    signed_in = any((root / name).is_file() for name in (access.files if access is not None else ()))
+    return harness.plan_limits if signed_in else None
+
+
 def refresh_usage(command: str) -> bool:
-    """Ask the desktop for this agent's usage (blocking; run it on a thread)."""
-    return desktop.has_usage_collector(command) and desktop.refresh_usage(command)
+    """Ask the desktop for this agent's usage (blocking; run it on a thread); without a collector,
+    the agent's own program when its adapter says how (native_usage)."""
+    if desktop.has_usage_collector(command):
+        return desktop.refresh_usage(command)
+    native = plan_limits_rpc(command)
+    return native is not None and native_usage(command, *native)
+
+
+def native_usage(command: str, rpc: str, argv, environ=None) -> bool:
+    """Ask the agent's own program for its plan limits and keep the answer as its usage record."""
+    record = ask_plan_limits(rpc, list(argv), dict(os.environ if environ is None else environ))
+    if record is None:
+        return False
+    folder = native_usage_dir()
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+        temporary = folder / f".{command}.json.tmp"
+        temporary.write_text(json.dumps(record) + "\n", encoding="utf-8")
+        temporary.replace(folder / f"{command}.json")
+    except OSError:
+        return False
+    return True
+
+
+LIMIT_RPCS = ("codex-app-server",)
+
+
+def ask_plan_limits(rpc: str, argv: list, environ: dict, answer: float = 8, total: float = 20,
+                    now=None) -> dict | None:
+    """The record Omarchy's collector would write (limits with label, percent and resetsAt; tierLabel),
+    asked of the agent's own program over `rpc` (omarchy-agent-usage-codex's fetch_codex_rpc:
+    initialize, initialized, account/rateLimits/read, account/read only when no plan is named); None
+    when it could not be asked. No prompt goes to a model and nothing here reads a credential. Each
+    answer within `answer` seconds, all within `total`; the program (its whole session) is killed
+    afterwards."""
+    import select
+    import shutil
+    import signal
+    import time
+    if rpc not in LIMIT_RPCS or not argv:
+        return None
+    binary = shutil.which(argv[0], path=environ.get("PATH", ""))
+    if binary is None:
+        return None
+    try:
+        proc = subprocess.Popen([binary, *argv[1:]], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                stderr=subprocess.DEVNULL, env=environ, cwd=environ.get("HOME") or None,
+                                start_new_session=True)
+    except OSError:
+        return None
+    end = time.monotonic() + total
+    pending = [b""]
+    read = [0]
+
+    def send(message):
+        assert proc.stdin is not None
+        proc.stdin.write((json.dumps(message) + "\n").encode())
+        proc.stdin.flush()
+
+    def request(ident, method, wait):
+        send({"id": ident, "method": method, "params": {"clientInfo": {"name": "maprisma", "version": "1"}}
+              if method == "initialize" else {}})
+        deadline = min(end, time.monotonic() + wait)
+        assert proc.stdout is not None
+        while True:
+            while b"\n" in pending[0]:
+                line, pending[0] = pending[0].split(b"\n", 1)
+                try:
+                    message = json.loads(line)
+                except ValueError:
+                    continue
+                if isinstance(message, dict) and message.get("id") == ident:
+                    return message
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError(method)
+            ready, _w, _x = select.select([proc.stdout], [], [], min(0.25, remaining))
+            if not ready:
+                continue
+            chunk = os.read(proc.stdout.fileno(), 65536)
+            read[0] += len(chunk)
+            if not chunk or read[0] > 1024 * 1024:
+                raise RuntimeError(method)
+            pending[0] += chunk
+
+    try:
+        request(1, "initialize", answer)
+        send({"method": "initialized", "params": {}})
+        reply = request(2, "account/rateLimits/read", answer)
+        at = (now or dt.datetime.now(dt.timezone.utc))
+        record = {"schemaVersion": 1, "updatedAt": at.isoformat(), "limitsStale": False,
+                  "limitsFetchedAt": int(at.timestamp() * 1000), "limits": [], "tierLabel": "",
+                  "usageStatusText": ""}
+        error = reply.get("error")
+        if isinstance(error, dict):
+            if "auth" not in str(error.get("message") or "").lower():
+                return None
+            record["usageStatusText"] = "Waiting for auth"
+            return record
+        result = reply.get("result") if isinstance(reply.get("result"), dict) else {}
+        limits = result.get("rateLimits") if isinstance(result.get("rateLimits"), dict) else {}
+        plan = limits.get("planType") if isinstance(limits.get("planType"), str) else ""
+        if not plan:
+            try:
+                found = (request(3, "account/read", 2).get("result") or {}).get("account") or {}
+                plan = str(found.get("planType") or found.get("type") or "") if isinstance(found, dict) else ""
+            except (TimeoutError, RuntimeError, OSError, AttributeError):
+                pass
+        record["tierLabel"] = plan
+        record["ready"] = True
+        for window in (limits.get("primary"), limits.get("secondary")):
+            entry = _rate_window(window)
+            if entry:
+                record["limits"].append(entry)
+        entry = _spend_limit(limits.get("individualLimit"))
+        if entry:
+            record["limits"].append(entry)
+        return record
+    except (TimeoutError, RuntimeError, OSError, ValueError):
+        return None
+    finally:
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except OSError:
+            pass
+        try:
+            proc.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+        for pipe in (proc.stdin, proc.stdout):
+            try:
+                if pipe is not None:
+                    pipe.close()
+            except OSError:
+                pass
+
+
+def _rpc_number(value) -> float:
+    try:
+        return float(value) if not isinstance(value, bool) else 0.0
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _rpc_reset(value) -> str:
+    seconds = _rpc_number(value)
+    if seconds <= 0:
+        return ""
+    moment = dt.datetime.fromtimestamp(seconds, dt.timezone.utc)
+    return moment.strftime("%Y-%m-%dT%H:%M:%S.") + f"{moment.microsecond // 1000:03d}Z"
+
+
+def _rate_window(window) -> dict | None:
+    """limit_window: a rate window's share used and when it resets."""
+    used = window.get("usedPercent") if isinstance(window, dict) else None
+    if not isinstance(used, (int, float)) or isinstance(used, bool):
+        return None
+    mins = int(_rpc_number(window.get("windowDurationMins")))
+    label = ("Weekly (7-day)" if mins == 10080 else f"{mins // 60}h window" if mins > 0 and mins % 60 == 0
+             else f"{mins}m window" if mins > 0 else "Limit")
+    return {"label": label, "percent": used / 100, "resetsAt": _rpc_reset(window.get("resetsAt"))}
+
+
+def _spend_limit(snapshot) -> dict | None:
+    """spend_limit: a spend cap's share used."""
+    if not isinstance(snapshot, dict):
+        return None
+    cap = _rpc_number(snapshot.get("limit"))
+    if cap > 0 and snapshot.get("used") is not None:
+        used = _rpc_number(snapshot.get("used")) / cap
+    elif isinstance(snapshot.get("remainingPercent"), (int, float)):
+        used = 1 - snapshot["remainingPercent"] / 100
+    else:
+        return None
+    return {"label": "Spend limit", "percent": max(0.0, min(1.0, used)),
+            "resetsAt": _rpc_reset(snapshot.get("resetsAt"))}
 
 
 # --- last used ---------------------------------------------------------------
@@ -390,12 +609,30 @@ def warn_levels() -> tuple[float, float]:
     return (yellow, red) if red > yellow else (1 - BATTERY_LOW, 1 - BATTERY_EMPTY)
 
 
+def _too_old(limit, now: dt.datetime) -> bool:
+    measured = getattr(limit, "measured_at", None)
+    return measured is not None and (now - measured).total_seconds() > LIMITS_MAX_AGE
+
+
 def current_limits(limits, now: dt.datetime | None = None) -> list:
     """The limits whose numbers still count: one whose reset time has passed is left out (its
-    percentage is from before the reset, so it would show too little left)."""
+    percentage is from before the reset, so it would show too little left), and so is one without a
+    valid reset whose numbers are older than LIMITS_MAX_AGE."""
     now = now or dt.datetime.now(dt.timezone.utc)
     return [limit for limit in limits or ()
-            if limit.resets_at is None or (limit.resets_at if limit.resets_at.tzinfo else limit.resets_at.astimezone()) > now]
+            if ((limit.resets_at if limit.resets_at.tzinfo else limit.resets_at.astimezone()) > now
+                if limit.resets_at is not None else not _too_old(limit, now))]
+
+
+def limits_stale(limits, now: dt.datetime | None = None) -> tuple | None:
+    """None while the limits still counting are current; else (when the oldest of them was measured,
+    None when not known): the collector kept them past a failed probe, or they are older than
+    LIMITS_MAX_AGE, so they may be out of date."""
+    now = now or dt.datetime.now(dt.timezone.utc)
+    stale = [limit for limit in current_limits(limits, now) if limit.stale or _too_old(limit, now)]
+    if not stale:
+        return None
+    return (min((limit.measured_at for limit in stale if limit.measured_at is not None), default=None),)
 
 
 def next_reset(limits, now: dt.datetime | None = None) -> dt.datetime | None:
@@ -459,6 +696,11 @@ def battery_tip(limits, now: dt.datetime | None = None) -> str:
             moment = limit.resets_at.astimezone() if limit.resets_at.tzinfo else limit.resets_at
             line += ", " + _("resets {0}").format(moment.strftime("%a %H:%M"))
         lines.append(line)
+    stale = limits_stale(limits, now)
+    if stale is not None:
+        lines.append(_("These numbers may be out of date.") if stale[0] is None else
+                     _("Measured {0}: these numbers may be out of date.").format(
+                         stale[0].astimezone().strftime("%a %H:%M")))
     return "\n".join(lines)
 
 
@@ -491,7 +733,10 @@ def details_for(command: str, usage_dir: Path = USAGE_DIR) -> Details:
             harness.details(details)
         except (OSError, ValueError, TypeError, AttributeError):
             pass
-    apply_usage(details, usage_record(command, usage_dir))
+    record = usage_record(command, usage_dir)
+    if not record and usage_dir == USAGE_DIR and not has_usage_collector(command):
+        record = usage_record(command, native_usage_dir())   # asked of the agent itself (native_usage)
+    apply_usage(details, record)
     if not details.limits:
         # The agent's own store (an adapter's or an extension's limits() fact): plan and limits.
         if harness is not None and harness.limits is not None:

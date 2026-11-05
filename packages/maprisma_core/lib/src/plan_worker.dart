@@ -18,6 +18,7 @@ import 'smart_card.dart';
 import 'system_help.dart' show analyzeMap;
 import 'mcp_updates.dart' as mcp_updates;
 import 'agent_details.dart' show refreshUsage;
+import 'adapters.dart' show Adapter;
 import 'agent_keys.dart' show storeKey;
 import 'model_moves.dart' show SystemMoves, ScanFilesLike;
 import 'dart:math' show Random;
@@ -823,13 +824,24 @@ Future<int> runWorker(List<String> args) async {
     if (args.isEmpty && request['operation'] == 'agents.usage_refresh') {
       final params = request['params'] as Map;
       final command = params['command'];
-      if (params.length != 1 || command is! String) {
+      final rpc = params['rpc'], argv = params['argv'];
+      if (command is! String ||
+          !(params.length == 1 ||
+              params.length == 3 &&
+                  rpc is String &&
+                  argv is List &&
+                  Adapter.configureOk(argv, command))) {
         throw const FormatException('Invalid worker request');
       }
       send({
         'type': 'result',
         'result': {
-          'ok': await refreshUsage(command, AppIdentity().environment),
+          'ok': await refreshUsage(
+            command,
+            AppIdentity().environment,
+            rpc: rpc as String?,
+            argv: argv == null ? null : [for (final a in argv as List) '$a'],
+          ),
         },
       });
       return 0;

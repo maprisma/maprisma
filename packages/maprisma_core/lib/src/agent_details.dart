@@ -14,6 +14,7 @@ import 'scan_files.dart';
 import 'service_i18n.dart';
 import 'provider_facts.dart';
 import 'posix_ffi.dart';
+import 'usage_rpc.dart';
 
 String boundedText(dynamic value, [int limit = 80]) =>
     value is String ? String.fromCharCodes(value.trim().runes.take(limit)) : '';
@@ -52,7 +53,14 @@ final class AgentInfo {
           },
         )
         .toList(),
-    'limits': limits,
+    'limits': [
+      for (final l in limits)
+        {
+          'label': l['label'],
+          'percent': l['percent'],
+          'resets_at': l['resets_at'],
+        },
+    ],
     'today_prompts': todayPrompts,
     'today_sessions': todaySessions,
     'today_tokens': todayTokens,
@@ -65,6 +73,20 @@ final class AgentInfo {
     final text = date.toUtc().toIso8601String();
     return '${text.replaceFirst(RegExp(r'\.000Z$'), 'Z').replaceFirst(RegExp(r'Z$'), '')}+00:00';
   }
+}
+
+/// agent_details._usage_time: a usage record's time, an ISO text or seconds
+/// or milliseconds since 1970 (collectors write both); null when there is none.
+DateTime? usageTime(dynamic value) {
+  if (value is num && value.isFinite && value > 0) {
+    final seconds = value > 1e11 ? value / 1000 : value;
+    if (seconds > 8e12) return null;
+    return DateTime.fromMillisecondsSinceEpoch(
+      (seconds * 1000).round(),
+      isUtc: true,
+    );
+  }
+  return value is String && value.isNotEmpty ? DateTime.tryParse(value) : null;
 }
 
 /// Where Omarchy's usage records are (desktop_omarchy.USAGE_DIR); another
@@ -96,14 +118,44 @@ String? usageCollector(String command, Map<String, String> env) {
 bool usageCollectorExists(String command, Map<String, String> env) =>
     usageCollector(command, env) != null;
 
+/// Where Maprisma keeps the usage record it asked an agent's own program for
+/// (`[plan_limits]`, agent_details.native_usage_path): only where no Omarchy
+/// collector of that agent is.
+String nativeUsagePath(String command, Map<String, String> env) {
+  final state = (env['XDG_STATE_HOME'] ?? '').startsWith('/')
+      ? env['XDG_STATE_HOME']!
+      : '${env['HOME'] ?? ''}/.local/state';
+  return '$state/maprisma/usage/$command.json';
+}
+
 /// desktop_omarchy.refresh_usage: fresh usage of this agent (at most a
 /// minute); true when it worked. On Omarchy its omarchy-agent-usage-update
 /// writes the record; elsewhere the collector is run here and what it prints,
 /// one JSON object, becomes the record. Maprisma reads no credentials: the
-/// collector, Omarchy's own tool, does what it does on Omarchy.
-Future<bool> refreshUsage(String command, Map<String, String> env) async {
+/// collector, Omarchy's own tool, does what it does on Omarchy. Without a
+/// collector, an agent whose adapter names a protocol for its plan limits
+/// (`rpc`, `argv`: agent_details.native_usage) is asked itself, and the
+/// answer becomes Maprisma's own record of it.
+Future<bool> refreshUsage(
+  String command,
+  Map<String, String> env, {
+  String? rpc,
+  List<String>? argv,
+}) async {
   final collector = usageCollector(command, env);
-  if (collector == null) return false;
+  if (collector == null) {
+    if (rpc == null || argv == null) return false;
+    final record = await askPlanLimits(rpc, argv, env);
+    if (record == null) return false;
+    try {
+      final path = nativeUsagePath(command, env);
+      Directory(p.dirname(path)).createSync(recursive: true);
+      Posix().atomicWrite(path, utf8.encode('${jsonEncode(record)}\n'));
+      return true;
+    } on FileSystemException {
+      return false;
+    }
+  }
   final update = (env['OMARCHY_PATH'] ?? '').isNotEmpty
       ? whichIn('omarchy-agent-usage-update', env['PATH'])
       : null;
@@ -684,6 +736,12 @@ final class DetailReaders {
     info.totalSessions = count(usage['totalSessions']);
     info.activeDays = count(usage['activeDays']);
     if (usage['limits'] is List) {
+      // When the numbers were measured (the collector's limitsFetchedAt, else
+      // the record's updatedAt) and whether the collector kept them past a
+      // failed probe (limitsStale): agent_badges.currentLimits and
+      // limitsStale judge by them.
+      final measured =
+          usageTime(usage['limitsFetchedAt']) ?? usageTime(usage['updatedAt']);
       for (final item in (usage['limits'] as List).take(8)) {
         if (item is! Map || item['percent'] is! num) continue;
         final percent = item['percent'] as num;
@@ -694,6 +752,8 @@ final class DetailReaders {
           'label': boundedText(item['title'] ?? item['label'], 40),
           'percent': percent.clamp(0.0, 1.0),
           'resets_at': AgentInfo.iso(resets),
+          'measured_at': AgentInfo.iso(measured),
+          'stale': usage['limitsStale'] == true,
         });
       }
     }
@@ -718,10 +778,14 @@ final class DetailReaders {
   /// agent_details.usage_is_stale: Omarchy collects usage for this agent and
   /// its record is missing or old, or older than the agent's sign-in (only
   /// the credential files' times are looked at, never their text).
-  bool usageIsStale(String command, List<String> accessFiles, {DateTime? now}) {
-    if (!hasUsageCollector(command)) return false;
-    final record =
-        '${files.identity.root('XDG_STATE_HOME', '.local/state')}/omarchy/agents/usage/$command.json';
+  bool usageIsStale(
+    String command,
+    List<String> accessFiles, {
+    DateTime? now,
+    bool native = false,
+  }) {
+    if (!hasUsageCollector(command) && !native) return false;
+    final record = usagePath(command);
     if (FileSystemEntity.typeSync(record) == FileSystemEntityType.notFound) {
       return true;
     }
@@ -754,10 +818,42 @@ final class DetailReaders {
 
   Map<String, dynamic> usageRecord(String command) {
     if (!RegExp(r'^[a-z0-9-]{1,64}$').hasMatch(command)) return {};
-    final path = desktop.name == 'omarchy' || hasUsageCollector(command)
-        ? '${files.identity.root('XDG_STATE_HOME', '.local/state')}/omarchy/agents/usage/$command.json'
-        : '~/.local/state/maprisma/no-usage/$command.json';
-    return Map<String, dynamic>.from(files.json(path));
+    return Map<String, dynamic>.from(files.json(usagePath(command)));
+  }
+
+  /// agent_details.usage_path: Omarchy's record of the agent where its
+  /// collector is (on Omarchy also one Omarchy wrote); else Maprisma's own,
+  /// asked of the agent's program (`[plan_limits]`), when there is one.
+  String usagePath(String command) {
+    final omarchy =
+        '${files.identity.root('XDG_STATE_HOME', '.local/state')}/omarchy/agents/usage/$command.json';
+    if (hasUsageCollector(command)) return omarchy;
+    if (desktop.name == 'omarchy' &&
+        FileSystemEntity.typeSync(omarchy) != FileSystemEntityType.notFound) {
+      return omarchy;
+    }
+    return nativeUsagePath(command, files.identity.environment);
+  }
+
+  /// agent_details.plan_limits_rpc: (rpc, argv) of an agent whose plan
+  /// limits Maprisma may ask its own program for: its adapter names how, no
+  /// Omarchy collector of it is found, and it is signed in (one of its
+  /// access files is there: only that, never what is in it). Else null.
+  (String, List<String>)? planLimitsRpc(Adapter adapter) {
+    final facts = adapter.table('plan_limits');
+    final rpc = facts['rpc'], argv = facts['argv'];
+    if (rpc is! String || argv is! List || argv.isEmpty) return null;
+    if (hasUsageCollector(adapter.command)) return null;
+    final signedIn =
+        [
+          for (final f in adapter.table('access')['files'] as List? ?? const [])
+            if (f is String) f,
+        ].any(
+          (name) =>
+              FileSystemEntity.typeSync('${files.identity.home}/$name') ==
+              FileSystemEntityType.file,
+        );
+    return signedIn ? (rpc, [for (final a in argv) '$a']) : null;
   }
 
   static const maxScan = 3000, dateDepth = 2;

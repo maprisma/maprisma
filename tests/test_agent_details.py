@@ -87,6 +87,62 @@ class DetailsTest(unittest.TestCase):
         self.assertEqual(d.limits[0].percent, 1.0)
         self.assertIsNotNone(d.usage_updated.tzinfo)
 
+    def test_codex_asked_itself_without_a_collector(self):
+        """No collector: Codex's own app-server answers account/rateLimits/read; the record has the
+        collector's shape and the program is killed afterwards."""
+        import time
+        bin_dir = self.home / "bin"
+        bin_dir.mkdir()
+        fake = bin_dir / "codex"
+        fake.write_text("""#!/bin/sh
+[ "$*" = "-s read-only -a on-request app-server" ] || exit 9
+read -r line
+printf '{"id":1,"result":{}}\\n'
+read -r line
+read -r line
+case "$line" in *account/rateLimits/read*) ;; *) exit 7;; esac
+printf '{"method":"note"}\\n{"id":2,"result":{"rateLimits":{"planType":"plus","primary":{"usedPercent":25,"windowDurationMins":300,"resetsAt":4102444800},"secondary":{"usedPercent":60,"windowDurationMins":10080,"resetsAt":4102531200}}}}\\n'
+echo $$ > "$HOME/app-server.pid"
+sleep 60
+""")
+        fake.chmod(0o755)
+        env = {"HOME": str(self.home), "PATH": f"{bin_dir}:/usr/bin:/bin", "XDG_STATE_HOME": str(self.home / "state")}
+        with mock.patch.object(ad, "has_usage_collector", return_value=False), \
+                mock.patch.object(ad, "HOME", self.home), mock.patch.dict(os.environ, env, clear=False):
+            self.assertIsNone(ad.plan_limits_rpc("codex", self.home))           # not signed in: never asked
+            self.assertFalse(ad.usage_is_stale("codex", root=self.home))
+            self.write(".codex/auth.json", "not read")
+            rpc = ad.plan_limits_rpc("codex", self.home)
+            self.assertEqual(rpc, ("codex-app-server", ("codex", "-s", "read-only", "-a", "on-request", "app-server")))
+            self.assertTrue(ad.usage_is_stale("codex", root=self.home))
+            started = time.monotonic()
+            self.assertTrue(ad.native_usage("codex", *rpc, environ=env))
+            self.assertLess(time.monotonic() - started, 15)
+            pid = (self.home / "app-server.pid").read_text().strip()
+            self.assertFalse(Path(f"/proc/{pid}").exists())                       # killed afterwards
+            record = json.loads((self.home / "state/maprisma/usage/codex.json").read_text())
+            self.assertEqual(record["tierLabel"], "plus")
+            self.assertEqual(record["limits"], [
+                {"label": "5h window", "percent": 0.25, "resetsAt": "2100-01-01T00:00:00.000Z"},
+                {"label": "Weekly (7-day)", "percent": 0.6, "resetsAt": "2100-01-02T00:00:00.000Z"}])
+            self.assertFalse(ad.usage_is_stale("codex", root=self.home))
+            d = ad.details_for("codex")
+            self.assertEqual(d.plan, "Plus")
+            self.assertEqual([x.percent for x in d.limits], [0.25, 0.6])
+        with mock.patch.object(ad, "has_usage_collector", return_value=True):
+            self.assertIsNone(ad.plan_limits_rpc("codex", self.home))          # Omarchy's collector first
+        self.assertIsNone(ad.ask_plan_limits("other-rpc", ["codex"], env))
+
+    def test_limits_measured_and_kept_stale(self):
+        usage = self.home / "usage"
+        usage.mkdir()
+        (usage / "claude.json").write_text(json.dumps({
+            "updatedAt": "2026-10-13T10:00:00+00:00", "limitsStale": True, "limitsFetchedAt": 1791885000000,
+            "limits": [{"label": "Session", "percent": 0.2}]}))
+        d = ad.details_for("claude", usage_dir=usage)
+        self.assertTrue(d.limits[0].stale)
+        self.assertEqual(d.limits[0].measured_at.isoformat(), "2026-10-13T09:50:00+00:00")   # limitsFetchedAt first
+
     def test_plan_label_names_service_codes(self):
         self.assertEqual(ad.plan_label("prolite"), "Pro Lite")
         self.assertEqual(ad.plan_label(" Plus "), "Plus")

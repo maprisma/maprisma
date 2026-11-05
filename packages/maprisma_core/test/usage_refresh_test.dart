@@ -1,6 +1,8 @@
 import 'dart:io';
 
+import 'package:maprisma_core/src/adapters.dart';
 import 'package:maprisma_core/src/agent_details.dart';
+import 'package:maprisma_core/src/usage_rpc.dart';
 import 'package:maprisma_core/src/desktop.dart';
 import 'package:maprisma_core/src/identity.dart';
 import 'package:maprisma_core/src/posix_ffi.dart';
@@ -132,5 +134,132 @@ void main() {
     // No collector: the generic desktop keeps no record and asks nobody.
     expect(other.usageIsStale('copilot', const []), isFalse);
     expect(other.usageRecord('copilot'), isEmpty);
+  });
+
+  test(
+    'no collector: Codex is asked itself over its app-server, then killed',
+    () async {
+      final bin = Directory('${root.path}/codex-bin')..createSync();
+      // A fake `codex … app-server`: the handshake, a notification before the
+      // answer, then it would stay up for a minute.
+      File('${bin.path}/codex').writeAsStringSync(r"""#!/bin/sh
+[ "$*" = "-s read-only -a on-request app-server" ] || exit 9
+read -r line
+case "$line" in *'"initialize"'*) ;; *) exit 8;; esac
+printf '{"id":1,"result":{}}\n'
+read -r line
+read -r line
+case "$line" in *account/rateLimits/read*) ;; *) exit 7;; esac
+printf '{"method":"note","params":{}}\n{"id":2,"result":{"rateLimits":{"planType":"plus","primary":{"usedPercent":25,"windowDurationMins":300,"resetsAt":4102444800},"secondary":{"usedPercent":60,"windowDurationMins":10080,"resetsAt":4102531200}}}}\n'
+echo $$ > "$HOME/app-server.pid"
+sleep 60
+""");
+      Process.runSync('chmod', ['755', '${bin.path}/codex']);
+      final generic = {
+        'HOME': root.path,
+        'PATH': '${bin.path}:/usr/bin:/bin',
+        'XDG_STATE_HOME': '${root.path}/state',
+        'XDG_CONFIG_HOME': '${root.path}/config',
+      };
+      final identity = AppIdentity(environment: generic);
+      final other = DetailReaders(
+        ScanFiles(identity),
+        GenericDesktop(generic),
+        ServiceI18n(identity, SettingsStore(identity)),
+      );
+      final codex = builtinAdapters().firstWhere((a) => a.command == 'codex');
+      // Not signed in (no access file): never asked.
+      expect(other.planLimitsRpc(codex), isNull);
+      File('${root.path}/.codex/auth.json')
+        ..createSync(recursive: true)
+        ..writeAsStringSync('not read');
+      final native = other.planLimitsRpc(codex)!;
+      expect(native.$1, 'codex-app-server');
+      expect(native.$2, [
+        'codex',
+        '-s',
+        'read-only',
+        '-a',
+        'on-request',
+        'app-server',
+      ]);
+      expect(
+        other.usageIsStale('codex', const []),
+        isFalse,
+      ); // not native: as before
+      expect(other.usageIsStale('codex', const [], native: true), isTrue);
+      final started = DateTime.now();
+      expect(
+        await refreshUsage('codex', generic, rpc: native.$1, argv: native.$2),
+        isTrue,
+      );
+      expect(DateTime.now().difference(started).inSeconds, lessThan(15));
+      final pid = File('${root.path}/app-server.pid').readAsStringSync().trim();
+      expect(
+        Directory('/proc/$pid').existsSync(),
+        isFalse,
+      ); // killed afterwards
+      expect(
+        File('${root.path}/state/maprisma/usage/codex.json').existsSync(),
+        isTrue,
+      );
+      expect(other.usageIsStale('codex', const [], native: true), isFalse);
+      final record = other.usageRecord('codex');
+      expect(record['tierLabel'], 'plus');
+      expect(record['limitsStale'], isFalse);
+      expect(record['limits'], [
+        {
+          'label': '5h window',
+          'percent': 0.25,
+          'resetsAt': '2100-01-01T00:00:00.000Z',
+        },
+        {
+          'label': 'Weekly (7-day)',
+          'percent': 0.6,
+          'resetsAt': '2100-01-02T00:00:00.000Z',
+        },
+      ]);
+      final info = other.read(codex);
+      expect(info.plan, 'Plus');
+      expect(info.limits.map((l) => l['percent']), [0.25, 0.6]);
+      // With Omarchy's collector on PATH, that stays the first source.
+      File('${bin.path}/omarchy-agent-usage-codex').writeAsStringSync('');
+      Process.runSync('chmod', [
+        '755',
+        '${bin.path}/omarchy-agent-usage-codex',
+      ]);
+      expect(other.planLimitsRpc(codex), isNull);
+    },
+  );
+
+  test('an app-server that does not answer is killed after its time', () async {
+    final bin = Directory('${root.path}/slow-bin')..createSync();
+    File(
+      '${bin.path}/codex',
+    ).writeAsStringSync('#!/bin/sh\necho \$\$ > "\$HOME/slow.pid"\nsleep 60\n');
+    Process.runSync('chmod', ['755', '${bin.path}/codex']);
+    final generic = {
+      'HOME': root.path,
+      'PATH': '${bin.path}:/usr/bin:/bin',
+      'XDG_STATE_HOME': '${root.path}/state',
+    };
+    final started = DateTime.now();
+    expect(
+      await askPlanLimits(
+        'codex-app-server',
+        const ['codex', 'app-server'],
+        generic,
+        answer: const Duration(seconds: 1),
+      ),
+      isNull,
+    );
+    expect(DateTime.now().difference(started).inSeconds, lessThan(6));
+    final pid = File('${root.path}/slow.pid').readAsStringSync().trim();
+    expect(Directory('/proc/$pid').existsSync(), isFalse);
+    expect(await refreshUsage('codex', generic), isFalse); // no rpc: not asked
+    expect(
+      await askPlanLimits('something-else', const ['codex'], generic),
+      isNull,
+    );
   });
 }

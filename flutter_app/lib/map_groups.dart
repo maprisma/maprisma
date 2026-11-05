@@ -366,10 +366,9 @@ class AgentBadge extends StatelessWidget {
       'yellow' => StatusColors.warn,
       _ => StatusColors.ok,
     };
-    final Widget child;
-    if (badge['kind'] == 'battery') {
-      final left = (badge['left'] as num? ?? 0).toDouble().clamp(0.0, 1.0);
-      child = Row(
+    Widget battery(num value) {
+      final left = value.toDouble().clamp(0.0, 1.0);
+      final cell = Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
@@ -393,8 +392,21 @@ class AgentBadge extends StatelessWidget {
           Container(width: 2, height: 4, color: colour),
         ],
       );
+      // Numbers that may be out of date (map.badges' stale): faded.
+      return badge['stale'] == true
+          ? Opacity(
+              key: const ValueKey('agent-battery-stale'),
+              opacity: .4,
+              child: cell,
+            )
+          : cell;
+    }
+
+    final Widget child;
+    if (badge['kind'] == 'battery') {
+      child = battery(badge['left'] as num? ?? 0);
     } else {
-      child = Text(
+      final cost = Text(
         '${badge['label']}',
         key: const ValueKey('agent-cost'),
         style: TextStyle(
@@ -403,6 +415,17 @@ class AgentBadge extends StatelessWidget {
           fontWeight: FontWeight.w600,
         ),
       );
+      // Paid per token: what is left of the day's limit beside the money.
+      child = badge['left'] is num
+          ? Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                battery(badge['left'] as num),
+                const SizedBox(width: 4),
+                cost,
+              ],
+            )
+          : cost;
     }
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4),

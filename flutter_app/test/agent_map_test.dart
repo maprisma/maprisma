@@ -162,6 +162,63 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets(
+    "paid per token: the day's limit left as a battery beside the cost; "
+    'old limits faded',
+    (tester) async {
+      Map<String, dynamic> node(String id, String label) => {
+        'id': id,
+        'column': 1,
+        'kind': 'agent',
+        'label': label,
+        'detail': '',
+        'status': '',
+      };
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: AgentMap(
+              graph: {
+                'nodes': [
+                  node('agent:codex', 'Codex'),
+                  node('agent:hermes', 'Hermes'),
+                ],
+                'edges': [],
+                'agent_badges': {
+                  'agent:codex': {
+                    'kind': 'battery',
+                    'left': 0.6,
+                    'colour': 'green',
+                    'stale': true,
+                    'tip':
+                        'Measured Thu 09:00: these numbers may be out of date.',
+                  },
+                  'agent:hermes': {
+                    'kind': 'cost',
+                    'left': 0.2,
+                    'label': r'$8.00 today',
+                    'colour': 'yellow',
+                    'tip': 'Paid per token',
+                  },
+                },
+              },
+              onAgent: (_) {},
+              tr: (key) => key,
+            ),
+          ),
+        ),
+      );
+      expect(find.byKey(const ValueKey('agent-battery')), findsNWidgets(2));
+      expect(find.text(r'$8.00 today'), findsOneWidget);
+      expect(find.byKey(const ValueKey('agent-battery-stale')), findsOneWidget);
+      final faded = tester.widget<Opacity>(
+        find.byKey(const ValueKey('agent-battery-stale')),
+      );
+      expect(faded.opacity, lessThan(1));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('a working agent shows its usage statistics box', (tester) async {
     await tester.pumpWidget(
       MaterialApp(

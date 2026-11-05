@@ -1066,13 +1066,13 @@
   "map.badges": {
    "area": "map",
    "kind": "read",
-   "note": "",
+   "note": "badges: per agent box (agent:<command>) {kind: battery (its plan limits) or cost (paid per token: label, today's money), left (0..1 left; for a cost what is left of the day's limit, only with a limit), colour (green, yellow, red at the levels of Settings: Costs), tip, stale (true: the limits may be out of date: kept past a failed probe or measured over 30 minutes ago), name and red_body (a cost)}.",
    "params": {},
    "result": {
     "badges": {},
     "rate_due": "bool"
    },
-   "source": "observed"
+   "source": "manual"
   },
   "map.smart_ask": {
    "area": "map",

@@ -470,12 +470,13 @@ def login_state(command: str) -> bool | None:
     return False if negative in text else True if positive in text else None
 
 
-def pays_per_token(command: str, details, environ=None) -> bool:
+def pays_per_token(command: str, details, environ=None, billed: bool = False) -> bool:
     """Whether the agent is paid per token (an API key or API billing) rather than with a plan whose
     limits the battery shows: no limits known, and one of its API-key variables is set (only whether
     it is), or it signs in with API keys only (access.per_token) and is signed in (its credential file
-    is there: never opened), or the desktop's usage record for it is there and names no plan. Without
-    any of these it is not known: no."""
+    is there: never opened), or the desktop's usage record for it is there, or its sessions say they
+    cost money (billed: Costs.billed, from its own store, which a provider billing per token fills in
+    and a plan or a local LLM does not), and no plan is named. Without any of these it is not known: no."""
     if details is None or details.limits or details.usage_note in TURNED_DOWN:
         return False             # limits known, or a plan's sign-in that ran out: not paid per token
     harness = harnesses.get(command)
@@ -485,7 +486,7 @@ def pays_per_token(command: str, details, environ=None) -> bool:
         return True
     if access is not None and access.per_token and credentials_present(access, HOME, environ):
         return True              # signed in, and it has only API keys (DeepSeek): only whether a file is there
-    return bool(details.has_usage) and not details.plan
+    return (bool(details.has_usage) or billed) and not details.plan
 
 
 def cost_today(command: str, today: dt.date | None = None) -> float | None:
@@ -505,6 +506,7 @@ class Costs:
     by_model: dict = field(default_factory=dict)   # model -> (provider, [4 token counts], [4 costs in USD])
     unpriced: dict = field(default_factory=dict)   # model -> its tokens (all four kinds together)
     reported: float = 0.0    # of month: what the agent itself reports for sessions without token counts (Crush)
+    billed: float = 0.0      # what its own store says the sessions of the 30 days cost (Hermes, OpenCode, Crush)
 
 
 def costs(command: str, today: dt.date | None = None, sessions=None) -> Costs | None:
@@ -546,6 +548,8 @@ def costs(command: str, today: dt.date | None = None, sessions=None) -> Costs | 
             if model not in split and model and total > 0:      # no empty entries ("unknown (0)")
                 result.unpriced[model] = result.unpriced.get(model, 0) + total
         own = getattr(session, "cost", 0) or 0
+        if isinstance(own, (int, float)) and own > 0:
+            result.billed += own     # money the agent was told, set only where a provider bills it
         if not session.tokens and isinstance(own, (int, float)) and own > 0:
             # No token counts, only the agent's own cost for the session (Crush): that counts.
             result.reported += own

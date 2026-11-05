@@ -468,6 +468,7 @@ const _newerKeys = [
   'subagents',
   'sessions',
   'install_marks',
+  'plan_limits',
 ];
 
 bool _emptyFact(dynamic v) =>
