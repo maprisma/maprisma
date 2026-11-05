@@ -199,8 +199,7 @@ class Engine(llm_engine.Engine):
 
     def add_model_step(self, rt):
         from i18n import _
-        return _("set one up in Strata's own screens: right-click Strata on the map → Configure… → "
-                 "Set up a model (strata launch).")
+        return _("set one up in Strata's own screens: run strata launch in a terminal.")
 
     def start_step(self, rt, agent_name):
         from i18n import _
