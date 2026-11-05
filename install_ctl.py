@@ -1182,6 +1182,109 @@ WantedBy=default.target
                 pass
 
 
+class Strata(Installer):
+    """Strata's terminal by its own installer (install.sh of one GitHub release): downloaded, its SHA-256
+    checked against the release's, then run with sh. It unpacks the terminal into
+    $XDG_DATA_HOME/strata/terminal/<version> (checksum and the release's signature checked by itself),
+    points `current` there and links ~/.local/bin/strata. The app marks that terminal folder as its
+    install, so Uninstall removes only the terminal and the link; Strata's engines, run configs and
+    models (components/, install/, the model folders) stay."""
+    key, name, command, service = "strata", "Strata", "strata", ""
+    bin_rel = "bin/strata"
+    has_service = False
+    uses_models = False
+    RELEASES = "https://api.github.com/repos/Niko1221/Strata/releases/latest"
+    DOWNLOADS = "https://github.com/Niko1221/Strata/releases/download/"
+    TAG_RE = re.compile(r"v\d{1,4}(?:\.\d{1,6}){1,3}")
+    TIMEOUT = 1800
+
+    @property
+    def default_folder(self) -> Path:
+        import provider_strata
+        return provider_strata.data_dir() / "terminal"
+
+    def latest(self, gpu: Gpu, build: str = "") -> Release:
+        data = _curl_json(self.RELEASES)
+        version = str(data.get("tag_name", ""))
+        if not self.TAG_RE.fullmatch(version):
+            raise RuntimeError("no release found")
+        assets = [a for a in data.get("assets", []) if isinstance(a, dict) and a.get("name") == "install.sh"]
+        if len(assets) != 1:
+            raise RuntimeError(f"{version} has no install.sh")
+        release = github_release(version, assets)
+        if release.assets[0][1] != f"{self.DOWNLOADS}{version}/install.sh":
+            raise RuntimeError("the installer is not in Strata's release")
+        return release
+
+    def current_version_in(self, folder: Path) -> str:
+        """Its `current` link is absolute (install.sh: ln -sfn <folder>/<version>): the version's name."""
+        try:
+            target = Path(os.readlink(folder / "current"))
+        except OSError:
+            return ""
+        return target.name if target.parent in (folder, Path(".")) or target.parent == folder.resolve() else ""
+
+    def current_version(self) -> str:
+        folder = self.installed_folder()
+        return self.current_version_in(folder) if folder else ""
+
+    def versions(self, folder: Path) -> list[str]:
+        """The marker's versions and the ones Strata's own update put beside them (each a folder with
+        bin/strata and VERSION), oldest first."""
+        if self.marker(folder) is None:
+            return []
+        listed = super().versions(folder)
+        try:
+            own = [p.name for p in folder.iterdir()
+                   if NAME_RE.fullmatch(p.name) and not p.name.startswith(".") and p.name != "current"
+                   and p.is_dir() and not p.is_symlink() and (p / self.bin_rel).is_file() and (p / "VERSION").is_file()]
+        except OSError:
+            own = []
+        found = {name: folder / name for name in [*listed, *own]}
+        return [n for n, p in sorted(found.items(), key=lambda item: item[1].stat().st_mtime)]
+
+    def install(self, folder: Path, models: Path | None, start_at_login: bool, start_now: bool, gpu: Gpu,
+                release: Release, progress, cancelled):
+        import tempfile
+        if folder != self.default_folder:
+            raise RuntimeError(f"Strata installs into its own folder ({self.default_folder}); nothing was installed")
+        if [name for name, _url, _size in release.assets] != ["install.sh"] or "install.sh" not in release.digests \
+                or not self.TAG_RE.fullmatch(release.version):
+            raise RuntimeError("install.sh: no SHA-256 checksum to check it against; nothing was installed")
+        link = BIN_DIR / self.command
+        if (link.exists() or link.is_symlink()) and self.installed_folder() != folder:
+            raise RuntimeError(f"{link} belongs to another program or install; nothing was installed")
+        if folder.is_symlink() or (folder.exists() and not folder.is_dir()):
+            raise RuntimeError(f"{folder} is not a folder of its own; nothing was installed")
+        if folder.is_dir() and any(folder.iterdir()) and self.marker(folder) is None:
+            raise RuntimeError(f"Strata is installed already in {folder}; update it with `strata update`")
+        name, url, size = release.assets[0]
+        with tempfile.TemporaryDirectory(prefix="maprisma-strata-") as work:
+            script = Path(work) / name
+            progress(0.0, f"download {name}")
+            download(url, script, size, progress, cancelled, 0, max(1, size), sha256=release.digests[name])
+            if cancelled():
+                raise Cancelled()
+            progress(0.2, "install.sh")
+            # Only this release's feed, and none of the user's STRATA_* settings (a test feed, other
+            # folders): what was checked is what installs.
+            env = {k: v for k, v in os.environ.items() if not k.startswith("STRATA_")}
+            env["STRATA_FEED"] = f"{self.DOWNLOADS}{release.version}"
+            out, ok = ai_core.read_bounded_output(["sh", str(script)], max_bytes=256 * 1024, timeout=self.TIMEOUT,
+                                                  merge_stderr=True, env=env)
+        if not ok:
+            raise RuntimeError(out.decode("utf-8", "replace").strip()[-300:] or "install.sh failed")
+        version = self.current_version_in(folder)
+        try:
+            ours = link.is_symlink() and link.resolve().is_relative_to(folder.resolve())
+        except OSError:
+            ours = False
+        if not version or not ours:
+            raise RuntimeError("install.sh finished, but its terminal or the strata link is missing")
+        self.record_version(folder, version)
+        progress(1.0, "done")
+
+
 class Jan(Installer):
     """Jan's AppImage, unpacked (as LM Studio's), with a desktop entry and
     `jan-desktop` in ~/.local/bin. For agents, Jan's own engine
