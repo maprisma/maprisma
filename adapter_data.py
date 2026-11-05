@@ -120,7 +120,7 @@ USAGE = {"pi": ("agent_status", "pi"), "hermes": ("agent_status", "hermes"),    
 DETAIL_READERS = {name: ("agent_readers", function) for name, function in (     # model + providers readers
     ("claude", "claude"), ("codex", "codex"), ("copilot", "copilot"), ("cursor", "cursor"),
     ("opencode", "opencode"), ("pi", "pi_like"), ("hermes", "hermes"), ("dsh", "dsh"), ("openclaw", "openclaw"),
-    ("goose", "goose"),
+    ("goose", "goose"), ("agy", "agy"),
     ("lmstudio-app", "bionic"))}
 MODEL_READERS = {"claude": ("online_models", "claude_choices", "claude_plan"),       # online model switchers
                  "codex": ("online_models", "codex_choices", "codex_plan")}

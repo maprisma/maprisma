@@ -254,7 +254,7 @@
  "installer": "Agy",
  "detect": false,
  "limits": false,
- "details": false,
+ "details": true,
  "models": null,
  "local_llm": null,
  "skills": {

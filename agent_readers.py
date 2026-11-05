@@ -165,9 +165,51 @@ def codex(details: "ad.Details"):
                 details.providers.append(ad.provider_for_url(ad._text(entry.get("name"), 40) or name,
                                                                 entry.get("base_url"), active=name == chosen))
     if not details.model and not chosen:
-        details.model = codex_session_model()          # none set: Codex's own default, as its last session ran it
+        # None set: Codex's own default, as its last session ran it, or before any session the model its
+        # models cache lists first.
+        details.model = codex_session_model() or codex_cache_model()
     if chosen and details.model:
         details.model = f"{details.model} ({chosen})"
+
+
+def codex_cache_model(path: str = "~/.codex/models_cache.json") -> str:
+    """The listed model of Codex's models cache with the lowest priority (the one its picker shows first and
+    a new Codex starts with), "" when there is none."""
+    rows = ad.read_json(ad._expand(path)).get("models")
+    best = None
+    for row in rows[:200] if isinstance(rows, list) else []:
+        if isinstance(row, dict) and row.get("visibility") == "list" and isinstance(row.get("slug"), str) \
+                and isinstance(row.get("priority"), int) and (best is None or row["priority"] < best[0]):
+            best = (row["priority"], row["slug"])
+    return ad._text(best[1]) if best else ""
+
+
+AGY_MODEL = re.compile(rb'selected model override to backend: label="([^"\n]{1,80})"')
+
+
+def agy_model_name(label: str) -> str:
+    """"Gemini 4 Argon (Medium)" → "gemini-4-argon": the label without its effort, as a model id."""
+    name = re.sub(r"\s*\([^)]*\)\s*$", "", label).strip().lower()
+    name = re.sub(r"[^a-z0-9.]+", "-", name).strip("-")
+    return name if re.fullmatch(r"[a-z0-9][a-z0-9.-]{0,79}", name) else ""
+
+
+def agy(details: "ad.Details", root: str = "~/.gemini/antigravity-cli/log"):
+    """Antigravity CLI keeps no model in its settings; its newest log names the model it selected."""
+    folder = ad._expand(root)
+    try:
+        logs = sorted((e.stat().st_mtime, e.path) for _i, e in zip(range(2000), os.scandir(folder))
+                      if e.name.startswith("cli-") and e.name.endswith(".log") and e.is_file(follow_symlinks=False))
+        if not logs:
+            return
+        with open(logs[-1][1], "rb") as handle:
+            size = os.fstat(handle.fileno()).st_size
+            handle.seek(max(0, size - 4 * 1024 * 1024))
+            found = AGY_MODEL.findall(handle.read(4 * 1024 * 1024))
+    except OSError:
+        return
+    if found:
+        details.model = agy_model_name(found[-1].decode("utf-8", "replace"))
 
 
 CODEX_MODEL = re.compile(rb'"type"\s*:\s*"turn_context".*?"model"\s*:\s*"([A-Za-z0-9._:-]{1,80})"')

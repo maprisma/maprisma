@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:path/path.dart' as p;
 import 'package:yaml/yaml.dart';
 import 'dsh_profile.dart';
 import 'py_time.dart';
@@ -423,6 +424,31 @@ final class DetailReaders {
         }
       case 'lmstudio-app':
         info.providers.add(provider('LM Studio', 'http://127.0.0.1:1234/v1'));
+      case 'agy':
+        // No model in its settings: its newest log names the one it selected.
+        const folder = '~/.gemini/antigravity-cli/log';
+        final logs = [
+          for (final path in files.list(folder, limit: 2000))
+            if (p.basename(path).startsWith('cli-') &&
+                path.endsWith('.log') &&
+                FileSystemEntity.typeSync(path, followLinks: false) ==
+                    FileSystemEntityType.file)
+              (File(path).statSync().modified, path),
+        ]..sort((a, b) => a.$1.compareTo(b.$1));
+        if (logs.isNotEmpty) {
+          final found =
+              RegExp(
+                r'selected model override to backend: label="([^"\n]{1,80})"',
+              ).allMatches(
+                files.text(
+                      logs.last.$2,
+                      limit: 4 * 1024 * 1024,
+                      portion: 'tail',
+                    ) ??
+                    '',
+              );
+          if (found.isNotEmpty) info.model = agyModelName(found.last[1]!);
+        }
     }
     if (info.model.isEmpty && ['claude', 'codex'].contains(reader)) {
       final session = SessionReaders(files);
@@ -439,6 +465,16 @@ final class DetailReaders {
               );
         final found = expression.allMatches(source).toList();
         if (found.isNotEmpty) info.model = found.last[1]!;
+      }
+      // Codex before its first session: the model its models cache lists
+      // first (the one a new Codex starts with).
+      if (info.model.isEmpty &&
+          reader == 'codex' &&
+          boundedText(
+            files.toml('~/.codex/config.toml')['model_provider'],
+            40,
+          ).isEmpty) {
+        info.model = codexCacheModel(files);
       }
     }
     final usage = usageRecord(adapter.command);
@@ -690,4 +726,35 @@ final class DetailReaders {
     stdin: stdin,
     envFile: envFile,
   );
+}
+
+/// agent_readers.codex_cache_model: the listed model of Codex's models cache
+/// with the lowest priority, '' when there is none.
+String codexCacheModel(ScanFiles files) {
+  final rows = files.json(
+    '~/.codex/models_cache.json',
+    limit: 4 * 1024 * 1024,
+  )['models'];
+  (int, String)? best;
+  for (final row in rows is List ? rows.take(200) : const []) {
+    if (row is Map &&
+        row['visibility'] == 'list' &&
+        row['slug'] is String &&
+        row['priority'] is int &&
+        (best == null || (row['priority'] as int) < best.$1)) {
+      best = (row['priority'] as int, row['slug'] as String);
+    }
+  }
+  return best == null ? '' : boundedText(best.$2);
+}
+
+/// agent_readers.agy_model_name: "Gemini 4 Argon (Medium)" → "gemini-4-argon".
+String agyModelName(String label) {
+  final name = label
+      .replaceFirst(RegExp(r'\s*\([^)]*\)\s*$'), '')
+      .trim()
+      .toLowerCase()
+      .replaceAll(RegExp(r'[^a-z0-9.]+'), '-')
+      .replaceAll(RegExp(r'^-+|-+$'), '');
+  return RegExp(r'^[a-z0-9][a-z0-9.-]{0,79}$').hasMatch(name) ? name : '';
 }

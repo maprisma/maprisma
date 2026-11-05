@@ -18,6 +18,9 @@ home = "~/.gemini/antigravity-cli"
 activity = ["~/.gemini/antigravity-cli"]
 web_search = true                      # searches the web itself (Google Search grounding)
 
+[details]                              # its model: the one its newest log says it selected
+reader = "agy"
+
 [[install]]                            # its release through mise (aqua, checksummed)
 kind = "mise"
 spec = "antigravity-cli"

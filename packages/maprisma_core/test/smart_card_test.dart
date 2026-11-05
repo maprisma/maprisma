@@ -1342,6 +1342,52 @@ void main() {
     expect(login['commands'], [endsWith('/bin/agy')]);
   });
 
+  test('Codex and Antigravity show the model they start with', () async {
+    final home = Directory.systemTemp.createTempSync('smart');
+    addTearDown(() => home.deleteSync(recursive: true));
+    final bin = Directory('${home.path}/bin')..createSync();
+    for (final command in ['agy', 'codex']) {
+      File('${bin.path}/$command').writeAsStringSync('#!/bin/sh\necho 1.0.0\n');
+      Process.runSync('chmod', ['+x', '${bin.path}/$command']);
+    }
+    File('${home.path}/.codex/config.toml')
+      ..createSync(recursive: true)
+      ..writeAsStringSync('[tui]\n');
+    File('${home.path}/.codex/models_cache.json').writeAsStringSync(
+      jsonEncode({
+        'models': [
+          {'slug': 'gpt-6-astra', 'visibility': 'list', 'priority': 2},
+          {'slug': 'gpt-reserve', 'visibility': 'hide', 'priority': 0},
+          {'slug': 'gpt-6.1-sol', 'visibility': 'list', 'priority': 1},
+        ],
+      }),
+    );
+    File('${home.path}/.gemini/antigravity-cli/log/cli-20261105_140532.log')
+      ..createSync(recursive: true)
+      ..writeAsStringSync(
+        'I1105 model_config_manager.go:363] Propagating selected model '
+        'override to backend: label="Gemini 4 Argon (Medium)"\n',
+      );
+    final core = CoreService(
+      environment: {
+        'HOME': home.path,
+        'PATH': bin.path,
+        'MAPRISMA_DESKTOP': 'generic',
+      },
+    );
+    var graph = core.dispatch('map.snapshot', {'force': true});
+    for (var i = 0; i < 100 && graph['pending'] == true; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      graph = core.dispatch('map.snapshot', {'poll': true});
+    }
+    final edges = {
+      for (final e in (graph['edges'] as List).cast<Map>())
+        if (e['kind'] == 'default') e['source']: e['target'],
+    };
+    expect(edges['agent:agy'], 'model:cloud:google:gemini-4-argon');
+    expect(edges['agent:codex'], 'model:cloud:openai:gpt-6.1-sol');
+  });
+
   test('a known server without agents stays on the map', () async {
     final home = Directory.systemTemp.createTempSync('smart');
     addTearDown(() => home.deleteSync(recursive: true));

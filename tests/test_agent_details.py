@@ -159,6 +159,31 @@ class DetailsTest(unittest.TestCase):
         self.write(".codex/config.toml", 'model = "o9"\n')
         self.assertEqual(ad.details_for("codex", usage_dir=self.home).model, "o9")      # set: as it is
 
+    def test_codex_model_before_its_first_session(self):
+        """No model set and no session yet: the listed model its models cache ranks first."""
+        import json
+        self.write(".codex/config.toml", "[tui]\n")
+        self.write(".codex/models_cache.json", json.dumps({"models": [
+            {"slug": "gpt-6-astra", "visibility": "list", "priority": 2},
+            {"slug": "gpt-reserve", "visibility": "hide", "priority": 0},
+            {"slug": "gpt-6.1-sol", "visibility": "list", "priority": 1}]}))
+        self.assertEqual(ad.details_for("codex", usage_dir=self.home).model, "gpt-6.1-sol")
+        self.write(".codex/sessions/2026/11/05/rollout-a.jsonl",
+                   '{"type":"turn_context","payload":{"cwd":"/x","model":"gpt-6-luna"}}\n')
+        self.assertEqual(ad.details_for("codex", usage_dir=self.home).model, "gpt-6-luna")   # a session wins
+
+    def test_agy_model_from_its_newest_log(self):
+        """Antigravity CLI keeps no model in its settings: its newest log names the one it selected."""
+        line = 'I1105 14:05:33 model_config_manager.go:363] Propagating selected model override to backend: label="{}"\n'
+        old = self.write(".gemini/antigravity-cli/log/cli-20261103_230333.log", line.format("Gemini 3 Pro (High)"))
+        os.utime(old, (1_700_000_000, 1_700_000_000))
+        self.write(".gemini/antigravity-cli/log/cli-20261105_140532.log",
+                   line.format("Gemini 3 Pro (High)") + line.format("Gemini 4 Argon (Medium)"))
+        self.assertEqual(ad.details_for("agy", usage_dir=self.home).model, "gemini-4-argon")
+        import agent_readers
+        self.assertEqual(agent_readers.agy_model_name("Gemini 3.8 Flash"), "gemini-3.8-flash")
+        self.assertEqual(agent_readers.agy_model_name("(Medium)"), "")
+
     def test_claude_model_from_its_last_session(self):
         """No model in settings.json: the one its newest session's last reply ran, as the map's alias."""
         import agent_readers
