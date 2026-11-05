@@ -70,9 +70,28 @@ class ToolsTest(unittest.TestCase):
         self.assertEqual(mcp_tools.cached("filesystem~2", mcp_ctl.identity_hash(broken))["status"], "failed")
         self.assertIsNone(mcp_tools.cached("filesystem~2", mcp_ctl.identity_hash(self.entry)))
         self.assertNotIn("identity", mcp_tools.cached("filesystem~2"))
-        # Env and headers do not change which server it is; arguments do.
-        self.assertEqual(mcp_ctl.identity_hash(dict(broken, env={"K": "x"})), mcp_ctl.identity_hash(broken))
+        # Arguments, env and headers change which server it is (R3 #1), only digested.
+        self.assertNotEqual(mcp_ctl.identity_hash(dict(broken, env={"K": "x"})), mcp_ctl.identity_hash(broken))
+        self.assertNotIn("from env", mcp_ctl.identity(self.entry))
         self.assertNotEqual(mcp_ctl.identity_hash(self.entry), mcp_ctl.identity_hash(broken))
+        # The digests of the Dart core (mcp_variants_test.dart).
+        self.assertEqual(mcp_ctl.identity_hash({"command": "fs-b"}), "a26b0c25c36845b4")
+        self.assertEqual(mcp_ctl.identity_hash({"url": "https://example.test:9443/mcp?k=ü"}), "eab49f62c0943d7e")
+        self.assertEqual(mcp_ctl.identity_hash({"command": "fs", "env": {"ROOT": "/data/a", "Ä": "ü"}}),
+                         "dee19b55720f91e8")
+        self.assertEqual(mcp_ctl.identity_hash({"url": "https://x.test/mcp", "headers": {"X-Workspace": "b"}}),
+                         "9cde67ee6fefe0a6")
+
+    def test_an_answer_without_digest_is_none_for_a_known_server(self):
+        """R3 #5: an answer kept before digests tells not whose it is: with a digest it counts as none
+        (and stays on disk); without one it is shown."""
+        import mcp_ctl
+        path = mcp_tools.cache_file("filesystem~2")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"status": "ok", "tools": [{"name": "old", "description": ""}]}))
+        self.assertIsNone(mcp_tools.cached("filesystem~2", mcp_ctl.identity_hash(self.entry)))
+        self.assertTrue(path.exists())
+        self.assertEqual(mcp_tools.cached("filesystem~2")["tools"][0]["name"], "old")
 
 
 if __name__ == "__main__":

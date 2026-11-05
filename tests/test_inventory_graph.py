@@ -475,16 +475,21 @@ class ReviewChainTest(unittest.TestCase):
 
     def test_servers_are_told_apart_by_what_they_are(self):
         """063e #4: same host, other path or port, or the same program with other arguments,
-        are other servers; other keys are not. The label stays short."""
+        are other servers; so are other env or headers (R3 #1), kept out of every label and id.
+        The label stays short."""
         self.write(".claude.json", json.dumps({"mcpServers": {
             "web": {"type": "http", "url": "https://example.test/a"},
             "port": {"type": "http", "url": "https://example.test:8443/mcp"},
             "tool": {"command": "node", "args": ["/x/server.js"]},
-            "same": {"command": "same-cli", "env": {"TOKEN": "one"}}}}))
+            "same": {"command": "same-cli", "env": {"ROOT": "/data/one"}},
+            "desk": {"type": "http", "url": "https://example.test/desk", "headers": {"X-Workspace": "alpha"}},
+            "twin": {"command": "twin-cli", "env": {"A": "1", "B": "2"}}}}))
         self.write(".codex/config.toml", '[mcp_servers.web]\nurl = "https://example.test/b"\n'
                    '[mcp_servers.port]\nurl = "https://example.test:9443/mcp"\n'
                    '[mcp_servers.tool]\ncommand = "node"\nargs = ["/y/server.js"]\n'
-                   '[mcp_servers.same]\ncommand = "same-cli"\nenv = { TOKEN = "two" }\n')
+                   '[mcp_servers.same]\ncommand = "same-cli"\nenv = { ROOT = "/data/two" }\n'
+                   '[mcp_servers.desk]\nurl = "https://example.test/desk"\nhttp_headers = { X-Workspace = "beta" }\n'
+                   '[mcp_servers.twin]\ncommand = "twin-cli"\nenv = { B = "2", A = "1" }\n')
         claude, codex = self.agent("claude", "Claude Code"), self.agent("codex", "Codex")
         with mock.patch.object(ad, "details_for", lambda c: ad.Details()):
             inv = invmod.collect([claude, codex], remember=False)
@@ -493,9 +498,29 @@ class ReviewChainTest(unittest.TestCase):
             self.assertEqual(servers[f"{name}~2"].agents, ["codex"], name)
             self.assertEqual(servers[f"{name}~2"].target, servers[name].target)
         self.assertEqual((servers["web"].target, servers["tool"].target), ("example.test", "node server.js"))
-        self.assertEqual(servers["same"].agents, ["claude", "codex"])
-        self.assertNotIn("same~2", servers)
-        self.assertNotIn("one", repr(inv.mcp))
+        for name in ("same", "desk"):
+            self.assertEqual(servers[f"{name}~2"].agents, ["codex"], name)
+            self.assertEqual(servers[f"{name}~2"].target, servers[name].target)
+        self.assertEqual(servers["twin"].agents, ["claude", "codex"])
+        self.assertNotIn("twin~2", servers)
+        for secret in ("/data/", "alpha", "beta"):
+            self.assertNotIn(secret, repr(inv.mcp))
+
+    def test_a_saved_server_keeps_its_key(self):
+        """R3 #4: a saved, unused filesystem keeps its key when an agent's other filesystem comes;
+        a saved server with env (from before env took part) still is that server."""
+        a = {"transport": "stdio", "command": "fs-a", "args": [], "env": {}, "url": "", "headers": {}}
+        rooted = dict(a, env={"ROOT": "/data/a"})
+        self.write(".config/maprisma/mcp-servers.json", json.dumps({"servers": {"filesystem": a, "rooted": rooted}}))
+        self.write(".claude.json", json.dumps({"mcpServers": {"filesystem": {"command": "fs-b"},
+                                                              "rooted": {"command": "fs-a", "env": {"ROOT": "/data/a"}}}}))
+        claude = self.agent("claude", "Claude Code")
+        with mock.patch.object(ad, "details_for", lambda c: ad.Details()):
+            invmod.collect([claude])
+        known = mcp_library.load()
+        self.assertEqual(sorted(known), ["filesystem", "filesystem~2", "rooted"])
+        self.assertEqual((known["filesystem"], known["filesystem~2"]["command"], known["rooted"]),
+                         (a, "fs-b", rooted))
 
     def test_the_second_server_of_a_name_stays_known(self):
         """063e #5: the list keeps every server of a name (an old list's plain name stays),

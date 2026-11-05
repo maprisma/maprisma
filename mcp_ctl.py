@@ -127,12 +127,25 @@ def base_name(ident: str) -> str:
 def identity(entry) -> str:
     """What makes two servers of one name the same server: the transport and the
     whole address (path, port and query), or the transport, command and every
-    argument. Env and headers stay out (keys). '' when the entry tells neither."""
+    argument, and the env or headers it is given (another ROOT or workspace is
+    another server). Those may hold keys: they take part only as a salted digest
+    (_settings_digest), never in clear text; an entry without any keeps the
+    identity it had before. '' when the entry tells neither."""
     e = normal(entry)
     if e is None:
         return ""
     parts = [e["transport"], e["command"], e["args"]] if e["transport"] == "stdio" else [e["transport"], e["url"]]
+    if e["env"] or e["headers"]:
+        parts.append(_settings_digest(e["env"], e["headers"]))
     return json.dumps(parts, separators=(",", ":"), ensure_ascii=False)
+
+
+def _settings_digest(env: dict, headers: dict) -> str:
+    """The env and headers of a server as a digest (Dart _settingsDigest)."""
+    import hashlib
+    pairs = [[[k, m[k]] for k in sorted(m)] for m in (env, headers)]
+    text = "maprisma-mcp-settings\n" + json.dumps(pairs, separators=(",", ":"), ensure_ascii=False)
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 def identity_hash(entry) -> str:

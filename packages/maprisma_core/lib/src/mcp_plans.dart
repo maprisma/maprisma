@@ -27,17 +27,37 @@ String mcpBaseName(String id) => id.replaceFirst(RegExp(r'~[0-9]+$'), '');
 
 /// What makes two servers of one name the same server: how it is reached (the
 /// transport and the whole address, path, port and query included) or what is
-/// started (the transport, the command and every argument). Environment and
-/// headers stay out: they may hold keys and do not change which server it is.
-/// '' for an entry that tells neither.
+/// started (the transport, the command and every argument), and the
+/// environment or headers it is given (another ROOT or workspace is another
+/// server). Those may hold keys, so they take part only as a salted digest of
+/// their sorted names and values, never in clear text; an entry without any
+/// keeps the identity it had before they took part. '' for an entry that tells
+/// neither.
 String mcpIdentity(dynamic entry) {
   final e = normalEntry(entry);
   if (e == null) return '';
-  return jsonEncode(
-    e['transport'] == 'stdio'
+  final env = e['env'] as Map<String, String>,
+      headers = e['headers'] as Map<String, String>;
+  return jsonEncode([
+    ...e['transport'] == 'stdio'
         ? [e['transport'], e['command'], e['args']]
         : [e['transport'], e['url']],
-  );
+    if (env.isNotEmpty || headers.isNotEmpty) _settingsDigest(env, headers),
+  ]);
+}
+
+/// mcp_ctl._settings_digest: the env and headers of a server, digested.
+String _settingsDigest(Map<String, String> env, Map<String, String> headers) {
+  List<List<String>> pairs(Map<String, String> m) => [
+    for (final k in m.keys.toList()..sort(pyCompare)) [k, m[k]!],
+  ];
+  return sha256
+      .convert(
+        utf8.encode(
+          'maprisma-mcp-settings\n${jsonEncode([pairs(env), pairs(headers)])}',
+        ),
+      )
+      .toString();
 }
 
 /// [mcpIdentity] as a short digest, for files kept beside a server's answer.
@@ -285,9 +305,10 @@ final class McpPlans {
   /// or has differently, written straight away; then the list as load() reads it.
   /// [serverAgents]: the map's ids (name, name~2, …) and their agents. Each
   /// server keeps the key that holds the same server ([mcpIdentity]); a new one
-  /// takes its name when it is the first of that name and the name is not
-  /// another's in use, else the next free name~N, so a second server of one
-  /// name is remembered too and its definition stays when its last agent goes.
+  /// takes its name when it is the first of that name and no saved server
+  /// holds the name (used or not), else the next free name~N, so a second
+  /// server of one name is remembered too and its definition stays when its
+  /// last agent goes. Only an update (mcp_update) rewrites a saved server.
   Map<String, dynamic> knownServers(
     Map<String, List<String>> serverAgents,
     bool remember,
@@ -320,7 +341,8 @@ final class McpPlans {
         }
         for (final (id, name, entry) in pending) {
           var key = name;
-          if (id != name || claimed.contains(name)) {
+          // A saved server of another identity keeps its key, used or not.
+          if (id != name || merged.containsKey(name)) {
             for (var n = 2; ; n++) {
               key = '$name~$n';
               if (!merged.containsKey(key) && !claimed.contains(key)) break;

@@ -239,7 +239,8 @@ def cache_file(name: str) -> Path:
 
 
 def cached(name: str, identity: str | None = None) -> dict | None:
-    """With identity, only an answer of that server (one kept before answers carried it is taken)."""
+    """With identity, only an answer of that server. One kept before answers carried
+    it tells nothing of its server: it counts as none (left on disk) until asked again."""
     try:
         data = json.loads(cache_file(name).read_text(encoding="utf-8"))
     except (OSError, ValueError):
@@ -247,7 +248,7 @@ def cached(name: str, identity: str | None = None) -> dict | None:
     if not isinstance(data, dict):
         return None
     kept = data.pop("identity", None)
-    if identity is not None and isinstance(kept, str) and kept != identity:
+    if identity is not None and kept != identity:
         return None
     return data
 

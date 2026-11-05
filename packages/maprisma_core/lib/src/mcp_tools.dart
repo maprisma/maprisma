@@ -438,8 +438,9 @@ String toolsCacheFile(String home, String name) {
   return '$home/.cache/maprisma/mcp-tools/$name.json';
 }
 
-/// mcp_tools.cached. With [identity], only an answer of that server (one kept
-/// before answers carried it is taken as it is).
+/// mcp_tools.cached. With [identity], only an answer of that server: one kept
+/// before answers carried it tells nothing of the server it came from, so it
+/// counts as no answer (and stays on disk) until the server is asked again.
 Map<String, dynamic>? cachedTools(
   String home,
   String name, {
@@ -451,7 +452,7 @@ Map<String, dynamic>? cachedTools(
     final data = jsonDecode(file.readAsStringSync());
     if (data is! Map<String, dynamic>) return null;
     final kept = data.remove('identity');
-    if (identity != null && kept is String && kept != identity) return null;
+    if (identity != null && kept != identity) return null;
     return data;
   } on Object {
     return null;

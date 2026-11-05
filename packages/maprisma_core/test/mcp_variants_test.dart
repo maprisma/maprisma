@@ -191,6 +191,33 @@ void main() {
       core.dispatch('mcp.tools_cached', {'name': 'filesystem~2'})['cached'],
       isNull,
     );
+    // R3 #5: an answer kept before digests tells not whose it is: none.
+    write(
+      '.cache/maprisma/mcp-tools/filesystem~2.json',
+      jsonEncode({
+        'status': 'ok',
+        'tools': [
+          {'name': 'read-old', 'description': ''},
+        ],
+      }),
+    );
+    expect(
+      core.dispatch('mcp.tools_cached', {'name': 'filesystem~2'})['cached'],
+      isNull,
+    );
+    expect(
+      core.dispatch('details.mcp', {'name': 'filesystem~2'})['tools'],
+      isEmpty,
+    );
+    expect(
+      read('.cache/maprisma/mcp-tools/filesystem~2.json'),
+      contains('read-old'),
+    );
+    // Without a digest to compare (no definition known) it is still shown.
+    expect(
+      (cachedTools(home.path, 'filesystem~2')!['tools'] as List).single['name'],
+      'read-old',
+    );
     keep('filesystem~2', _b, 'read-b');
     final cached =
         core.dispatch('mcp.tools_cached', {'name': 'filesystem~2'})['cached']
@@ -238,7 +265,16 @@ void main() {
           },
           'same': {
             'command': 'same-cli',
-            'env': {'TOKEN': 'one'},
+            'env': {'ROOT': '/data/one'},
+          },
+          'desk': {
+            'type': 'http',
+            'url': 'https://example.test/desk',
+            'headers': {'X-Workspace': 'alpha'},
+          },
+          'twin': {
+            'command': 'twin-cli',
+            'env': {'A': '1', 'B': '2'},
           },
         },
       }),
@@ -255,7 +291,13 @@ void main() {
         'args = ["/y/server.js"]',
         '[mcp_servers.same]',
         'command = "same-cli"',
-        'env = { TOKEN = "two" }',
+        'env = { ROOT = "/data/two" }',
+        '[mcp_servers.desk]',
+        'url = "https://example.test/desk"',
+        'http_headers = { X-Workspace = "beta" }',
+        '[mcp_servers.twin]',
+        'command = "twin-cli"',
+        'env = { B = "2", A = "1" }',
         '',
       ].join('\n'),
     );
@@ -266,10 +308,69 @@ void main() {
     }
     expect(found['web']!['target'], 'example.test');
     expect(found['tool']!['target'], 'node server.js');
-    // Other keys or tokens do not make another server.
-    expect(found['same']!['agents'], ['claude', 'codex']);
-    expect(found.containsKey('same~2'), isFalse);
-    expect(jsonEncode(found), isNot(contains('one')));
+    // Another ROOT or workspace is another server (R3 #1), shown as before.
+    for (final name in ['same', 'desk']) {
+      expect(found['$name~2']?['agents'], ['codex'], reason: name);
+      expect(found['$name~2']!['target'], found[name]!['target']);
+    }
+    // The same env in another order is the same server.
+    expect(found['twin']!['agents'], ['claude', 'codex']);
+    expect(found.containsKey('twin~2'), isFalse);
+    // Their values are in no id, label or identity, only digested.
+    final entry = {
+      'command': 'same-cli',
+      'env': {'ROOT': '/data/one'},
+    };
+    for (final text in [
+      jsonEncode(found),
+      mcpIdentity(entry),
+      mcpIdentityHash(entry),
+    ]) {
+      expect(text, isNot(contains('/data/')));
+      expect(text, isNot(contains('alpha')));
+      expect(text, isNot(contains('beta')));
+    }
+    expect(mcpIdentity(entry), isNot(mcpIdentity({'command': 'same-cli'})));
+  });
+
+  test('#4: a saved server with its env still is the server it was', () {
+    // A list saved before env took part in the identity.
+    final rooted = {
+      ..._a,
+      'env': {'ROOT': '/data/a'},
+    };
+    write(
+      '.config/maprisma/mcp-servers.json',
+      jsonEncode({
+        'servers': {'filesystem': rooted},
+      }),
+    );
+    write(
+      '.claude.json',
+      jsonEncode({
+        'mcpServers': {
+          'filesystem': {
+            'command': 'fs-a',
+            'env': {'ROOT': '/data/a'},
+          },
+        },
+      }),
+    );
+    write(
+      '.codex/config.toml',
+      '[mcp_servers.filesystem]\ncommand = "fs-a"\n'
+          'env = { ROOT = "/data/b" }\n',
+    );
+    final inventory = core.reads.inventory.collect(core.reads.catalog.scan());
+    expect(library().keys, ['filesystem', 'filesystem~2']);
+    expect(library()['filesystem'], rooted);
+    expect(library()['filesystem~2']['env'], {'ROOT': '/data/b'});
+    expect(inventory.mcpLibrary, {
+      'filesystem': 'filesystem',
+      'filesystem~2': 'filesystem~2',
+    });
+    // Without env the digest is the one kept before (old tool answers match).
+    expect(mcpIdentityHash(_a), mcpIdentityHash({'command': 'fs-a'}));
   });
 
   group('#5: Ask AI and the list of known servers keep each server', () {
@@ -351,7 +452,35 @@ void main() {
       );
     });
 
-    test('a changed server keeps its key; the first of a name its name', () {
+    test('a saved server keeps its key when another takes its name', () {
+      // R3 #4: saved filesystem -> fs-a, used by no agent.
+      write(
+        '.config/maprisma/mcp-servers.json',
+        jsonEncode({
+          'servers': {'filesystem': _a},
+        }),
+      );
+      write(
+        '.claude.json',
+        jsonEncode({
+          'mcpServers': {
+            'filesystem': {'command': 'fs-b'},
+          },
+        }),
+      );
+      final inventory = core.reads.inventory.collect(core.reads.catalog.scan());
+      expect(library().keys, ['filesystem', 'filesystem~2']);
+      expect(library()['filesystem'], _a);
+      expect(library()['filesystem~2'], _b);
+      expect(inventory.mcpLibrary['filesystem'], 'filesystem~2');
+      final unused = inventory.mcp.singleWhere(
+        (s) => (s['agents'] as List).isEmpty,
+      );
+      expect(unused['target'], 'fs-a');
+      expect(inventory.mcpLibrary[unused['id']], 'filesystem');
+    });
+
+    test('a changed server is a new one; the saved one keeps its key', () {
       claudeAndCodex();
       core.reads.inventory.collect(core.reads.catalog.scan());
       write(
@@ -366,9 +495,10 @@ void main() {
         }),
       );
       core.reads.inventory.collect(core.reads.catalog.scan());
-      expect(library().keys, ['filesystem', 'filesystem~2']);
-      expect(library()['filesystem']['args'], ['--new']);
+      expect(library().keys, ['filesystem', 'filesystem~2', 'filesystem~3']);
+      expect(library()['filesystem'], _a);
       expect(library()['filesystem~2']['command'], 'fs-b');
+      expect(library()['filesystem~3']['args'], ['--new']);
     });
   });
 
@@ -384,6 +514,20 @@ void main() {
     expect(
       mcpIdentityHash({'url': 'https://example.test:9443/mcp?k=ü'}),
       'eab49f62c0943d7e',
+    );
+    expect(
+      mcpIdentityHash({
+        'command': 'fs',
+        'env': {'ROOT': '/data/a', 'Ä': 'ü'},
+      }),
+      'dee19b55720f91e8',
+    );
+    expect(
+      mcpIdentityHash({
+        'url': 'https://x.test/mcp',
+        'headers': {'X-Workspace': 'b'},
+      }),
+      '9cde67ee6fefe0a6',
     );
   });
 }

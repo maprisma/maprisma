@@ -69,7 +69,8 @@ def remember(used: dict):
     that the list lacks or has differently. Written straight away: it only grows
     from what is set up. Each server keeps the key that holds the same server
     (mcp_ctl.identity); a new one takes its name when it is the first of that
-    name and the name is not another's in use, else the next free name~N."""
+    name and no saved server holds the name (used or not), else the next free
+    name~N. Only an update (mcp_update) rewrites a saved server."""
     import mcp_ctl
     servers = load()
     merged = dict(servers)
@@ -88,7 +89,7 @@ def remember(used: dict):
             merged[key] = entry
     for ident, name, entry in pending:
         key, n = name, 2
-        if ident != name or name in claimed:
+        if ident != name or name in merged:     # a saved server of another identity keeps its key
             key = f"{name}~{n}"
             while key in merged or key in claimed:
                 n += 1
