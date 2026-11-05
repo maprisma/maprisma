@@ -13,6 +13,7 @@ Future<(List<int>, bool)> boundedOutput(
   List<int>? stdin,
   bool mergeStderr = false,
   Map<String, String>? environment,
+  bool inheritEnvironment = true,
 }) async {
   final Process process;
   try {
@@ -20,6 +21,7 @@ Future<(List<int>, bool)> boundedOutput(
       argv.first,
       argv.skip(1).toList(),
       environment: environment,
+      includeParentEnvironment: inheritEnvironment,
     );
   } on ProcessException {
     return (<int>[], false);

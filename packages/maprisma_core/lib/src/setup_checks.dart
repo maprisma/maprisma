@@ -155,6 +155,9 @@ final class SetupChecks {
     'lmstudio' => tr(
       'download one in LM Studio (Discover), or right-click LM Studio on the map → Models….',
     ),
+    'strata' => tr(
+      "set one up in Strata's own screens: right-click Strata on the map → Configure… → Set up a model (strata launch).",
+    ),
     'vllm' => f(
       'vLLM serves one Hugging Face model: write its id into {0} (VLLM_MODEL=…), then start vLLM.',
       ['$home/.config/vllm/server.env'],

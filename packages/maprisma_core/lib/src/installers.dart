@@ -1378,6 +1378,219 @@ Terminal=false
   }
 }
 
+/// install_ctl.Strata: Strata's terminal by its own install.sh of one GitHub
+/// release (its SHA-256 checked), run with sh; the terminal folder is then
+/// marked as the app's install. Strata's engines, run configs and models stay.
+final class StrataInstaller extends Installer {
+  StrataInstaller(super.host);
+  @override
+  String get key => 'strata';
+  @override
+  String get name => 'Strata';
+  @override
+  String get command => 'strata';
+  @override
+  String get binRel => 'bin/strata';
+  @override
+  String get typeName => 'install_ctl.Strata';
+  @override
+  bool get hasService => false;
+  @override
+  bool get usesModels => false;
+
+  static const releases =
+      'https://api.github.com/repos/Niko1221/Strata/releases/latest';
+  static const downloads =
+      'https://github.com/Niko1221/Strata/releases/download/';
+  static final tagRe = RegExp(r'^v\d{1,4}(?:\.\d{1,6}){1,3}$');
+  static const timeout = Duration(seconds: 1800);
+
+  @override
+  String get defaultFolder {
+    final value = Platform.environment['XDG_DATA_HOME'] ?? '';
+    final data = value.startsWith('/') ? value : '$home/.local/share';
+    return '$data/strata/terminal';
+  }
+
+  @override
+  Future<Release> latest(Gpu gpu, String build) async {
+    final data = await _json(releases);
+    final version = '${data['tag_name'] ?? ''}';
+    if (!tagRe.hasMatch(version)) throw StateError('no release found');
+    final assets = [
+      for (final a in (data['assets'] is List ? data['assets'] as List : []))
+        if (a is Map && a['name'] == 'install.sh') a,
+    ];
+    if (assets.length != 1) throw StateError('$version has no install.sh');
+    final release = githubRelease(version, assets);
+    if (release.assets.first.$2 != '$downloads$version/install.sh') {
+      throw StateError("the installer is not in Strata's release");
+    }
+    return release;
+  }
+
+  /// Its `current` link is absolute (install.sh: `ln -sfn <folder>/<version>`).
+  @override
+  String currentVersionIn(String folder) {
+    try {
+      final target = Link('$folder/current').targetSync();
+      final parent = p.dirname(target);
+      String? real;
+      try {
+        real = Directory(folder).resolveSymbolicLinksSync();
+      } on FileSystemException {
+        real = null;
+      }
+      return parent == folder || parent == '.' || parent == real
+          ? p.basename(target)
+          : '';
+    } on FileSystemException {
+      return '';
+    }
+  }
+
+  /// The marker's versions and the ones Strata's own update put beside them.
+  @override
+  List<String> versions(String folder) {
+    if (readMarker(folder) == null) return [];
+    final listed = super.versions(folder);
+    final own = <String>[];
+    try {
+      for (final e in Directory(folder).listSync(followLinks: false)) {
+        final n = p.basename(e.path);
+        if (nameRe.hasMatch(n) &&
+            !n.startsWith('.') &&
+            n != 'current' &&
+            e is Directory &&
+            FileSystemEntity.isFileSync('${e.path}/$binRel') &&
+            FileSystemEntity.isFileSync('${e.path}/VERSION')) {
+          own.add(n);
+        }
+      }
+    } on FileSystemException {
+      /* none */
+    }
+    final names = [
+      ...listed,
+      for (final n in own)
+        if (!listed.contains(n)) n,
+    ];
+    final indexed = [for (var i = 0; i < names.length; i++) (i, names[i])]
+      ..sort((a, b) {
+        final c = Directory('$folder/${a.$2}').statSync().modified.compareTo(
+          Directory('$folder/${b.$2}').statSync().modified,
+        );
+        return c != 0 ? c : a.$1.compareTo(b.$1);
+      });
+    return [for (final e in indexed) e.$2];
+  }
+
+  @override
+  Future<void> install(
+    String folder,
+    String? models,
+    bool startAtLogin,
+    bool startNow,
+    Gpu gpu,
+    Release release,
+    Progress progress,
+  ) async {
+    if (folder != defaultFolder) {
+      throw StateError(
+        'Strata installs into its own folder ($defaultFolder); nothing was installed',
+      );
+    }
+    if (release.assets.length != 1 ||
+        release.assets.first.$1 != 'install.sh' ||
+        !release.digests.containsKey('install.sh') ||
+        !tagRe.hasMatch(release.version)) {
+      throw StateError(
+        'install.sh: no SHA-256 checksum to check it against; nothing was installed',
+      );
+    }
+    final link = '${host.binDir}/$command';
+    if (_lexists(link) && installedFolder() != folder) {
+      throw StateError(
+        '$link belongs to another program or install; nothing was installed',
+      );
+    }
+    if (_isLink(folder) ||
+        (_lexists(folder) && !FileSystemEntity.isDirectorySync(folder))) {
+      throw StateError(
+        '$folder is not a folder of its own; nothing was installed',
+      );
+    }
+    if (FileSystemEntity.isDirectorySync(folder) &&
+        Directory(folder).listSync(followLinks: false).isNotEmpty &&
+        readMarker(folder) == null) {
+      throw StateError(
+        'Strata is installed already in $folder; update it with `strata update`',
+      );
+    }
+    final (asset, url, size) = release.assets.first;
+    final work = Directory.systemTemp.createTempSync('maprisma-strata-');
+    List<int> out;
+    bool ok;
+    try {
+      final script = '${work.path}/$asset';
+      progress(0.0, 'download $asset');
+      await ModelFiles(host.posix).download(
+        url,
+        script,
+        size,
+        progress,
+        doneBefore: 0,
+        total: size < 1 ? 1 : size,
+        sha256: release.digests[asset]!,
+      );
+      progress(0.2, 'install.sh');
+      // Only this release's feed, and none of the user's STRATA_* settings.
+      final env = <String, String>{
+        for (final e in Platform.environment.entries)
+          if (!e.key.startsWith('STRATA_')) e.key: e.value,
+        'STRATA_FEED': '$downloads${release.version}',
+      };
+      (out, ok) = await boundedOutput(
+        ['sh', script],
+        maxBytes: 256 * 1024,
+        timeout: timeout,
+        mergeStderr: true,
+        environment: env,
+        inheritEnvironment: false,
+      );
+    } finally {
+      work.deleteSync(recursive: true);
+    }
+    if (!ok) {
+      final text = utf8.decode(out, allowMalformed: true).trim();
+      throw StateError(
+        text.isEmpty
+            ? 'install.sh failed'
+            : text.substring(text.length > 300 ? text.length - 300 : 0),
+      );
+    }
+    final version = currentVersionIn(folder);
+    var ours = false;
+    try {
+      ours =
+          _isLink(link) &&
+          p.isWithin(
+            Directory(folder).resolveSymbolicLinksSync(),
+            File(link).resolveSymbolicLinksSync(),
+          );
+    } on FileSystemException {
+      ours = false;
+    }
+    if (version.isEmpty || !ours) {
+      throw StateError(
+        'install.sh finished, but its terminal or the strata link is missing',
+      );
+    }
+    recordVersion(folder, version);
+    progress(1.0, 'done');
+  }
+}
+
 final class MiseInstaller extends Installer {
   MiseInstaller(super.host);
   @override
@@ -1473,6 +1686,7 @@ final class Installers {
         'llamacpp' => LlamaCppInstaller(host),
         'koboldcpp' => KoboldCppInstaller(host),
         'jan' => JanInstaller(host),
+        'strata' => StrataInstaller(host),
         'vllm' => RefusedInstaller(host, 'vllm', 'vLLM', 'vllm'),
         'lmstudio' => RefusedInstaller(
           host,

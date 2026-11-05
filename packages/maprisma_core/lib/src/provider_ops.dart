@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'adapter_assets.g.dart';
 import 'installers.dart' show InstallHost, KoboldCppInstaller;
+import 'strata.dart';
+import 'model_guard.dart' show GpuUsage;
 import 'model_downloads.dart';
 import 'model_hub.dart';
 import 'provider_scans.dart';
@@ -94,7 +96,10 @@ Future<dynamic> httpJson(
 }
 
 /// llm_engine._run: no shell, bounded output, 30 s.
-Future<(bool, String)> runCommand(List<String> argv) async {
+Future<(bool, String)> runCommand(
+  List<String> argv, {
+  Duration timeout = const Duration(seconds: 30),
+}) async {
   try {
     final process = await Process.start(argv.first, argv.skip(1).toList());
     unawaited(process.stdin.close());
@@ -108,7 +113,7 @@ Future<(bool, String)> runCommand(List<String> argv) async {
       ),
     ]);
     final code = await process.exitCode.timeout(
-      const Duration(seconds: 30),
+      timeout,
       onTimeout: () {
         process.kill(ProcessSignal.sigkill);
         return -1;
@@ -203,10 +208,36 @@ final class ProviderOps {
     return FileSystemEntity.isFileSync(own) ? own : null;
   }
 
-  bool canControl(RuntimeRecord rt) =>
-      (_engines[rt.key] as Map?)?['lms_control'] == true
+  bool canControl(RuntimeRecord rt) => rt.key == 'strata'
+      ? rt.installed &&
+            StrataFacts(files).binary() != null &&
+            StrataFacts(files).lastPreset().$1.isNotEmpty
+      : (_engines[rt.key] as Map?)?['lms_control'] == true
       ? rt.installed && (rt.service.isNotEmpty || lmsBinary() != null)
       : rt.installed && rt.service.isNotEmpty;
+
+  /// provider_strata.Engine.start / stop: its CLI with the launch preset used
+  /// last (it returns once the model serves), and `strata launch --stop`.
+  Future<(bool, String)> _strata(bool start) async {
+    final strata = StrataFacts(files), binary = strata.binary();
+    if (binary == null) return (false, 'strata not found');
+    if (!start) return runCommand([binary, 'launch', '--stop']);
+    final preset = strata.lastPreset().$1;
+    if (preset.isEmpty) {
+      return (
+        false,
+        'no saved launch preset; start one model with `strata launch` first',
+      );
+    }
+    return runCommand([
+      binary,
+      'launch',
+      '--preset',
+      preset,
+      '--yes',
+      '--no-tui',
+    ], timeout: StrataFacts.startTimeout);
+  }
 
   Future<(bool, String)> _systemctl(String verb, RuntimeRecord rt) =>
       runCommand(['systemctl', '--user', verb, '${rt.service}.service']);
@@ -219,6 +250,7 @@ final class ProviderOps {
   }
 
   Future<(bool, String)> start(RuntimeRecord rt) async {
+    if (rt.key == 'strata') return _strata(true);
     if (rt.key == 'lmstudio' && rt.service.isEmpty) {
       return _lmsRun(['server', 'start']);
     }
@@ -228,6 +260,7 @@ final class ProviderOps {
   }
 
   Future<(bool, String)> stop(RuntimeRecord rt) async {
+    if (rt.key == 'strata') return _strata(false);
     if (rt.key == 'lmstudio' && rt.service.isEmpty) {
       return _lmsRun(['server', 'stop']);
     }
@@ -296,6 +329,21 @@ final class ProviderOps {
           : (false, 'it did not unload the model');
     }
     if (rt.key == 'lmstudio') return _lmsRun(['unload', '--', model]);
+    if (rt.key == 'strata') {
+      // provider_strata.Engine.unload_all: the server stays up.
+      if ((await GpuUsage(files, providers).loadedModels(rt)).isEmpty) {
+        return (true, '');
+      }
+      final reply = await httpJson(
+        port,
+        '/v1/unload',
+        uid,
+        method: 'POST',
+        body: {},
+        timeout: const Duration(seconds: 30),
+      );
+      return reply is Map ? (true, '') : (false, 'Strata did not unload');
+    }
     // Engines that cannot unload one model stop the server (unload_all).
     return canControl(rt) ? stop(rt) : (false, 'no way to stop it');
   }

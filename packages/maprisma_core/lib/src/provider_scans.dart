@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'agent_details.dart';
 import 'scan_files.dart';
+import 'strata.dart';
 import 'provider_facts.dart';
 
 String cleanName(dynamic value) {
@@ -72,12 +73,16 @@ int? addressPort(String address) {
 RuntimeRecord? localRuntime(Map provider, Iterable<RuntimeRecord> runtimes) {
   if (provider['local'] != true) return null;
   final port = provider['port'];
-  if (port is int) {
-    for (final rt in runtimes) {
-      if (rt.installed && addressPort(rt.address) == port) return rt;
-    }
-  }
   final usual = _usualRuntime(provider, runtimes);
+  if (port is int) {
+    // Two local LLMs may share a usual port (Strata and llama.cpp: 8080):
+    // the one the provider names wins, else the first one detected there.
+    final here = [
+      for (final rt in runtimes)
+        if (rt.installed && addressPort(rt.address) == port) rt,
+    ];
+    if (here.isNotEmpty) return here.contains(usual) ? usual : here.first;
+  }
   return usual == null || _moved(usual, port) ? null : usual;
 }
 
@@ -647,6 +652,25 @@ final class ProviderScans {
             }
           }
           rt.modelFiles = absoluteFiles(servedFiles);
+        case 'strata':
+          // inventory.strata: its own CLI, its server process (the port from
+          // its run config), its run configs as models; while it is off, the
+          // port of the launch preset used last.
+          final strata = StrataFacts(files);
+          rt.installed = strata.binary() != null;
+          var port = 0;
+          for (final process in processesNow) {
+            if (StrataFacts.isServer(process.argv)) {
+              rt.running = rt.installed = true;
+              if (port == 0) port = strata.serverPort(process.argv);
+            }
+          }
+          if (port == 0) port = strata.lastPreset().$2;
+          rt.address =
+              '127.0.0.1:${port == 0 ? StrataFacts.defaultPort : port}';
+          final names = strata.modelIds();
+          if (names.isNotEmpty) rt.modelsDir = tilde(files, strata.installDir);
+          rt.models = dedupe(names);
       }
       result.add(rt);
     }
