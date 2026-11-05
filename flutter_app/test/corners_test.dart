@@ -50,4 +50,16 @@ void main() {
       theme.colorScheme.onSurface,
     );
   });
+
+  test(
+    'the desktop accent is the primary colour itself, as in the Launcher',
+    () {
+      final theme = appTheme(
+        Brightness.dark,
+        desktop: const {'accent': '#7ebae4', 'background': '#0b0c16'},
+      );
+      expect(theme.colorScheme.primary, const Color(0xff7ebae4));
+      expect(theme.colorScheme.onPrimary, Colors.black);
+    },
+  );
 }

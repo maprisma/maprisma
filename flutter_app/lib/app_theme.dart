@@ -58,7 +58,14 @@ ThemeData appTheme(
     // The card tones step from the desktop's background, as Material's do
     // from its own surface: cards keep their contrast on any desktop.
     Color step(double amount) => Color.lerp(background, foreground, amount)!;
+    // The desktop's own accent, not a Material tone of it (as the Launcher):
+    // Back, the Ask AI symbol and buttons take the theme's colour.
+    final accent = desktopThemeColor(desktop, 'accent');
     colors = colors.copyWith(
+      primary: accent,
+      onPrimary: accent == null
+          ? null
+          : (accent.computeLuminance() > .4 ? Colors.black : Colors.white),
       surface: background,
       onSurface: foreground,
       surfaceContainerLowest: step(.02),

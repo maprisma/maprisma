@@ -38,6 +38,8 @@ const smartProposalMinutes = 30;
 /// Texts of the core; the core words them when it hands a result over.
 const smartNotYet = 'This column does not take requests yet.',
     smartNoModel = 'No model was found for this search.',
+    smartNoModelWords =
+        'Hugging Face found no model for {0}. Its search only matches words in model names, so write "vision" for a model that understands images, or a model family such as qwen, gemma or llama. For example: "Models: Download a vision model".',
     smartNoServer = 'No MCP server was found for this search.',
     smartNothingToDo = 'Nothing to change: it is already set up that way.',
     smartNoUsers = 'No agent uses it, so there is nothing to disconnect.',
@@ -397,6 +399,99 @@ String _moveChoice(Map facts) {
       'when the request is to move or reorganise model folders. Leave out a folder that is on that disk already.\n';
 }
 
+/// Words a model name never has: left out of a search that found nothing.
+const _searchFiller = {
+  'a',
+  'an',
+  'the',
+  'for',
+  'with',
+  'that',
+  'which',
+  'to',
+  'of',
+  'and',
+  'or',
+  'model',
+  'models',
+  'gguf',
+  'llm',
+  'download',
+  'find',
+  'get',
+  'install',
+  'support',
+  'supports',
+  'supporting',
+  'can',
+  'best',
+  'good',
+  'small',
+  'local',
+  'new',
+  'latest',
+  'cpp',
+  'llama.cpp',
+  'llamacpp',
+  'ollama',
+  'runner',
+};
+
+/// What people say for "understands images"; model names say vision.
+const _imageWords = {
+  'image',
+  'images',
+  'imaging',
+  'picture',
+  'pictures',
+  'photo',
+  'photos',
+  'visual',
+  'multimodal',
+  'see',
+  'seeing',
+  'sight',
+};
+
+/// The searches to try, the helper's own first: then without filler words
+/// and image words as "vision", then shorter, then each word alone.
+List<String> smartSearchQueries(String query) {
+  final first = query.trim();
+  final words = <String>[];
+  for (final raw in first.toLowerCase().split(RegExp(r'[\s,;:/]+'))) {
+    final word = raw.replaceAll(RegExp(r'^[^\w.+-]+|[^\w.+-]+$'), '');
+    if (word.isEmpty || _searchFiller.contains(word)) continue;
+    final mapped = _imageWords.contains(word) ? 'vision' : word;
+    if (!words.contains(mapped)) words.add(mapped);
+  }
+  final out = <String>[first];
+  void add(String q) {
+    if (q.isNotEmpty && !out.any((o) => o.toLowerCase() == q)) out.add(q);
+  }
+
+  for (var n = words.length; n >= 2; n--) {
+    add(words.take(n).join(' '));
+  }
+  // A single word: the most telling first (vision, then the family).
+  for (final w in [...words.where((w) => w == 'vision'), ...words]) {
+    add(w);
+  }
+  return out.where((q) => q.isNotEmpty).take(5).toList();
+}
+
+/// The Hugging Face search with fewer words until something is found: its
+/// search only matches words in model names.
+Future<List<Map<String, dynamic>>> smartModelSearch(
+  Future<List<Map<String, dynamic>>> Function(String) search,
+  String query,
+) async {
+  for (final q in smartSearchQueries(query)) {
+    final repos = await search(q);
+    if (repos.isNotEmpty) return repos;
+  }
+  return const [];
+}
+
 /// The first step: what the user wants, for the Models column.
 String smartModelsPrompt(Map facts) {
   return '$_rules ${_language(facts)}\n\n'
@@ -405,8 +500,10 @@ String smartModelsPrompt(Map facts) {
       '${_request(facts)}\n'
       '${smartMapChoice(facts)}'
       'Choose one:\n'
-      '{"action": "search", "query": "<words for a Hugging Face GGUF search, at most 80 characters>", "runtime": "<key of a runner listed above>"}\n'
-      'when the request is to find or add a model for a runner.\n'
+      '{"action": "search", "query": "<1 to 3 English words that appear in Hugging Face model names, at most 80 characters>", "runtime": "<key of a runner listed above>"}\n'
+      'when the request is to find or add a model for a runner. The search only matches words in model names: '
+      'use a model family (llama, qwen, gemma, mistral), "vision" or "VL" for models that understand images, "coder" for code; '
+      'never words like model, download, support, imaging or the runner\'s name.\n'
       '{"action": "remove", "runtime": "<key of a runner listed above>", "model": "<exact name in its models>"}\n'
       'when the request is to delete a model that is listed above.\n'
       '{"action": "disconnect", "runtime": "<key of a local LLM in use, listed next>", "models": ["<exact model names listed next>"]}\n'
@@ -1306,11 +1403,18 @@ Future<Map<String, dynamic>> smartModels(
   if (smartRefused(facts, 'install', 'models') case final refused?) {
     return refused;
   }
-  final repos = await search(first['query'] as String);
+  final tried = smartSearchQueries(first['query'] as String);
+  final repos = await smartModelSearch(search, first['query'] as String);
   if (repos.isEmpty) {
+    // What was searched and how to word it (the user cannot see the search).
     return {
       'status': 'redirect',
-      'instead': {'hint': smartNoModel, 'column': null, 'request': null},
+      'instead': {
+        'hint': smartNoModelWords,
+        'words': tried.map((q) => '“$q”').join(', '),
+        'column': null,
+        'request': null,
+      },
     };
   }
   final answer = firstJson(
@@ -1742,6 +1846,7 @@ Map<String, dynamic> smartWorded(
   const own = {
     smartNotYet,
     smartNoModel,
+    smartNoModelWords,
     smartNoServer,
     smartNoHelper,
     smartNeedsWeb,
@@ -1757,7 +1862,12 @@ Map<String, dynamic> smartWorded(
     ...result,
     if (own.contains(result['summary'])) 'summary': tr(result['summary']),
     if (instead is Map && own.contains(instead['hint']))
-      'instead': {...instead, 'hint': tr(instead['hint'] as String)},
+      'instead': {
+        ...instead,
+        'hint': tr(
+          instead['hint'] as String,
+        ).replaceAll('{0}', '${instead['words'] ?? ''}'),
+      },
   };
 }
 

@@ -46,7 +46,7 @@ import 'item_details_view.dart';
 import 'map_layout.dart' show withAgentLinks;
 import 'map_editor.dart' show mapColumnLayers;
 import 'action_rules_window.dart';
-import 'app_look.dart' show StatusColors;
+import 'app_look.dart' show AppSpace, StatusColors;
 import 'map_smart_card.dart'
     show
         MapSmartCard,
@@ -1524,16 +1524,124 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   /// The last tips per local LLM (llm_help_page.llm_tuning_answers).
   final _tuningAnswers = <String, Map<String, dynamic>>{};
 
+  /// models.tuning of a local LLM, one read at a time: a second caller (the
+  /// background tuning, Performance) waits for the read under way instead of
+  /// starting another one that slows both down.
+  final _tuningReads = <String, Future<Map<String, dynamic>>>{};
+  Future<Map<String, dynamic>> _readTuning(String key) => _tuningReads[key] ??=
+      _quietTask('models.tuning', {'key': key})
+      // A block, not `=> remove(key)`: that returns this very future, and
+      // whenComplete would wait for it, that is, for itself, forever.
+      .whenComplete(() {
+        _tuningReads.remove(key);
+      });
+
+  /// The AI's look at a local LLM's settings (tokens: only on the user's
+  /// click), kept for the next time Performance opens.
+  Future<Map<String, dynamic>> _tuningAsk(String key, String command) async {
+    final answer = await _quietTask('models.tuning_ask', {
+      'key': key,
+      'command': command,
+    });
+    _tuningAnswers[key] = answer;
+    return answer;
+  }
+
+  /// What is on screen apart from cards and Ask AI: a review from Ask AI
+  /// returns to it only while this stays the same.
+  Object get _screen =>
+      (_view, _showMap, _showSettings, _focusCategory, _visibleTerminal);
+
+  /// A review run from Ask AI's Performance page; true: Ask AI may come back.
+  /// It waits until the review's last card is closed: its cards follow each
+  /// other without a gap (result, Undo, Undo's result; Codex recheck), and
+  /// while one is open nothing else can start (cards are modal). Another page
+  /// meanwhile, and Ask AI stays closed (Codex review).
+  Future<bool> _reviewAside(Future<Object?> Function() run) async {
+    final screen = _screen;
+    await run();
+    if (mounted && !_cardsClear) {
+      // Ends in the frame the last card closes (build), before the next
+      // click is handled: a card opened after it is never waited for
+      // (Codex recheck: no 200 ms poll gap).
+      final wait = _asideWait = Completer<void>();
+      await wait.future;
+    }
+    return mounted && _screen == screen;
+  }
+
+  Completer<void>? _asideWait;
+  bool get _cardsClear => _card == null && !_busy && !_taskActive;
+
+  void _endAsideWait() {
+    final wait = _asideWait;
+    _asideWait = null;
+    if (wait != null && !wait.isCompleted) wait.complete();
+  }
+
+  /// Performance as a page of the Ask AI window: the same view and the same
+  /// reviews as its own card. A change or a measurement runs aside: its
+  /// review takes the window's place, then Ask AI is back on this page.
+  Future<Widget> _performancePage(
+    String key, {
+    required void Function(Future<bool> Function() review) aside,
+    required VoidCallback back,
+  }) async {
+    final runtime = await _localRuntime(key);
+    if (runtime == null || runtime['tunable'] != true) {
+      throw StateError('not tunable');
+    }
+    final facts = await _readTuning(key);
+    return PerformanceView(
+      facts: facts,
+      tr: tr,
+      answer: _tuningAnswers[key],
+      onAsk: (command) => _tuningAsk(key, command),
+      onChange: (section, setting, value) => aside(
+        () => _reviewAside(
+          () => _connectionPreview({
+            'key': key,
+            'section': section,
+            'setting': setting,
+            'value': value,
+          }, method: 'models.tuning_preview'),
+        ),
+      ),
+      onTune: key == 'llamacpp'
+          ? (models) =>
+                aside(() => _reviewAside(() => _measureAndTune(key, models)))
+          : null,
+      onClose: back,
+    );
+  }
+
   /// A local LLM's performance (models.tuning); a setting or a model's
   /// context changed through the connection preview (backup, Undo).
   Future<void> _performance(Map<String, dynamic> runtime) async {
     if (_busy) return;
     final key = runtime['key'] as String;
     Map<String, dynamic> facts;
-    setState(() => _busy = true);
+    // Reading a local LLM's settings can take ten seconds and more: its card
+    // is there at once, so a click is never answered by nothing.
+    setState(() {
+      _busy = true;
+      _card = TaskCardSpec(
+        title: '${tr('Performance')} · ${runtime['name']}',
+        closable: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const CircularProgressIndicator(),
+            const SizedBox(height: AppSpace.md),
+            Text(tr('Checking…')),
+          ],
+        ),
+      );
+    });
     try {
-      facts = await _quietTask('models.tuning', {'key': key});
+      facts = await _readTuning(key);
     } catch (_) {
+      if (mounted) setState(() => _card = null);
       _actionFailed();
       return;
     } finally {
@@ -1549,14 +1657,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         facts: facts,
         tr: tr,
         answer: _tuningAnswers[key],
-        onAsk: (command) async {
-          final answer = await _quietTask('models.tuning_ask', {
-            'key': key,
-            'command': command,
-          });
-          _tuningAnswers[key] = answer;
-          return answer;
-        },
+        onAsk: (command) => _tuningAsk(key, command),
         onChange: (section, setting, value) {
           change = (section, setting, value);
           no();
@@ -1975,18 +2076,59 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
           }),
         );
       case 'performance':
-        final runtime = (_providers['local'] as List? ?? const [])
-            .cast<Map>()
-            .where((r) => r['key'] == key)
-            .firstOrNull;
-        if (runtime != null) {
-          unawaited(_performance(Map<String, dynamic>.from(runtime)));
-        } else {
-          _actionFailed();
-        }
+        unawaited(() async {
+          final runtime = await _localRuntime(key);
+          if (runtime != null) {
+            await _performance(Map<String, dynamic>.from(runtime));
+          } else {
+            _actionFailed();
+          }
+        }());
       default:
         _actionFailed();
     }
+  }
+
+  /// Whether a provider box gets the Performance symbol: the providers list
+  /// says so (read once in the background when the map shows first).
+  bool _tunable(Map node) {
+    final local = _providers['local'] as List? ?? const [];
+    if (local.isEmpty && !_providersAsked) {
+      _providersAsked = true;
+      unawaited(_localRuntime(''));
+    }
+    final key = '${node['id']}'.replaceFirst('runtime:', '');
+    return local.cast<Map>().any(
+      (r) => r['key'] == key && r['tunable'] == true,
+    );
+  }
+
+  bool _providersAsked = false;
+
+  /// The box's Performance symbol: its own card, as on the Providers page.
+  Future<void> _mapPerformance(Map node) async {
+    final key = '${node['id']}'.replaceFirst('runtime:', '');
+    final runtime = await _localRuntime(key);
+    if (runtime == null) return _actionFailed();
+    await _performance(Map<String, dynamic>.from(runtime));
+  }
+
+  /// A local LLM by key. The providers list is read only while its page is
+  /// shown: from the map (Ask AI, the guide) it is read here first.
+  Future<Map?> _localRuntime(String key) async {
+    Map? find() => (_providers['local'] as List? ?? const [])
+        .cast<Map>()
+        .where((r) => r['key'] == key)
+        .firstOrNull;
+    final known = find();
+    if (known != null) return known;
+    try {
+      final data = await _client.providersSnapshot();
+      if (mounted) setState(() => _providers = data);
+    } catch (_) {
+      return null;
+    }
+    return find();
   }
 
   /// Update: its own command in a terminal, or the app's install review.
@@ -2797,7 +2939,8 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     } catch (_) {
       return;
     }
-    if (!mounted) return;
+    // Answered after another card opened: never over it (Codex recheck).
+    if (!mounted || _card != null) return;
     await _cardReview(
       '${details['title']}',
       (yes, no) => ItemDetailsView(details: details, tr: tr, onClose: no),
@@ -3076,10 +3219,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     Map<String, dynamic> starter,
   ) async {
     if (_busy) return;
-    final runtime = (_providers['local'] as List? ?? const [])
-        .cast<Map>()
-        .where((r) => r['key'] == key)
-        .firstOrNull;
+    final runtime = await _localRuntime(key);
     final pull = runtime?['download'] == 'pull';
     final result = await _providerOperation(
       pull ? 'models.pull' : 'models.download',
@@ -3443,7 +3583,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       Map<String, dynamic>? facts;
       for (var tries = 0; facts == null; tries++) {
         try {
-          facts = await _quietTask('models.tuning', {'key': 'llamacpp'});
+          facts = await _readTuning('llamacpp');
         } on BackendError {
           lastRefusal = null;
           if (tries + 1 >= tuneTries || !mounted) rethrow;
@@ -3525,6 +3665,16 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
             onPressed: () => _aiNode(node),
             icon: const Icon(Icons.info_outline, size: 16),
           ),
+          if (node['kind'] == 'runtime' && _tunable(node))
+            IconButton(
+              key: ValueKey('performance-${node['id']}'),
+              padding: EdgeInsets.zero,
+              visualDensity: VisualDensity.compact,
+              constraints: compact,
+              tooltip: tr('Performance'),
+              onPressed: () => _mapPerformance(node),
+              icon: const Icon(Icons.speed, size: 16),
+            ),
           if (node['kind'] == 'runtime')
             IconButton(
               padding: EdgeInsets.zero,
@@ -4665,6 +4815,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
 
   @override
   void dispose() {
+    _endAsideWait();
     _terminalKeys.dispose();
     _limitsTimer?.cancel();
     _usageTimer?.cancel();
@@ -4688,6 +4839,8 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
 
   @override
   Widget build(BuildContext context) {
+    // A review from Ask AI ends with its last card: checked in every build.
+    if (_asideWait != null && _cardsClear) _endAsideWait();
     // One scan when the map is back and nothing else is running.
     if (_mapStale && _mapOnScreen && _browser == null && !_keysBlocked) {
       _mapStale = false;
@@ -5292,6 +5445,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                             promptTrigger: _askPromptSeq,
                             client: _maybeClient,
                             onProvider: _smartProvider,
+                            performancePage: _performancePage,
                             onTask: _smartTask,
                             onApplied: _onSmartApplied,
                           ),

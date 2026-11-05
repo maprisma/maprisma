@@ -13,6 +13,7 @@ import 'package:maprisma/connections_view.dart';
 import 'package:maprisma/test_shots.dart';
 import 'package:maprisma/map_addons_focus.dart';
 import 'package:maprisma/map_smart_card.dart';
+import 'package:maprisma/performance_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -44,7 +45,7 @@ nodes=[{'id':ident,'kind':kind,'column':column,'label':label,'detail':''}
  for ident,kind,column,label in [('agent:test','agent',1,'Test agent'),
  ('runtime:fixture','runtime',2,'Fixture provider'),('model:runtime:fixture:example-model','model',3,'example-model'),
  ('mcp:known-server','mcp',0,'Known server')]]
-tasks={}
+tasks={};slow_polls=[]
 for line in sys.stdin:
  q=json.loads(line);m=q['method'];p=q.get('params',{})
  with open('requests.jsonl','a') as log:log.write(json.dumps(q)+'\n')
@@ -124,7 +125,7 @@ for line in sys.stdin:
  elif m=='models.tuning' and p.get('key')=='llamacpp' and Path('llama').exists():tasks['tune']={'runtime':'llama.cpp','key':'llamacpp','gpu':'GPU','vram':24<<30,'stacks':['Vulkan'],'build':'vulkan','builds':[],'devices':'','settings':{'*':{}},'tuning':{},'per_model':True,'models':[],'loaded':[],'vram_used':0,'helpers':[],'build_path':'/x/llama-server','untuned':[] if Path('tuned').exists() else ['Big']};r={'task':'tune'}
  elif m=='models.tune' and Path('card_busy').exists():tasks['measure']={'refused':'The card is in use: a model is loaded in llama.cpp. Measure again when it is idle.','item':'llama.cpp','models':[],'skipped':[],'notes':[]};r={'task':'measure'}
  elif m=='models.tune':tasks['measure']={'plan':'opaque-measure','empty':False,'files':[{'path':'~/.config/llama.cpp/models.ini','added':5,'removed':1}],'links_add':[],'links_remove':[],'item':'llama.cpp','build':'vulkan','models':[{'name':'Big','ctx':131072,'ubatch':1024,'batch':2048,'pp':8500,'tg':235}],'skipped':[],'notes':[],'focus':['runtime:llamacpp']};r={'task':'measure'}
- elif m=='models.tuning':tasks['tune']={'runtime':'Fixture provider','key':'fixture','gpu':'GPU','vram':8<<30,'stacks':[],'build':'','builds':[],'devices':'','settings':{'*':{}},'tuning':{'mode':['a|b','A mode']},'per_model':False,'models':[],'loaded':[],'vram_used':0,'helpers':[{'command':'test','name':'Test agent'}]};r={'task':'tune'}
+ elif m=='models.tuning':tasks['tune']={'runtime':'Fixture provider','key':'fixture','gpu':'GPU','vram':8<<30,'stacks':[],'build':'','builds':[],'devices':'','settings':{'*':{}},'tuning':{'mode':['a|b','A mode']},'per_model':False,'models':[],'loaded':[],'vram_used':0,'helpers':[{'command':'test','name':'Test agent'}]};tasks['tune_slow']=tasks['tune'];r={'task':'tune_slow' if Path('slow_tuning').exists() and p.get('key')=='fixture' else 'tune'}
  elif m=='models.tuning_ask':tasks['ask']={'summary':'One thing.','agent':p['command'],'suggestions':[{'kind':'setting','title':'Use b','why':'Faster.','model':'*','key':'mode','value':'b'}]};r={'task':'ask'}
  elif m=='models.tuning_preview':r={'plan':'opaque-tune','empty':False,'files':[{'path':'~/.config/x.ini','added':1,'removed':0}],'links_add':[],'links_remove':[],'item':'Fixture provider','notes':[],'focus':['runtime:fixture']}
  elif m=='models.slots_preview' and Path('no-slots').exists():r={'empty':True}
@@ -166,8 +167,9 @@ for line in sys.stdin:
  elif m=='mcp.tools_cached':r={'cached':None}
  elif m=='mcp.tools':tasks['tools']={'status':'ok','checked':'2026-10-29T12:00:00','server':'known 1','tools':[{'name':'lookup','description':'Looks up'}],'prompts':[]};r={'task':'tools'}
  elif m=='mcp.option_preview':r={'plan':'opaque-catalog','empty':False,'files':[],'links_add':[],'links_remove':[],'kind':'mcp','agents':['Test agent'],'focus':['agent:test']}
+ elif m=='map.smart_ask':tasks['sa']={'status':'proposal','summary':'','proposal':'p1','candidates':[{'id':'c1','kind':'provider_action','title':'Fixture provider','subtitle':'Performance','reason':'','fit':'ok','size':0,'key':'fixture','step':'performance','action':{'kind':'provider_action'}}]};r={'task':'sa'}
  elif m=='map.smart_helpers':r={'helpers':[{'command':'local-helper','name':'Local helper','local':True}] if Path('smart_helpers').exists() else []}
- elif m=='tasks.status':r=({'state':'failed'} if p['task']=='install' and install_fails else {'state':'done','result':tasks[p['task']]})
+ elif m=='tasks.status':r=({'state':'failed'} if p['task']=='install' and install_fails else {'state':'running'} if p['task']=='tune_slow' and slow_polls.append(1) is None and len(slow_polls) <= 15 else {'state':'done','result':tasks[p['task']]})
  else:r={}
  with out:print(json.dumps({'id':q['id'],'result':r}),flush=True)
 ''';
@@ -2428,21 +2430,14 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('ask-ai-open')));
       await settleService(tester);
       expect(find.byType(OverlayWindow), findsOneWidget);
-      final examples = find.descendant(
-        of: find.byKey(const ValueKey('smart-prompt-examples')),
-        matching: find.byType(Scrollable),
-      );
-      for (final (index, title, text) in const [
-        (0, 'MCP servers and skills', 'Find an MCP server for my notes'),
-        (2, 'Agents', 'Which agents need sign-in?'),
-        (4, 'Providers', 'Why is my local LLM slow?'),
-        (6, 'Models', 'Find a model that fits my PC'),
+      for (final (index, column, title, text) in const [
+        (0, 'mcp', 'MCP servers and skills', 'Find an MCP server for my notes'),
+        (2, 'agents', 'Agents', 'Which agents need sign-in?'),
+        (4, 'providers', 'Providers', 'Why is my local LLM slow?'),
+        (6, 'models', 'Models', 'Find a model that fits my PC'),
       ]) {
-        await tester.scrollUntilVisible(
-          find.byKey(ValueKey('smart-example-$index')),
-          100,
-          scrollable: examples,
-        );
+        await tester.tap(find.byKey(ValueKey('smart-category-$column')));
+        await settleService(tester);
         await tester.tap(find.byKey(ValueKey('smart-example-$index')));
         await settleService(tester);
         expect(find.text('Ask AI · $title'), findsOneWidget);
@@ -2459,10 +2454,252 @@ void main() {
           '$title: $text',
         );
       }
-      expect(find.byKey(const ValueKey('smart-category-models')), findsNothing);
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       await settleService(tester);
       expect(find.byType(OverlayWindow), findsNothing);
+      expect(tester.takeException(), isNull);
+      await unmountApp(tester);
+    },
+  );
+
+  testWidgets(
+    'Review on an Ask AI Performance proposal shows Performance inside the window',
+    (tester) async {
+      final dir = await mountApp(
+        tester,
+        beforeStart: (d) =>
+            File('${d.path}/smart_helpers').writeAsStringSync('1'),
+      );
+      await settleService(tester);
+      List<Map> calls(String method) =>
+          requests(dir).where((q) => q['method'] == method).toList();
+      await tester.tap(find.byKey(const ValueKey('ask-ai-open')));
+      await settleService(tester);
+      await tester.enterText(
+        find.descendant(
+          of: find.byKey(const ValueKey('smart-card')),
+          matching: find.byType(TextField),
+        ),
+        'Providers: Make llama faster',
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.send);
+      await settleService(tester);
+      await tester.tap(find.byKey(const ValueKey('smart-review-c1')));
+      List<Map> tuning() => calls(
+        'models.tuning',
+      ).where((q) => q['params']['key'] == 'fixture').toList();
+      for (var i = 0; i < 10 && tuning().isEmpty; i++) {
+        await settleService(tester);
+      }
+      expect(calls('providers.snapshot'), isNotEmpty);
+      expect(tuning(), hasLength(1));
+      for (
+        var i = 0;
+        i < 10 && find.byType(PerformanceView).evaluate().isEmpty;
+        i++
+      ) {
+        await settleService(tester);
+      }
+      // Inside Ask AI: the window stays open around it.
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('smart-card')),
+          matching: find.byType(PerformanceView),
+        ),
+        findsOneWidget,
+      );
+      expect(find.byType(OverlayWindow), findsOneWidget);
+      // Back: the proposal again, then the main page, then the map.
+      await tester.tap(find.byKey(const ValueKey('smart-back')));
+      await settleService(tester);
+      expect(find.byType(PerformanceView), findsNothing);
+      expect(find.byKey(const ValueKey('smart-review-c1')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('smart-back')));
+      await settleService(tester);
+      await tester.tap(find.byKey(const ValueKey('smart-back')));
+      await settleService(tester);
+      expect(find.byType(OverlayWindow), findsNothing);
+      expect(tester.takeException(), isNull);
+      await unmountApp(tester);
+    },
+  );
+
+  testWidgets(
+    'a slow read of the settings shows a spinner in Ask AI at once, then Performance',
+    (tester) async {
+      final dir = await mountApp(
+        tester,
+        beforeStart: (d) {
+          File('${d.path}/smart_helpers').writeAsStringSync('1');
+          // Reading the settings takes a while, as on a real PC.
+          File('${d.path}/slow_tuning').writeAsStringSync('1');
+        },
+      );
+      await settleService(tester);
+      await tester.tap(find.byKey(const ValueKey('ask-ai-open')));
+      await settleService(tester);
+      await tester.enterText(
+        find.descendant(
+          of: find.byKey(const ValueKey('smart-card')),
+          matching: find.byType(TextField),
+        ),
+        'Providers: Make llama faster',
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.send);
+      await settleService(tester);
+      await tester.tap(find.byKey(const ValueKey('smart-review-c1')));
+      await settleService(tester);
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('smart-performance')),
+          matching: find.text('Checking…'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.byType(PerformanceView), findsNothing);
+      for (
+        var i = 0;
+        i < 20 && find.byType(PerformanceView).evaluate().isEmpty;
+        i++
+      ) {
+        await settleService(tester);
+      }
+      expect(find.byType(PerformanceView), findsOneWidget);
+      expect(find.text('Checking…'), findsNothing);
+      expect(
+        requests(dir).where(
+          (q) =>
+              q['method'] == 'models.tuning' && q['params']['key'] == 'fixture',
+        ),
+        hasLength(1),
+      );
+      expect(tester.takeException(), isNull);
+      await unmountApp(tester);
+    },
+  );
+
+  testWidgets(
+    'a change from Performance in Ask AI is reviewed, then Ask AI is back on Performance',
+    (tester) async {
+      final dir = await mountApp(
+        tester,
+        beforeStart: (d) =>
+            File('${d.path}/smart_helpers').writeAsStringSync('1'),
+      );
+      await settleService(tester);
+      List<Map> calls(String method) =>
+          requests(dir).where((q) => q['method'] == method).toList();
+      await tester.tap(find.byKey(const ValueKey('ask-ai-open')));
+      await settleService(tester);
+      await tester.enterText(
+        find.descendant(
+          of: find.byKey(const ValueKey('smart-card')),
+          matching: find.byType(TextField),
+        ),
+        'Providers: Make llama faster',
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.send);
+      await settleService(tester);
+      await tester.tap(find.byKey(const ValueKey('smart-review-c1')));
+      for (
+        var i = 0;
+        i < 10 && find.byType(PerformanceView).evaluate().isEmpty;
+        i++
+      ) {
+        await settleService(tester);
+      }
+      final reads = calls('models.tuning').length;
+      // A setting: its review takes the window's place.
+      final mode = find
+          .ancestor(
+            of: find.text('—'),
+            matching: find.byWidgetPredicate((w) => w is DropdownButton),
+          )
+          .first;
+      await tester.ensureVisible(mode);
+      await tester.pumpAndSettle();
+      await tester.tap(mode);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('b').last);
+      await settleService(tester);
+      expect(calls('models.tuning_preview'), hasLength(1));
+      expect(find.byKey(const ValueKey('smart-card')), findsNothing);
+      await tester.tap(find.widgetWithText(FilledButton, 'Apply'));
+      await settleService(tester);
+      // The result card, then Undo and its own result: Ask AI waits for all.
+      expect(find.byKey(const ValueKey('task-card')), findsOneWidget);
+      expect(find.text('Succeeded'), findsOneWidget);
+      expect(find.byKey(const ValueKey('smart-card')), findsNothing);
+      await tester.tap(find.widgetWithText(TextButton, 'Undo'));
+      await settleService(tester);
+      await settleService(tester);
+      expect(calls('connections.undo'), hasLength(1));
+      expect(find.byKey(const ValueKey('task-card')), findsOneWidget);
+      expect(find.byKey(const ValueKey('smart-card')), findsNothing);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      // Back in the frame the last card closes: no gap for another card.
+      await tester.pump();
+      await tester.pump();
+      expect(find.byKey(const ValueKey('task-card')), findsNothing);
+      expect(find.byKey(const ValueKey('smart-card')), findsOneWidget);
+      await settleService(tester);
+      for (
+        var i = 0;
+        i < 10 && find.byType(PerformanceView).evaluate().isEmpty;
+        i++
+      ) {
+        await settleService(tester);
+      }
+      // Ask AI is back, on Performance read again.
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('smart-card')),
+          matching: find.byType(PerformanceView),
+        ),
+        findsOneWidget,
+      );
+      expect(calls('models.tuning').length, greaterThan(reads));
+      // Back, step by step: the proposal, the main page, the map.
+      await tester.tap(find.byKey(const ValueKey('smart-back')));
+      await settleService(tester);
+      expect(find.byKey(const ValueKey('smart-review-c1')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('smart-back')));
+      await settleService(tester);
+      expect(find.byKey(const ValueKey('smart-send')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('smart-back')));
+      await settleService(tester);
+      expect(find.byKey(const ValueKey('smart-card')), findsNothing);
+      // The map, not a review's card left underneath.
+      expect(find.byKey(const ValueKey('task-card')), findsNothing);
+      expect(tester.takeException(), isNull);
+      await unmountApp(tester);
+    },
+  );
+
+  testWidgets(
+    'a tunable provider box has a Performance symbol that opens its own card',
+    (tester) async {
+      await mountApp(tester);
+      await settleService(tester);
+      final symbol = find.byKey(const ValueKey('performance-runtime:fixture'));
+      for (var i = 0; i < 10 && symbol.evaluate().isEmpty; i++) {
+        await settleService(tester);
+      }
+      expect(symbol, findsOneWidget);
+      await tester.ensureVisible(symbol);
+      await tester.pumpAndSettle();
+      await tester.tap(symbol);
+      for (
+        var i = 0;
+        i < 10 && find.byType(PerformanceView).evaluate().isEmpty;
+        i++
+      ) {
+        await settleService(tester);
+      }
+      // Without Ask AI: its own card.
+      expect(find.byType(PerformanceView), findsOneWidget);
+      expect(find.byKey(const ValueKey('smart-card')), findsNothing);
+      expect(find.byKey(const ValueKey('task-card')), findsOneWidget);
       expect(tester.takeException(), isNull);
       await unmountApp(tester);
     },
@@ -2483,17 +2720,8 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('ask-ai-open')));
       await settleService(tester);
       final window = tester.state(find.byType(OverlayWindow));
-      await tester.scrollUntilVisible(
-        find.byKey(const ValueKey('smart-example-6')),
-        100,
-        scrollable: find.descendant(
-          of: find.byKey(const ValueKey('smart-prompt-examples')),
-          matching: find.byType(Scrollable),
-        ),
-      );
-      // The examples scroll inside the window, which scrolls too.
-      await tester.ensureVisible(find.byKey(const ValueKey('smart-example-6')));
-      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('smart-category-models')));
+      await settleService(tester);
       await tester.tap(find.byKey(const ValueKey('smart-example-6')));
       await settleService(tester);
       expect(find.text('Ask AI · Models'), findsOneWidget);

@@ -168,7 +168,7 @@ void main() {
     );
     await tester.pump();
     await tester.enterText(find.byType(TextField), 'connect pdfcraft to codex');
-    await tester.tap(find.widgetWithText(FilledButton, 'Ask'));
+    await tester.tap(find.byKey(const ValueKey('smart-send')));
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pump(const Duration(milliseconds: 300));
     await tester.tap(find.byKey(const ValueKey('smart-review-c1')));
@@ -227,7 +227,7 @@ void main() {
     );
     await tester.pump();
     await tester.enterText(find.byType(TextField), 'update craft');
-    await tester.tap(find.widgetWithText(FilledButton, 'Ask'));
+    await tester.tap(find.byKey(const ValueKey('smart-send')));
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('Do it with Claude Code…'), findsOneWidget);
@@ -289,7 +289,7 @@ void main() {
     );
     await tester.pump();
     await tester.enterText(find.byType(TextField), 'install ollama');
-    await tester.tap(find.widgetWithText(FilledButton, 'Ask'));
+    await tester.tap(find.byKey(const ValueKey('smart-send')));
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pump(const Duration(milliseconds: 300));
     await tester.tap(find.byKey(const ValueKey('smart-review-c1')));
@@ -365,7 +365,7 @@ void main() {
     );
     await tester.pump();
     await tester.enterText(find.byType(TextField), 'update codex');
-    await tester.tap(find.widgetWithText(FilledButton, 'Ask'));
+    await tester.tap(find.byKey(const ValueKey('smart-send')));
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pump(const Duration(milliseconds: 300));
     await tester.tap(find.byKey(const ValueKey('smart-review-c1')));
@@ -450,7 +450,7 @@ void main() {
     );
     await tester.pump();
     await tester.enterText(find.byType(TextField), 'move my models to Data');
-    await tester.tap(find.widgetWithText(FilledButton, 'Ask'));
+    await tester.tap(find.byKey(const ValueKey('smart-send')));
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pump(const Duration(milliseconds: 300));
     await tester.tap(find.byKey(const ValueKey('smart-review-c1')));
@@ -554,7 +554,7 @@ void main() {
     );
     await tester.pump();
     await tester.enterText(find.byType(TextField), 'a github server');
-    await tester.tap(find.widgetWithText(FilledButton, 'Ask'));
+    await tester.tap(find.byKey(const ValueKey('smart-send')));
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pump(const Duration(milliseconds: 300));
     await tester.tap(find.byKey(const ValueKey('smart-review-c1')));
@@ -1558,7 +1558,7 @@ void main() {
       );
 
       // Clicking Ask with blank prompt sends nothing.
-      await tester.tap(find.text('Ask'));
+      await tester.tap(find.byKey(const ValueKey('smart-send')));
       await tester.pump();
       expect(calls, isEmpty);
 
@@ -1569,7 +1569,7 @@ void main() {
       );
       await tester.pump();
       expect(calls, isEmpty);
-      await tester.tap(find.text('Ask'));
+      await tester.tap(find.byKey(const ValueKey('smart-send')));
       await tester.pump();
       expect(calls.first.$1, 'map.smart_ask');
       expect(calls.first.$2, {
@@ -1599,7 +1599,7 @@ void main() {
           'request': 'install qwencoder',
         },
       };
-      await tester.tap(find.text('Ask'));
+      await tester.tap(find.byKey(const ValueKey('smart-send')));
       await tester.pumpAndSettle();
       expect(
         find.text('Models are managed in the Models column.'),
@@ -1636,7 +1636,7 @@ void main() {
         'question': 'Which local LLM should run this model?',
         'choices': ['Ollama', 'llama.cpp'],
       };
-      await tester.tap(find.text('Ask'));
+      await tester.tap(find.byKey(const ValueKey('smart-send')));
       await tester.pumpAndSettle();
       expect(
         find.text('Which local LLM should run this model?'),
@@ -1807,7 +1807,7 @@ void main() {
         find.descendant(of: modelsCard, matching: find.byType(TextField)),
         'coding model for ollama',
       );
-      await tester.tap(find.text('Ask'));
+      await tester.tap(find.byKey(const ValueKey('smart-send')));
       await tester.pumpAndSettle();
 
       // State 7: Proposal shows PC limits, worded fit, and Review only on ok/tight.
@@ -1981,10 +1981,18 @@ void main() {
       expect(find.text('Lokal, keine Tokens'), findsOneWidget);
       expect(find.text('Modell finden oder verbinden…'), findsOneWidget);
       await tester.enterText(find.byType(TextField), 'qwen');
-      // Tab from TextField -> Ask ('Fragen'), then press Enter.
-      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
-      await tester.pump();
+      // Enter in the field asks (as the Launcher); Ctrl+Enter is a new line.
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
       await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pump();
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller?.text,
+        'qwen\n',
+      );
+      expect(calls, isNot(contains('map.smart_ask')));
+      await tester.testTextInput.receiveAction(TextInputAction.send);
+      await tester.pumpAndSettle();
       await tester.pumpAndSettle();
       expect(calls, contains('map.smart_ask'));
       expect(find.text('Nur Modelle.'), findsOneWidget);
@@ -2098,28 +2106,34 @@ void main() {
         ),
       );
 
-      // 1. Collapse during working cancels the ask and leaves a usable prompt with text kept.
+      // 1. Back during working cancels the ask and returns to the main Ask AI
+      // page with the text kept; Back there goes to the map.
       await tester.tap(find.text('Ask AI…'));
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField), 'qwen coder');
-      await tester.tap(find.text('Ask'));
+      await tester.tap(find.byKey(const ValueKey('smart-send')));
       await tester.pump();
       expect(find.text('Local helper is checking Models…'), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('smart-back')));
-      await tester.pump();
-      expect(isOpen, isFalse);
+      await tester.pumpAndSettle();
+      expect(isOpen, isTrue);
       expect(calls, contains('tasks.cancel'));
+      expect(find.widgetWithText(TextField, 'qwen coder'), findsOneWidget);
+      expect(find.byKey(const ValueKey('smart-send')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('smart-back')));
+      await tester.pumpAndSettle();
+      expect(isOpen, isFalse);
 
       // Reopen: prompt is back in idle state with 'qwen coder' preserved and Ask usable.
       calls.clear();
       await tester.tap(find.text('Ask AI…'));
       await tester.pumpAndSettle();
       expect(find.widgetWithText(TextField, 'qwen coder'), findsOneWidget);
-      expect(find.text('Ask'), findsOneWidget);
+      expect(find.byKey(const ValueKey('smart-send')), findsOneWidget);
 
       // 2. Start ask -> proposal -> review -> running download.
       askDone = true;
-      await tester.tap(find.text('Ask'));
+      await tester.tap(find.byKey(const ValueKey('smart-send')));
       await tester.pumpAndSettle();
       expect(find.text('Found 1 model.'), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('smart-review-c1')));
@@ -2237,14 +2251,14 @@ void main() {
 
       // 1. Working task answering "stopped" returns to idle prompt with text kept.
       await tester.enterText(find.byType(TextField), 'qwen');
-      await tester.tap(find.text('Ask'));
+      await tester.tap(find.byKey(const ValueKey('smart-send')));
       await tester.pumpAndSettle();
       expect(find.widgetWithText(TextField, 'qwen'), findsOneWidget);
-      expect(find.text('Ask'), findsOneWidget);
+      expect(find.byKey(const ValueKey('smart-send')), findsOneWidget);
 
       // 2. Running download answering "stopped" returns to proposal, not error.
       askState = 'done';
-      await tester.tap(find.text('Ask'));
+      await tester.tap(find.byKey(const ValueKey('smart-send')));
       await tester.pumpAndSettle();
       expect(find.text('Found 1 model.'), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('smart-review-c1')));
@@ -2344,7 +2358,7 @@ void main() {
       await tester.pumpAndSettle();
 
       await tester.enterText(find.byType(TextField), 'qwen');
-      await tester.tap(find.text('Ask'));
+      await tester.tap(find.byKey(const ValueKey('smart-send')));
       await tester.pumpAndSettle();
       expect(askCalls, 1);
       expect(find.text('Found 1 model.'), findsOneWidget);

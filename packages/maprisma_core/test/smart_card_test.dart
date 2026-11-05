@@ -308,6 +308,83 @@ void main() {
     },
   );
 
+  test(
+    'a search that finds nothing tries fewer words, image words as vision',
+    () {
+      expect(smartSearchQueries('llama imaging'), [
+        'llama imaging',
+        'llama vision',
+        'vision',
+        'llama',
+      ]);
+      expect(smartSearchQueries('model that supports images for llama.cpp'), [
+        'model that supports images for llama.cpp',
+        'vision',
+      ]);
+      expect(smartSearchQueries('qwen coder'), ['qwen coder', 'qwen', 'coder']);
+      expect(smartSearchQueries('vision'), ['vision']);
+    },
+  );
+
+  test('the Models search goes on with fewer words until it finds one', () async {
+    final hub = FakeHub();
+    final searched = <String>[];
+    final result = await smartModels(
+      facts(),
+      answers([
+        '{"action": "search", "query": "llama imaging", "runtime": "ollama"}',
+        '{"summary": "s", "picks": [{"repo": "real/vision-GGUF", "reason": "sees"}]}',
+      ], []),
+      (q) async {
+        searched.add(q);
+        return q == 'llama vision' ? hub.search(q) : const [];
+      },
+      hub.files,
+    );
+    expect(searched, ['llama imaging', 'llama vision']);
+    expect(result['status'], 'proposal');
+  });
+
+  test(
+    'nothing found with any of the words: what was searched and how to word it',
+    () async {
+      final searched = <String>[];
+      final result = await smartModels(
+        facts(),
+        answers([
+          '{"action": "search", "query": "llama imaging", "runtime": "ollama"}',
+        ], []),
+        (q) async {
+          searched.add(q);
+          return const [];
+        },
+        FakeHub().files,
+      );
+      expect(searched.length, 4);
+      // The user learns what was searched and how to word it.
+      final instead = result['instead'] as Map;
+      expect(instead['hint'], smartNoModelWords);
+      expect(
+        instead['words'],
+        '“llama imaging”, “llama vision”, “vision”, “llama”',
+      );
+      final worded = smartWorded(result, (s) => s)['instead'] as Map;
+      expect(
+        worded['hint'],
+        startsWith(
+          'Hugging Face found no model for “llama imaging”, “llama vision”',
+        ),
+      );
+      expect(worded['hint'], contains('"vision"'));
+    },
+  );
+
+  test('the Models prompt asks for words of model names', () {
+    final prompt = smartModelsPrompt(facts());
+    expect(prompt, contains('"vision" or "VL"'));
+    expect(prompt, contains('only matches words in model names'));
+  });
+
   test('the agent writes in the language of the app, a request stays data', () {
     final prompt = smartModelsPrompt({...facts(), 'language': 'de'});
     expect(prompt, contains('language with the code "de"'));

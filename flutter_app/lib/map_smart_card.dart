@@ -32,6 +32,26 @@ const mapSmartColumns = [
   ('models', 'Models'),
 ];
 
+/// A category's icon and what Ask AI does there (the central window's card).
+(IconData, String) _columnAbout(String column) => switch (column) {
+  'mcp' => (
+    Icons.extension_outlined,
+    'Find MCP servers and skills and connect them to your agents.',
+  ),
+  'agents' => (
+    Icons.smart_toy_outlined,
+    'Set up agents, check their sign-in, or connect them to providers.',
+  ),
+  'providers' => (
+    Icons.dns_outlined,
+    'Set up a provider, or find out why a local LLM is slow.',
+  ),
+  _ => (
+    Icons.view_in_ar_outlined,
+    'Find a model that fits this PC, connect it to an agent, or disconnect it.',
+  ),
+};
+
 String _columnHint(String column) => switch (column) {
   'mcp' => 'Find an MCP server or skill…',
   'agents' => 'Set up or connect an agent…',
@@ -62,15 +82,120 @@ String _columnHint(String column) => switch (column) {
   return (column: fallback, request: request);
 }
 
-const smartPromptExamples = <(String, IconData, String)>[
-  ('mcp', Icons.extension_outlined, 'Find an MCP server for my notes'),
-  ('mcp', Icons.folder_outlined, 'Connect a skill folder to an agent'),
-  ('agents', Icons.person_outline, 'Which agents need sign-in?'),
-  ('agents', Icons.link_outlined, 'Connect an agent to a provider'),
-  ('providers', Icons.speed_outlined, 'Why is my local LLM slow?'),
-  ('providers', Icons.memory_outlined, 'Check GPU and context settings'),
-  ('models', Icons.search_outlined, 'Find a model that fits my PC'),
-  ('models', Icons.link_off_outlined, 'Disconnect a model from an agent'),
+/// The prompt presets per category: (column, icon, label, prompt). A label
+/// ending in "…" starts the question for the user to finish. Tests use the
+/// first eight by index: new presets go at the end.
+const smartPromptExamples = <(String, IconData, String, String)>[
+  (
+    'mcp',
+    Icons.extension_outlined,
+    'Find an MCP server for my notes',
+    'Find an MCP server for my notes',
+  ),
+  (
+    'mcp',
+    Icons.folder_outlined,
+    'Connect a skill folder to an agent',
+    'Connect a skill folder to an agent',
+  ),
+  (
+    'agents',
+    Icons.person_outline,
+    'Which agents need sign-in?',
+    'Which agents need sign-in?',
+  ),
+  (
+    'agents',
+    Icons.link_outlined,
+    'Connect an agent to a provider',
+    'Connect an agent to a provider',
+  ),
+  (
+    'providers',
+    Icons.speed_outlined,
+    'Why is my local LLM slow?',
+    'Why is my local LLM slow?',
+  ),
+  (
+    'providers',
+    Icons.memory_outlined,
+    'Check GPU and context settings',
+    'Check GPU and context settings',
+  ),
+  (
+    'models',
+    Icons.search_outlined,
+    'Find a model that fits my PC',
+    'Find a model that fits my PC',
+  ),
+  (
+    'models',
+    Icons.link_off_outlined,
+    'Disconnect a model from an agent',
+    'Disconnect a model from an agent',
+  ),
+  (
+    'mcp',
+    Icons.add_circle_outline,
+    'Add an MCP server…',
+    'Add the MCP server ',
+  ),
+  (
+    'mcp',
+    Icons.remove_circle_outline,
+    'Remove an MCP server…',
+    'Remove the MCP server ',
+  ),
+  (
+    'mcp',
+    Icons.update,
+    'Which MCP servers have updates?',
+    'Which MCP servers have updates?',
+  ),
+  (
+    'agents',
+    Icons.add_circle_outline,
+    'Set up a new agent…',
+    'Set up the agent ',
+  ),
+  ('agents', Icons.update, 'Update an agent…', 'Update the agent '),
+  (
+    'agents',
+    Icons.system_update_alt,
+    'Which agents have updates?',
+    'Which agents have updates?',
+  ),
+  (
+    'providers',
+    Icons.add_circle_outline,
+    'Set up a provider…',
+    'Set up the provider ',
+  ),
+  (
+    'providers',
+    Icons.link_outlined,
+    'Connect a provider to an agent…',
+    'Connect the provider ',
+  ),
+  (
+    'providers',
+    Icons.play_circle_outline,
+    'Which providers are running?',
+    'Which providers are running?',
+  ),
+  (
+    'models',
+    Icons.download_outlined,
+    'Download a model…',
+    'Download the model ',
+  ),
+  ('models', Icons.delete_outline, 'Remove a model…', 'Remove the model '),
+  (
+    'models',
+    Icons.drive_file_move_outline,
+    'Move models to another folder',
+    'Move models to another folder',
+  ),
 ];
 
 String smartFitLabel(String? fit, String Function(String) tr) => switch (fit) {
@@ -354,6 +479,7 @@ enum _SmartStep {
   done,
   connectReview,
   mcpForm,
+  performance,
   error,
 }
 
@@ -363,6 +489,7 @@ class MapSmartCard extends StatefulWidget {
     this.takesRequests = true,
     this.showBar = true,
     this.onProvider,
+    this.performancePage,
     this.onTask,
     required this.column,
     required this.title,
@@ -391,6 +518,17 @@ class MapSmartCard extends StatefulWidget {
 
   /// A provider step the user chose: (install, update, start or stop, key).
   final void Function(String step, String key, String name)? onProvider;
+
+  /// A local LLM's Performance as a page of this window (Ask AI keeps it
+  /// open): aside runs a review in the window's place (a change, a
+  /// measurement), then the window comes back on a fresh Performance page;
+  /// back returns to the proposal. Null: Performance opens as its own card.
+  final Future<Widget> Function(
+    String key, {
+    required void Function(Future<bool> Function() review) aside,
+    required VoidCallback back,
+  })?
+  performancePage;
 
   /// A reviewed task for an agent in a terminal (system.help_apply).
   final ValueChanged<Map<String, dynamic>>? onTask;
@@ -457,6 +595,8 @@ class _MapSmartCardState extends State<MapSmartCard> {
   double? _runFraction;
   String _runText = '';
   String _errorText = '';
+  Widget? _performancePage;
+  int _performanceToken = 0;
   _SmartStep _errorReturnTo = _SmartStep.idle;
   Map<String, dynamic>? _dictation;
   bool _dictationRecording = false;
@@ -623,6 +763,15 @@ class _MapSmartCardState extends State<MapSmartCard> {
   /// terminal, a page.
   void _close({bool refocus = true}) {
     _cancelDictationRecording();
+    // A Performance page still loading never lands in a closed window; opened
+    // again, Ask AI shows the proposal (Codex review).
+    if (_step == _SmartStep.performance) {
+      _performanceToken++;
+      setState(() {
+        _step = _SmartStep.proposal;
+        _performancePage = null;
+      });
+    }
     if (_step == _SmartStep.working) {
       setState(_abortWorking);
     } else if (_step != _SmartStep.running && !_applyingConnect) {
@@ -642,6 +791,85 @@ class _MapSmartCardState extends State<MapSmartCard> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && !widget.open) _barFocus.requestFocus();
     });
+  }
+
+  /// Performance inside the window: a spinner while its settings are read
+  /// (that can take ten seconds and more), then the page.
+  Future<void> _openPerformance(String key) async {
+    final token = ++_performanceToken;
+    setState(() {
+      _step = _SmartStep.performance;
+      _performancePage = null;
+    });
+    try {
+      final page = await widget.performancePage!(
+        key,
+        aside: (review) => unawaited(_aside(key, review)),
+        back: _leavePerformance,
+      );
+      if (!mounted ||
+          token != _performanceToken ||
+          _step != _SmartStep.performance) {
+        return;
+      }
+      setState(() => _performancePage = page);
+    } catch (error) {
+      if (!mounted ||
+          token != _performanceToken ||
+          _step != _SmartStep.performance) {
+        return;
+      }
+      setState(() {
+        _errorText = failureText(widget.tr, error);
+        _errorReturnTo = _SmartStep.proposal;
+        _step = _SmartStep.error;
+      });
+    }
+  }
+
+  /// A change or a measurement from the Performance page: its review takes
+  /// the window's place; afterwards (applied or not) Ask AI is back on the
+  /// Performance page, read again, so Back still leads step by step.
+  /// The review says whether to come back (false: the user moved on to
+  /// something else meanwhile, or another card took its place).
+  Future<void> _aside(String key, Future<bool> Function() review) async {
+    _performanceToken++;
+    _close(refocus: false);
+    var back = false;
+    try {
+      back = await review();
+    } finally {
+      if (mounted && back && !widget.open) {
+        widget.onToggle();
+        unawaited(_openPerformance(key));
+      }
+    }
+  }
+
+  void _leavePerformance() {
+    _performanceToken++;
+    setState(() {
+      _step = _SmartStep.proposal;
+      _performancePage = null;
+    });
+  }
+
+  /// Back: from a result to the main Ask AI page (the question stays), from
+  /// there to the map (Esc closes at once). A download or a connection under way
+  /// goes on in the background: the window only closes.
+  void _back() {
+    if (_step == _SmartStep.idle ||
+        _step == _SmartStep.status ||
+        _step == _SmartStep.running ||
+        _applyingConnect) {
+      _close();
+    } else if (_step == _SmartStep.working) {
+      _cancelTask();
+    } else if (_step == _SmartStep.performance) {
+      _leavePerformance();
+    } else {
+      _backToIdle();
+    }
   }
 
   void _backToIdle() {
@@ -1297,9 +1525,8 @@ class _MapSmartCardState extends State<MapSmartCard> {
             child: Text(tr('Get started')),
           ),
       ],
-      _SmartStep.idle => [
-        FilledButton(onPressed: () => _ask(), child: Text(tr('Ask'))),
-      ],
+      // Ask is the symbol in the field's corner (Enter).
+      _SmartStep.idle => const [],
       _SmartStep.status => [
         TextButton(
           key: const ValueKey('health-again'),
@@ -1352,7 +1579,10 @@ class _MapSmartCardState extends State<MapSmartCard> {
       _SmartStep.error => [
         FilledButton.tonal(onPressed: _tryAgain, child: Text(tr('Try again'))),
       ],
-      _SmartStep.review || _SmartStep.connectReview => const [],
+      // Its own footer (TaskReview).
+      _SmartStep.performance ||
+      _SmartStep.review ||
+      _SmartStep.connectReview => const [],
     };
   }
 
@@ -1548,73 +1778,143 @@ class _MapSmartCardState extends State<MapSmartCard> {
     );
   }
 
-  Widget _buildPromptExamples(ColorScheme colors) => Material(
-    key: const ValueKey('smart-prompt-examples'),
-    color: colors.surfaceContainerLow,
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(corners(context)),
-      side: BorderSide(color: colors.outlineVariant),
-    ),
-    child: Padding(
-      padding: const EdgeInsets.all(AppSpace.sm),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            widget.tr('Try asking Ask AI'),
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: AppSpace.xs),
-          Text(
-            widget.tr(
-              'Choose an example or start with a category. Only Ask sends the question.',
-            ),
-            style: TextStyle(fontSize: 11, color: colors.onSurfaceVariant),
-          ),
-          const SizedBox(height: AppSpace.xs),
-          SizedBox(
-            height: 176,
-            child: Scrollbar(
-              controller: _examplesScroll,
-              thumbVisibility: true,
-              child: ListView.builder(
-                controller: _examplesScroll,
-                primary: false,
-                itemCount: smartPromptExamples.length,
-                itemBuilder: (context, index) {
-                  final (column, icon, example) = smartPromptExamples[index];
-                  final title = mapSmartColumns
-                      .where((entry) => entry.$1 == column)
-                      .first
-                      .$2;
-                  final prompt = '${widget.tr(title)}: ${widget.tr(example)}';
-                  return ListTile(
-                    key: ValueKey('smart-example-$index'),
-                    dense: true,
-                    visualDensity: VisualDensity.compact,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 4),
-                    leading: Icon(icon, size: 17, color: colors.primary),
-                    title: Text(prompt, style: const TextStyle(fontSize: 12)),
-                    onTap: () {
-                      setState(() {
-                        _column = column;
-                        _prompt.text = prompt;
-                        _prompt.selection = TextSelection.collapsed(
-                          offset: prompt.length,
-                        );
-                      });
-                      widget.onColumnChanged?.call(column);
-                      _fieldFocus.requestFocus();
-                    },
-                  );
+  /// The central window's prompt helps, as in the Launcher's Ask AI: a row
+  /// to choose the category, then its card with the examples on one line
+  /// that scrolls sideways when it is too long. An example only fills the
+  /// question: Ask sends it.
+  Widget _buildPromptExamples(ColorScheme colors) {
+    final title = _columnTitle;
+    final (icon, about) = _columnAbout(_column);
+    return Column(
+      key: const ValueKey('smart-prompt-examples'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Wrap(
+          key: const ValueKey('smart-categories'),
+          spacing: 6,
+          runSpacing: 6,
+          children: [
+            for (final (col, colTitle) in mapSmartColumns)
+              ChoiceChip(
+                key: ValueKey('smart-category-$col'),
+                selected: _column == col,
+                avatar: Icon(_columnAbout(col).$1, size: 16),
+                label: Text(widget.tr(colTitle)),
+                onSelected: (_) {
+                  if (col == _column) return;
+                  // A column's own window: the other category is the
+                  // other column's window (as Move to).
+                  final move = widget.onMoveToColumn;
+                  if (widget.showBar && move != null) {
+                    move(
+                      col,
+                      smartPromptRequest(
+                        _prompt.text,
+                        _column,
+                        widget.tr,
+                      ).request,
+                    );
+                    return;
+                  }
+                  setState(() {
+                    _retargetPrefixedPrompt(col);
+                    _column = col;
+                  });
+                  widget.onColumnChanged?.call(col);
+                  _fieldFocus.requestFocus();
                 },
               ),
-            ),
+          ],
+        ),
+        const SizedBox(height: AppSpace.sm),
+        Container(
+          key: ValueKey('smart-category-card-$_column'),
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+          decoration: BoxDecoration(
+            color: colors.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(corners(context)),
+            border: Border.all(color: colors.outlineVariant),
           ),
-        ],
-      ),
-    ),
-  );
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(icon, size: 16, color: colors.primary),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      widget.tr(title),
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '${widget.tr(about)} ${widget.tr('Only Ask sends the question.')}',
+                style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant),
+              ),
+              const SizedBox(height: 8),
+              _ScrollArrows(
+                key: ValueKey('smart-presets-$_column'),
+                controller: _examplesScroll,
+                tr: widget.tr,
+                child: SingleChildScrollView(
+                  controller: _examplesScroll,
+                  primary: false,
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      for (final (index, (column, exIcon, label, example))
+                          in smartPromptExamples.indexed)
+                        if (column == _column)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 6),
+                            child: ActionChip(
+                              key: ValueKey('smart-example-$index'),
+                              avatar: Icon(exIcon, size: 16),
+                              label: Text(widget.tr(label)),
+                              onPressed: () {
+                                // A started prompt keeps its trailing
+                                // space: the user names the item.
+                                final prompt =
+                                    '${widget.tr(title)}: ${widget.tr(example.trimRight())}${example.endsWith(' ') ? ' ' : ''}';
+                                setState(() {
+                                  _prompt.text = prompt;
+                                  _prompt.selection = TextSelection.collapsed(
+                                    offset: prompt.length,
+                                  );
+                                });
+                                _fieldFocus.requestFocus();
+                              },
+                            ),
+                          ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Ctrl+Enter: a line break at the cursor (Enter alone asks).
+  void _newLine() {
+    final value = _prompt.value;
+    final sel = value.selection.isValid
+        ? value.selection
+        : TextSelection.collapsed(offset: value.text.length);
+    _prompt.value = TextEditingValue(
+      text: value.text.replaceRange(sel.start, sel.end, '\n'),
+      selection: TextSelection.collapsed(offset: sel.start + 1),
+    );
+  }
 
   Widget _buildAsk(ColorScheme colors) {
     if (widget.helpers.isEmpty) {
@@ -1640,32 +1940,61 @@ class _MapSmartCardState extends State<MapSmartCard> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        TextField(
-          controller: _prompt,
-          focusNode: _fieldFocus,
-          autofocus: true,
-          minLines: 2,
-          maxLines: 3,
-          style: const TextStyle(fontSize: 13),
-          decoration: InputDecoration(
-            isDense: true,
-            hintText: _dictationTranscribing
-                ? widget.tr('Transcribing…')
-                : _dictationRecording
-                ? widget.tr('Listening… Click Stop when done.')
-                : widget.showBar
-                ? widget.tr(_columnHint(_column))
-                : '${widget.tr(_columnTitle)}: ${widget.tr(_columnHint(_column))}',
-            border: const OutlineInputBorder(),
-            suffixIcon: showMic
-                ? _buildDictationSuffix(colors, dictReady, dictActive)
-                : null,
+        // As the Launcher: Enter asks, Ctrl+Enter starts a new line.
+        CallbackShortcuts(
+          bindings: {
+            const SingleActivator(LogicalKeyboardKey.enter, control: true):
+                _newLine,
+            const SingleActivator(
+              LogicalKeyboardKey.numpadEnter,
+              control: true,
+            ): _newLine,
+          },
+          child: TextField(
+            controller: _prompt,
+            focusNode: _fieldFocus,
+            autofocus: true,
+            minLines: 1,
+            maxLines: 4,
+            keyboardType: TextInputType.multiline,
+            textInputAction: TextInputAction.send,
+            onSubmitted: (_) {
+              if (!_dictationRecording && !_dictationTranscribing) _ask();
+              _fieldFocus.requestFocus();
+            },
+            style: const TextStyle(fontSize: 13),
+            decoration: InputDecoration(
+              isDense: true,
+              hintText: _dictationTranscribing
+                  ? widget.tr('Transcribing…')
+                  : _dictationRecording
+                  ? widget.tr('Listening… Click Stop when done.')
+                  : widget.showBar
+                  ? widget.tr(_columnHint(_column))
+                  : '${widget.tr(_columnTitle)}: ${widget.tr(_columnHint(_column))}',
+              border: const OutlineInputBorder(),
+              // The microphone (when on) and Ask in the field's right corner.
+              suffixIcon: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (showMic)
+                    _buildDictationSuffix(colors, dictReady, dictActive),
+                  IconButton(
+                    key: const ValueKey('smart-send'),
+                    tooltip:
+                        '${widget.tr('Ask')} · ${widget.tr('Enter asks, Ctrl+Enter: new line.')}',
+                    onPressed: _dictationRecording || _dictationTranscribing
+                        ? null
+                        : () => _ask(),
+                    icon: Icon(Icons.send, color: colors.primary),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
-        if (!widget.showBar) ...[
-          const SizedBox(height: AppSpace.sm),
-          _buildPromptExamples(colors),
-        ],
+        const SizedBox(height: AppSpace.sm),
+        _buildPromptExamples(colors),
         if (_dictationError.isNotEmpty) ...[
           const SizedBox(height: AppSpace.xs),
           Text(
@@ -2269,7 +2598,12 @@ class _MapSmartCardState extends State<MapSmartCard> {
                         child: FilledButton.tonal(
                           key: ValueKey('smart-review-${c['id']}'),
                           onPressed: () {
-                            if (c['kind'] == 'provider_action') {
+                            if (c['kind'] == 'provider_action' &&
+                                c['step'] == 'performance' &&
+                                widget.performancePage != null) {
+                              // Shown here: the window stays open.
+                              _openPerformance('${c['key']}');
+                            } else if (c['kind'] == 'provider_action') {
                               // Its own page has the review.
                               _close(refocus: false);
                               widget.onProvider?.call(
@@ -2531,6 +2865,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
         focusNode: _cardFocus,
         autofocus: true,
         onKeyEvent: (_, event) {
+          // Esc leaves Ask AI for the map at once; Back goes step by step.
           if (event is KeyDownEvent &&
               event.logicalKey == LogicalKeyboardKey.escape) {
             _close();
@@ -2547,7 +2882,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
                   .replaceAll('{0}', widget.tr(_columnTitle)),
               tr: widget.tr,
               backKey: const ValueKey('smart-back'),
-              onBack: _close,
+              onBack: _back,
               actions: [
                 // The helper's name and cost: never wider than a third.
                 ConstrainedBox(
@@ -2608,6 +2943,22 @@ class _MapSmartCardState extends State<MapSmartCard> {
                             setState(() => _step = _SmartStep.proposal),
                       ),
               )
+            else if (_step == _SmartStep.performance)
+              Expanded(
+                key: const ValueKey('smart-performance'),
+                child:
+                    _performancePage ??
+                    Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const CircularProgressIndicator(),
+                          const SizedBox(height: AppSpace.md),
+                          Text(widget.tr('Checking…')),
+                        ],
+                      ),
+                    ),
+              )
             else if (_step == _SmartStep.connectReview)
               Expanded(
                 child: ConnectionReview(
@@ -2641,6 +2992,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
                     _SmartStep.done => _buildDone(),
                     _SmartStep.error => _buildError(colors),
                     _SmartStep.review ||
+                    _SmartStep.performance ||
                     _SmartStep.connectReview => const SizedBox.shrink(),
                   },
                 ),
@@ -2654,4 +3006,105 @@ class _MapSmartCardState extends State<MapSmartCard> {
         ? KeyedSubtree(key: const ValueKey('smart-card'), child: window)
         : window;
   }
+}
+
+/// A sideways line with ‹ › at its ends while there is more to see that way
+/// (the mouse wheel does not scroll sideways).
+class _ScrollArrows extends StatefulWidget {
+  const _ScrollArrows({
+    super.key,
+    required this.controller,
+    required this.tr,
+    required this.child,
+  });
+  final ScrollController controller;
+  final String Function(String) tr;
+  final Widget child;
+  @override
+  State<_ScrollArrows> createState() => _ScrollArrowsState();
+}
+
+class _ScrollArrowsState extends State<_ScrollArrows> {
+  bool _left = false, _right = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // The first layout: the right arrow when the line is already too long.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final c = widget.controller;
+      if (mounted && c.hasClients && c.position.hasContentDimensions) {
+        _update(c.position);
+      }
+    });
+  }
+
+  void _update(ScrollMetrics m) {
+    final left = m.pixels > m.minScrollExtent + 1;
+    final right = m.pixels < m.maxScrollExtent - 1;
+    if (left != _left || right != _right) {
+      setState(() {
+        _left = left;
+        _right = right;
+      });
+    }
+  }
+
+  void _step(double direction) {
+    final c = widget.controller;
+    if (!c.hasClients) return;
+    final p = c.position;
+    c.animateTo(
+      (p.pixels + direction * p.viewportDimension * .8).clamp(
+        p.minScrollExtent,
+        p.maxScrollExtent,
+      ),
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOut,
+    );
+  }
+
+  Widget _arrow(Key key, IconData icon, String tip, double direction) =>
+      IconButton(
+        key: key,
+        visualDensity: VisualDensity.compact,
+        tooltip: widget.tr(tip),
+        onPressed: () => _step(direction),
+        icon: Icon(icon, size: 20),
+      );
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: [
+      if (_left)
+        _arrow(
+          const ValueKey('smart-presets-left'),
+          Icons.chevron_left,
+          'Scroll left',
+          -1,
+        ),
+      Expanded(
+        child: NotificationListener<ScrollMetricsNotification>(
+          onNotification: (n) {
+            _update(n.metrics);
+            return false;
+          },
+          child: NotificationListener<ScrollNotification>(
+            onNotification: (n) {
+              _update(n.metrics);
+              return false;
+            },
+            child: widget.child,
+          ),
+        ),
+      ),
+      if (_right)
+        _arrow(
+          const ValueKey('smart-presets-right'),
+          Icons.chevron_right,
+          'Scroll right',
+          1,
+        ),
+    ],
+  );
 }
