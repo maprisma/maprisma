@@ -4567,7 +4567,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     if (!_detectionComplete) unawaited(_detectSetup());
   }
 
-  Future<void> _detectSetup() async {
+  Future<void> _detectSetup({bool enableFound = false}) async {
     if (_setupDetecting) return;
     final revision = _setupRevision;
     setState(() {
@@ -4588,6 +4588,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                 .cast<String>()
                 .toSet(),
           );
+          if (enableFound) unawaited(_enableFound());
           return;
         }
         if (status['state'] != 'running') throw StateError('Detection failed');
@@ -4601,6 +4602,34 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       if (mounted && revision == _setupRevision) {
         setState(() => _setupDetecting = false);
       }
+    }
+  }
+
+  /// At the start, once setup is done: every agent, local LLM and online
+  /// provider found on this PC is put on the map, its add-on switched on;
+  /// the core leaves the ones the user switched off alone.
+  Future<void> _enableFound() async {
+    if (_welcome || _setupDetected.isEmpty || !mounted) return;
+    final off = {
+      for (final i in _addons)
+        if (i['enabled'] != true) i['id'] as String,
+    };
+    final ids = _setupDetected.intersection(off).toList()..sort();
+    if (ids.isEmpty) return;
+    while (mounted && _busy) {
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+    }
+    if (!mounted || _welcome) return;
+    try {
+      final result = await _client.addonsEnableFound(ids: ids);
+      if (!mounted || (result['switched_on'] as List? ?? const []).isEmpty) {
+        return;
+      }
+      _mapStale = true;
+      await _refresh();
+    } catch (_) {
+      // A rule that refuses it, or an installation running: the found ones
+      // stay in the column's "found on this PC", as before.
     }
   }
 
@@ -4635,7 +4664,13 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         await _client.setupLater();
       } else {
         _mapStale = true;
-        await _client.setupApply(enabled: enabled);
+        // Found here but left unticked: switched off, and so never switched
+        // on again at the start (addons.enable_found).
+        await _client.setupApply(
+          enabled: enabled,
+          declined: _setupDetected.difference(selected!.toSet()).toList()
+            ..sort(),
+        );
       }
       if (!mounted) return;
       setState(() {
@@ -4750,7 +4785,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         _failed = false;
       });
       if (firstSnapshot) {
-        unawaited(_detectSetup());
+        unawaited(_detectSetup(enableFound: true));
         unawaited(_loadJobs());
         unawaited(_checkHealth());
         unawaited(_checkUpdates());

@@ -73,6 +73,10 @@ for line in sys.stdin:
  elif m=='existing.preview':r={'plan':'opaque-existing','files':[],'notes':[],'empty':False}
  elif m=='existing.apply':tasks['existing']={'ok':True};r={'task':'existing'}
  elif m=='setup.detect':tasks['detect']={'installed':['fixture-addon']};r={'task':'detect'}
+ elif m=='addons.enable_found':
+  on=Path('enable_found').exists() and 'fixture-addon' in p['ids'] and not addon['enabled']
+  if on:addon['enabled']=True;addon['state']='loaded'
+  r={'addons':[addon],'switched_on':['fixture-addon'] if on else []}
  elif m=='providers.snapshot':r={'local':[runtime]+([{**runtime,'key':'llamacpp','name':'llama.cpp','models':['Big'],'focus':['runtime:llamacpp']}] if Path('llama').exists() else []),'online':[],'folders':[]}
  elif m=='connections.snapshot':r={'agents':[{'command':'test','name':'Test agent','mcp':True,'skills':False}],
   'providers':[],'skills':[],'mcp':[{'id':'known-server','name':'Known server','target':'example.test','agents':['test'] if connected else []}], 'focus':['agent:test']}
@@ -315,6 +319,41 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await settleService(tester);
     expect(find.byType(OverlayWindow), findsNothing);
+    await unmountApp(tester);
+  });
+
+  testWidgets('at the start, what is found on this PC is put on the map', (
+    tester,
+  ) async {
+    final dir = await mountApp(
+      tester,
+      beforeStart: (dir) => File('${dir.path}/enable_found').createSync(),
+    );
+    await settleService(tester);
+    final asked = requests(
+      dir,
+    ).where((q) => q['method'] == 'addons.enable_found').toList();
+    expect(asked, hasLength(1));
+    expect(asked.single['params'], {
+      'ids': ['fixture-addon'],
+    });
+    // The map and the add-ons are read again after it switched one on.
+    final after = requests(
+      dir,
+    ).skipWhile((q) => q['method'] != 'addons.enable_found');
+    expect(after.where((q) => q['method'] == 'addons.list'), isNotEmpty);
+    await unmountApp(tester);
+  });
+
+  testWidgets('first-run setup: nothing switched on before it is done', (
+    tester,
+  ) async {
+    final dir = await mountApp(tester, welcome: true);
+    await settleService(tester);
+    expect(
+      requests(dir).where((q) => q['method'] == 'addons.enable_found'),
+      isEmpty,
+    );
     await unmountApp(tester);
   });
 
