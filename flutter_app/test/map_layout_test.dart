@@ -89,6 +89,42 @@ void main() {
     expect((saved['order'] as Map)[agents], ['agent:b', 'agent:a']);
   });
 
+  test(
+    'programs to install end the first Agents card, unless folded or used only',
+    () {
+      final graph = {
+        ...fixtureGraph(),
+        'missing': [
+          {'command': 'codex', 'name': 'Codex', 'addon': 'agent-codex'},
+          {'command': 'goose', 'name': 'Goose', 'addon': 'agent-goose'},
+        ],
+      };
+      final plain = MapLayout(fixtureGraph(), {}).cards['1:agent:']!;
+      final l = MapLayout(graph, {});
+      final card = l.cards['1:agent:']!;
+      expect(card.missing.map((m) => m.$2['command']), ['codex', 'goose']);
+      expect(card.rect.height, plain.rect.height + 2 * mapAddStep);
+      final first = card.missing.first.$1, last = card.missing.last.$1;
+      expect(first.top - l.boxes['agent:b']!.bottom, 12);
+      expect(last.top - first.top, mapAddStep);
+      expect(card.rect.bottom - last.bottom, 12);
+      expect(first.left, l.boxes['agent:b']!.left);
+      expect(first.width, l.boxes['agent:b']!.width);
+      // Other cards have none; a new one is a new layout.
+      expect(l.cards['0:mcp:']!.missing, isEmpty);
+      expect(l.updateGraph(fixtureGraph()), false);
+      for (final saved in [
+        {
+          'collapsed': ['1:agent:'],
+        },
+        {
+          'used_only': ['1:agent:'],
+        },
+      ]) {
+        expect(MapLayout(graph, saved).cards['1:agent:']!.missing, isEmpty);
+      }
+    },
+  );
   test('a colour is a hex value or one of the theme', () {
     final colors = ColorScheme.fromSeed(seedColor: const Color(0xff123456));
     expect(mapColor('theme:tertiary', colors), colors.tertiary);

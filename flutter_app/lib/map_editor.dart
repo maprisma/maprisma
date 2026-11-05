@@ -39,6 +39,7 @@ class MapEditor extends StatefulWidget {
     this.groups,
     this.onExpandGroup,
     this.onAdd,
+    this.onMissing,
     this.onOpen,
     this.onMenu,
     this.animate = 'all',
@@ -87,6 +88,11 @@ class MapEditor extends StatefulWidget {
   /// An add card at the end of a card: what it adds ('mcp', 'skills',
   /// 'model') and, for a model, the local LLM serving that folder.
   final void Function(String kind, String target)? onAdd;
+
+  /// A missing program's card at the end of the Agents card: 'install',
+  /// 'details' (its add-on) or 'off' (switch the add-on off).
+  final void Function(BuildContext, String action, Map<String, dynamic>)?
+  onMissing;
   final ValueChanged<Map<String, dynamic>>? onOpen;
   final void Function(BuildContext, Map<String, dynamic>)? onMenu;
   final String animate;
@@ -1597,6 +1603,25 @@ class _MapEditorState extends State<MapEditor>
                                                 card.addKind,
                                                 card.addTarget,
                                               ),
+                                            ),
+                                          ),
+                                    if (widget.onMissing != null)
+                                      for (final card in layout.cards.values)
+                                        for (final (rect, item) in card.missing)
+                                          Positioned.fromRect(
+                                            rect: rect,
+                                            child: MapMissingCard(
+                                              key: ValueKey(
+                                                'card-missing-${item['command']}',
+                                              ),
+                                              name: '${item['name']}',
+                                              tr: widget.tr,
+                                              onAction: (context, action) =>
+                                                  widget.onMissing!(
+                                                    context,
+                                                    action,
+                                                    item,
+                                                  ),
                                             ),
                                           ),
                                     if (_draggingCard != null &&

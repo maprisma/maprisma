@@ -153,6 +153,7 @@ class MapCardLayout {
     this.add,
     this.addKind = '',
     this.addTarget = '',
+    this.missing = const [],
   }) : all = all ?? nodes;
   final String id, label;
 
@@ -163,6 +164,11 @@ class MapCardLayout {
   /// What it adds ('mcp', 'skills', 'model') and, for a model, the local
   /// LLM that serves this folder (its runtime key).
   final String addKind, addTarget;
+
+  /// Programs to install (agent add-on on, program not on this PC), each a
+  /// dashed card with its place; only at the end of the first Agents card,
+  /// not when it is folded or shows only what is used.
+  final List<(Rect, Map<String, dynamic>)> missing;
 
   /// Every box of the card, also those a used-only card leaves out.
   final List<String> all;
@@ -327,6 +333,9 @@ class MapLayout {
         ],
       ...(saved['pins'] as List? ?? const []).cast<String>(),
     };
+    final missing = (graph['missing'] as List? ?? const [])
+        .cast<Map<String, dynamic>>();
+    var missingPlaced = false;
     for (final id in keys) {
       final order = ((saved['order'] as Map?)?[id] as List? ?? [])
           .cast<String>();
@@ -343,10 +352,22 @@ class MapLayout {
       // Last in an MCP, skills or local model folder card: an add card.
       final (addKind, addTarget) = _addOf(first['kind'] as String?, full);
       final withAdd = addKind.isNotEmpty && !folded && ids.isNotEmpty;
+      final toInstall =
+          first['kind'] == 'agent' &&
+              !missingPlaced &&
+              !folded &&
+              !usedOnly.contains(id) &&
+              ids.isNotEmpty
+          ? missing
+          : const <Map<String, dynamic>>[];
+      if (first['kind'] == 'agent') missingPlaced = true;
       // An empty card is as tall as a folded one: its header still fits.
       final height = folded || ids.isEmpty
           ? 38.0
-          : 32 + ids.length * mapRowStep + (withAdd ? mapAddStep : 0);
+          : 32 +
+                ids.length * mapRowStep +
+                (withAdd ? mapAddStep : 0) +
+                toInstall.length * mapAddStep;
       final rect = origin & Size(columnWidthOf(column), height);
       const labels = {
         'agent': 'Agents',
@@ -376,6 +397,18 @@ class MapLayout {
             : null,
         addKind: withAdd ? addKind : '',
         addTarget: withAdd ? addTarget : '',
+        missing: [
+          for (var i = 0; i < toInstall.length; i++)
+            (
+              Rect.fromLTWH(
+                origin.dx + 12,
+                origin.dy + 32 + ids.length * mapRowStep + i * mapAddStep,
+                columnWidthOf(column) - 24.0,
+                mapAddHeight,
+              ),
+              toInstall[i],
+            ),
+        ],
       );
       heights[column] = math.max(heights[column] ?? startTop, rect.bottom + 18);
       if (!folded) {

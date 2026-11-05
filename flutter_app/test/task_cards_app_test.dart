@@ -52,7 +52,7 @@ tasks={};slow_polls=[]
 for line in sys.stdin:
  q=json.loads(line);m=q['method'];p=q.get('params',{})
  with open('requests.jsonl','a') as log:log.write(json.dumps(q)+'\n')
- if m=='app.snapshot':r={'agents':[{'command':'test','name':'Test agent','version':'1.0','installed':True}],
+ if m=='app.snapshot':r={'agents':[{'command':'test','name':'Test agent','version':'1.0','installed':True}]+([{'command':'codex','name':'Codex','version':'','installed':False}] if Path('missing_program').exists() else []),
   'projects':{'test':{'history':[],'default':'/home/u','pinned':''}},'settings':settings,'language':'en','setup_needed':welcome,'theme':{}}
  elif m=='settings.update':settings.update(p['values']);r=settings
  elif m=='settings.get':
@@ -63,9 +63,10 @@ for line in sys.stdin:
  elif m=='window.popup':r={'placed':True,'x':10,'y':40,'width':p['width'],'height':p['height']}
  elif m=='agents.usage_refresh':tasks['usage']={'ok':True};r={'task':'usage'}
  elif m=='app.theme':r={'theme':json.loads(Path('theme.json').read_text()) if Path('theme.json').exists() else {}}
- elif m=='addons.list':r={'addons':[addon]+([new_addon] if installed else [])}
+ elif m=='addons.list':r={'addons':[addon]+([new_addon] if installed else [])+([{**addon,'id':'agent-codex','name':'Codex','enabled':True,'state':'loaded','loaded':True,'provides':['codex']}] if Path('missing_program').exists() else [])}
  elif m=='system.cached':r={'nodes':[],'edges':[],'notes':[],'helpers':[]}
  elif m=='map.snapshot':r={'nodes':[({**n,'status':'running'} if n['id']=='agent:test' and Path('agent_running').exists() else n) for n in nodes],'edges':([{'source':'agent:test','target':'mcp:known-server','kind':'mcp'}] if connected else [])+([{'source':'runtime:fixture','target':'model:runtime:fixture:example-model','kind':'serves'}] if Path('serves').exists() else []),'activity':{},'pending':Path('pending').exists()}
+ elif m=='agents.action_preview':r={'action':p['action'],'name':'Codex','command':p['command'],'commands':['mise use -g codex'],'data':[],'runnable':True,'note':'','url':''}
  elif m=='agents.traffic':r={'available':True,'agents':{}}
  elif m=='agents.halt_preview':r={'instances':[{'label':'PID 42','preview':'halt-42'}]}
  elif m=='system.refresh':
@@ -347,6 +348,33 @@ void main() {
     expect(after.where((q) => q['method'] == 'addons.list'), isNotEmpty);
     await unmountApp(tester);
   });
+
+  testWidgets(
+    'an agent add-on whose program is missing offers Install on the map',
+    (tester) async {
+      final dir = await mountApp(
+        tester,
+        beforeStart: (dir) => File('${dir.path}/missing_program').createSync(),
+      );
+      await settleService(tester);
+      final card = find.byKey(const ValueKey('card-missing-codex'));
+      expect(card, findsOneWidget);
+      // The installed agent and add-ons that are off get no such card.
+      expect(find.byKey(const ValueKey('card-missing-test')), findsNothing);
+      await tester.tap(find.text('Codex · Not installed'));
+      await settleService(tester);
+      final asked = requests(
+        dir,
+      ).where((q) => q['method'] == 'agents.action_preview').toList();
+      expect(asked.single['params'], containsPair('command', 'codex'));
+      expect(asked.single['params'], containsPair('action', 'install'));
+      // The normal review shows what runs before anything is installed.
+      expect(find.text('mise use -g codex'), findsOneWidget);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await settleService(tester);
+      await unmountApp(tester);
+    },
+  );
 
   testWidgets('the add cards open the MCP catalog and the model download', (
     tester,

@@ -174,6 +174,80 @@ class MapAddCard extends StatelessWidget {
   }
 }
 
+/// A dashed card at the end of the Agents card: an agent whose add-on is on
+/// but whose program is not on this PC. A click installs it; its menu also
+/// opens the add-on or switches it off.
+class MapMissingCard extends StatelessWidget {
+  const MapMissingCard({
+    super.key,
+    required this.name,
+    required this.tr,
+    required this.onAction,
+  });
+  final String name;
+  final String Function(String) tr;
+  final void Function(BuildContext, String action) onAction;
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final radius = corners(context);
+    final hint = tr('Not installed');
+    final install = tr('Install {0}…').replaceAll('{0}', name);
+    return Semantics(
+      button: true,
+      label: '$name. $hint. $install',
+      onTap: () => onAction(context, 'install'),
+      child: Tooltip(
+        message: install,
+        child: CustomPaint(
+          foregroundPainter: _DashedBorder(colors.outline, radius),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () => onAction(context, 'install'),
+              borderRadius: BorderRadius.circular(radius),
+              child: Padding(
+                padding: const EdgeInsets.only(left: 10),
+                child: Row(
+                  children: [
+                    Icon(Icons.download, size: 18, color: colors.primary),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '$name · $hint',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: colors.primary),
+                      ),
+                    ),
+                    PopupMenuButton<String>(
+                      tooltip: tr('Actions'),
+                      iconSize: 18,
+                      icon: const Icon(Icons.more_vert),
+                      onSelected: (action) => onAction(context, action),
+                      itemBuilder: (_) => [
+                        PopupMenuItem(value: 'install', child: Text(install)),
+                        PopupMenuItem(
+                          value: 'details',
+                          child: Text(tr('Add-on…')),
+                        ),
+                        PopupMenuItem(
+                          value: 'off',
+                          child: Text(tr('Switch off')),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _DashedBorder extends CustomPainter {
   _DashedBorder(this.color, this.radius);
   final Color color;

@@ -66,6 +66,7 @@ Future<void> mount(
   TransformationController? controller,
   Size size = const Size(1500, 1000),
   void Function(String kind, String target)? onAdd,
+  void Function(BuildContext, String, Map<String, dynamic>)? onMissing,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -84,6 +85,7 @@ Future<void> mount(
             onEdit: (e) async {
               edits.add(e);
             },
+            onMissing: onMissing,
             tr: (s) => s,
             animate: mode,
             selection: selection,
@@ -837,6 +839,47 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     await mount(tester, edits: []);
     expect(find.byKey(const ValueKey('card-add-0:mcp:')), findsNothing);
+  });
+  testWidgets('a program to install ends the Agents card, with its menu', (
+    tester,
+  ) async {
+    final asked = <(String, String)>[];
+    final graph = {
+      ...fixtureGraph(),
+      'missing': [
+        {'command': 'codex', 'name': 'Codex', 'addon': 'agent-codex'},
+      ],
+    };
+    await mount(
+      tester,
+      edits: [],
+      graph: graph,
+      onMissing: (_, action, item) =>
+          asked.add((action, item['addon'] as String)),
+    );
+    final card = find.byKey(const ValueKey('card-missing-codex'));
+    expect(card, findsOneWidget);
+    expect(find.text('Codex · Not installed'), findsOneWidget);
+    await tester.tap(find.text('Codex · Not installed'));
+    await tester.pump();
+    for (final item in ['Add-on…', 'Switch off', 'Install {0}…']) {
+      await tester.tap(
+        find.descendant(of: card, matching: find.byTooltip('Actions')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(item.replaceAll('{0}', 'Codex')).last);
+      await tester.pumpAndSettle();
+    }
+    expect(asked, [
+      ('install', 'agent-codex'),
+      ('details', 'agent-codex'),
+      ('off', 'agent-codex'),
+      ('install', 'agent-codex'),
+    ]);
+    // Without a handler there is nothing to tap.
+    await tester.pumpWidget(const SizedBox());
+    await mount(tester, edits: [], graph: graph);
+    expect(card, findsNothing);
   });
   testWidgets('a click on a line shows its hook; empty space hides it', (
     tester,

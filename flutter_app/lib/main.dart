@@ -1143,7 +1143,53 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
           'usage_boxes': _usageBoxes,
           'usage_box_size': _usageBoxSize,
           'traffic': _agentTraffic,
+          'missing': _missingPrograms,
         };
+
+  /// Agents whose add-on is on but whose program is not on this PC: dashed
+  /// cards at the end of the map's Agents card, with Install.
+  List<Map<String, dynamic>> get _missingPrograms {
+    final known = {for (final a in _catalog) a['command'] as String: a};
+    final onMap = {
+      for (final n in (_graph?['nodes'] as List? ?? const []))
+        if (n is Map) n['id'],
+    };
+    final seen = <String>{};
+    return [
+      for (final addon in _addons)
+        if (addon['kind'] == 'agent' &&
+            addon['enabled'] == true &&
+            addon['loaded'] == true)
+          for (final command in (addon['provides'] as List? ?? const []))
+            if (known[command] case final agent?
+                when agent['installed'] != true &&
+                    !onMap.contains('agent:$command') &&
+                    seen.add(command as String))
+              {
+                'command': command,
+                'name': agent['name'] ?? addon['name'],
+                'addon': addon['id'],
+              },
+    ];
+  }
+
+  /// A missing program's card on the map: install it, open its add-on or
+  /// switch the add-on off.
+  Future<void> _missingAction(
+    BuildContext context,
+    String action,
+    Map<String, dynamic> item,
+  ) async {
+    final addon = _addons.where((a) => a['id'] == item['addon']).firstOrNull;
+    switch (action) {
+      case 'install':
+        await _agentAction(item['command'] as String, 'install');
+      case 'details' when addon != null:
+        await _addonMenu(context, addon);
+      case 'off' when addon != null:
+        await _toggleAddon(addon['id'] as String, false);
+    }
+  }
 
   Map<int, int> get _groupAvailable => {
     for (final col in [1, 2])
@@ -5491,6 +5537,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                                               onExpandGroup: (col) => setState(
                                                 () => _focusCategory = col,
                                               ),
+                                              onMissing: _missingAction,
                                               onAdd: (kind, target) =>
                                                   _openAdd(kind, target),
                                               client: _maybeClient,
