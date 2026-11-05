@@ -42,7 +42,7 @@ class SameTablesAsBeforeTest(unittest.TestCase):
     def test_graph(self):
         self.assertEqual(graph.CLOUD, {
             "claude": "Anthropic", "codex": "OpenAI", "copilot": "GitHub Copilot", "cursor-agent": "Cursor",
-            "gemini": "Google", "grok": "xAI", "muse": "Meta"})       # OpenClaw: none of its own
+            "gemini": "Google", "agy": "Google", "grok": "xAI", "muse": "Meta"})       # OpenClaw: none of its own
         self.assertEqual(graph.PROVIDER_NAMES, {
             "anthropic": "Anthropic", "openai": "OpenAI", "openai-codex": "OpenAI", "google": "Google",
             "gemini": "Google", "github-copilot": "GitHub Copilot", "xai": "xAI", "nous": "Nous Research",
