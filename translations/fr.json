@@ -3418,5 +3418,7 @@
  "its address is set in its own settings: change it there to {0}": "son adresse est dans ses propres réglages : changez-la là-bas en {0}",
  "This local LLM now listens on another port. Repair or remove this connection.": "Ce LLM local écoute maintenant sur un autre port. Réparez ou supprimez cette connexion.",
  "Applied, but the local LLM's own model stayed as it was: it changed meanwhile or could not be saved.": "Appliqué, mais le modèle propre du LLM local est resté tel quel : il a changé entre-temps ou n'a pas pu être enregistré.",
- "The local LLM's own model was not put back: a file or the model changed since.": "Le modèle propre du LLM local n'a pas été rétabli : un fichier ou le modèle a changé depuis."
+ "The local LLM's own model was not put back: a file or the model changed since.": "Le modèle propre du LLM local n'a pas été rétabli : un fichier ou le modèle a changé depuis.",
+ "Show faded lines": "Afficher les lignes estompées",
+ "While a box is selected, the lines of other boxes stay visible, faded. Off: only the selected box's lines are drawn.": "Tant qu'une case est sélectionnée, les lignes des autres cases restent visibles, estompées. Désactivé : seules les lignes de la case sélectionnée sont dessinées."
 }

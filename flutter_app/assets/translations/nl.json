@@ -6,6 +6,8 @@
   "Show all": "Alles tonen",
   "Show only what is connected or pinned": "Alleen verbonden of vastgezette tonen",
   "Line colours": "Lijnkleuren",
+  "Show faded lines": "Vervaagde lijnen tonen",
+  "While a box is selected, the lines of other boxes stay visible, faded. Off: only the selected box's lines are drawn.": "Zolang een vak geselecteerd is, blijven de lijnen van andere vakken vervaagd zichtbaar. Uit: alleen de lijnen van het geselecteerde vak worden getekend.",
   "Agent and provider": "Agent en aanbieder",
   "Agent and model": "Agent en model",
   "Provider and model": "Aanbieder en model",

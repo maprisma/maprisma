@@ -1434,6 +1434,9 @@ class _MapEditorState extends State<MapEditor>
                                                 corners(context),
                                                 _saved['line_colors'] as Map? ??
                                                     const {},
+                                                fadedLines:
+                                                    _saved['dim_lines'] !=
+                                                    false,
                                               ),
                                             ),
                                           ),
@@ -1990,8 +1993,9 @@ class _MapPaint extends CustomPainter {
     this.dimming,
     this.pinned,
     this.radius,
-    this.lineColors,
-  );
+    this.lineColors, {
+    this.fadedLines = true,
+  });
   final MapLayout layout;
 
   /// The corners of Settings › Corners.
@@ -2009,6 +2013,10 @@ class _MapPaint extends CustomPainter {
 
   /// Something is selected: lines not part of it fade.
   final bool dimming;
+
+  /// Settings › Map › Show faded lines: off, lines not part of the
+  /// selection are not drawn at all.
+  final bool fadedLines;
   final Set<String> pinned;
   @override
   void paint(Canvas canvas, Size size) {
@@ -2048,6 +2056,7 @@ class _MapPaint extends CustomPainter {
               lit.contains(edge['source']) && lit.contains(edge['target']) ||
               pinned.contains(edge['source']) ||
               pinned.contains(edge['target']);
+      if (dimming && !related && !fadedLines) return;
       final error =
           edge['failed'] == 'error' ||
           (edge['hints'] as List? ?? const []).any(

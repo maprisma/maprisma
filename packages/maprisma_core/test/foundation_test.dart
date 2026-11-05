@@ -218,10 +218,13 @@ void main() {
             'card_border': {'on': true, 'width': 3, 'color': 'theme:primary'},
             'line_colors': {'mcp': '#ef5350', 'model': 'theme:tertiary'},
             'used_only': ['0:mcp:'],
+            'dim_lines': false,
           },
         },
       });
       for (final bad in [
+        {'dim_lines': 'no'},
+        {'dim_lines': 0},
         {
           'line_colors': {'mcp': 'theme:pink'},
         },

@@ -1036,6 +1036,46 @@ void main() {
     expect(saved.last['column_widths'], isEmpty);
   });
 
+  testWidgets(
+    'Show faded lines off: a selection draws only its own lines, no faded ones',
+    (tester) async {
+      Future<int> pathsWithSelection(Map<String, dynamic> saved) async {
+        // agent:b's own line has nothing to do with agent:a's selection.
+        final graph = fixtureGraph();
+        (graph['edges'] as List).add({
+          'source': 'agent:b',
+          'target': 'runtime:s',
+          'kind': 'uses',
+        });
+        await tester.pumpWidget(const SizedBox()); // a fresh map, no selection
+        await mount(tester, edits: [], saved: saved, graph: graph);
+        await tester.tap(find.text('agent:a'));
+        await tester.pumpAndSettle();
+        final map = tester.renderObject(
+          find.byWidgetPredicate(
+            (w) =>
+                w is CustomPaint &&
+                w.painter.runtimeType.toString() == '_MapPaint',
+          ),
+        );
+        var paths = 0;
+        expect(
+          map,
+          paints..everything((method, args) {
+            if (method == #drawPath) paths++;
+            return true;
+          }),
+        );
+        return paths;
+      }
+
+      final faded = await pathsWithSelection({});
+      final hidden = await pathsWithSelection({'dim_lines': false});
+      expect(hidden, greaterThan(0));
+      expect(hidden, lessThan(faded));
+    },
+  );
+
   testWidgets('a selection grays out the rest, but not what is pinned', (
     tester,
   ) async {

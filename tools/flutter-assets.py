@@ -14,6 +14,8 @@ KEYS = (
     "Show all",
     "Show only what is connected or pinned",
     "Line colours",
+    "Show faded lines",
+    "While a box is selected, the lines of other boxes stay visible, faded. Off: only the selected box's lines are drawn.",
     "Agent and provider",
     "Agent and model",
     "Provider and model",

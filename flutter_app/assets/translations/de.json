@@ -6,6 +6,8 @@
   "Show all": "Alle zeigen",
   "Show only what is connected or pinned": "Nur Verbundenes oder Angeheftetes zeigen",
   "Line colours": "Linienfarben",
+  "Show faded lines": "Verblasste Linien zeigen",
+  "While a box is selected, the lines of other boxes stay visible, faded. Off: only the selected box's lines are drawn.": "Solange ein Feld ausgewählt ist, bleiben die Linien anderer Felder verblasst sichtbar. Aus: Nur die Linien des ausgewählten Felds werden gezeichnet.",
   "Agent and provider": "Agent und Anbieter",
   "Agent and model": "Agent und Modell",
   "Provider and model": "Anbieter und Modell",

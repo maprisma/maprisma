@@ -55,6 +55,15 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(back);
     expect(layout['line_colors'], <String, dynamic>{});
+    // Show faded lines: on by default, off stores dim_lines: false.
+    final faded = find.byKey(const ValueKey('map-faded-lines'));
+    await tester.ensureVisible(faded);
+    await tester.pumpAndSettle();
+    expect(tester.widget<SwitchListTile>(faded).value, isTrue);
+    await tester.tap(faded);
+    expect(layout['dim_lines'], isFalse);
+    await tester.pumpWidget(view());
+    expect(tester.widget<SwitchListTile>(faded).value, isFalse);
 
     // A width changed elsewhere shows while Settings stays open.
     layout = {

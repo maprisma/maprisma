@@ -305,6 +305,20 @@ class SettingsView extends StatelessWidget {
       return {...latest, 'line_colors': colors};
     });
     return [
+      SwitchListTile(
+        key: const ValueKey('map-faded-lines'),
+        contentPadding: EdgeInsets.zero,
+        title: Text(_t('Show faded lines')),
+        subtitle: Text(
+          _t(
+            "While a box is selected, the lines of other boxes stay visible, faded. Off: only the selected box's lines are drawn.",
+          ),
+        ),
+        value: layout['dim_lines'] != false,
+        onChanged: busy || onMapLayout == null
+            ? null
+            : (on) => onMapLayout!((latest) => {...latest, 'dim_lines': on}),
+      ),
       const SizedBox(height: 12),
       Text(_t('Line colours')),
       for (final line in _lineKinds.entries) ...[

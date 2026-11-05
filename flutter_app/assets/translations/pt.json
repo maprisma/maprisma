@@ -6,6 +6,8 @@
   "Show all": "Mostrar tudo",
   "Show only what is connected or pinned": "Mostrar só o que está ligado ou fixado",
   "Line colours": "Cores das linhas",
+  "Show faded lines": "Mostrar linhas esbatidas",
+  "While a box is selected, the lines of other boxes stay visible, faded. Off: only the selected box's lines are drawn.": "Enquanto uma caixa estiver selecionada, as linhas das outras caixas continuam visíveis, esbatidas. Desligado: só são desenhadas as linhas da caixa selecionada.",
   "Agent and provider": "Agente e fornecedor",
   "Agent and model": "Agente e modelo",
   "Provider and model": "Fornecedor e modelo",

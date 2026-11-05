@@ -75,6 +75,7 @@ bool validLayout(dynamic v) {
           'card_border',
           'used_only',
           'line_colors',
+          'dim_lines',
         ].contains(k),
       )) {
     return false;
@@ -105,6 +106,7 @@ bool validLayout(dynamic v) {
       border.containsKey('color') && !mapColorValue(border['color'])) {
     return false;
   }
+  if (v.containsKey('dim_lines') && v['dim_lines'] is! bool) return false;
   final lines = v.containsKey('line_colors')
       ? v['line_colors']
       : <String, dynamic>{};

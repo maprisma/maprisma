@@ -174,6 +174,10 @@ class MapEditorTest(unittest.TestCase):
         self.assertTrue(api.valid_layout({'cards':{'x':[0,30000]},'order':{'x':['a']},'collapsed':['x'],'pins':['a']}))
         self.assertTrue(api.valid_layout({'card_border':{'color':'theme:outline'},'line_colors':{'serves':'#ffffff'},'used_only':['x']}))
         self.assertFalse(api.valid_layout({'line_colors':{'serves':'theme:pink'}}))
+        # Settings › Map › Show faded lines: a plain bool.
+        self.assertTrue(api.valid_layout({'dim_lines':False}))
+        for bad in ('no', 0, None):
+            with self.subTest(dim_lines=bad):self.assertFalse(api.valid_layout({'dim_lines':bad}))
 
     def test_wire_v3_validates_actions_and_keeps_v1_v2_compatibility(self):
         p=self.plan();p.model_actions=[{'operation':'model.load','key':'r','model':'new','agents':[]}]
