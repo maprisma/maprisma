@@ -810,5 +810,10 @@
   "Recommended, registry, this PC": "Recomendados, registo, este PC",
   "This PC or the web": "Este PC ou a web",
   "Add model": "Adicionar modelo",
-  "Download for {0}": "Transferir para {0}"
+  "Download for {0}": "Transferir para {0}",
+  "General": "Geral",
+  "Appearance": "Aparência",
+  "Clear": "Limpar",
+  "Find in Settings": "Procurar nas definições",
+  "No setting matches “{0}”": "Nenhuma definição corresponde a «{0}»"
 }

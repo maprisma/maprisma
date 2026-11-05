@@ -80,6 +80,7 @@ void main() {
         MaterialApp(
           home: Scaffold(
             body: SettingsView(
+              section: 'all',
               settings: settings,
               busy: false,
               tr: (k) => k,
@@ -93,7 +94,7 @@ void main() {
       await tester.scrollUntilVisible(
         find.byKey(const ValueKey('settings-dictation-card')),
         250,
-        scrollable: find.byType(Scrollable).first,
+        scrollable: settingsList,
       );
       expect(
         find.byKey(const ValueKey('settings-dictation-card')),
@@ -357,3 +358,11 @@ void main() {
     },
   );
 }
+
+/// The page's own list in Settings (not the Find in Settings field).
+Finder get settingsList => find
+    .descendant(
+      of: find.byKey(const ValueKey('settings-content')),
+      matching: find.byType(Scrollable),
+    )
+    .first;

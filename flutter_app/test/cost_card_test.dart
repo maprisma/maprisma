@@ -67,6 +67,7 @@ void main() {
       MaterialApp(
         home: Scaffold(
           body: SettingsView(
+            section: 'all',
             settings: const {
               'language': 'auto',
               'look': 'adwaita',
@@ -84,19 +85,31 @@ void main() {
         ),
       ),
     );
-    await tester.scrollUntilVisible(find.text('Yellow from'), 250);
+    await tester.scrollUntilVisible(
+      find.text('Yellow from'),
+      250,
+      scrollable: settingsList,
+    );
     final yellow = tester.widget<DropdownButtonFormField<int>>(
       find.byKey(const ValueKey('warn-yellow-75')),
     );
     yellow.onChanged!(85);
     expect(updates.last, {'warn_yellow': 85, 'warn_red': 90});
-    await tester.scrollUntilVisible(find.text('Red from'), 100);
+    await tester.scrollUntilVisible(
+      find.text('Red from'),
+      100,
+      scrollable: settingsList,
+    );
     final red = tester.widget<DropdownButtonFormField<int>>(
       find.byKey(const ValueKey('warn-red-80')),
     );
     red.onChanged!(80);
     expect(updates.last, {'warn_red': 80, 'warn_yellow': 75});
-    await tester.scrollUntilVisible(find.text('Currency'), -100);
+    await tester.scrollUntilVisible(
+      find.text('Currency'),
+      -100,
+      scrollable: settingsList,
+    );
     final currency = tester.widget<DropdownButtonFormField<String>>(
       find.byKey(const ValueKey('cost-currency-usd')),
     );
@@ -104,3 +117,11 @@ void main() {
     expect(updates.last, {'cost_currency': 'eur'});
   });
 }
+
+/// The page's own list in Settings (not the Find in Settings field).
+Finder get settingsList => find
+    .descendant(
+      of: find.byKey(const ValueKey('settings-content')),
+      matching: find.byType(Scrollable),
+    )
+    .first;

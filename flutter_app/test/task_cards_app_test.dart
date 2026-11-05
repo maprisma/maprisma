@@ -1249,6 +1249,8 @@ void main() {
     final dir = await mountApp(tester);
     await tester.tap(find.byTooltip('Settings'));
     await settleService(tester);
+    await tester.tap(find.byKey(const ValueKey('settings-section-appearance')));
+    await settleService(tester);
     await tester.tap(find.byKey(const ValueKey('theme-dark')));
     await settleService(tester);
     expect(
@@ -1894,6 +1896,8 @@ void main() {
     await settleService(tester);
     await tester.tap(find.byTooltip('Settings').first);
     await settleService(tester);
+    await tester.tap(find.byKey(const ValueKey('settings-section-changes')));
+    await settleService(tester);
     final undo = find.byKey(const ValueKey('undo-20261030-100000-000000'));
     await tester.scrollUntilVisible(
       undo,
@@ -1931,6 +1935,8 @@ void main() {
     final before = primary();
     await tester.tap(find.byTooltip('Settings').first);
     await settleService(tester);
+    await tester.tap(find.byKey(const ValueKey('settings-section-changes')));
+    await settleService(tester);
     final undo = find.byKey(const ValueKey('undo-20261030-100000-000000'));
     await tester.scrollUntilVisible(
       undo,
@@ -1960,6 +1966,8 @@ void main() {
     final dir = await mountApp(tester);
     await settleService(tester);
     await tester.tap(find.byTooltip('Settings').first);
+    await settleService(tester);
+    await tester.tap(find.byKey(const ValueKey('settings-section-agents')));
     await settleService(tester);
     final daily = find.byKey(const ValueKey('ai-checks'));
     await tester.scrollUntilVisible(
@@ -2861,3 +2869,11 @@ void main() {
     await unmountApp(tester);
   });
 }
+
+/// The page's own list in Settings (not the Find in Settings field).
+Finder get settingsList => find
+    .descendant(
+      of: find.byKey(const ValueKey('settings-content')),
+      matching: find.byType(Scrollable),
+    )
+    .first;

@@ -785,6 +785,12 @@ KEYS = (
     "This PC or the web",
     "Add model",
     "Download for {0}",
+    # Settings: sections on the left, Find in Settings (task 057).
+    "General",
+    "Appearance",
+    "Clear",
+    "Find in Settings",
+    "No setting matches “{0}”",
 )
 
 

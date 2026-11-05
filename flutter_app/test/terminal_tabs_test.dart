@@ -49,6 +49,7 @@ void main() {
       MaterialApp(
         home: Scaffold(
           body: SettingsView(
+            section: 'all',
             settings: const {
               'language': 'auto',
               'look': 'adwaita',
@@ -67,6 +68,7 @@ void main() {
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('terminal-tabs')),
       250,
+      scrollable: settingsList,
     );
     final tabs = tester.widget<SwitchListTile>(
       find.byKey(const ValueKey('terminal-tabs')),
@@ -84,6 +86,7 @@ void main() {
       MaterialApp(
         home: Scaffold(
           body: SettingsView(
+            section: 'all',
             settings: const {
               'language': 'auto',
               'look': 'adwaita',
@@ -103,6 +106,7 @@ void main() {
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('usage-box-context')),
       250,
+      scrollable: settingsList,
     );
     final context = tester.widget<SwitchListTile>(
       find.byKey(const ValueKey('usage-box-context')),
@@ -121,3 +125,11 @@ void main() {
     });
   });
 }
+
+/// The page's own list in Settings (not the Find in Settings field).
+Finder get settingsList => find
+    .descendant(
+      of: find.byKey(const ValueKey('settings-content')),
+      matching: find.byType(Scrollable),
+    )
+    .first;

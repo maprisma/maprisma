@@ -810,5 +810,10 @@
   "Recommended, registry, this PC": "Aanbevolen, register, deze pc",
   "This PC or the web": "Deze pc of het web",
   "Add model": "Model toevoegen",
-  "Download for {0}": "Downloaden voor {0}"
+  "Download for {0}": "Downloaden voor {0}",
+  "General": "Algemeen",
+  "Appearance": "Uiterlijk",
+  "Clear": "Wissen",
+  "Find in Settings": "Zoeken in instellingen",
+  "No setting matches “{0}”": "Geen instelling komt overeen met ‘{0}’"
 }

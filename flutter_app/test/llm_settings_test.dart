@@ -10,6 +10,7 @@ void main() {
   ) => MaterialApp(
     home: Scaffold(
       body: SettingsView(
+        section: 'all',
         settings: {
           'language': 'auto',
           'look': 'adwaita',
@@ -43,6 +44,7 @@ void main() {
     await tester.scrollUntilVisible(
       find.text('Start local LLMs with their agents'),
       250,
+      scrollable: settingsList,
     );
     expect(
       find.textContaining('(user service fixture-providers.service)'),
@@ -54,8 +56,16 @@ void main() {
     expect(watch.value, isTrue);
     watch.onChanged!(false);
     expect(updated, {'providers_with_agents': false});
-    await tester.scrollUntilVisible(find.text('Agent for AI checks'), 250);
-    await tester.scrollUntilVisible(find.text('Codex'), 100);
+    await tester.scrollUntilVisible(
+      find.text('Agent for AI checks'),
+      250,
+      scrollable: settingsList,
+    );
+    await tester.scrollUntilVisible(
+      find.text('Codex'),
+      100,
+      scrollable: settingsList,
+    );
     await tester.pumpAndSettle();
     expect(find.text('Codex'), findsOneWidget); // the saved one is shown
     await tester.tap(find.text('Codex'));
@@ -67,14 +77,22 @@ void main() {
 
   testWidgets('no agent that can check: none installed', (tester) async {
     await tester.pumpWidget(view({}, const [], (_) {}));
-    await tester.scrollUntilVisible(find.text('Agent for AI checks'), 250);
+    await tester.scrollUntilVisible(
+      find.text('Agent for AI checks'),
+      250,
+      scrollable: settingsList,
+    );
     expect(find.text('None installed'), findsOneWidget);
   });
 
   testWidgets('notify when an agent turns red, on by default', (tester) async {
     Map<String, dynamic>? updated;
     await tester.pumpWidget(view({}, const [], (values) => updated = values));
-    await tester.scrollUntilVisible(find.text('Notify when red'), 250);
+    await tester.scrollUntilVisible(
+      find.text('Notify when red'),
+      250,
+      scrollable: settingsList,
+    );
     final notify = tester.widget<SwitchListTile>(
       find.byKey(const ValueKey('warn-notify')),
     );
@@ -91,6 +109,7 @@ void main() {
       MaterialApp(
         home: Scaffold(
           body: SettingsView(
+            section: 'all',
             settings: const {
               'language': 'auto',
               'look': 'adwaita',
@@ -135,7 +154,11 @@ void main() {
         ),
       ),
     );
-    await tester.scrollUntilVisible(find.text('Local helper'), 250);
+    await tester.scrollUntilVisible(
+      find.text('Local helper'),
+      250,
+      scrollable: settingsList,
+    );
     await tester.ensureVisible(find.text('Local helper'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Off'));
@@ -161,6 +184,7 @@ void main() {
       MaterialApp(
         home: Scaffold(
           body: SettingsView(
+            section: 'all',
             settings: const {
               'language': 'auto',
               'look': 'adwaita',
@@ -183,10 +207,10 @@ void main() {
       ),
     );
     final daily = find.byKey(const ValueKey('ai-checks'));
-    await tester.scrollUntilVisible(daily, 250);
+    await tester.scrollUntilVisible(daily, 250, scrollable: settingsList);
     expect(tester.widget<SwitchListTile>(daily).value, isFalse);
     final now = find.byKey(const ValueKey('ai-checks-now'));
-    await tester.scrollUntilVisible(now, 100);
+    await tester.scrollUntilVisible(now, 100, scrollable: settingsList);
     expect(find.text('MCP server updates: daily checks off'), findsOneWidget);
     await tester.ensureVisible(daily);
     await tester.pumpAndSettle();
@@ -199,3 +223,11 @@ void main() {
     expect(checked, 1);
   });
 }
+
+/// The page's own list in Settings (not the Find in Settings field).
+Finder get settingsList => find
+    .descendant(
+      of: find.byKey(const ValueKey('settings-content')),
+      matching: find.byType(Scrollable),
+    )
+    .first;

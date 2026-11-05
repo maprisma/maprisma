@@ -41,6 +41,7 @@ void main() {
         MaterialApp(
           home: Scaffold(
             body: SettingsView(
+              section: 'all',
               settings: const {
                 'map_layers': ['agents'],
                 'language': 'auto',
@@ -71,7 +72,7 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('theme-light')));
       expect(updates.single, {'flutter_theme_mode': 'light'});
       final rate = find.byKey(const ValueKey('map-light-fps-20'));
-      await tester.scrollUntilVisible(rate, 200);
+      await tester.scrollUntilVisible(rate, 200, scrollable: settingsList);
       await tester.ensureVisible(rate);
       await tester.pumpAndSettle();
       await tester.tap(rate);
@@ -113,3 +114,11 @@ void main() {
     },
   );
 }
+
+/// The page's own list in Settings (not the Find in Settings field).
+Finder get settingsList => find
+    .descendant(
+      of: find.byKey(const ValueKey('settings-content')),
+      matching: find.byType(Scrollable),
+    )
+    .first;

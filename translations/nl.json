@@ -3397,5 +3397,8 @@
  "Enter asks, Ctrl+Enter: new line.": "Enter vraagt, Ctrl+Enter: nieuwe regel.",
  "Scroll left": "Naar links scrollen",
  "Scroll right": "Naar rechts scrollen",
- "Hugging Face found no model for {0}. Its search only matches words in model names, so write \"vision\" for a model that understands images, or a model family such as qwen, gemma or llama. For example: \"Models: Download a vision model\".": "Hugging Face vond geen model voor {0}. De zoekfunctie vindt alleen woorden in modelnamen: schrijf \"vision\" voor een model dat afbeeldingen begrijpt, of een modelfamilie zoals qwen, gemma of llama. Bijvoorbeeld: \"Modellen: Download een vision-model\"."
+ "Hugging Face found no model for {0}. Its search only matches words in model names, so write \"vision\" for a model that understands images, or a model family such as qwen, gemma or llama. For example: \"Models: Download a vision model\".": "Hugging Face vond geen model voor {0}. De zoekfunctie vindt alleen woorden in modelnamen: schrijf \"vision\" voor een model dat afbeeldingen begrijpt, of een modelfamilie zoals qwen, gemma of llama. Bijvoorbeeld: \"Modellen: Download een vision-model\".",
+ "Appearance": "Uiterlijk",
+ "Find in Settings": "Zoeken in instellingen",
+ "No setting matches “{0}”": "Geen instelling komt overeen met ‘{0}’"
 }

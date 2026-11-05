@@ -10,6 +10,7 @@ void main() {
     Widget view() => MaterialApp(
       home: Scaffold(
         body: SettingsView(
+          section: 'all',
           settings: {
             'language': 'auto',
             'look': 'adwaita',
@@ -26,11 +27,7 @@ void main() {
     );
     await tester.pumpWidget(view());
     final toggle = find.byKey(const ValueKey('card-border'));
-    await tester.scrollUntilVisible(
-      toggle,
-      250,
-      scrollable: find.byType(Scrollable).first,
-    );
+    await tester.scrollUntilVisible(toggle, 250, scrollable: settingsList);
     expect(find.byKey(const ValueKey('card-border-width-1')), findsNothing);
     await tester.ensureVisible(toggle);
     await tester.pumpAndSettle();
@@ -67,7 +64,7 @@ void main() {
     await tester.scrollUntilVisible(
       find.text('5 px'),
       -250,
-      scrollable: find.byType(Scrollable).first,
+      scrollable: settingsList,
     );
     expect(find.text('5 px'), findsOneWidget);
   });
@@ -83,6 +80,7 @@ void main() {
       MaterialApp(
         home: Scaffold(
           body: SettingsView(
+            section: 'all',
             settings: const {
               'language': 'auto',
               'look': 'adwaita',
@@ -103,11 +101,7 @@ void main() {
     );
     final current = find.byKey(const ValueKey('column_widths-agents'));
     final fallback = find.byKey(const ValueKey('column_defaults-agents'));
-    await tester.scrollUntilVisible(
-      fallback,
-      250,
-      scrollable: find.byType(Scrollable).first,
-    );
+    await tester.scrollUntilVisible(fallback, 250, scrollable: settingsList);
     expect(
       find.descendant(of: current, matching: find.text('410')),
       findsOneWidget,
@@ -135,6 +129,7 @@ void main() {
       MaterialApp(
         home: Scaffold(
           body: SettingsView(
+            section: 'all',
             settings: const {
               'language': 'auto',
               'look': 'adwaita',
@@ -154,7 +149,11 @@ void main() {
       ),
     );
     // Down to the last target this test uses: the list builds only what it shows.
-    await tester.scrollUntilVisible(find.text('Agent details'), 250);
+    await tester.scrollUntilVisible(
+      find.text('Agent details'),
+      250,
+      scrollable: settingsList,
+    );
     final activity = tester.widget<CheckboxListTile>(
       find.widgetWithText(CheckboxListTile, 'Activity and subagents'),
     );
@@ -170,6 +169,7 @@ void main() {
     await tester.scrollUntilVisible(
       find.text('Pause scans while unfocused'),
       -200,
+      scrollable: settingsList,
     );
     final pause = tester.widget<SwitchListTile>(
       find.widgetWithText(SwitchListTile, 'Pause scans while unfocused'),
@@ -179,3 +179,11 @@ void main() {
     expect(updated, {'map_scan_pause_unfocused': false});
   });
 }
+
+/// The page's own list in Settings (not the Find in Settings field).
+Finder get settingsList => find
+    .descendant(
+      of: find.byKey(const ValueKey('settings-content')),
+      matching: find.byType(Scrollable),
+    )
+    .first;

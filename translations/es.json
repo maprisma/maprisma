@@ -3397,5 +3397,8 @@
  "Enter asks, Ctrl+Enter: new line.": "Enter pregunta, Ctrl+Enter: nueva línea.",
  "Scroll left": "Desplazar a la izquierda",
  "Scroll right": "Desplazar a la derecha",
- "Hugging Face found no model for {0}. Its search only matches words in model names, so write \"vision\" for a model that understands images, or a model family such as qwen, gemma or llama. For example: \"Models: Download a vision model\".": "Hugging Face no encontró ningún modelo para {0}. Su búsqueda solo encuentra palabras de los nombres de modelos: escribe «vision» para un modelo que entiende imágenes, o una familia de modelos como qwen, gemma o llama. Por ejemplo: «Modelos: Descarga un modelo vision»."
+ "Hugging Face found no model for {0}. Its search only matches words in model names, so write \"vision\" for a model that understands images, or a model family such as qwen, gemma or llama. For example: \"Models: Download a vision model\".": "Hugging Face no encontró ningún modelo para {0}. Su búsqueda solo encuentra palabras de los nombres de modelos: escribe «vision» para un modelo que entiende imágenes, o una familia de modelos como qwen, gemma o llama. Por ejemplo: «Modelos: Descarga un modelo vision».",
+ "Appearance": "Apariencia",
+ "Find in Settings": "Buscar en Ajustes",
+ "No setting matches “{0}”": "Ningún ajuste coincide con «{0}»"
 }
