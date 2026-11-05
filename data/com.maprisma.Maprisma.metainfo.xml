@@ -25,6 +25,13 @@
   <url type="bugtracker">https://github.com/uBruckhaus/Asterism/issues</url>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.14.1" date="2026-11-05">
+      <description>
+        <p>Strata joins the local LLMs: Maprisma finds it, shows its models, starts and stops it, connects
+        agents to it and can install it. Settings › Map › Show faded lines can hide the lines of other boxes
+        while one is selected. Odd replies from a local LLM server and odd port numbers no longer disturb the map.</p>
+      </description>
+    </release>
     <release version="0.14.0" date="2026-11-05">
       <description>
         <p>The map shows what this PC already has: at the first start everything found is switched on,

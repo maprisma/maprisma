@@ -36,3 +36,9 @@ Review of `8cf3759..fa278c5` found five Medium issues. I read the stat, diff, an
    > (checked: `RegExp(r'^[a-z][a-z0-9_-]{0,47}$').hasMatch("office\n")` is false).
 3. **Medium** `manual.html:546` "nothing of the download runs" while Strata's install.sh runs.
    > Author: fixed in all 8 languages: Strata is named as the exception.
+
+## Round 3 (Codex, 2026-11-05, commit 374b216)
+
+The round 2 folder cap and manual corrections are present; the Dart regex answer holds.
+
+CLEAN
