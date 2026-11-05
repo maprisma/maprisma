@@ -251,7 +251,7 @@ packages:
       path: "../packages/maprisma_core"
       relative: true
     source: path
-    version: "0.14.1"
+    version: "0.14.2"
   matcher:
     dependency: transitive
     description:

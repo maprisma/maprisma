@@ -25,6 +25,12 @@
   <url type="bugtracker">https://github.com/uBruckhaus/Asterism/issues</url>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.14.2" date="2026-11-06">
+      <description>
+        <p>Add-ons left over from Asterism, this app's old name, no longer show as "Not available in this
+        version": their card says what they are and that removing them lets Maprisma use its own copy.</p>
+      </description>
+    </release>
     <release version="0.14.1" date="2026-11-05">
       <description>
         <p>Strata joins the local LLMs: Maprisma finds it, shows its models, starts and stops it, connects
