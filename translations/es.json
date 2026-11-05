@@ -3420,5 +3420,10 @@
  "Applied, but the local LLM's own model stayed as it was: it changed meanwhile or could not be saved.": "Aplicado, pero el modelo propio del LLM local se quedó como estaba: cambió mientras tanto o no se pudo guardar.",
  "The local LLM's own model was not put back: a file or the model changed since.": "El modelo propio del LLM local no se restauró: un archivo o el modelo cambió desde entonces.",
  "Show faded lines": "Mostrar líneas atenuadas",
- "While a box is selected, the lines of other boxes stay visible, faded. Off: only the selected box's lines are drawn.": "Mientras hay un cuadro seleccionado, las líneas de los demás cuadros siguen visibles, atenuadas. Desactivado: solo se dibujan las líneas del cuadro seleccionado."
+ "While a box is selected, the lines of other boxes stay visible, faded. Off: only the selected box's lines are drawn.": "Mientras hay un cuadro seleccionado, las líneas de los demás cuadros siguen visibles, atenuadas. Desactivado: solo se dibujan las líneas del cuadro seleccionado.",
+ "start a model in Strata (strata launch) before working with {0}.": "inicia un modelo en Strata (strata launch) antes de trabajar con {0}.",
+ "Set up a model": "Configurar un modelo",
+ "What is serving": "Qué se está sirviendo",
+ "Strata's own screens: choose a model, download it and serve it.": "Las pantallas propias de Strata: elige un modelo, descárgalo y sírvelo.",
+ "set one up in Strata's own screens: run strata launch in a terminal.": "configura uno en las pantallas propias de Strata: ejecuta strata launch en un terminal."
 }

@@ -34,10 +34,10 @@ class SameTablesAsBeforeTest(unittest.TestCase):
     def test_connect(self):
         self.assertEqual(connect.KEYS, {"llamacpp": "llama-local", "ollama": "ollama-local",
                                         "lmstudio": "lmstudio-local", "vllm": "vllm-local", "jan": "jan-local",
-                                        "koboldcpp": "koboldcpp-local"})
+                                        "koboldcpp": "koboldcpp-local", "strata": "strata-local"})
         self.assertEqual(connect.LABELS, {"llamacpp": "llama.cpp (local)", "ollama": "Ollama (local)",
                                           "lmstudio": "LM Studio (local)", "vllm": "vLLM (local)",
-                                          "jan": "Jan (local)", "koboldcpp": "KoboldCpp (local)"})
+                                          "jan": "Jan (local)", "koboldcpp": "KoboldCpp (local)", "strata": "Strata (local)"})
 
     def test_graph(self):
         self.assertEqual(graph.CLOUD, {
@@ -53,7 +53,7 @@ class SameTablesAsBeforeTest(unittest.TestCase):
     def test_installers(self):
         self.assertEqual({k: type(v).__name__ for k, v in install_ctl.INSTALLERS.items()}, {
             "ollama": "Ollama", "llamacpp": "LlamaCpp", "lmstudio": "LmStudio", "vllm": "Vllm", "jan": "Jan",
-            "koboldcpp": "KoboldCpp"})
+            "koboldcpp": "KoboldCpp", "strata": "Strata"})
         for key, inst in install_ctl.INSTALLERS.items():
             self.assertEqual(inst.key, key)
 

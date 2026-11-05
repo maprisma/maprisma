@@ -50,7 +50,7 @@ class Provider:
 
 
 _HIDDEN: set = set()       # built-in providers an installed add-on brings instead (hide_built_in)
-LOCAL_ORDER = ("llamacpp", "ollama", "lmstudio", "vllm", "jan", "koboldcpp")
+LOCAL_ORDER = ("llamacpp", "ollama", "lmstudio", "vllm", "jan", "koboldcpp", "strata")
 
 
 def hide_built_in(keys) -> None:
@@ -74,10 +74,11 @@ def built_in_local() -> tuple:
     import provider_llamacpp
     import provider_lmstudio
     import provider_ollama
+    import provider_strata
     import provider_vllm
     # Order: how the map and the cards list them.
     return (provider_llamacpp.PROVIDER, provider_ollama.PROVIDER, provider_lmstudio.PROVIDER,
-            provider_vllm.PROVIDER, provider_jan.PROVIDER, provider_koboldcpp.PROVIDER)
+            provider_vllm.PROVIDER, provider_jan.PROVIDER, provider_koboldcpp.PROVIDER, provider_strata.PROVIDER)
 
 
 def built_in_online() -> tuple:

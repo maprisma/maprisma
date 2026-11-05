@@ -111,6 +111,28 @@ def fake_web(web: Path) -> None:
                                           asset(web, urls, 'ollama-linux-amd64-rocm.tar.zst', zst)]})
     page('https://api.github.com/repos/janhq/jan/releases/latest', {
         'tag_name': 'v0.7.0', 'assets': [asset(web, urls, 'Jan_0.7.0_amd64.AppImage', b'not run here')]})
+    # Strata: its own install.sh (here a stand-in that lays out what the real one does: the terminal
+    # under $XDG_DATA_HOME/strata/terminal/<version>, an absolute `current`, the ~/.local/bin link) and
+    # says which feed it was given.
+    script = (b"#!/bin/sh\nexec python3 -I -c '\nimport os\n"
+              b"data = os.environ[\"XDG_DATA_HOME\"] + \"/strata\"\n"
+              b"dest = data + \"/terminal/0.1.57\"\n"
+              b"os.makedirs(dest + \"/bin\", exist_ok=True)\n"
+              b"open(dest + \"/bin/strata\", \"w\").write(\"#!/bin/sh\\n\")\nos.chmod(dest + \"/bin/strata\", 0o755)\n"
+              b"open(dest + \"/VERSION\", \"w\").write(\"0.1.57\\n\")\n"
+              b"open(dest + \"/feed.txt\", \"w\").write(os.environ.get(\"STRATA_FEED\", \"\") + \"|\" + os.environ.get(\"STRATA_DATA_DIR\", \"-\"))\n"
+              b"os.symlink(dest, data + \"/terminal/current\")\n"
+              b"os.makedirs(os.environ[\"HOME\"] + \"/.local/bin\", exist_ok=True)\n"
+              b"os.symlink(data + \"/terminal/current/bin/strata\", os.environ[\"HOME\"] + \"/.local/bin/strata\")\n"
+              b"print(\"Installed. Run: strata launch\")\n'\n")
+    (web / 'strata-install.sh').write_bytes(script)
+    strata_url = 'https://github.com/Niko1221/Strata/releases/download/v0.2.11/install.sh'
+    urls[strata_url] = str(web / 'strata-install.sh')
+    page('https://api.github.com/repos/Niko1221/Strata/releases/latest', {
+        'tag_name': 'v0.2.11', 'assets': [
+            {'name': 'install.sh', 'browser_download_url': strata_url, 'size': len(script),
+             'digest': 'sha256:' + hashlib.sha256(script).hexdigest()},
+            asset(web, urls, 'Strata-0.2.11-linux-x86_64.AppImage', b'not used')]})
     (web / 'map.json').write_text(json.dumps(urls))
 
 
@@ -286,6 +308,17 @@ class DartInstallersParityTest(unittest.TestCase):
                     answers.append(runner.call('installers.install', {'installer': tokens['mise'], 'start_now': False,
                                                                       'start_at_login': False}))
                     answers.append(['again', wait(runner.call('installers.preview', {'kind': 'tool', 'key': 'mise'}))])
+                    # Strata: preview, its install.sh run with this release's feed, then installed (marker).
+                    strata = wait(runner.call('installers.preview', {'kind': 'runtime', 'key': 'strata'}))
+                    if isinstance(strata, list) and isinstance(strata[1], dict) and 'installer' in strata[1]:
+                        token = strata[1]['installer']
+                        answers.append(['strata preview', [strata[0], {**strata[1], 'installer': '<token>'}]])
+                        answers.append(['strata', wait(runner.call('installers.install', {
+                            'installer': token, 'start_now': False, 'start_at_login': False}))])
+                    else:
+                        answers.append(['strata preview', strata])
+                    answers.append(['strata again', wait(runner.call('installers.preview',
+                                                                     {'kind': 'runtime', 'key': 'strata'}))])
                 finally:
                     runner.close()
                 log = (home / 'systemctl.log').read_text() if (home / 'systemctl.log').exists() else ''
@@ -301,6 +334,11 @@ class DartInstallersParityTest(unittest.TestCase):
         self.assertIn('.local/share/maprisma/llamacpp/b9000-cpu/llama-server', files)
         self.assertIn('--user enable llama-server.service', log)
         self.assertIn('--user restart llama-server.service', log)
+        self.assertEqual(answers[-2][1][0], 'done', answers[-3:])               # Strata
+        self.assertEqual(files['.local/bin/strata'], ['link', '$HOME/.local/share/strata/terminal/current/bin/strata'])
+        self.assertEqual(files['.local/share/strata/terminal/0.1.57/feed.txt'][0],
+                         'https://github.com/Niko1221/Strata/releases/download/v0.2.11|-')
+        self.assertIn('"runtime": "strata"', files['.local/share/strata/terminal/.maprisma'][0])
 
 
 if __name__ == '__main__':

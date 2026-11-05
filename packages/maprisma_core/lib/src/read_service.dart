@@ -1,3 +1,4 @@
+import 'provider_ops.dart' show ProviderOps;
 import 'provider_scans.dart' show RuntimeRecord;
 import 'dart:async';
 import 'dart:convert';
@@ -229,7 +230,9 @@ final class ReadService {
         'address': rt.address,
         'models_dir': rt.modelsDir,
         'models': rt.models,
-        'can_control': engine['lms_control'] == true
+        'can_control': rt.key == 'strata'
+            ? ProviderOps(files, inventory.providers).canControl(rt)
+            : engine['lms_control'] == true
             ? rt.installed && (rt.service.isNotEmpty || lms())
             : rt.installed && rt.service.isNotEmpty,
         'can_load': engine['can_load'] == true,

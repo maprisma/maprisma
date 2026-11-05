@@ -265,6 +265,10 @@ class Engine:
     # own controllers (provider_watch.CONTROLS: "lms"), never a command line.
     watch_control = ""
 
+    # The provider watcher starts and stops it with its agents (a user service or watch_control);
+    # False: it is started on the map or in its own app (Strata).
+    starts_with_agents = True
+
     # Its usual ports: an agent's provider at this machine on one of them is this local LLM.
     ports: tuple = ()
 

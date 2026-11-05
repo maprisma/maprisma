@@ -251,14 +251,19 @@ final class DetailReaders {
     final local =
         uri != null &&
         ['127.0.0.1', 'localhost', '::1', '0.0.0.0'].contains(uri.host);
-    final ports = <int, String>{};
+    final ports = <int, String>{}, names = <String, String>{};
     for (final p in visibleProviderFacts['local'] as List) {
       for (final port in p['ports'] as List) {
         ports.putIfAbsent(port as int, () => p['name'] as String);
       }
+      // agent_details.local_names: a provider the app wrote names its local
+      // LLM, also when another one has that usual port (Strata and
+      // llama.cpp: 8080).
+      final key = p['connect_key'];
+      if (key is String && key.isNotEmpty) names[key] = p['name'] as String;
     }
     final port = local && uri.hasPort ? uri.port : null;
-    final runtime = local ? ports[port] ?? '' : '';
+    final runtime = local ? names[name] ?? ports[port] ?? '' : '';
     return {
       'name': boundedText(name, 40),
       'local': local,

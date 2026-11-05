@@ -3501,5 +3501,10 @@
  "Applied, but the local LLM's own model stayed as it was: it changed meanwhile or could not be saved.": "Zastosowano, ale własny model lokalnego LLM pozostał bez zmian: w międzyczasie się zmienił lub nie dało się go zapisać.",
  "The local LLM's own model was not put back: a file or the model changed since.": "Własny model lokalnego LLM nie został przywrócony: plik lub model zmienił się od tego czasu.",
  "Show faded lines": "Pokazuj wyblakłe linie",
- "While a box is selected, the lines of other boxes stay visible, faded. Off: only the selected box's lines are drawn.": "Gdy pole jest zaznaczone, linie innych pól pozostają widoczne, wyblakłe. Wyłączone: rysowane są tylko linie zaznaczonego pola."
+ "While a box is selected, the lines of other boxes stay visible, faded. Off: only the selected box's lines are drawn.": "Gdy pole jest zaznaczone, linie innych pól pozostają widoczne, wyblakłe. Wyłączone: rysowane są tylko linie zaznaczonego pola.",
+ "start a model in Strata (strata launch) before working with {0}.": "uruchom model w Strata (strata launch), zanim zaczniesz pracę z {0}.",
+ "Set up a model": "Skonfiguruj model",
+ "What is serving": "Co jest teraz udostępniane",
+ "Strata's own screens: choose a model, download it and serve it.": "Własne ekrany Strata: wybierz model, pobierz go i udostępnij.",
+ "set one up in Strata's own screens: run strata launch in a terminal.": "skonfiguruj go na ekranach Strata: uruchom strata launch w terminalu."
 }

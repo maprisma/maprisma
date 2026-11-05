@@ -558,6 +558,7 @@ List<Map<String, dynamic>> healthRows(
       'jan',
       'vllm',
       'lmstudio',
+      'strata',
     };
     final first =
         keys.where(installable.contains).firstOrNull ?? keys.firstOrNull ?? '';

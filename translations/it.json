@@ -3420,5 +3420,10 @@
  "Applied, but the local LLM's own model stayed as it was: it changed meanwhile or could not be saved.": "Applicato, ma il modello proprio dell'LLM locale è rimasto com'era: è cambiato nel frattempo o non è stato possibile salvarlo.",
  "The local LLM's own model was not put back: a file or the model changed since.": "Il modello proprio dell'LLM locale non è stato ripristinato: un file o il modello è cambiato da allora.",
  "Show faded lines": "Mostra linee sbiadite",
- "While a box is selected, the lines of other boxes stay visible, faded. Off: only the selected box's lines are drawn.": "Mentre un riquadro è selezionato, le linee degli altri riquadri restano visibili, sbiadite. Disattivato: vengono disegnate solo le linee del riquadro selezionato."
+ "While a box is selected, the lines of other boxes stay visible, faded. Off: only the selected box's lines are drawn.": "Mentre un riquadro è selezionato, le linee degli altri riquadri restano visibili, sbiadite. Disattivato: vengono disegnate solo le linee del riquadro selezionato.",
+ "start a model in Strata (strata launch) before working with {0}.": "avvia un modello in Strata (strata launch) prima di lavorare con {0}.",
+ "Set up a model": "Configura un modello",
+ "What is serving": "Cosa è in servizio",
+ "Strata's own screens: choose a model, download it and serve it.": "Le schermate di Strata: scegli un modello, scaricalo e servilo.",
+ "set one up in Strata's own screens: run strata launch in a terminal.": "configurane uno nelle schermate di Strata: esegui strata launch in un terminale."
 }

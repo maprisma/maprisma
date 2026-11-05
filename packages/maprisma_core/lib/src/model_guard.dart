@@ -8,6 +8,7 @@ import 'adapter_assets.g.dart';
 import 'provider_ops.dart';
 import 'provider_scans.dart';
 import 'scan_files.dart';
+import 'strata.dart';
 
 /// gpu_usage: only what `snapshot(...).generating` needs, for the model guard
 /// (a model is generating when one is loaded and the GPU is busy).
@@ -204,6 +205,7 @@ final class GpuUsage {
           ? 1
           : 0,
       'koboldcpp': comm == 'koboldcpp' || base.startsWith('koboldcpp') ? 1 : 0,
+      'strata': StrataFacts.ownsPath(exe) ? 2 : 0,
     };
     var best = 0, key = '';
     for (final e in claims.entries) {

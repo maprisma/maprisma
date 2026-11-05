@@ -28,7 +28,9 @@ import providers  # noqa: E402
 
 # Programs that tell a local LLM is here (its detect() needs the add-on loaded; these are hints).
 LLM_COMMANDS = {"llamacpp": ["llama-server"], "ollama": ["ollama"], "lmstudio": ["lms"], "vllm": ["vllm"],
-                "jan": ["jan", "Jan"], "koboldcpp": ["koboldcpp"]}
+                "jan": ["jan", "Jan"], "koboldcpp": ["koboldcpp"],
+                # Not its command: /usr/bin/strata is also a file manager; its folders tell instead.
+                "strata": []}
 NEEDS = f"maprisma >= {addons.MAPRISMA_VERSION}"
 
 
