@@ -815,5 +815,7 @@
   "Appearance": "Apparence",
   "Clear": "Vider",
   "Find in Settings": "Rechercher dans les réglages",
-  "No setting matches “{0}”": "Aucun réglage ne correspond à « {0} »"
+  "No setting matches “{0}”": "Aucun réglage ne correspond à « {0} »",
+  "Rules": "Règles",
+  "Terminals and screenshots": "Terminaux et captures d'écran"
 }

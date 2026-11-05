@@ -791,6 +791,9 @@ KEYS = (
     "Clear",
     "Find in Settings",
     "No setting matches “{0}”",
+    # The headings of the General groups (task 058).
+    "Rules",
+    "Terminals and screenshots",
 )
 
 

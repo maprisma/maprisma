@@ -815,5 +815,7 @@
   "Appearance": "Apariencia",
   "Clear": "Vaciar",
   "Find in Settings": "Buscar en Ajustes",
-  "No setting matches “{0}”": "Ningún ajuste coincide con «{0}»"
+  "No setting matches “{0}”": "Ningún ajuste coincide con «{0}»",
+  "Rules": "Reglas",
+  "Terminals and screenshots": "Terminales y capturas de pantalla"
 }

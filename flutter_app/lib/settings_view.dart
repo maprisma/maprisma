@@ -602,12 +602,14 @@ class SettingsView extends StatelessWidget {
     final List<Object> log;
     try {
       items = <Widget>[
+        _Heading('general', _t('Language')),
         DropdownButtonFormField<String>(
           key: ValueKey('language-${settings['language']}'),
           initialValue: languages.containsKey(settings['language'])
               ? settings['language'] as String
               : 'auto',
-          decoration: InputDecoration(labelText: _t('Language')),
+          // The group's heading names it.
+          decoration: const InputDecoration(),
           items: [
             for (final language in languages.entries)
               DropdownMenuItem(
@@ -733,7 +735,7 @@ class SettingsView extends StatelessWidget {
             'Maximum frame rate for map lights. Reduced motion and Lights off stop animation.',
           ),
         ),
-        _Heading('general'),
+        _Heading('general', _t('Agents')),
         Column(
           children: [
             ListTile(
@@ -765,7 +767,7 @@ class SettingsView extends StatelessWidget {
             ),
           ],
         ),
-        _Heading('general'),
+        _Heading('general', _t('Rules')),
         ListTile(
           key: const ValueKey('rules-open'),
           contentPadding: EdgeInsets.zero,
@@ -853,7 +855,7 @@ class SettingsView extends StatelessWidget {
               ? null
               : (value) => onUpdate({'providers_with_agents': value}),
         ),
-        _Heading('general'),
+        _Heading('general', _t('Terminals and screenshots')),
         SwitchListTile(
           key: const ValueKey('terminal-tabs'),
           title: Text(_t('Terminal tabs above the map')),

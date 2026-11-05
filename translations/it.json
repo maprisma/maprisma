@@ -3400,5 +3400,7 @@
  "Hugging Face found no model for {0}. Its search only matches words in model names, so write \"vision\" for a model that understands images, or a model family such as qwen, gemma or llama. For example: \"Models: Download a vision model\".": "Hugging Face non ha trovato nessun modello per {0}. La sua ricerca trova solo parole nei nomi dei modelli: scrivi «vision» per un modello che capisce le immagini, oppure una famiglia di modelli come qwen, gemma o llama. Per esempio: «Modelli: Scarica un modello vision».",
  "Appearance": "Aspetto",
  "Find in Settings": "Cerca nelle impostazioni",
- "No setting matches “{0}”": "Nessuna impostazione corrisponde a «{0}»"
+ "No setting matches “{0}”": "Nessuna impostazione corrisponde a «{0}»",
+ "Rules": "Regole",
+ "Terminals and screenshots": "Terminali e screenshot"
 }

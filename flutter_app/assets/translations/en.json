@@ -815,5 +815,7 @@
   "Appearance": "Appearance",
   "Clear": "Clear",
   "Find in Settings": "Find in Settings",
-  "No setting matches “{0}”": "No setting matches “{0}”"
+  "No setting matches “{0}”": "No setting matches “{0}”",
+  "Rules": "Rules",
+  "Terminals and screenshots": "Terminals and screenshots"
 }

@@ -45,6 +45,24 @@ void main() {
     }
     // General: the language; not the theme of Appearance.
     expect(find.text('Language'), findsWidgets);
+    // Every group of General has its heading (task 058).
+    for (final heading in [
+      'Language',
+      'Agents',
+      'Rules',
+      'Terminals and screenshots',
+    ]) {
+      expect(
+        find.byWidgetPredicate(
+          (w) =>
+              w is Text &&
+              w.data == heading &&
+              w.style?.fontWeight == FontWeight.w600,
+        ),
+        findsOneWidget,
+        reason: heading,
+      );
+    }
     expect(find.byKey(const ValueKey('theme-dark')), findsNothing);
     await tester.tap(find.byKey(const ValueKey('settings-section-appearance')));
     await tester.pumpAndSettle();

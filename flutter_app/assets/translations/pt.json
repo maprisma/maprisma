@@ -815,5 +815,7 @@
   "Appearance": "Aparência",
   "Clear": "Limpar",
   "Find in Settings": "Procurar nas definições",
-  "No setting matches “{0}”": "Nenhuma definição corresponde a «{0}»"
+  "No setting matches “{0}”": "Nenhuma definição corresponde a «{0}»",
+  "Rules": "Regras",
+  "Terminals and screenshots": "Terminais e capturas de ecrã"
 }
