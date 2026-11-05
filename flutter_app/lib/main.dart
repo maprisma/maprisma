@@ -5207,7 +5207,13 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                       ? null
                       : () => _openAskAi(),
                 ),
-                MapLegendButton(tr: tr, enabled: !_keysBlocked),
+                MapLegendButton(
+                  tr: tr,
+                  enabled: !_keysBlocked,
+                  levels: warnPercents(
+                    _snapshot?['settings'] as Map? ?? const {},
+                  ),
+                ),
                 IconButton(
                   key: const ValueKey('help-open'),
                   tooltip: tr('Help (F1)'),

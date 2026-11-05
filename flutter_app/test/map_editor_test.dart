@@ -478,8 +478,34 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('map-legend')));
     await tester.pumpAndSettle();
     expect(find.text('What the marks mean'), findsOneWidget);
-    expect(find.byKey(const ValueKey('agent-battery')), findsNWidgets(3));
+    expect(find.byKey(const ValueKey('agent-battery')), findsNWidgets(4));
+    // The defaults: yellow from 75 % used, red from 90 % (a tenth left is red).
+    expect(find.text('Yellow: 25 % or less is left.'), findsOneWidget);
+    expect(find.text('Red: 10 % or less is left.'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets("the legend's levels are those of Settings › Costs", (
+    tester,
+  ) async {
+    expect(warnPercents({'warn_yellow': 60, 'warn_red': 95}), (60, 95));
+    expect(warnPercents({'warn_yellow': 90, 'warn_red': 80}), (75, 90));
+    expect(warnPercents(const {}), (75, 90));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MapLegendButton(
+            tr: (s) => s,
+            levels: warnPercents({'warn_yellow': 60, 'warn_red': 95}),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.byKey(const ValueKey('map-legend')));
+    await tester.pumpAndSettle();
+    expect(find.text('Yellow: 40 % or less is left.'), findsOneWidget);
+    expect(find.text('Red: 5 % or less is left.'), findsOneWidget);
+    expect(find.byKey(const ValueKey('agent-battery-stale')), findsOneWidget);
   });
 
   testWidgets('MCP: proposal, agents and fields, then the normal review', (

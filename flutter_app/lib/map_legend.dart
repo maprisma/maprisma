@@ -3,11 +3,26 @@ import 'package:flutter/material.dart';
 import 'map_groups.dart' show AgentBadge;
 import 'map_layout.dart' show mapCollaborationColor;
 
+/// agent_details.warn_levels: Settings › Costs' (yellow, red) as % used,
+/// red always above yellow; else the defaults (75, 90).
+(int, int) warnPercents(Map settings) {
+  final yellow = settings['warn_yellow'], red = settings['warn_red'];
+  return yellow is int && red is int && red > yellow ? (yellow, red) : (75, 90);
+}
+
 /// What the marks on the map mean (the ⓘ in the header).
 class MapLegendButton extends StatelessWidget {
-  const MapLegendButton({super.key, required this.tr, this.enabled = true});
+  const MapLegendButton({
+    super.key,
+    required this.tr,
+    this.enabled = true,
+    this.levels = (75, 90),
+  });
   final String Function(String) tr;
   final bool enabled;
+
+  /// Settings › Costs' yellow and red levels, as % used (warnPercents).
+  final (int, int) levels;
 
   @override
   Widget build(BuildContext context) => IconButton(
@@ -17,30 +32,42 @@ class MapLegendButton extends StatelessWidget {
     onPressed: enabled
         ? () => showDialog<void>(
             context: context,
-            builder: (_) => MapLegend(tr: tr),
+            builder: (_) => MapLegend(tr: tr, levels: levels),
           )
         : null,
   );
 }
 
 class MapLegend extends StatelessWidget {
-  const MapLegend({super.key, required this.tr});
+  const MapLegend({super.key, required this.tr, this.levels = (75, 90)});
   final String Function(String) tr;
+  final (int, int) levels;
 
-  Widget _row(Widget mark, String text) => Padding(
+  Widget _row(Widget mark, String text, [String? value]) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 4),
     child: Row(
       children: [
         SizedBox(width: 44, child: Center(child: mark)),
         const SizedBox(width: 12),
-        Expanded(child: Text(tr(text))),
+        Expanded(
+          child: Text(
+            value == null ? tr(text) : tr(text).replaceAll('{0}', value),
+          ),
+        ),
       ],
     ),
   );
 
-  Widget _battery(String colour, double left) => AgentBadge(
-    badge: {'kind': 'battery', 'colour': colour, 'left': left, 'tip': ''},
-  );
+  Widget _battery(String colour, double left, {bool stale = false}) =>
+      AgentBadge(
+        badge: {
+          'kind': 'battery',
+          'colour': colour,
+          'left': left,
+          'tip': '',
+          if (stale) 'stale': true,
+        },
+      );
 
   Widget _line(Color colour, double width) =>
       Container(width: 36, height: width, color: colour);
@@ -88,13 +115,24 @@ class MapLegend extends StatelessWidget {
               _heading(context, 'Battery'),
               _row(
                 _battery('green', .9),
-                'Green: what is left of an agent\'s plan limits, or free GPU memory on a running local LLM.',
+                "Green: what is left of an agent's plan limits or of a day's limit (paid per token), or free GPU memory on a running local LLM.",
+              ),
+              // The cards' levels (agent_badges.charge: this much left or
+              // less), not fixed ones.
+              _row(
+                _battery('yellow', (100 - levels.$1) / 100),
+                'Yellow: {0} % or less is left.',
+                '${100 - levels.$1}',
               ),
               _row(
-                _battery('yellow', .2),
-                'Yellow: a quarter or less is left.',
+                _battery('red', (100 - levels.$2) / 200),
+                'Red: {0} % or less is left.',
+                '${100 - levels.$2}',
               ),
-              _row(_battery('red', .05), 'Red: under a tenth is left.'),
+              _row(
+                _battery('green', .6, stale: true),
+                'Faded: its numbers may be out of date (its tooltip says when they were measured).',
+              ),
               _heading(context, 'Lines'),
               _row(
                 _line(colors.primary, 2),
