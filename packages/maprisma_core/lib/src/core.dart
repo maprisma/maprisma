@@ -4852,6 +4852,7 @@ final class CoreService {
         agent.command,
         access,
         native: native != null,
+        adapter: agent.adapter,
       )) {
         return {'refreshed': false};
       }
@@ -4861,6 +4862,8 @@ final class CoreService {
           'rpc': native.$1,
           'argv': native.$2,
           'program': native.$3,
+          // The home it is asked for: its record is that home's only.
+          'home': reads.details.usageHome(agent.adapter),
         },
       }, (result) => result);
     }

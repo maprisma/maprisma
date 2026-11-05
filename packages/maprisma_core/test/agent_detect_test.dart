@@ -161,6 +161,34 @@ void main() {
     expect(merged['install_marks'], isNotEmpty);
   });
 
+  test('R3 #13: an add-on with only rpc and argv gets home_env and store', () {
+    final own = builtinAdapters().firstWhere((a) => a.command == 'codex');
+    final mine = own.facts['plan_limits'] as Map;
+    final merged = withNewerFacts({
+      'command': 'codex',
+      'name': 'Codex',
+      'plan_limits': {
+        'rpc': 'codex-app-server',
+        'argv': ['codex', 'app-server'],
+      },
+    }, own.facts);
+    final limits = merged['plan_limits'] as Map;
+    expect(limits['argv'], ['codex', 'app-server']); // the add-on's own
+    expect(limits['home_env'], 'CODEX_HOME');
+    expect(limits['store'], mine['store']);
+    expect((limits['store'] as Map)['key'], 'cli_auth_credentials_store');
+    // What the add-on names itself stays.
+    final kept = withNewerFacts({
+      'command': 'codex',
+      'plan_limits': {
+        'rpc': 'codex-app-server',
+        'argv': ['codex', 'app-server'],
+        'home_env': 'OTHER_HOME',
+      },
+    }, own.facts);
+    expect((kept['plan_limits'] as Map)['home_env'], 'OTHER_HOME');
+  });
+
   test('xdg-terminal-exec without a terminal entry is passed over', () {
     program(system, 'xdg-terminal-exec', '#!/bin/sh\nexit 1\n');
     program(system, 'cosmic-term');

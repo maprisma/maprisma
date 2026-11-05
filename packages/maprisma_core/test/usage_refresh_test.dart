@@ -215,6 +215,7 @@ sleep 60
           rpc: native.$1,
           argv: native.$2,
           program: native.$3,
+          home: other.usageHome(codex),
         ),
         isTrue,
       );
@@ -418,5 +419,209 @@ sleep 60
         isTrue,
       );
     });
+  });
+
+  group('round 3: whose sign-in, which home, which record', () {
+    late Map<String, String> generic;
+    late Adapter codex;
+    late Directory bin;
+    DetailReaders readers(Map<String, String> env, {bool omarchy = false}) {
+      final identity = AppIdentity(environment: env);
+      return DetailReaders(
+        ScanFiles(identity),
+        omarchy ? OmarchyDesktop(identity, Posix()) : GenericDesktop(env),
+        ServiceI18n(identity, SettingsStore(identity)),
+      );
+    }
+
+    // A fake `codex app-server` that answers account/rateLimits/read with
+    // [reply] (a JSON-RPC body after "id":2), or says nothing and ends.
+    void fake(String? reply) {
+      File('${bin.path}/codex').writeAsStringSync(
+        reply == null
+            ? '#!/bin/sh\nexit 0\n'
+            : '#!/bin/sh\n'
+                  'read -r line\nprintf \'{"id":1,"result":{}}\\n\'\n'
+                  'read -r line\nread -r line\n'
+                  "printf '%s\\n' '{\"id\":2,$reply}'\n",
+      );
+      Process.runSync('chmod', ['755', '${bin.path}/codex']);
+    }
+
+    const limits =
+        '"result":{"rateLimits":{"planType":"plus","primary":{"usedPercent":25,"windowDurationMins":300,"resetsAt":4102444800}}}';
+    const authFailure = '"error":{"code":-32600,"message":"Not authenticated"}';
+
+    Future<bool> ask(DetailReaders d, Map<String, String> env) {
+      final native = d.planLimitsRpc(codex)!;
+      return refreshUsage(
+        'codex',
+        env,
+        rpc: native.$1,
+        argv: native.$2,
+        program: native.$3,
+        home: d.usageHome(codex),
+      );
+    }
+
+    setUp(() {
+      bin = Directory('${root.path}/codex-bin')..createSync();
+      generic = {
+        'HOME': root.path,
+        'PATH': '${bin.path}:/usr/bin:/bin',
+        'XDG_STATE_HOME': '${root.path}/state',
+        'XDG_CONFIG_HOME': '${root.path}/config',
+      };
+      codex = builtinAdapters().firstWhere((a) => a.command == 'codex');
+    });
+
+    test(
+      '#10: a keyring store may be asked; its answer says signed in',
+      () async {
+        final d = readers(generic);
+        File('${root.path}/.codex/config.toml')
+          ..createSync(recursive: true)
+          ..writeAsStringSync('cli_auth_credentials_store = "keyring"\n');
+        // Never asked: may be asked, and as before counts as signed in.
+        expect(d.limitsProbeable(codex), isTrue);
+        expect(d.programAnswer(codex), isNull);
+        expect(d.limitsSignedIn(codex), isTrue);
+        // Codex says nobody is signed in to its keyring: not signed in, but it
+        // is asked again (a new sign-in is found so).
+        fake(authFailure);
+        expect(await ask(d, generic), isTrue);
+        expect(d.programAnswer(codex), isFalse);
+        expect(d.limitsSignedIn(codex), isFalse);
+        expect(d.usageRecord('codex', codex), isEmpty);
+        expect(d.planLimitsRpc(codex), isNotNull);
+        // No answer (it ends at once): unknown again, as before.
+        fake(null);
+        expect(await ask(d, generic), isFalse);
+        expect(d.programAnswer(codex), isNull);
+        expect(d.limitsSignedIn(codex), isTrue);
+        // Signed in again: its limits came.
+        fake(limits);
+        expect(await ask(d, generic), isTrue);
+        expect(d.programAnswer(codex), isTrue);
+        expect(d.read(codex).limits, hasLength(1));
+        // An auth failure after that hides the limits.
+        fake(authFailure);
+        expect(await ask(d, generic), isTrue);
+        expect(d.read(codex).limits, isEmpty);
+        expect(d.read(codex).plan, '');
+        // Without the keyring setting (the file store, no auth.json) its old
+        // answer does not count: not signed in, never asked.
+        File('${root.path}/.codex/config.toml').deleteSync();
+        expect(d.limitsSignedIn(codex), isFalse);
+        expect(d.planLimitsRpc(codex), isNull);
+      },
+    );
+
+    test(
+      '#12: another CODEX_HOME never shows the first home\'s limits',
+      () async {
+        final first = Directory('${root.path}/home-a')..createSync();
+        final second = Directory('${root.path}/home-b')..createSync();
+        final auth = File('${second.path}/auth.json')..writeAsStringSync('x');
+        auth.setLastModifiedSync(
+          DateTime.now().subtract(const Duration(hours: 1)),
+        );
+        File('${first.path}/auth.json').writeAsStringSync('x');
+        final a = {...generic, 'CODEX_HOME': first.path};
+        final b = {...generic, 'CODEX_HOME': second.path};
+        final da = readers(a), db = readers(b);
+        expect(da.usageHome(codex), isNot(db.usageHome(codex)));
+        expect(readers(generic).usageHome(codex), isNot(da.usageHome(codex)));
+        fake(limits);
+        expect(await ask(da, a), isTrue);
+        expect(da.read(codex).limits, hasLength(1));
+        expect(
+          da.usageIsStale(
+            'codex',
+            da.accessPaths(codex),
+            native: true,
+            adapter: codex,
+          ),
+          isFalse,
+        );
+        // The same record file, but the other home: no limits, and due at once
+        // even though that home's sign-in predates the record.
+        expect(db.read(codex).limits, isEmpty);
+        expect(db.usageRecord('codex', codex), isEmpty);
+        expect(
+          db.usageIsStale(
+            'codex',
+            db.accessPaths(codex),
+            native: true,
+            adapter: codex,
+          ),
+          isTrue,
+        );
+        // A record without a home (written before) is no home's.
+        File(nativeUsagePath('codex', a)).writeAsStringSync(
+          '{"limits":[{"label":"x","percent":0.5}],"limitsFetchedAt":${DateTime.now().millisecondsSinceEpoch}}',
+        );
+        expect(da.read(codex).limits, isEmpty);
+      },
+    );
+
+    test(
+      '#14: on Omarchy without the collector, the newer record is read',
+      () async {
+        final omarchyEnv = {...generic, 'OMARCHY_PATH': '${root.path}/omarchy'};
+        final d = readers(omarchyEnv, omarchy: true);
+        File('${root.path}/.codex/auth.json')
+          ..createSync(recursive: true)
+          ..writeAsStringSync('not read');
+        final old = File('${root.path}/state/omarchy/agents/usage/codex.json')
+          ..createSync(recursive: true)
+          ..writeAsStringSync(
+            '{"limits":[{"label":"Old","percent":0.9}],"tierLabel":"pro",'
+            '"limitsFetchedAt":${DateTime.now().subtract(const Duration(hours: 3)).millisecondsSinceEpoch}}',
+          );
+        final native = nativeUsagePath('codex', omarchyEnv);
+        expect(d.usagePath('codex', codex), old.path); // nothing else yet
+        // Due: Maprisma's own record, the one the refresh writes, is missing.
+        expect(
+          d.usageIsStale(
+            'codex',
+            d.accessPaths(codex),
+            native: true,
+            adapter: codex,
+          ),
+          isTrue,
+        );
+        fake(limits);
+        expect(await ask(d, omarchyEnv), isTrue);
+        expect(d.usagePath('codex', codex), native);
+        expect(d.read(codex).limits.single['percent'], 0.25);
+        expect(d.read(codex).plan, 'Plus');
+        expect(
+          d.usageIsStale(
+            'codex',
+            d.accessPaths(codex),
+            native: true,
+            adapter: codex,
+          ),
+          isFalse,
+        );
+        // Omarchy's newer than Maprisma's: Omarchy's.
+        old.writeAsStringSync(
+          '{"limits":[{"label":"New","percent":0.1}],'
+          '"limitsFetchedAt":${DateTime.now().add(const Duration(minutes: 1)).millisecondsSinceEpoch}}',
+        );
+        expect(d.usagePath('codex', codex), old.path);
+        // With its collector, Omarchy's record as before.
+        Directory('${root.path}/omarchy/bin').createSync(recursive: true);
+        File(
+          '${root.path}/omarchy/bin/omarchy-agent-usage-codex',
+        ).writeAsStringSync('');
+        old.writeAsStringSync('{"limits":[]}');
+        old.setLastModifiedSync(
+          DateTime.now().subtract(const Duration(days: 1)),
+        );
+        expect(d.usagePath('codex', codex), old.path);
+      },
+    );
   });
 }

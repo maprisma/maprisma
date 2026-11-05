@@ -155,6 +155,66 @@ void main() {
     expect(edges(build()), contains(('agent:codex', 'cloud:openai', 'uses')));
   });
 
+  test('R3 #11: with CODEX_HOME set, ~/.codex/auth.json is no sign-in', () {
+    final moved = Directory('${home.path}/codex-home')..createSync();
+    final service = CoreService(
+      environment: {
+        'HOME': home.path,
+        'PATH': '${home.path}/bin',
+        'MAPRISMA_DESKTOP': 'generic',
+        'MAPRISMA_SCAN_PROC': '${home.path}/proc',
+        'CODEX_HOME': moved.path,
+      },
+    );
+    final codex = AgentRecord(
+      service.reads.catalog.adapter('codex')!,
+      name: 'codex',
+      icon: '',
+      installed: true,
+    );
+    Set<(String, String, String)> build() => edges(
+      service.reads.graph.build(
+        [codex],
+        {'codex': AgentInfo()..model = 'gpt-6.1-sol'},
+        InventorySnapshot(),
+      ),
+    );
+    write('.codex/auth.json', '{}'); // the default home's: not this one
+    expect(build(), contains(('agent:codex', 'cloud:openai', 'available')));
+    // The line and the battery agree: one rule.
+    expect(service.reads.details.limitsSignedIn(codex.adapter), isFalse);
+    write('codex-home/auth.json', '{}');
+    expect(build(), contains(('agent:codex', 'cloud:openai', 'uses')));
+    expect(service.reads.details.limitsSignedIn(codex.adapter), isTrue);
+  });
+
+  test('R3 #10: a keyring Codex said is signed out has an available line', () {
+    write('.codex/config.toml', 'cli_auth_credentials_store = "keyring"\n');
+    Set<(String, String, String)> build() => edges(
+      core.reads.graph.build(
+        [agent('codex')],
+        {'codex': AgentInfo()..model = 'gpt-6.1-sol'},
+        InventorySnapshot(),
+      ),
+    );
+    // Not asked yet: only Codex can tell, so as before it uses OpenAI.
+    expect(build(), contains(('agent:codex', 'cloud:openai', 'uses')));
+    final adapter = core.reads.catalog.adapter('codex')!;
+    final record = File(
+      nativeUsagePath('codex', core.reads.files.identity.environment),
+    )..createSync(recursive: true);
+    void said(bool signedIn) => record.writeAsStringSync(
+      jsonEncode({
+        'home': core.reads.details.usageHome(adapter),
+        'signedIn': signedIn,
+      }),
+    );
+    said(false);
+    expect(build(), contains(('agent:codex', 'cloud:openai', 'available')));
+    said(true);
+    expect(build(), contains(('agent:codex', 'cloud:openai', 'uses')));
+  });
+
   test('#16: a key it names but is not set is no sign-in; nor a drop', () {
     // Grok names no sign-in file, only XAI_API_KEY.
     Map build(Map<String, String> extra) {

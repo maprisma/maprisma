@@ -373,6 +373,13 @@ def _with_newer_facts(harness: Harness) -> Harness:
     if own is None or own is harness:
         return harness
     filled = {n: getattr(own, n) for n in NEWER_FACTS if _empty(harness, n) and not _empty(own, n)}
+    if harness.plan_limits and own.plan_limits:
+        # home_env and store are newer than rpc and argv: an add-on signed with the earlier table
+        # gets them from the app's own adapter, as security.sandbox or access.logout.
+        mine = tuple(harness.plan_limits) + ("", ())[len(harness.plan_limits) - 2:]
+        merged = mine[:2] + tuple(m or o for m, o in zip(mine[2:], own.plan_limits[2:]))
+        if merged != tuple(harness.plan_limits):
+            filled["plan_limits"] = merged
     if "research" in filled or (harness.research_output == "text" and own.research_output != "text" and own.research) \
             or ("{prompt}" in harness.research and own.research and "{prompt}" not in own.research):
         # The format belongs to its command; an add-on's look-up that only answers in text (signed

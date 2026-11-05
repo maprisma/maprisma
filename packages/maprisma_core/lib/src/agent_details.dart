@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:crypto/crypto.dart' show sha256;
 import 'package:path/path.dart' as p;
 import 'package:yaml/yaml.dart';
 import 'dsh_profile.dart';
@@ -135,25 +136,44 @@ String nativeUsagePath(String command, Map<String, String> env) {
 /// collector, Omarchy's own tool, does what it does on Omarchy. Without a
 /// collector, an agent whose adapter names a protocol for its plan limits
 /// (`rpc`, `argv`: agent_details.native_usage) is asked itself, and the
-/// answer becomes Maprisma's own record of it.
+/// answer becomes Maprisma's own record of it, marked with the agent's
+/// effective home ([home]: DetailReaders.usageHome) it was asked for.
 Future<bool> refreshUsage(
   String command,
   Map<String, String> env, {
   String? rpc,
   List<String>? argv,
   String? program,
+  String? home,
 }) async {
   final collector = usageCollector(command, env);
   if (collector == null) {
     if (rpc == null || argv == null || program == null) return false;
     final record = await askPlanLimits(rpc, argv, env, program: program);
-    if (record == null) return false;
+    final path = nativeUsagePath(command, env);
     try {
-      final path = nativeUsagePath(command, env);
+      if (record == null) {
+        // No answer (a timeout, another error): whether it is signed in is
+        // not known now; an earlier "signed out" of this home no longer
+        // counts, the rest of the record stays as it was.
+        final old = File(path).existsSync()
+            ? jsonDecode(File(path).readAsStringSync())
+            : null;
+        if (old is Map && old['home'] == home && old['signedIn'] == false) {
+          Posix().atomicWrite(
+            path,
+            utf8.encode('${jsonEncode({...old}..remove('signedIn'))}\n'),
+          );
+        }
+        return false;
+      }
+      if (home != null) record['home'] = home;
       Directory(p.dirname(path)).createSync(recursive: true);
       Posix().atomicWrite(path, utf8.encode('${jsonEncode(record)}\n'));
       return true;
     } on FileSystemException {
+      return false;
+    } on FormatException {
       return false;
     }
   }
@@ -745,7 +765,7 @@ final class DetailReaders {
       final measured =
           usageTime(usage['limitsFetchedAt']) ??
           usageTime(usage['updatedAt']) ??
-          recordWritten(usagePath(adapter.command));
+          recordWritten(usagePath(adapter.command, adapter));
       for (final item in (usage['limits'] as List).take(8)) {
         if (item is! Map || item['percent'] is! num) continue;
         final percent = item['percent'] as num;
@@ -781,16 +801,27 @@ final class DetailReaders {
 
   /// agent_details.usage_is_stale: Omarchy collects usage for this agent and
   /// its record is missing or old, or older than the agent's sign-in (only
-  /// the credential files' times are looked at, never their text).
+  /// the credential files' times are looked at, never their text). Asked
+  /// of its own program ([native]): Maprisma's own record, the one that
+  /// refresh writes, and one of another home of [adapter] is missing.
   bool usageIsStale(
     String command,
     List<String> accessFiles, {
     DateTime? now,
     bool native = false,
+    Adapter? adapter,
   }) {
-    if (!hasUsageCollector(command) && !native) return false;
-    final record = usagePath(command);
+    final collected = hasUsageCollector(command);
+    if (!collected && !native) return false;
+    final record = collected
+        ? usagePath(command)
+        : nativeUsagePath(command, files.identity.environment);
     if (FileSystemEntity.typeSync(record) == FileSystemEntityType.notFound) {
+      return true;
+    }
+    if (!collected &&
+        adapter != null &&
+        files.json(record)['home'] != usageHome(adapter)) {
       return true;
     }
     final written = File(record).statSync().modified;
@@ -836,32 +867,66 @@ final class DetailReaders {
 
   /// The agent's usage record. Maprisma's own, asked of the agent's
   /// program, counts only while it is signed in ([limitsSignedIn] of
-  /// [adapter]): after a sign-out it is the old account's plan and limits.
+  /// [adapter]): after a sign-out it is the old account's plan and limits;
+  /// and only for the home it was asked for ([usageHome]): another home's
+  /// are another account's.
   Map<String, dynamic> usageRecord(String command, [Adapter? adapter]) {
     if (!RegExp(r'^[a-z0-9-]{1,64}$').hasMatch(command)) return {};
-    final path = usagePath(command);
+    final path = usagePath(command, adapter);
+    final record = files.json(path);
     if (adapter != null &&
         path == nativeUsagePath(command, files.identity.environment) &&
         adapter.table('plan_limits').isNotEmpty &&
-        !limitsSignedIn(adapter)) {
+        (record['home'] != usageHome(adapter) || !limitsSignedIn(adapter))) {
       return {};
     }
-    return Map<String, dynamic>.from(files.json(path));
+    return Map<String, dynamic>.from(record);
   }
 
+  /// When a usage record's numbers were measured: its limitsFetchedAt, else
+  /// its updatedAt, else when the file was written.
+  DateTime? _measured(String path, Map record) =>
+      usageTime(record['limitsFetchedAt']) ??
+      usageTime(record['updatedAt']) ??
+      recordWritten(path);
+
   /// agent_details.usage_path: Omarchy's record of the agent where its
-  /// collector is (on Omarchy also one Omarchy wrote); else Maprisma's own,
-  /// asked of the agent's program (`[plan_limits]`), when there is one.
-  String usagePath(String command) {
+  /// collector is; else Maprisma's own, asked of the agent's program
+  /// (`[plan_limits]`), when there is one. On Omarchy without the collector
+  /// (it was removed) a record Omarchy wrote before still counts, but the
+  /// newer of the two by when it was measured: once Maprisma asked the
+  /// program itself, that answer is the one shown. Maprisma's own of another
+  /// home of [adapter] ([usageHome]) is not one.
+  String usagePath(String command, [Adapter? adapter]) {
     final omarchy =
         '${files.identity.root('XDG_STATE_HOME', '.local/state')}/omarchy/agents/usage/$command.json';
     if (hasUsageCollector(command)) return omarchy;
-    if (desktop.name == 'omarchy' &&
-        FileSystemEntity.typeSync(omarchy) != FileSystemEntityType.notFound) {
+    final native = nativeUsagePath(command, files.identity.environment);
+    if (desktop.name != 'omarchy' ||
+        FileSystemEntity.typeSync(omarchy) == FileSystemEntityType.notFound) {
+      return native;
+    }
+    final own = files.json(native);
+    if (FileSystemEntity.typeSync(native) == FileSystemEntityType.notFound ||
+        adapter != null && own['home'] != usageHome(adapter)) {
       return omarchy;
     }
-    return nativeUsagePath(command, files.identity.environment);
+    final mine = _measured(native, own);
+    final theirs = _measured(omarchy, files.json(omarchy));
+    return mine == null || theirs != null && theirs.isAfter(mine)
+        ? omarchy
+        : native;
   }
+
+  /// The agent's effective home (its plan_limits.home_env, CODEX_HOME, or
+  /// the home folder) as a digest: Maprisma's own usage record keeps the
+  /// one it was asked for, so another home's limits never show.
+  String usageHome(Adapter adapter) => sha256
+      .convert(
+        utf8.encode('${files.identity.home}\n${_movedHome(adapter) ?? ''}'),
+      )
+      .toString()
+      .substring(0, 16);
 
   /// The folder an agent's plan_limits.home_env moves its home to
   /// (CODEX_HOME), or null while it is not set.
@@ -887,18 +952,46 @@ final class DetailReaders {
     ];
   }
 
-  /// agent_details.plan_limits_signed_in: whether the agent's own program
-  /// can answer for a sign-in: one of its access files is there (a stat,
-  /// never a read; [accessPaths]), or its store setting (plain
-  /// configuration, plan_limits.store: Codex's cli_auth_credentials_store)
-  /// keeps the sign-in outside the files, a keyring, which only the program
-  /// can tell.
+  /// One of the agent's access files is there (a stat, never a read;
+  /// [accessPaths]).
+  bool _accessFileThere(Adapter adapter) => accessPaths(
+    adapter,
+  ).any((path) => FileSystemEntity.typeSync(path) == FileSystemEntityType.file);
+
+  /// agent_details.plan_limits_probe: whether the agent's own program may be
+  /// asked for its plan limits: one of its access files is there, or its
+  /// store setting keeps the sign-in elsewhere ([_storeElsewhere]).
+  bool limitsProbeable(Adapter adapter) =>
+      _accessFileThere(adapter) || _storeElsewhere(adapter);
+
+  /// agent_details.plan_limits_signed_in: whether the agent is signed in, as
+  /// far as this PC can tell: one of its access files is there, or its store
+  /// keeps the sign-in elsewhere and its own program did not answer, last
+  /// time it was asked for this home (Maprisma's own record, [programAnswer]),
+  /// that nobody is signed in. Not asked yet, or no answer: as before, signed
+  /// in. The map's line (MapGraph.signedIn), the battery and the record's
+  /// validity all go by this.
   bool limitsSignedIn(Adapter adapter) {
-    if (accessPaths(adapter).any(
-      (path) => FileSystemEntity.typeSync(path) == FileSystemEntityType.file,
-    )) {
-      return true;
-    }
+    if (_accessFileThere(adapter)) return true;
+    return _storeElsewhere(adapter) && programAnswer(adapter) != false;
+  }
+
+  /// What the agent's own program last said for this home ([usageHome]):
+  /// true (its limits came), false (it named no sign-in) or null (not asked
+  /// yet, no answer, or Omarchy's collector asks it, not Maprisma).
+  bool? programAnswer(Adapter adapter) {
+    if (hasUsageCollector(adapter.command)) return null;
+    final record = files.json(
+      nativeUsagePath(adapter.command, files.identity.environment),
+    );
+    final said = record['signedIn'];
+    return record['home'] == usageHome(adapter) && said is bool ? said : null;
+  }
+
+  /// Its store setting (plain configuration, plan_limits.store: Codex's
+  /// cli_auth_credentials_store) keeps the sign-in outside the files, a
+  /// keyring, where only the program can tell.
+  bool _storeElsewhere(Adapter adapter) {
     final store = adapter.table('plan_limits')['store'];
     if (store is! Map || store['file'] is! String || store['key'] is! String) {
       return false;
@@ -921,8 +1014,9 @@ final class DetailReaders {
 
   /// agent_details.plan_limits_rpc: (rpc, argv, program) of an agent whose
   /// plan limits Maprisma may ask its own program for: its adapter names
-  /// how, no Omarchy collector of it is found, it is signed in
-  /// ([limitsSignedIn]) and its installed program is found offline
+  /// how, no Omarchy collector of it is found, it may be asked
+  /// ([limitsProbeable]: also after it said nobody is signed in, so a new
+  /// sign-in in a keyring is found) and its installed program is found offline
   /// (AgentCatalog.realProgram: never a launcher that would install or
   /// update it). Else null.
   (String, List<String>, String)? planLimitsRpc(Adapter adapter) {
@@ -930,7 +1024,7 @@ final class DetailReaders {
     final rpc = facts['rpc'], argv = facts['argv'];
     if (rpc is! String || argv is! List || argv.isEmpty) return null;
     if (hasUsageCollector(adapter.command)) return null;
-    if (!limitsSignedIn(adapter)) return null;
+    if (!limitsProbeable(adapter)) return null;
     final catalog = AgentCatalog(files, desktop);
     final program = catalog.realProgram(
       adapter.command,

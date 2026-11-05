@@ -104,6 +104,19 @@ class FactsTest(unittest.TestCase):
         old = dataclasses.replace(codex, research=tuple("{prompt}" if a == "-" else a for a in codex.research))
         self.assertEqual(harnesses._with_newer_facts(old).research, codex.research)
 
+    def test_an_add_on_with_the_earlier_plan_limits_gets_home_env_and_store(self):
+        """Review 063 round 3 #13: a signed add-on whose [plan_limits] has only rpc and argv."""
+        import dataclasses
+        codex = next(h for h in harnesses.built_in_adapters() if h.command == "codex")
+        old = dataclasses.replace(codex, plan_limits=("codex-app-server", ("codex", "app-server"), "", ()))
+        filled = harnesses._with_newer_facts(old).plan_limits
+        self.assertEqual(filled[:2], ("codex-app-server", ("codex", "app-server")))     # its own
+        self.assertEqual(filled[2:], codex.plan_limits[2:])
+        self.assertEqual(filled[2], "CODEX_HOME")
+        own = dataclasses.replace(codex, plan_limits=("codex-app-server", ("codex", "app-server"), "OTHER", ()))
+        self.assertEqual(harnesses._with_newer_facts(own).plan_limits[2], "OTHER")
+        self.assertIs(harnesses._with_newer_facts(codex), codex)
+
 
 if __name__ == "__main__":
     unittest.main()

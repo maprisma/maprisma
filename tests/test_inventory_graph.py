@@ -443,6 +443,23 @@ class ReviewChainTest(unittest.TestCase):
             g = graph.build([codex], {"codex": ad.Details(model="gpt-6.1-sol")}, invmod.Inventory())
             self.assertIn(("agent:codex", "cloud:openai", "uses"), self.edges(g))
 
+    def test_a_moved_codex_home_is_where_its_sign_in_is(self):
+        """Review 063 round 3 #11: with CODEX_HOME set, ~/.codex/auth.json is no sign-in; the line and
+        the battery go by the same files."""
+        import agent_status
+        codex = self.agent("codex", "Codex")
+        moved = self.home / "codex-home"
+        moved.mkdir()
+        self.write(".codex/auth.json", "{}")
+        with mock.patch.object(agent_status, "HOME", self.home), \
+                mock.patch.dict(os.environ, {"CODEX_HOME": str(moved)}, clear=True):
+            g = graph.build([codex], {"codex": ad.Details(model="gpt-6.1-sol")}, invmod.Inventory())
+            self.assertIn(("agent:codex", "cloud:openai", "available"), self.edges(g))
+            self.assertFalse(ad.plan_limits_signed_in("codex", self.home))
+            (moved / "auth.json").write_text("{}")
+            g = graph.build([codex], {"codex": ad.Details(model="gpt-6.1-sol")}, invmod.Inventory())
+            self.assertIn(("agent:codex", "cloud:openai", "uses"), self.edges(g))
+
     def test_an_unset_key_is_no_sign_in_and_no_login_no_drop(self):
         """Round 2 #16: Grok names only XAI_API_KEY: without it xAI is available, not used; and the app
         can start no sign-in for it (own_login), as Ask AI refuses."""
