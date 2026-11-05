@@ -3,6 +3,20 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:maprisma/action_rules_window.dart';
 
 void main() {
+  test('a rule names an MCP server as its settings do, not its map id', () {
+    final items = ruleItemsOf([
+      {'id': 'mcp:filesystem', 'label': 'filesystem'},
+      {'id': 'mcp:filesystem~2', 'label': 'filesystem'},
+      {'id': 'agent:pi', 'label': 'Pi'},
+      {'id': 'skills:~/.agents/skills', 'label': 'skills'},
+      {'id': 'model:runtime:ollama:qwen3:8b', 'label': 'qwen3:8b'},
+    ]);
+    expect(items['mcp'], {'filesystem': 'filesystem'});
+    expect(items['agents'], {'pi': 'Pi'});
+    expect(items['skills'], {'~/.agents/skills': 'skills'});
+    expect(items['models'], {'qwen3:8b': 'qwen3:8b'});
+  });
+
   Future<List<List<Map<String, dynamic>>>> mount(
     WidgetTester tester,
     List<Map<String, dynamic>> rules, {

@@ -44,6 +44,34 @@ List<Map<String, dynamic>> defaultRules() => [
   for (final action in ruleActions) _rule('allow', action),
 ];
 
+/// The items a rule can name, by category, from the map's nodes: id → label.
+/// An MCP server is named as its settings name it: mcp:fs~2 (another server
+/// of that name) is fs, as the core checks it.
+Map<String, Map<String, String>> ruleItemsOf(List<Map> nodes) {
+  final items = <String, Map<String, String>>{};
+  for (final n in nodes) {
+    final id = '${n['id']}', label = '${n['label']}';
+    final parts = id.split(':');
+    switch (parts.first) {
+      case 'agent':
+        (items['agents'] ??= {})[id.substring(6)] = label;
+      case 'mcp':
+        (items['mcp'] ??= {})[id
+                .substring(4)
+                .replaceFirst(RegExp(r'~[0-9]+$'), '')] =
+            label;
+      case 'skills':
+        (items['skills'] ??= {})[id.substring(7)] = label;
+      case 'runtime' || 'cloud':
+        (items['providers'] ??= {})[id.substring(parts.first.length + 1)] =
+            label;
+      case 'model' when parts.length > 3:
+        (items['models'] ??= {})[parts.skip(3).join(':')] = label;
+    }
+  }
+  return items;
+}
+
 /// Allow and deny rules, each list with its +; a bar tries a request.
 class ActionRulesWindow extends StatefulWidget {
   const ActionRulesWindow({

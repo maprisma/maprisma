@@ -576,25 +576,10 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   Future<void> _openRules() async {
     if (_busy || _taskActive) return;
     final settings = _snapshot?['settings'] as Map? ?? const {};
-    final items = <String, Map<String, String>>{};
-    final agents = <String, String>{};
-    for (final n in (_graph?['nodes'] as List? ?? const []).cast<Map>()) {
-      final id = '${n['id']}', label = '${n['label']}';
-      final parts = id.split(':');
-      switch (parts.first) {
-        case 'agent':
-          agents[id.substring(6)] = label;
-          (items['agents'] ??= {})[id.substring(6)] = label;
-        case 'mcp' || 'skills':
-          (items[parts.first] ??= {})[id.substring(parts.first.length + 1)] =
-              label;
-        case 'runtime' || 'cloud':
-          (items['providers'] ??= {})[id.substring(parts.first.length + 1)] =
-              label;
-        case 'model' when parts.length > 3:
-          (items['models'] ??= {})[parts.skip(3).join(':')] = label;
-      }
-    }
+    final items = ruleItemsOf(
+      (_graph?['nodes'] as List? ?? const []).cast<Map>(),
+    );
+    final agents = {...?items['agents']};
     await showDialog<void>(
       context: _navigator.currentContext!,
       // The window dims what is under it; a second shade would only darken.
