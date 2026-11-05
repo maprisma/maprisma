@@ -20,7 +20,7 @@ MAX_REQUEST = 64 * 1024
 
 def registry_key(saved):
     stamps = []
-    for folder in addons.find():
+    for folder in (f for folders in addons.find_all() for f in folders):
         try:
             info = folder.stat()
             stamps.append((str(folder), info.st_ino, info.st_mtime_ns))

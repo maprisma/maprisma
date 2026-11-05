@@ -32,6 +32,8 @@ from pathlib import Path
 sys.path.insert(0, sys.argv[1])
 import addons
 addons.find.__defaults__ = ((addons.USER_DIR, Path('/nonexistent-system-addons')),)
+addons.find_all.__defaults__ = addons.find.__defaults__
+addons.chosen.__defaults__ = (addons.find.__defaults__[0], addons.ALLOWED_SIGNERS)
 import flutter_backend, ai_core
 from flutter_addons import AdapterRegistry
 service = flutter_backend.Service(ai_core.settings_file())

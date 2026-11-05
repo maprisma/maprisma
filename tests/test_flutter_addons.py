@@ -26,8 +26,7 @@ class FlutterAddonsTest(unittest.TestCase):
                      ('one-agent', 'agent', 'verified'), ('one-provider', 'provider', 'verified'),
                      ('off-agent', 'agent', 'verified'), ('bad-agent', 'agent', 'refused'),
                      ('ui-feature', 'feature', 'verified'), ('ui-extension', 'extension', 'verified'))]
-        with mock.patch.object(addons, 'find', return_value=[a.folder for a in items]), \
-                mock.patch.object(addons, 'verify', side_effect=items), \
+        with mock.patch.object(addons, 'chosen', return_value=items), \
                 mock.patch.object(addons, 'load') as load:
             registry = flutter_addons.AdapterRegistry()
             enabled = {a.id for a in items} - {'off-agent'}

@@ -340,8 +340,7 @@ final class AddonStore {
   Map<String, Addon> installed(List<String> dirs) {
     final registry = AddonRegistry(verifier, dirs);
     final found = <String, Addon>{};
-    for (final folder in registry.find()) {
-      final item = verifier.verify(folder);
+    for (final item in registry.chosen()) {
       if (item.id.isNotEmpty && item.state == 'verified') found[item.id] = item;
     }
     return found;
