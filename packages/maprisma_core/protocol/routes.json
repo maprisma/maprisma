@@ -45,7 +45,40 @@
    },
    "result": {
     "addons": [
-     "object"
+     {
+      "capabilities": [
+       "string"
+      ],
+      "description": "string",
+      "enabled": "bool",
+      "id": "string",
+      "kind": "string",
+      "legacy": "bool",
+      "loaded": "bool",
+      "name": "string",
+      "privacy": "int",
+      "provides": [
+       "string"
+      ],
+      "reads": [
+       "string"
+      ],
+      "removable": "bool",
+      "sends": [
+       "string"
+      ],
+      "sign_ins": [
+       {
+        "command": "string",
+        "name": "string"
+       }
+      ],
+      "state": "string",
+      "summary": "string",
+      "supported": "bool",
+      "verified": "bool",
+      "version": "string"
+     }
     ],
     "switched_on": [
      "string"
@@ -98,10 +131,47 @@
   "addons.list": {
    "area": "addons",
    "kind": "read",
-   "note": "",
+   "note": "The add-ons found (user folder first, then the app's), each verified; legacy: signed for Asterism (the old name), never loaded.",
    "params": {},
-   "result": null,
-   "source": null
+   "result": {
+    "addons": [
+     {
+      "capabilities": [
+       "string"
+      ],
+      "description": "string",
+      "enabled": "bool",
+      "id": "string",
+      "kind": "string",
+      "legacy": "bool",
+      "loaded": "bool",
+      "name": "string",
+      "privacy": "int",
+      "provides": [
+       "string"
+      ],
+      "reads": [
+       "string"
+      ],
+      "removable": "bool",
+      "sends": [
+       "string"
+      ],
+      "sign_ins": [
+       {
+        "command": "string",
+        "name": "string"
+       }
+      ],
+      "state": "string",
+      "summary": "string",
+      "supported": "bool",
+      "verified": "bool",
+      "version": "string"
+     }
+    ]
+   },
+   "source": "manual"
   },
   "addons.remove_apply": {
    "area": "addons",

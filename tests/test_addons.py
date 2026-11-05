@@ -219,6 +219,14 @@ class AddonsTest(unittest.TestCase):
             path.chmod(0o755 if path.is_dir() else 0o644)
         item = addons.verify(folder)
         self.assertEqual((item.state, item.reason), ("refused", addons.LEGACY_REASON))
+        # A reload switched on for it still loads nothing; the snapshot marks it legacy, not verified.
+        import flutter_addons
+        registry = flutter_addons.AdapterRegistry()
+        with mock.patch.object(addons, "find", return_value=[folder]):
+            registry.reload({"agent-goose"})
+        card = registry.snapshot({"agent-goose"})["addons"][0]
+        self.assertEqual((card["state"], card["legacy"], card["verified"], card["loaded"]),
+                         ("refused", True, False, False))
         # A changed manifest is no longer signed by either key: an ordinary refusal.
         (folder / "MANIFEST.sha256").write_text((folder / "MANIFEST.sha256").read_text() + "\n")
         item = addons.verify(folder)

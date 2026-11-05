@@ -21,7 +21,7 @@ A parameter written `name?` may be left out.
 | `addons.file_preview` | preview | `path`: ? | ? |
 | `addons.hints` | read | — | `lines` Each line has kind (off, new, updates), column (agents, providers) and text; off and new have ids, updates has updates. |
 | `addons.install` | change | — | ? |
-| `addons.list` | read | — | ? |
+| `addons.list` | read | — | `addons` The add-ons found (user folder first, then the app's), each verified; legacy: signed for Asterism (the old name), never loaded. |
 | `addons.remove_apply` | change | `preview`: ? | ? |
 | `addons.remove_preview` | preview | `id`: ? | ? |
 | `addons.remove_undo` | change | `undo`: ? | ? |
