@@ -463,6 +463,20 @@ class CoreClient {
     'provider': provider,
   });
 
+  Future<Map<String, dynamic>> modelsChooseApply({required String preview}) =>
+      transport.call('models.choose_apply', {'preview': preview});
+
+  Future<Map<String, dynamic>> modelsChoosePreview({
+    required Object? model,
+    required String provider,
+  }) => transport.call('models.choose_preview', {
+    'model': model,
+    'provider': provider,
+  });
+
+  Future<Map<String, dynamic>> modelsChooseUndo({required String undo}) =>
+      transport.call('models.choose_undo', {'undo': undo});
+
   Future<Map<String, dynamic>> modelsRemoveApply({required Object? removal}) =>
       transport.call('models.remove_apply', {'removal': removal});
 
