@@ -84,7 +84,7 @@
     <li><b>Coding agents</b> — Claude Code, Codex, GitHub Copilot, Cursor CLI, Gemini, OpenCode, Pi,
       Hermes and more: their version, plan, limits and usage, and what each one still needs, with
       the command that fixes it.</li>
-    <li><b>Local LLMs</b> — llama.cpp, Ollama, LM Studio, vLLM, Jan and KoboldCpp: install them,
+    <li><b>Local LLMs</b> — llama.cpp, Ollama, LM Studio, vLLM, Jan, KoboldCpp and Strata: install them,
       download models, set the context size that fits your graphics card, and start them together
       with the agents that use them.</li>
     <li><b>MCP servers and skills</b> — found on your computer or on the web, with recommended
@@ -534,6 +534,7 @@
       <tr><td><b>vLLM</b></td><td>For NVIDIA cards, in its own Python environment.</td></tr>
       <tr><td><b>Jan</b></td><td>Its AppImage, unpacked, with Jan's engine as a background service for agents.</td></tr>
       <tr><td><b>KoboldCpp</b></td><td>The official single-file build, run as a model router.</td></tr>
+      <tr><td><b>Strata</b></td><td>Its own installer (<code>install.sh</code> of the latest release, checked against the SHA-256 the release lists), which puts Strata’s terminal in <code>~/.local/share/strata/terminal</code>. Its engine and models come later, in Strata’s own screens (see <a href="#strata">Strata</a>).</td></tr>
     </tbody>
   </table>
   <p>Installed this way, a local LLM also offers <b>Update…</b> (the previous version is kept as a
@@ -542,7 +543,7 @@
 
   <h2 id="install-runtime-flutter">Installing in the Flutter preview</h2>
   <p>In the Flutter preview, a local LLM that is not installed yet shows <b>Install</b> under Providers and models, and the first-agent guide offers <b>Install mise</b>, <b>Install Node.js</b> and <b>Install</b> for the local LLM its route needs. Maprisma first looks up the latest release and shows it on a card: its files and their size, the program folder (<code>~/.local/share/ai-agents-map/&lt;name&gt;</code>, one folder per version), the model folder inside it and your graphics card. For llama.cpp and KoboldCpp, choose the build there (Vulkan, ROCm, CUDA or CPU); another build is looked up again before anything is installed. A local LLM with a user service also offers <b>Start now</b> and <b>Start at login</b>.</p>
-  <p><b>Install</b> downloads the files, checks each one against the checksum its release lists, and unpacks them; nothing of the download runs while it is installed (Jan’s AppImage unpacks itself in a closed-in sandbox). A program that is already installed some other way, or a settings file or service that already exists, is never replaced: the card refuses it. Ollama, llama.cpp, KoboldCpp, Jan and mise install this way; LM Studio and vLLM do not, because no checksummed release can be taken for them.</p>
+  <p><b>Install</b> downloads the files, checks each one against the checksum its release lists, and unpacks them; nothing of the download runs while it is installed (Jan’s AppImage unpacks itself in a closed-in sandbox). A program that is already installed some other way, or a settings file or service that already exists, is never replaced: the card refuses it. Ollama, llama.cpp, KoboldCpp, Jan, Strata and mise install this way; LM Studio and vLLM do not, because no checksummed release can be taken for them.</p>
   <p>Every step you start from the first-agent guide — installing, signing in, the test question, Providers and models, Connections — brings you back to the guide with <b>Back</b>, refreshed, so the step just done shows as done.</p>
 
   <h2 id="start-with-agents">Starting and stopping with agents</h2>
@@ -554,6 +555,27 @@
   Settings › <b>Start local LLMs with their agents</b>.</p>
   <div class="note"><p><b>Note</b> KoboldCpp takes a few seconds to start, longer than some agents
   wait. So it starts at login, and when the last agent closes only its model is unloaded.</p></div>
+  <div class="note"><p><b>Note</b> Strata is not started with its agents. Start it on the map
+  (the ▶ button on its box) or in Strata itself before you work with an agent connected to it.</p></div>
+
+  <h2 id="strata">Strata</h2>
+  <p>Strata is a local inference engine with a terminal app of its own. It serves one model at a time on
+  <code>127.0.0.1:8080</code> and speaks the OpenAI and Anthropic APIs, so agents connect to it like to
+  the other local LLMs. Maprisma finds it by its own <code>strata</code> command (another program with
+  that name, such as the Strata file manager in <code>/usr/bin</code>, is not taken for it), by its
+  running server, and by its models: the run configs Strata keeps in
+  <code>~/.local/share/strata/install</code>.</p>
+  <p>Choosing, downloading and tuning a model happens in Strata’s own screens: run
+  <code>strata launch</code> in a terminal (<code>strata launch --status</code> shows what is serving).
+  Once Strata has started a model this way, it remembers it as a launch preset. From then on
+  <b>Start</b> on the map (the ▶ button on Strata’s box) starts the preset used last
+  (<code>strata launch --preset … --no-tui</code>, which returns when the model serves; large models take
+  a few minutes), and <b>Stop</b> stops it (<code>strata launch --stop</code>).</p>
+  <p>Strata and llama.cpp both use port 8080 unless told otherwise. An agent connected from the map
+  names its local LLM (<code>strata-local</code>), so it stays Strata’s even when llama.cpp uses that port
+  too; only one of them can serve on a port at a time.</p>
+  <p><b>Uninstall…</b> removes only Strata’s terminal and the <code>strata</code> command it installed.
+  Its engines, run configs and models stay where they are; remove them in Strata or by hand.</p>
 
   <h2 id="llm-details">A local LLM's details</h2>
   <p>Click a local LLM's card on Setup, or right-click its box on the map › <b>Details</b>. Below the
