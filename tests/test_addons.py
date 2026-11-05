@@ -210,28 +210,6 @@ class AddonsTest(unittest.TestCase):
         (system / "insights").mkdir()
         self.assertEqual(addons.find((self.root, system)), [self.root / "insights"])
 
-    def test_a_refused_user_copy_does_not_hide_the_apps_own(self):
-        # An old add-on left in the user folder (here: an Asterism-era "needs") is refused; the copy that
-        # came with the app is used instead. A verified user copy still wins; none verified: the user's refusal.
-        system = self.root.parent / "system"
-        system.mkdir(mode=0o755)
-        self.build()
-        os.replace(self.root / "insights", system / "insights")
-        self.build(meta={"needs": "asterism >= 0.11.1"})
-        found = addons.chosen((self.root, system), self.signers)
-        self.assertEqual([(a.state, Path(a.folder).parent) for a in found], [("verified", system)])
-        found = addons.load_all({"insights"}, dirs=(self.root, system), signers=self.signers, hooks=self.hooks)
-        self.assertEqual([(a.state, Path(a.folder).parent) for a in found], [("loaded", system)])
-        shutil.rmtree(self.root / "insights")
-        self.build(meta={"version": "2.0.0"})
-        found = addons.chosen((self.root, system), self.signers)
-        self.assertEqual([(a.version, Path(a.folder).parent) for a in found], [("2.0.0", self.root)])
-        shutil.rmtree(system / "insights")
-        shutil.rmtree(self.root / "insights")
-        self.build(meta={"needs": "asterism >= 0.11.1"})
-        found = addons.chosen((self.root, system), self.signers)
-        self.assertEqual([(a.state, Path(a.folder).parent) for a in found], [("refused", self.root)])
-
     def test_translations(self):
         api = addon_api.AddonAPI("insights", edition.TITLES, addons.strings(self.verify(self.build())))
         with mock.patch("i18n.current", return_value="de"):

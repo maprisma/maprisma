@@ -23,7 +23,7 @@ class AdapterRegistry:
         self.hooks.clear()
         harnesses.remove_added()
         providers.remove_added()
-        self.items = addons.chosen()
+        self.items = [addons.verify(path) for path in addons.find()]
         verified = [item for item in self.items if item.state == "verified"]
         harnesses.hide_built_in({key for item in verified if item.kind == "agent" for key in item.provides})
         providers.hide_built_in({key for item in verified if item.kind == "provider" for key in item.provides})

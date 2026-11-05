@@ -382,39 +382,6 @@ def find(dirs=(USER_DIR, SYSTEM_DIR)) -> list:
     return found
 
 
-def find_all(dirs=(USER_DIR, SYSTEM_DIR)) -> list:
-    """Every add-on folder per id, the user's first, in find()'s order: [[user folder, system folder], …]."""
-    order, by_id = [], {}
-    for base in dirs:
-        try:
-            entries = sorted(Path(base).iterdir())
-        except OSError:
-            continue
-        for path in entries[:100]:
-            if path.name not in by_id:
-                order.append(path.name)
-                by_id[path.name] = []
-            by_id[path.name].append(path)
-    return [by_id[name] for name in order]
-
-
-def chosen(dirs=(USER_DIR, SYSTEM_DIR), signers: str = ALLOWED_SIGNERS) -> list:
-    """One verified add-on per id: the user's copy, unless it is refused and a copy installed with the app
-    verifies (an old add-on left in the user folder must not hide the app's own); none verifies: the
-    user's copy, with its refusal."""
-    result = []
-    for folders in find_all(dirs):
-        first = None
-        for folder in folders:
-            item = verify(folder, signers)
-            if item.state == "verified":
-                first = item
-                break
-            first = first or item
-        result.append(first)
-    return result
-
-
 def load_all(enabled, dirs=(USER_DIR, SYSTEM_DIR), signers: str = ALLOWED_SIGNERS,
              hooks: addon_api.Hooks = addon_api.HOOKS) -> list:
     """Verify every add-on found (to show its state) and load the ones switched on; then the
@@ -422,7 +389,7 @@ def load_all(enabled, dirs=(USER_DIR, SYSTEM_DIR), signers: str = ALLOWED_SIGNER
     hooks.clear()
     harnesses.remove_added()
     providers.remove_added()
-    result = chosen(dirs, signers)
+    result = [verify(folder, signers) for folder in find(dirs)]
     for addon in result:
         # Its own icon (checked in verify): kept in the cache, used for its card and its agent.
         if addon.state == "verified" and "icon.svg" in addon.files:

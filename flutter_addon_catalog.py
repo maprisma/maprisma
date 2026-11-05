@@ -29,7 +29,8 @@ TTL = 600
 
 def installed() -> dict[str, addons.Addon]:
     found = {}
-    for item in addons.chosen():
+    for path in addons.find():
+        item = addons.verify(path)
         if item.id and item.state == 'verified':
             found[item.id] = item
     return found

@@ -554,56 +554,6 @@ final class AddonRegistry {
     return found;
   }
 
-  /// addons.find_all: every folder per id, the user's first, in find()'s
-  /// order.
-  List<List<String>> findAll() {
-    final order = <String>[], byId = <String, List<String>>{};
-    for (final base in dirs) {
-      List<String> entries;
-      try {
-        entries = [
-          for (final e in Directory(base).listSync(followLinks: false)) e.path,
-        ]..sort();
-      } on FileSystemException {
-        continue;
-      }
-      for (final path in entries.take(100)) {
-        final name = p.basename(path);
-        if (!byId.containsKey(name)) {
-          order.add(name);
-          byId[name] = [];
-        }
-        byId[name]!.add(path);
-      }
-    }
-    return [for (final name in order) byId[name]!];
-  }
-
-  /// addons.chosen: one add-on per id, the user's copy unless it is refused
-  /// and a copy installed with the app verifies (an old add-on left in the
-  /// user folder must not hide the app's own); none verifies: the user's
-  /// copy, with its refusal.
-  List<Addon> chosen() {
-    final result = <Addon>[];
-    for (final folders in findAll()) {
-      Addon? first;
-      for (final folder in folders) {
-        final item = verifier.verify(folder);
-        if (item.state == 'verified') {
-          final refusal = dataOnlyRefusal(item);
-          if (refusal != null) _refuse(item, refusal);
-        }
-        if (item.state == 'verified') {
-          first = item;
-          break;
-        }
-        first ??= item;
-      }
-      result.add(first!);
-    }
-    return result;
-  }
-
   /// Whether this core can take a verified add-on as data: its code (if
   /// any) is code the core has built in.
   static String? dataOnlyRefusal(Addon addon) {
@@ -623,7 +573,12 @@ final class AddonRegistry {
   }
 
   void reload(Set<String> enabled) {
-    items = chosen();
+    items = [for (final folder in find()) verifier.verify(folder)];
+    for (final item in items) {
+      if (item.state != 'verified') continue;
+      final refusal = dataOnlyRefusal(item);
+      if (refusal != null) _refuse(item, refusal);
+    }
     final verified = items.where((i) => i.state == 'verified').toList();
     final hiddenAgents = {
       for (final i in verified)
