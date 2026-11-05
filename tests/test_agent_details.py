@@ -1,3 +1,4 @@
+import datetime as dt
 import json
 import os
 import sys
@@ -142,6 +143,19 @@ sleep 60
         d = ad.details_for("claude", usage_dir=usage)
         self.assertTrue(d.limits[0].stale)
         self.assertEqual(d.limits[0].measured_at.isoformat(), "2026-10-13T09:50:00+00:00")   # limitsFetchedAt first
+
+    def test_limits_without_a_time_are_as_old_as_the_record(self):
+        usage = self.home / "usage"
+        usage.mkdir()
+        record = usage / "claude.json"
+        record.write_text(json.dumps({"limits": [{"label": "Week", "percent": 0.4}]}))
+        written = dt.datetime(2026, 11, 5, 9, 30, 12, tzinfo=dt.timezone.utc)
+        os.utime(record, (written.timestamp(), written.timestamp()))
+        d = ad.details_for("claude", usage_dir=usage)
+        self.assertEqual(d.limits[0].measured_at, written)                    # the file's time
+        later = written + dt.timedelta(hours=2)
+        self.assertEqual(ad.current_limits(d.limits, later), [])              # no reset and too old
+        self.assertEqual(ad.current_limits(d.limits, written), d.limits)
 
     def test_plan_label_names_service_codes(self):
         self.assertEqual(ad.plan_label("prolite"), "Pro Lite")

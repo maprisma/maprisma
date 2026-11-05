@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:maprisma_core/src/adapters.dart';
+import 'package:maprisma_core/src/agent_badges.dart';
 import 'package:maprisma_core/src/agent_details.dart';
 import 'package:maprisma_core/src/usage_rpc.dart';
 import 'package:maprisma_core/src/desktop.dart';
@@ -79,6 +80,23 @@ void main() {
       details.usageIsStale('claude', ['.claude/.credentials.json']),
       isTrue,
     );
+  });
+
+  test('limits whose record names no time are as old as its file', () {
+    final record = File('${root.path}/state/omarchy/agents/usage/claude.json')
+      ..createSync(recursive: true)
+      ..writeAsStringSync(
+        '{"limits": [{"label": "Week", "percent": 0.4}], "tierLabel": "Pro"}',
+      );
+    final written = DateTime.utc(2026, 11, 5, 9, 30, 12);
+    record.setLastModifiedSync(written);
+    final claude = builtinAdapters().firstWhere((a) => a.command == 'claude');
+    final limits = details.read(claude).limits;
+    expect(limits.single['measured_at'], AgentInfo.iso(written));
+    final later = written.add(const Duration(hours: 2));
+    expect(currentLimits(limits, later), isEmpty); // no reset, too old
+    expect(battery(limits, (0.75, 0.9), later), isNull);
+    expect(currentLimits(limits, written), limits); // fresh at first
   });
 
   test('not collected: never stale, never asked', () async {

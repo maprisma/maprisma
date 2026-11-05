@@ -273,7 +273,16 @@ def plan_label(raw) -> str:
     return PLAN_NAMES.get(text.strip().lower(), text)
 
 
-def apply_usage(details: Details, record: dict):
+def record_written(path: Path) -> dt.datetime | None:
+    """When a usage record was written (its mtime): when its limits were measured if it says nothing
+    itself, so limits of unknown age still grow old (current_limits, limits_stale)."""
+    try:
+        return dt.datetime.fromtimestamp(int(path.stat().st_mtime), dt.timezone.utc)   # whole seconds
+    except (OSError, OverflowError, ValueError):
+        return None
+
+
+def apply_usage(details: Details, record: dict, written: dt.datetime | None = None):
     if not record:
         return
     details.has_usage = bool(record.get("ready")) or bool(record.get("hasLocalStats"))
@@ -286,7 +295,8 @@ def apply_usage(details: Details, record: dict):
     details.usage_updated = _time(record.get("updatedAt"))
     details.usage_note = _text(record.get("usageStatusText"), 120)
     limits = record.get("limits")
-    measured = _usage_time(record.get("limitsFetchedAt")) or _usage_time(record.get("updatedAt"))
+    measured = (_usage_time(record.get("limitsFetchedAt")) or _usage_time(record.get("updatedAt"))
+                or written)      # no time of its own: the file's, never an age that is unknown for ever
     if isinstance(limits, list):
         for item in limits[:8]:
             if not isinstance(item, dict):
@@ -733,10 +743,12 @@ def details_for(command: str, usage_dir: Path = USAGE_DIR) -> Details:
             harness.details(details)
         except (OSError, ValueError, TypeError, AttributeError):
             pass
-    record = usage_record(command, usage_dir)
+    folder = usage_dir
+    record = usage_record(command, folder)
     if not record and usage_dir == USAGE_DIR and not has_usage_collector(command):
-        record = usage_record(command, native_usage_dir())   # asked of the agent itself (native_usage)
-    apply_usage(details, record)
+        folder = native_usage_dir()
+        record = usage_record(command, folder)   # asked of the agent itself (native_usage)
+    apply_usage(details, record, record_written(folder / f"{command}.json"))
     if not details.limits:
         # The agent's own store (an adapter's or an extension's limits() fact): plan and limits.
         if harness is not None and harness.limits is not None:

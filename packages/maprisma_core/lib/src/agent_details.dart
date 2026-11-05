@@ -737,11 +737,14 @@ final class DetailReaders {
     info.activeDays = count(usage['activeDays']);
     if (usage['limits'] is List) {
       // When the numbers were measured (the collector's limitsFetchedAt, else
-      // the record's updatedAt) and whether the collector kept them past a
-      // failed probe (limitsStale): agent_badges.currentLimits and
-      // limitsStale judge by them.
+      // the record's updatedAt, else when the file was written: an age never
+      // stays unknown) and whether the collector kept them past a failed
+      // probe (limitsStale): agent_badges.currentLimits and limitsStale
+      // judge by them.
       final measured =
-          usageTime(usage['limitsFetchedAt']) ?? usageTime(usage['updatedAt']);
+          usageTime(usage['limitsFetchedAt']) ??
+          usageTime(usage['updatedAt']) ??
+          recordWritten(usagePath(adapter.command));
       for (final item in (usage['limits'] as List).take(8)) {
         if (item is! Map || item['percent'] is! num) continue;
         final percent = item['percent'] as num;
@@ -814,6 +817,20 @@ final class DetailReaders {
         ? dig(files.json(path, limit: 8 * 1024 * 1024), key)
         : null;
     return {'on': on is bool ? on : null, 'url': access['extra_url'] ?? ''};
+  }
+
+  /// agent_details.record_written: when a usage record was written.
+  DateTime? recordWritten(String path) {
+    try {
+      final stat = File(path).statSync();
+      if (stat.type == FileSystemEntityType.notFound) return null;
+      return DateTime.fromMillisecondsSinceEpoch(
+        stat.modified.millisecondsSinceEpoch ~/ 1000 * 1000, // whole seconds
+        isUtc: true,
+      );
+    } on FileSystemException {
+      return null;
+    }
   }
 
   Map<String, dynamic> usageRecord(String command) {
