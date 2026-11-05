@@ -109,7 +109,26 @@ class HermesTest(unittest.TestCase):
         self.assertEqual(h1.active, 200)
         self.assertEqual(h1.replies, 3)
         self.assertAlmostEqual(h1.cost, 0.2)
+        self.assertTrue(h1.estimated)                       # estimated_cost_usd only: an API value, no bill
         self.assertEqual(h1.subagents["?"][0], 1)            # Hermes names no type for child sessions
+
+    def test_only_an_actual_cost_is_billed(self):
+        import datetime as dt
+        import agent_status
+        from unittest import mock
+        from types import SimpleNamespace
+        db = sqlite3.connect(self.db)
+        db.execute("INSERT INTO sessions VALUES ('h3', NULL, '/srv/b', NULL, ?, NULL, ?, 'claude-opus-5-5', 1, 1, 0, 0, 0,"
+                   " 0.4, 0.3)", (T0, T0 + 5))
+        db.commit()
+        db.close()
+        sessions = harness_hermes.sessions(self.db)
+        self.assertFalse(sessions["h3"].estimated)
+        self.assertAlmostEqual(sessions["h3"].cost, 0.3)
+        harness = SimpleNamespace(sessions=SimpleNamespace(collect=lambda: sessions))
+        with mock.patch.object(agent_status.harnesses, "get", return_value=harness):
+            spent = agent_status.costs("hermes", dt.date.fromtimestamp(T0))
+        self.assertAlmostEqual(spent.billed, 0.3)            # h1's estimated 0.2 is not a bill
 
     def test_without_messages_the_session_times_count(self):
         db = sqlite3.connect(self.db)

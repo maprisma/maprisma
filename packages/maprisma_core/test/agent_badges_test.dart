@@ -186,4 +186,37 @@ void main() {
       isTrue,
     );
   });
+
+  test("Hermes' estimated cost is no bill, its actual cost is", () {
+    final home = Directory.systemTemp.createTempSync('badges-hermes');
+    addTearDown(() => home.deleteSync(recursive: true));
+    Directory('${home.path}/.hermes').createSync(recursive: true);
+    final s = DateTime.now().millisecondsSinceEpoch / 1000;
+    Process.runSync('sqlite3', [
+      '${home.path}/.hermes/state.db',
+      'CREATE TABLE sessions(id TEXT, parent_session_id TEXT, cwd TEXT, '
+          'title TEXT, started_at REAL, ended_at REAL, last_activity_at REAL, '
+          'model TEXT, input_tokens INTEGER, output_tokens INTEGER, '
+          'reasoning_tokens INTEGER, cache_read_tokens INTEGER, '
+          'cache_write_tokens INTEGER, estimated_cost_usd REAL, '
+          'actual_cost_usd REAL);'
+          'CREATE TABLE messages(session_id TEXT, timestamp REAL);'
+          "INSERT INTO sessions VALUES('e', NULL, '/p', NULL, $s, NULL, $s, "
+          "'claude-opus-5-5', 10, 1, 0, 0, 0, 0.2, NULL);",
+    ]);
+    final hermes = builtinAdapters().firstWhere((a) => a.command == 'hermes');
+    final files = ScanFiles(
+      AppIdentity(environment: {'HOME': home.path, 'PATH': '/usr/bin:/bin'}),
+    );
+    final estimated = SessionReaders(files).read(hermes);
+    expect(estimated.values.single.cost, closeTo(0.2, 1e-9)); // its API value
+    expect(estimated.values.single.estimated, isTrue);
+    expect(UsageReaders(files).costs(hermes)!['billed'], 0.0);
+    Process.runSync('sqlite3', [
+      '${home.path}/.hermes/state.db',
+      "INSERT INTO sessions VALUES('a', NULL, '/p', NULL, $s, NULL, $s, "
+          "'claude-opus-5-5', 10, 1, 0, 0, 0, 0.4, 0.3);",
+    ]);
+    expect(UsageReaders(files).costs(hermes)!['billed'], closeTo(0.3, 1e-9));
+  });
 }

@@ -26,7 +26,7 @@ def sessions(db_path: Path = DB) -> dict:
         rows = db.execute(
             "SELECT id, parent_session_id, cwd, started_at, COALESCE(last_activity_at, ended_at, started_at),"
             " model, input_tokens, COALESCE(output_tokens, 0) + COALESCE(reasoning_tokens, 0),"
-            " cache_read_tokens, cache_write_tokens, COALESCE(actual_cost_usd, estimated_cost_usd)"
+            " cache_read_tokens, cache_write_tokens, COALESCE(actual_cost_usd, estimated_cost_usd), actual_cost_usd"
             " FROM sessions ORDER BY started_at DESC LIMIT ?", (harnesses.MAX_SESSIONS,)).fetchall()
         times: dict = {}
         for sid, stamp in db.execute(
@@ -41,13 +41,14 @@ def sessions(db_path: Path = DB) -> dict:
     finally:
         db.close()
     sessions, runs = {}, []
-    for sid, parent, cwd, started, last, model, inp, out, cache_read, cache_write, cost in rows:
+    for sid, parent, cwd, started, last, model, inp, out, cache_read, cache_write, cost, actual in rows:
         s = Session(cwd=harnesses.folder(cwd))
         s.tokens[harnesses.model_name(model)] = [harnesses.number(inp), harnesses.number(out),
                                                  harnesses.number(cache_read), harnesses.number(cache_write)]
         fallback = [t for t in (started, last) if isinstance(t, (int, float))]
         harnesses.add_times(s, times.get(str(sid)) or fallback)
         s.cost = harnesses.money(cost)
+        s.estimated = s.cost > 0 and harnesses.money(actual) <= 0     # an estimate is no bill (Costs.billed)
         if parent:
             runs.append((str(parent), s))
         else:

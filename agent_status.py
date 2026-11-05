@@ -548,8 +548,8 @@ def costs(command: str, today: dt.date | None = None, sessions=None) -> Costs | 
             if model not in split and model and total > 0:      # no empty entries ("unknown (0)")
                 result.unpriced[model] = result.unpriced.get(model, 0) + total
         own = getattr(session, "cost", 0) or 0
-        if isinstance(own, (int, float)) and own > 0:
-            result.billed += own     # money the agent was told, set only where a provider bills it
+        if isinstance(own, (int, float)) and own > 0 and not getattr(session, "estimated", False):
+            result.billed += own     # money the agent was told, set only where a provider bills it (no estimate)
         if not session.tokens and isinstance(own, (int, float)) and own > 0:
             # No token counts, only the agent's own cost for the session (Crush): that counts.
             result.reported += own
