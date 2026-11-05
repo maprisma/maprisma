@@ -5,7 +5,6 @@ import 'package:path/path.dart' as p;
 import 'adapter_assets.g.dart';
 import 'installers.dart' show InstallHost, KoboldCppInstaller;
 import 'strata.dart';
-import 'model_guard.dart' show GpuUsage;
 import 'model_downloads.dart';
 import 'model_hub.dart';
 import 'provider_scans.dart';
@@ -329,21 +328,6 @@ final class ProviderOps {
           : (false, 'it did not unload the model');
     }
     if (rt.key == 'lmstudio') return _lmsRun(['unload', '--', model]);
-    if (rt.key == 'strata') {
-      // provider_strata.Engine.unload_all: the server stays up.
-      if ((await GpuUsage(files, providers).loadedModels(rt)).isEmpty) {
-        return (true, '');
-      }
-      final reply = await httpJson(
-        port,
-        '/v1/unload',
-        uid,
-        method: 'POST',
-        body: {},
-        timeout: const Duration(seconds: 30),
-      );
-      return reply is Map ? (true, '') : (false, 'Strata did not unload');
-    }
     // Engines that cannot unload one model stop the server (unload_all).
     return canControl(rt) ? stop(rt) : (false, 'no way to stop it');
   }

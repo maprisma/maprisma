@@ -190,7 +190,8 @@ class Engine(llm_engine.Engine):
         return llm_engine._run([binary, "launch", "--stop"]) if binary else (False, "strata not found")
 
     def unload_all(self, rt):
-        """POST /v1/unload frees the graphics memory; the server stays up (no key on this computer)."""
+        """POST /v1/unload frees the graphics memory; the server stays up (no key on this computer).
+        (runtime_ctl.unload; the map has no per-model unload for it: it cannot load models itself.)"""
         if not self.loaded_models(rt):
             return True, ""
         reply = llm_engine._http(rt, "/v1/unload", "POST", {}, timeout=30)
@@ -208,7 +209,6 @@ class Engine(llm_engine.Engine):
 
 PROVIDER = Provider("strata", "Strata", "local", detect=_detect, installer=_installer, engine=Engine(),
                     connect_key="strata-local", connect_label="Strata (local)",
-                    stays_up=True, unload=("/v1/unload", {}),
                     install=(Way("installer"), Way("manual", url="https://github.com/Niko1221/Strata#install")),
                     data=("~/.local/share/strata/install", "~/.local/share/strata/components", "~/.strata"),
                     configure=(Configure("Set up a model", ("strata", "launch"),
