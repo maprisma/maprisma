@@ -73,21 +73,7 @@ def llm_text(text: str, provider: str, label: str, url: str, models: list, conte
             entry.append(f"      {name}: {{}}")
     entry_text = "\n".join(entry) + "\n"
 
-    block = connect._top_block(text, "providers")
-    if block is None:
-        if not remove:
-            text = text + ("" if text.endswith("\n") or not text else "\n") + "providers:\n" + entry_text
-    else:
-        start, end = block
-        body = text[start:end]
-        header, _nl, rest = body.partition("\n")
-        # Our entry: from "  <provider>:" to the next two-space key.
-        rest = re.sub(rf"^  ([\"']?){re.escape(provider)}\1:.*\n(?:(?:    |\t\t).*\n?|\s*\n)*", "", rest, flags=re.MULTILINE)
-        if not remove:
-            rest = rest.rstrip("\n") + ("\n" if rest.strip() else "") + entry_text
-        header = "providers:" if header.strip() in ("providers: {}", "providers:{}") else header
-        new_body = header + "\n" + rest if rest.strip() else ("" if remove else header + "\n")
-        text = text[:start] + new_body + text[end:]
+    text = connect.providers_entry_replaced(text, entry_text, provider, remove)
 
     if remove:
         text = _model_off(text, provider)
@@ -136,17 +122,28 @@ def models_choices(current="", home=None):
     import connect
     from pathlib import Path
     text = connect._read((home or Path.home()) / ".hermes/config.yaml")
+    found = []
+    for start, end, key in _entries(text):
+        entry = text[start:end].partition("\n")[2]
+        models = re.search(r"^    models:[ \t]*\n((?:(?:      ).*\n?|\s*\n)*)", entry, re.MULTILINE)
+        if models:
+            found += [f"{key}/{name}" for name in
+                      re.findall(r"^      ([^\s#][^\n#]*?):(?=[ \t]|$)", models.group(1), re.MULTILINE)]
+    return found
+
+
+def _entries(text):
+    """(start, end, key) of each providers entry, offsets into `text`; [] when unreadable."""
+    import connect
     block = connect._top_block(text, "providers")
     if block is None:
         return []
-    found = []
-    body = text[block[0]:block[1]]
-    for entry in re.finditer(r"^  (\S+):[ \t]*\n((?:(?:    |\t\t).*\n?|\s*\n)*)", body, re.MULTILINE):
-        models = re.search(r"^    models:[ \t]*\n((?:(?:      ).*\n?|\s*\n)*)", entry.group(2), re.MULTILINE)
-        if models:
-            found += [f"{entry.group(1)}/{name}" for name in
-                      re.findall(r"^      ([^\s#][^\n#]*?):(?=[ \t]|$)", models.group(1), re.MULTILINE)]
-    return found
+    header, _nl, body = text[block[0]:block[1]].partition("\n")
+    offset = block[0] + len(header) + 1
+    try:
+        return [(offset + s, offset + e, key) for s, e, key in connect.provider_entries(body)]
+    except ValueError:
+        return []
 
 
 def models_plan(model, home):
@@ -161,15 +158,10 @@ def models_plan(model, home):
 
 def _first_provider(text: str):
     """(name, default model) of the first provider still in the providers block, or None."""
-    import connect
-    block = connect._top_block(text, "providers")
-    if block is None:
-        return None
-    body = text[block[0]:block[1]]
-    for found in re.finditer(r"^  (\S+):[ \t]*\n((?:(?:    |\t\t).*\n?|\s*\n)*)", body, re.MULTILINE):
-        default = re.search(r"^    default_model:\s*(\S.*?)\s*$", found.group(2), re.MULTILINE)
+    for start, end, key in _entries(text):
+        default = re.search(r"^    default_model:\s*(\S.*?)\s*$", text[start:end].partition("\n")[2], re.MULTILINE)
         if default:
-            return found.group(1), default.group(1)
+            return key, default.group(1)
     return None
 
 
@@ -197,9 +189,7 @@ def _model_off(text: str, provider: str) -> str:
 
 def local_llm_connected(texts, provider):
     import connect
-    block = connect._top_block(texts[0], "providers")
-    return bool(block) and re.search(rf"^  ([\"']?){re.escape(provider)}\1:", texts[0][block[0]:block[1]],
-                                     re.MULTILINE) is not None
+    return provider in connect.provider_keys(texts[0])
 
 
 def local_llm_active(texts, provider):

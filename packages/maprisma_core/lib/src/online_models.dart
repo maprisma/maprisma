@@ -123,22 +123,19 @@ final class OnlineModels {
         }
       case 'hermes':
         final text = config.read(_path('.hermes/config.yaml'));
-        final body = LocalLlm.topBlock(text, 'providers');
-        if (body == null) return [];
-        for (final entry in RegExp(
-          r'^  (\S+):[ \t]*\n((?:(?:    |\t\t).*\n?|\s*\n)*)',
-          multiLine: true,
-        ).allMatches(body)) {
+        for (final (start, end, key) in LocalLlm.providerEntriesIn(text)) {
+          final entry = text.substring(start, end);
+          final cut = entry.indexOf('\n');
           final models = RegExp(
             r'^    models:[ \t]*\n((?:(?:      ).*\n?|\s*\n)*)',
             multiLine: true,
-          ).firstMatch(entry[2]!);
+          ).firstMatch(cut < 0 ? '' : entry.substring(cut + 1));
           if (models == null) continue;
           for (final n in RegExp(
             r'^      ([^\s#][^\n#]*?):(?=[ \t]|$)',
             multiLine: true,
           ).allMatches(models[1]!)) {
-            found.add('${entry[1]}/${n[1]}');
+            found.add('$key/${n[1]}');
           }
         }
       case 'dsh':

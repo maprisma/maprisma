@@ -39,8 +39,7 @@ final class ReadService {
     details = DetailReaders(files, desktop, i18n);
     inventory = InventoryReader(files, catalog, details);
     activity = ActivityReaders(files, details);
-    graph = MapGraph(files, i18n)
-      ..programSignIn = details.limitsSignedIn;
+    graph = MapGraph(files, i18n)..programSignIn = details.limitsSignedIn;
   }
   final AppIdentity identity;
   final SettingsStore settings;

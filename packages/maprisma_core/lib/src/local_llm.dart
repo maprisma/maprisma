@@ -36,6 +36,92 @@ final class LocalLlm {
     }
   }
 
+  // connect._ENTRY_KEY / _BARE_KEY: a two-space providers entry key, bare,
+  // "double" (no escapes) or 'single' quoted, spaces allowed before the colon.
+  static final _entryKey = RegExp(
+    r'''^  (?:"([^"\\\n]*)"|'((?:[^'\n]|'')*)'|([^\s"'#?&*!|>%@`{}\[\],:-][^\n:#]*?))[ \t]*:(?:[ \t]|$)''',
+  );
+  static final _bareKey = RegExp(r'''^[^\s"'#?&*!|>%@`{}\[\],:-][^\n:#]*$''');
+
+  /// A provider name the writers can put down as a bare key.
+  static bool bareProviderKey(String name) =>
+      _bareKey.hasMatch(name) && name == name.trim();
+
+  /// connect.provider_entries: (start, end, key) of each entry in a providers
+  /// block's body (after its header line), with its deeper and blank lines.
+  /// Throws FormatException on a line it cannot read safely.
+  static List<(int, int, String)> providerEntries(String body) {
+    final found = <(int, int, String)>[];
+    var pos = 0;
+    int? start, end;
+    String? key;
+    void close() {
+      if (key != null) found.add((start!, end!, key!));
+      key = null;
+    }
+
+    for (final m in RegExp(r'[^\n]*\n|[^\n]+$').allMatches(body)) {
+      final line = m[0]!;
+      final bare = line.replaceFirst(RegExp(r'[\r\n]+$'), '');
+      if (key != null &&
+          (bare.trim().isEmpty ||
+              bare.startsWith('    ') ||
+              bare.startsWith('\t\t'))) {
+        end = pos + line.length;
+      } else if (bare.trim().isEmpty || bare.trimLeft().startsWith('#')) {
+        close();
+      } else {
+        final match = _entryKey.firstMatch(bare);
+        if (match == null) {
+          throw const FormatException(
+            'providers entry not readable; edit it by hand',
+          );
+        }
+        close();
+        start = pos;
+        end = pos + line.length;
+        key = match[1] ?? match[2]?.replaceAll("''", "'") ?? match[3]!;
+      }
+      pos += line.length;
+    }
+    close();
+    return found;
+  }
+
+  /// connect.provider_keys: [] when there is no readable providers block.
+  static List<String> providerKeys(String text) {
+    final block = topBlock(text, 'providers');
+    if (block == null) return [];
+    final cut = block.indexOf('\n');
+    if (cut < 0) return [];
+    try {
+      return [for (final e in providerEntries(block.substring(cut + 1))) e.$3];
+    } on FormatException {
+      return [];
+    }
+  }
+
+  /// hermes._entries: (start, end, key) with offsets into [text]; [] when
+  /// there is none or it is not readable.
+  static List<(int, int, String)> providerEntriesIn(String text) {
+    final block = topBlock(text, 'providers');
+    if (block == null) return [];
+    final cut = block.indexOf('\n');
+    if (cut < 0) return [];
+    final offset =
+        RegExp('^providers:', multiLine: true).firstMatch(text)!.start +
+        cut +
+        1;
+    try {
+      return [
+        for (final e in providerEntries(block.substring(cut + 1)))
+          (offset + e.$1, offset + e.$2, e.$3),
+      ];
+    } on FormatException {
+      return [];
+    }
+  }
+
   /// connect._top_block: the text of a top-level `key:` block in YAML.
   static String? topBlock(String text, String key) {
     final start = RegExp(
@@ -79,13 +165,7 @@ final class LocalLlm {
     if (texts.isEmpty || texts.any((t) => t == '\u0000')) return false;
     switch (adapter.command) {
       case 'hermes' || 'omp':
-        final block = topBlock(texts[0], 'providers');
-        return block != null &&
-            block.isNotEmpty &&
-            RegExp(
-              '^  ${RegExp.escape(key)}:',
-              multiLine: true,
-            ).hasMatch(block);
+        return providerKeys(texts[0]).contains(key);
       case 'pi':
         final data = _json(texts[0]);
         return data != null && _has(data['providers'] ?? {}, key);

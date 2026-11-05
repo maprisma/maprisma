@@ -39,14 +39,14 @@ String _dump(Map data) =>
       : (body.substring(0, cut), body.substring(cut + 1));
 }
 
-// The entry whether its key is written bare, "quoted" or 'quoted'.
-String _entryRemoved(String rest, String provider) => rest.replaceAll(
-  RegExp(
-    '^  (["\']?)${RegExp.escape(provider)}\\1:.*\\n(?:(?:    |\\t\\t).*\\n?|\\s*\\n)*',
-    multiLine: true,
-  ),
-  '',
-);
+// connect.providers_entry_replaced: the entry of that name, whatever its key
+// spelling; an entry it cannot read safely stops the edit.
+String _entryRemoved(String rest, String provider) {
+  for (final (start, end, key) in LocalLlm.providerEntries(rest).reversed) {
+    if (key == provider) rest = rest.substring(0, start) + rest.substring(end);
+  }
+  return rest;
+}
 
 String _trimEnd(String s) => s.replaceFirst(RegExp(r'\n+$'), '');
 
@@ -57,6 +57,11 @@ String _providersBlock(
   String provider,
   bool remove,
 ) {
+  if (!remove && !LocalLlm.bareProviderKey(provider)) {
+    throw const FormatException(
+      'providers entry not readable; edit it by hand',
+    );
+  }
   final start = _start(text, 'providers');
   if (start < 0) {
     if (remove) return text;
@@ -154,17 +159,14 @@ String hermesModelText(String text, String provider, String model) {
 }
 
 (String, String)? _hermesFirstProvider(String text) {
-  if (_start(text, 'providers') < 0) return null;
-  final body = _block(text, 'providers');
-  for (final found in RegExp(
-    r'^  (\S+):[ \t]*\n((?:(?:    |\t\t).*\n?|\s*\n)*)',
-    multiLine: true,
-  ).allMatches(body)) {
+  for (final (start, end, key) in LocalLlm.providerEntriesIn(text)) {
+    final entry = text.substring(start, end);
+    final cut = entry.indexOf('\n');
     final d = RegExp(
       r'^    default_model:\s*(\S.*?)\s*$',
       multiLine: true,
-    ).firstMatch(found[2]!);
-    if (d != null) return (found[1]!, d[1]!);
+    ).firstMatch(cut < 0 ? '' : entry.substring(cut + 1));
+    if (d != null) return (key, d[1]!);
   }
   return null;
 }

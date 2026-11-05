@@ -175,6 +175,74 @@ def _top_block(text: str, key: str):
     return match.start(), len(text)
 
 
+# A two-space entry key of a YAML providers block: bare, "double" (no escapes) or 'single' quoted, spaces
+# allowed before the colon. Anything else (escapes, flow or complex keys, anchors) is not guessed at.
+_ENTRY_KEY = re.compile(r"""  (?:"([^"\\\n]*)"|'((?:[^'\n]|'')*)'|([^\s"'#?&*!|>%@`{}\[\],:-][^\n:#]*?))[ \t]*:(?:[ \t]|$)""")
+_BARE_KEY = re.compile(r"""[^\s"'#?&*!|>%@`{}\[\],:-][^\n:#]*""")
+
+
+def provider_entries(body: str):
+    """[(start, end, key)] of the entries in a providers block's body (the text after its header line):
+    each two-space key line with its deeper (four spaces, two tabs) and blank lines. ValueError on a line
+    Maprisma cannot read safely, so that no writer guesses and no reader misnames an entry."""
+    found, pos, current = [], 0, None
+    for line in re.findall(r"[^\n]*\n|[^\n]+$", body):
+        bare = line.rstrip("\r\n")
+        if current is not None and (not bare.strip() or bare.startswith(("    ", "\t\t"))):
+            current[1] = pos + len(line)
+        elif not bare.strip() or bare.lstrip().startswith("#"):
+            if current is not None:
+                found.append(tuple(current))
+                current = None
+        else:
+            match = _ENTRY_KEY.match(bare)
+            if not match:
+                raise ValueError("providers entry not readable; edit it by hand")
+            if current is not None:
+                found.append(tuple(current))
+            double, single, plain = match.groups()
+            key = double if double is not None else single.replace("''", "'") if single is not None else plain
+            current = [pos, pos + len(line), key]
+        pos += len(line)
+    if current is not None:
+        found.append(tuple(current))
+    return found
+
+
+def provider_keys(text: str):
+    """The keys of the providers block in YAML text; [] when there is none or it is not readable."""
+    block = _top_block(text, "providers")
+    if block is None:
+        return []
+    _header, _nl, body = text[block[0]:block[1]].partition("\n")
+    try:
+        return [key for _start, _end, key in provider_entries(body)]
+    except ValueError:
+        return []
+
+
+def providers_entry_replaced(text: str, entry_text: str, provider: str, remove: bool) -> str:
+    """The providers block with `provider`'s entry (whatever its key spelling) removed, then `entry_text`
+    appended unless `remove`. Shared by Hermes and Oh My Pi."""
+    if not remove and (not _BARE_KEY.fullmatch(provider) or provider != provider.strip()):
+        raise ValueError("providers entry not readable; edit it by hand")
+    block = _top_block(text, "providers")
+    if block is None:
+        if remove:
+            return text
+        return text + ("" if text.endswith("\n") or not text else "\n") + "providers:\n" + entry_text
+    start, end = block
+    header, _nl, rest = text[start:end].partition("\n")
+    for e_start, e_end, key in reversed(provider_entries(rest)):
+        if key == provider:
+            rest = rest[:e_start] + rest[e_end:]
+    if not remove:
+        rest = rest.rstrip("\n") + ("\n" if rest.strip() else "") + entry_text
+    header = "providers:" if header.strip() in ("providers: {}", "providers:{}") else header
+    body = header + "\n" + rest if rest.strip() else ("" if remove else header + "\n")
+    return text[:start] + body + text[end:]
+
+
 # --- plan / apply / undo -------------------------------------------------------------------------
 
 def _llm(agent: str):
