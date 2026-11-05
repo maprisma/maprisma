@@ -229,7 +229,14 @@ final class CoreConnections {
   final String backupRoot;
   final _plans = <String, (DateTime, Plan)>{};
   final _undos = <String, String>{};
+  final _undoChoices = <String, List<(String, String?, String?)>>{};
   static const lifetime = Duration(minutes: 10);
+
+  /// Settings › provider_models for a plan's [Plan.choices]: the model a
+  /// local LLM uses now, and a change of it, made only from [from]
+  /// (FormatException when another change came first).
+  String? Function(String provider)? chosenModel;
+  void Function(String provider, String? from, String? to)? chooseModel;
 
   Map<String, dynamic> keep(Plan plan) {
     for (final links in [plan.linksAdd, plan.linksRemove]) {
@@ -321,15 +328,23 @@ final class CoreConnections {
       _plans.remove(ident);
       return {'ok': true, 'undo': null};
     }
+    for (final (provider, from, _) in plan.choices) {
+      if (chosenModel?.call(provider) != from) {
+        throw const FormatException('Model choice changed; refresh');
+      }
+    }
     final result = tasks.startPlan(
       encodePlan(plan, backupRoot),
-      registerBackup,
+      (done) => registerBackup(done, plan.choices),
     );
     _plans.remove(ident);
     return result;
   }
 
-  Map<String, dynamic> registerBackup(Map<String, dynamic> result) {
+  Map<String, dynamic> registerBackup(
+    Map<String, dynamic> result, [
+    List<(String, String?, String?)> choices = const [],
+  ]) {
     final keys = result.keys.toSet();
     if (!(keys.length == 1 && keys.contains('backup') ||
             keys.length == 2 &&
@@ -350,10 +365,29 @@ final class CoreConnections {
     }
     final token = newHandle();
     while (_undos.length >= 16) {
+      _undoChoices.remove(_undos.keys.first);
       _undos.remove(_undos.keys.first);
     }
     _undos[token] = backup;
+    // The files are written: the local LLM's own model follows, unless
+    // something else changed it meanwhile.
+    final made = [
+      for (final (provider, from, to) in choices)
+        if (_choose(provider, from, to)) (provider, from, to),
+    ];
+    if (made.isNotEmpty) _undoChoices[token] = made;
     return {'ok': true, 'undo': token, 'context_failures': failures};
+  }
+
+  bool _choose(String provider, String? from, String? to) {
+    final write = chooseModel;
+    if (write == null) return false;
+    try {
+      write(provider, from, to);
+      return true;
+    } on FormatException {
+      return false;
+    }
   }
 
   Map<String, dynamic> undo(String token) {
@@ -361,6 +395,11 @@ final class CoreConnections {
     if (folder == null) throw const FormatException('Unknown Undo handle');
     final restored = files.undo(folder);
     if (restored.isNotEmpty) _undos.remove(token);
+    // With its files, the local LLM's own model it moved, if still so.
+    final choices = _undoChoices.remove(token) ?? const [];
+    for (final (provider, from, to) in choices) {
+      _choose(provider, to, from);
+    }
     return {
       'ok': true,
       'restored': [for (final path in restored) files.tilde(path)],

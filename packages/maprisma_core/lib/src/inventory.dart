@@ -6,7 +6,6 @@ import 'local_llm.dart';
 import 'skill_plans.dart' show hermesSkillDirs;
 import 'agent_catalog.dart';
 import 'agent_details.dart';
-import 'map_graph.dart' show graphModelKey;
 import 'provider_scans.dart';
 import 'scan_files.dart';
 import 'provider_facts.dart';
@@ -380,27 +379,53 @@ final class InventoryReader {
         (a, b) => a.toLowerCase().compareTo(b.toLowerCase()),
       );
     }
-    // Reused model folders: their models, unless a local LLM lists them.
-    final listed = {
-      for (final rt in inv.runtimes.where((r) => r.installed))
-        for (final m in rt.models) graphModelKey(m),
-    };
-    final served = {
-      for (final rt in inv.runtimes.where((r) => r.installed))
-        if (rt.modelsDir.isNotEmpty) files.expand(rt.modelsDir),
-    };
-    for (final folder in modelFolders.take(50)) {
-      final path = files.expand(folder);
-      if (served.contains(path)) continue;
-      final models = [
-        for (final m in providers.ggufNames(path))
-          if (!listed.contains(graphModelKey(m))) m,
-      ];
-      if (models.isNotEmpty) {
-        inv.modelFolders.add({'path': tilde(files, path), 'models': models});
+    inv.modelFolders.addAll(reusedFolders(inv.runtimes, modelFolders));
+    return inv;
+  }
+
+  /// inventory.reused_folders: the reused model folders (Settings ›
+  /// model_folders) with their files, unless a local LLM serves that same
+  /// file: its models folder, or the same file reached another way. A file
+  /// of the same model name elsewhere (another quantization) stays.
+  List<Map<String, dynamic>> reusedFolders(
+    List<RuntimeRecord> runtimes,
+    List<String> modelFolders,
+  ) {
+    String real(String path) {
+      try {
+        return File(path).resolveSymbolicLinksSync();
+      } on FileSystemException {
+        return path;
       }
     }
-    return inv;
+
+    (int, int)? identity(String path) {
+      final info = files.posix.statBlocks(path, follow: true);
+      return info == null ? null : (info.dev, info.ino);
+    }
+
+    final served = {
+      for (final rt in runtimes.where((r) => r.installed))
+        if (rt.modelsDir.isNotEmpty) real(files.expand(rt.modelsDir)),
+    };
+    final servedFiles = {
+      for (final dir in served)
+        for (final file in providers.ggufFiles(dir)) ?identity(file),
+    };
+    final found = <Map<String, dynamic>>[];
+    for (final folder in modelFolders.take(50)) {
+      final path = files.expand(folder);
+      if (served.contains(real(path))) continue;
+      final models = {
+        for (final file in providers.ggufFiles(path))
+          if (!servedFiles.contains(identity(file)))
+            ProviderScans.ggufName(file),
+      }.take(500).toList();
+      if (models.isNotEmpty) {
+        found.add({'path': tilde(files, path), 'models': models});
+      }
+    }
+    return found;
   }
 
   Map<String, dynamic> snapshot(List<AgentRecord> agents) {

@@ -418,6 +418,12 @@ final class MapEdits {
       ?next,
       for (final c in selected) 'agent:$c',
     };
+    // The provider's own model (Settings › provider_models) follows its
+    // agents: in the same Apply and the same Undo as their files.
+    final chosen =
+        (reads.settings.value(reads.settings.load(), 'provider_models')
+            as Map)[pid];
+    final choice = switching && chosen == old ? (pid, old, next) : null;
     final builders = <Plan Function()>[];
     final actions = <Map<String, dynamic>>[], notes = <String>[];
     if (provider['kind'] == 'cloud') {
@@ -449,13 +455,17 @@ final class MapEdits {
         focus,
         selected,
         catalog,
+        choice,
       );
     }
     final rt = runtimes[pid];
     node(pid, {'runtime'});
     if (rt == null) throw const FormatException('Runtime unavailable');
     final name = next != null ? nodes[next]!['label'] as String : '';
-    if (!rt.models.contains(modelNode['label']) ||
+    // A model switched away from may be gone (a missing model's line is
+    // repaired this way); the model switched to must be served.
+    final present = rt.models.contains(modelNode['label']);
+    if (!switching && !present ||
         name.isNotEmpty && !chatModels(rt.models).contains(name)) {
       throw const FormatException('Model unavailable');
     }
@@ -473,7 +483,7 @@ final class MapEdits {
     }
     if ((providerFacts['engines'] as Map)[rt.key]?['can_load'] == true) {
       // The worker checks these again before it writes any configuration.
-      if (switching) {
+      if (switching && present) {
         guard(rt.key, selected);
         actions.add({
           'operation': 'model.unload',
@@ -502,6 +512,7 @@ final class MapEdits {
       focus,
       selected,
       catalog,
+      choice,
     );
   }
 
@@ -591,8 +602,9 @@ final class MapEdits {
     Map<String, Map> nodes,
     Set<String> focus,
     List<String> selected,
-    Map<String, AgentRecord> catalog,
-  ) {
+    Map<String, AgentRecord> catalog, [
+    (String, String?, String?)? choice,
+  ]) {
     if (builders.isEmpty && actions.isEmpty) {
       throw const FormatException('No editable model users');
     }
@@ -600,6 +612,7 @@ final class MapEdits {
         ? chainPlans(config, builders)
         : Plan('', '', '');
     plan.modelActions.addAll(actions);
+    if (choice != null && !plan.empty) plan.choices.add(choice);
     final result = connections.keep(plan);
     if (actions.isNotEmpty) result['empty'] = false;
     return {

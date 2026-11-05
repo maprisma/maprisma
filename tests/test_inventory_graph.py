@@ -474,7 +474,6 @@ class ReviewChainTest(unittest.TestCase):
         """F11: a folder saved by Reuse model folder that no local LLM lists."""
         folder = self.home / "Old/models"
         self.write("Old/models/qwen-7b-Q4_K_M.gguf", "")
-        self.write("Old/models/served.gguf", "")
         llama = invmod.Runtime("llamacpp", "llama.cpp", True, False, models=["served"])
         found = invmod.reused_folders([llama], [str(folder)])
         self.assertEqual(found, [("~/Old/models", ["qwen-7b-Q4_K_M"])])
@@ -484,3 +483,43 @@ class ReviewChainTest(unittest.TestCase):
         # A folder a runtime already lists its models from is that runtime's.
         llama.models_dir = "~/Old/models"
         self.assertEqual(invmod.reused_folders([llama], [str(folder)]), [])
+
+    def test_a_reused_file_is_hidden_only_when_the_runtime_serves_that_file(self):
+        """Round 2 #11: another quantization of the same model stays; the same file reached by a link goes."""
+        for name in ("Old/models/qwen-Q8_0.gguf", "Old/models/gemma.gguf", "llama/qwen-Q4_K_M.gguf", "llama/gemma.gguf"):
+            self.write(name, "")
+        (self.home / "Old/models/same.gguf").symlink_to(self.home / "llama/gemma.gguf")
+        llama = invmod.Runtime("llamacpp", "llama.cpp", True, False, models_dir="~/llama",
+                               models=["qwen-Q4_K_M", "gemma"])
+        found = invmod.reused_folders([llama], [str(self.home / "Old/models"), str(self.home / "llama")])
+        self.assertEqual(found, [("~/Old/models", ["gemma", "qwen-Q8_0"])])
+        ids = {n.id for n in graph.build([], {}, invmod.Inventory(runtimes=[llama], model_folders=found)).nodes}
+        self.assertLessEqual({"model:folder:~/Old/models:qwen-q8_0", "model:folder:~/Old/models:gemma",
+                              "model:runtime:llamacpp:qwen-q4_k_m"}, ids)
+
+    def test_a_runtime_detected_on_another_port_is_a_broken_line(self):
+        """Round 2 #9: llama.cpp on 9090, Pi still set to 8080."""
+        pi = self.agent("pi", "Pi")
+        provider = ad.provider_for_url("llama", "http://127.0.0.1:8080/v1")
+        provider.active = True
+        self.assertEqual((provider.runtime, provider.port), ("llama.cpp", 8080))
+        inv = invmod.Inventory(runtimes=[invmod.Runtime("llamacpp", "llama.cpp", True, True,
+                                                        address="127.0.0.1:9090", models=["qwen"])])
+        self.assertIsNone(invmod.local_runtime(provider, inv.runtimes))
+        self.assertIs(invmod.moved_runtime(provider, inv.runtimes), inv.runtimes[0])
+        g = graph.build([pi], {"pi": ad.Details(model="qwen (llama)", providers=[provider])}, inv)
+        self.assertIn(("agent:pi", "runtime:llamacpp", "failed"), self.edges(g))
+        self.assertNotIn(("agent:pi", "runtime:llamacpp", "uses"), self.edges(g))
+        self.assertFalse([e for e in g.edges if e.source == "agent:pi" and e.kind == "default"])
+        self.assertFalse([n for n in g.nodes if n.kind == "cloud"])
+        self.assertEqual([e.dangling for e in g.edges if e.kind == "failed"], ["qwen"])
+        claude = self.agent("claude", "Claude Code")
+        local = ad.provider_for_url("Anthropic API", "http://localhost:8080")
+        local.active = True
+        g = graph.build([claude], {"claude": ad.Details(model="qwen", providers=[local])}, inv)
+        self.assertIn(("agent:claude", "runtime:llamacpp", "failed"), self.edges(g))
+        self.assertFalse([n for n in g.nodes if n.kind == "cloud"])
+        for address in ("127.0.0.1:8080", ""):
+            inv.runtimes[0].address = address
+            self.assertIs(invmod.local_runtime(provider, inv.runtimes), inv.runtimes[0])
+            self.assertIsNone(invmod.moved_runtime(provider, inv.runtimes))

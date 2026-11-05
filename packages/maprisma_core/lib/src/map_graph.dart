@@ -339,6 +339,8 @@ final class MapGraph {
       );
       var (model, modelProvider) = splitModel(info?.model ?? '');
       final local = <String, String>{};
+      // A local provider set to a port its LLM no longer listens on.
+      final stale = <String, RuntimeRecord>{};
       final providers = List<Map<String, dynamic>>.from(info?.providers ?? [])
         ..sort(
           (a, b) => (a['active'] == true ? 0 : 1).compareTo(
@@ -356,6 +358,8 @@ final class MapGraph {
             'runtime:${rt.key}',
             provider['active'] == true ? 'uses' : 'available',
           );
+        } else if (movedRuntime(provider, inv.runtimes) case final moved?) {
+          stale['${provider['name']}'] = moved;
         }
       }
       // A model with no provider of its own, while the agent's one provider
@@ -364,16 +368,20 @@ final class MapGraph {
       final active = providers.where((p) => p['active'] == true).toList();
       if (modelProvider.isEmpty &&
           active.length == 1 &&
-          local.containsKey(active.single['name'])) {
+          (local.containsKey(active.single['name']) ||
+              stale.containsKey(active.single['name']))) {
         modelProvider = active.single['name'] as String;
       }
-      final dangling = inv.runtimes.firstWhereOrNull(
-        (rt) =>
-            rt.installed &&
-            modelProvider.isNotEmpty &&
-            names[rt.key] == modelProvider &&
-            !local.containsKey(modelProvider),
-      );
+      // Also a provider whose LLM moved to another port: a broken line to it.
+      final dangling =
+          stale[modelProvider] ??
+          inv.runtimes.firstWhereOrNull(
+            (rt) =>
+                rt.installed &&
+                modelProvider.isNotEmpty &&
+                names[rt.key] == modelProvider &&
+                !local.containsKey(modelProvider),
+          );
       if (dangling != null) {
         runtime(dangling);
         link(
@@ -392,7 +400,10 @@ final class MapGraph {
       } else if (modelProvider.isEmpty) {
         cloud = clouds[agent.command] as String? ?? '';
       }
-      if (clouds.containsKey(agent.command) && local.isEmpty && cloud.isEmpty) {
+      if (clouds.containsKey(agent.command) &&
+          local.isEmpty &&
+          stale.isEmpty &&
+          cloud.isEmpty) {
         cloud = clouds[agent.command];
       }
       if (cloud.isNotEmpty) {
@@ -433,9 +444,10 @@ final class MapGraph {
         if (names.values
                 .map((v) => '$v'.toLowerCase())
                 .contains(provider.toLowerCase()) ||
-            local.keys
-                .map((v) => v.toLowerCase())
-                .contains(provider.toLowerCase())) {
+            [
+              ...local.keys,
+              ...stale.keys,
+            ].map((v) => v.toLowerCase()).contains(provider.toLowerCase())) {
           continue;
         }
         final service = providerName(provider),

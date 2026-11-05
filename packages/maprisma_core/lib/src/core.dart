@@ -235,11 +235,10 @@ final class CoreService {
   String? migrationError;
   late final tasks = CoreTasks(defaultWorkerCommand(identity.environment));
   late final config = ConfigFiles(Posix(), identity.home);
-  late final connections = CoreConnections(
-    config,
-    tasks,
-    '${identity.configDir}/connection-backups',
-  );
+  late final connections =
+      CoreConnections(config, tasks, '${identity.configDir}/connection-backups')
+        ..chosenModel = ((provider) => _providerModels()[provider])
+        ..chooseModel = _writeChoice;
   late final mcp = McpPlans(
     reads.files,
     config,
@@ -3175,15 +3174,7 @@ final class CoreService {
           'action_rules': _rulesForHelper(column),
           'rule_hints': settings.value(settings.load(), 'action_rule_hints'),
           'settings_path': identity.settingsPath,
-          'map_nodes': [
-            for (final node in (mapGraph['nodes'] as List).cast<Map>())
-              if (node['kind'] != 'more' && node['kind'] != 'skills')
-                {
-                  'id': node['id'],
-                  'kind': node['kind'],
-                  'label': node['label'],
-                },
-          ],
+          'map_nodes': smartMapNodes(mapGraph),
           'map_edges': [
             for (final edge in (mapGraph['edges'] as List).cast<Map>())
               if (edge['kind'] != 'serves' && edge['kind'] != 'skills')
@@ -4437,8 +4428,32 @@ final class CoreService {
       '${e.key}': '${e.value}',
   };
 
+  /// Changes only that local LLM's entry, and only if nothing changed it.
+  void _writeChoice(String provider, String? from, String? to) {
+    final models = _providerModels();
+    if (models[provider] != from) {
+      throw const FormatException('Model choice changed; refresh');
+    }
+    if (to == null) {
+      models.remove(provider);
+    } else {
+      models[provider] = to;
+    }
+    settings.saveOwn({'provider_models': models});
+  }
+
+  /// A local LLM lists [label] now: its own current inventory, not the map.
+  bool _servedNow(String provider, String label) =>
+      reads.inventory.providers.scan().any(
+        (r) =>
+            r.installed &&
+            'runtime:${r.key}' == provider &&
+            r.models.contains(label),
+      );
+
   /// models.choose_*: the previews and Undos of a local LLM's own model.
-  final _choices = <String, (DateTime, String, String?, String?, bool)>{};
+  final _choices =
+      <String, (DateTime, String, String?, String?, bool, String)>{};
 
   /// flutter: a provider → model line on the map is the local LLM's own
   /// choice (an agent connected to it later gets that model). The rules were
@@ -4452,24 +4467,16 @@ final class CoreService {
     while (_choices.length >= 32) {
       _choices.remove(_choices.keys.first);
     }
-    String keep(String provider, String? before, String? after, bool undo) {
+    String keep(
+      String provider,
+      String? before,
+      String? after,
+      bool undo, [
+      String label = '',
+    ]) {
       final token = newHandle();
-      _choices[token] = (now, provider, before, after, undo);
+      _choices[token] = (now, provider, before, after, undo, label);
       return token;
-    }
-
-    // Changes only that local LLM's entry, and only if nothing changed it.
-    void write(String provider, String? from, String? to) {
-      final models = _providerModels();
-      if (models[provider] != from) {
-        throw const FormatException('Model choice changed; refresh');
-      }
-      if (to == null) {
-        models.remove(provider);
-      } else {
-        models[provider] = to;
-      }
-      settings.saveOwn({'provider_models': models});
     }
 
     if (method == 'models.choose_preview') {
@@ -4502,10 +4509,18 @@ final class CoreService {
           i18n.text('This model cannot be connected here.'),
         );
       }
+      // A model the map keeps for its line (missing), or one deleted since
+      // the map was drawn: not one to choose.
+      final label = model == null ? '' : '${nodes[model]!['label']}';
+      if (model != null &&
+          (nodes[model]!['status'] == 'missing' ||
+              !_servedNow(provider, label))) {
+        throw FormatException(i18n.text('This model is no longer on this PC.'));
+      }
       final old = _providerModels()[provider];
       final shown = model ?? old;
       return {
-        'preview': keep(provider, old, model as String?, false),
+        'preview': keep(provider, old, model as String?, false, label),
         'empty': old == model,
         'old': old,
         'new': model,
@@ -4527,12 +4542,16 @@ final class CoreService {
       throw const FormatException('This preview has expired');
     }
     _choices.remove(token);
-    final (_, provider, before, after, _) = kept;
+    final (_, provider, before, after, _, label) = kept;
     if (undo) {
-      write(provider, after, before);
+      _writeChoice(provider, after, before);
       return {'ok': true};
     }
-    write(provider, before, after);
+    // Deleted between Preview and Apply: refused, nothing saved.
+    if (after != null && !_servedNow(provider, label)) {
+      throw FormatException(i18n.text('This model is no longer on this PC.'));
+    }
+    _writeChoice(provider, before, after);
     return {'ok': true, 'undo': keep(provider, before, after, true)};
   }
 

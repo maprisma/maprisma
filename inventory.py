@@ -82,7 +82,9 @@ def address_port(address: str):
 
 def local_runtime(provider, runtimes):
     """The runtime a local provider points at: the installed one detected on its configured port,
-    else the one whose usual port it is (provider.runtime, from the facts)."""
+    else the one whose usual port it is (provider.runtime, from the facts) while its address is
+    unknown or that port. One detected on another port is not there: the endpoint is stale
+    (moved_runtime)."""
     if not provider.local:
         return None
     port = getattr(provider, "port", None)
@@ -90,7 +92,23 @@ def local_runtime(provider, runtimes):
         for rt in runtimes:
             if rt.installed and address_port(rt.address) == port:
                 return rt
-    return next((rt for rt in runtimes if rt.name == provider.runtime), None)
+    usual = next((rt for rt in runtimes if rt.name == provider.runtime), None)
+    return None if usual is None or _moved(usual, port) else usual
+
+
+def moved_runtime(provider, runtimes):
+    """The runtime whose usual port a local provider has, while it was detected on another one
+    (llama.cpp on 9090, the agent still set to 8080): a broken line to it, not a working one."""
+    if not provider.local or local_runtime(provider, runtimes) is not None:
+        return None
+    usual = next((rt for rt in runtimes if rt.name == provider.runtime), None)
+    port = getattr(provider, "port", None)
+    return usual if usual is not None and usual.installed and _moved(usual, port) else None
+
+
+def _moved(rt, port) -> bool:
+    at = address_port(rt.address)
+    return port is not None and at is not None and at != port
 
 
 def tilde(path) -> str:
@@ -218,23 +236,28 @@ def unit_for(binary: str) -> tuple[str, dict]:
 
 def gguf_names(folder: Path) -> list[str]:
     """Model names in a folder of GGUF files (or symlinks to them), one level deep."""
-    names = []
+    return list(dict.fromkeys(p.name[:-5] for p in gguf_files(folder)))[:MAX_ITEMS]
+
+
+def gguf_files(folder: Path) -> list[Path]:
+    """The GGUF files of a folder (or symlinks to them), one level deep."""
+    found = []
     try:
         entries = sorted(folder.iterdir())[:MAX_ITEMS * 2]
     except OSError:
-        return names
+        return found
     for entry in entries:
         name = entry.name
         if name.lower().endswith(".gguf") and not name.lower().startswith("mmproj"):
-            names.append(name[:-5])
+            found.append(entry)
         elif entry.is_dir() and not entry.name.startswith("."):
             try:
-                inner = [p.name for p in list(entry.iterdir())[:50] if p.name.lower().endswith(".gguf")
+                inner = [p for p in list(entry.iterdir())[:50] if p.name.lower().endswith(".gguf")
                          and not p.name.lower().startswith("mmproj")]
             except OSError:
                 inner = []
-            names.extend(n[:-5] for n in inner)
-    return list(dict.fromkeys(names))[:MAX_ITEMS]
+            found.extend(inner)
+    return found
 
 
 def llama_presets() -> list[str]:
@@ -669,23 +692,29 @@ def add_server(servers: dict, name: str, kind: str, target: str) -> McpServer:
 
 
 def reused_folders(runtimes, folders) -> list:
-    """Reused model folders (settings model_folders) no installed runtime lists: (path, [models])."""
-    listed = {graph_key(m) for rt in runtimes if rt.installed for m in rt.models}
-    served = {os.path.expanduser(rt.models_dir) for rt in runtimes if rt.installed and rt.models_dir}
+    """Reused model folders (settings model_folders): (path, [models]), each file unless an installed
+    runtime serves that same file (its models folder, or the same file reached another way). A file of
+    the same model name elsewhere (another quantization) stays."""
+    def identity(path):
+        try:
+            info = os.stat(path)
+        except OSError:
+            return None
+        return info.st_dev, info.st_ino
+
+    served = {os.path.realpath(os.path.expanduser(rt.models_dir))
+              for rt in runtimes if rt.installed and rt.models_dir}
+    served_files = {identity(f) for d in served for f in gguf_files(Path(d))} - {None}
     found = []
     for folder in list(folders)[:50]:
         path = Path(os.path.expanduser(folder))
-        if str(path) in served:
+        if os.path.realpath(path) in served:
             continue
-        models = [m for m in gguf_names(path) if graph_key(m) not in listed]
+        models = list(dict.fromkeys(f.name[:-5] for f in gguf_files(path)
+                                    if identity(f) not in served_files))[:MAX_ITEMS]
         if models:
             found.append((tilde(path), models))
     return found
-
-
-def graph_key(name: str) -> str:
-    import graph
-    return graph.model_key(name)
 
 
 def collect(agent_list, *, remember: bool = True, model_folders=()) -> Inventory:
