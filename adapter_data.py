@@ -40,7 +40,8 @@ HOOKS = ("sessions", "security", "local_llm_connected", "local_llm_active", "loc
          "models_choices", "models_plan")
 
 TOP = {"command": STR, "name": STR, "label": STR, "full_name": STR, "icon": STR, "icon_font": STR,
-       "spec": STR, "package": STR, "package_only": BOOL, "own_install_counts": BOOL, "short_version": BOOL,
+       "spec": STR, "package": STR, "package_only": BOOL, "own_install_counts": BOOL, "install_marks": STRS,
+       "short_version": BOOL,
        "offered": BOOL, "short_model_flag": BOOL, "fixed_provider": STR, "self_served": BOOL, "homepage": STR,
        "data": STRS, "install": TABLES, "update": TABLE, "sessions": TABLE, "skills": TABLE, "mcp": TABLE,
        "access": TABLE, "security": TABLE, "login_status": TABLE, "installer": STR, "usage": STR,
@@ -120,7 +121,7 @@ USAGE = {"pi": ("agent_status", "pi"), "hermes": ("agent_status", "hermes"),    
 DETAIL_READERS = {name: ("agent_readers", function) for name, function in (     # model + providers readers
     ("claude", "claude"), ("codex", "codex"), ("copilot", "copilot"), ("cursor", "cursor"),
     ("opencode", "opencode"), ("pi", "pi_like"), ("hermes", "hermes"), ("dsh", "dsh"), ("openclaw", "openclaw"),
-    ("goose", "goose"), ("agy", "agy"),
+    ("goose", "goose"), ("agy", "agy"), ("gemini", "gemini"), ("grok", "grok"), ("crush", "crush"),
     ("lmstudio-app", "bionic"))}
 MODEL_READERS = {"claude": ("online_models", "claude_choices", "claude_plan"),       # online model switchers
                  "codex": ("online_models", "codex_choices", "codex_plan")}
@@ -497,6 +498,7 @@ def harness(data: dict, name: str = "adapter", hooks=None) -> Harness:
         security=(hook("security") if security.get("hook") else _security(security)) if security else None,
         sandbox_setting=security.get("sandbox", ""), asks_setting=security.get("asks", ""),
         home=data.get("home", ""), activity=tuple(data.get("activity", ())), details=details,
+        install_marks=tuple(data.get("install_marks", ())),
         program_dir=data.get("program_dir", ""), web_search=data.get("web_search", False),
         chat_app=data.get("chat_app", False), herdr=data.get("herdr", ""), start=tuple(data.get("start", ())),
         logout=tuple(data.get("access", {}).get("logout", ())),

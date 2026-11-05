@@ -151,6 +151,8 @@ class Harness:
     package: str = ""                 # pacman package that also counts as installed
     package_only: bool = False        # installed only as that package (OpenClaw)
     own_install_counts: bool = True   # a file of the user's own at ~/.local/bin/<command> counts (not Hermes)
+    install_marks: tuple = ()         # path parts that prove a program by its name is this agent's
+                                      # (agents.proven): then it counts despite the two above
     installer: Callable | None = None  # installer() -> install_ctl.Installer: the app installs it itself
     download: Download | None = None   # or: what the app installs, as data (install_ctl.Declared)
     detect: Callable | None = None    # detect() -> (installed, version, source) when none of the above fits
@@ -361,7 +363,7 @@ def _extended(harness: Harness) -> Harness:
 # app's own adapter for the same agent gives them until the add-on is signed again.
 NEWER_FACTS = ("home", "activity", "details", "program_dir", "web_search", "chat_app", "herdr", "logout",
                "start", "research", "rewrite", "task", "closed", "advise", "models", "tools_setting", "sandbox_setting",
-               "asks_setting", "replies", "subagents", "sessions")
+               "asks_setting", "replies", "subagents", "sessions", "install_marks")
 
 
 def _with_newer_facts(harness: Harness) -> Harness:

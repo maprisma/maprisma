@@ -102,6 +102,43 @@ class AgentsTest(unittest.TestCase):
         self.assertTrue(found.installed)
         self.assertEqual(found.version, "2026.10.1")
 
+    def test_openclaw_and_hermes_outside_their_packages_when_proven(self):
+        """npm, upstream's installers, pipx or a wrapper of the user's count when the program is
+        proven the agent's (install_marks); another program by the name, a stub that runs mise,
+        does not."""
+        root = Path(self.tmp.name)
+        system = root / "usr-bin"
+        system.mkdir()
+
+        def program(path, text="#!/bin/sh\n"):
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text)
+            path.chmod(0o755)
+            return path
+        detect = lambda c: agents.detect(c, self.bin, self.mise, self.db)
+        with unittest.mock.patch.dict(os.environ, {"PATH": str(system), "HOME": str(root)}):
+            program(system / "openclaw")                              # someone else's openclaw
+            program(system / "hermes")                                # the Hermes JavaScript engine
+            self.assertEqual(detect("openclaw"), (False, "", ""))
+            self.assertEqual(detect("hermes"), (False, "", ""))
+            (system / "openclaw").unlink()                            # npm -g: a link into its package
+            os.symlink(program(root / "npm/lib/node_modules/openclaw/openclaw.mjs"), system / "openclaw")
+            self.assertEqual(detect("openclaw"), (True, "", "system"))
+            (system / "openclaw").unlink()                            # upstream's install-cli.sh
+            os.symlink(program(root / ".openclaw/bin/openclaw"), self.bin / "openclaw")
+            self.assertEqual(detect("openclaw"), (True, "", "own"))
+            legacy = ("#!/bin/bash\n\n# Written by omarchy-install-hermes-cli.\n\n"
+                      "if ! [[ -d \"$(mise where 'pipx:hermes-agent[extras=all]')/hermes-agent/lib\" ]]; then\n"
+                      "  mise use -g --quiet --force 'pipx:hermes-agent[extras=all]' || exit 1\nfi\n\n"
+                      "exec mise x 'pipx:hermes-agent[extras=all]' -- hermes \"$@\"\n")
+            program(self.bin / "hermes", legacy)                      # Omarchy's old stub: builds it first
+            self.assertEqual(detect("hermes"), (False, "", ""))
+            program(self.bin / "hermes", f'#!/bin/bash\nexec "{root}/.hermes/hermes-agent/venv/bin/hermes" "$@"\n')
+            self.assertEqual(detect("hermes"), (True, "", "own"))    # upstream's installer
+            (self.bin / "hermes").unlink()                            # pipx
+            os.symlink(program(root / ".local/share/pipx/venvs/hermes-agent/bin/hermes"), self.bin / "hermes")
+            self.assertEqual(detect("hermes"), (True, "", "own"))
+
     def test_order_installed_first_default_leading(self):
         self.install("claude", "1")
         self.install("codex", "1")
