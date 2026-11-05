@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:maprisma_core/src/identity.dart';
+import 'package:maprisma_core/src/model_guard.dart' show GpuUsage;
 import 'package:maprisma_core/src/provider_ops.dart' show portOf;
 import 'package:maprisma_core/src/provider_scans.dart';
 import 'package:maprisma_core/src/provider_watch.dart' show watchConfigText;
@@ -141,6 +142,69 @@ void main() {
         expect(strata.isServer([exe, ...server]), isFalse, reason: exe);
       }
       expect(strata.isServer([binary, ...server]), isFalse);
+    },
+  );
+
+  test(
+    '#4: odd JSON replies never break loadedModels (every engine)',
+    () async {
+      var body = '[]';
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) {
+        request.response
+          ..headers.contentType = ContentType.json
+          ..write(body);
+        request.response.close();
+      });
+      addTearDown(server.close);
+      final files = ScanFiles(
+        AppIdentity(
+          environment: {
+            'HOME': home.path,
+            'PATH': '${home.path}/nothing',
+            'MAPRISMA_SCAN_GPU': '${home.path}/drm',
+          },
+        ),
+      );
+      final guard = GpuUsage(files, ProviderScans(files));
+      const odd = [
+        '[]',
+        '[1, 2]',
+        '"text"',
+        '5',
+        '{"data": {}}',
+        '{"data": "x"}',
+        '{"data": 5}',
+        '{"models": {}}',
+        '{"models": "x"}',
+        '{"data": [1, "x", null, []]}',
+        '{"models": [1, "x", null]}',
+      ];
+      for (final key in [
+        'llamacpp',
+        'jan',
+        'ollama',
+        'lmstudio',
+        'vllm',
+        'koboldcpp',
+        'strata',
+      ]) {
+        for (final reply in odd) {
+          body = reply;
+          final rt = RuntimeRecord(key, key)
+            ..installed = true
+            ..running = true
+            ..address = '127.0.0.1:${server.port}';
+          expect(await guard.loadedModels(rt), isEmpty, reason: '$key $reply');
+        }
+      }
+      // The server is really asked: a well-formed reply gives its model.
+      body = '{"data": [{"id": "Model-A"}]}';
+      final strata = RuntimeRecord('strata', 'Strata')
+        ..installed = true
+        ..running = true
+        ..address = '127.0.0.1:${server.port}';
+      expect(await guard.loadedModels(strata), {'model-a': 'loaded'});
     },
   );
 }
