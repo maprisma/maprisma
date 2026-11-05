@@ -484,7 +484,10 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                           }
                           _moveUndo = null;
                           await _reloadSystem();
-                        } else if (!await _undoConnection(refresh: false)) {
+                        } else if (!await _undoConnection(
+                          refresh: false,
+                          token: value?['undo'] as String?,
+                        )) {
                           throw StateError('Undo failed');
                         }
                       },
@@ -1571,7 +1574,10 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   }
 
   Completer<void>? _asideWait;
-  bool get _cardsClear => _card == null && !_busy && !_taskActive;
+  // The review's cards replace each other without a gap (result, Undo,
+  // Undo's result): when none is left it is over. Background work (_refresh,
+  // the background tuning) is not waited for (Codex recheck).
+  bool get _cardsClear => _card == null;
 
   void _endAsideWait() {
     final wait = _asideWait;
@@ -2523,7 +2529,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     }
     if (result['undo'] is String) {
       _connectionUndo = result['undo'] as String;
-      _appliedMessage();
+      _appliedMessage(result['undo'] as String);
     }
     // The map first: the slots read it.
     unawaited(result['models_left'] == true ? _modelsLeft(result) : _refresh());
@@ -3596,8 +3602,11 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         'key': 'llamacpp',
         'models': untuned,
       });
+      // An open card (a review's result with its Undo) is never applied
+      // behind: its Undo would change, and Ask AI waits for it (Codex).
       if (!mounted ||
           _busy ||
+          _card != null ||
           plan['refused'] is String ||
           plan['plan'] is! String ||
           (plan['models'] as List? ?? const []).isEmpty) {
@@ -3610,7 +3619,8 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       }
       if (!mounted) return;
       // The views show the new contexts and the Undo (as after any apply).
-      setState(() => _connectionUndo = result['undo'] as String?);
+      final undo = result['undo'] as String?;
+      setState(() => _connectionUndo = undo);
       if (!_busy) await _refresh();
       if (!mounted) return;
       final messenger = ScaffoldMessenger.of(_navigator.currentContext!);
@@ -3623,12 +3633,14 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
               'Measured for this card: {0}',
             ).replaceAll('{0}', _tuneLines(plan).join('; ')),
           ),
-          action: _connectionUndo == null
+          action: undo == null
               ? null
               : SnackBarAction(
                   label: tr('Undo'),
                   onPressed: () {
-                    if (!_keysBlocked) unawaited(_undoConnection());
+                    if (!_keysBlocked) {
+                      unawaited(_undoConnection(token: undo));
+                    }
                   },
                 ),
         ),
@@ -4196,12 +4208,12 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
           // Routine: a short note with Undo, or what went wrong.
           applied = result['ok'] != false;
           if (applied) {
-            _appliedMessage();
+            _appliedMessage(result['undo'] as String?);
           } else {
             _mapNote(failureText(tr));
           }
         } else if (quiet && mounted) {
-          _appliedMessage();
+          _appliedMessage(result['undo'] as String?);
           applied = true;
         } else {
           applied = true;
@@ -4450,31 +4462,39 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     await _syncSlots();
   }
 
-  void _appliedMessage() {
+  /// "Succeeded" with an Undo for exactly this apply: its token comes from the
+  /// apply's result, never from _connectionUndo, which the background tuning
+  /// may have replaced meanwhile (during the refresh before; Codex recheck).
+  void _appliedMessage(String? undo) {
     final messenger = ScaffoldMessenger.of(_navigator.currentContext!);
     messenger.clearSnackBars();
     messenger.showSnackBar(
       SnackBar(
         content: Text(tr('Succeeded')),
-        action: _connectionUndo == null
+        action: undo == null
             ? null
             : SnackBarAction(
                 label: tr('Undo'),
                 onPressed: () {
-                  if (!_keysBlocked) unawaited(_undoConnection());
+                  if (!_keysBlocked) unawaited(_undoConnection(token: undo));
                 },
               ),
       ),
     );
   }
 
-  Future<bool> _undoConnection({bool refresh = true}) async {
-    final token = _connectionUndo;
+  /// Undo of an apply with the token of that apply (a result card, a message):
+  /// never "the last one", so a later apply's token is never the one undone
+  /// (Codex recheck). Required, so no caller can forget it.
+  Future<bool> _undoConnection({
+    bool refresh = true,
+    required String? token,
+  }) async {
     if (token == null) return false;
     setState(() => _busy = true);
     try {
       final result = await _client.connectionsUndo(undo: token);
-      _connectionUndo = null;
+      if (_connectionUndo == token) _connectionUndo = null;
       _mapStale = true;
       if (mounted) {
         ScaffoldMessenger.of(_navigator.currentContext!).showSnackBar(
@@ -5195,9 +5215,17 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                                           });
                                           _backToGuideIfFromIt();
                                         },
+                                        // The last change, as this page
+                                        // shows it now (redrawn when it
+                                        // changes).
                                         onUndo: _connectionUndo == null
                                             ? null
-                                            : _undoConnection,
+                                            : (() {
+                                                final undo = _connectionUndo;
+                                                return () => _undoConnection(
+                                                  token: undo,
+                                                );
+                                              })(),
                                       ),
                                       () {
                                         setState(() {

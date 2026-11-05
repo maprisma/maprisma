@@ -2633,7 +2633,10 @@ void main() {
       await tester.tap(find.widgetWithText(TextButton, 'Undo'));
       await settleService(tester);
       await settleService(tester);
-      expect(calls('connections.undo'), hasLength(1));
+      // Its own result's token (not whatever applied last).
+      expect(calls('connections.undo').single['params'], {
+        'undo': 'undo-token',
+      });
       expect(find.byKey(const ValueKey('task-card')), findsOneWidget);
       expect(find.byKey(const ValueKey('smart-card')), findsNothing);
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);
