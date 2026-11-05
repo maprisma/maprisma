@@ -447,3 +447,128 @@ All 17 fixed, each with a test that fails before and passes after (task notes `d
 
 Suites on the merged branch: core all but `dictation_test` "Omarchy readiness…"; app 322 pass; typecheck clean;
 protocol check clean; Python 1353, the same 9 failures as on main.
+
+## Round 3 (Codex, 2026-11-05, commit f12309b)
+
+Review complete. No files changed; no network used.
+
+1. **High** `packages/maprisma_core/lib/src/mcp_plans.dart:33` MCP identity still excludes environment and headers. Two agents running the same server command with `ROOT=/data/a` and `ROOT=/data/b` collapse into one variant; HTTP entries selecting different workspaces through headers do likewise. Connecting or testing that card can copy or use the first agent’s configuration instead of the intended one. These fields can change the server’s behavior and accessible data. They can participate in private identity comparison without being displayed.
+
+2. **Medium** `packages/maprisma_core/lib/src/core_tasks.dart:374` Provider-choice changes happen after the worker has written the agent files. If the choice changes while the worker runs, `_choose` silently skips the update and Apply reports success with inconsistent agent/provider choices. If saving settings throws a filesystem error, task finalization fails after the agent files changed, without returning the registered Undo handle to the GUI. The pre-worker check does not cover either case.
+
+3. **Medium** `packages/maprisma_core/lib/src/core_tasks.dart:396` Connection Undo restores the provider choice even when none of the agent files can be restored. After switching X → Y, modifying an affected agent configuration causes `ConfigFiles.undo` to skip that file, but `_undoChoices` still changes the provider back to X and is consumed. The agent remains on Y while the provider returns to X.
+
+4. **Medium** `packages/maprisma_core/lib/src/mcp_plans.dart:323` Remembering a new first server of a name overwrites an unused saved server under that name. With saved `filesystem` → A and no current users of A, discovering an unrelated `filesystem` → B leaves `claimed` empty; the pending branch writes B over A rather than allocating a suffix. A previously disconnected server disappears from the reusable library without a Forget action.
+
+5. **Medium** `packages/maprisma_core/lib/src/mcp_tools.dart:454` A legacy tool cache without an identity digest is accepted even when the caller supplies the current server’s digest. After the server behind an existing name changes, its old pre-digest cache is displayed as the new server’s tools. The digest protection works for new caches but does not safely handle the existing caches named in this review’s scope.
+
+6. **Medium** `packages/maprisma_core/lib/src/map_graph.dart:489` Running-instance processing does not recognize moved local providers. With Pi configured for `llama-local` on 8080, llama.cpp detected on 9090, and Pi running on its configured model, the graph first draws the failed runtime line, then treats `llama-local` as an online service in the running-model branch. The map invents a cloud/model chain for the broken local connection.
+
+7. **Medium** `packages/maprisma_core/lib/src/map_graph.dart:393` Only the selected model’s moved provider receives a failed line. If an agent actively uses Ollama and also has an inactive llama.cpp connection whose port moved, the latter is collected in `stale` but never drawn. Its existing available connection disappears instead of remaining visible as broken.
+
+8. **Medium** `packages/maprisma_core/lib/src/map_edits.dart:672` Repair of a moved endpoint always delegates to the local-connection planner. Claude and Codex can acquire these failed lines through their details readers, but neither adapter has `[local_llm]`; the delegated preview rejects them at `core.dart:4183`. Their newly displayed Repair action therefore cannot repair the endpoint. The graph tests cover these failed lines but do not establish a working repair operation.
+
+9. **Medium** `packages/maprisma_core/lib/src/inventory.dart:435` Reused-file deduplication considers files only under `RuntimeRecord.modelsDir`. A running llama.cpp invoked with `-m /mnt/models/qwen.gguf`, without a model-directory setting, lists `qwen` but has no corresponding directory in `served`. Reusing `/mnt/models` then draws the same file again as a standalone folder model. Device/inode comparison never reaches the runtime’s explicit model path.
+
+10. **Medium** `packages/maprisma_core/lib/src/agent_details.dart:919` A keyring/auto store setting is treated as confirmed sign-in rather than permission to ask the agent. After Codex signs out of that store, this predicate remains true. It keeps the cached limits eligible and makes `MapGraph.programSignIn` draw a `uses` line—even when a subsequent RPC record reports authentication failure. The agent’s answer must distinguish signed-in state from probe eligibility.
+
+11. **Medium** `packages/maprisma_core/lib/src/map_graph.dart:126` The integration still checks default-home credential presence before the moved-home check. With an old `~/.codex/auth.json` present and `CODEX_HOME` pointing to a different, signed-out file store, `credentialsPresent` makes the OpenAI line `uses`; `limitsSignedIn` correctly finds no sign-in in the moved home and suppresses its battery. The line and battery therefore still disagree.
+
+12. **Medium** `packages/maprisma_core/lib/src/agent_details.dart:124` Native usage records are keyed only by command, not the effective agent home. Starting Maprisma with another existing `CODEX_HOME` reuses the previous home’s `codex.json`. If that home’s sign-in file predates the cached record, the staleness check can also skip renewal. The user sees the previous account’s limits until another refresh becomes due.
+
+13. **Medium** `packages/maprisma_core/lib/src/addons.dart:489` Newer facts fill `plan_limits` only when the entire table is empty. A signed Codex add-on already containing the earlier `{rpc, argv}` table does not inherit the newly added `home_env` or `store`. Keyring and moved-home fixes therefore fail for that adapter, despite the task note saying those fields reach older add-ons with the table. The Python whole-fact merge has the same limitation.
+
+14. **Medium** `packages/maprisma_core/lib/src/agent_details.dart:859` On Omarchy, an existing Omarchy usage record remains the selected read path after its collector disappears. Native refresh then writes a different Maprisma record (`agent_details.dart:152`), while details, badges and staleness checks continue reading the old Omarchy file. Successful native refreshes never update the displayed limits in this fallback state.
+
+### Verdicts on round 2 #1–#17
+
+| Round 2 finding | Verdict | Checked result |
+|---|---|---|
+| #1 — suffixed MCP rule bypass | **Fixed** | Core rule normalization uses `mcpBaseName`; GUI rule items also use configuration names. |
+| #2 — native refresh runs lazy launcher | **Fixed for the identified launcher forms** | `realProgram` skips mise launcher locations, mise links and detected lazy scripts; worker rechecks the selected program. Native RPC no longer resolves the agent through PATH. |
+| #3 — wrong variant’s tools | **Partly fixed** | Exact-variant lookup and digest-bearing caches work. Legacy cache acceptance remains: R3 #5. |
+| #4 — redacted MCP identity | **Partly fixed** | Full URL, transport, command and arguments now participate. Environment/header differences still collapse: R3 #1. |
+| #5 — Ask AI/library loses variants | **Partly fixed** | Ask AI facts and connection routes carry variant IDs; reconnect/forget use library mappings. An unused saved base entry can still be overwritten: R3 #4. |
+| #6 — cannot switch away from missing model | **Fixed** | The old model may be absent; only the replacement must be available. No unload is scheduled for the absent old model. |
+| #7 — choose missing/stale model | **Fixed** | Preview checks missing status and current runtime inventory; Apply rechecks inventory. Ask AI receives missing status and rejects it. |
+| #8 — provider choice outside connection Undo | **Partly fixed** | Normal GUI and Ask AI switches carry `Plan.choices` through Apply/Undo. Failure, concurrent-change and skipped-restoration cases remain: R3 #2–#3. |
+| #9 — moved-port fallback looks valid | **Partly fixed** | Contradictory addresses no longer match as working connections. Running, inactive and unsupported-repair cases remain: R3 #6–#8. |
+| #10 — `$HOME` wrappers missed | **Fixed** | Marker matching now includes `$HOME/`, `${HOME}/` and `~/`, alongside expanded paths. |
+| #11 — distinct reused files suppressed | **Partly fixed** | Distinct quantizations survive; resolved folders and scanned file identities deduplicate aliases. Explicit runtime model paths outside `modelsDir` remain: R3 #9. |
+| #12 — estimated Hermes cost means billing | **Fixed for the reported Hermes case** | `NumericSession.estimated` excludes estimate-only costs from `billed`. OpenCode/Crush interpretation remains conditional as explained below. |
+| #13 — keyring/moved-home limits unavailable | **Partly fixed** | Built-in facts support both. Existing nonempty add-on tables and cross-home cache reuse remain: R3 #12–#13. |
+| #14 — limits survive sign-out | **Partly fixed** | Native records are suppressed after file-store sign-out. Keyring state, cache ownership and Omarchy fallback remain: R3 #10, #12, #14. |
+| #15 — no background renewal | **Fixed** | Minute timer invokes `UsageSweep`; due agents run sequentially, with shared per-agent throttling and one sweep at a time. |
+| #16 — sign-in/drop disagreement | **Partly fixed** | Grok’s missing key now produces `available`; `own_login` aligns drop availability with Ask AI. Keyring and moved-home state still diverge: R3 #10–#11. |
+| #17 — unknown-age limits never expire | **Fixed** | Measurement time falls back to the selected record’s file mtime. |
+
+For #12, preserving Hermes’s estimate as API value while excluding it from billing evidence is sound. OpenCode and Crush still contribute their single cost column to `billed`. The inspected code establishes that those values are reported by the agents, but does not establish the author’s external assertion that they are always zero under a plan. That assertion remains **unconfirmed offline**; I found no checked contrary case warranting another finding.
+
+### 1. Ask AI and menus — changed rows
+
+Core filenames below are under `packages/maprisma_core/lib/src/`; GUI filenames are under `flutter_app/lib/`.
+
+| Action | Menu path | Ask AI path | Same route/preview? | Rules, review and Undo | New state |
+|---|---|---|---|---|---|
+| MCP connect/disconnect | Core `core.dart:4219` | `core.dart:3544` variant facts | Shared connection preview with variant ID/library mapping | Configuration-name rules now agree | Identity/library gaps R3 #1, #4 |
+| MCP details/tools | `core.dart:689`, `core.dart:2150` | Same variant IDs available in map facts | Exact variant entry resolved | Tools cached by ID and digest | Legacy cache gap R3 #5 |
+| Forget/reconnect unused MCP | `core.dart:3683`; `mcp_plans.dart:737` | Shared map-edit routes | Library key resolved separately from map ID | Normal preview and connection backup | Unused base entry can be overwritten before Forget: R3 #4 |
+| Update an MCP application | `mcp_update.dart:153` | Existing manual workflow | Updates matching agent entries and full library keys | Existing preview/backup retained | No additional variant-key defect confirmed |
+| Switch provider model with agent users | `main.dart:4173` | Shared `models.switch_preview` | Both carry provider choice inside `Plan.choices` | Normal Apply/Undo shared | Partial-failure/restoration gaps R3 #2–#3 |
+| Choose provider model without users | `core.dart:4515` | `smart_card.dart` choose validator | Existing choose routes, now inventory-validated | Entry-specific Undo retained | Missing/deleted-model gap closed |
+| Repair moved endpoint | `map_edits.dart:660` | Shared repair preview | Delegates to connection planner | Same downstream checks | Unsupported adapters cannot repair: R3 #8 |
+| Own-provider sign-in drop | `main.dart:4293`; `map_layout.dart` own-login gate | `smartCloudSignIn` | Registered own-provider login only | Shared agent-action preview | Drop availability aligned; displayed sign-in state still R3 #10–#11 |
+
+### 2. Existing installations — changed rows
+
+| Existing PC state | Detection/read path | Add-on enabled? | Map and lines | Decline preserved? | New state |
+|---|---|---|---|---|---|
+| Hermes/OpenClaw wrapper using shell home spelling | `agent_catalog.dart:347` marker matching | Existing enable-found mechanism | Normal detected-agent chain | Unchanged: yes | Round 2 wrapper gap closed |
+| Same-name MCP entries differing in URL/arguments | `mcp_plans.dart:33`; `inventory.dart:257` | Agent state unchanged | Separate variants | Unchanged | Full transport/address/argument identity works |
+| Same-name MCP entries differing only in env/headers | Same identity function | Agent state unchanged | Still one merged variant | Unchanged | R3 #1 |
+| Existing saved MCP library | `mcp_plans.dart:289`; `inventory.dart:349` | No add-on change | Saved variants reappear and reconnect by library key | Unchanged | Base-entry overwrite R3 #4 |
+| Existing tool cache without digest | `mcp_tools.dart:443` | No add-on change | Old tools accepted under current ID | Not applicable | R3 #5 |
+| Local runtime moved to another port | `provider_scans.dart:64`, `movedRuntime` | Existing state retained | Failed selected connection replaces false working match | Unchanged | R3 #6–#8 |
+| Reused folder alias/hardlink | `inventory.dart:430` | No program enabled by reuse | Same scanned file suppressed by device/inode | Unchanged | Works within scanned runtime directories |
+| Runtime serves explicit file outside model directory | `inventory.dart:435` | Existing runtime state | Runtime model plus reused-folder duplicate | Unchanged | R3 #9 |
+| Older Codex add-on with existing plan-limit table | `addons.dart:489` | Existing enabled state | Old table retained | Unchanged | New nested fields missing: R3 #13 |
+
+### 3. Agent → provider → model — changed rows
+
+| Agent/case | Provider/model source | Local connection behavior | Chain now | Remaining gap / reference |
+|---|---|---|---|---|
+| Agent configured to deleted local model | Existing reader plus synthetic missing node | Switch permits absent old model | Moves to available replacement | Round 2 #6 closed; inspected Python switch follows the same rule |
+| Provider choice with agent users | `map_edits.dart:421`, `Plan.choices` | Core moves choice after file application | GUI and Ask AI use the same normal path | R3 #2–#3; no Python choice-route counterpart |
+| Running agent on moved local endpoint | Configured provider inherited by running instance | Matcher correctly rejects old port | Failed runtime line plus invented cloud chain | R3 #6; reference has equivalent graph limitation |
+| Several local providers, one inactive and moved | Provider readers retain configured entries | Moved inactive provider collected but not drawn | Active chain remains; broken available chain disappears | R3 #7 |
+| Claude/Codex with moved local endpoint | Details reader supplies local endpoint | Repair reaches unsupported local planner | Failed line visible; repair refused | R3 #8 |
+| Grok without/with API key | Existing reader and named access variable | No local change | `available` without key; `uses` with key; no unsupported login drop | Original round 2 #16 case closed |
+| Codex using keyring | Store metadata and native RPC | No local change | Store setting alone can make OpenAI line `uses` | R3 #10 |
+| Codex with moved home | `accessPaths` for limits, original access check still used by graph | No local change | Old default-home sign-in can determine line | R3 #11 |
+| Reused model files | File identity instead of normalized model-name identity | Runtime directory scan determines served identities | Distinct quantizations remain separate | Explicit runtime paths remain R3 #9 |
+
+### 4. Batteries — changed rows
+
+| Agent/case | Source/read path | Battery conditions now | App reads credentials? | New state |
+|---|---|---|---|---|
+| Codex behind known mise/Omarchy launcher | `agent_catalog.dart:276`, `realProgram`; worker recheck | Actual installed program required | No | Identified lazy launchers are skipped |
+| Codex keyring/auto store | `agent_details.dart:894` | Store metadata permits native query | No | Acquisition works; eligibility is mistaken for confirmed sign-in: R3 #10 |
+| Codex moved home | `accessPaths`, moved store configuration | Files/store checked in effective home | No | Cross-home cache reuse R3 #12 |
+| Codex after file-store logout | `usageRecord(command, adapter)` | Native record suppressed when access disappears | No | Original file-store case closed |
+| Codex on Omarchy after collector disappears | `usagePath` versus native refresh destination | Old Omarchy file remains selected | No | R3 #14 |
+| Older signed Codex add-on | Whole-table newer-fact merge | Earlier table may omit moved-home/store support | No | R3 #13 |
+| All usage-capable installed agents | `usage_sweep.dart:30`; `main.dart:5088` | Due records renewed in background; shared ten-minute throttle | No direct credential decoding | Round 2 #15 closed |
+| Hermes estimate-only session | `session_readers.dart:637`; `usage_readers.dart` billing aggregation | Estimate retained as API value, excluded from `billed` | No | Round 2 #12 Hermes case closed |
+| OpenCode/Crush reported cost | Existing single-cost readers | Positive reported amount can establish billing | No | Zero-under-plan assertion unconfirmed offline |
+| Record without measurement fields | `agent_details.dart:824`, ingestion fallback | File mtime supplies age | No | Round 2 #17 closed |
+
+### Not checked
+
+- No GUI, agents, collectors, installers, MCP servers or provider APIs were executed. No credential, key or token files were read.
+- Behavioral suites were not rerun. Findings above are checked against implementation paths; live timing, process descendants and hardware behavior were not exercised.
+- The native RPC retains bounded stdout, answer/overall deadlines and cleanup in `finally`; it sends account requests, not a model prompt. Actual process-group termination remains unconfirmed.
+- `python3 -B tools/protocol.py check` passed, including generated protocol documentation/client consistency.
+- All eight generated translation files contain the declared Flutter asset keys. The inspected Codex snapshot includes `home_env` and `store`.
+- Manual translation checking still reports stale `map` stamps in all seven translated manuals. This was already recorded in round 2 and is not presented as a new finding.
+- Python implementations were inspected for the touched identity, library, launcher, sign-in and reader behavior. Several remaining defects are mirrored there; differential agreement would not establish correctness for those cases.
+- The supplied known failures and deliberately accepted open points are not repeated as findings.
