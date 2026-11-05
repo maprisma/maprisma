@@ -81,7 +81,11 @@ REPLY_FORMATS = ("claude-jsonl", "codex-jsonl", "pi-jsonl")
 SUBAGENTS = {"format": STR, "path": STR}
 # Its plan's limits where no Omarchy collector is: asked of the agent's own program (argv: plain words,
 # starting with its command) over a protocol the app speaks (LIMIT_RPCS); no prompt, no credential read.
-PLAN_LIMITS = {"rpc": STR, "argv": STRS}
+# home_env: a variable that moves the agent's home, and its access files and store file with it (each
+# by its name); store: a plain setting (file ~/…, format, dotted key) naming where its sign-in is kept,
+# outside the access files (a keyring) for any value other than `files`: then only the program can tell.
+PLAN_LIMITS = {"rpc": STR, "argv": STRS, "home_env": STR, "store": TABLE}
+STORE = {"file": STR, "format": STR, "key": STR, "files": STR}
 LIMIT_RPCS = ("codex-app-server",)
 SUBAGENT_FORMATS = ("claude-projects", "opencode-db", "codex-rollouts", "copilot-events", "goose-db")
 SKILLS = {"dirs": STRS, "own": STR, "listed": TABLE_OR_HOOK, "settings_list": BOOL, "settings_file": STR,
@@ -278,6 +282,13 @@ def check(data: dict, name: str) -> None:
                                f"({', '.join(LIMIT_RPCS)})")
         if not harnesses.configure_ok(data["plan_limits"]["argv"], (data["command"],)):
             raise AdapterError(f"{name}: plan_limits.argv must start with “{data['command']}”, plain words")
+        if not re.fullmatch(r"([A-Z_][A-Z0-9_]{0,63})?", data["plan_limits"].get("home_env", "")):
+            raise AdapterError(f"{name}: plan_limits.home_env must be the name of an environment variable")
+        if "store" in data["plan_limits"]:
+            store = data["plan_limits"]["store"]
+            _check(store, STORE, f"{name}: plan_limits.store", ("file", "format", "key"))
+            if store["format"] not in ("json", "toml") or not store["file"].startswith("~/"):
+                raise AdapterError(f"{name}: plan_limits.store must be a json or toml file in ~/")
     sessions = data.get("sessions", {})
     _check(sessions, SESSIONS, f"{name}: sessions")
     if "reader" in sessions and sessions["reader"] not in READERS:
@@ -343,6 +354,12 @@ def _way(way: dict) -> Way:
     return Way(way["kind"], spec=way.get("spec", ""), tool=way.get("tool", ""), argv=tuple(way.get("argv", ())),
                sudo=way.get("sudo", False), packages=tuple(tuple(p) for p in way.get("packages", ())),
                url=way.get("url", ""), note=way.get("note", ""), update=tuple(way.get("update", ())))
+
+
+def _plan_limits(facts: dict) -> tuple:
+    store = facts.get("store")
+    return (facts["rpc"], tuple(facts["argv"]), facts.get("home_env", ""),
+            (store["file"], store["format"], store["key"], store.get("files", "")) if store else ())
 
 
 def _access(facts: dict):
@@ -525,7 +542,7 @@ def harness(data: dict, name: str = "adapter", hooks=None) -> Harness:
         replies=(data["replies"]["folder"], data["replies"].get("depth", 1), data["replies"]["format"],
                  tuple(sorted(data["replies"].get("contexts", {}).items()))) if "replies" in data else (),
         subagents=(data["subagents"]["format"], data["subagents"]["path"]) if "subagents" in data else (),
-        plan_limits=(data["plan_limits"]["rpc"], tuple(data["plan_limits"]["argv"])) if "plan_limits" in data else (),
+        plan_limits=_plan_limits(data["plan_limits"]) if "plan_limits" in data else (),
         session_files=data.get("sessions", {}).get("reader", ""),
         usage=ref(*USAGE[data["usage"]]) if "usage" in data else None,
         local_llm=llm, skills=skills, mcp=mcp,

@@ -201,6 +201,7 @@ sleep 60
         'on-request',
         'app-server',
       ]);
+      expect(native.$3, '${bin.path}/codex'); // the installed program
       expect(
         other.usageIsStale('codex', const []),
         isFalse,
@@ -208,7 +209,13 @@ sleep 60
       expect(other.usageIsStale('codex', const [], native: true), isTrue);
       final started = DateTime.now();
       expect(
-        await refreshUsage('codex', generic, rpc: native.$1, argv: native.$2),
+        await refreshUsage(
+          'codex',
+          generic,
+          rpc: native.$1,
+          argv: native.$2,
+          program: native.$3,
+        ),
         isTrue,
       );
       expect(DateTime.now().difference(started).inSeconds, lessThan(15));
@@ -240,6 +247,14 @@ sleep 60
       final info = other.read(codex);
       expect(info.plan, 'Plus');
       expect(info.limits.map((l) => l['percent']), [0.25, 0.6]);
+      // Signed out: the record is the old account's, no longer this PC's.
+      File('${root.path}/.codex/auth.json').deleteSync();
+      expect(other.read(codex).limits, isEmpty);
+      expect(other.read(codex).plan, '');
+      expect(other.usageRecord('codex', codex), isEmpty);
+      expect(other.planLimitsRpc(codex), isNull);
+      File('${root.path}/.codex/auth.json').writeAsStringSync('not read');
+      expect(other.read(codex).limits, hasLength(2)); // signed in again
       // With Omarchy's collector on PATH, that stays the first source.
       File('${bin.path}/omarchy-agent-usage-codex').writeAsStringSync('');
       Process.runSync('chmod', [
@@ -267,6 +282,7 @@ sleep 60
         'codex-app-server',
         const ['codex', 'app-server'],
         generic,
+        program: '${bin.path}/codex',
         answer: const Duration(seconds: 1),
       ),
       isNull,
@@ -276,8 +292,131 @@ sleep 60
     expect(Directory('/proc/$pid').existsSync(), isFalse);
     expect(await refreshUsage('codex', generic), isFalse); // no rpc: not asked
     expect(
-      await askPlanLimits('something-else', const ['codex'], generic),
+      await askPlanLimits(
+        'something-else',
+        const ['codex'],
+        generic,
+        program: '${bin.path}/codex',
+      ),
       isNull,
     );
+    // No program found: never the first `codex` on PATH.
+    File('${root.path}/slow.pid').deleteSync();
+    expect(
+      await askPlanLimits(
+        'codex-app-server',
+        const ['codex', 'app-server'],
+        generic,
+        program: null,
+      ),
+      isNull,
+    );
+    expect(File('${root.path}/slow.pid').existsSync(), isFalse);
+  });
+
+  group('the program asked for plan limits', () {
+    late Map<String, String> generic;
+    late DetailReaders other;
+    late Adapter codex;
+    late String ran;
+    // A program that leaves a mark when it is started: none may be.
+    String program(String path, [String body = '']) {
+      File(path)
+        ..createSync(recursive: true)
+        ..writeAsStringSync('#!/bin/sh\n$body\ntouch "$ran"\n');
+      Process.runSync('chmod', ['755', path]);
+      return path;
+    }
+
+    setUp(() {
+      ran = '${root.path}/started';
+      generic = {
+        'HOME': root.path,
+        'PATH': '${root.path}/.local/bin:${root.path}/.local/share/mise/shims',
+        'XDG_STATE_HOME': '${root.path}/state',
+        'XDG_CONFIG_HOME': '${root.path}/config',
+      };
+      final identity = AppIdentity(environment: generic);
+      other = DetailReaders(
+        ScanFiles(identity),
+        GenericDesktop(generic),
+        ServiceI18n(identity, SettingsStore(identity)),
+      );
+      codex = builtinAdapters().firstWhere((a) => a.command == 'codex');
+      File('${root.path}/.codex/auth.json')
+        ..createSync(recursive: true)
+        ..writeAsStringSync('not read');
+    });
+
+    test('is never a launcher that installs or updates it', () {
+      // Omarchy's lazy launcher first on PATH, then mise's shim.
+      program(
+        '${root.path}/.local/bin/codex',
+        'export MISE_MINIMUM_RELEASE_AGE=0\n'
+            'mise use -g --quiet "codex" || exit 1\n'
+            'exec mise x "codex" -- "codex" "\$@"',
+      );
+      program('${root.path}/.local/share/mise/shims/codex');
+      expect(other.planLimitsRpc(codex), isNull); // nothing real: not asked
+      // A link to mise itself is a shim too.
+      final mise = program('${root.path}/tools/mise');
+      File('${root.path}/.local/bin/codex').deleteSync();
+      Link('${root.path}/.local/bin/codex').createSync(mise);
+      expect(other.planLimitsRpc(codex), isNull);
+      // The version mise installed is the real program.
+      final installed = program(
+        '${root.path}/.local/share/mise/installs/codex/0.50.0/bin/codex',
+      );
+      expect(other.planLimitsRpc(codex)?.$3, installed);
+      // So is an own install on PATH, before mise's.
+      Link('${root.path}/.local/bin/codex').deleteSync();
+      final own = program('${root.path}/.local/bin/codex');
+      expect(other.planLimitsRpc(codex)?.$3, own);
+      expect(File(ran).existsSync(), isFalse); // nothing was started
+    });
+
+    test('a keyring store or a moved CODEX_HOME is a sign-in too', () {
+      program('${root.path}/.local/bin/codex');
+      File('${root.path}/.codex/auth.json').deleteSync();
+      expect(other.planLimitsRpc(codex), isNull); // the file store, empty
+      final config = File('${root.path}/.codex/config.toml')
+        ..writeAsStringSync('cli_auth_credentials_store = "file"\n');
+      expect(other.planLimitsRpc(codex), isNull);
+      config.writeAsStringSync('cli_auth_credentials_store = "keyring"\n');
+      expect(other.planLimitsRpc(codex), isNotNull); // only Codex can tell
+      config.deleteSync();
+      // CODEX_HOME moves the sign-in file and the store setting.
+      final moved = Directory('${root.path}/codex-home')..createSync();
+      generic['CODEX_HOME'] = moved.path;
+      final identity = AppIdentity(environment: generic);
+      final relocated = DetailReaders(
+        ScanFiles(identity),
+        GenericDesktop(generic),
+        ServiceI18n(identity, SettingsStore(identity)),
+      );
+      File('${root.path}/.codex/auth.json').writeAsStringSync('not read');
+      expect(relocated.planLimitsRpc(codex), isNull); // ~/.codex is not it
+      expect(relocated.accessPaths(codex), ['${moved.path}/auth.json']);
+      File(
+        '${moved.path}/config.toml',
+      ).writeAsStringSync('cli_auth_credentials_store = "auto"\n');
+      expect(relocated.planLimitsRpc(codex), isNotNull);
+      File('${moved.path}/config.toml').deleteSync();
+      final auth = File('${moved.path}/auth.json')..writeAsStringSync('x');
+      expect(relocated.planLimitsRpc(codex), isNotNull);
+      // A new sign-in there makes the record stale.
+      File(nativeUsagePath('codex', generic))
+        ..createSync(recursive: true)
+        ..writeAsStringSync('{}');
+      auth.setLastModifiedSync(DateTime.now().add(const Duration(minutes: 1)));
+      expect(
+        relocated.usageIsStale(
+          'codex',
+          relocated.accessPaths(codex),
+          native: true,
+        ),
+        isTrue,
+      );
+    });
   });
 }

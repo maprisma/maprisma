@@ -48,6 +48,8 @@ note = "read-only sandbox, no session kept"
 [plan_limits]                          # its plan's limits where no Omarchy collector is: asked of its own app-server
 rpc = "codex-app-server"               # account/rateLimits/read over JSON-RPC: no prompt, no credential read here
 argv = ["codex", "-s", "read-only", "-a", "on-request", "app-server"]
+home_env = "CODEX_HOME"                # moves ~/.codex: auth.json and config.toml are looked for there
+store = { file = "~/.codex/config.toml", format = "toml", key = "cli_auth_credentials_store", files = "file" }   # keyring or auto: signed in outside auth.json, only Codex can tell
 
 [access]
 logout = ["codex", "logout"]     # its own sign-out, in a terminal

@@ -24,7 +24,7 @@ import 'model_moves.dart' show SystemMoves, ScanFilesLike;
 import 'dart:math' show Random;
 import 'first_agent.dart';
 import 'agent_catalog.dart';
-import 'desktop.dart' show detectDesktop;
+import 'desktop.dart' show detectDesktop, GenericDesktop;
 import 'model_guard.dart';
 import 'mcp_catalog.dart';
 import 'mcp_tools.dart';
@@ -825,12 +825,23 @@ Future<int> runWorker(List<String> args) async {
       final params = request['params'] as Map;
       final command = params['command'];
       final rpc = params['rpc'], argv = params['argv'];
+      final program = params['program'];
+      final env = AppIdentity().environment;
+      // The installed program the core found (AgentCatalog.realProgram),
+      // checked again here: never a launcher that installs or updates it.
       if (command is! String ||
           !(params.length == 1 ||
-              params.length == 3 &&
+              params.length == 4 &&
                   rpc is String &&
                   argv is List &&
-                  Adapter.configureOk(argv, command))) {
+                  Adapter.configureOk(argv, command) &&
+                  program is String &&
+                  p.isAbsolute(program) &&
+                  p.basename(program) == command &&
+                  !AgentCatalog(
+                    ScanFiles(AppIdentity(environment: env)),
+                    GenericDesktop(env),
+                  ).lazyLauncher(program))) {
         throw const FormatException('Invalid worker request');
       }
       send({
@@ -838,9 +849,10 @@ Future<int> runWorker(List<String> args) async {
         'result': {
           'ok': await refreshUsage(
             command,
-            AppIdentity().environment,
+            env,
             rpc: rpc as String?,
             argv: argv == null ? null : [for (final a in argv as List) '$a'],
+            program: program as String?,
           ),
         },
       });

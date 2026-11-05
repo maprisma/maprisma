@@ -114,7 +114,8 @@ sleep 60
             self.assertFalse(ad.usage_is_stale("codex", root=self.home))
             self.write(".codex/auth.json", "not read")
             rpc = ad.plan_limits_rpc("codex", self.home)
-            self.assertEqual(rpc, ("codex-app-server", ("codex", "-s", "read-only", "-a", "on-request", "app-server")))
+            self.assertEqual(rpc, ("codex-app-server", ("codex", "-s", "read-only", "-a", "on-request", "app-server"),
+                                   str(fake)))                                  # the installed program
             self.assertTrue(ad.usage_is_stale("codex", root=self.home))
             started = time.monotonic()
             self.assertTrue(ad.native_usage("codex", *rpc, environ=env))
@@ -130,9 +131,65 @@ sleep 60
             d = ad.details_for("codex")
             self.assertEqual(d.plan, "Plus")
             self.assertEqual([x.percent for x in d.limits], [0.25, 0.6])
+            (self.home / ".codex/auth.json").unlink()                           # signed out: the old account's
+            d = ad.details_for("codex")
+            self.assertEqual((d.plan, d.limits), ("", []))
+            self.assertIsNone(ad.plan_limits_rpc("codex", self.home))
         with mock.patch.object(ad, "has_usage_collector", return_value=True):
             self.assertIsNone(ad.plan_limits_rpc("codex", self.home))          # Omarchy's collector first
-        self.assertIsNone(ad.ask_plan_limits("other-rpc", ["codex"], env))
+        self.assertIsNone(ad.ask_plan_limits("other-rpc", ["codex"], env, program=str(fake)))
+        self.assertIsNone(ad.ask_plan_limits("codex-app-server", ["codex"], env))   # no program: never PATH's
+
+    def program(self, rel, body=""):
+        path = self.write(rel, f'#!/bin/sh\n{body}\ntouch "{self.home}/started"\n')
+        path.chmod(0o755)
+        return path
+
+    def test_limits_never_ask_a_launcher_that_installs(self):
+        """Omarchy's lazy launcher, mise's shim or a link to mise is never the program asked; the
+        version mise installed or an own install is (omarchy-agent-usage-codex's find_codex_binary)."""
+        env = {"HOME": str(self.home), "PATH": f"{self.home}/.local/bin:{self.home}/.local/share/mise/shims"}
+        self.write(".codex/auth.json", "not read")
+        self.program(".local/bin/codex", 'mise use -g --quiet "codex" || exit 1\nexec mise x "codex" -- "codex" "$@"')
+        self.program(".local/share/mise/shims/codex")
+        with mock.patch.object(ad, "has_usage_collector", return_value=False), \
+                mock.patch.dict(os.environ, env, clear=False):
+            self.assertIsNone(ad.plan_limits_rpc("codex", self.home))
+            mise = self.program("tools/mise")
+            (self.home / ".local/bin/codex").unlink()
+            (self.home / ".local/bin/codex").symlink_to(mise)
+            self.assertIsNone(ad.plan_limits_rpc("codex", self.home))
+            installed = self.program(".local/share/mise/installs/codex/0.50.0/bin/codex")
+            self.assertEqual(ad.plan_limits_rpc("codex", self.home)[2], str(installed))
+            (self.home / ".local/bin/codex").unlink()
+            own = self.program(".local/bin/codex")
+            self.assertEqual(ad.plan_limits_rpc("codex", self.home)[2], str(own))
+        self.assertFalse((self.home / "started").exists())                     # nothing was started
+
+    def test_limits_sign_in_in_a_keyring_or_a_moved_home(self):
+        env = {"HOME": str(self.home), "PATH": f"{self.home}/.local/bin"}
+        self.program(".local/bin/codex")
+        with mock.patch.object(ad, "has_usage_collector", return_value=False), \
+                mock.patch.dict(os.environ, env, clear=False):
+            os.environ.pop("CODEX_HOME", None)
+            self.assertIsNone(ad.plan_limits_rpc("codex", self.home))           # the file store, empty
+            config = self.write(".codex/config.toml", 'cli_auth_credentials_store = "file"\n')
+            self.assertIsNone(ad.plan_limits_rpc("codex", self.home))
+            config.write_text('cli_auth_credentials_store = "keyring"\n')
+            self.assertIsNotNone(ad.plan_limits_rpc("codex", self.home))        # only Codex can tell
+            config.unlink()
+            moved = self.home / "codex-home"
+            moved.mkdir()
+            os.environ["CODEX_HOME"] = str(moved)
+            self.write(".codex/auth.json", "not read")
+            self.assertIsNone(ad.plan_limits_rpc("codex", self.home))           # ~/.codex is not it
+            self.assertEqual(ad.access_paths("codex", self.home), [moved / "auth.json"])
+            (moved / "config.toml").write_text('cli_auth_credentials_store = "auto"\n')
+            self.assertIsNotNone(ad.plan_limits_rpc("codex", self.home))
+            (moved / "config.toml").unlink()
+            (moved / "auth.json").write_text("x")
+            self.assertIsNotNone(ad.plan_limits_rpc("codex", self.home))
+            self.assertTrue(ad.signed_in_since("codex", 0, self.home))
 
     def test_limits_measured_and_kept_stale(self):
         usage = self.home / "usage"
