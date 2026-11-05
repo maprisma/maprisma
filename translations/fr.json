@@ -3418,5 +3418,10 @@
  "its address is set in its own settings: change it there to {0}": "son adresse est dans ses propres réglages : changez-la là-bas en {0}",
  "This local LLM now listens on another port. Repair or remove this connection.": "Ce LLM local écoute maintenant sur un autre port. Réparez ou supprimez cette connexion.",
  "Applied, but the local LLM's own model stayed as it was: it changed meanwhile or could not be saved.": "Appliqué, mais le modèle propre du LLM local est resté tel quel : il a changé entre-temps ou n'a pas pu être enregistré.",
- "The local LLM's own model was not put back: a file or the model changed since.": "Le modèle propre du LLM local n'a pas été rétabli : un fichier ou le modèle a changé depuis."
+ "The local LLM's own model was not put back: a file or the model changed since.": "Le modèle propre du LLM local n'a pas été rétabli : un fichier ou le modèle a changé depuis.",
+ "start a model in Strata (strata launch) before working with {0}.": "démarre un modèle dans Strata (strata launch) avant de travailler avec {0}.",
+ "set one up in Strata's own screens: right-click Strata on the map → Configure… → Set up a model (strata launch).": "configure-en un dans les écrans de Strata : clic droit sur Strata sur la carte → Configurer… → Configurer un modèle (strata launch).",
+ "Set up a model": "Configurer un modèle",
+ "What is serving": "Ce qui est servi",
+ "Strata's own screens: choose a model, download it and serve it.": "Les écrans de Strata : choisir un modèle, le télécharger et le servir."
 }

@@ -191,6 +191,13 @@ def local_ports() -> dict:
     return found
 
 
+def local_names() -> dict:
+    """{connect key: name} of the local LLMs ("strata-local": "Strata"): a provider the app wrote
+    names its local LLM, also when another one has that usual port (Strata and llama.cpp: 8080)."""
+    import providers
+    return {p.connect_key: p.name for p in providers.local() if p.connect_key}
+
+
 def provider_for_url(name: str, url, models: int = 0, active: bool = True) -> Provider:
     """A provider entry; local when its address is this machine."""
     try:
@@ -199,7 +206,7 @@ def provider_for_url(name: str, url, models: int = 0, active: bool = True) -> Pr
     except ValueError:
         host, port = None, None
     local = host in LOCAL_HOSTS
-    runtime = local_ports().get(port, "") if local else ""
+    runtime = (local_names().get(name) or local_ports().get(port, "")) if local else ""
     return Provider(name=_text(name, 40), local=local, runtime=runtime, models=models, active=active,
                     port=port if local else None)
 

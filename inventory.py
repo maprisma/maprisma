@@ -31,7 +31,7 @@ NAME_RE = re.compile(r"[\w.@:+/ -]{1,120}")
 
 @dataclass
 class Runtime:
-    key: str                 # "llamacpp", "ollama", "lmstudio", "vllm", "jan", "koboldcpp"
+    key: str                 # "llamacpp", "ollama", "lmstudio", "vllm", "jan", "koboldcpp", "strata"
     name: str
     installed: bool = False
     running: bool = False
@@ -94,11 +94,13 @@ def local_runtime(provider, runtimes):
     if not provider.local:
         return None
     port = getattr(provider, "port", None)
-    if port is not None:
-        for rt in runtimes:
-            if rt.installed and address_port(rt.address) == port:
-                return rt
     usual = next((rt for rt in runtimes if rt.name == provider.runtime), None)
+    if port is not None:
+        # Two local LLMs may share a usual port (Strata and llama.cpp: 8080): the one the provider
+        # names wins, else the first one detected there.
+        here = [rt for rt in runtimes if rt.installed and address_port(rt.address) == port]
+        if here:
+            return usual if usual in here else here[0]
     return None if usual is None or _moved(usual, port) else usual
 
 
@@ -610,6 +612,24 @@ def koboldcpp(processes) -> Runtime:
             value = config.get(key)
             served += [v for v in (value if isinstance(value, list) else [value]) if isinstance(v, str) and v]
     rt.model_files = absolute_files(served)
+    return rt
+
+
+def strata(processes) -> Runtime:
+    """Strata (provider_strata): its CLI, its server process (`… -m serve.server`, the port from its
+    run config), its run configs as models; while it is off, the port of the launch preset used last."""
+    import provider_strata as ps
+    rt = Runtime("strata", "Strata", installed=ps.strata_binary() is not None)
+    port = 0
+    for _pid, _comm, argv in processes:
+        if ps.is_server(argv):
+            rt.running = rt.installed = True
+            port = port or ps.server_port(argv)
+    rt.address = f"127.0.0.1:{port or ps.last_preset()[1] or ps.DEFAULT_PORT}"
+    names = ps.model_ids()
+    if names:
+        rt.models_dir = tilde(ps.install_dir())
+    rt.models = dedupe_models(names)
     return rt
 
 

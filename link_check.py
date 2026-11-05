@@ -104,7 +104,7 @@ def check_provider(agent: str, agent_name: str, rt, model: str, with_agents: boo
         hints.append(hint("warning", _("{0} does not use a model of {1} yet: draw a line on the map from {0} to one "
                                        "of {1}'s models.").format(agent_name, rt.name)))
     if not rt.running:
-        if not runtime_ctl.can_control(rt):
+        if not runtime_ctl.can_control(rt) or not llm_engine.of(rt).starts_with_agents:
             hints.append(hint("error", _("{0} is not running and has no service to start it with {1}: {2}")
                               .format(rt.name, agent_name, start_step(rt, agent_name))))
         elif not with_agents:
