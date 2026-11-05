@@ -399,6 +399,17 @@ final class MapGraph {
                 names[rt.key] == modelProvider &&
                 !local.containsKey(modelProvider),
           );
+      // An agent with no local-LLM planner (Claude Code, Codex: the address
+      // is in its own settings) cannot be repaired or disconnected here: the
+      // line says where to change it instead.
+      String unfixable(RuntimeRecord rt) =>
+          agent.adapter.facts.containsKey('local_llm')
+          ? ''
+          : i18n
+                .text(
+                  'its address is set in its own settings: change it there to {0}',
+                )
+                .replaceAll('{0}', rt.address);
       if (dangling != null) {
         runtime(dangling);
         link(
@@ -407,6 +418,20 @@ final class MapGraph {
           'failed',
           failed: 'error',
           dangling: model,
+          fixed: unfixable(dangling),
+        );
+      }
+      // Every other local provider whose LLM moved (an inactive one too):
+      // a broken line, no default; Repair rewrites its address.
+      for (final moved in stale.values) {
+        if (identical(moved, dangling)) continue;
+        runtime(moved);
+        link(
+          aid,
+          'runtime:${moved.key}',
+          'failed',
+          failed: 'error',
+          fixed: unfixable(moved),
         );
       }
       var cloud = '';
@@ -486,6 +511,11 @@ final class MapGraph {
         if (local.containsKey(provider)) {
           mid =
               'model:runtime:${runtimes[local[provider]]!.key}:${name.toLowerCase()}';
+        } else if (stale.containsKey(provider) ||
+            dangling != null && provider == modelProvider) {
+          // Its local LLM moved (or its provider is gone): only the broken
+          // line, no online service.
+          continue;
         } else {
           final service = provider.isEmpty ? cloud : providerName(provider);
           if (service.isEmpty) continue;
@@ -840,12 +870,14 @@ final class MapGraph {
       if (entry != null) {
         row['hints'] = entry['hints'];
         row['applied'] = entry['applied'];
-      } else if (edge['dangling'] != '') {
+      } else if (edge['kind'] == 'failed' && edge['fixed'] == '') {
+        // A broken local line of the map's own (no recorded failure).
         row['hints'] = [
           {
             'level': 'error',
-            'text':
-                'The configured model has no provider connection. Repair or remove this connection.',
+            'text': edge['dangling'] != ''
+                ? 'The configured model has no provider connection. Repair or remove this connection.'
+                : 'This local LLM now listens on another port. Repair or remove this connection.',
           },
         ];
       }

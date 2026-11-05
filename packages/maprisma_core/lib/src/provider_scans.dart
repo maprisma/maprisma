@@ -36,6 +36,12 @@ final class RuntimeRecord {
   bool installed = false, running = false, serverOff = false;
   String service = '', address = '', modelsDir = '';
   List<String> models = [], agents = [], activeAgents = [];
+
+  /// The absolute paths of the model files it serves outside [modelsDir],
+  /// where its scan knows them (llama.cpp's -m and models.ini, KoboldCpp's
+  /// model, vLLM's served file): a reused folder compares them by file
+  /// identity. Not in [toJson].
+  List<String> modelFiles = [];
   Map<String, dynamic> toJson() => {
     'key': key,
     'name': name,
@@ -297,6 +303,22 @@ final class ProviderScans {
     return found;
   }
 
+  /// The `model = <path>` files of a preset file's sections (llama.cpp's
+  /// models.ini), absolute.
+  List<String> presetFiles(String path) => absoluteFiles(
+    RegExp(
+      r'^\s*model\s*=\s*"?([^"\n]+?)"?\s*$',
+      multiLine: true,
+    ).allMatches(files.text(path) ?? '').map((m) => m[1]!),
+  );
+
+  /// Model paths as files of this PC: `~` expanded, relative ones dropped.
+  List<String> absoluteFiles(Iterable<String> paths) => {
+    for (final path in paths)
+      if (p.isAbsolute(files.expand(path.trim())))
+        p.normalize(files.expand(path.trim())),
+  }.take(500).toList();
+
   List<String> presets(String path) =>
       RegExp(r'^\[([^\]\n]{1,120})\]', multiLine: true)
           .allMatches(files.text(path) ?? '')
@@ -347,7 +369,7 @@ final class ProviderScans {
           final (service, env) = unit('llama-server');
           rt.service = service;
           var folder = '';
-          final models = <String>[];
+          final models = <String>[], served = <String>[];
           bool server(ProcessRecord process) =>
               process.comm == 'llama-server' &&
               !(process.argv.isNotEmpty &&
@@ -368,6 +390,7 @@ final class ProviderScans {
               models.add(
                 p.basename(model).replaceFirst(RegExp(r'\.gguf$'), ''),
               );
+              served.add(model);
             }
             folder = arg(process.argv, ['--models-dir']).isNotEmpty
                 ? arg(process.argv, ['--models-dir'])
@@ -392,6 +415,12 @@ final class ProviderScans {
             ...models,
             ...presets('~/.config/llama.cpp/models.ini'),
             ...ggufNames('~/.cache/llama.cpp'),
+          ]);
+          rt.modelFiles = absoluteFiles([
+            ...served,
+            ?env['LLAMA_ARG_MODEL'],
+            ...presetFiles('~/.config/llama.cpp/models.ini'),
+            ...ggufFiles(files.expand('~/.cache/llama.cpp')),
           ]);
           rt.installed = rt.installed || rt.service.isNotEmpty;
         case 'ollama':
@@ -494,6 +523,8 @@ final class ProviderScans {
           if (cleanName(env['VLLM_MODEL']).isNotEmpty) {
             rt.models = [cleanName(env['VLLM_MODEL'])];
           }
+          // A model given as a file of this PC (a GGUF), not a hub name.
+          final servedFiles = [?env['VLLM_MODEL']];
           for (final process in processesNow) {
             final argv = process.argv;
             if (argv.length > 2 &&
@@ -504,18 +535,22 @@ final class ProviderScans {
               rt.running = rt.installed = true;
               final model = arg(argv, ['--model']);
               final serve = argv.indexOf('serve');
-              rt.models = dedupe([
-                model.isNotEmpty
-                    ? model
-                    : serve + 1 < argv.length
-                    ? argv[serve + 1]
-                    : '',
+              final named = model.isNotEmpty
+                  ? model
+                  : serve + 1 < argv.length
+                  ? argv[serve + 1]
+                  : '';
+              rt.models = dedupe([named]);
+              servedFiles.addAll([
+                model,
+                if (serve + 1 < argv.length) argv[serve + 1],
               ]);
               final host = arg(argv, ['--host']), port = arg(argv, ['--port']);
               rt.address =
                   '${host.isEmpty ? '127.0.0.1' : host}:${port.isEmpty ? '8000' : port}';
             }
           }
+          rt.modelFiles = absoluteFiles(servedFiles);
         case 'jan':
           rt.service = unit('jan', named: true).$1;
           // The port its service starts the engine on, else the usual one.
@@ -577,11 +612,13 @@ final class ProviderScans {
           final (service, env) = unit('koboldcpp', named: true);
           rt.service = service;
           rt.installed = service.isNotEmpty || which('koboldcpp');
+          final servedFiles = <String>[];
           for (final process in processesNow) {
             if (process.comm == 'koboldcpp' ||
                 process.argv.isNotEmpty &&
                     p.basename(process.argv[0]).startsWith('koboldcpp')) {
               rt.running = rt.installed = true;
+              servedFiles.add(arg(process.argv, ['--model', '--model_param']));
               final port = arg(process.argv, ['--port']);
               if (RegExp(r'^[0-9]+$').hasMatch(port)) {
                 rt.address = '127.0.0.1:$port';
@@ -599,6 +636,17 @@ final class ProviderScans {
                   .toList()
                 ..sort();
           rt.models = dedupe(names);
+          // Each .kcpps names its model file (model_param, or model).
+          for (final name in names.take(500)) {
+            final config = files.json('~/.config/koboldcpp/models/$name');
+            for (final key in ['model_param', 'model']) {
+              final value = config[key];
+              for (final path in value is List ? value : [value]) {
+                if (path is String && path.isNotEmpty) servedFiles.add(path);
+              }
+            }
+          }
+          rt.modelFiles = absoluteFiles(servedFiles);
       }
       result.add(rt);
     }

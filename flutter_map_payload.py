@@ -32,7 +32,9 @@ def edges(graph, activity, failures, inventory, animate):
         if entry:
             row['hints'] = entry['hints'][:12]
             row['applied'] = entry['applied']
-        elif edge.dangling:
-            row['hints'] = [{'level':'error', 'text':'The configured model has no provider connection. Repair or remove this connection.'}]
+        elif edge.kind == 'failed' and not edge.fixed:
+            # A broken local line of the map's own (no recorded failure).
+            row['hints'] = [{'level':'error', 'text':'The configured model has no provider connection. Repair or remove this connection.'
+                             if edge.dangling else 'This local LLM now listens on another port. Repair or remove this connection.'}]
         result.append(row)
     return result

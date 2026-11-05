@@ -3414,5 +3414,9 @@
  "Red: {0} % or less is left.": "Rood: {0} % of minder is over.",
  "Faded: its numbers may be out of date (its tooltip says when they were measured).": "Vervaagd: de cijfers zijn misschien niet meer actueel (de tooltip zegt wanneer ze gemeten zijn).",
  "These numbers may be out of date.": "Deze cijfers zijn misschien niet meer actueel.",
- "Measured {0}: these numbers may be out of date.": "Gemeten {0}: deze cijfers zijn misschien niet meer actueel."
+ "Measured {0}: these numbers may be out of date.": "Gemeten {0}: deze cijfers zijn misschien niet meer actueel.",
+ "its address is set in its own settings: change it there to {0}": "het adres staat in de eigen instellingen: verander het daar in {0}",
+ "This local LLM now listens on another port. Repair or remove this connection.": "Deze lokale LLM luistert nu op een andere poort. Herstel of verwijder deze verbinding.",
+ "Applied, but the local LLM's own model stayed as it was: it changed meanwhile or could not be saved.": "Toegepast, maar het eigen model van de lokale LLM bleef zoals het was: het is intussen gewijzigd of kon niet worden opgeslagen.",
+ "The local LLM's own model was not put back: a file or the model changed since.": "Het eigen model van de lokale LLM is niet teruggezet: een bestand of het model is sindsdien gewijzigd."
 }

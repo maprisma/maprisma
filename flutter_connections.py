@@ -253,7 +253,9 @@ class Connections:
         while len(self.undos) >= 16:
             self.undos.pop(next(iter(self.undos)))
         self.undos[token] = backup
-        return {'ok': True, 'undo': token, 'context_failures': failures}
+        # choice_failures: the Dart core's provider choices (Plan.choices) that could not follow the
+        # files; this reference has none, so always 0 (review 063 round 3 #2).
+        return {'ok': True, 'undo': token, 'context_failures': failures, 'choice_failures': 0}
 
     def undo(self, ident: str) -> dict:
         if ident not in self.undos:
@@ -262,4 +264,4 @@ class Connections:
         restored = connect.undo(folder)
         if restored:
             del self.undos[ident]
-        return {'ok': True, 'restored': [connect.tilde(path) for path in restored]}
+        return {'ok': True, 'restored': [connect.tilde(path) for path in restored], 'choice_failures': 0}

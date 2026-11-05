@@ -264,8 +264,13 @@ def repair_preview(params, graph, connections, settings_path=None):
     path = (settings_path or ai_core.settings_file()).parent / 'failed-links.json'
     failures = {} if path.is_symlink() else link_hints.load(path)
     entry = failures.get(link_hints.key(aid, target))
-    if not edge or (not entry and not edge.get('dangling')):
+    # The map's own broken local line (its LLM moved, its provider gone): no recorded failure, and a
+    # reason in fixed when it is not this app's to repair (the agent has no local-LLM planner).
+    moved = not entry and bool(edge) and edge.get('kind') == 'failed' and nodes[target]['kind'] == 'runtime'
+    if not edge or (not entry and not moved):
         raise ValueError('Failure changed; refresh')
+    if moved and edge.get('fixed'):
+        raise ValueError(edge['fixed'])
     kind = nodes[target]['kind']
     request = {'kind':'provider' if kind == 'runtime' else kind, 'command':aid.removeprefix('agent:'),
                'item':target.partition(':')[2], 'remove':False}

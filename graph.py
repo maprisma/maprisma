@@ -314,13 +314,27 @@ def build(agent_list, details: dict, inventory, labels: dict | None = None, fail
         dangling = stale.get(model_provider) or next((rt for rt in inventory.runtimes if rt.installed and model_provider
                          and providers.connect_keys().get(rt.key) == model_provider
                          and model_provider not in local_names), None)
+        # An agent with no local-LLM planner (Claude Code, Codex: the address is in its own settings)
+        # cannot be repaired or disconnected here: the line says where to change it instead.
+        def unfixable(rt):
+            return "" if harness and harness.local_llm else \
+                _("its address is set in its own settings: change it there to {0}").format(rt.address)
         if dangling is not None:
             rid = f"runtime:{dangling.key}"
             graph.add(Node(rid, 2, dangling.name, runtime_detail(dangling, labels), "runtime",
                            status=runtime_status(dangling)))
-            edge = Edge(aid, rid, "failed", "error")
+            edge = Edge(aid, rid, "failed", "error", fixed=unfixable(dangling))
             edge.dangling = model
             graph.edges.append(edge)
+        # Every other local provider whose LLM moved (an inactive one too): a broken line, no default;
+        # Repair rewrites its address.
+        for moved in stale.values():
+            rid = f"runtime:{moved.key}"
+            if moved is dangling or any(e.source == aid and e.target == rid for e in graph.edges):
+                continue
+            graph.add(Node(rid, 2, moved.name, runtime_detail(moved, labels), "runtime",
+                           status=runtime_status(moved)))
+            graph.edges.append(Edge(aid, rid, "failed", "error", fixed=unfixable(moved)))
 
         # The cloud service: the configured provider when it is not local, else the agent's own.
         cloud = ""
@@ -371,6 +385,8 @@ def build(agent_list, details: dict, inventory, labels: dict | None = None, fail
             provider = provider or model_provider     # `--model qwen` names none: the agent's configured one
             if provider in local_names:
                 mid = f"model:runtime:{runtimes[local_names[provider]].key}:{name.lower()}"
+            elif provider in stale or (dangling is not None and provider == model_provider):
+                continue    # its local LLM moved (or its provider is gone): only the broken line
             else:
                 service = provider_name(provider) if provider else cloud
                 if not service:

@@ -370,22 +370,30 @@ final class CoreConnections {
     }
     _undos[token] = backup;
     // The files are written: the local LLM's own model follows, unless
-    // something else changed it meanwhile.
+    // something else changed it meanwhile or it cannot be saved. Either is
+    // said in the result (choice_failures); the Undo of the files stays.
     final made = [
       for (final (provider, from, to) in choices)
         if (_choose(provider, from, to)) (provider, from, to),
     ];
     if (made.isNotEmpty) _undoChoices[token] = made;
-    return {'ok': true, 'undo': token, 'context_failures': failures};
+    return {
+      'ok': true,
+      'undo': token,
+      'context_failures': failures,
+      'choice_failures': choices.length - made.length,
+    };
   }
 
+  /// A provider choice moved from [from] to [to]; false when another change
+  /// came first or the settings could not be saved.
   bool _choose(String provider, String? from, String? to) {
     final write = chooseModel;
     if (write == null) return false;
     try {
       write(provider, from, to);
       return true;
-    } on FormatException {
+    } on Exception {
       return false;
     }
   }
@@ -393,16 +401,27 @@ final class CoreConnections {
   Map<String, dynamic> undo(String token) {
     final folder = _undos[token];
     if (folder == null) throw const FormatException('Unknown Undo handle');
-    final restored = files.undo(folder);
-    if (restored.isNotEmpty) _undos.remove(token);
-    // With its files, the local LLM's own model it moved, if still so.
-    final choices = _undoChoices.remove(token) ?? const [];
-    for (final (provider, from, to) in choices) {
-      _choose(provider, to, from);
+    final skipped = <String>[];
+    final restored = files.undo(folder, skipped: skipped);
+    // With its files, the local LLM's own model it moved, if still so; only
+    // when all of them came back: an agent file changed since stays on the
+    // new model, so its provider does too (choice_failures says so).
+    final choices = _undoChoices[token] ?? const [];
+    var kept = choices.length;
+    if (restored.isNotEmpty) {
+      _undos.remove(token);
+      _undoChoices.remove(token);
+      if (skipped.isEmpty) {
+        kept = 0;
+        for (final (provider, from, to) in choices) {
+          if (!_choose(provider, to, from)) kept++;
+        }
+      }
     }
     return {
       'ok': true,
       'restored': [for (final path in restored) files.tilde(path)],
+      'choice_failures': kept,
     };
   }
 }

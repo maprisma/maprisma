@@ -42,6 +42,10 @@ class Runtime:
     agents: list = field(default_factory=list)   # agents with a provider pointing at it
     active_agents: list = field(default_factory=list)   # of those, the ones using it now (their model is here)
     server_off: bool = False  # the app runs but its API server does not (LM Studio without `lms server start`)
+    # The absolute paths of the model files it serves outside models_dir, where its scan knows them
+    # (llama.cpp's -m and models.ini, KoboldCpp's model, vLLM's served file): a reused folder compares
+    # them by file identity.
+    model_files: list = field(default_factory=list, repr=False, compare=False)
 
 
 @dataclass
@@ -268,6 +272,18 @@ def llama_presets() -> list[str]:
     return [s for s in re.findall(r"^\[([^\]\n]{1,120})\]", text, re.MULTILINE) if s != "*"][:MAX_ITEMS]
 
 
+def absolute_files(paths) -> list[str]:
+    """Model paths as files of this PC: `~` expanded, relative ones dropped."""
+    found = (os.path.normpath(os.path.expanduser(p.strip())) for p in paths if isinstance(p, str))
+    return list(dict.fromkeys(p for p in found if os.path.isabs(p)))[:MAX_ITEMS]
+
+
+def preset_files(path: Path) -> list[str]:
+    """The `model = <path>` files of a preset file's sections (llama.cpp's models.ini), absolute."""
+    text = ad._read(path) or ""
+    return absolute_files(re.findall(r'^\s*model\s*=\s*"?([^"\n]+?)"?\s*$', text, re.MULTILINE))
+
+
 def llama_context() -> dict:
     """Context size per llama.cpp router preset (ctx-size in models.ini)."""
     text = ad._read(HOME / ".config/llama.cpp/models.ini") or ""
@@ -282,7 +298,7 @@ def llama_context() -> dict:
 def llamacpp(processes) -> Runtime:
     rt = Runtime("llamacpp", "llama.cpp", installed=bool(shutil.which("llama-server")))
     rt.service, env = unit_for("llama-server")
-    models, folder = [], ""
+    models, folder, served = [], "", []
     # LM Studio's engines are called llama-server too (~/.lmstudio/extensions/backends/…).
     processes = [(pid, comm, argv) for pid, comm, argv in processes
                  if comm != "llama-server" or not argv or "/.lmstudio/" not in argv[0]]
@@ -300,6 +316,7 @@ def llamacpp(processes) -> Runtime:
         model = arg_value(argv, "-m", "--model")
         if model:
             models.append(Path(model).name.removesuffix(".gguf"))
+            served.append(model)
         folder = arg_value(argv, "--models-dir") or folder
         host = arg_value(argv, "--host") or env.get("LLAMA_ARG_HOST") or env.get("LLAMA_HOST") or "127.0.0.1"
         port = arg_value(argv, "--port") or env.get("LLAMA_ARG_PORT") or env.get("LLAMA_PORT") or "8080"
@@ -314,6 +331,9 @@ def llamacpp(processes) -> Runtime:
     models += llama_presets()
     models += gguf_names(HOME / ".cache/llama.cpp")
     rt.models = dedupe_models(models)
+    rt.model_files = absolute_files([*served, *([env["LLAMA_ARG_MODEL"]] if env.get("LLAMA_ARG_MODEL") else []),
+                                     *preset_files(HOME / ".config/llama.cpp/models.ini"),
+                                     *map(str, gguf_files(HOME / ".cache/llama.cpp"))])
     rt.installed = rt.installed or bool(rt.service)
     return rt
 
@@ -470,6 +490,7 @@ def vllm(processes) -> Runtime:
     rt.installed = rt.installed or bool(rt.service)
     if env.get("VLLM_MODEL") and NAME_RE.fullmatch(env["VLLM_MODEL"]):
         rt.models = [clean(env["VLLM_MODEL"])]
+    served = [env["VLLM_MODEL"]] if env.get("VLLM_MODEL") else []   # a file of this PC, not a hub name
     for _pid, _comm, argv in processes:
         if len(argv) > 2 and Path(argv[0]).name.startswith(("vllm", "python")) and "serve" in argv[1:3] \
                 and any(Path(a).name == "vllm" for a in argv[:2]):
@@ -477,9 +498,12 @@ def vllm(processes) -> Runtime:
             index = argv.index("serve")
             if index + 1 < len(argv) and not argv[index + 1].startswith("-"):
                 rt.models = [clean(argv[index + 1])]
+                served.append(argv[index + 1])
+            served.append(arg_value(argv, "--model"))
             port = arg_value(argv, "--port")
             if port:
                 rt.address = f"127.0.0.1:{port}"
+    rt.model_files = absolute_files(served)
     return rt
 
 
@@ -564,9 +588,11 @@ def koboldcpp(processes) -> Runtime:
     rt = Runtime("koboldcpp", "KoboldCpp", address="127.0.0.1:5001")
     rt.service, env = unit_named("koboldcpp")
     rt.installed = bool(rt.service) or bool(shutil.which("koboldcpp"))
+    served = []
     for _pid, comm, argv in processes:
         if comm == "koboldcpp" or (argv and Path(argv[0]).name.startswith("koboldcpp")):
             rt.running = rt.installed = True
+            served.append(arg_value(argv, "--model", "--model_param"))
             port = arg_value(argv, "--port")
             if port.isdigit():
                 rt.address = f"127.0.0.1:{port}"
@@ -578,6 +604,12 @@ def koboldcpp(processes) -> Runtime:
     except OSError:
         configs = []
     rt.models = dedupe_models(configs)
+    for name in configs:      # each .kcpps names its model file (model_param, or model)
+        config = ad.read_json(KOBOLD_CONFIGS / name)
+        for key in ("model_param", "model"):
+            value = config.get(key)
+            served += [v for v in (value if isinstance(value, list) else [value]) if isinstance(v, str) and v]
+    rt.model_files = absolute_files(served)
     return rt
 
 
@@ -698,7 +730,8 @@ def add_server(servers: dict, name: str, kind: str, target: str, identity: str =
 
 def reused_folders(runtimes, folders) -> list:
     """Reused model folders (settings model_folders): (path, [models]), each file unless an installed
-    runtime serves that same file (its models folder, or the same file reached another way). A file of
+    runtime serves that same file (its models folder, a file it serves by path, or the same file reached
+    another way). A file of
     the same model name elsewhere (another quantization) stays."""
     def identity(path):
         try:
@@ -709,7 +742,10 @@ def reused_folders(runtimes, folders) -> list:
 
     served = {os.path.realpath(os.path.expanduser(rt.models_dir))
               for rt in runtimes if rt.installed and rt.models_dir}
-    served_files = {identity(f) for d in served for f in gguf_files(Path(d))} - {None}
+    # Its folder's files, and those it serves by their own path (llama.cpp -m, models.ini, KoboldCpp,
+    # vLLM), compared by device and inode.
+    served_files = ({identity(f) for d in served for f in gguf_files(Path(d))}
+                    | {identity(f) for rt in runtimes if rt.installed for f in rt.model_files}) - {None}
     found = []
     for folder in list(folders)[:50]:
         path = Path(os.path.expanduser(folder))

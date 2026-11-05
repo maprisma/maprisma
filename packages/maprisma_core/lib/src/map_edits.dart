@@ -653,8 +653,18 @@ final class MapEdits {
         if (e['source'] == aid && e['target'] == target) e as Map,
     ].firstOrNull;
     final entry = _failures()['$aid|$target'] as Map?;
-    if (edge == null || entry == null && !pyTruthy(edge['dangling'])) {
+    // The map's own broken local line (its LLM moved, its provider gone): no
+    // recorded failure, and a reason in fixed when it is not this app's to
+    // repair (the agent has no local-LLM planner).
+    final moved =
+        entry == null &&
+        edge?['kind'] == 'failed' &&
+        nodes[target]?['kind'] == 'runtime';
+    if (edge == null || entry == null && !moved) {
       throw const FormatException('Failure changed; refresh');
+    }
+    if (moved && pyTruthy(edge['fixed'])) {
+      throw FormatException('${edge['fixed']}');
     }
     final kind = nodes[target]!['kind'] as String;
     final request = <String, dynamic>{
