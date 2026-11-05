@@ -48,6 +48,8 @@ class MapAddonsFocus extends StatefulWidget {
     this.onNodeMenu,
     this.locked = const {},
     this.onShowTerminal,
+    this.onAdd,
+    this.runtimes = const [],
   });
   final bool hosted;
   final int category;
@@ -57,6 +59,13 @@ class MapAddonsFocus extends StatefulWidget {
   final bool busy, online, welcome, detecting, detectionFailed;
   final String Function(String) tr;
   final VoidCallback onBack, onCatalog, onModels, onConnections, onFolders;
+
+  /// The add cards of the MCP and Models pages (no add-ons exist for them):
+  /// what to add ('mcp', 'skills', 'model') and a local LLM's key.
+  final void Function(String kind, String target)? onAdd;
+
+  /// The local LLMs on the map ({'key', 'name'}): an Add model card each.
+  final List<Map<String, String>> runtimes;
   final VoidCallback? onDetect, onLater, onFile;
   final ValueChanged<bool> onOnline;
   final ValueChanged<String>? onLogin;
@@ -302,6 +311,9 @@ class _MapAddonsFocusState extends State<MapAddonsFocus> {
     final holders = <String>{
       for (final item in items) ...?lockOf(item),
     }.toList();
+    // Add-ons exist for agents and providers only; the MCP and Models pages
+    // add servers, skills and models instead.
+    final addons = widget.category == 1 || widget.category == 2;
     final title = const [
       'MCP servers and skills',
       'Agents',
@@ -342,7 +354,7 @@ class _MapAddonsFocusState extends State<MapAddonsFocus> {
             lockedBanner(addonsLockedText(tr, holders)),
             const SizedBox(height: AppSpace.md),
           ],
-          if (widget.onDetect != null)
+          if (widget.onDetect != null && addons)
             Align(
               alignment: Alignment.centerRight,
               child: TextButton.icon(
@@ -353,10 +365,14 @@ class _MapAddonsFocusState extends State<MapAddonsFocus> {
                 label: Text(tr('Refresh')),
               ),
             ),
-          Text(
-            tr('Only add-ons signed by Uwe Bruckhaus are offered and loaded.'),
-          ),
-          Text(tr('New add-ons stay switched off until you enable them.')),
+          if (addons) ...[
+            Text(
+              tr(
+                'Only add-ons signed by Uwe Bruckhaus are offered and loaded.',
+              ),
+            ),
+            Text(tr('New add-ons stay switched off until you enable them.')),
+          ],
           if (widget.welcome)
             Text(
               tr(
@@ -412,60 +428,102 @@ class _MapAddonsFocusState extends State<MapAddonsFocus> {
                   ),
                 ),
               ),
-          const Divider(),
-          Text(
-            tr('Not installed'),
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          if (dummy) ...[
-            for (final item in [...on, ...off]) addon(item),
-          ],
-          SwitchListTile(
-            title: Text(tr('Look for add-ons online')),
-            value: widget.online,
-            onChanged: widget.busy ? null : widget.onOnline,
-          ),
-          Wrap(
-            spacing: 8,
-            children: [
-              TextButton(
-                onPressed: widget.busy ? null : widget.onCatalog,
-                child: Text(
-                  tr(widget.online ? 'Look for add-ons online' : 'Available'),
+          if (!addons && widget.onAdd != null) ...[
+            const SizedBox(height: AppSpace.md),
+            for (final (kind, target, label, hint) in [
+              if (widget.category == 0) ...[
+                (
+                  'mcp',
+                  '',
+                  tr('Add MCP server'),
+                  tr('Recommended, registry, this PC'),
                 ),
-              ),
-              if (widget.onFile != null)
-                TextButton(
-                  key: const ValueKey('addons-install-file'),
-                  onPressed: widget.busy ? null : widget.onFile,
-                  child: Text(tr('Install from file…')),
-                ),
-            ],
-          ),
-          if (widget.entries == null)
-            Text(tr('The catalog loads only when you ask to look online.')),
-          for (final item in catalog)
-            Card(
-              child: ExpansionTile(
-                title: Text('${item['name']} · ${item['version']}'),
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: AddonDetails(item: item, tr: tr),
+                ('skills', '', tr('Add skills'), tr('This PC or the web')),
+              ],
+              // No local LLM on the map (its column hidden): the first one
+              // installed, or Providers and models if there is none.
+              if (widget.category == 3 && widget.runtimes.isEmpty)
+                ('model', '', tr('Add model'), tr('Download model')),
+              if (widget.category == 3)
+                for (final rt in widget.runtimes)
+                  (
+                    'model',
+                    rt['key']!,
+                    '${tr('Add model')} · ${rt['name']}',
+                    tr('Download for {0}').replaceAll('{0}', rt['name']!),
                   ),
-                  FilledButton(
-                    onPressed:
-                        widget.busy ||
-                            !widget.online ||
-                            item['supported'] != true ||
-                            item['preview'] == null
+            ])
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: SizedBox(
+                  height: 48,
+                  child: MapAddCard(
+                    key: ValueKey('focus-add-$kind-$target'),
+                    label: label,
+                    hint: hint,
+                    onTap: widget.busy
                         ? null
-                        : () => widget.onInstall(item),
-                    child: Text(tr('Get add-on')),
+                        : () => widget.onAdd!(kind, target),
                   ),
-                ],
+                ),
               ),
+          ],
+          if (addons) ...[
+            const Divider(),
+            Text(
+              tr('Not installed'),
+              style: Theme.of(context).textTheme.titleLarge,
             ),
+            if (dummy) ...[
+              for (final item in [...on, ...off]) addon(item),
+            ],
+            SwitchListTile(
+              title: Text(tr('Look for add-ons online')),
+              value: widget.online,
+              onChanged: widget.busy ? null : widget.onOnline,
+            ),
+            Wrap(
+              spacing: 8,
+              children: [
+                TextButton(
+                  onPressed: widget.busy ? null : widget.onCatalog,
+                  child: Text(
+                    tr(widget.online ? 'Look for add-ons online' : 'Available'),
+                  ),
+                ),
+                if (widget.onFile != null)
+                  TextButton(
+                    key: const ValueKey('addons-install-file'),
+                    onPressed: widget.busy ? null : widget.onFile,
+                    child: Text(tr('Install from file…')),
+                  ),
+              ],
+            ),
+            if (widget.entries == null)
+              Text(tr('The catalog loads only when you ask to look online.')),
+            for (final item in catalog)
+              Card(
+                child: ExpansionTile(
+                  title: Text('${item['name']} · ${item['version']}'),
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: AddonDetails(item: item, tr: tr),
+                    ),
+                    FilledButton(
+                      onPressed:
+                          widget.busy ||
+                              !widget.online ||
+                              item['supported'] != true ||
+                              item['preview'] == null
+                          ? null
+                          : () => widget.onInstall(item),
+                      child: Text(tr('Get add-on')),
+                    ),
+                  ],
+                ),
+              ),
+          ],
           if (widget.category == 3 || widget.category == 2)
             TextButton(
               onPressed: widget.busy ? null : widget.onModels,

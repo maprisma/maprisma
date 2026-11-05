@@ -780,6 +780,11 @@ KEYS = (
     "llama.cpp is not installed",
     "llama-bench is not next to the llama.cpp the service runs",
     "llama.cpp is started by a script: start its service, then measure again",
+    # The add card last in an MCP, skills or model folder card (task 056).
+    "Recommended, registry, this PC",
+    "This PC or the web",
+    "Add model",
+    "Download for {0}",
 )
 
 

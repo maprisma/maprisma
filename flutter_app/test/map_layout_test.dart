@@ -290,7 +290,8 @@ void main() {
       // Old free card coordinates in `cards` are ignored; cards stay in their column.
       expect(
         l.cards['0:mcp:']!.rect,
-        const Rect.fromLTWH(16, 106, 266, 32 + 146),
+        // The MCP card ends with its add card.
+        const Rect.fromLTWH(16, 106, 266, 32 + 146 + mapAddStep),
       );
       expect(
         l.cards['1:agent:']!.rect,
@@ -298,7 +299,11 @@ void main() {
       );
       expect(l.boxes['mcp:c']!.left - l.cards['0:mcp:']!.rect.left, 12);
       expect(l.cards['0:mcp:']!.rect.right - l.boxes['mcp:c']!.right, 12);
-      expect(l.cards['0:mcp:']!.rect.bottom - l.boxes['mcp:c']!.bottom, 12);
+      final add = l.cards['0:mcp:']!.add!;
+      expect(add.top - l.boxes['mcp:c']!.bottom, 12);
+      expect(l.cards['0:mcp:']!.rect.bottom - add.bottom, 12);
+      expect(add.left, l.boxes['mcp:c']!.left);
+      expect(add.width, l.boxes['mcp:c']!.width);
       expect(l.cards['1:agent:']!.rect.bottom - l.boxes['agent:b']!.bottom, 12);
       expect(
         MapLayout(graph, {
@@ -407,5 +412,55 @@ void main() {
       greaterThanOrEqualTo(empty.columnX(3) + empty.columnWidth + 16),
     );
     expect(empty.size.width, lessThanOrEqualTo(1500));
+  });
+
+  test('MCP, skills and local model folder cards end with an add card', () {
+    final graph = {
+      ...fixtureGraph(),
+      'nodes': [
+        ...(fixtureGraph()['nodes'] as List),
+        {
+          'id': 'skills:s',
+          'kind': 'skills',
+          'column': 0,
+          'label': 'skills:s',
+          'detail': '',
+        },
+        {
+          'id': 'model:cloud:x:y',
+          'kind': 'model',
+          'column': 3,
+          'label': 'y',
+          'detail': '',
+          'group': 'online',
+        },
+      ],
+      'edges': [
+        ...(fixtureGraph()['edges'] as List),
+        {'source': 'cloud:x', 'target': 'model:cloud:x:y', 'kind': 'serves'},
+      ],
+    };
+    final l = MapLayout(graph, const {});
+    expect(
+      [
+        for (final c in l.cards.values)
+          if (c.add != null) (c.id, c.addKind, c.addTarget),
+      ],
+      unorderedEquals([
+        ('0:mcp:', 'mcp', ''),
+        ('0:skills:', 'skills', ''),
+        // The folder a local LLM serves: its download is for that one.
+        ('3:model:', 'model', 'r'),
+      ]),
+    );
+    // An online provider's models are not downloaded: no add card.
+    expect(l.cards['3:model:online']!.add, isNull);
+    expect(l.cards['1:agent:']!.add, isNull);
+    // Folded: neither the add card nor its room.
+    final folded = MapLayout(graph, const {
+      'collapsed': ['3:model:'],
+    });
+    expect(folded.cards['3:model:']!.add, isNull);
+    expect(folded.cards['3:model:']!.rect.height, 38);
   });
 }

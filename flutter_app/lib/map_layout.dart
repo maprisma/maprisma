@@ -138,6 +138,9 @@ Map<String, dynamic> withAgentLinks(Map<String, dynamic> graph) {
   };
 }
 
+/// The height an add card takes at the end of a card (with its gap).
+const mapAddStep = 52.0, mapAddHeight = 40.0;
+
 class MapCardLayout {
   MapCardLayout(
     this.id,
@@ -147,8 +150,19 @@ class MapCardLayout {
     this.nodes,
     this.folded, {
     List<String>? all,
+    this.add,
+    this.addKind = '',
+    this.addTarget = '',
   }) : all = all ?? nodes;
   final String id, label;
+
+  /// The add card last in the card (Add MCP server, Add skills, Add model),
+  /// null for cards without one or folded ones.
+  final Rect? add;
+
+  /// What it adds ('mcp', 'skills', 'model') and, for a model, the local
+  /// LLM that serves this folder (its runtime key).
+  final String addKind, addTarget;
 
   /// Every box of the card, also those a used-only card leaves out.
   final List<String> all;
@@ -212,6 +226,7 @@ class MapLayout {
     double? centerWidth,
   }) {
     _columns = columns;
+    _edgesOf = (graph['edges'] as List? ?? const []).cast<Map>();
     _providerModelsRaw = graph['provider_models'] as Map?;
     bordered = (saved['card_border'] as Map?)?['on'] == true;
 
@@ -324,12 +339,15 @@ class MapLayout {
       final column = nodes[grouped[id]!.first]!['column'] as int;
       final folded = (saved['collapsed'] as List? ?? []).contains(id);
       final origin = Offset(columnX(column), heights[column] ?? startTop);
+      final first = nodes[grouped[id]!.first]!;
+      // Last in an MCP, skills or local model folder card: an add card.
+      final (addKind, addTarget) = _addOf(first['kind'] as String?, full);
+      final withAdd = addKind.isNotEmpty && !folded && ids.isNotEmpty;
       // An empty card is as tall as a folded one: its header still fits.
       final height = folded || ids.isEmpty
           ? 38.0
-          : 32 + ids.length * mapRowStep;
+          : 32 + ids.length * mapRowStep + (withAdd ? mapAddStep : 0);
       final rect = origin & Size(columnWidthOf(column), height);
-      final first = nodes[grouped[id]!.first]!;
       const labels = {
         'agent': 'Agents',
         'runtime': 'Providers',
@@ -348,6 +366,16 @@ class MapLayout {
         ids,
         folded,
         all: full,
+        add: withAdd
+            ? Rect.fromLTWH(
+                origin.dx + 12,
+                origin.dy + 32 + ids.length * mapRowStep,
+                columnWidthOf(column) - 24.0,
+                mapAddHeight,
+              )
+            : null,
+        addKind: withAdd ? addKind : '',
+        addTarget: withAdd ? addTarget : '',
       );
       heights[column] = math.max(heights[column] ?? startTop, rect.bottom + 18);
       if (!folded) {
@@ -399,6 +427,24 @@ class MapLayout {
   }
   late final Object _geometry;
 
+  /// What a card's add card adds: MCP servers and skills always; models only
+  /// in a folder a local LLM serves (an online provider's models are not
+  /// downloaded). ('', '') for none.
+  (String, String) _addOf(String? kind, List<String> ids) {
+    if (kind == 'mcp' || kind == 'skills') return (kind!, '');
+    if (kind != 'model') return ('', '');
+    final members = ids.toSet();
+    for (final e in _edgesOf) {
+      final source = '${e['source']}';
+      if (e['kind'] == 'serves' &&
+          source.startsWith('runtime:') &&
+          members.contains(e['target'])) {
+        return ('model', source.substring('runtime:'.length));
+      }
+    }
+    return ('', '');
+  }
+
   /// Refresh metadata without losing boxes, curves or their cached paths.
   bool updateGraph(Map<String, dynamic> graph) {
     if (!sameMapJson(_geometry, mapGeometry(graph))) return false;
@@ -426,6 +472,7 @@ class MapLayout {
 
   /// The columns shown, in order (null: all); hidden ones leave no gap.
   List<int>? _columns;
+  late final List<Map> _edgesOf;
   late final double columnWidth, columnGap, boxWidth;
   double _inset = 0;
   bool _sized = false;

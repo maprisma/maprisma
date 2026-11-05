@@ -806,5 +806,9 @@
   "The card is in use: a model is loaded in Ollama. Measure again when it is idle.": "De videokaart is bezet: er is een model geladen in Ollama. Meet opnieuw wanneer ze vrij is.",
   "llama.cpp is not installed": "llama.cpp is niet geïnstalleerd",
   "llama-bench is not next to the llama.cpp the service runs": "llama-bench staat niet naast de llama.cpp die de service uitvoert",
-  "llama.cpp is started by a script: start its service, then measure again": "llama.cpp wordt via een script gestart: start de service en meet daarna opnieuw"
+  "llama.cpp is started by a script: start its service, then measure again": "llama.cpp wordt via een script gestart: start de service en meet daarna opnieuw",
+  "Recommended, registry, this PC": "Aanbevolen, register, deze pc",
+  "This PC or the web": "Deze pc of het web",
+  "Add model": "Model toevoegen",
+  "Download for {0}": "Downloaden voor {0}"
 }

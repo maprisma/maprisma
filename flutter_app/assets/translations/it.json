@@ -806,5 +806,9 @@
   "The card is in use: a model is loaded in Ollama. Measure again when it is idle.": "La scheda grafica è occupata: in Ollama è caricato un modello. Misura di nuovo quando è libera.",
   "llama.cpp is not installed": "llama.cpp non è installato",
   "llama-bench is not next to the llama.cpp the service runs": "llama-bench non si trova accanto al llama.cpp eseguito dal servizio",
-  "llama.cpp is started by a script: start its service, then measure again": "llama.cpp viene avviato da uno script: avvia il suo servizio, poi misura di nuovo"
+  "llama.cpp is started by a script: start its service, then measure again": "llama.cpp viene avviato da uno script: avvia il suo servizio, poi misura di nuovo",
+  "Recommended, registry, this PC": "Consigliati, registro, questo PC",
+  "This PC or the web": "Questo PC o il web",
+  "Add model": "Aggiungi modello",
+  "Download for {0}": "Scarica per {0}"
 }

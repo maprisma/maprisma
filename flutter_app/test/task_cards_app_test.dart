@@ -12,6 +12,9 @@ import 'package:maprisma/main.dart';
 import 'package:maprisma/connections_view.dart';
 import 'package:maprisma/test_shots.dart';
 import 'package:maprisma/map_addons_focus.dart';
+import 'package:maprisma/map_groups.dart';
+import 'package:maprisma/mcp_catalog_view.dart';
+import 'package:maprisma/providers_view.dart' show ModelBrowser;
 import 'package:maprisma/map_smart_card.dart';
 import 'package:maprisma/performance_view.dart';
 import 'package:flutter/material.dart';
@@ -342,6 +345,43 @@ void main() {
       dir,
     ).skipWhile((q) => q['method'] != 'addons.enable_found');
     expect(after.where((q) => q['method'] == 'addons.list'), isNotEmpty);
+    await unmountApp(tester);
+  });
+
+  testWidgets('the add cards open the MCP catalog and the model download', (
+    tester,
+  ) async {
+    await mountApp(
+      tester,
+      beforeStart: (dir) => File('${dir.path}/serves').createSync(),
+    );
+    await settleService(tester);
+    // The MCP column's own page: its add cards, no add-on section.
+    tester.widget<MapGroupCard>(find.byType(MapGroupCard).first).onExpand();
+    await settleService(tester);
+    final page = tester.widget<MapAddonsFocus>(find.byType(MapAddonsFocus));
+    expect(page.category, 0);
+    expect(find.byKey(const ValueKey('focus-add-mcp-')), findsOneWidget);
+    expect(find.byKey(const ValueKey('focus-add-skills-')), findsOneWidget);
+    expect(find.text('Look for add-ons online'), findsNothing);
+    page.onBack();
+    await settleService(tester);
+    // On the map: last in the MCP card.
+    await tester.tap(find.byKey(const ValueKey('card-add-0:mcp:')));
+    await settleService(tester);
+    expect(find.byType(McpCatalogView), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await settleService(tester);
+    // Last in the model folder card: the download of the local LLM serving it.
+    await tester.tap(find.byKey(const ValueKey('card-add-3:model:')));
+    await settleService(tester);
+    expect(
+      tester.widget<ModelBrowser>(find.byType(ModelBrowser)).runtime['key'],
+      'fixture',
+    );
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await settleService(tester);
+    expect(tester.takeException(), isNull);
     await unmountApp(tester);
   });
 

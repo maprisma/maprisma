@@ -35,6 +35,7 @@ class AgentMap extends StatelessWidget {
     this.focusedNode,
     this.groups,
     this.onExpandGroup,
+    this.onAdd,
     this.onNodeMenu,
     this.smartCards = false,
     this.smartAskColumns,
@@ -81,6 +82,7 @@ class AgentMap extends StatelessWidget {
   final String? focusedNode;
   final List<MapGroup>? groups;
   final ValueChanged<int>? onExpandGroup;
+  final void Function(String kind, String target)? onAdd;
   final void Function(BuildContext, Map<String, dynamic>)? onNodeMenu;
   final List<String>? layers;
   final FutureOr<void> Function(List<String>)? onLayers;
@@ -157,6 +159,7 @@ class AgentMap extends StatelessWidget {
         controller: controller,
         groups: this.groups,
         onExpandGroup: onExpandGroup,
+        onAdd: onAdd,
         onOpen: onNode,
         onMenu: onNodeMenu,
         animate: animate,

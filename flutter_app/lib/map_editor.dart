@@ -38,6 +38,7 @@ class MapEditor extends StatefulWidget {
     this.controller,
     this.groups,
     this.onExpandGroup,
+    this.onAdd,
     this.onOpen,
     this.onMenu,
     this.animate = 'all',
@@ -82,6 +83,10 @@ class MapEditor extends StatefulWidget {
   final TransformationController? controller;
   final List<MapGroup>? groups;
   final ValueChanged<int>? onExpandGroup;
+
+  /// An add card at the end of a card: what it adds ('mcp', 'skills',
+  /// 'model') and, for a model, the local LLM serving that folder.
+  final void Function(String kind, String target)? onAdd;
   final ValueChanged<Map<String, dynamic>>? onOpen;
   final void Function(BuildContext, Map<String, dynamic>)? onMenu;
   final String animate;
@@ -1386,20 +1391,25 @@ class _MapEditorState extends State<MapEditor>
                                             });
                                           }
                                         },
-                                        child: RepaintBoundary(
-                                          child: CustomPaint(
-                                            painter: _MapPaint(
-                                              layout,
-                                              colors,
-                                              lit,
-                                              _source,
-                                              _cursor,
-                                              _saved['card_border'] as Map?,
-                                              dimming,
-                                              pinned,
-                                              corners(context),
-                                              _saved['line_colors'] as Map? ??
-                                                  const {},
+                                        // The map's own surface (lines and
+                                        // empty space) has a name of its own.
+                                        child: Semantics(
+                                          label: widget.tr('AI Map'),
+                                          child: RepaintBoundary(
+                                            child: CustomPaint(
+                                              painter: _MapPaint(
+                                                layout,
+                                                colors,
+                                                lit,
+                                                _source,
+                                                _cursor,
+                                                _saved['card_border'] as Map?,
+                                                dimming,
+                                                pinned,
+                                                corners(context),
+                                                _saved['line_colors'] as Map? ??
+                                                    const {},
+                                              ),
                                             ),
                                           ),
                                         ),
@@ -1552,6 +1562,43 @@ class _MapEditorState extends State<MapEditor>
                                           ),
                                         ),
                                       ),
+                                    if (widget.onAdd != null)
+                                      for (final card in layout.cards.values)
+                                        if (card.add case final add?)
+                                          Positioned.fromRect(
+                                            rect: add,
+                                            child: MapAddCard(
+                                              key: ValueKey(
+                                                'card-add-${card.id}',
+                                              ),
+                                              label: widget.tr(
+                                                switch (card.addKind) {
+                                                  'mcp' => 'Add MCP server',
+                                                  'skills' => 'Add skills',
+                                                  _ => 'Add model',
+                                                },
+                                              ),
+                                              hint: switch (card.addKind) {
+                                                'mcp' => widget.tr(
+                                                  'Recommended, registry, this PC',
+                                                ),
+                                                'skills' => widget.tr(
+                                                  'This PC or the web',
+                                                ),
+                                                _ =>
+                                                  widget
+                                                      .tr('Download for {0}')
+                                                      .replaceAll(
+                                                        '{0}',
+                                                        '${layout.nodes['runtime:${card.addTarget}']?['label'] ?? card.addTarget}',
+                                                      ),
+                                              },
+                                              onTap: () => widget.onAdd!(
+                                                card.addKind,
+                                                card.addTarget,
+                                              ),
+                                            ),
+                                          ),
                                     if (_draggingCard != null &&
                                         _draggingCardY != null &&
                                         layout.cards.containsKey(_draggingCard))

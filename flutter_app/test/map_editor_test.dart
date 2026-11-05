@@ -65,6 +65,7 @@ Future<void> mount(
   ValueChanged<Map<String, dynamic>>? onSmartApplied,
   TransformationController? controller,
   Size size = const Size(1500, 1000),
+  void Function(String kind, String target)? onAdd,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -93,6 +94,7 @@ Future<void> mount(
             client: client,
             onSmartApplied: onSmartApplied,
             controller: controller,
+            onAdd: onAdd,
             groups: smartCards
                 ? MapGroup.fromGraph(g, const [
                     'MCP servers and skills',
@@ -817,6 +819,24 @@ void main() {
     await tester.tapAt(onLine);
     await tester.pumpAndSettle();
     expect(edits.single['fixed'], isNotNull);
+  });
+  testWidgets('an add card ends the MCP and model folder cards', (
+    tester,
+  ) async {
+    final added = <(String, String)>[];
+    await mount(tester, edits: [], onAdd: (k, t) => added.add((k, t)));
+    expect(find.byKey(const ValueKey('card-add-0:mcp:')), findsOneWidget);
+    expect(find.text('Add MCP server'), findsOneWidget);
+    expect(find.text('Add model'), findsOneWidget);
+    expect(find.byKey(const ValueKey('card-add-1:agent:')), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('card-add-3:model:')));
+    await tester.tap(find.byKey(const ValueKey('card-add-0:mcp:')));
+    await tester.pump();
+    expect(added, [('model', 'r'), ('mcp', '')]);
+    // Without a handler there is nothing to tap.
+    await tester.pumpWidget(const SizedBox());
+    await mount(tester, edits: []);
+    expect(find.byKey(const ValueKey('card-add-0:mcp:')), findsNothing);
   });
   testWidgets('a click on a line shows its hook; empty space hides it', (
     tester,

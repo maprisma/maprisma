@@ -26,6 +26,7 @@ class ConnectionsView extends StatefulWidget {
     this.onCall,
     this.onSkillPreview,
     this.showFound = false,
+    this.open,
     this.onFoundChanged,
     this.onUpdatePreview,
   });
@@ -38,6 +39,10 @@ class ConnectionsView extends StatefulWidget {
 
   /// Open with what was found on this PC (the smart card's "New on this PC").
   final bool showFound;
+
+  /// Opened from a map card's add card: 'mcp' opens the MCP catalog,
+  /// 'skills' the skills search on the web.
+  final String? open;
   final Future<void> Function(Map<String, dynamic>)? onSkillPreview;
   final Future<Map<String, dynamic>> Function(String, Map<String, dynamic>)?
   onCall;
@@ -71,12 +76,19 @@ class _ConnectionsViewState extends State<ConnectionsView> {
   void initState() {
     super.initState();
     if (widget.showFound) _openFound();
+    _openAsked();
   }
 
   @override
   void didUpdateWidget(ConnectionsView old) {
     super.didUpdateWidget(old);
     if (widget.showFound && !old.showFound) _openFound();
+    if (widget.open != old.open) _openAsked();
+  }
+
+  void _openAsked() {
+    if (widget.open == 'mcp') _catalog = true;
+    if (widget.open == 'skills') _skillsWeb = true;
   }
 
   Future<void> _openFound() async {

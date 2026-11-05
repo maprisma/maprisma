@@ -118,6 +118,62 @@ class MapGroupCard extends StatelessWidget {
   }
 }
 
+/// A dashed "+" card: the last entry of an MCP, skills or model folder card on
+/// the map, and an action on a column's own page (Add MCP server, Add model).
+class MapAddCard extends StatelessWidget {
+  const MapAddCard({
+    super.key,
+    required this.label,
+    required this.hint,
+    required this.onTap,
+    this.icon = Icons.add,
+  });
+  final String label, hint;
+  final IconData icon;
+  final VoidCallback? onTap;
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final radius = corners(context);
+    return Semantics(
+      button: true,
+      label: '$label. $hint',
+      excludeSemantics: true,
+      onTap: onTap,
+      child: Tooltip(
+        message: hint,
+        child: CustomPaint(
+          foregroundPainter: _DashedBorder(colors.outline, radius),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(radius),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                child: Row(
+                  children: [
+                    Icon(icon, size: 18, color: colors.primary),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: colors.primary),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _DashedBorder extends CustomPainter {
   _DashedBorder(this.color, this.radius);
   final Color color;

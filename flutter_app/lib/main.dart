@@ -1245,6 +1245,15 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       onModels: () => _guideAction('', 'providers'),
       onConnections: () => _guideAction('', 'connections'),
       onFolders: _openExisting,
+      onAdd: (kind, target) => _openAdd(kind, target),
+      runtimes: [
+        for (final n in (_mapGraph['nodes'] as List? ?? const []).cast<Map>())
+          if (n['kind'] == 'runtime' && '${n['id']}'.startsWith('runtime:'))
+            {
+              'key': '${n['id']}'.substring('runtime:'.length),
+              'name': '${n['label']}',
+            },
+      ],
     );
   }
 
@@ -1892,6 +1901,9 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   /// ones (found.hints).
   List<Map<String, dynamic>> _foundHints = [];
   bool _showFound = false;
+
+  /// What Connections opens at once ('mcp', 'skills'): a map add card.
+  String? _connectionsOpen;
 
   Future<void> _lookForNewApps() async {
     try {
@@ -3171,6 +3183,48 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     _showGuide = false;
     _guideReturn = false;
   });
+
+  /// A map add card, or the same action on a column's own page: the MCP
+  /// catalog, the skills search, or the model download of the local LLM
+  /// that serves a folder.
+  Future<void> _openAdd(String kind, [String runtime = '']) async {
+    if (_busy) return;
+    if (kind == 'mcp' || kind == 'skills') {
+      setState(() {
+        _focusCategory = null;
+        _showGuide = false;
+        _showSettings = false;
+        _showProviders = false;
+        _showConnections = true;
+        _connectionsOpen = kind;
+      });
+      await _refresh();
+      return;
+    }
+    try {
+      final data = await _client.providersSnapshot();
+      if (!mounted) return;
+      final local = (data['local'] as List? ?? const [])
+          .cast<Map<String, dynamic>>()
+          .where((r) => r['installed'] == true)
+          .toList();
+      final chosen =
+          local.where((r) => r['key'] == runtime).firstOrNull ??
+          (runtime.isEmpty ? local.firstOrNull : null);
+      setState(() {
+        _providers = data;
+        _focusCategory = null;
+        if (chosen != null) {
+          _browser = chosen;
+        } else {
+          // No local LLM to download for: Providers and models says why.
+          _showProviders = true;
+        }
+      });
+    } catch (_) {
+      _actionFailed();
+    }
+  }
 
   void _guideAction(String command, String action) {
     _connectionCommand = command.isEmpty ? null : command;
@@ -5235,6 +5289,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                                               method: 'mcp.option_preview',
                                             ),
                                         showFound: _showFound,
+                                        open: _connectionsOpen,
                                         onFoundChanged: _loadFoundHints,
                                         onUpdatePreview: (params) async {
                                           await _connectionPreview(
@@ -5247,6 +5302,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                                           setState(() {
                                             _showConnections = false;
                                             _showFound = false;
+                                            _connectionsOpen = null;
                                           });
                                           _backToGuideIfFromIt();
                                         },
@@ -5266,6 +5322,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                                         setState(() {
                                           _showConnections = false;
                                           _showFound = false;
+                                          _connectionsOpen = null;
                                         });
                                         _backToGuideIfFromIt();
                                       },
@@ -5434,6 +5491,8 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                                               onExpandGroup: (col) => setState(
                                                 () => _focusCategory = col,
                                               ),
+                                              onAdd: (kind, target) =>
+                                                  _openAdd(kind, target),
                                               client: _maybeClient,
                                             )
                                           : _viewHost(
