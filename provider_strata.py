@@ -88,11 +88,21 @@ def _port(value) -> int:
     return value if isinstance(value, int) and not isinstance(value, bool) and 0 < value < 65536 else 0
 
 
+# At most this many entries of a folder are read, in the folder's own order (as the Dart core's
+# ScanFiles.list): a huge folder costs bounded memory on every scan.
+LIST_LIMIT = 4000
+
+
+def _listed(folder):
+    import itertools
+    return list(itertools.islice(folder.iterdir(), LIST_LIMIT))
+
+
 def model_ids() -> list[str]:
     """Its installed models: the ids of strata-<id>.json run configs, sorted."""
     found = []
     try:
-        entries = sorted(install_dir().iterdir())[:4 * MAX_ITEMS]
+        entries = sorted(_listed(install_dir()))[:4 * MAX_ITEMS]
     except OSError:
         return []
     for path in entries:
@@ -110,7 +120,8 @@ def last_preset() -> tuple[str, int]:
     Only these two fields are read: a preset file may hold the API key."""
     best, best_time = ("", 0), ""
     try:
-        paths = sorted(presets_dir().glob("*.json"))[:MAX_ITEMS]
+        paths = sorted(p for p in _listed(presets_dir())
+                       if p.name.endswith(".json") and not p.name.startswith("."))[:MAX_ITEMS]
     except OSError:
         return best
     for path in paths:

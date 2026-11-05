@@ -86,6 +86,26 @@ class FindTest(unittest.TestCase):
             # Its own terminal's strata is still found.
             self.assertEqual(ps.strata_binary(), str(h.data / "terminal/current/bin/strata"))
 
+    def test_a_huge_folder_is_read_only_up_to_its_limit(self):
+        # Review 064 round 2: never every entry of a folder, as the Dart core's ScanFiles.list (4000).
+        with Home() as h, mock.patch.object(ps, "LIST_LIMIT", 6):
+            install = h.data / "install"
+            install.mkdir(parents=True)
+            for i in range(20):
+                (install / f"strata-m{i:02d}.json").write_text("{}")
+                h.preset(f"p{i:02d}", last_used=f"2026-11-05T10:{i:02d}:00")
+            read = []
+            real = ps._listed
+
+            def counted(folder):
+                found = real(folder)
+                read.append(len(found))
+                return found
+            with mock.patch.object(ps, "_listed", counted):
+                self.assertLessEqual(len(ps.model_ids()), 6)
+                ps.last_preset()
+            self.assertEqual(read, [6, 6])
+
     def test_models_are_its_run_configs_only(self):
         with Home() as h:
             install = h.data / "install"
