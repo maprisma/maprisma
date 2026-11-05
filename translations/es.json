@@ -3405,5 +3405,6 @@
  "Terminals and screenshots": "Terminales y capturas de pantalla",
  "Local agents": "Agentes locales",
  "{0} cannot use {1}.": "{0} no puede usar {1}.",
- "To switch {0} to {1}, draw the line to one of its models.": "Para cambiar {0} a {1}, traza la línea hasta uno de sus modelos."
+ "To switch {0} to {1}, draw the line to one of its models.": "Para cambiar {0} a {1}, traza la línea hasta uno de sus modelos.",
+ "{0} uses {1} through its own settings. Change it there.": "{0} usa {1} mediante sus propios ajustes. Cámbialo allí."
 }

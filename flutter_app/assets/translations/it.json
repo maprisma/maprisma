@@ -821,5 +821,6 @@
   "Online agents": "Agenti online",
   "Local agents": "Agenti locali",
   "{0} cannot use {1}.": "{0} non può usare {1}.",
-  "To switch {0} to {1}, draw the line to one of its models.": "Per passare {0} a {1}, traccia la linea verso uno dei suoi modelli."
+  "To switch {0} to {1}, draw the line to one of its models.": "Per passare {0} a {1}, traccia la linea verso uno dei suoi modelli.",
+  "{0} uses {1} through its own settings. Change it there.": "{0} usa {1} tramite le proprie impostazioni. Cambialo lì."
 }

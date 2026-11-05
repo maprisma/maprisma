@@ -4040,6 +4040,16 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       final confirmed = edit['confirmed'] == true;
       final old = nodes[edge['target']];
       if (source['kind'] == 'agent' && old?['kind'] == 'cloud') {
+        // Only its own provider is a sign-in; another one is set in the
+        // agent's own settings and stays as it is.
+        if (source['own_provider'] != old!['id']) {
+          _mapNote(
+            tr('{0} uses {1} through its own settings. Change it there.')
+                .replaceAll('{0}', '${source['label']}')
+                .replaceAll('{1}', '${old['label']}'),
+          );
+          return;
+        }
         await _agentAction((source['id'] as String).substring(6), 'logout');
         return;
       }

@@ -800,6 +800,8 @@ KEYS = (
     # An agent dropped on an online provider that is not its own (review 063).
     "{0} cannot use {1}.",
     "To switch {0} to {1}, draw the line to one of its models.",
+    # Disconnecting a provider an agent sets itself (review 063).
+    "{0} uses {1} through its own settings. Change it there.",
 )
 
 

@@ -65,7 +65,7 @@ for line in sys.stdin:
  elif m=='app.theme':r={'theme':json.loads(Path('theme.json').read_text()) if Path('theme.json').exists() else {}}
  elif m=='addons.list':r={'addons':[addon]+([new_addon] if installed else [])+([{**addon,'id':'agent-codex','name':'Codex','enabled':True,'state':'loaded','loaded':True,'provides':['codex']}] if Path('missing_program').exists() else [])+([{**addon,'id':'llm-vllm','name':'vLLM','kind':'provider','enabled':True,'state':'loaded','loaded':True,'provides':['vllm'],'capabilities':['provider','installer']},{**addon,'id':'llm-fixture','name':'Fixture provider','kind':'provider','enabled':True,'state':'loaded','loaded':True,'provides':['fixture'],'capabilities':['provider','installer']},{**addon,'id':'providers-online','name':'Online providers','kind':'provider','enabled':True,'state':'loaded','loaded':True,'provides':['anthropic'],'capabilities':['provider']}] if Path('missing_runtime').exists() else [])}
  elif m=='system.cached':r={'nodes':[],'edges':[],'notes':[],'helpers':[]}
- elif m=='map.snapshot':r={'nodes':[({**n,'status':'running'} if n['id']=='agent:test' and Path('agent_running').exists() else n) for n in nodes],'edges':([{'source':'agent:test','target':'mcp:known-server','kind':'mcp'}] if connected else [])+([{'source':'runtime:fixture','target':'model:runtime:fixture:example-model','kind':'serves'}] if Path('serves').exists() else []),'activity':{},'pending':Path('pending').exists()}
+ elif m=='map.snapshot':r={'nodes':[({**n,'status':'running'} if n['id']=='agent:test' and Path('agent_running').exists() else n) for n in nodes]+([{'id':'cloud:anthropic','kind':'cloud','column':2,'label':'Anthropic','detail':''}] if Path('foreign_cloud').exists() else []),'edges':([{'source':'agent:test','target':'cloud:anthropic','kind':'uses'}] if Path('foreign_cloud').exists() else [])+([{'source':'agent:test','target':'mcp:known-server','kind':'mcp'}] if connected else [])+([{'source':'runtime:fixture','target':'model:runtime:fixture:example-model','kind':'serves'}] if Path('serves').exists() else []),'activity':{},'pending':Path('pending').exists()}
  elif m=='agents.action_preview':r={'action':p['action'],'name':'Codex','command':p['command'],'commands':['mise use -g codex'],'data':[],'runnable':True,'note':'','url':''}
  elif m=='agents.traffic':r={'available':True,'agents':{}}
  elif m=='agents.halt_preview':r={'instances':[{'label':'PID 42','preview':'halt-42'}]}
@@ -1096,6 +1096,40 @@ void main() {
         1,
       );
       expect(tester.takeException(), isNull);
+      await unmountApp(tester);
+    },
+  );
+  testWidgets(
+    'disconnecting a provider the agent sets itself does not sign it out',
+    (tester) async {
+      final dir = await mountApp(
+        tester,
+        beforeStart: (dir) => File('${dir.path}/foreign_cloud').createSync(),
+      );
+      await settleService(tester);
+      await tester.tap(find.text('Test agent'));
+      await tester.pumpAndSettle();
+      await tester.drag(
+        find.byTooltip(
+          'Move this connection to another compatible box, or to empty space to disconnect.',
+        ),
+        const Offset(0, 240),
+      );
+      await settleService(tester);
+      expect(
+        find.text(
+          'Test agent uses Anthropic through its own settings. Change it there.',
+        ),
+        findsOneWidget,
+      );
+      expect(
+        requests(dir).where(
+          (q) =>
+              q['method'] == 'agents.action_preview' &&
+              (q['params'] as Map)['action'] == 'logout',
+        ),
+        isEmpty,
+      );
       await unmountApp(tester);
     },
   );
