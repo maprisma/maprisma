@@ -637,3 +637,73 @@ class ReviewChainTest(unittest.TestCase):
             inv.runtimes[0].address = address
             self.assertIs(invmod.local_runtime(provider, inv.runtimes), inv.runtimes[0])
             self.assertIsNone(invmod.moved_runtime(provider, inv.runtimes))
+
+    def moved_llama(self):
+        provider = ad.provider_for_url("llama", "http://127.0.0.1:8080/v1")
+        return provider, invmod.Runtime("llamacpp", "llama.cpp", True, True, address="127.0.0.1:9090",
+                                        models=["qwen"])
+
+    def test_r3_a_file_a_runtime_serves_by_its_path_is_not_shown_twice(self):
+        """Round 3 #9: llama.cpp -m, a models.ini preset (through a link), a .kcpps and vLLM's file."""
+        for name in ("qwen", "gemma", "phi", "mistral", "other"):
+            self.write(f"models/{name}.gguf", "")
+        (self.home / "gemma-link.gguf").symlink_to(self.home / "models/gemma.gguf")
+        self.write(".config/llama.cpp/models.ini", "[gemma]\nmodel = ~/gemma-link.gguf\nctx-size = 8192\n")
+        none = 2 ** 31 - 2   # no such process: no parent, no environment
+        llama = invmod.llamacpp([(none, "llama-server", ["llama-server", "-m", str(self.home / "models/qwen.gguf")])])
+        self.assertEqual(llama.models_dir, "")
+        self.assertLessEqual({"qwen", "gemma"}, set(llama.models))
+        folder = [str(self.home / "models")]
+        self.assertEqual(invmod.reused_folders([llama], folder), [("~/models", ["mistral", "other", "phi"])])
+        self.write(".config/koboldcpp/models/phi.kcpps", json.dumps({"model_param": str(self.home / "models/phi.gguf")}))
+        with mock.patch.object(invmod, "KOBOLD_CONFIGS", self.home / ".config/koboldcpp/models"):
+            kobold = invmod.koboldcpp([(none, "koboldcpp", ["koboldcpp"])])
+        self.assertNotIn("phi", invmod.reused_folders([kobold], folder)[0][1])
+        vllm = invmod.vllm([(none, "vllm", ["vllm", "serve", str(self.home / "models/mistral.gguf")])])
+        self.assertNotIn("mistral", invmod.reused_folders([vllm], folder)[0][1])
+
+    def test_r3_a_running_agent_on_a_moved_llm_invents_no_cloud(self):
+        """Round 3 #6: Pi running on its configured model, its llama.cpp moved to 9090."""
+        pi = self.agent("pi", "Pi")
+        provider, llama = self.moved_llama()
+        inv = invmod.Inventory(runtimes=[llama])
+        for instance in ("", "qwen", "qwen (llama)"):
+            with self.subTest(instance=instance):
+                g = graph.build([pi], {"pi": ad.Details(model="qwen (llama)", providers=[provider])}, inv,
+                                running={"pi": [instance]})
+                self.assertFalse([n for n in g.nodes if n.kind == "cloud"])
+                self.assertEqual({e for e in self.edges(g) if e[0] == "agent:pi"},
+                                 {("agent:pi", "runtime:llamacpp", "failed")})
+
+    def test_r3_an_inactive_provider_whose_llm_moved_stays_broken(self):
+        """Round 3 #7: Pi uses Ollama; its llama.cpp provider is set to 8080, llama.cpp moved to 9090."""
+        import flutter_map_payload
+        pi = self.agent("pi", "Pi")
+        provider, llama = self.moved_llama()
+        provider.active = False
+        ollama = ad.provider_for_url("ollama", "http://127.0.0.1:11434/v1")
+        inv = invmod.Inventory(runtimes=[llama, invmod.Runtime("ollama", "Ollama", True, True,
+                                                              address="127.0.0.1:11434", models=["gemma3:4b"])])
+        g = graph.build([pi], {"pi": ad.Details(model="gemma3:4b (ollama)", providers=[ollama, provider])}, inv)
+        self.assertIn(("agent:pi", "runtime:ollama", "uses"), self.edges(g))
+        self.assertIn(("agent:pi", "runtime:llamacpp", "failed"), self.edges(g))
+        self.assertFalse([e for e in g.edges if e.kind == "default" and e.target.startswith("model:runtime:llamacpp")])
+        broken = next(e for e in g.edges if e.kind == "failed")
+        self.assertEqual((broken.failed, broken.dangling, broken.fixed), ("error", "", ""))
+        row = next(r for r in flutter_map_payload.edges(g, {}, {}, inv, "off") if r["kind"] == "failed")
+        self.assertIn("another port", row["hints"][0]["text"])
+
+    def test_r3_an_agent_the_app_cannot_repair_says_where_to_change_it(self):
+        """Round 3 #8: Claude Code's local endpoint is in its own settings: no Repair, the reason instead."""
+        import flutter_map_payload
+        claude, pi = self.agent("claude", "Claude Code"), self.agent("pi", "Pi")
+        provider, llama = self.moved_llama()
+        local = ad.provider_for_url("Anthropic API", "http://localhost:8080")
+        inv = invmod.Inventory(runtimes=[llama])
+        g = graph.build([claude, pi], {"claude": ad.Details(model="qwen", providers=[local]),
+                                       "pi": ad.Details(model="qwen (llama)", providers=[provider])}, inv)
+        rows = {r["source"]: r for r in flutter_map_payload.edges(g, {}, {}, inv, "off") if r["kind"] == "failed"}
+        self.assertIn("127.0.0.1:9090", rows["agent:claude"]["fixed"])
+        self.assertNotIn("hints", rows["agent:claude"])
+        self.assertEqual(rows["agent:pi"]["fixed"], "")
+        self.assertTrue(rows["agent:pi"]["hints"])

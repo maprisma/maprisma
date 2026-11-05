@@ -413,7 +413,8 @@ final class InventoryReader {
 
   /// inventory.reused_folders: the reused model folders (Settings ›
   /// model_folders) with their files, unless a local LLM serves that same
-  /// file: its models folder, or the same file reached another way. A file
+  /// file: its models folder, a file it serves by path, or the same file
+  /// reached another way. A file
   /// of the same model name elsewhere (another quantization) stays.
   List<Map<String, dynamic>> reusedFolders(
     List<RuntimeRecord> runtimes,
@@ -436,9 +437,13 @@ final class InventoryReader {
       for (final rt in runtimes.where((r) => r.installed))
         if (rt.modelsDir.isNotEmpty) real(files.expand(rt.modelsDir)),
     };
+    // Its folder's files, and those it serves by their own path (llama.cpp
+    // -m, models.ini, KoboldCpp, vLLM), compared by device and inode.
     final servedFiles = {
       for (final dir in served)
         for (final file in providers.ggufFiles(dir)) ?identity(file),
+      for (final rt in runtimes.where((r) => r.installed))
+        for (final file in rt.modelFiles) ?identity(file),
     };
     final found = <Map<String, dynamic>>[];
     for (final folder in modelFolders.take(50)) {

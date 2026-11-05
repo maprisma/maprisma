@@ -19,7 +19,9 @@ def encode(plan: connect.Plan, backup_root: Path) -> bytes:
                        'links_add': [[str(p), str(t)] for p, t in plan.links_add],
                        'links_remove': [[str(p), str(t)] for p, t in plan.links_remove],
                        'changes': [{'path': str(c.path), 'old': c.old, 'new': c.new} for c in plan.changes],
-                       'contexts': [{'runtime': asdict(rt), 'model': model, 'tokens': tokens}
+                       # model_files stays out (as RuntimeRecord.toJson): the wire's runtime is unchanged.
+                       'contexts': [{'runtime': {k: v for k, v in asdict(rt).items() if k != 'model_files'},
+                                     'model': model, 'tokens': tokens}
                                     for rt, model, tokens in plan.contexts]}, ensure_ascii=False, allow_nan=False).encode()
     if len(body) > MAX_BYTES:
         raise ValueError('Private plan too large')

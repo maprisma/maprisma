@@ -310,8 +310,9 @@ final class ConfigFiles {
     return folder;
   }
 
-  /// connect.undo: what was not changed again since; returns restored paths.
-  List<String> undo(String folder) {
+  /// connect.undo: what was not changed again since; returns restored paths
+  /// (those changed since are added to [skipped]).
+  List<String> undo(String folder, {List<String>? skipped}) {
     final restored = <String>[];
     final manifest = jsonDecode(
       File(p.join(folder, 'manifest.json')).readAsStringSync(),
@@ -328,6 +329,8 @@ final class ConfigFiles {
         if (_isLink(link) && Link(link).targetSync() == target) {
           Link(link).deleteSync();
           restored.add(link);
+        } else {
+          skipped?.add(link);
         }
       }
       for (final entry in links['removed'] as List? ?? []) {
@@ -335,6 +338,8 @@ final class ConfigFiles {
         if (!_exists(link) && !_isLink(link)) {
           Link(link).createSync(target);
           restored.add(link);
+        } else {
+          skipped?.add(link);
         }
       }
       final made = manifest['created'] as Map? ?? {};
@@ -346,9 +351,12 @@ final class ConfigFiles {
                   entry[1]) {
             File(path).deleteSync();
             restored.add(path);
+          } else {
+            skipped?.add(path);
           }
         } on FileSystemException {
-          continue;
+          // gone already is undone; unreadable is not
+          if (_exists(path)) skipped?.add(path);
         }
       }
       dirs = made['dirs'] as List? ?? [];
@@ -359,6 +367,8 @@ final class ConfigFiles {
             Directory(p.join(folder, name)).existsSync()) {
           Directory(p.join(folder, name)).renameSync(path);
           restored.add(path);
+        } else {
+          skipped?.add(path);
         }
       }
       items = manifest['files'] as List? ?? [];
@@ -367,7 +377,10 @@ final class ConfigFiles {
     }
     for (final item in items) {
       final path = item['path'] as String;
-      if (read(path) != item['written']) continue;
+      if (read(path) != item['written']) {
+        skipped?.add(path);
+        continue;
+      }
       if (item['copy'] != null) {
         write(
           path,

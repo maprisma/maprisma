@@ -824,5 +824,8 @@
   "{0} cannot use {1}.": "{0} nie może korzystać z {1}.",
   "To switch {0} to {1}, draw the line to one of its models.": "Aby przełączyć {0} na {1}, poprowadź linię do jednego z jego modeli.",
   "{0} uses {1} through its own settings. Change it there.": "{0} używa {1} przez własne ustawienia. Zmień to tam.",
-  "This agent has no sign-in that the app can start.": "Ten agent nie ma logowania, które aplikacja może uruchomić."
+  "This agent has no sign-in that the app can start.": "Ten agent nie ma logowania, które aplikacja może uruchomić.",
+  "This local LLM now listens on another port. Repair or remove this connection.": "Ten lokalny LLM nasłuchuje teraz na innym porcie. Napraw lub usuń to połączenie.",
+  "Applied, but the local LLM's own model stayed as it was: it changed meanwhile or could not be saved.": "Zastosowano, ale własny model lokalnego LLM pozostał bez zmian: w międzyczasie się zmienił lub nie dało się go zapisać.",
+  "The local LLM's own model was not put back: a file or the model changed since.": "Własny model lokalnego LLM nie został przywrócony: plik lub model zmienił się od tego czasu."
 }

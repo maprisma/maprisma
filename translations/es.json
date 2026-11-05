@@ -3414,5 +3414,9 @@
  "Red: {0} % or less is left.": "Rojo: queda un {0} % o menos.",
  "Faded: its numbers may be out of date (its tooltip says when they were measured).": "Atenuada: sus cifras pueden estar desactualizadas (su información emergente dice cuándo se midieron).",
  "These numbers may be out of date.": "Estas cifras pueden estar desactualizadas.",
- "Measured {0}: these numbers may be out of date.": "Medido {0}: estas cifras pueden estar desactualizadas."
+ "Measured {0}: these numbers may be out of date.": "Medido {0}: estas cifras pueden estar desactualizadas.",
+ "its address is set in its own settings: change it there to {0}": "su dirección está en su propia configuración: cámbiala allí a {0}",
+ "This local LLM now listens on another port. Repair or remove this connection.": "Este LLM local escucha ahora en otro puerto. Repara o elimina esta conexión.",
+ "Applied, but the local LLM's own model stayed as it was: it changed meanwhile or could not be saved.": "Aplicado, pero el modelo propio del LLM local se quedó como estaba: cambió mientras tanto o no se pudo guardar.",
+ "The local LLM's own model was not put back: a file or the model changed since.": "El modelo propio del LLM local no se restauró: un archivo o el modelo cambió desde entonces."
 }

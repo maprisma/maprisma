@@ -96,6 +96,20 @@ class MapEditorTest(unittest.TestCase):
         self.assertEqual(path.read_text(),text)
         self.assertEqual(self.file.read_text(),'private-fixture')
 
+    def test_r3_repair_of_a_moved_provider_line(self):
+        """Round 3 #7/#8: an inactive moved provider is repaired without being used; a line the agent's
+        own settings hold (fixed) is refused with that reason."""
+        failed = dict(source='agent:a', target='runtime:s', kind='failed', failed='error', dangling='', fixed='')
+        self.graph['edges'].append(failed)
+        with mock.patch.object(self.connections,'preview',side_effect=lambda _:self.connections.keep(self.plan())) as made:
+            api.repair_preview({'agent':'agent:a','target':'runtime:s'},self.graph,self.connections,self.root/'settings.json')
+        self.assertEqual(made.call_args.args[0], {'kind':'provider','command':'a','item':'s','remove':False,
+                                                  'model':'','use_now':False})
+        failed['fixed'] = 'its address is set in its own settings: change it there to 127.0.0.1:9090'
+        with mock.patch.object(self.connections,'preview') as made, self.assertRaisesRegex(ValueError, 'own settings'):
+            api.repair_preview({'agent':'agent:a','target':'runtime:s'},self.graph,self.connections,self.root/'settings.json')
+        made.assert_not_called()
+
     def test_failure_metadata_changed_since_preview_is_preserved(self):
         path=self.root/'failed-links.json'
         path.write_text(json.dumps({'agent:a|mcp:test':{'kind':'mcp','applied':False,'hints':[{'level':'error','text':'test'}]}}))

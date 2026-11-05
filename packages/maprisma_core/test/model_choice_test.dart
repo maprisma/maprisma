@@ -19,7 +19,7 @@ const gone = 'model:runtime:llamacpp:gone',
   final home = Directory.systemTemp.createTempSync('model-choice');
   addTearDown(() => home.deleteSync(recursive: true));
   final bin = Directory('${home.path}/bin')..createSync();
-  for (final command in ['pi', 'llama-server']) {
+  for (final command in ['pi', 'llama-server', 'claude']) {
     File('${bin.path}/$command').writeAsStringSync('#!/bin/sh\necho 1.0.0\n');
     Process.runSync('chmod', ['+x', '${bin.path}/$command']);
   }
@@ -99,8 +99,11 @@ String piModel(Directory home) =>
     '${(jsonDecode(File('${home.path}/.pi/agent/settings.json').readAsStringSync()) as Map)['defaultModel']}';
 
 /// connections.apply through the worker, to its result.
-Future<Map> apply(CoreService core, String plan) async {
-  final started = core.dispatch('connections.apply', {'plan': plan});
+Future<Map> apply(CoreService core, String plan) =>
+    finish(core, core.dispatch('connections.apply', {'plan': plan}));
+
+/// A started connections.apply, to its result.
+Future<Map> finish(CoreService core, Map started) async {
   var status = core.dispatch('tasks.status', {'task': started['task']});
   final deadline = DateTime.now().add(const Duration(seconds: 60));
   while (status['state'] == 'running' && DateTime.now().isBefore(deadline)) {
@@ -281,5 +284,154 @@ void main() {
       throwsFormatException,
     );
     expect(piModel(home), 'gemma');
+  });
+
+  group('review 063 round 3', () {
+    Future<(Directory, CoreService, Map)> switched() async {
+      final (:home, :core) = llamaSetup('gemma', chosen: gemma);
+      await mapOf(core);
+      final preview = core.dispatch('models.switch_preview', {
+        'provider': 'runtime:llamacpp',
+        'old': gemma,
+        'new': qwen,
+      });
+      return (home, core, preview);
+    }
+
+    test(
+      '#2: a choice changed while the worker ran is said, with Undo',
+      () async {
+        final (home, core, preview) = await switched();
+        final started = core.dispatch('connections.apply', {
+          'plan': preview['plan'],
+        });
+        // Before the worker answers: llama.cpp is set to no model of its own.
+        core.dispatch('models.choose_apply', {
+          'preview': core.dispatch('models.choose_preview', {
+            'provider': 'runtime:llamacpp',
+            'model': null,
+          })['preview'],
+        });
+        final result = await finish(core, started);
+        expect(piModel(home), 'qwen');
+        expect(result['choice_failures'], 1);
+        expect(result['undo'], isA<String>());
+        expect(saved(home)['provider_models'], isEmpty);
+        // Its Undo puts the files back and leaves that later choice alone.
+        final undone = core.dispatch('connections.undo', {
+          'undo': result['undo'],
+        });
+        expect(piModel(home), 'gemma');
+        expect(undone['choice_failures'], 0);
+        expect(saved(home)['provider_models'], isEmpty);
+      },
+    );
+
+    test('#2: settings that cannot be saved still return the Undo', () async {
+      final (home, core, preview) = await switched();
+      core.connections.chooseModel = (_, _, _) =>
+          throw const FileSystemException('read-only');
+      final result = await apply(core, preview['plan'] as String);
+      expect(piModel(home), 'qwen');
+      expect(result['ok'], isTrue);
+      expect(result['choice_failures'], 1);
+      expect(saved(home)['provider_models'], {'runtime:llamacpp': gemma});
+      core.dispatch('connections.undo', {'undo': result['undo']});
+      expect(piModel(home), 'gemma');
+    });
+
+    test(
+      '#3: an agent file changed since keeps its provider\'s choice',
+      () async {
+        final (home, core, preview) = await switched();
+        final result = await apply(core, preview['plan'] as String);
+        expect(result['choice_failures'], 0);
+        expect(saved(home)['provider_models'], {'runtime:llamacpp': qwen});
+        // Pi's settings changed by hand since: its Undo skips that file.
+        final settings = File('${home.path}/.pi/agent/settings.json');
+        settings.writeAsStringSync('${settings.readAsStringSync()}\n');
+        final undone = core.dispatch('connections.undo', {
+          'undo': result['undo'],
+        });
+        expect(
+          undone['restored'],
+          isNot(contains('~/.pi/agent/settings.json')),
+        );
+        expect(piModel(home), 'qwen');
+        expect(undone['choice_failures'], 1);
+        expect(saved(home)['provider_models'], {'runtime:llamacpp': qwen});
+      },
+    );
+
+    /// llama.cpp now runs on 9090; Pi is still set to 8080.
+    void moved(Directory home) {
+      File('${home.path}/proc/77/comm')
+        ..createSync(recursive: true)
+        ..writeAsStringSync('llama-server\n');
+      File(
+        '${home.path}/proc/77/cmdline',
+      ).writeAsStringSync('llama-server\x00--port\x009090\x00');
+    }
+
+    Map failedLine(Map graph, String agent) => (graph['edges'] as List)
+        .cast<Map>()
+        .singleWhere((e) => e['source'] == agent && e['kind'] == 'failed');
+
+    test(
+      '#7: Repair rewrites an inactive moved provider, not its use',
+      () async {
+        final (:home, :core) = llamaSetup('qwen');
+        moved(home);
+        final settings = File('${home.path}/.pi/agent/settings.json')
+          ..writeAsStringSync(
+            jsonEncode({'defaultProvider': 'openai', 'defaultModel': 'gpt-5'}),
+          );
+        final line = failedLine(await mapOf(core), 'agent:pi');
+        expect([line['target'], line['dangling']], ['runtime:llamacpp', '']);
+        final preview = core.dispatch('connections.repair_preview', {
+          'agent': 'agent:pi',
+          'target': 'runtime:llamacpp',
+        });
+        await apply(core, preview['plan'] as String);
+        expect(
+          File('${home.path}/.pi/agent/models.json').readAsStringSync(),
+          contains('127.0.0.1:9090'),
+        );
+        expect(jsonDecode(settings.readAsStringSync()), {
+          'defaultProvider': 'openai',
+          'defaultModel': 'gpt-5',
+        });
+      },
+    );
+
+    test('#8: Claude Code\'s moved endpoint is not offered a Repair', () async {
+      final (:home, :core) = llamaSetup('qwen');
+      moved(home);
+      File('${home.path}/.claude/settings.json')
+        ..createSync(recursive: true)
+        ..writeAsStringSync(
+          jsonEncode({
+            'model': 'qwen',
+            'env': {'ANTHROPIC_BASE_URL': 'http://localhost:8080'},
+          }),
+        );
+      final line = failedLine(await mapOf(core), 'agent:claude');
+      expect(line['target'], 'runtime:llamacpp');
+      expect(line['fixed'], contains('127.0.0.1:9090'));
+      expect(line['hints'], isNull);
+      expect(
+        () => core.dispatch('connections.repair_preview', {
+          'agent': 'agent:claude',
+          'target': 'runtime:llamacpp',
+        }),
+        throwsA(
+          isA<FormatException>().having(
+            (e) => e.message,
+            'message',
+            contains('own settings'),
+          ),
+        ),
+      );
+    });
   });
 }

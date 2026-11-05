@@ -444,4 +444,171 @@ void main() {
       ]),
     );
   });
+
+  group('review 063 round 3', () {
+    Map<String, dynamic> llamaAt8080() =>
+        core.reads.details.provider('llama', 'http://127.0.0.1:8080/v1');
+    List<Map> failedLines(Map graph) => [
+      for (final e in (graph['edges'] as List).cast<Map>())
+        if (e['kind'] == 'failed') e,
+    ];
+
+    test('#6: a running agent on a moved local LLM invents no cloud', () {
+      final inv = InventorySnapshot()
+        ..runtimes.add(llama('127.0.0.1:9090', ['qwen']));
+      final info = AgentInfo()
+        ..model = 'qwen (llama)'
+        ..providers.add({...llamaAt8080(), 'active': true});
+      for (final instance in ['', 'qwen', 'qwen (llama)']) {
+        final graph = core.reads.graph.build(
+          [agent('pi')],
+          {'pi': info},
+          inv,
+          running: {
+            'pi': [instance],
+          },
+        );
+        expect(
+          nodes(graph).values.where((n) => n['kind'] == 'cloud'),
+          isEmpty,
+          reason: instance,
+        );
+        expect(edges(graph).where((e) => e.$1 == 'agent:pi'), {
+          ('agent:pi', 'runtime:llamacpp', 'failed'),
+        }, reason: instance);
+      }
+    });
+
+    test('#7: an inactive provider whose LLM moved stays, broken', () {
+      final ollama = RuntimeRecord('ollama', 'Ollama')
+        ..installed = true
+        ..running = true
+        ..address = '127.0.0.1:11434'
+        ..models = ['gemma3:4b'];
+      final inv = InventorySnapshot()
+        ..runtimes.addAll([
+          llama('127.0.0.1:9090', ['qwen']),
+          ollama,
+        ]);
+      final info = AgentInfo()
+        ..model = 'gemma3:4b (ollama)'
+        ..providers.addAll([
+          {
+            ...core.reads.details.provider(
+              'ollama',
+              'http://127.0.0.1:11434/v1',
+            ),
+            'active': true,
+          },
+          {...llamaAt8080(), 'active': false},
+        ]);
+      final graph = core.reads.graph.build([agent('pi')], {'pi': info}, inv);
+      final lines = edges(graph);
+      expect(lines, contains(('agent:pi', 'runtime:ollama', 'uses')));
+      expect(lines, contains(('agent:pi', 'runtime:llamacpp', 'failed')));
+      expect(
+        lines.where(
+          (e) =>
+              e.$1 == 'agent:pi' &&
+              e.$3 == 'default' &&
+              e.$2.startsWith('model:runtime:llamacpp'),
+        ),
+        isEmpty,
+      );
+      final broken = failedLines(graph).single;
+      expect(
+        [broken['failed'], broken['dangling'], broken['fixed']],
+        ['error', '', ''],
+      );
+      expect(
+        (broken['hints'] as List).single['text'],
+        contains('another port'),
+      );
+    });
+
+    test('#8: an agent the app cannot repair says where to change it', () {
+      final inv = InventorySnapshot()
+        ..runtimes.add(llama('127.0.0.1:9090', ['qwen']));
+      final graph = core.reads.graph.build(
+        [agent('claude'), agent('pi')],
+        {
+          'claude': AgentInfo()
+            ..model = 'qwen'
+            ..providers.add({
+              ...core.reads.details.provider(
+                'Anthropic API',
+                'http://localhost:8080',
+              ),
+              'active': true,
+            }),
+          'pi': AgentInfo()
+            ..model = 'qwen (llama)'
+            ..providers.add({...llamaAt8080(), 'active': true}),
+        },
+        inv,
+      );
+      final byAgent = {for (final e in failedLines(graph)) e['source']: e};
+      final claude = byAgent['agent:claude']!, pi = byAgent['agent:pi']!;
+      // No Repair (no hints to open the failure card), no Disconnect, no
+      // move: the reason, with the address to set.
+      expect(claude['fixed'], contains('127.0.0.1:9090'));
+      expect(claude['hints'], isNull);
+      // Pi has a planner: Repair stays.
+      expect(pi['fixed'], '');
+      expect(pi['hints'], isNotEmpty);
+    });
+
+    test('#9: a file a runtime serves by its path is not shown twice', () {
+      RuntimeRecord scan(String key) => core.reads.inventory.providers
+          .scan()
+          .singleWhere((r) => r.key == key);
+      List<Map<String, dynamic>> reused(RuntimeRecord rt) =>
+          core.reads.inventory.reusedFolders([rt], ['${home.path}/models']);
+      for (final name in ['qwen', 'gemma', 'phi', 'mistral', 'other']) {
+        write('models/$name.gguf', '');
+      }
+      // llama.cpp started with -m and no models folder.
+      write('proc/5/comm', 'llama-server\n');
+      write(
+        'proc/5/cmdline',
+        [
+          'llama-server',
+          '-m',
+          '${home.path}/models/qwen.gguf',
+          '',
+        ].join('\x00'),
+      );
+      // A router preset by its path, here through a link to it.
+      Link(
+        '${home.path}/gemma-link.gguf',
+      ).createSync('${home.path}/models/gemma.gguf');
+      write(
+        '.config/llama.cpp/models.ini',
+        '[gemma]\nmodel = ~/gemma-link.gguf\nctx-size = 8192\n',
+      );
+      final llama = scan('llamacpp');
+      expect(llama.modelsDir, '');
+      expect(llama.models, containsAll(['qwen', 'gemma']));
+      expect(reused(llama), [
+        {
+          'path': '~/models',
+          'models': ['mistral', 'other', 'phi'],
+        },
+      ]);
+      // KoboldCpp's .kcpps and vLLM's served file.
+      write(
+        '.config/koboldcpp/models/phi.kcpps',
+        jsonEncode({'model_param': '${home.path}/models/phi.gguf'}),
+      );
+      write('bin/koboldcpp', '');
+      Process.runSync('chmod', ['+x', '${home.path}/bin/koboldcpp']);
+      expect(reused(scan('koboldcpp'))[0]['models'], isNot(contains('phi')));
+      write('proc/6/comm', 'vllm\n');
+      write(
+        'proc/6/cmdline',
+        ['vllm', 'serve', '${home.path}/models/mistral.gguf', ''].join('\x00'),
+      );
+      expect(reused(scan('vllm'))[0]['models'], isNot(contains('mistral')));
+    });
+  });
 }

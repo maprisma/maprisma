@@ -458,13 +458,14 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
           content: Text(
             value?['ok'] == false
                 ? failure ?? failureText(tr)
-                : tr(
-                    value == null
-                        ? 'Cancelled'
-                        : value['external'] == true
-                        ? 'This runs in a separate terminal; passwords are entered there. Refresh when it finishes.'
-                        : 'Succeeded',
-                  ),
+                : _choiceWarning(value) ??
+                      tr(
+                        value == null
+                            ? 'Cancelled'
+                            : value['external'] == true
+                            ? 'This runs in a separate terminal; passwords are entered there. Refresh when it finishes.'
+                            : 'Succeeded',
+                      ),
           ),
           actions: [
             if (undo != null ||
@@ -2719,7 +2720,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     }
     if (result['undo'] is String) {
       _connectionUndo = result['undo'] as String;
-      _appliedMessage(result['undo'] as String);
+      _appliedMessage(result['undo'] as String, _choiceWarning(result));
     }
     // The map first: the slots read it.
     unawaited(result['models_left'] == true ? _modelsLeft(result) : _refresh());
@@ -4345,6 +4346,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   }) async {
     setState(() => _busy = true);
     var applied = false;
+    String? warning, undoToken;
     try {
       final Map<String, dynamic> plan;
       if (ready != null) {
@@ -4436,16 +4438,18 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
           await _refresh(refreshMap: true);
           if (!quiet && !compact) _taskResult(tr('Apply'), result);
         }
+        warning = _choiceWarning(result);
+        undoToken = result['undo'] as String?;
         if (compact && mounted) {
           // Routine: a short note with Undo, or what went wrong.
           applied = result['ok'] != false;
           if (applied) {
-            _appliedMessage(result['undo'] as String?);
+            _appliedMessage(result['undo'] as String?, _choiceWarning(result));
           } else {
             _mapNote(failureText(tr));
           }
         } else if (quiet && mounted) {
-          _appliedMessage(result['undo'] as String?);
+          _appliedMessage(result['undo'] as String?, _choiceWarning(result));
           applied = true;
         } else {
           applied = true;
@@ -4484,6 +4488,9 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
             }.contains(method) ||
             method == null && !author && params['kind'] == 'provider')) {
       await _syncSlots();
+      // The slots' window took the message away; what did not follow is
+      // said again, with this apply's Undo.
+      if (warning != null && mounted) _appliedMessage(undoToken, warning, true);
     }
     return applied;
   }
@@ -4747,12 +4754,14 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   /// "Succeeded" with an Undo for exactly this apply: its token comes from the
   /// apply's result, never from _connectionUndo, which the background tuning
   /// may have replaced meanwhile (during the refresh before; Codex recheck).
-  void _appliedMessage(String? undo) {
+  /// [warning] in its place when the apply could not do all (_choiceWarning);
+  /// [keep]: after a message of its own (a window's), queued behind it.
+  void _appliedMessage(String? undo, [String? warning, bool keep = false]) {
     final messenger = ScaffoldMessenger.of(_navigator.currentContext!);
-    messenger.clearSnackBars();
+    if (!keep) messenger.clearSnackBars();
     messenger.showSnackBar(
       SnackBar(
-        content: Text(tr('Succeeded')),
+        content: Text(warning ?? tr('Succeeded')),
         action: undo == null
             ? null
             : SnackBarAction(
@@ -4764,6 +4773,16 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       ),
     );
   }
+
+  /// An apply whose files were written while a local LLM's own model it
+  /// moves could not follow (changed meanwhile, or not saved): connections
+  /// apply's choice_failures. Its Undo is there all the same.
+  String? _choiceWarning(Map<String, dynamic>? result) =>
+      (result?['choice_failures'] as num? ?? 0) > 0
+      ? tr(
+          "Applied, but the local LLM's own model stayed as it was: it changed meanwhile or could not be saved.",
+        )
+      : null;
 
   /// Undo of an apply with the token of that apply (a result card, a message):
   /// never "the last one", so a later apply's token is never the one undone
@@ -4782,7 +4801,15 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         ScaffoldMessenger.of(_navigator.currentContext!).showSnackBar(
           SnackBar(
             content: Text(
-              '${tr('Restored files')}: ${(result['restored'] as List).length}',
+              [
+                '${tr('Restored files')}: ${(result['restored'] as List).length}',
+                // The local LLM's own model stays with an agent file that
+                // could not be put back (connections.undo choice_failures).
+                if ((result['choice_failures'] as num? ?? 0) > 0)
+                  tr(
+                    "The local LLM's own model was not put back: a file or the model changed since.",
+                  ),
+              ].join('\n'),
             ),
           ),
         );

@@ -805,6 +805,11 @@ KEYS = (
     "{0} uses {1} through its own settings. Change it there.",
     # An agent dropped on its own provider without a sign-in the app can start (review 063, round 2).
     "This agent has no sign-in that the app can start.",
+    # A local provider whose LLM moved to another port; a provider choice an apply or Undo could not move
+    # (review 063, round 3).
+    "This local LLM now listens on another port. Repair or remove this connection.",
+    "Applied, but the local LLM's own model stayed as it was: it changed meanwhile or could not be saved.",
+    "The local LLM's own model was not put back: a file or the model changed since.",
 )
 
 
