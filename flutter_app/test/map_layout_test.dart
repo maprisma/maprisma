@@ -581,8 +581,9 @@ void main() {
       for (final n in graph['nodes'] as List) Map<String, dynamic>.from(n),
     ];
     graph['nodes'] = nodes;
-    nodes.firstWhere((n) => n['id'] == 'agent:a')['own_provider'] =
-        'cloud:openai';
+    nodes.firstWhere((n) => n['id'] == 'agent:a')
+      ..['own_provider'] = 'cloud:openai'
+      ..['own_login'] = true;
     nodes.addAll([
       for (final id in ['cloud:openai', 'cloud:google'])
         {'id': id, 'kind': 'cloud', 'column': 2, 'label': id, 'detail': ''},
@@ -593,5 +594,10 @@ void main() {
     expect(l.targetOk('agent:a', 'cloud:google'), isFalse);
     expect(l.targetOk('cloud:google', 'agent:a'), isFalse);
     expect(l.targetOk('agent:b', 'cloud:openai'), isFalse);
+    // Its own provider, but no sign-in the app can start (round 2 #16).
+    nodes.firstWhere((n) => n['id'] == 'agent:a')['own_login'] = false;
+    final none = MapLayout(graph, {});
+    expect(none.targetOk('agent:a', 'cloud:openai'), isFalse);
+    expect(none.targetOk('cloud:openai', 'agent:a'), isFalse);
   });
 }

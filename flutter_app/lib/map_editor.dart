@@ -591,6 +591,12 @@ class _MapEditorState extends State<MapEditor>
         : kind(target) == 'cloud'
         ? target
         : null;
+    if (agent != null &&
+        cloud != null &&
+        layout.ownProvider(agent, cloud) &&
+        !layout.ownLogin(agent)) {
+      return widget.tr('This agent has no sign-in that the app can start.');
+    }
     if (agent != null && cloud != null) {
       return fill(
         layout.connected(agent, cloud)

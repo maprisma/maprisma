@@ -21,6 +21,7 @@ import 'agent_map.dart';
 import 'agent_list_view.dart';
 import 'agent_details_view.dart';
 import 'agent_usage.dart';
+import 'usage_sweep.dart';
 import 'cost_card.dart';
 import 'settings_view.dart';
 import 'app_theme.dart';
@@ -1952,12 +1953,18 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   /// each provider for its limits; no model runs, so no tokens are used.
   Future<void> _refreshAllUsage() async {
     await Future<void>.delayed(const Duration(seconds: 3));
-    for (final agent in _catalog.where((a) => a['installed'] == true)) {
-      if (!mounted) return;
-      await _refreshUsage(agent['command'] as String);
-    }
+    await _sweepUsage();
     if (mounted) await _loadBadges();
   }
+
+  /// Each agent whose usage record is due, one after the other: at the
+  /// start and then from the minute timer, so the batteries stay current
+  /// while the map is open without an agent's details (round 2 #15). In the
+  /// background, one sweep at a time; true when a record was renewed.
+  Future<bool> _sweepUsage() => _usage.sweep([
+    for (final agent in _catalog.where((a) => a['installed'] == true))
+      agent['command'] as String,
+  ], (command) async => mounted && await _askUsage(command));
 
   Future<void> _loadBadges() async {
     if (_backend?.isConnected != true) return;
@@ -2514,21 +2521,25 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   /// Omarchy's usage records (agents.usage_refresh): when an agent's details
   /// show and its record is stale, Omarchy is asked in the background (at
   /// most every ten minutes per agent), then the details read again.
-  final _usageAsked = <String, DateTime>{};
+  final _usage = UsageSweep();
 
   Future<void> _refreshUsage(String command) async {
-    final last = _usageAsked[command];
-    if (last != null && DateTime.now().difference(last).inMinutes < 10) return;
-    _usageAsked[command] = DateTime.now();
+    if (_usage.take(command)) await _askUsage(command);
+  }
+
+  /// True when the record was renewed.
+  Future<bool> _askUsage(String command) async {
     try {
       final started = await _client.agentsUsageRefresh(command: command);
-      if (started['task'] is! String) return;
+      if (started['task'] is! String) return false;
       final done = await _awaitTask('agents.usage_refresh', started);
-      if (done['ok'] != true || !mounted || _selected != command) return;
+      if (done['ok'] != true) return false;
+      if (!mounted || _selected != command) return true;
       final info = await _client.agentsDetails(command: command);
       if (mounted && _selected == command) setState(() => _agentInfo = info);
+      return true;
     } catch (_) {
-      // The record stays as it was.
+      return false; // The record stays as it was.
     }
   }
 
@@ -4303,6 +4314,11 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         );
         return;
       }
+      // Its own provider, but a sign-in the app cannot start (as Ask AI).
+      if (agent['own_login'] != true) {
+        _mapNote(tr('This agent has no sign-in that the app can start.'));
+        return;
+      }
       await _agentAction(command, 'login');
       return;
     }
@@ -5096,6 +5112,15 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         });
         _limitsTimer ??= Timer.periodic(const Duration(minutes: 1), (_) {
           if (_backend?.isConnected == true) {
+            // The records behind them too, those due (at most every ten
+            // minutes each), in the background: then the badges again.
+            if (!_usage.running) {
+              unawaited(
+                _sweepUsage().then((renewed) {
+                  if (renewed && mounted) unawaited(_loadBadges());
+                }),
+              );
+            }
             unawaited(_loadBadges());
             unawaited(_loadGpu());
             unawaited(_client.limitsNotify().then((_) {}, onError: (_) {}));
