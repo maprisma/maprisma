@@ -442,6 +442,21 @@ class ReviewChainTest(unittest.TestCase):
             g = graph.build([codex], {"codex": ad.Details(model="gpt-6.1-sol")}, invmod.Inventory())
             self.assertIn(("agent:codex", "cloud:openai", "uses"), self.edges(g))
 
+    def test_an_unset_key_is_no_sign_in_and_no_login_no_drop(self):
+        """Round 2 #16: Grok names only XAI_API_KEY: without it xAI is available, not used; and the app
+        can start no sign-in for it (own_login), as Ask AI refuses."""
+        import agent_status
+        grok, codex = self.agent("grok", "Grok"), self.agent("codex", "Codex")
+        with mock.patch.object(agent_status, "HOME", self.home), mock.patch.dict(os.environ, {}, clear=True):
+            g = graph.build([grok, codex], {"grok": ad.Details(model="grok-5")}, invmod.Inventory())
+            self.assertIn(("agent:grok", "cloud:xai", "available"), self.edges(g))
+            nodes = {n.id: n for n in g.nodes}
+            self.assertEqual((nodes["agent:grok"].own_provider, nodes["agent:grok"].own_login), ("cloud:xai", False))
+            self.assertTrue(nodes["agent:codex"].own_login)
+            os.environ["XAI_API_KEY"] = "set"
+            g = graph.build([grok], {"grok": ad.Details(model="grok-5")}, invmod.Inventory())
+            self.assertIn(("agent:grok", "cloud:xai", "uses"), self.edges(g))
+
     def test_servers_of_one_name_but_other_commands_stay_two(self):
         """F2: Claude's and Codex's "filesystem" run different programs."""
         self.write(".claude.json", json.dumps({"mcpServers": {"filesystem": {"command": "fs-a"}}}))

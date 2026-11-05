@@ -155,6 +155,52 @@ void main() {
     expect(edges(build()), contains(('agent:codex', 'cloud:openai', 'uses')));
   });
 
+  test('#16: a key it names but is not set is no sign-in; nor a drop', () {
+    // Grok names no sign-in file, only XAI_API_KEY.
+    Map build(Map<String, String> extra) {
+      final service = CoreService(
+        environment: {
+          'HOME': home.path,
+          'PATH': '${home.path}/bin',
+          'MAPRISMA_DESKTOP': 'generic',
+          'MAPRISMA_SCAN_PROC': '${home.path}/proc',
+          ...extra,
+        },
+      );
+      return service.reads.graph.build(
+        [
+          AgentRecord(
+            service.reads.catalog.adapter('grok')!,
+            name: 'grok',
+            icon: '',
+            installed: true,
+          ),
+        ],
+        {'grok': AgentInfo()..model = 'grok-5'},
+        InventorySnapshot(),
+      );
+    }
+
+    expect(
+      edges(build({})),
+      contains(('agent:grok', 'cloud:xai', 'available')),
+    );
+    expect(
+      edges(build({'XAI_API_KEY': 'set'})),
+      contains(('agent:grok', 'cloud:xai', 'uses')),
+    );
+    // Its own provider, but no sign-in the app can start (Ask AI refuses it
+    // too); Codex has one.
+    final grok = nodes(build({}))['agent:grok']!;
+    expect([grok['own_provider'], grok['own_login']], ['cloud:xai', false]);
+    final codex = core.reads.graph.build(
+      [agent('codex')],
+      {},
+      InventorySnapshot(),
+    );
+    expect(nodes(codex)['agent:codex']!['own_login'], isTrue);
+  });
+
   test('F2: servers of one name but other commands stay two boxes', () {
     write(
       '.claude.json',
