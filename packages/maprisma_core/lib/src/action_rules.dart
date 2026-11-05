@@ -203,6 +203,7 @@ final class RuleFacts {
     this.updateColumn,
     this.enabled,
     this.modelUsers,
+    this.providerModel,
   });
 
   /// Whether a program of an installer is already here: then it is an update.
@@ -216,6 +217,9 @@ final class RuleFacts {
 
   /// The agents on a model's line.
   final List<String> Function(String node)? modelUsers;
+
+  /// The model a local LLM uses itself now (Settings provider_models).
+  final String? Function(String provider)? providerModel;
 }
 
 /// Everything a request does, for the rules. A route that changes the setup
@@ -270,6 +274,10 @@ List<ActionCheck> actionChecks(
     case 'models.attach_preview':
       final model = _node(p['model'])?.$2 ?? text('model');
       return _forAgents('connect', 'models', model, p['agents']);
+    case 'models.choose_preview':
+      // As models.switch_preview for the provider's own line: leaving the
+      // model it uses now, reaching the new one.
+      return _line(facts.providerModel?.call(text('provider')), p['model'], '');
     case 'models.remove_preview':
       return [ActionCheck('remove', 'models', text('model'))];
     case 'models.tuning_preview':
@@ -381,12 +389,14 @@ const rulesExempt = {
   // rules cannot change in between. The rules button waits in Ask AI too.
   'addons.file_install', 'addons.remove_apply', 'agents.action_apply',
   'agents.halt_apply', 'agents.key_apply', 'connections.apply',
+  'models.choose_apply',
   'existing.apply', 'installers.install', 'models.remove_apply',
   'system.help_apply', 'system.move_apply', 'system.stack_apply',
   // Ask AI: each dispatches a checked route, or checks its own candidate.
   'map.smart_connect', 'map.smart_plan', 'map.smart_run',
   // Putting back what was changed; Settings lists these.
   'addons.remove_undo', 'changes.undo', 'connections.undo', 'system.move_undo',
+  'models.choose_undo',
   // The rules live in the settings, so these can never lock their editor.
   'app.settings_changed', 'settings.update',
   // A running session's input and size, tasks, and the app's own state.

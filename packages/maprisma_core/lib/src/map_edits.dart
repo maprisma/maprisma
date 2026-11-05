@@ -522,14 +522,12 @@ final class MapEdits {
     }
   }
 
-  /// Ask AI: agents leave a local LLM in one preview, one backup and one Undo,
-  /// as models.switch_preview does for one model. The files stay. [pairs] says
-  /// who leaves; a model unloads when nobody stays on it.
-  Map<String, dynamic> modelsDisconnect(
-    String key,
-    List<Map> pairs,
-    void Function(String key, List<String> commands) guard,
-  ) {
+  /// Ask AI: agents leave a local LLM in one preview, one backup and one Undo.
+  /// The files stay. [pairs] says who leaves. As the map's own disconnect of
+  /// an agent → provider line it only changes configuration: nothing is
+  /// unloaded, so Undo puts back all it did; afterwards the app offers the
+  /// local LLM's loaded models as after any line change (models.slots_preview).
+  Map<String, dynamic> modelsDisconnect(String key, List<Map> pairs) {
     final catalog = {
       for (final a in reads.catalog.scan().where((a) => a.installed))
         a.command: a,
@@ -563,24 +561,6 @@ final class MapEdits {
       builders.add(() => llm.plan(command, rt, '', false, remove: true));
     }
     final actions = <Map<String, dynamic>>[], notes = <String>[];
-    if ((providerFacts['engines'] as Map)[key]?['can_load'] == true) {
-      // Only what nobody stays on unloads, and only that asks the LLM.
-      for (final model in leaving) {
-        if (!users[model]!.every(selected.contains)) continue;
-        actions.add({
-          'operation': 'model.unload',
-          'key': key,
-          'model': model,
-          'agents': users[model]!,
-        });
-      }
-      if (actions.isNotEmpty) {
-        guard(key, selected);
-        notes.add(
-          'Undo restores configuration files; runtime load and unload actions are not undone.',
-        );
-      }
-    }
     final pid = 'runtime:$key';
     final nodes = {
       for (final n in currentMap()['nodes'] as List)

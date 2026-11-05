@@ -3406,5 +3406,7 @@
  "Local agents": "Agentes locais",
  "{0} cannot use {1}.": "{0} não pode usar {1}.",
  "To switch {0} to {1}, draw the line to one of its models.": "Para mudar {0} para {1}, desenhe a linha até um dos seus modelos.",
- "{0} uses {1} through its own settings. Change it there.": "{0} usa {1} pelas suas próprias definições. Altere-o aí."
+ "{0} uses {1} through its own settings. Change it there.": "{0} usa {1} pelas suas próprias definições. Altere-o aí.",
+ "An agent can only sign in to its own online provider.": "Um agente só pode iniciar sessão no seu próprio fornecedor online.",
+ "This agent has no sign-in that the app can start.": "Este agente não tem um início de sessão que a aplicação possa iniciar."
 }

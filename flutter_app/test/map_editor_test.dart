@@ -1836,6 +1836,10 @@ void main() {
                         'reason': 'Fast coding model.',
                         'fit': 'ok',
                         'size': 5 * gib,
+                        // From the core: the agents that can use a local LLM.
+                        'connect': [
+                          {'command': 'pi', 'name': 'Pi'},
+                        ],
                       },
                       {
                         'id': 'c2',
@@ -1878,11 +1882,11 @@ void main() {
               return {
                 'plan': 'plan-1',
                 'empty': false,
-                'command': 'claude',
+                'command': 'pi',
                 'item': 'ollama',
                 'remove': false,
                 'files': [
-                  {'path': '~/.claude.json', 'added': 2, 'removed': 0},
+                  {'path': '~/.pi/agent/models.json', 'added': 2, 'removed': 0},
                 ],
                 'links_add': [],
                 'links_remove': [],
@@ -1962,18 +1966,20 @@ void main() {
         find.text('Connect it to an agent now? (Optional)'),
         findsOneWidget,
       );
-      // Only real agents (Claude Code), not local-helper, are offered as connect chips.
-      expect(find.widgetWithText(ActionChip, 'Claude Code'), findsOneWidget);
+      // The agents the core names (those the manual Connect offers), not
+      // the helpers: Claude Code has no local LLM connector.
+      expect(find.widgetWithText(ActionChip, 'Pi'), findsOneWidget);
+      expect(find.widgetWithText(ActionChip, 'Claude Code'), findsNothing);
       expect(find.widgetWithText(ActionChip, 'Local helper'), findsNothing);
 
-      // Clicking Claude Code calls map.smart_connect and shows ConnectionReview.
-      await tester.tap(find.widgetWithText(ActionChip, 'Claude Code'));
+      // Clicking Pi calls map.smart_connect and shows ConnectionReview.
+      await tester.tap(find.widgetWithText(ActionChip, 'Pi'));
       await tester.pumpAndSettle();
       expect(calls.last.$1, 'map.smart_connect');
       expect(calls.last.$2, {
         'proposal': 'prop-1',
         'candidate': 'c1',
-        'agent': 'claude',
+        'agent': 'pi',
       });
       expect(find.byType(ConnectionReview), findsOneWidget);
 

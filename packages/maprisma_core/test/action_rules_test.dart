@@ -155,6 +155,12 @@ void main() {
       'models',
       'm',
     ),
+    'models.choose_preview': (
+      {'provider': 'runtime:o', 'model': 'model:runtime:o:m'},
+      'connect',
+      'models',
+      'm',
+    ),
     'models.remove_preview': (
       {'key': 'o', 'model': 'm'},
       'remove',

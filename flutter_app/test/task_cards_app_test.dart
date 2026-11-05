@@ -55,6 +55,12 @@ for line in sys.stdin:
  if m=='app.snapshot':r={'agents':[{'command':'test','name':'Test agent','version':'1.0','installed':True}]+([{'command':'codex','name':'Codex','version':'','installed':False}] if Path('missing_program').exists() else []),
   'projects':{'test':{'history':[],'default':'/home/u','pinned':''}},'settings':settings,'language':'en','setup_needed':welcome,'theme':{}}
  elif m=='settings.update':settings.update(p['values']);r=settings
+ elif m=='models.choose_preview':
+  old=settings.get('provider_models',{}).get(p['provider']);r={'preview':'choose-'+json.dumps([p['provider'],old,p['model']]),'empty':old==p['model'],'old':old,'new':p['model'],'line':'Fixture provider → example-model','focus':[]}
+ elif m in ('models.choose_apply','models.choose_undo'):
+  prov,old,new=json.loads(p['preview' if m=='models.choose_apply' else 'undo'].split('-',1)[1]);to=new if m=='models.choose_apply' else old;pm={k:v for k,v in settings.get('provider_models',{}).items() if k!=prov}
+  if to is not None:pm[prov]=to
+  settings['provider_models']=pm;r={'ok':True,'undo':'undo-'+json.dumps([prov,old,new])} if m=='models.choose_apply' else {'ok':True}
  elif m=='settings.get':
   # Another process may have changed them: other.json is merged in.
   if Path('other.json').exists():settings.update(json.loads(Path('other.json').read_text()));Path('other.json').unlink()
@@ -175,6 +181,10 @@ for line in sys.stdin:
  elif m=='mcp.tools_cached':r={'cached':None}
  elif m=='mcp.tools':tasks['tools']={'status':'ok','checked':'2026-10-29T12:00:00','server':'known 1','tools':[{'name':'lookup','description':'Looks up'}],'prompts':[]};r={'task':'tools'}
  elif m=='mcp.option_preview':r={'plan':'opaque-catalog','empty':False,'files':[],'links_add':[],'links_remove':[],'kind':'mcp','agents':['Test agent'],'focus':['agent:test']}
+ elif m=='map.smart_ask' and Path('smart_menu').exists():tasks['sa']={'status':'proposal','summary':'','proposal':'p1','candidates':[{'id':'c1','kind':'menu_action','title':'Fixture provider → example-model','subtitle':'Connect','reason':'','fit':'ok','size':0,'area':'models','step':'choose','key':'fixture','model':'model:runtime:fixture:example-model'},{'id':'c2','kind':'menu_action','title':'Find existing AI','subtitle':'Find existing AI','reason':'','fit':'ok','size':0,'area':'existing','step':'find','key':''}]};r={'task':'sa'}
+ elif m=='map.smart_ask' and Path('smart_download').exists():tasks['sa']={'status':'proposal','summary':'','proposal':'p1','candidates':[{'id':'c1','title':'qwen','subtitle':'a/qwen','reason':'','fit':'ok','size':1,'connect':[{'command':'pi','name':'Pi'}]}]};r={'task':'sa'}
+ elif m=='map.smart_review':r={'title':'qwen','subtitle':'a/qwen','size':1,'fit':'ok','runtime':'Fixture provider'}
+ elif m=='map.smart_run':tasks['dl']={'ok':True};r={'task':'dl'}
  elif m=='map.smart_ask':tasks['sa']={'status':'proposal','summary':'','proposal':'p1','candidates':[{'id':'c1','kind':'provider_action','title':'Fixture provider','subtitle':'Performance','reason':'','fit':'ok','size':0,'key':'fixture','step':'performance','action':{'kind':'provider_action'}}]};r={'task':'sa'}
  elif m=='map.smart_helpers':r={'helpers':[{'command':'local-helper','name':'Local helper','local':True}] if Path('smart_helpers').exists() else []}
  elif m=='tasks.status':r=({'state':'failed'} if p['task']=='install' and install_fails else {'state':'running'} if p['task']=='tune_slow' and slow_polls.append(1) is None and len(slow_polls) <= 15 else {'state':'done','result':tasks[p['task']]})
@@ -1209,13 +1219,16 @@ void main() {
         await settleService(tester);
       }
 
-      List<Map<String, dynamic>> updates() => [
+      List<Map<String, dynamic>> calls(String method) => [
         for (final q in requests(dir))
-          if (q['method'] == 'settings.update' &&
-              (q['params']['values'] as Map).containsKey('provider_models'))
-            q['params']['values'] as Map<String, dynamic>,
+          if (q['method'] == method) q['params'] as Map<String, dynamic>,
       ];
       await draw('Fixture provider', 'example-model');
+      // The core previews it with its rules first (models.choose_preview).
+      expect(calls('models.choose_preview').single, {
+        'model': 'model:runtime:fixture:example-model',
+        'provider': 'runtime:fixture',
+      });
       final dialog = find.byKey(const ValueKey('map-change-dialog'));
       expect(dialog, findsOneWidget);
       expect(
@@ -1231,9 +1244,14 @@ void main() {
         find.descendant(of: dialog, matching: find.text('Apply')),
       );
       await settleService(tester);
-      expect(updates().last['provider_models'], {
-        'runtime:fixture': 'model:runtime:fixture:example-model',
-      });
+      expect(calls('models.choose_apply'), hasLength(1));
+      // Never around the rules through the settings.
+      expect(
+        calls(
+          'settings.update',
+        ).where((v) => (v['values'] as Map).containsKey('provider_models')),
+        isEmpty,
+      );
       expect(
         requests(dir).where((q) => q['method'] == 'models.attach_preview'),
         isEmpty,
@@ -1242,7 +1260,7 @@ void main() {
       expect(undo, findsOneWidget);
       await tester.tap(undo);
       await settleService(tester);
-      expect(updates().last['provider_models'], isEmpty);
+      expect(calls('models.choose_undo'), hasLength(1));
       // Chosen again, then the agent drawn to the provider gets that model.
       await draw('Fixture provider', 'example-model');
       await tester.tap(
@@ -2695,6 +2713,98 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('smart-back')));
       await settleService(tester);
       expect(find.byType(OverlayWindow), findsNothing);
+      expect(tester.takeException(), isNull);
+      await unmountApp(tester);
+    },
+  );
+
+  Future<void> askAi(WidgetTester tester, String request) async {
+    await tester.tap(find.byKey(const ValueKey('ask-ai-open')));
+    await settleService(tester);
+    await tester.enterText(
+      find.descendant(
+        of: find.byKey(const ValueKey('smart-card')),
+        matching: find.byType(TextField),
+      ),
+      request,
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.send);
+    await settleService(tester);
+  }
+
+  testWidgets(
+    'an Ask AI menu action opens the manual step: a local LLM\'s model',
+    (tester) async {
+      final dir = await mountApp(
+        tester,
+        beforeStart: (d) {
+          File('${d.path}/smart_helpers').writeAsStringSync('1');
+          File('${d.path}/smart_menu').writeAsStringSync('1');
+          File('${d.path}/serves').writeAsStringSync('');
+        },
+      );
+      await settleService(tester);
+      List<Map> calls(String method) =>
+          requests(dir).where((q) => q['method'] == method).toList();
+      await askAi(tester, 'Models: let the fixture use example-model');
+      // The step names come from the core in English, shown translated.
+      expect(find.text('Find existing AI'), findsWidgets);
+      await tester.tap(find.byKey(const ValueKey('smart-review-c1')));
+      await settleService(tester);
+      // The map's own step: the core's preview with its rules, one question.
+      expect(calls('models.choose_preview').single['params'], {
+        'model': 'model:runtime:fixture:example-model',
+        'provider': 'runtime:fixture',
+      });
+      expect(calls('map.smart_review'), isEmpty);
+      final dialog = find.byKey(const ValueKey('map-change-dialog'));
+      expect(
+        find.descendant(
+          of: dialog,
+          matching: find.text('Fixture provider → example-model'),
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(
+        find.descendant(of: dialog, matching: find.text('Apply')),
+      );
+      await settleService(tester);
+      expect(calls('models.choose_apply'), hasLength(1));
+      expect(find.widgetWithText(SnackBarAction, 'Undo'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await unmountApp(tester);
+    },
+  );
+
+  testWidgets(
+    'after an Ask AI download, Connect offers the agents the core names',
+    (tester) async {
+      final dir = await mountApp(
+        tester,
+        beforeStart: (d) {
+          File('${d.path}/smart_helpers').writeAsStringSync('1');
+          File('${d.path}/smart_download').writeAsStringSync('1');
+        },
+      );
+      await settleService(tester);
+      await askAi(tester, 'Models: a qwen model');
+      await tester.tap(find.byKey(const ValueKey('smart-review-c1')));
+      await settleService(tester);
+      await tester.tap(find.widgetWithText(FilledButton, 'Download'));
+      for (
+        var i = 0;
+        i < 10 && find.byType(ActionChip).evaluate().isEmpty;
+        i++
+      ) {
+        await settleService(tester);
+      }
+      expect(
+        requests(dir).where((q) => q['method'] == 'map.smart_run'),
+        hasLength(1),
+      );
+      // Pi can use a local LLM; the helper (Local helper) is not an agent here.
+      expect(find.widgetWithText(ActionChip, 'Pi'), findsOneWidget);
+      expect(find.widgetWithText(ActionChip, 'Local helper'), findsNothing);
       expect(tester.takeException(), isNull);
       await unmountApp(tester);
     },

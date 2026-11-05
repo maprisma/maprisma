@@ -3406,5 +3406,7 @@
  "Local agents": "Lokale agents",
  "{0} cannot use {1}.": "{0} kan {1} niet gebruiken.",
  "To switch {0} to {1}, draw the line to one of its models.": "Om {0} naar {1} over te zetten, trek je de lijn naar een van zijn modellen.",
- "{0} uses {1} through its own settings. Change it there.": "{0} gebruikt {1} via zijn eigen instellingen. Wijzig het daar."
+ "{0} uses {1} through its own settings. Change it there.": "{0} gebruikt {1} via zijn eigen instellingen. Wijzig het daar.",
+ "An agent can only sign in to its own online provider.": "Een agent kan alleen inloggen bij zijn eigen online aanbieder.",
+ "This agent has no sign-in that the app can start.": "Deze agent heeft geen aanmelding die de app kan starten."
 }

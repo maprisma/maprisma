@@ -50,7 +50,9 @@ const smartNotYet = 'This column does not take requests yet.',
     smartNoHelper = 'This helper is not available.';
 const smartMapUnavailable =
         "I can't make that map change. Try another item or ask again.",
-    smartMapChatModel = 'Choose an available chat model.';
+    smartMapChatModel = 'Choose an available chat model.',
+    smartCloudForeign = 'An agent can only sign in to its own online provider.',
+    smartCloudNoLogin = 'This agent has no sign-in that the app can start.';
 
 /// What one line of an answer may be, for the card.
 String _line(dynamic value, [int limit = 300]) {
@@ -162,6 +164,7 @@ List<ActionCheck> smartCandidateChecks(Map candidate) {
       'action': text('step'),
       'command': text('command'),
     }),
+    'menu_action' => smartMenuChecks(action),
     'provider_action' when candidate['step'] == 'performance' => const [],
     'provider_action' => [
       ActionCheck(
@@ -189,7 +192,8 @@ const smartMapMethods = {
 String smartMapChoice(Map facts) =>
     '\nFor an edit the user can draw on the map, choose '
     '{"action":"map_edit","method":"<route>","params":{},"title":"<short plain description>"}. '
-    'Routes and params: connections.preview {kind:"provider|mcp",command:"agent command",item:"provider key or MCP name",remove:bool,model:"for a provider: the label of one of its chat models, or empty",use_now:"bool, true to make that model the agent model now"}; use the MCP column connect_skill action for skill folders. '
+    'Routes and params: connections.preview {kind:"provider|mcp",command:"agent command",item:"local LLM key, an online provider\'s map id (cloud:<name>), or MCP name",remove:bool,model:"for a local LLM: the label of one of its chat models, or empty",use_now:"bool, true to make that model the agent model now"}; use the MCP column connect_skill action for skill folders. '
+    'An online provider target signs the agent in to (remove: out of) its own online provider only; another agent\'s provider is refused. '
     'connections.move_preview {agent:"agent:id",old:"target id",new:"target id or null"}; '
     'connections.repair_preview {agent:"agent:id",target:"target id"}; '
     'connections.forget_preview {name:"MCP name"}; '
@@ -287,6 +291,24 @@ Map<String, dynamic> smartMapEdit(Map answer, Map facts) {
   if (agents.any((agent) => !nodes.contains('agent:$agent'))) {
     throw const FormatException(smartMapUnavailable);
   }
+  if (method == 'connections.preview' &&
+      checked['kind'] == 'provider' &&
+      checked['item'] is String) {
+    // An online provider on the map: its own sign-in, as dropping the agent
+    // onto it does (agents.action_preview), never another agent's (F14).
+    final item = checked['item'] as String;
+    final cloud = item.startsWith('cloud:')
+        ? item
+        : 'cloud:${item.toLowerCase()}';
+    if (!nodes.contains('runtime:$item') && nodes.contains(cloud)) {
+      return smartCloudSignIn(
+        facts,
+        '${checked['command']}',
+        cloud,
+        checked['remove'] == true,
+      );
+    }
+  }
   if (method == 'connections.preview') {
     final kind = checked['kind'];
     final item = checked['item'];
@@ -357,6 +379,184 @@ Map<String, dynamic> smartMapEdit(Map answer, Map facts) {
   };
 }
 
+/// Ask AI's connection to an online provider: the agent signs in to its own
+/// provider through agents.action_preview, as on the map; a provider that is
+/// not its own, or an agent without a sign-in, is refused with the reason.
+Map<String, dynamic> smartCloudSignIn(
+  Map facts,
+  String command,
+  String cloud,
+  bool remove,
+) {
+  final own = (facts['own_clouds'] as Map? ?? const {})[command];
+  if (own is! Map || own['cloud'] != cloud) {
+    throw const FormatException(smartCloudForeign);
+  }
+  final step = remove ? 'logout' : 'login';
+  if (own[step] != true) throw const FormatException(smartCloudNoLogin);
+  return {
+    'status': 'proposal',
+    'summary': '',
+    'candidates': [
+      {
+        'id': 'c1',
+        'kind': 'agent_action',
+        'title': _line(own['name'] ?? command),
+        'subtitle': smartStepNames[step],
+        'reason': '',
+        'fit': 'ok',
+        'size': 0,
+        'agents': [command],
+        'action': {'kind': 'agent_action', 'command': command, 'step': step},
+      },
+    ],
+  };
+}
+
+/// What a menu action is called on the card, by area and step; the GUI
+/// translates it. These are the app's own menu actions: the GUI opens the
+/// same menu, so its preview, rule check, review and Undo are the manual ones.
+const smartMenuNames = {
+  'agents': {
+    'key': 'API key…',
+    'security': 'Security settings',
+    'start': 'Start',
+    'halt': 'Stop external instance',
+    'configure': 'Connections',
+    'details': 'Details',
+  },
+  'addons': {
+    'details': 'Details',
+    'on': 'Switch on',
+    'off': 'Switch off',
+    'install': 'Install',
+    'update': 'Update',
+    'remove': 'Remove',
+  },
+  'models': {
+    'import': 'Import model',
+    'load': 'Load',
+    'unload': 'Unload',
+    'choose': 'Connect',
+  },
+  'existing': {
+    'find': 'Find existing AI',
+    'reconnect': 'Reconnect',
+    'folder': 'Reuse model folder',
+  },
+  'mcp': {'found': 'Found on this PC', 'unpack': 'Unpack', 'update': 'Update'},
+};
+
+/// One menu action as a candidate. The GUI sees area, step, key and model;
+/// the rules are checked from `action` (smartMenuChecks).
+Map<String, dynamic> smartMenuCandidate(
+  int index,
+  String area,
+  String step,
+  String key,
+  String title, {
+  String? model,
+  String? old,
+}) => {
+  'id': 'c$index',
+  'kind': 'menu_action',
+  'title': _line(title),
+  'subtitle': area == 'models' && step == 'choose' && model == null
+      ? 'Disconnect'
+      : smartMenuNames[area]![step],
+  'reason': '',
+  'fit': 'ok',
+  'size': 0,
+  'area': area,
+  'step': step,
+  'key': key,
+  'model': ?model,
+  'action': {
+    'kind': 'menu_action',
+    'area': area,
+    'step': step,
+    'key': key,
+    'model': ?model,
+    'old': ?old,
+  },
+};
+
+/// The rules of a menu action: those of the manual route it opens.
+List<ActionCheck> smartMenuChecks(Map action) {
+  final key = '${action['key'] ?? ''}';
+  final model = action['model'];
+  Map<String, dynamic> run(String operation) => {
+    'operation': operation,
+    'params': {'key': key, 'model': ?model},
+  };
+  return switch ((action['area'], action['step'])) {
+    ('agents', 'key') => actionChecks('agents.key_preview', {'command': key}),
+    ('agents', 'security') => actionChecks('agents.security_preview', {
+      'command': key,
+    }),
+    ('agents', 'start') => actionChecks('sessions.start', {'command': key}),
+    ('agents', 'halt') => actionChecks('agents.halt_preview', {'command': key}),
+    ('addons', 'on' || 'off') => actionChecks('addons.set_enabled', {
+      'id': key,
+      'enabled': action['step'] == 'on',
+    }),
+    ('addons', 'remove') => actionChecks('addons.remove_preview', {'id': key}),
+    ('addons', 'install' || 'update') => [
+      ActionCheck(
+        '${action['step']}',
+        ruleAddonCategory(key),
+        ruleAddonItem(key),
+      ),
+    ],
+    ('models', 'import') => actionChecks('providers.run', run('model.import')),
+    ('models', 'load') => actionChecks('providers.run', run('model.load')),
+    ('models', 'unload') => actionChecks('providers.run', run('model.unload')),
+    ('models', 'choose') => actionChecks('models.choose_preview', {
+      'provider': 'runtime:$key',
+      'model': model,
+    }, RuleFacts(providerModel: (_) => action['old'] as String?)),
+    ('existing', _) => actionChecks('existing.preview', const {}),
+    _ => const [],
+  };
+}
+
+/// An add-on step for the add-ons listed in facts['addons'], one candidate
+/// each, only where that step is true.
+Map<String, dynamic> smartAddons(Map answer, Map facts) {
+  final step = answer['step'];
+  final named = answer['addons'] is List ? answer['addons'] as List : const [];
+  final found = [
+    for (final a in (facts['addons'] as List? ?? const []).cast<Map>())
+      if (named.contains(a['id']) && a[step] == true) a,
+  ];
+  if (!(smartMenuNames['addons']!).containsKey(step) || found.isEmpty) {
+    throw const FormatException('not possible for this add-on');
+  }
+  return {
+    'status': 'proposal',
+    'summary': '',
+    'candidates': [
+      for (final (i, a) in found.indexed)
+        smartMenuCandidate(
+          i + 1,
+          'addons',
+          '$step',
+          '${a['id']}',
+          '${a['name']}',
+        ),
+    ],
+  };
+}
+
+/// The add-on choice of a prompt, with the add-ons it may name.
+String _addonChoice(Map facts) {
+  final addons = facts['addons'];
+  if (addons is! List || addons.isEmpty) return '';
+  return 'Add-ons here and what can be done with each: ${jsonEncode(addons)}.\n'
+      '{"action": "addon", "step": "<details, on, off, install, update or remove>", "addons": ["<ids>"]}\n'
+      'when an add-on should be shown, switched on or off, installed, updated or removed; only where that step is true above. An add-on puts an agent or a local LLM on the map; switching it off or removing it does not uninstall the program.\n';
+}
+
 /// Before a search and a second paid answer: refused unless a narrower rule
 /// could still allow one item.
 Map<String, dynamic>? smartRefused(Map facts, String action, String category) {
@@ -397,6 +597,97 @@ String _moveChoice(Map facts) {
       'Disks: ${jsonEncode(named(disks))}.\n'
       '{"action": "move", "folders": ["<ids of model folders>"], "disk": "<id of a disk>"}\n'
       'when the request is to move or reorganise model folders. Leave out a folder that is on that disk already.\n';
+}
+
+/// Loading, unloading, importing and a local LLM's own model, when the facts
+/// name local LLMs that can.
+String _modelActionsChoice(Map facts) {
+  final runtimes = facts['runtime_actions'];
+  if (runtimes is! List || runtimes.isEmpty) return '';
+  return 'Local LLMs and what can be done with their models: ${jsonEncode(runtimes)}.\n'
+      '{"action": "load", "runtime": "<key listed just above>", "model": "<exact name in its models>"}\n'
+      '{"action": "unload", "runtime": "<key>", "model": "<exact name in its models>"}\n'
+      'when a model should be loaded into or unloaded from a local LLM whose load is true just above.\n'
+      '{"action": "import", "runtime": "<key>"}\n'
+      'when a GGUF file on this PC should be imported into a local LLM whose import is true just above; the user picks the file.\n'
+      '{"action": "choose", "provider": "<runtime:key id of the map facts>", "model": "<model id of that runtime in the map facts, or null for none>"}\n'
+      'when a local LLM itself should use one of its models, without changing an agent (an agent connected to it later gets that model). '
+      'What each uses now: ${jsonEncode(facts['provider_models'] ?? const {})}.\n';
+}
+
+/// A model step of a local LLM (load, unload, import, its own model), checked
+/// against the facts; null for any other action.
+Map<String, dynamic>? smartModelAction(Map answer, Map facts) {
+  final action = answer['action'];
+  if (const {'load', 'unload', 'import'}.contains(action)) {
+    final rt = (facts['runtime_actions'] as List? ?? const [])
+        .cast<Map>()
+        .where((r) => r['key'] == answer['runtime'])
+        .firstOrNull;
+    final model = answer['model'];
+    if (rt == null ||
+        rt[action == 'import' ? 'import' : 'load'] != true ||
+        action != 'import' &&
+            (model is! String ||
+                !(rt['models'] as List? ?? const []).contains(model))) {
+      throw const FormatException('not possible for this local LLM');
+    }
+    return {
+      'status': 'proposal',
+      'summary': '',
+      'candidates': [
+        smartMenuCandidate(
+          1,
+          'models',
+          '$action',
+          '${rt['key']}',
+          action == 'import' ? '${rt['name']}' : '$model · ${rt['name']}',
+          model: action == 'import' ? null : model as String,
+        ),
+      ],
+    };
+  }
+  if (action != 'choose') return null;
+  final nodes = {
+    for (final n in (facts['map_nodes'] as List? ?? const []).cast<Map>())
+      '${n['id']}': n,
+  };
+  final provider = answer['provider'], model = answer['model'];
+  if (provider is! String ||
+      !provider.startsWith('runtime:') ||
+      nodes[provider]?['kind'] != 'runtime' ||
+      model != null && model is! String) {
+    throw const FormatException(smartMapUnavailable);
+  }
+  if (model != null &&
+      (!'$model'.startsWith('model:$provider:') ||
+          nodes[model]?['kind'] != 'model' ||
+          chatModels(['${nodes[model]!['label']}']).isEmpty)) {
+    throw const FormatException(smartMapChatModel);
+  }
+  final old = (facts['provider_models'] as Map? ?? const {})[provider];
+  if (old == model) {
+    return {
+      'status': 'redirect',
+      'instead': {'hint': smartNothingToDo, 'column': null, 'request': null},
+    };
+  }
+  final shown = nodes[model ?? old]?['label'] ?? model ?? old;
+  return {
+    'status': 'proposal',
+    'summary': '',
+    'candidates': [
+      smartMenuCandidate(
+        1,
+        'models',
+        'choose',
+        provider.substring('runtime:'.length),
+        '${nodes[provider]!['label']} → $shown',
+        model: model as String?,
+        old: old is String ? old : null,
+      ),
+    ],
+  };
 }
 
 /// Words a model name never has: left out of a search that found nothing.
@@ -508,6 +799,7 @@ String smartModelsPrompt(Map facts) {
       'when the request is to delete a model that is listed above.\n'
       '{"action": "disconnect", "runtime": "<key of a local LLM in use, listed next>", "models": ["<exact model names listed next>"]}\n'
       'when agents should stop using models, one, several or all of a local LLM; an empty list when none is in use. Models in use, with their agents: ${jsonEncode(facts['model_users'] ?? const [])}. No file is deleted, and the agent leaves that local LLM; the user sees one preview for all of it.\n'
+      '${_modelActionsChoice(facts)}'
       '${_moveChoice(facts)}'
       '$_lookupChoice'
       '{"action": "clarify", "question": "<one short question>", "choices": ["<2 to 4 short answers>"]}\n'
@@ -576,6 +868,9 @@ String smartMcpPrompt(Map facts) {
       'when an agent should use an existing skill folder.\n'
       '{"action": "disconnect", "servers": ["<exact server names listed above>"], "skills": ["<short ids of skill folders listed above>"], "agents": ["<commands>"]}\n'
       'when agents should stop using servers or skill folders: name every one meant, all of them for "all"; the user sees one preview for all of it.\n'
+      '{"action": "found", "step": "<found, unpack or update>"}\n'
+      'when MCP servers or skills that programs on this PC bring should be found (found), a server inside an AppImage unpacked (unpack), or everyone moved to a newer version found here (update): '
+      'it opens Connections › Found on this PC, where each has its own preview.\n'
       '$_lookupChoice'
       '{"action": "clarify", "question": "<one short question>", "choices": ["<2 to 4 short answers>"]}\n'
       'when you cannot tell what is meant, for example which agents.\n'
@@ -604,6 +899,7 @@ const smartStepNames = {
   'stop': 'Stop',
   'login': 'Sign in',
   'logout': 'Sign out',
+  'verify': 'Send the test question',
   'performance': 'Performance',
 };
 
@@ -620,12 +916,27 @@ String smartAgentsPrompt(Map facts) {
       '{"action": "remove", "agents": ["<commands>"]}\n'
       '{"action": "login", "agents": ["<commands>"]}\n'
       '{"action": "logout", "agents": ["<commands>"]}\n'
+      '{"action": "verify", "agents": ["<commands>"]}\n'
+      'to send the agent its test question.\n'
+      '{"action": "key", "agents": ["<commands>"]}\n'
+      'to open the app\'s API key card; the user types the key there. Never ask for, write or repeat a key.\n'
+      '{"action": "security", "agents": ["<commands>"]}\n'
+      'to open its security settings (what it may do without asking).\n'
+      '{"action": "start", "agents": ["<commands>"]}\n'
+      'to start it in a terminal of the app.\n'
+      '{"action": "halt", "agents": ["<commands>"]}\n'
+      'to stop an instance that runs outside the app.\n'
+      '{"action": "configure", "agents": ["<commands>"]}\n'
+      'to open its connections (local LLMs, MCP servers, skills).\n'
+      '{"action": "details", "agents": ["<commands>"]}\n'
+      'to open its details page.\n'
       'naming only agents for which that action is true above.\n'
+      '${_addonChoice(facts)}'
       '$_lookupChoice'
       '{"action": "clarify", "question": "<one short question>", "choices": ["<2 to 4 short answers>"]}\n'
       'when you cannot tell which agent is meant.\n'
       '{"action": "redirect", "hint": "<what works instead, one sentence>", "column": "<mcp, providers or models, or null>", "request": "<the request for that column, or null>"}\n'
-      'for anything else beyond the listed actions and map_edit: this column cannot run an agent or change its settings.';
+      'for anything else beyond the listed actions and map_edit.';
 }
 
 /// The Agents column: one answer of the agent.
@@ -658,12 +969,14 @@ Future<Map<String, dynamic>> smartAgents(Map facts, SmartAgent agent) async {
       },
     };
   }
+  if (action == 'addon') return smartAddons(answer, facts);
   const names = {
     'install': 'install',
     'update': 'update',
     'remove': 'uninstall',
     'login': 'login',
     'logout': 'logout',
+    'verify': 'verify',
   };
   final step = names[action];
   final raw = answer['agents'];
@@ -672,8 +985,28 @@ Future<Map<String, dynamic>> smartAgents(Map facts, SmartAgent agent) async {
     for (final a in agents)
       if (named.contains(a['command']) && a[action] == true) a,
   ];
-  if (step == null || found.isEmpty) {
+  final menu = smartMenuNames['agents']!.containsKey(action);
+  if (step == null && !menu || found.isEmpty) {
     throw const FormatException('not possible for this agent');
+  }
+  if (menu) {
+    return {
+      'status': 'proposal',
+      'summary': '',
+      'candidates': [
+        for (final (i, a) in found.indexed)
+          {
+            ...smartMenuCandidate(
+              i + 1,
+              'agents',
+              '$action',
+              '${a['command']}',
+              '${a['name']}',
+            ),
+            'agents': [a['command']],
+          },
+      ],
+    };
   }
   return {
     'status': 'proposal',
@@ -713,12 +1046,16 @@ String smartProvidersPrompt(Map facts) {
       '{"action": "performance", "provider": "<key>"}\n'
       'when the user asks about speed, GPU memory, context size, Vulkan, ROCm or other local LLM performance; the Performance page checks the actual hardware and build and offers reviewed tuning actions.\n'
       'only when that action is true for that provider above.\n'
+      '{"action": "existing", "step": "<find, reconnect or folder>"}\n'
+      'when AI programs or model folders already on this PC (also on another disk or installation) should be found, a found local LLM reconnected, or a found model folder reused: '
+      'it opens Find existing AI, which looks through this PC and shows each find with its own preview.\n'
+      '${_addonChoice(facts)}'
       '$_lookupChoice'
       '{"action": "clarify", "question": "<one short question>", "choices": ["<2 to 4 short answers>"]}\n'
       'when you cannot tell which provider is meant.\n'
       '{"action": "redirect", "hint": "<what works instead, one sentence>", "column": "<mcp, agents or models, or null>", "request": "<the request for that column, or null>"}\n'
-      'when models should be disconnected or deleted use redirect with column models and the request. '
-      'for anything else beyond the listed actions and map_edit: this column cannot uninstall a provider.';
+      'when models should be loaded, unloaded, imported, chosen, disconnected or deleted use redirect with column models and the request. '
+      'for anything else beyond the listed actions and map_edit. The app does not uninstall a local LLM program: its add-on can be switched off or removed (addon), which takes it off the map; for the program itself use lookup.';
 }
 
 /// The Providers column: one answer. Each action has its own page with its
@@ -750,6 +1087,26 @@ Future<Map<String, dynamic>> smartProviders(Map facts, SmartAgent agent) async {
         'column': answer['column'] == 'models' ? 'models' : first['column'],
         'request': first['request'],
       },
+    };
+  }
+  if (action == 'addon') return smartAddons(answer, facts);
+  if (action == 'existing') {
+    final step = answer['step'];
+    if (!smartMenuNames['existing']!.containsKey(step)) {
+      throw const FormatException('not possible here');
+    }
+    return {
+      'status': 'proposal',
+      'summary': '',
+      'candidates': [
+        smartMenuCandidate(
+          1,
+          'existing',
+          '$step',
+          '',
+          smartMenuNames['existing']![step]!,
+        ),
+      ],
     };
   }
   final found = providers
@@ -861,6 +1218,25 @@ Future<Map<String, dynamic>> smartMcp(
   final names = {for (final a in agents) '${a['command']}': '${a['name']}'};
   final initial = firstJson(await agent(smartMcpPrompt(facts)), 'action');
   if (initial['action'] == 'map_edit') return smartMapEdit(initial, facts);
+  if (initial['action'] == 'found') {
+    final step = initial['step'];
+    if (!smartMenuNames['mcp']!.containsKey(step)) {
+      throw const FormatException('unknown action');
+    }
+    return {
+      'status': 'proposal',
+      'summary': '',
+      'candidates': [
+        smartMenuCandidate(
+          1,
+          'mcp',
+          '$step',
+          '',
+          smartMenuNames['mcp']![step]!,
+        ),
+      ],
+    };
+  }
   final first = smartMcpChecked(
     initial,
     names.keys.toSet(),
@@ -1270,6 +1646,7 @@ Future<Map<String, dynamic>> smartModels(
   ];
   final initial = firstJson(await agent(smartModelsPrompt(facts)), 'action');
   if (initial['action'] == 'map_edit') return smartMapEdit(initial, facts);
+  if (smartModelAction(initial, facts) case final step?) return step;
   final first = smartChecked(
     initial,
     {for (final r in runtimes) '${r['key']}'},
@@ -1427,6 +1804,10 @@ Future<Map<String, dynamic>> smartModels(
     if (runtime['free_disk'] is int) 'free_disk': runtime['free_disk'],
   };
   final candidates = <Map<String, dynamic>>[];
+  final connect = [
+    for (final a in (facts['connect_agents'] as List? ?? const []).cast<Map>())
+      {'command': '${a['command']}', 'name': _line(a['name'])},
+  ];
   for (final pick in smartPicks(answer, repos)) {
     final files = await filesOf(
       pick['repo'] as String,
@@ -1434,9 +1815,11 @@ Future<Map<String, dynamic>> smartModels(
     );
     final file = smartFile(files, runtime, chosen);
     if (file == null) continue;
-    candidates.add(
-      smartCandidate(pick, file, runtime, chosen, candidates.length + 1),
-    );
+    candidates.add({
+      ...smartCandidate(pick, file, runtime, chosen, candidates.length + 1),
+      // Once it is ready: the agents the manual Connect offers (F12).
+      'connect': connect,
+    });
   }
   if (candidates.isEmpty) {
     return {
@@ -1725,7 +2108,12 @@ Future<Map<String, dynamic>> smartAsk(
     'status': 'error',
     'summary':
         error is FormatException &&
-            {smartMapUnavailable, smartMapChatModel}.contains(error.message)
+            {
+              smartMapUnavailable,
+              smartMapChatModel,
+              smartCloudForeign,
+              smartCloudNoLogin,
+            }.contains(error.message)
         ? error.message
         : local
         ? smartLocalDown
@@ -1856,6 +2244,8 @@ Map<String, dynamic> smartWorded(
     smartNoUsers,
     smartMapUnavailable,
     smartMapChatModel,
+    smartCloudForeign,
+    smartCloudNoLogin,
   };
   final instead = result['instead'];
   return {
