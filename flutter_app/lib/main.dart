@@ -4157,7 +4157,9 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
           );
           return;
         }
-        final moved = await _connectionPreview(
+        // The provider's choice follows its agents: the core moves it in the
+        // same Apply and Undo (models.switch_preview).
+        await _connectionPreview(
           {'provider': source['id'], 'old': old['id'], 'new': target?['id']},
           method: 'models.switch_preview',
           plainDisconnect: target == null
@@ -4167,17 +4169,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
           mapDraw: true,
           mapLine: '${source['label']} → ${target?['label'] ?? old['label']}',
         );
-        // The provider's choice follows its agents.
-        if (moved && chosen && mounted) {
-          await _updateSettings({
-            'provider_models': {
-              for (final e in _providerModels.entries)
-                if (e.key != source['id']) e.key: e.value,
-              if (target != null)
-                source['id'] as String: target['id'] as String,
-            },
-          });
-        }
         return;
       }
       if (source['kind'] == 'agent' && old?['kind'] == 'model') {

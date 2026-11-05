@@ -249,4 +249,93 @@ void main() {
       contains('model:folder:~/Old/models:qwen-7b-q4_k_m'),
     );
   });
+
+  test('#9: a runtime detected on another port is a broken line', () {
+    final provider = core.reads.details.provider(
+      'llama',
+      'http://127.0.0.1:8080/v1',
+    );
+    expect(provider['runtime'], 'llama.cpp');
+    final inv = InventorySnapshot()
+      ..runtimes.add(llama('127.0.0.1:9090', ['qwen']));
+    expect(localRuntime(provider, inv.runtimes), isNull);
+    expect(movedRuntime(provider, inv.runtimes), same(inv.runtimes.single));
+    final info = AgentInfo()
+      ..model = 'qwen (llama)'
+      ..providers.add({...provider, 'active': true});
+    var graph = core.reads.graph.build([agent('pi')], {'pi': info}, inv);
+    final lines = edges(graph);
+    expect(lines, contains(('agent:pi', 'runtime:llamacpp', 'failed')));
+    expect(lines, isNot(contains(('agent:pi', 'runtime:llamacpp', 'uses'))));
+    expect(
+      lines.where((e) => e.$1 == 'agent:pi' && e.$3 == 'default'),
+      isEmpty,
+    );
+    expect(nodes(graph).values.where((n) => n['kind'] == 'cloud'), isEmpty);
+    final failed = (graph['edges'] as List).cast<Map>().singleWhere(
+      (e) => e['kind'] == 'failed',
+    );
+    expect(failed['dangling'], 'qwen');
+    // An unqualified model on that endpoint (Claude with a local base URL):
+    // the same broken line, not its own online provider.
+    graph = core.reads.graph.build(
+      [agent('claude')],
+      {
+        'claude': AgentInfo()
+          ..model = 'qwen'
+          ..providers.add({
+            ...core.reads.details.provider(
+              'Anthropic API',
+              'http://localhost:8080',
+            ),
+            'active': true,
+          }),
+      },
+      inv,
+    );
+    expect(
+      edges(graph),
+      contains(('agent:claude', 'runtime:llamacpp', 'failed')),
+    );
+    expect(nodes(graph).values.where((n) => n['kind'] == 'cloud'), isEmpty);
+    // Detected on its usual port, or with no address known: found.
+    for (final address in ['127.0.0.1:8080', '']) {
+      inv.runtimes.single.address = address;
+      expect(localRuntime(provider, inv.runtimes), same(inv.runtimes.single));
+      expect(movedRuntime(provider, inv.runtimes), isNull);
+    }
+  });
+
+  test('#11: a reused file is hidden only when the LLM serves that file', () {
+    write('Old/models/qwen-Q8_0.gguf', '');
+    write('Old/models/gemma.gguf', '');
+    write('llama/qwen-Q4_K_M.gguf', '');
+    write('llama/gemma.gguf', '');
+    Link(
+      '${home.path}/Old/models/same.gguf',
+    ).createSync('${home.path}/llama/gemma.gguf');
+    final rt = llama('', ['qwen-Q4_K_M', 'gemma'])..modelsDir = '~/llama';
+    // The runtime's own folder and its own file (linked in) stay its own.
+    final reused = InventorySnapshot()..runtimes.add(rt);
+    final folders = core.reads.inventory.reusedFolders(reused.runtimes, [
+      '${home.path}/Old/models',
+      '${home.path}/llama',
+    ]);
+    expect(folders, [
+      {
+        'path': '~/Old/models',
+        'models': ['gemma', 'qwen-Q8_0'],
+      },
+    ]);
+    reused.modelFolders.addAll(folders);
+    final shown = nodes(core.reads.graph.build([], {}, reused));
+    expect(
+      shown.keys,
+      containsAll([
+        'model:folder:~/Old/models:qwen-q8_0',
+        'model:folder:~/Old/models:gemma',
+        'model:runtime:llamacpp:qwen-q4_k_m',
+      ]),
+    );
+  });
 }

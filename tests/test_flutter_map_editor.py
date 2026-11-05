@@ -125,6 +125,20 @@ class MapEditorTest(unittest.TestCase):
                 mock.patch.object(api.provider_watch,'agent_instances',return_value={'a':[[]]}), self.assertRaisesRegex(ValueError,'in use'):
             self.preview('models.switch_preview',dict(provider='runtime:r',old='model:r:old',new='model:r:new'))
 
+    def test_switch_away_from_a_missing_model(self):
+        # Review 063 round 2 #6: the old model is gone; only the new one must be served.
+        self.runtimes[0].models = ['new']
+        self.engine.return_value=SimpleNamespace(can_load=True)
+        with mock.patch.object(connect,'is_active',return_value=True), mock.patch.object(connect,'plan',return_value=self.plan()), \
+                mock.patch.object(api,'_guard_model') as guard:
+            result=self.preview('models.switch_preview',dict(provider='runtime:r',old='model:r:old',new='model:r:new'))
+        guard.assert_not_called()
+        self.assertEqual(result['model_actions'],[{'operation':'model.load','model':'new'}])
+        self.runtimes[0].models = ['old']
+        with mock.patch.object(connect,'is_active',return_value=True), mock.patch.object(connect,'plan',return_value=self.plan()), \
+                self.assertRaisesRegex(ValueError,'Model unavailable'):
+            self.preview('models.switch_preview',dict(provider='runtime:r',old='model:r:old',new='model:r:new'))
+
     def test_model_only_load_is_not_empty_and_requires_worker(self):
         self.engine.return_value=SimpleNamespace(can_load=True)
         result=self.preview('models.attach_preview',dict(provider='runtime:r',model='model:r:new',agents=[]))

@@ -71,6 +71,8 @@ for line in sys.stdin:
  elif m=='app.theme':r={'theme':json.loads(Path('theme.json').read_text()) if Path('theme.json').exists() else {}}
  elif m=='addons.list':r={'addons':[addon]+([new_addon] if installed else [])+([{**addon,'id':'agent-codex','name':'Codex','enabled':True,'state':'loaded','loaded':True,'provides':['codex']}] if Path('missing_program').exists() else [])+([{**addon,'id':'llm-vllm','name':'vLLM','kind':'provider','enabled':True,'state':'loaded','loaded':True,'provides':['vllm'],'capabilities':['provider','installer']},{**addon,'id':'llm-fixture','name':'Fixture provider','kind':'provider','enabled':True,'state':'loaded','loaded':True,'provides':['fixture'],'capabilities':['provider','installer']},{**addon,'id':'providers-online','name':'Online providers','kind':'provider','enabled':True,'state':'loaded','loaded':True,'provides':['anthropic'],'capabilities':['provider']}] if Path('missing_runtime').exists() else [])}
  elif m=='system.cached':r={'nodes':[],'edges':[],'notes':[],'helpers':[]}
+ elif m=='map.snapshot' and Path('switch').exists():r={'nodes':nodes+[{'id':'model:runtime:fixture:other-model','kind':'model','column':3,'label':'other-model','detail':''}],'edges':[{'source':'agent:test','target':'runtime:fixture','kind':'uses'},{'source':'agent:test','target':'model:runtime:fixture:example-model','kind':'default'}]+[{'source':'runtime:fixture','target':'model:runtime:fixture:'+n,'kind':'serves'} for n in ('example-model','other-model')],'activity':{},'pending':False}
+ elif m=='models.switch_preview':r={'plan':'opaque-switch','empty':False,'files':[],'links_add':[],'links_remove':[],'agents':['Test agent'],'notes':[],'model_actions':[],'focus':[]}
  elif m=='map.snapshot':r={'nodes':[({**n,'status':'running'} if n['id']=='agent:test' and Path('agent_running').exists() else n) for n in nodes]+([{'id':'cloud:anthropic','kind':'cloud','column':2,'label':'Anthropic','detail':''}] if Path('foreign_cloud').exists() else []),'edges':([{'source':'agent:test','target':'cloud:anthropic','kind':'uses'}] if Path('foreign_cloud').exists() else [])+([{'source':'agent:test','target':'mcp:known-server','kind':'mcp'}] if connected else [])+([{'source':'runtime:fixture','target':'model:runtime:fixture:example-model','kind':'serves'}] if Path('serves').exists() else []),'activity':{},'pending':Path('pending').exists()}
  elif m=='agents.action_preview':r={'action':p['action'],'name':'Codex','command':p['command'],'commands':['mise use -g codex'],'data':[],'runnable':True,'note':'','url':''}
  elif m=='agents.traffic':r={'available':True,'agents':{}}
@@ -1278,6 +1280,74 @@ void main() {
       await unmountApp(tester);
     },
   );
+  testWidgets('a provider choice with agent users moves with them in the core', (
+    tester,
+  ) async {
+    final dir = await mountApp(
+      tester,
+      beforeStart: (d) {
+        File('${d.path}/switch').writeAsStringSync('');
+        File('${d.path}/start-settings.json').writeAsStringSync(
+          jsonEncode({
+            'provider_models': {
+              'runtime:fixture': 'model:runtime:fixture:example-model',
+            },
+          }),
+        );
+      },
+    );
+    // The provider → model line, moved from its chosen model to another.
+    await tester.tap(find.text('Fixture provider'));
+    await tester.pumpAndSettle();
+    final old = tester.getCenter(find.text('example-model'));
+    final hooks = find.byTooltip(
+      'Move this connection to another compatible box, or to empty space to disconnect.',
+    );
+    final hook =
+        (hooks.evaluate().toList()..sort(
+              (x, y) => (tester.getCenter(find.byWidget(x.widget)) - old)
+                  .distance
+                  .compareTo(
+                    (tester.getCenter(find.byWidget(y.widget)) - old).distance,
+                  ),
+            ))
+            .first;
+    final from = tester.getCenter(find.byWidget(hook.widget)),
+        to = tester.getCenter(find.text('other-model'));
+    await tester.dragFrom(from, to - from);
+    await settleService(tester);
+    final switched = requests(
+      dir,
+    ).where((q) => q['method'] == 'models.switch_preview').toList();
+    expect(switched, hasLength(1), reason: 'drawn as a switch');
+    final dialog = find.byKey(const ValueKey('map-change-dialog'));
+    if (dialog.evaluate().isNotEmpty) {
+      await tester.tap(
+        find.descendant(of: dialog, matching: find.text('Apply')),
+      );
+      await settleService(tester);
+    }
+    expect(
+      requests(dir).where((q) => q['method'] == 'connections.apply'),
+      hasLength(1),
+    );
+    // The models the local LLM keeps loaded are offered afterwards: not now.
+    await tester.tap(find.text('Cancel').last);
+    await settleService(tester);
+    // Not beside the connection's backup through the settings.
+    expect(
+      requests(dir).where(
+        (q) =>
+            q['method'] == 'settings.update' &&
+            ((q['params'] as Map)['values'] as Map).containsKey(
+              'provider_models',
+            ),
+      ),
+      isEmpty,
+    );
+    expect(tester.takeException(), isNull);
+    await unmountApp(tester);
+  });
   testWidgets('a stale provider choice is not sent to an agent', (
     tester,
   ) async {

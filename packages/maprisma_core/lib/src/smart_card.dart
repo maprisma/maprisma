@@ -615,6 +615,19 @@ String _modelActionsChoice(Map facts) {
       'What each uses now: ${jsonEncode(facts['provider_models'] ?? const {})}.\n';
 }
 
+/// The map's boxes as Ask AI is told them: a missing model (kept on the map
+/// for its line) says so, as it is no model to choose.
+List<Map> smartMapNodes(Map graph) => [
+  for (final node in (graph['nodes'] as List).cast<Map>())
+    if (node['kind'] != 'more' && node['kind'] != 'skills')
+      {
+        'id': node['id'],
+        'kind': node['kind'],
+        'label': node['label'],
+        if (node['status'] == 'missing') 'status': 'missing',
+      },
+];
+
 /// A model step of a local LLM (load, unload, import, its own model), checked
 /// against the facts; null for any other action.
 Map<String, dynamic>? smartModelAction(Map answer, Map facts) {
@@ -662,6 +675,7 @@ Map<String, dynamic>? smartModelAction(Map answer, Map facts) {
   if (model != null &&
       (!'$model'.startsWith('model:$provider:') ||
           nodes[model]?['kind'] != 'model' ||
+          nodes[model]!['status'] == 'missing' ||
           chatModels(['${nodes[model]!['label']}']).isEmpty)) {
     throw const FormatException(smartMapChatModel);
   }

@@ -192,7 +192,10 @@ def preview(method: str, params: dict, graph: dict, connections, settings_path=N
         else:
             rt = runtime(pid)
             name = nodes[new]['label'] if new else ''
-            if model_node['label'] not in rt.models or (name and name not in connect.chat_models(rt.models)):
+            # A model switched away from may be gone (a missing model's line is repaired this way);
+            # the model switched to must be served.
+            present = model_node['label'] in rt.models
+            if (method != 'models.switch_preview' and not present) or (name and name not in connect.chat_models(rt.models)):
                 raise ValueError('Model unavailable')
             for command in selected:
                 if command not in connect.SUPPORTED or connect.FIXED.get(command):
@@ -202,7 +205,7 @@ def preview(method: str, params: dict, graph: dict, connections, settings_path=N
                 builders.append(lambda c=command: connect.plan(c, rt, name, bool(name), remove=not bool(name)))
             if llm_engine.of(rt).can_load:
                 # The worker rechecks these conditions before writing any configuration.
-                if method == 'models.switch_preview':
+                if method == 'models.switch_preview' and present:
                     _guard_model(rt, selected)
                     actions.append({'operation': 'model.unload', 'key': rt.key, 'model': model_node['label'], 'agents': selected})
                 if new is not None:

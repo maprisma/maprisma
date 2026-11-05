@@ -60,7 +60,9 @@ int? addressPort(String address) {
 
 /// The local LLM an agent's local provider points at: the installed one
 /// whose detected address has the configured port, else the one whose usual
-/// port it is (the provider's `runtime`, from the facts).
+/// port it is (the provider's `runtime`, from the facts) while its address is
+/// unknown or that port. One detected on another port is not there: the
+/// provider's endpoint is stale ([movedRuntime]).
 RuntimeRecord? localRuntime(Map provider, Iterable<RuntimeRecord> runtimes) {
   if (provider['local'] != true) return null;
   final port = provider['port'];
@@ -69,10 +71,33 @@ RuntimeRecord? localRuntime(Map provider, Iterable<RuntimeRecord> runtimes) {
       if (rt.installed && addressPort(rt.address) == port) return rt;
     }
   }
+  final usual = _usualRuntime(provider, runtimes);
+  return usual == null || _moved(usual, port) ? null : usual;
+}
+
+/// The local LLM whose usual port a local provider has, while it was detected
+/// on another one (llama.cpp on 9090, the agent still set to 8080): a broken
+/// line to it, not a working one.
+RuntimeRecord? movedRuntime(Map provider, Iterable<RuntimeRecord> runtimes) {
+  if (provider['local'] != true || localRuntime(provider, runtimes) != null) {
+    return null;
+  }
+  final usual = _usualRuntime(provider, runtimes);
+  return usual != null && usual.installed && _moved(usual, provider['port'])
+      ? usual
+      : null;
+}
+
+RuntimeRecord? _usualRuntime(Map provider, Iterable<RuntimeRecord> runtimes) {
   for (final rt in runtimes) {
     if (rt.name == provider['runtime']) return rt;
   }
   return null;
+}
+
+bool _moved(RuntimeRecord rt, Object? port) {
+  final at = addressPort(rt.address);
+  return port is int && at != null && at != port;
 }
 
 final class ProviderScans {
@@ -242,26 +267,34 @@ final class ProviderScans {
     return out;
   }
 
-  List<String> ggufNames(String folder) {
+  List<String> ggufNames(String folder) =>
+      ggufFiles(folder).map(ggufName).toSet().take(500).toList();
+
+  /// A GGUF file's model name.
+  static String ggufName(String file) {
+    final name = p.basename(file);
+    return name.substring(0, name.length - 5);
+  }
+
+  /// The GGUF files of a folder (or links to them), one level deep.
+  List<String> ggufFiles(String folder) {
     final found = <String>[];
     final entries = files.list(folder, limit: 4000)..sort();
     for (final entry in entries.take(1000)) {
       final name = p.basename(entry), lower = p.basename(entry).toLowerCase();
       if (lower.endsWith('.gguf') && !lower.startsWith('mmproj')) {
-        found.add(name.substring(0, name.length - 5));
+        found.add(entry);
       } else if (!name.startsWith('.') &&
           FileSystemEntity.typeSync(entry) == FileSystemEntityType.directory) {
         for (final file in files.list(entry, limit: 50)) {
           final lower = p.basename(file).toLowerCase();
           if (lower.endsWith('.gguf') && !lower.startsWith('mmproj')) {
-            found.add(
-              p.basename(file).substring(0, p.basename(file).length - 5),
-            );
+            found.add(file);
           }
         }
       }
     }
-    return found.toSet().take(500).toList();
+    return found;
   }
 
   List<String> presets(String path) =>

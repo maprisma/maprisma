@@ -278,6 +278,7 @@ def build(agent_list, details: dict, inventory, labels: dict | None = None, fail
 
         # Local runtimes the agent's providers point at.
         local_names = {}
+        stale = {}  # a local provider set to a port its LLM no longer listens on
         # Active providers first, so an agent's line to a runtime is solid when any is in use.
         import inventory as inventory_mod
         for provider in sorted(info.providers if info else [], key=lambda p: not p.active):
@@ -288,16 +289,19 @@ def build(agent_list, details: dict, inventory, labels: dict | None = None, fail
                 rid = f"runtime:{rt.key}"
                 graph.add(Node(rid, 2, rt.name, runtime_detail(rt, labels), "runtime", status=runtime_status(rt)))
                 graph.link(aid, rid, "uses" if provider.active else "available")
+            elif (moved := inventory_mod.moved_runtime(provider, inventory.runtimes)) is not None:
+                stale[provider.name] = moved
 
         # A model with no provider of its own, while the agent's one provider is a local LLM (Claude
         # Code with a local ANTHROPIC_BASE_URL): that LLM's model, not one of its own online provider.
         active = [p for p in (info.providers if info else []) if p.active]
-        if not model_provider and len(active) == 1 and active[0].name in local_names:
+        if not model_provider and len(active) == 1 and (active[0].name in local_names or active[0].name in stale):
             model_provider = active[0].name
 
         # A model that points at a local LLM's provider the agent no longer has (removed by hand, or by
         # an older disconnect): not an online service, a broken line to that local LLM.
-        dangling = next((rt for rt in inventory.runtimes if rt.installed and model_provider
+        # Also a provider whose LLM moved to another port: a broken line to it.
+        dangling = stale.get(model_provider) or next((rt for rt in inventory.runtimes if rt.installed and model_provider
                          and providers.connect_keys().get(rt.key) == model_provider
                          and model_provider not in local_names), None)
         if dangling is not None:
@@ -314,7 +318,7 @@ def build(agent_list, details: dict, inventory, labels: dict | None = None, fail
             cloud = provider_name(model_provider)
         elif not model_provider:
             cloud = CLOUD.get(agent.command, "")
-        if agent.command in CLOUD and not local_names:
+        if agent.command in CLOUD and not local_names and not stale:
             cloud = cloud or CLOUD[agent.command]
         if cloud:
             cid = f"cloud:{cloud.lower()}"
@@ -347,7 +351,7 @@ def build(agent_list, details: dict, inventory, labels: dict | None = None, fail
             mid = f"model:runtime:{rt.key}:{model.lower()}"
             model_labels[mid] = model
             graph.link(aid, mid, "default")
-        online_choices(graph, agent, aid, model, model_provider, local_names, runtimes)
+        online_choices(graph, agent, aid, model, model_provider, local_names | {n: rt.name for n, rt in stale.items()}, runtimes)
 
         # The model each open instance runs with: its own --model, else the settings'.
         for chosen in instances:

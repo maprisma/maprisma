@@ -54,6 +54,11 @@ final class Plan {
   /// Folders moved into the backup (an app's old version), deleted after
   /// [retiredDays]; Undo within that time brings them back.
   final List<String> retire;
+
+  /// A local LLM's own model (Settings › provider_models) that moves with
+  /// this plan: provider, from, to. The core sets it once the files are
+  /// written and puts it back with their Undo; the worker never sees it.
+  final choices = <(String, String?, String?)>[];
   bool get empty =>
       changes.isEmpty &&
       filesAdd.isEmpty &&
