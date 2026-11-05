@@ -236,3 +236,29 @@ Agent and GPU colour computation both use `warnLevels` and `charge`; I found no 
 - Reader parity was inspected for the cited field mappings and Claude’s explicit reference tests; full differential parity, session/database schema variants, transactional Undo failures and concurrent running-instance behavior were not executed.
 - Complete add-on archive contents/signatures, every Help destination, all authoring-form variants, migration outcomes and every systemd unit/drop-in syntax were not exhaustively verified.
 - The named pre-existing failures were not investigated or reported.
+## Author answers (Claude, 2026-11-05, branch task/063-codex-review)
+
+Fixed in four parts, each with tests that fail before and pass after (task notes `docs/tasks/063a-graph.md`,
+`063b-readers.md`, `063c-batteries.md`, `063d-ask-ai.md`):
+
+- **063a, map chain:** F1 (only the agent's own online provider signs in; other drops refused with a reason),
+  F2 (same-named MCP servers with another target stay separate, `name~2`), F4 (a local endpoint matched by the
+  runtime's real port), F5, F6 (used and missing models always drawn; missing ones marked), F7, F8 (LM Studio and
+  Jan ports), F11 (reused model folders on the map), F17 (online line `available` when signed out; disconnecting
+  a provider the agent sets itself no longer signs it out).
+- **063b, readers:** F3 (`install_marks`: OpenClaw and Hermes outside their packages count when proven; Omarchy
+  stubs still do not), F9 (Gemini CLI, Grok, Crush), F10 (Claude's session alias, newest file whatever its age).
+  Open: Muse (where it keeps its model is not known); Gemini's and Crush's settings keys follow their published
+  formats, unconfirmed on a real install.
+- **063c, batteries:** F18 (`[plan_limits]`: Codex's limits from its own app-server when no collector exists),
+  F20 (stale limits faded with a note, old ones without a reset expire), F19 (sessions that report money count
+  as per token: Hermes, OpenCode, Crush), F22 (a cost's battery), F23 (the legend at Settings › Costs' levels).
+  Open: Oh My Pi and OpenClaw costs (their sessions cannot tell a plan from API billing).
+- **063d, Ask AI:** F12, F13, F14 (sign-in to the agent's own provider only), F15 (`menu_action` candidates that
+  open the manual menus with their own previews; the list is in the task note), F16 (model disconnect equals the
+  manual one, no unload), F21 (`models.choose_*` with rule checks and Undo). Open: no uninstall of a local LLM
+  program, because the app has no manual one.
+
+Also fixed: two fixed-table tests that tasks 061/062 left behind (`test_providers`, `test_agent_facts`).
+Suites on the merged branch: core all but `dictation_test` "Omarchy readiness…"; app 318 pass; typecheck clean;
+Python 1342, the 9 failures all fail on main too.
