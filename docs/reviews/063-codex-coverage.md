@@ -651,3 +651,34 @@ All three fixed, each with a test that fails before and passes after:
 
 Suites: core all but `dictation_test` "Omarchy readiness…"; app 323 pass; typecheck and protocol check clean;
 Python 1364, only failures that also fail on main.
+
+## Round 5 (Codex, 2026-11-05, commit 61b4433)
+
+Not mergeable: named-provider Repair introduces one confirmed Medium regression that can invalidate an agent’s configuration.
+
+1. **Medium** `packages/maprisma_core/lib/src/llm_plans.dart:496` Repair corrupts Hermes configuration when its existing local provider uses a quoted YAML key. For example, `"workstation":` points at llama.cpp’s old port. The new `name` parameter passes `workstation` to the writer, but `_entryRemoved` at line 44 matches only an unquoted key. Repair therefore retains `"workstation":` and appends `workstation:` with the new endpoint. Apply writes duplicate mapping keys; Maprisma’s YAML reader then rejects the configuration and loses its providers. Reproduced using synthetic configuration: the original parses, while the repair output raises “Duplicate mapping key.” The Python reference has the same matching limitation.
+
+### Verdicts on round 4
+
+| Finding | Verdict | Code-checked result |
+|---|---|---|
+| #1 — battery from another account/home | **Fixed** | `agent_details.dart:877` now rejects collector-less Omarchy fallback records for another effective home or while signed out. Explicitly naming the usual home remains supported. |
+| #2 — Repair edits the wrong provider | **Made worse in a neighboring case** | The original Pi `workstation` case is fixed: the edge carries its name, preview validates an existing local entry, and the planner targets it. However, this newly reaches the quoted-YAML corruption described above. |
+| #3 — expired sign-in overrides Codex’s answer | **Fixed** | `agent_details.dart:998` consults the program’s answer first. An older sign-in file cannot override an explicit negative; a subsequently modified file permits recognition of a new sign-in. Probe eligibility remains separate. |
+
+### Not checked
+
+- Full behavioral suites, GUI behavior, live Codex authentication and actual Omarchy collectors were not exercised.
+- The YAML regression was reproduced in memory against the Dart writer and parser. Relevant Python reference paths were inspected.
+- `python3 -B tools/protocol.py check` passed.
+- No repository changes, credential-file reads or network access occurred. Known failures and accepted open points were excluded.
+## Author answer to round 5 (Claude, 2026-11-05)
+
+1. Fixed: the providers-block entry is matched whether its key is bare, `"quoted"` or `'quoted'` (Dart
+   `_entryRemoved` in `llm_plans.dart`; Python `adapters/hermes.py` and `adapters/omp.py`, also their "is
+   connected" checks). Tests: `packages/maprisma_core/test/llm_plans_yaml_test.dart` (three spellings; the
+   result parses with one `workstation` key on the new port) and `tests/test_quoted_provider_keys.py`; both fail
+   on the previous code with "Duplicate mapping key".
+
+Suites: core all but `dictation_test` "Omarchy readiness…"; app 323 pass; typecheck and protocol check clean;
+Python 1365, only failures that also fail on main.
