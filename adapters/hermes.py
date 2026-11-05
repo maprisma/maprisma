@@ -82,7 +82,7 @@ def llm_text(text: str, provider: str, label: str, url: str, models: list, conte
         body = text[start:end]
         header, _nl, rest = body.partition("\n")
         # Our entry: from "  <provider>:" to the next two-space key.
-        rest = re.sub(rf"^  {re.escape(provider)}:.*\n(?:(?:    |\t\t).*\n?|\s*\n)*", "", rest, flags=re.MULTILINE)
+        rest = re.sub(rf"^  ([\"']?){re.escape(provider)}\1:.*\n(?:(?:    |\t\t).*\n?|\s*\n)*", "", rest, flags=re.MULTILINE)
         if not remove:
             rest = rest.rstrip("\n") + ("\n" if rest.strip() else "") + entry_text
         header = "providers:" if header.strip() in ("providers: {}", "providers:{}") else header
@@ -198,7 +198,7 @@ def _model_off(text: str, provider: str) -> str:
 def local_llm_connected(texts, provider):
     import connect
     block = connect._top_block(texts[0], "providers")
-    return bool(block) and re.search(rf"^  {re.escape(provider)}:", texts[0][block[0]:block[1]],
+    return bool(block) and re.search(rf"^  ([\"']?){re.escape(provider)}\1:", texts[0][block[0]:block[1]],
                                      re.MULTILINE) is not None
 
 

@@ -71,9 +71,10 @@ class Connections:
                 known = agent_details.details_for(command).providers
                 if not isinstance(name, str) or not any(p.name == name and p.local for p in known):
                     raise ValueError('Provider unavailable')
-            plan = connect.plan(command, rt, '' if params['remove'] else model,
-                                False if params['remove'] else params['use_now'], remove=params['remove'],
-                                **({'name': name} if name is not None else {}))
+            model = '' if params['remove'] else model
+            use_now = False if params['remove'] else params['use_now']
+            plan = (connect.plan(command, rt, model, use_now, remove=params['remove']) if name is None
+                    else connect.plan(command, rt, model, use_now, remove=params['remove'], name=name))
         elif params['kind'] == 'mcp':
             # The map's id: the name, or name~2 for another server of that name.
             server = next((item for item in inv.mcp if item.id == params['item']), None)

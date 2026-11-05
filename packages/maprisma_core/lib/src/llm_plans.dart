@@ -39,9 +39,10 @@ String _dump(Map data) =>
       : (body.substring(0, cut), body.substring(cut + 1));
 }
 
+// The entry whether its key is written bare, "quoted" or 'quoted'.
 String _entryRemoved(String rest, String provider) => rest.replaceAll(
   RegExp(
-    '^  ${RegExp.escape(provider)}:.*\\n(?:(?:    |\\t\\t).*\\n?|\\s*\\n)*',
+    '^  (["\']?)${RegExp.escape(provider)}\\1:.*\\n(?:(?:    |\\t\\t).*\\n?|\\s*\\n)*',
     multiLine: true,
   ),
   '',
