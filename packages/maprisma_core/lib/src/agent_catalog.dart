@@ -226,7 +226,9 @@ final class AgentCatalog {
   /// A program of a distribution package or another installer: on PATH, but
   /// not mise's shims and wrappers or ~/.local/bin, which can be stubs that
   /// install the agent at its first start (the checks above read those).
-  bool onSystemPath(String command) {
+  bool onSystemPath(String command) => systemProgram(command) != null;
+
+  String? systemProgram(String command) {
     final env = files.identity.environment;
     final data = env['MISE_DATA_DIR'] ?? '';
     final mise = data.startsWith('/')
@@ -240,7 +242,37 @@ final class AgentCatalog {
               !p.equals(f, own) && !p.equals(f, mise) && !p.isWithin(mise, f),
         )
         .join(':');
-    return whichIn(command, folders) != null;
+    return whichIn(command, folders);
+  }
+
+  static final _runsMise = RegExp(r'\bmise\s+(x|exec|use|install|where)\b');
+
+  /// Python agents.proven: the program at [path] is the agent's own (adapter
+  /// fact install_marks): its real path (links followed) or, for a script of
+  /// at most 4 KiB, its text names one of the marks ("~/" is the home
+  /// folder). A script that runs mise is a stub that builds the agent at its
+  /// first start, never proof. Nothing is started.
+  bool proven(String? path, List marks) {
+    if (marks.isEmpty || path == null) return false;
+    final wanted = [
+      for (final m in marks.whereType<String>())
+        m.startsWith('~/') ? files.expand('~') + m.substring(1) : m,
+    ];
+    final String real;
+    try {
+      real = File(path).resolveSymbolicLinksSync();
+    } on FileSystemException {
+      return false; // gone, or a link to nothing
+    }
+    if (wanted.any(real.contains)) return true;
+    if (FileSystemEntity.typeSync(real) != FileSystemEntityType.file ||
+        File(real).lengthSync() > 4096) {
+      return false;
+    }
+    final text = files.text(real, limit: 4096, allowRootOwned: true);
+    return text != null &&
+        !_runsMise.hasMatch(text) &&
+        wanted.any(text.contains);
   }
 
   /// Python agents.detect(): (installed, version, source) for one agent.
@@ -265,17 +297,22 @@ final class AgentCatalog {
     if (package != null) {
       final found = packageVersion(package);
       if (found != null) return (true, found, 'package');
-      if (a!.facts['package_only'] == true) return (false, '', '');
     }
+    final only = a?.facts['package_only'] == true;
+    // Any program by the name, or only one proven the agent's (package_only,
+    // own_install_counts off)?
+    final anything =
+        a == null || (a.facts['own_install_counts'] ?? true) == true && !only;
+    final marks = a?.facts['install_marks'] as List? ?? const [];
     final spec = wrapperSpec(command) ?? a?.facts['spec'] as String? ?? command;
-    final folder = miseInstall(spec);
-    if ((a == null || (a.facts['own_install_counts'] ?? true) == true) &&
-        ownInstall(command)) {
+    final folder = only ? null : miseInstall(spec);
+    if (ownInstall(command) &&
+        (anything || proven(files.expand('~/.local/bin/$command'), marks))) {
       return (true, folder == null ? '' : miseVersion(folder), 'own');
     }
     if (folder != null) return (true, miseVersion(folder), 'mise');
-    final counts = a == null || (a.facts['own_install_counts'] ?? true) == true;
-    return counts && onSystemPath(command)
+    final program = systemProgram(command);
+    return program != null && (anything || proven(program, marks))
         ? (true, '', 'system')
         : (false, '', '');
   }

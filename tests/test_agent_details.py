@@ -184,6 +184,54 @@ class DetailsTest(unittest.TestCase):
         self.assertEqual(agent_readers.agy_model_name("Gemini 3.8 Flash"), "gemini-3.8-flash")
         self.assertEqual(agent_readers.agy_model_name("(Medium)"), "")
 
+    def test_gemini_model_from_settings_else_its_newest_session(self):
+        """Gemini CLI: settings.json's model.name; none set: its newest session's last reply."""
+        self.assertEqual(ad.details_for("gemini", usage_dir=self.home).model, "")
+        old = self.write(".gemini/tmp/p1/chats/session-1.jsonl",
+                         '{"type":"gemini","model":"gemini-2.5-pro","tokens":{"input":1}}\n')
+        os.utime(old, (1_700_000_000, 1_700_000_000))
+        self.write(".gemini/tmp/p2/chats/session-2.json",
+                   '{"messages":[{"type":"user","content":"x"},'
+                   '{"type":"gemini","model":"gemini-3.1-pro","tokens":{"input":1}},'
+                   '{"type":"gemini","model":"gemini-3-flash","tokens":{"input":1}}]}')
+        self.assertEqual(ad.details_for("gemini", usage_dir=self.home).model, "gemini-3-flash")
+        self.write(".gemini/tmp/p1/chats/parent/sub.jsonl",                    # a subagent, written last
+                   '{"type":"gemini","model":"gemini-3.8-flash","tokens":{"input":1}}\n')
+        self.assertEqual(ad.details_for("gemini", usage_dir=self.home).model, "gemini-3.8-flash")
+        self.write(".gemini/settings.json", '{"model": {"name": "gemini-2.5-flash"}}')
+        self.assertEqual(ad.details_for("gemini", usage_dir=self.home).model, "gemini-2.5-flash")
+        self.write(".gemini/settings.json", '{"model": "gemini-2.5-pro"}')          # an older file
+        self.assertEqual(ad.details_for("gemini", usage_dir=self.home).model, "gemini-2.5-pro")
+
+    def test_grok_model_from_its_newest_session(self):
+        """Grok: the model of its newest session's last finished turn (usage.json), the larger of two."""
+        self.assertEqual(ad.details_for("grok", usage_dir=self.home).model, "")
+        old = self.write(".grok/sessions/a/s1/usage.json",
+                         '{"turns":[{"endedAt":"x","modelUsage":{"grok-4.6":{"inputTokens":5,"outputTokens":1}}}]}')
+        os.utime(old, (1_700_000_000, 1_700_000_000))
+        self.write(".grok/sessions/b/s2/usage.json", json.dumps({"turns": [
+            {"modelUsage": {"grok-4.6": {"inputTokens": 9}}},
+            {"modelUsage": {"grok-build-0.1": {"inputTokens": 10, "outputTokens": 1},
+                            "grok-4.7": {"inputTokens": 900, "outputTokens": 20}}},
+            {"endedAt": None}]}))
+        self.assertEqual(ad.details_for("grok", usage_dir=self.home).model, "grok-4.7")
+
+    def test_crush_model_and_providers_from_its_config(self):
+        """Crush: models.large's model and provider, and its own providers (the chosen one active)."""
+        self.assertEqual(ad.details_for("crush", usage_dir=self.home).model, "")
+        self.write(".config/crush/crush.json", json.dumps({
+            "models": {"large": {"model": "qwen3", "provider": "ollama"},
+                       "small": {"model": "claude-haiku-4-5", "provider": "anthropic"}},
+            "providers": {"ollama": {"type": "openai", "base_url": "http://localhost:11434/v1/",
+                                     "models": [{"id": "qwen3"}, {"id": "gemma3"}]},
+                          "work": {"type": "openai", "base_url": "https://llm.example.com/v1"}}}))
+        details = ad.details_for("crush", usage_dir=self.home)
+        self.assertEqual(details.model, "qwen3 (ollama)")
+        self.assertEqual([(p.name, p.local, p.runtime, p.models, p.active) for p in details.providers],
+                         [("ollama", True, "Ollama", 2, True), ("work", False, "", 0, False)])
+        self.write(".config/crush/crush.json", '{"models": {"large": {"model": "claude-sonnet-5-5", "provider": "anthropic"}}}')
+        self.assertEqual(ad.details_for("crush", usage_dir=self.home).model, "claude-sonnet-5-5 (anthropic)")
+
     def test_claude_model_from_its_last_session(self):
         """No model in settings.json: the one its newest session's last reply ran, as the map's alias."""
         import agent_readers

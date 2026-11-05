@@ -48,6 +48,7 @@ little code for what facts cannot say (hooks.py)".
 | `login_status = {argv, no, yes}` | Cursor CLI | a command whose output says whether it is signed in |
 | `installer = "<name>"` | Antigravity CLI | an installer the app has (`adapter_data.INSTALLERS`) |
 | `sessions.reader`, `update.latest` | Claude Code | readers the app has (`adapter_data.READERS`, `LATEST`) |
+| `install_marks = ["~/…/", "/…/"]` | OpenClaw, Hermes | a program by its name outside its package (`package_only`) or at `~/.local/bin` (`own_install_counts = false`) still counts when its real path, or a small script's text, holds one of these (`~/.openclaw/`, `/node_modules/openclaw/`; `~/.hermes/`, `/hermes-agent/`); a script that runs mise never does (`agents.proven`) |
 | `home = "~/…"` | every agent | the folder of its settings (shown in its card, counted on Disk space) |
 | `activity = ["~/…"]` | most agents | files and folders whose last change is its last use |
 | `details = {reader, dir}` | most agents | its model and providers, by a reader the app has (`adapter_data.DETAIL_READERS`; `dir` for `pi`) |

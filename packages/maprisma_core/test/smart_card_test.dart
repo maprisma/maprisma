@@ -1388,6 +1388,65 @@ void main() {
     expect(edges['agent:codex'], 'model:cloud:openai:gpt-6.1-sol');
   });
 
+  test('Gemini, Grok, Crush and Claude show the model they run', () async {
+    final home = Directory.systemTemp.createTempSync('smart');
+    addTearDown(() => home.deleteSync(recursive: true));
+    final bin = Directory('${home.path}/bin')..createSync();
+    for (final command in ['gemini', 'grok', 'crush', 'claude']) {
+      File('${bin.path}/$command').writeAsStringSync('#!/bin/sh\necho 1.0.0\n');
+      Process.runSync('chmod', ['+x', '${bin.path}/$command']);
+    }
+    void write(String path, String text) => File('${home.path}/$path')
+      ..createSync(recursive: true)
+      ..writeAsStringSync(text);
+    write(
+      '.gemini/tmp/p/chats/session-1.jsonl',
+      '{"type":"gemini","model":"gemini-3-flash","tokens":{"input":1}}\n',
+    );
+    write(
+      '.grok/sessions/a/s/usage.json',
+      '{"turns":[{"modelUsage":{"grok-4.7":{"inputTokens":5}}}]}',
+    );
+    write(
+      '.config/crush/crush.json',
+      '{"models":{"large":{"model":"claude-sonnet-5-5","provider":"anthropic"}}}',
+    );
+    write('.claude.json', '{}');
+    write('.claude/settings.json', '{}');
+    write(
+      '.claude/projects/-a/s.jsonl',
+      '{"message":{"model":"claude-opus-5-5"}}\n',
+    );
+    File(
+      '${home.path}/.claude/projects/-a/s.jsonl',
+    ).setLastModifiedSync(DateTime.now().subtract(const Duration(days: 60)));
+    final core = CoreService(
+      environment: {
+        'HOME': home.path,
+        'PATH': bin.path,
+        'MAPRISMA_DESKTOP': 'generic',
+      },
+    );
+    var graph = core.dispatch('map.snapshot', {'force': true});
+    for (var i = 0; i < 100 && graph['pending'] == true; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      graph = core.dispatch('map.snapshot', {'poll': true});
+    }
+    final edges = {
+      for (final e in (graph['edges'] as List).cast<Map>())
+        if (e['kind'] == 'default') e['source']: e['target'],
+    };
+    expect(edges['agent:gemini'], 'model:cloud:google:gemini-3-flash');
+    expect(edges['agent:grok'], 'model:cloud:xai:grok-4.7');
+    expect(edges['agent:crush'], 'model:cloud:anthropic:claude-sonnet-5-5');
+    // A session older than a month still counts, as its alias: no second
+    // card under its full name.
+    expect(edges['agent:claude'], 'model:cloud:anthropic:opus');
+    expect([
+      for (final n in (graph['nodes'] as List).cast<Map>()) n['id'],
+    ], isNot(contains('model:cloud:anthropic:claude-opus-5-5')));
+  });
+
   test('a known server without agents stays on the map', () async {
     final home = Directory.systemTemp.createTempSync('smart');
     addTearDown(() => home.deleteSync(recursive: true));

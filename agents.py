@@ -6,7 +6,10 @@ decided the way omarchy-default-agent decides it, from the file system only
 (nothing is started):
 
 - OpenClaw is the `openclaw` pacman package; Hermes is either the
-  `hermes-desktop` package or its mise copy.
+  `hermes-desktop` package or its mise copy. Another install of either (its own
+  installer, pipx, npm, a wrapper of the user's) counts only when it is proven
+  that agent's: its program's real path, or a small script's text, names one of
+  the adapter's install_marks (another program can have the same name).
 - Every other agent: the user's own install at ~/.local/bin/<agent> (a
   symlink or anything but Omarchy's mise wrapper), else mise's install folder
   for the agent's tool spec.
@@ -191,7 +194,7 @@ def package_version(name: str, db: Path = PACMAN_DB) -> str | None:
     return None
 
 
-def on_system_path(command: str, bin_dir: Path = BIN_DIR, mise_dir: Path = MISE_DIR) -> bool:
+def system_program(command: str, bin_dir: Path = BIN_DIR, mise_dir: Path = MISE_DIR) -> str | None:
     """A program of a distribution package or another installer: on PATH, but not
     mise's shims and wrappers or ~/.local/bin, which can be stubs that install the
     agent at its first start (detect reads those itself)."""
@@ -200,7 +203,35 @@ def on_system_path(command: str, bin_dir: Path = BIN_DIR, mise_dir: Path = MISE_
     folders = [f for f in os.environ.get("PATH", "").split(":") if f]
     kept = [f for f in folders if Path(f) not in skipped
             and not any(Path(f) == m or m in Path(f).parents for m in mises)]
-    return shutil.which(command, path=":".join(kept)) is not None if kept else False
+    return shutil.which(command, path=":".join(kept)) if kept else None
+
+
+def on_system_path(command: str, bin_dir: Path = BIN_DIR, mise_dir: Path = MISE_DIR) -> bool:
+    return system_program(command, bin_dir, mise_dir) is not None
+
+
+_RUNS_MISE = re.compile(r"\bmise\s+(x|exec|use|install|where)\b")
+
+
+def proven(path, marks) -> bool:
+    """The program at path is the agent's own (adapter fact install_marks): its real path (links
+    followed) or, for a script of at most MAX_WRAPPER_BYTES, its text names one of the marks ("~/"
+    is the home folder). A script that runs mise is a stub that builds the agent at its first start
+    (mise's own install folder says whether that happened), never proof. Nothing is started."""
+    if not marks or path is None:
+        return False
+    home = os.path.expanduser("~")
+    wanted = [home + m[1:] if m.startswith("~/") else m for m in marks]
+    try:
+        real = os.path.realpath(path, strict=True)
+    except OSError:
+        return False                                  # gone, or a link to nothing
+    if any(m in real for m in wanted):
+        return True
+    if not os.path.isfile(real):
+        return False
+    text = read_capped(Path(real), MAX_WRAPPER_BYTES)
+    return text is not None and not _RUNS_MISE.search(text) and any(m in text for m in wanted)
 
 
 def detect(command: str, bin_dir: Path = BIN_DIR, mise_dir: Path = MISE_DIR,
@@ -230,16 +261,19 @@ def detect(command: str, bin_dir: Path = BIN_DIR, mise_dir: Path = MISE_DIR,
         version = package_version(h.package, db)
         if version is not None:
             return True, version, "package"
-        if h.package_only:
-            return False, "", ""
+    only = h is not None and h.package_only
+    # Any program by the name, or only one proven the agent's (package_only, own_install_counts off)?
+    anything = h is None or (h.own_install_counts and not only)
+    marks = h.install_marks if h is not None else ()
     spec = wrapper_spec(command, bin_dir) or SPECS.get(command, command)
-    folder = mise_install(spec, mise_dir)
-    if (h is None or h.own_install_counts) and own_install(command, bin_dir):
+    folder = None if only else mise_install(spec, mise_dir)
+    if own_install(command, bin_dir) and (anything or proven(bin_dir / command, marks)):
         # A script of the user's own may still run mise's copy: show its version.
         return True, mise_version(folder) if folder is not None else "", "own"
     if folder is not None:
         return True, mise_version(folder), "mise"
-    if (h is None or h.own_install_counts) and on_system_path(command, bin_dir, mise_dir):
+    program = system_program(command, bin_dir, mise_dir)
+    if program is not None and (anything or proven(program, marks)):
         return True, "", "system"
     return False, "", ""
 

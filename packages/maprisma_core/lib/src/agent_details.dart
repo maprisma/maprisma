@@ -203,6 +203,99 @@ final class DetailReaders {
       : models is List
       ? models.length.clamp(0, 9999)
       : 0;
+  // agent_readers.claude_session_model: the newest session file is looked
+  // for at most every claudeRescan seconds (or when there was none or it is
+  // gone), its end read again only when the file changed.
+  static const claudeRescan = 30, claudeMaxEntries = 2000;
+  static const claudeAliases = ['fable', 'opus', 'sonnet'];
+  ({String root, double at, String? file})? _claudeSeen;
+  (String, String)? _claudeModel;
+
+  /// No "model" in settings.json: Claude Code runs the model of the last
+  /// reply in its newest session file (`projects/<folder>/<session>.jsonl`),
+  /// as the alias the map switches between ("claude-opus-5-5" -> "opus")
+  /// when it is one; "" when there is none. Only the file's end is read.
+  String claudeSessionModel([String root = '~/.claude/projects']) {
+    root = files.expand(root);
+    final now = DateTime.now().millisecondsSinceEpoch / 1000;
+    var seen = _claudeSeen;
+    if (seen == null ||
+        seen.root != root ||
+        seen.file == null ||
+        now - seen.at >= claudeRescan) {
+      seen = _claudeSeen = (root: root, at: now, file: _newestClaude(root));
+    }
+    final path = seen.file;
+    if (path == null) return '';
+    final stat = files.posix.lstatFull(path);
+    if (stat == null) {
+      _claudeSeen = (root: root, at: now, file: null); // gone: look again
+      return '';
+    }
+    final key = '$path\x00${stat.signature.join(',')}';
+    final cached = _claudeModel;
+    if (cached != null && cached.$1 == key) return cached.$2;
+    final found = RegExp(
+      r'"model"\s*:\s*"(claude-[A-Za-z0-9._-]{1,80})"',
+    ).allMatches(files.text(path, limit: 256 * 1024, portion: 'tail') ?? '');
+    var model = found.isEmpty ? '' : found.last[1]!;
+    if (model.isNotEmpty) {
+      final parts = model.split('-');
+      model = claudeAliases.firstWhere(parts.contains, orElse: () => model);
+    }
+    _claudeModel = (key, model);
+    return model;
+  }
+
+  /// The most recently written session file, by the file's own time (writing
+  /// to a file does not touch its folder's); a project or file that cannot be
+  /// read is skipped, not the whole look.
+  String? _newestClaude(String root) {
+    (int, String)? newest;
+    for (final project in files.list(root, limit: claudeMaxEntries)) {
+      if (!_isFolder(project)) continue;
+      final found = newestFile(project, 0, (n) => n.endsWith('.jsonl'));
+      if (found != null && (newest == null || found.$1 > newest.$1)) {
+        newest = found;
+      }
+    }
+    return newest?.$2;
+  }
+
+  bool _isFolder(String path) {
+    final stat = files.posix.lstatFull(path);
+    return stat != null && stat.mode & 0xF000 == 0x4000;
+  }
+
+  /// agent_readers._newest: (time, path) of the most recently written
+  /// regular file [levels] folders below [root] (no links followed) whose
+  /// name [wanted] accepts, at most 2000 entries a folder.
+  (int, String)? newestFile(
+    String root,
+    int levels,
+    bool Function(String) wanted,
+  ) {
+    (int, String)? newest;
+    final todo = [(files.expand(root), 0)];
+    while (todo.isNotEmpty) {
+      final (folder, depth) = todo.removeLast();
+      for (final path in files.list(folder, limit: 2000)) {
+        final stat = files.posix.lstatFull(path);
+        if (stat == null) continue;
+        final kind = stat.mode & 0xF000;
+        if (depth < levels && kind == 0x4000) {
+          todo.add((path, depth + 1));
+        } else if (depth == levels &&
+            kind == 0x8000 &&
+            wanted(p.basename(path))) {
+          final time = stat.sec * 1000000000 + stat.nsec;
+          if (newest == null || time > newest.$1) newest = (time, path);
+        }
+      }
+    }
+    return newest;
+  }
+
   AgentInfo read(Adapter adapter) {
     final info = AgentInfo();
     final spec = adapter.table('details');
@@ -426,6 +519,95 @@ final class DetailReaders {
         if (local.containsKey(chosen) && !providers.containsKey(chosen)) {
           info.providers.add(provider(chosen, local[chosen]));
         }
+      case 'gemini':
+        // settings.json's model.name (older files: "model" as text), else
+        // the last reply in its newest session file (gemini-files).
+        final model = files.json('~/.gemini/settings.json')['model'];
+        info.model = boundedText(model is Map ? model['name'] : model);
+        if (info.model.isNotEmpty) break;
+        (int, String)? newest;
+        for (final project in files.list('~/.gemini/tmp', limit: 2000)) {
+          if (!_isFolder(project)) continue;
+          for (final found in [
+            newestFile(
+              '$project/chats',
+              0,
+              (n) =>
+                  n.startsWith('session-') &&
+                  (n.endsWith('.json') || n.endsWith('.jsonl')),
+            ),
+            newestFile('$project/chats', 1, (n) => n.endsWith('.jsonl')),
+          ]) {
+            if (found != null && (newest == null || found.$1 > newest.$1)) {
+              newest = found;
+            }
+          }
+        }
+        if (newest != null) {
+          final found = RegExp(r'"model"\s*:\s*"(gemini-[A-Za-z0-9._-]{1,80})"')
+              .allMatches(
+                files.text(
+                      newest.$2,
+                      limit: 4 * 1024 * 1024,
+                      portion: 'tail',
+                    ) ??
+                    '',
+              );
+          if (found.isNotEmpty) info.model = found.last[1]!;
+        }
+      case 'grok':
+        // No model in its settings: its newest session's last finished turn
+        // (usage.json's turns[].modelUsage, as omarchy-agent-usage-grok
+        // reads it); of several models, the one with the most tokens.
+        final path = newestFile(
+          '~/.grok/sessions',
+          2,
+          (n) => n == 'usage.json',
+        );
+        final turns = path == null ? null : files.json(path.$2)['turns'];
+        if (turns is! List) break;
+        for (final turn in turns.reversed.take(2000)) {
+          final used = turn is Map ? turn['modelUsage'] : null;
+          if (used is! Map) continue;
+          int tokens(Map bucket, String key) =>
+              bucket[key] is int ? bucket[key] as int : 0;
+          final sizes = {
+            for (final e in used.entries.take(50))
+              if (e.key is String && e.value is Map)
+                e.key as String:
+                    tokens(e.value, 'inputTokens') +
+                    tokens(e.value, 'outputTokens'),
+          };
+          if (sizes.isEmpty) continue;
+          var best = sizes.keys.first;
+          for (final e in sizes.entries) {
+            if (e.value > sizes[best]!) best = e.key;
+          }
+          info.model = boundedText(best);
+          break;
+        }
+      case 'crush':
+        // ~/.config/crush/crush.json: models.large and its own providers.
+        // Its data folder's crush.json keeps the API keys: not read.
+        final config = files.json('~/.config/crush/crush.json');
+        final large = mapOf(mapOf(config['models'])['large']);
+        final model = boundedText(large['model']),
+            chosen = boundedText(large['provider'], 40);
+        info.model = model.isNotEmpty && chosen.isNotEmpty
+            ? '$model ($chosen)'
+            : model;
+        for (final e in mapOf(config['providers']).entries.take(50)) {
+          if (e.value is Map) {
+            info.providers.add(
+              provider(
+                '${e.key}',
+                e.value['base_url'],
+                models: modelCount(e.value['models']),
+                active: chosen.isEmpty || e.key == chosen,
+              ),
+            );
+          }
+        }
       case 'lmstudio-app':
         info.providers.add(provider('LM Studio', 'http://127.0.0.1:1234/v1'));
       case 'agy':
@@ -454,26 +636,25 @@ final class DetailReaders {
           if (found.isNotEmpty) info.model = agyModelName(found.last[1]!);
         }
     }
-    if (info.model.isEmpty && ['claude', 'codex'].contains(reader)) {
+    if (info.model.isEmpty && reader == 'claude') {
+      info.model = claudeSessionModel();
+    }
+    if (info.model.isEmpty && reader == 'codex') {
       final session = SessionReaders(files);
       final paths = session.matching(
-        reader == 'claude' ? '~/.claude/projects' : '~/.codex/sessions',
-        reader == 'claude' ? '*/*.jsonl' : '*/*/*/rollout-*.jsonl',
+        '~/.codex/sessions',
+        '*/*/*/rollout-*.jsonl',
       );
       if (paths.isNotEmpty) {
         final source = files.text(paths.first, limit: 64 * 1024 * 1024) ?? '';
-        final expression = reader == 'claude'
-            ? RegExp(r'"model"\s*:\s*"(claude-[A-Za-z0-9._-]{1,80})"')
-            : RegExp(
-                r'"type"\s*:\s*"turn_context".*?"model"\s*:\s*"([A-Za-z0-9._:-]{1,80})"',
-              );
-        final found = expression.allMatches(source).toList();
+        final found = RegExp(
+          r'"type"\s*:\s*"turn_context".*?"model"\s*:\s*"([A-Za-z0-9._:-]{1,80})"',
+        ).allMatches(source).toList();
         if (found.isNotEmpty) info.model = found.last[1]!;
       }
       // Codex before its first session: the model its models cache lists
       // first (the one a new Codex starts with).
       if (info.model.isEmpty &&
-          reader == 'codex' &&
           boundedText(
             files.toml('~/.codex/config.toml')['model_provider'],
             40,

@@ -241,6 +241,103 @@ def codex_session_model(root: str = "~/.codex/sessions") -> str:
     return found[-1].decode("ascii") if found else ""
 
 
+def _newest(folder, levels: int, wanted) -> str | None:
+    """The most recently written regular file levels folders below folder (no links followed) whose
+    name wanted() accepts, at most 2000 entries a folder; one that cannot be read is skipped."""
+    newest, todo = None, [(ad._expand(folder) if isinstance(folder, str) else folder, 0)]
+    while todo:
+        path, depth = todo.pop()
+        try:
+            with os.scandir(path) as entries:
+                for _i, entry in zip(range(2000), entries):
+                    try:
+                        if depth < levels and entry.is_dir(follow_symlinks=False):
+                            todo.append((entry.path, depth + 1))
+                        elif depth == levels and wanted(entry.name) and entry.is_file(follow_symlinks=False):
+                            mtime = entry.stat(follow_symlinks=False).st_mtime_ns
+                            if newest is None or mtime > newest[0]:
+                                newest = (mtime, entry.path)
+                    except OSError:
+                        continue
+        except OSError:
+            continue
+    return newest[1] if newest else None
+
+
+def _tail(path, size: int) -> bytes:
+    try:
+        with open(path, "rb") as handle:
+            handle.seek(max(0, os.fstat(handle.fileno()).st_size - size))
+            return handle.read(size)
+    except OSError:
+        return b""
+
+
+GEMINI_MODEL = re.compile(rb'"model"\s*:\s*"(gemini-[A-Za-z0-9._-]{1,80})"')
+
+
+def gemini(details: "ad.Details"):
+    """Gemini CLI: settings.json's model.name (older files: "model" as text), else the model of the
+    last reply in its newest session file (tmp/<project>/chats/session-*.jsonl, a subagent's
+    <parent>/<id>.jsonl, older session-*.json; agent_sessions' gemini-files)."""
+    model = ad.read_json(ad._expand("~/.gemini/settings.json")).get("model")
+    details.model = ad._text(model.get("name") if isinstance(model, dict) else model)
+    if details.model:
+        return
+    try:
+        projects = [e.path for _i, e in zip(range(2000), os.scandir(ad._expand("~/.gemini/tmp")))
+                    if e.is_dir(follow_symlinks=False)]
+    except OSError:
+        projects = []
+    newest = []
+    for project in projects:
+        for levels, wanted in ((0, lambda n: n.startswith("session-") and n.endswith((".json", ".jsonl"))),
+                               (1, lambda n: n.endswith(".jsonl"))):
+            path = _newest(Path(project) / "chats", levels, wanted)
+            try:
+                if path is not None:
+                    newest.append((os.stat(path, follow_symlinks=False).st_mtime_ns, path))
+            except OSError:
+                pass
+    found = GEMINI_MODEL.findall(_tail(max(newest)[1], 4 * 1024 * 1024)) if newest else []
+    details.model = found[-1].decode("ascii") if found else ""
+
+
+def grok(details: "ad.Details"):
+    """Grok keeps no model in its settings: the one its newest session's last finished turn ran
+    (sessions/<folder>/<session>/usage.json, turns[].modelUsage by model, as Omarchy's
+    omarchy-agent-usage-grok reads it); of several, the one with the most tokens."""
+    path = _newest("~/.grok/sessions", 2, lambda name: name == "usage.json")
+    usage = ad.read_json(Path(path)) if path else {}
+    turns = usage.get("turns") if isinstance(usage.get("turns"), list) else []
+    for turn in reversed(turns[-2000:]):
+        used = turn.get("modelUsage") if isinstance(turn, dict) else None
+        if not isinstance(used, dict):
+            continue
+        tokens = lambda bucket, key: bucket.get(key) if isinstance(bucket.get(key), int) else 0
+        sizes = {name: tokens(bucket, "inputTokens") + tokens(bucket, "outputTokens")
+                 for name, bucket in list(used.items())[:50] if isinstance(name, str) and isinstance(bucket, dict)}
+        if sizes:
+            details.model = ad._text(max(sizes, key=lambda name: sizes[name]))
+            return
+
+
+def crush(details: "ad.Details"):
+    """Crush's ~/.config/crush/crush.json: models.large ({model, provider}: what it works with) and
+    its own providers ({base_url, models}). Its data folder's crush.json keeps the API keys: not read."""
+    config = ad.read_json(ad._expand("~/.config/crush/crush.json"))
+    large = (config.get("models") or {}).get("large") if isinstance(config.get("models"), dict) else None
+    large = large if isinstance(large, dict) else {}
+    model, chosen = ad._text(large.get("model")), ad._text(large.get("provider"), 40)
+    details.model = f"{model} ({chosen})" if model and chosen else model
+    providers = config.get("providers") if isinstance(config.get("providers"), dict) else {}
+    for name, entry in list(providers.items())[:50]:
+        if isinstance(entry, dict):
+            details.providers.append(ad.provider_for_url(name, entry.get("base_url"),
+                                                         ad._model_count(entry.get("models")),
+                                                         active=not chosen or name == chosen))
+
+
 def copilot(details: "ad.Details"):
     config = ad.read_json(ad._expand("~/.copilot/config.json"))
     details.model = ad._text(config.get("model"))
