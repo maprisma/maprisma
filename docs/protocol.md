@@ -16,6 +16,7 @@ A parameter written `name?` may be left out.
 | Route | Kind | Params | Result |
 |---|---|---|---|
 | `addons.catalog` | read | — | ? |
+| `addons.enable_found` | change | `ids`: ["string"] | `addons`, `switched_on` At the start: switches on the add-ons of what setup.detect found (ids), except those the user switched off (addons_off). Never switches one off. |
 | `addons.file_install` | change | — | ? |
 | `addons.file_preview` | preview | `path`: ? | ? |
 | `addons.hints` | read | — | `lines` Each line has kind (off, new, updates), column (agents, providers) and text; off and new have ids, updates has updates. |
@@ -276,7 +277,7 @@ A parameter written `name?` may be left out.
 
 | Route | Kind | Params | Result |
 |---|---|---|---|
-| `setup.apply` | change | `enabled`: ? | ? |
+| `setup.apply` | change | `declined?`: ["string"], `enabled`: ["string"] | `addons` declined: found add-ons left unticked; they count as switched off (addons_off). |
 | `setup.detect` | read | — | ? |
 | `setup.later` | change | — | ? |
 

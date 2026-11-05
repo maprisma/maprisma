@@ -38,6 +38,9 @@ class CoreClient {
     Map<String, dynamic> params = const {},
   ]) => transport.call('addons.catalog', params);
 
+  Future<Map<String, dynamic>> addonsEnableFound({required Object? ids}) =>
+      transport.call('addons.enable_found', {'ids': ids});
+
   Future<Map<String, dynamic>> addonsFileInstall([
     Map<String, dynamic> params = const {},
   ]) => transport.call('addons.file_install', params);
@@ -579,8 +582,13 @@ class CoreClient {
   Future<Map<String, dynamic>> settingsUpdate({required Object? values}) =>
       transport.call('settings.update', {'values': values});
 
-  Future<Map<String, dynamic>> setupApply({required Object? enabled}) =>
-      transport.call('setup.apply', {'enabled': enabled});
+  Future<Map<String, dynamic>> setupApply({
+    Object? declined,
+    required Object? enabled,
+  }) => transport.call('setup.apply', {
+    'declined': ?declined,
+    'enabled': enabled,
+  });
 
   Future<Map<String, dynamic>> setupDetect([
     Map<String, dynamic> params = const {},

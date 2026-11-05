@@ -33,6 +33,25 @@
    "result": null,
    "source": null
   },
+  "addons.enable_found": {
+   "area": "addons",
+   "kind": "change",
+   "note": "At the start: switches on the add-ons of what setup.detect found (ids), except those the user switched off (addons_off). Never switches one off.",
+   "params": {
+    "ids": [
+     "string"
+    ]
+   },
+   "result": {
+    "addons": [
+     "object"
+    ],
+    "switched_on": [
+     "string"
+    ]
+   },
+   "source": "manual"
+  },
   "addons.file_install": {
    "area": "addons",
    "kind": "change",
@@ -1679,12 +1698,24 @@
   "setup.apply": {
    "area": "setup",
    "kind": "change",
-   "note": "",
+   "note": "declined: found add-ons left unticked; they count as switched off (addons_off).",
    "params": {
-    "enabled": "?"
+    "declined": [
+     "string"
+    ],
+    "enabled": [
+     "string"
+    ]
    },
-   "result": null,
-   "source": null
+   "result": {
+    "addons": [
+     "object"
+    ]
+   },
+   "source": "manual",
+   "optional": [
+    "declined"
+   ]
   },
   "setup.detect": {
    "area": "setup",
