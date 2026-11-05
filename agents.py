@@ -216,12 +216,14 @@ _RUNS_MISE = re.compile(r"\bmise\s+(x|exec|use|install|where)\b")
 def proven(path, marks) -> bool:
     """The program at path is the agent's own (adapter fact install_marks): its real path (links
     followed) or, for a script of at most MAX_WRAPPER_BYTES, its text names one of the marks ("~/"
-    is the home folder). A script that runs mise is a stub that builds the agent at its first start
-    (mise's own install folder says whether that happened), never proof. Nothing is started."""
+    is the home folder; in a script's text also "$HOME/", "${HOME}/" or "~/"). A script that runs
+    mise is a stub that builds the agent at its first start (mise's own install folder says whether
+    that happened), never proof. Nothing is started."""
     if not marks or path is None:
         return False
     home = os.path.expanduser("~")
     wanted = [home + m[1:] if m.startswith("~/") else m for m in marks]
+    spelled = wanted + [s + m[1:] for m in marks if m.startswith("~/") for s in ("~", "$HOME", "${HOME}")]
     try:
         real = os.path.realpath(path, strict=True)
     except OSError:
@@ -231,7 +233,7 @@ def proven(path, marks) -> bool:
     if not os.path.isfile(real):
         return False
     text = read_capped(Path(real), MAX_WRAPPER_BYTES)
-    return text is not None and not _RUNS_MISE.search(text) and any(m in text for m in wanted)
+    return text is not None and not _RUNS_MISE.search(text) and any(m in text for m in spelled)
 
 
 def detect(command: str, bin_dir: Path = BIN_DIR, mise_dir: Path = MISE_DIR,

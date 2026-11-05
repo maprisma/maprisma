@@ -250,13 +250,24 @@ final class AgentCatalog {
   /// Python agents.proven: the program at [path] is the agent's own (adapter
   /// fact install_marks): its real path (links followed) or, for a script of
   /// at most 4 KiB, its text names one of the marks ("~/" is the home
-  /// folder). A script that runs mise is a stub that builds the agent at its
-  /// first start, never proof. Nothing is started.
+  /// folder; in a script's text also `$HOME/`, `${HOME}/` or `~/`). A script
+  /// that runs mise is a stub that builds the agent at its first start, never
+  /// proof. Nothing is started.
   bool proven(String? path, List marks) {
     if (marks.isEmpty || path == null) return false;
+    final home = files.expand('~');
     final wanted = [
       for (final m in marks.whereType<String>())
-        m.startsWith('~/') ? files.expand('~') + m.substring(1) : m,
+        m.startsWith('~/') ? home + m.substring(1) : m,
+    ];
+    final spelled = [
+      ...wanted,
+      for (final m in marks.whereType<String>())
+        if (m.startsWith('~/')) ...[
+          m,
+          '\$HOME${m.substring(1)}',
+          '\${HOME}${m.substring(1)}',
+        ],
     ];
     final String real;
     try {
@@ -272,7 +283,7 @@ final class AgentCatalog {
     final text = files.text(real, limit: 4096, allowRootOwned: true);
     return text != null &&
         !_runsMise.hasMatch(text) &&
-        wanted.any(text.contains);
+        spelled.any(text.contains);
   }
 
   /// Python agents.detect(): (installed, version, source) for one agent.

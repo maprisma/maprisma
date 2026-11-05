@@ -135,6 +135,11 @@ class AgentsTest(unittest.TestCase):
             self.assertEqual(detect("hermes"), (False, "", ""))
             program(self.bin / "hermes", f'#!/bin/bash\nexec "{root}/.hermes/hermes-agent/venv/bin/hermes" "$@"\n')
             self.assertEqual(detect("hermes"), (True, "", "own"))    # upstream's installer
+            for home in ("$HOME", "${HOME}", "~"):                     # a hand-made wrapper
+                program(self.bin / "hermes", f'#!/bin/sh\nexec "{home}/.hermes/bin/hermes" "$@"\n')
+                self.assertEqual(detect("hermes"), (True, "", "own"), home)
+            program(self.bin / "hermes", '#!/bin/sh\nexec "$HOMEX/.hermes/bin/hermes" "$@"\n')
+            self.assertEqual(detect("hermes"), (False, "", ""))      # another variable's folder
             (self.bin / "hermes").unlink()                            # pipx
             os.symlink(program(root / ".local/share/pipx/venvs/hermes-agent/bin/hermes"), self.bin / "hermes")
             self.assertEqual(detect("hermes"), (True, "", "own"))
