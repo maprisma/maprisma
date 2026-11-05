@@ -16,7 +16,7 @@ def main():
         os.environ.update(LC_ALL='C',LC_MESSAGES='C',LANG='en_US.UTF-8')
         import adapter_data as source
         import harnesses
-        names = ['TOP','WAY','UPDATE','ASK','SESSIONS','DETAILS','MODELS','TOOLS','RESEARCH','REWRITE','TASK','CLOSED','ADVISE','REPLIES','SUBAGENTS','SKILLS','LISTED','MCP','LOCAL_LLM','LOGIN_STATUS','ACCESS','LOGIN','CONFIGURE','KEY','SECURITY','SETTING','WARN','CHOICE','RULE','REQUIRED','READERS','LATEST','INSTALLERS','USAGE','DETAIL_READERS','MODEL_READERS','PLAN_LIMITS','LIMIT_RPCS']
+        names = ['TOP','WAY','UPDATE','ASK','SESSIONS','DETAILS','MODELS','TOOLS','RESEARCH','REWRITE','TASK','CLOSED','ADVISE','REPLIES','SUBAGENTS','SKILLS','LISTED','MCP','LOCAL_LLM','LOGIN_STATUS','ACCESS','LOGIN','CONFIGURE','KEY','SECURITY','SETTING','WARN','CHOICE','RULE','REQUIRED','READERS','LATEST','INSTALLERS','USAGE','DETAIL_READERS','MODEL_READERS','PLAN_LIMITS','STORE','LIMIT_RPCS']
         schema = {name:getattr(source,name) for name in names}
         schema['NOT_OWN'] = sorted(harnesses.NOT_OWN)
         import providers, llm_engine, plugin_costs

@@ -416,7 +416,7 @@ final class CoreService {
       paying: paysPerToken(
         limits: info.limits,
         plan: info.plan,
-        usageRecord: reads.details.usageRecord(agent.command),
+        usageRecord: reads.details.usageRecord(agent.command, agent.adapter),
         access: agent.adapter.table('access'),
         home: identity.home,
         environment: identity.environment,
@@ -2726,7 +2726,7 @@ final class CoreService {
       bool paying({bool billed = false}) => paysPerToken(
         limits: info.limits,
         plan: info.plan,
-        usageRecord: reads.details.usageRecord(a.command),
+        usageRecord: reads.details.usageRecord(a.command, a.adapter),
         access: a.adapter.table('access'),
         home: identity.home,
         environment: identity.environment,
@@ -4842,12 +4842,11 @@ final class CoreService {
       if (params.length != 1 || agent == null) {
         throw const FormatException('Unknown agent');
       }
-      final access = [
-        for (final f in agent.adapter.table('access')['files'] as List? ?? [])
-          if (f is String) f,
-      ];
-      // Without Omarchy's collector: its own program, when its adapter says
-      // how to ask it and it is signed in.
+      // Its access files where it keeps them (plan_limits.home_env).
+      final access = reads.details.accessPaths(agent.adapter);
+      // Without Omarchy's collector: its own installed program (never a
+      // launcher that installs it), when its adapter says how to ask it and
+      // it is signed in.
       final native = reads.details.planLimitsRpc(agent.adapter);
       if (!reads.details.usageIsStale(
         agent.command,
@@ -4858,7 +4857,11 @@ final class CoreService {
       }
       return tasks.start('agents.usage_refresh', {
         'command': agent.command,
-        if (native != null) ...{'rpc': native.$1, 'argv': native.$2},
+        if (native != null) ...{
+          'rpc': native.$1,
+          'argv': native.$2,
+          'program': native.$3,
+        },
       }, (result) => result);
     }
     if (method == 'gpu.snapshot') {
@@ -5290,7 +5293,7 @@ final class _HealthInputs {
         'version': agent.version,
       },
       info: {'model': details.model, 'providers': details.providers},
-      record: core.reads.details.usageRecord(command),
+      record: core.reads.details.usageRecord(command, a),
       runtimes: runtimes,
       mcp: inventory.agentMcp[command] ?? const [],
       skills: inventory.agentSkills[command] ?? const [],

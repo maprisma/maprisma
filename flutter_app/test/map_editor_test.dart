@@ -725,10 +725,13 @@ void main() {
       for (final n in graph['nodes'] as List) Map<String, dynamic>.from(n),
     ];
     graph['nodes'] = nodes;
-    nodes.firstWhere((n) => n['id'] == 'agent:a')['own_provider'] =
-        'cloud:openai';
+    nodes.firstWhere((n) => n['id'] == 'agent:a')
+      ..['own_provider'] = 'cloud:openai'
+      ..['own_login'] = true;
+    nodes.firstWhere((n) => n['id'] == 'agent:b')['own_provider'] =
+        'cloud:xai'; // with no sign-in the app can start (round 2 #16)
     nodes.addAll([
-      for (final id in ['cloud:openai', 'cloud:google'])
+      for (final id in ['cloud:openai', 'cloud:google', 'cloud:xai'])
         {'id': id, 'kind': 'cloud', 'column': 2, 'label': id, 'detail': ''},
     ]);
     graph['edges'] = [
@@ -753,6 +756,12 @@ void main() {
       find.text(
         'To switch agent:b to cloud:google, draw the line to one of its models.',
       ),
+      findsOneWidget,
+    );
+    await draw('agent:b', 'cloud:xai');
+    expect(edits, isEmpty);
+    expect(
+      find.text('This agent has no sign-in that the app can start.'),
       findsOneWidget,
     );
     // Its own provider: the edit (a sign-in) goes ahead.

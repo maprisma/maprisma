@@ -213,15 +213,78 @@ def on_system_path(command: str, bin_dir: Path = BIN_DIR, mise_dir: Path = MISE_
 _RUNS_MISE = re.compile(r"\bmise\s+(x|exec|use|install|where)\b")
 
 
+def _mise_data(environ) -> Path:
+    data = environ.get("MISE_DATA_DIR", "")
+    return Path(data) if data.startswith("/") else Path(environ.get("HOME") or Path.home()) / ".local/share/mise"
+
+
+def _mise_launcher_folder(folder, environ) -> bool:
+    """In mise's folder but not in a version it installed: its shims and command wrappers."""
+    mise, folder = _mise_data(environ), Path(os.path.normpath(folder))
+    return (folder == mise or mise in folder.parents) and (mise / "installs") not in folder.parents
+
+
+def lazy_launcher(path, environ=None) -> bool:
+    """A program that installs or updates what it stands for when started (omarchy-agent-usage-codex's
+    is_lazy_launcher), so never one to run for a look: one of mise's shims or command wrappers, a link
+    to mise itself, or a script whose first 4 KiB run mise (Omarchy's `mise use -g …` and
+    `exec mise x …`). One whose head cannot be read counts as one. Nothing is started."""
+    environ = os.environ if environ is None else environ
+    if _mise_launcher_folder(os.path.dirname(os.path.abspath(path)), environ):
+        return True
+    try:
+        real = os.path.realpath(path, strict=True)
+        owner = os.stat(real).st_uid
+        if owner not in (os.getuid(), 0):
+            return True
+        with open(real, "rb") as handle:
+            head = handle.read(4096).decode("utf-8", "replace")
+    except OSError:
+        return True
+    return (os.path.basename(real) == "mise" or _mise_launcher_folder(os.path.dirname(real), environ)
+            or bool(_RUNS_MISE.search(head)))
+
+
+def real_program(command: str, specs=(), environ=None) -> str | None:
+    """The agent's installed program (omarchy-agent-usage-codex's find_codex_binary, offline), never a
+    launcher that would install or update it (lazy_launcher): the first on PATH, then in ~/.local/bin
+    and ~/.npm-global/bin; else the program in the version mise uses of one of `specs` (its folder's
+    bin/ or top). None when none is installed. Nothing is started."""
+    environ = os.environ if environ is None else environ
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._+-]{0,63}", command):
+        return None
+    home = Path(environ.get("HOME") or Path.home())
+    folders = [os.path.normpath(f) for f in environ.get("PATH", "").split(":") if f.startswith("/")]
+    folders += [str(home / ".local/bin"), str(home / ".npm-global/bin")]
+
+    def runnable(path) -> bool:
+        return os.path.isfile(path) and os.access(path, os.X_OK)
+    for folder in dict.fromkeys(folders):
+        path = os.path.join(folder, command)
+        if not _mise_launcher_folder(folder, environ) and runnable(path) and not lazy_launcher(path, environ):
+            return path
+    for spec in dict.fromkeys([*specs, command]):
+        folder = mise_install(spec, _mise_data(environ))
+        version = mise_version(folder) if folder is not None else ""
+        if not version:
+            continue
+        for path in (folder / version / "bin" / command, folder / version / command):
+            if runnable(path) and not lazy_launcher(path, environ):
+                return str(path)
+    return None
+
+
 def proven(path, marks) -> bool:
     """The program at path is the agent's own (adapter fact install_marks): its real path (links
     followed) or, for a script of at most MAX_WRAPPER_BYTES, its text names one of the marks ("~/"
-    is the home folder). A script that runs mise is a stub that builds the agent at its first start
-    (mise's own install folder says whether that happened), never proof. Nothing is started."""
+    is the home folder; in a script's text also "$HOME/", "${HOME}/" or "~/"). A script that runs
+    mise is a stub that builds the agent at its first start (mise's own install folder says whether
+    that happened), never proof. Nothing is started."""
     if not marks or path is None:
         return False
     home = os.path.expanduser("~")
     wanted = [home + m[1:] if m.startswith("~/") else m for m in marks]
+    spelled = wanted + [s + m[1:] for m in marks if m.startswith("~/") for s in ("~", "$HOME", "${HOME}")]
     try:
         real = os.path.realpath(path, strict=True)
     except OSError:
@@ -231,7 +294,7 @@ def proven(path, marks) -> bool:
     if not os.path.isfile(real):
         return False
     text = read_capped(Path(real), MAX_WRAPPER_BYTES)
-    return text is not None and not _RUNS_MISE.search(text) and any(m in text for m in wanted)
+    return text is not None and not _RUNS_MISE.search(text) and any(m in text for m in spelled)
 
 
 def detect(command: str, bin_dir: Path = BIN_DIR, mise_dir: Path = MISE_DIR,

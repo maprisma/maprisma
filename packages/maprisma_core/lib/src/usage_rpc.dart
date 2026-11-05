@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'desktop.dart' show whichIn;
+import 'package:path/path.dart' as p;
 
 /// An agent's plan limits asked of its own program where no Omarchy
 /// collector is (an adapter's `[plan_limits]`, adapter_data.LIMIT_RPCS):
@@ -10,18 +10,26 @@ import 'desktop.dart' show whichIn;
 /// and resetsAt; tierLabel), or null when it could not be asked. No prompt
 /// is sent to a model and Maprisma reads no credential: the agent's program
 /// answers for its own sign-in. Each answer within [answer], the whole
-/// exchange within [total]; the program is killed afterwards.
+/// exchange within [total]; the program is killed afterwards. [program] is
+/// the agent's installed program (AgentCatalog.realProgram, never a
+/// launcher that installs or updates it); without one nothing is asked,
+/// never the first `argv.first` on PATH.
 Future<Map<String, dynamic>?> askPlanLimits(
   String rpc,
   List<String> argv,
   Map<String, String> env, {
+  required String? program,
   Duration answer = const Duration(seconds: 8),
   Duration total = const Duration(seconds: 20),
   DateTime Function() now = DateTime.now,
 }) async {
-  if (rpc != 'codex-app-server' || argv.isEmpty) return null;
-  final binary = whichIn(argv.first, env['PATH']);
-  if (binary == null) return null;
+  if (rpc != 'codex-app-server' ||
+      argv.isEmpty ||
+      program == null ||
+      p.basename(program) != argv.first) {
+    return null;
+  }
+  final binary = program;
   final Process process;
   try {
     process = await Process.start(

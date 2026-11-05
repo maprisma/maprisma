@@ -310,8 +310,19 @@ final class Adapter {
       if (!(adapterSchema['LIMIT_RPCS'] as List).contains(
             t('plan_limits')['rpc'],
           ) ||
-          !configureOk(t('plan_limits')['argv'] as List, command)) {
+          !configureOk(t('plan_limits')['argv'] as List, command) ||
+          !RegExp(
+            r'^([A-Z_][A-Z0-9_]{0,63})?$',
+          ).hasMatch(t('plan_limits')['home_env'] as String? ?? '')) {
         throw const AdapterError('Invalid plan_limits');
+      }
+      if (t('plan_limits').containsKey('store')) {
+        final store = t('plan_limits')['store'] as Map;
+        _check(store, 'STORE', ['file', 'format', 'key']);
+        if (!['json', 'toml'].contains(store['format']) ||
+            !(store['file'] as String).startsWith('~/')) {
+          throw const AdapterError('Invalid plan_limits store');
+        }
       }
     }
     check('sessions', 'SESSIONS');

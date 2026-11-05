@@ -247,16 +247,116 @@ final class AgentCatalog {
 
   static final _runsMise = RegExp(r'\bmise\s+(x|exec|use|install|where)\b');
 
+  String get _miseData {
+    final data = files.identity.environment['MISE_DATA_DIR'] ?? '';
+    return data.startsWith('/') ? data : files.expand('~/.local/share/mise');
+  }
+
+  /// In mise's folder but not in a version it installed: its shims and
+  /// command wrappers, which run mise.
+  bool _miseLauncherFolder(String path) {
+    final mise = _miseData;
+    return (p.equals(path, mise) || p.isWithin(mise, path)) &&
+        !p.isWithin(p.join(mise, 'installs'), path);
+  }
+
+  /// Python agents.lazy_launcher (omarchy-agent-usage-codex's
+  /// is_lazy_launcher): a program that installs or updates what it stands
+  /// for when started, so never one to run for a look: one of mise's shims
+  /// or command wrappers, a link to mise itself, or a script whose first
+  /// 4 KiB run mise (Omarchy's `mise use -g …` and `exec mise x …`). One
+  /// whose head cannot be read counts as one. Nothing is started.
+  bool lazyLauncher(String path) {
+    if (_miseLauncherFolder(p.dirname(path))) return true;
+    final String real;
+    try {
+      real = File(path).resolveSymbolicLinksSync();
+    } on FileSystemException {
+      return true;
+    }
+    if (p.basename(real) == 'mise' || _miseLauncherFolder(p.dirname(real))) {
+      return true;
+    }
+    final head = files.text(
+      real,
+      limit: 4096,
+      portion: 'head',
+      allowRootOwned: true,
+    );
+    return head == null || _runsMise.hasMatch(head);
+  }
+
+  static bool _runnable(String path) {
+    final stat = File(path).statSync(); // links followed
+    return stat.type == FileSystemEntityType.file && stat.mode & 0x49 != 0;
+  }
+
+  /// Python agents.real_program (omarchy-agent-usage-codex's
+  /// find_codex_binary, offline): the agent's installed program, never a
+  /// launcher that would install or update it (lazyLauncher). The first on
+  /// PATH, then in ~/.local/bin and ~/.npm-global/bin; else the program in
+  /// the version mise uses of one of [specs] (its folder's bin/ or top).
+  /// Null when none is installed. Nothing is started.
+  String? realProgram(String command, {Iterable<String> specs = const []}) {
+    if (!RegExp(r'^[A-Za-z0-9][A-Za-z0-9._+\-]{0,63}$').hasMatch(command)) {
+      return null;
+    }
+    final folders = <String>{
+      for (final f in (files.identity.environment['PATH'] ?? '').split(':'))
+        if (p.isAbsolute(f)) p.normalize(f),
+      files.expand('~/.local/bin'),
+      files.expand('~/.npm-global/bin'),
+    };
+    for (final folder in folders) {
+      if (_miseLauncherFolder(folder)) continue;
+      final path = p.join(folder, command);
+      if (_runnable(path) && !lazyLauncher(path)) return path;
+    }
+    for (final spec in {...specs, command}) {
+      final folder = miseInstall(spec);
+      final version = folder == null ? '' : miseVersion(folder);
+      if (version.isEmpty) continue;
+      for (final path in [
+        p.join(folder!, version, 'bin', command),
+        p.join(folder, version, command),
+      ]) {
+        if (_runnable(path) && !lazyLauncher(path)) return path;
+      }
+    }
+    return null;
+  }
+
+  /// The mise tool specs an agent may be installed as: its wrapper's, its
+  /// adapter's `spec` and the specs of its mise install ways.
+  List<String> miseSpecs(Adapter adapter) => [
+    ?wrapperSpec(adapter.command),
+    if (adapter.facts['spec'] is String) adapter.facts['spec'] as String,
+    for (final way in adapter.facts['install'] as List? ?? const [])
+      if (way is Map && way['kind'] == 'mise' && way['spec'] is String)
+        way['spec'] as String,
+  ];
+
   /// Python agents.proven: the program at [path] is the agent's own (adapter
   /// fact install_marks): its real path (links followed) or, for a script of
   /// at most 4 KiB, its text names one of the marks ("~/" is the home
-  /// folder). A script that runs mise is a stub that builds the agent at its
-  /// first start, never proof. Nothing is started.
+  /// folder; in a script's text also `$HOME/`, `${HOME}/` or `~/`). A script
+  /// that runs mise is a stub that builds the agent at its first start, never
+  /// proof. Nothing is started.
   bool proven(String? path, List marks) {
     if (marks.isEmpty || path == null) return false;
+    final home = files.expand('~');
     final wanted = [
       for (final m in marks.whereType<String>())
-        m.startsWith('~/') ? files.expand('~') + m.substring(1) : m,
+        m.startsWith('~/') ? home + m.substring(1) : m,
+    ];
+    final spelled = [
+      ...wanted,
+      for (final m in marks.whereType<String>())
+        if (m.startsWith('~/')) ...[
+          m,
+          '\$HOME${m.substring(1)}',
+          '\${HOME}${m.substring(1)}',
+        ],
     ];
     final String real;
     try {
@@ -272,7 +372,7 @@ final class AgentCatalog {
     final text = files.text(real, limit: 4096, allowRootOwned: true);
     return text != null &&
         !_runsMise.hasMatch(text) &&
-        wanted.any(text.contains);
+        spelled.any(text.contains);
   }
 
   /// Python agents.detect(): (installed, version, source) for one agent.

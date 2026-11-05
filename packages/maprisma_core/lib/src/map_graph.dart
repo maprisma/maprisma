@@ -61,6 +61,7 @@ final class MapGraph {
     String status = '',
     String group = '',
     String ownProvider = '',
+    bool ownLogin = false,
   }) {
     final existing = nodes.firstWhereOrNull((n) => n['id'] == id);
     if (existing != null) return existing;
@@ -79,6 +80,9 @@ final class MapGraph {
       // Agents: the id of their own online provider (provider facts), the
       // one dragging the agent onto signs in to; "" for none.
       'own_provider': ownProvider,
+      // Agents: the app can start their sign-in there (access.logins, as
+      // Ask AI's own_clouds login); dropping one onto it is refused without.
+      'own_login': ownLogin,
     };
     nodes.add(value);
     return value;
@@ -107,10 +111,13 @@ final class MapGraph {
 
   /// An agent's sign-in to its own online provider is there: a key in the
   /// environment or a sign-in file (a stat, never a read). An adapter that
-  /// names no sign-in file cannot tell: signed in.
+  /// names neither sign-in files nor keys cannot tell: signed in.
   bool signedIn(AgentRecord agent) {
     final access = agent.adapter.table('access');
-    if ((access['files'] as List? ?? const []).isEmpty) return true;
+    if ((access['files'] as List? ?? const []).isEmpty &&
+        (access['env'] as List? ?? const []).isEmpty) {
+      return true;
+    }
     return credentialsPresent(
       access,
       files.identity.home,
@@ -336,6 +343,10 @@ final class MapGraph {
         // agents card; the others are online agents.
         group: agent.adapter.table('local_llm').isEmpty ? '' : 'local',
         ownProvider: own.isEmpty ? '' : 'cloud:${own.toLowerCase()}',
+        ownLogin:
+            own.isNotEmpty &&
+            (agent.adapter.table('access')['logins'] as List? ?? const [])
+                .isNotEmpty,
       );
       var (model, modelProvider) = splitModel(info?.model ?? '');
       final local = <String, String>{};

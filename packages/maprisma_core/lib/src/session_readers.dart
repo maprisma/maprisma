@@ -55,6 +55,10 @@ double scanNow(ScanFiles files) =>
 final class NumericSession {
   String cwd = '';
   double first = 0, last = 0, active = 0, cost = 0;
+
+  /// [cost] is only the agent's estimate of the API value, not a charge it
+  /// was told of (Hermes' estimated_cost_usd without actual_cost_usd).
+  bool estimated = false;
   int replies = 0, linesAdded = 0, linesRemoved = 0, apiMs = 0;
   final tokens = <String, List<int>>{},
       hours = <String, int>{},
@@ -117,6 +121,7 @@ final class NumericSession {
     'lines_added': linesAdded,
     'lines_removed': linesRemoved,
     'cost': cost,
+    'estimated': estimated,
     'api_ms': apiMs,
     'subagents': subagents,
   };
@@ -582,7 +587,7 @@ final class SessionReaders {
         ? '~/.hermes/state.db'
         : '~/.local/share/opencode/opencode.db';
     final query = hermes
-        ? 'SELECT id, parent_session_id, cwd, started_at, COALESCE(last_activity_at, ended_at, started_at), model, input_tokens, COALESCE(output_tokens, 0) + COALESCE(reasoning_tokens, 0), cache_read_tokens, cache_write_tokens, COALESCE(actual_cost_usd, estimated_cost_usd) FROM sessions ORDER BY started_at DESC LIMIT 20000'
+        ? 'SELECT id, parent_session_id, cwd, started_at, COALESCE(last_activity_at, ended_at, started_at), model, input_tokens, COALESCE(output_tokens, 0) + COALESCE(reasoning_tokens, 0), cache_read_tokens, cache_write_tokens, COALESCE(actual_cost_usd, estimated_cost_usd), actual_cost_usd FROM sessions ORDER BY started_at DESC LIMIT 20000'
         : 'SELECT id, parent_id, agent, directory, time_created, time_updated, model, tokens_input, COALESCE(tokens_output, 0) + COALESCE(tokens_reasoning, 0), tokens_cache_read, tokens_cache_write, cost, summary_additions, summary_deletions FROM session_v2 ORDER BY time_created DESC LIMIT 20000';
     final rows = sqlite.select(path, query);
     if (rows.isEmpty) return {};
@@ -629,7 +634,11 @@ final class SessionReaders {
             ],
       );
       session.cost = safeMoney(row[10]);
-      if (!hermes) {
+      // Hermes keeps an estimate beside what was charged: only the latter is
+      // a bill (usage_readers' billed).
+      if (hermes) {
+        session.estimated = session.cost > 0 && safeMoney(row[11]) <= 0;
+      } else {
         session.linesAdded = tokenNumber(row[11]);
         session.linesRemoved = tokenNumber(row[12]);
       }

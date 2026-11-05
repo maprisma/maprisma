@@ -823,5 +823,6 @@
   "Local agents": "Local agents",
   "{0} cannot use {1}.": "{0} cannot use {1}.",
   "To switch {0} to {1}, draw the line to one of its models.": "To switch {0} to {1}, draw the line to one of its models.",
-  "{0} uses {1} through its own settings. Change it there.": "{0} uses {1} through its own settings. Change it there."
+  "{0} uses {1} through its own settings. Change it there.": "{0} uses {1} through its own settings. Change it there.",
+  "This agent has no sign-in that the app can start.": "This agent has no sign-in that the app can start."
 }

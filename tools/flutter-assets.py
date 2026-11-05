@@ -803,6 +803,8 @@ KEYS = (
     "To switch {0} to {1}, draw the line to one of its models.",
     # Disconnecting a provider an agent sets itself (review 063).
     "{0} uses {1} through its own settings. Change it there.",
+    # An agent dropped on its own provider without a sign-in the app can start (review 063, round 2).
+    "This agent has no sign-in that the app can start.",
 )
 
 

@@ -115,6 +115,8 @@ class Node:
     active: bool = False     # models: an agent's model, or one an open agent runs
     own_provider: str = ""   # agents: the id of their own online provider (CLOUD), the one drawing the
                              # agent onto signs in to; "" for none
+    own_login: bool = False  # agents: the app can start their sign-in there (access.logins); a drop onto
+                             # it is refused without
 
 
 @dataclass
@@ -192,10 +194,12 @@ def runtime_detail(rt, labels: dict) -> str:
 
 def signed_in(command: str) -> bool:
     """An agent's sign-in to its own online provider is there: a key in the environment or a sign-in
-    file (a stat, never a read). An agent whose access facts name no sign-in file cannot tell: signed in."""
+    file (a stat, never a read). An agent whose access facts name neither sign-in files nor keys cannot
+    tell: signed in."""
     import agent_status
     access = agent_status.access_table().get(command)
-    return access is None or not access.files or agent_status.credentials_present(access, agent_status.HOME)
+    return (access is None or not access.files and not access.env
+            or agent_status.credentials_present(access, agent_status.HOME))
 
 
 def provider_name(raw: str) -> str:
@@ -267,12 +271,15 @@ def build(agent_list, details: dict, inventory, labels: dict | None = None, fail
         local = "local" if harness and harness.local_llm else ""
         own = CLOUD.get(agent.command, "")
         own_id = f"cloud:{own.lower()}" if own else ""
+        access = harness.access() if harness and harness.access else None
+        own_login = bool(own_id and access is not None and access.logins)
         if instances:
             graph.add(Node(aid, 1, agent.name, " · ".join(filter(None, [agent.version, labels["running"](len(instances))])),
-                           "agent", agent.icon, agent.icon_font, status="running", group=local, own_provider=own_id))
+                           "agent", agent.icon, agent.icon_font, status="running", group=local, own_provider=own_id,
+                           own_login=own_login))
         else:
             graph.add(Node(aid, 1, agent.name, agent.version, "agent", agent.icon, agent.icon_font, group=local,
-                           own_provider=own_id))
+                           own_provider=own_id, own_login=own_login))
         info = details.get(agent.command)
         model, model_provider = split_model(info.model if info else "")
 

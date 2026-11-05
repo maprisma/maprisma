@@ -97,8 +97,9 @@ final class UsageReaders {
         any = true;
       }
       // Money the agent's own store says the session cost (Hermes, OpenCode,
-      // Crush): set only where a provider bills it, never for a plan.
-      if (session.cost > 0) billed += session.cost;
+      // Crush): set only where a provider bills it, never for a plan. An
+      // estimate of the API value (Hermes' estimated_cost_usd) is no bill.
+      if (session.cost > 0 && !session.estimated) billed += session.cost;
       if (session.tokens.isEmpty && session.cost > 0) {
         reported += session.cost;
         total += session.cost;

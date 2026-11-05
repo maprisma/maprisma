@@ -141,11 +141,12 @@ Future<bool> refreshUsage(
   Map<String, String> env, {
   String? rpc,
   List<String>? argv,
+  String? program,
 }) async {
   final collector = usageCollector(command, env);
   if (collector == null) {
-    if (rpc == null || argv == null) return false;
-    final record = await askPlanLimits(rpc, argv, env);
+    if (rpc == null || argv == null || program == null) return false;
+    final record = await askPlanLimits(rpc, argv, env, program: program);
     if (record == null) return false;
     try {
       final path = nativeUsagePath(command, env);
@@ -714,7 +715,7 @@ final class DetailReaders {
         info.model = codexCacheModel(files);
       }
     }
-    final usage = usageRecord(adapter.command);
+    final usage = usageRecord(adapter.command, adapter);
     final tier = boundedText(usage['tierLabel'], 40);
     info.plan =
         {
@@ -737,11 +738,14 @@ final class DetailReaders {
     info.activeDays = count(usage['activeDays']);
     if (usage['limits'] is List) {
       // When the numbers were measured (the collector's limitsFetchedAt, else
-      // the record's updatedAt) and whether the collector kept them past a
-      // failed probe (limitsStale): agent_badges.currentLimits and
-      // limitsStale judge by them.
+      // the record's updatedAt, else when the file was written: an age never
+      // stays unknown) and whether the collector kept them past a failed
+      // probe (limitsStale): agent_badges.currentLimits and limitsStale
+      // judge by them.
       final measured =
-          usageTime(usage['limitsFetchedAt']) ?? usageTime(usage['updatedAt']);
+          usageTime(usage['limitsFetchedAt']) ??
+          usageTime(usage['updatedAt']) ??
+          recordWritten(usagePath(adapter.command));
       for (final item in (usage['limits'] as List).take(8)) {
         if (item is! Map || item['percent'] is! num) continue;
         final percent = item['percent'] as num;
@@ -795,7 +799,7 @@ final class DetailReaders {
       return true;
     }
     for (final name in accessFiles) {
-      final path = '${files.identity.home}/$name';
+      final path = name.startsWith('/') ? name : '${files.identity.home}/$name';
       if (FileSystemEntity.typeSync(path) == FileSystemEntityType.notFound) {
         continue;
       }
@@ -816,9 +820,33 @@ final class DetailReaders {
     return {'on': on is bool ? on : null, 'url': access['extra_url'] ?? ''};
   }
 
-  Map<String, dynamic> usageRecord(String command) {
+  /// agent_details.record_written: when a usage record was written.
+  DateTime? recordWritten(String path) {
+    try {
+      final stat = File(path).statSync();
+      if (stat.type == FileSystemEntityType.notFound) return null;
+      return DateTime.fromMillisecondsSinceEpoch(
+        stat.modified.millisecondsSinceEpoch ~/ 1000 * 1000, // whole seconds
+        isUtc: true,
+      );
+    } on FileSystemException {
+      return null;
+    }
+  }
+
+  /// The agent's usage record. Maprisma's own, asked of the agent's
+  /// program, counts only while it is signed in ([limitsSignedIn] of
+  /// [adapter]): after a sign-out it is the old account's plan and limits.
+  Map<String, dynamic> usageRecord(String command, [Adapter? adapter]) {
     if (!RegExp(r'^[a-z0-9-]{1,64}$').hasMatch(command)) return {};
-    return Map<String, dynamic>.from(files.json(usagePath(command)));
+    final path = usagePath(command);
+    if (adapter != null &&
+        path == nativeUsagePath(command, files.identity.environment) &&
+        adapter.table('plan_limits').isNotEmpty &&
+        !limitsSignedIn(adapter)) {
+      return {};
+    }
+    return Map<String, dynamic>.from(files.json(path));
   }
 
   /// agent_details.usage_path: Omarchy's record of the agent where its
@@ -835,25 +863,82 @@ final class DetailReaders {
     return nativeUsagePath(command, files.identity.environment);
   }
 
-  /// agent_details.plan_limits_rpc: (rpc, argv) of an agent whose plan
-  /// limits Maprisma may ask its own program for: its adapter names how, no
-  /// Omarchy collector of it is found, and it is signed in (one of its
-  /// access files is there: only that, never what is in it). Else null.
-  (String, List<String>)? planLimitsRpc(Adapter adapter) {
+  /// The folder an agent's plan_limits.home_env moves its home to
+  /// (CODEX_HOME), or null while it is not set.
+  String? _movedHome(Adapter adapter) {
+    final name = adapter.table('plan_limits')['home_env'];
+    final moved = name is String && name.isNotEmpty
+        ? files.identity.environment[name] ?? ''
+        : '';
+    return moved.startsWith('/') ? moved : null;
+  }
+
+  /// agent_details.access_paths: the agent's access files where it keeps
+  /// them, in the folder its plan_limits.home_env names when that is set
+  /// (each by its name), else in the home folder.
+  List<String> accessPaths(Adapter adapter) {
+    final moved = _movedHome(adapter);
+    return [
+      for (final f in adapter.table('access')['files'] as List? ?? const [])
+        if (f is String)
+          moved != null
+              ? p.join(moved, p.basename(f))
+              : '${files.identity.home}/$f',
+    ];
+  }
+
+  /// agent_details.plan_limits_signed_in: whether the agent's own program
+  /// can answer for a sign-in: one of its access files is there (a stat,
+  /// never a read; [accessPaths]), or its store setting (plain
+  /// configuration, plan_limits.store: Codex's cli_auth_credentials_store)
+  /// keeps the sign-in outside the files, a keyring, which only the program
+  /// can tell.
+  bool limitsSignedIn(Adapter adapter) {
+    if (accessPaths(adapter).any(
+      (path) => FileSystemEntity.typeSync(path) == FileSystemEntityType.file,
+    )) {
+      return true;
+    }
+    final store = adapter.table('plan_limits')['store'];
+    if (store is! Map || store['file'] is! String || store['key'] is! String) {
+      return false;
+    }
+    final moved = _movedHome(adapter);
+    final path = moved != null
+        ? p.join(moved, p.basename(store['file'] as String))
+        : files.expand(store['file'] as String);
+    final value = dig(
+      store['format'] == 'toml'
+          ? files.toml(path)
+          : files.json(path, comments: false),
+      store['key'] as String,
+    );
+    final inFiles = store['files'] is String && store['files'] != ''
+        ? store['files']
+        : 'file';
+    return value is String && value.isNotEmpty && value != inFiles;
+  }
+
+  /// agent_details.plan_limits_rpc: (rpc, argv, program) of an agent whose
+  /// plan limits Maprisma may ask its own program for: its adapter names
+  /// how, no Omarchy collector of it is found, it is signed in
+  /// ([limitsSignedIn]) and its installed program is found offline
+  /// (AgentCatalog.realProgram: never a launcher that would install or
+  /// update it). Else null.
+  (String, List<String>, String)? planLimitsRpc(Adapter adapter) {
     final facts = adapter.table('plan_limits');
     final rpc = facts['rpc'], argv = facts['argv'];
     if (rpc is! String || argv is! List || argv.isEmpty) return null;
     if (hasUsageCollector(adapter.command)) return null;
-    final signedIn =
-        [
-          for (final f in adapter.table('access')['files'] as List? ?? const [])
-            if (f is String) f,
-        ].any(
-          (name) =>
-              FileSystemEntity.typeSync('${files.identity.home}/$name') ==
-              FileSystemEntityType.file,
-        );
-    return signedIn ? (rpc, [for (final a in argv) '$a']) : null;
+    if (!limitsSignedIn(adapter)) return null;
+    final catalog = AgentCatalog(files, desktop);
+    final program = catalog.realProgram(
+      adapter.command,
+      specs: catalog.miseSpecs(adapter),
+    );
+    return program == null
+        ? null
+        : (rpc, [for (final a in argv) '$a'], program);
   }
 
   static const maxScan = 3000, dateDepth = 2;

@@ -273,7 +273,16 @@ def plan_label(raw) -> str:
     return PLAN_NAMES.get(text.strip().lower(), text)
 
 
-def apply_usage(details: Details, record: dict):
+def record_written(path: Path) -> dt.datetime | None:
+    """When a usage record was written (its mtime): when its limits were measured if it says nothing
+    itself, so limits of unknown age still grow old (current_limits, limits_stale)."""
+    try:
+        return dt.datetime.fromtimestamp(int(path.stat().st_mtime), dt.timezone.utc)   # whole seconds
+    except (OSError, OverflowError, ValueError):
+        return None
+
+
+def apply_usage(details: Details, record: dict, written: dt.datetime | None = None):
     if not record:
         return
     details.has_usage = bool(record.get("ready")) or bool(record.get("hasLocalStats"))
@@ -286,7 +295,8 @@ def apply_usage(details: Details, record: dict):
     details.usage_updated = _time(record.get("updatedAt"))
     details.usage_note = _text(record.get("usageStatusText"), 120)
     limits = record.get("limits")
-    measured = _usage_time(record.get("limitsFetchedAt")) or _usage_time(record.get("updatedAt"))
+    measured = (_usage_time(record.get("limitsFetchedAt")) or _usage_time(record.get("updatedAt"))
+                or written)      # no time of its own: the file's, never an age that is unknown for ever
     if isinstance(limits, list):
         for item in limits[:8]:
             if not isinstance(item, dict):
@@ -316,12 +326,11 @@ def usage_is_stale(command: str, usage_dir: Path = USAGE_DIR, root: Path = HOME)
 
 
 def signed_in_since(command: str, when: float, root: Path = HOME) -> bool:
-    """The agent's credential file changed after `when` (only its time is looked at, never its text)."""
-    import agent_status
-    access = agent_status.access_table().get(command)
-    for name in access.files if access is not None else ():
+    """The agent's credential file changed after `when` (only its time is looked at, never its text;
+    where its home variable moved it: access_paths)."""
+    for path in access_paths(command, root):
         try:
-            if (root / name).stat().st_mtime > when:
+            if path.stat().st_mtime > when:
                 return True
         except OSError:
             continue
@@ -338,18 +347,65 @@ def native_usage_dir() -> Path:
     return (Path(state) if state.startswith("/") else HOME / ".local/state") / "maprisma/usage"
 
 
-def plan_limits_rpc(command: str, root: Path = HOME) -> tuple | None:
-    """(rpc, argv) of an agent whose plan limits may be asked of its own program: its adapter names
-    how ([plan_limits]), no collector of it is found, and it is signed in (one of its access files is
-    there: only that, never what is in it). Else None."""
+def access_paths(command: str, root: Path | None = None, environ=None) -> list:
+    """The agent's access files (relative to ~) where it keeps them: in the folder its
+    plan_limits.home_env names when that is set (CODEX_HOME), each by its name."""
     import harnesses
     import agent_status
+    environ = os.environ if environ is None else environ
+    root = HOME if root is None else root
+    harness = harnesses.get(command)
+    access = agent_status.access_table().get(command)
+    names = access.files if access is not None else ()
+    var = harness.plan_limits[2] if harness is not None and len(harness.plan_limits) > 2 else ""
+    moved = environ.get(var, "") if var else ""
+    return [Path(moved) / Path(name).name if moved.startswith("/") else root / name for name in names]
+
+
+def plan_limits_signed_in(command: str, root: Path | None = None, environ=None) -> bool:
+    """Whether the agent's own program can answer for a sign-in ([plan_limits]): one of its access
+    files is there (only that, never what is in it; access_paths), or its store setting (plain
+    configuration, plan_limits.store: Codex's cli_auth_credentials_store) keeps the sign-in outside
+    the files, a keyring, which only the program can tell."""
+    import harnesses
+    environ = os.environ if environ is None else environ
+    root = HOME if root is None else root
+    if any(path.is_file() for path in access_paths(command, root, environ)):
+        return True
+    harness = harnesses.get(command)
+    facts = harness.plan_limits if harness is not None else ()
+    if len(facts) < 4 or not facts[3]:
+        return False
+    file, fmt, key, files = facts[3]
+    var = facts[2]
+    moved = environ.get(var, "") if var else ""
+    path = Path(moved) / Path(file).name if moved.startswith("/") else root / file.removeprefix("~/")
+    try:
+        text = path.read_text(encoding="utf-8") if path.stat().st_size <= 512 * 1024 else ""
+        value = (tomllib.loads(text) if fmt == "toml" else json.loads(text)) if text else {}
+    except (OSError, ValueError, UnicodeDecodeError):
+        value = {}
+    for part in key.split("."):
+        value = value.get(part) if isinstance(value, dict) else None
+    return isinstance(value, str) and value != "" and value != (files or "file")
+
+
+def plan_limits_rpc(command: str, root: Path = HOME, environ=None) -> tuple | None:
+    """(rpc, argv, program) of an agent whose plan limits may be asked of its own program: its
+    adapter names how ([plan_limits]), no collector of it is found, it is signed in
+    (plan_limits_signed_in) and its installed program is found offline (agents.real_program: never a
+    launcher that would install or update it). Else None."""
+    import agents
+    import harnesses
     harness = harnesses.get(command)
     if harness is None or not harness.plan_limits or has_usage_collector(command):
         return None
-    access = agent_status.access_table().get(command)
-    signed_in = any((root / name).is_file() for name in (access.files if access is not None else ()))
-    return harness.plan_limits if signed_in else None
+    if not plan_limits_signed_in(command, root, environ):
+        return None
+    specs = [s for s in (agents.wrapper_spec(command), harness.spec,
+                         *(w.spec for w in harness.install if w.kind == "mise")) if s]
+    program = agents.real_program(command, specs, os.environ if environ is None else environ)
+    return (harness.plan_limits[0], harness.plan_limits[1], program) if program else None
 
 
 def refresh_usage(command: str) -> bool:
@@ -361,9 +417,9 @@ def refresh_usage(command: str) -> bool:
     return native is not None and native_usage(command, *native)
 
 
-def native_usage(command: str, rpc: str, argv, environ=None) -> bool:
+def native_usage(command: str, rpc: str, argv, program: str, environ=None) -> bool:
     """Ask the agent's own program for its plan limits and keep the answer as its usage record."""
-    record = ask_plan_limits(rpc, list(argv), dict(os.environ if environ is None else environ))
+    record = ask_plan_limits(rpc, list(argv), dict(os.environ if environ is None else environ), program=program)
     if record is None:
         return False
     folder = native_usage_dir()
@@ -381,22 +437,20 @@ LIMIT_RPCS = ("codex-app-server",)
 
 
 def ask_plan_limits(rpc: str, argv: list, environ: dict, answer: float = 8, total: float = 20,
-                    now=None) -> dict | None:
+                    now=None, program: str | None = None) -> dict | None:
     """The record Omarchy's collector would write (limits with label, percent and resetsAt; tierLabel),
     asked of the agent's own program over `rpc` (omarchy-agent-usage-codex's fetch_codex_rpc:
     initialize, initialized, account/rateLimits/read, account/read only when no plan is named); None
     when it could not be asked. No prompt goes to a model and nothing here reads a credential. Each
     answer within `answer` seconds, all within `total`; the program (its whole session) is killed
-    afterwards."""
+    afterwards. `program` is the agent's installed program (plan_limits_rpc: agents.real_program);
+    without one nothing is asked, never the first `argv[0]` on PATH."""
     import select
-    import shutil
     import signal
     import time
-    if rpc not in LIMIT_RPCS or not argv:
+    if rpc not in LIMIT_RPCS or not argv or not program or os.path.basename(program) != argv[0]:
         return None
-    binary = shutil.which(argv[0], path=environ.get("PATH", ""))
-    if binary is None:
-        return None
+    binary = program
     try:
         proc = subprocess.Popen([binary, *argv[1:]], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                 stderr=subprocess.DEVNULL, env=environ, cwd=environ.get("HOME") or None,
@@ -733,10 +787,14 @@ def details_for(command: str, usage_dir: Path = USAGE_DIR) -> Details:
             harness.details(details)
         except (OSError, ValueError, TypeError, AttributeError):
             pass
-    record = usage_record(command, usage_dir)
+    folder = usage_dir
+    record = usage_record(command, folder)
     if not record and usage_dir == USAGE_DIR and not has_usage_collector(command):
-        record = usage_record(command, native_usage_dir())   # asked of the agent itself (native_usage)
-    apply_usage(details, record)
+        folder = native_usage_dir()
+        record = usage_record(command, folder)   # asked of the agent itself (native_usage)
+        if record and not plan_limits_signed_in(command):
+            record = {}        # signed out since: the old account's plan and limits are not this PC's now
+    apply_usage(details, record, record_written(folder / f"{command}.json"))
     if not details.limits:
         # The agent's own store (an adapter's or an extension's limits() fact): plan and limits.
         if harness is not None and harness.limits is not None:

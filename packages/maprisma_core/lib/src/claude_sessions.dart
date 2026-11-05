@@ -87,6 +87,7 @@ NumericSession? sessionFrom(dynamic data) {
       ..linesAdded = data['lines_added'] as int? ?? 0
       ..linesRemoved = data['lines_removed'] as int? ?? 0
       ..cost = (data['cost'] as num? ?? 0).toDouble()
+      ..estimated = data['estimated'] == true
       ..apiMs = data['api_ms'] as int? ?? 0;
     for (final e in (data['tokens'] as Map? ?? const {}).entries) {
       s.tokens['${e.key}'] = [for (final n in e.value as List) n as int];

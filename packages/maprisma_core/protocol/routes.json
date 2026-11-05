@@ -1175,7 +1175,7 @@
   "map.snapshot": {
    "area": "map",
    "kind": "read",
-   "note": "nodes: dim marks a known server without agents; an agent's own_provider is the id of its own online provider (\"\" for none); a model with status missing is one an agent is set to that its local LLM no longer has; a model:folder:<path>:<name> model is in a reused model folder no local LLM lists. mcp:<name>~2 is another server of that name. edges: fixed says why a line cannot be taken away here; available from an agent to its own online provider: not signed in.",
+   "note": "nodes: dim marks a known server without agents; an agent's own_provider is the id of its own online provider (\"\" for none); own_login: the app can start its sign-in there (a drop onto that provider signs it in only then); a model with status missing is one an agent is set to that its local LLM no longer has; a model:folder:<path>:<name> model is in a reused model folder no local LLM lists. mcp:<name>~2 is another server of that name. edges: fixed says why a line cannot be taken away here; available from an agent to its own online provider: not signed in.",
    "optional": [
     "force",
     "poll"

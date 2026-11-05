@@ -128,6 +128,18 @@ void main() {
       '"\$@"\n',
     );
     expect(of('hermes'), (true, '', 'own')); // upstream's installer
+    for (final home in [r'$HOME', r'${HOME}', '~']) {
+      made(
+        p.join(bin, 'hermes'),
+        '#!/bin/sh\nexec "$home/.hermes/bin/hermes" "\$@"\n',
+      );
+      expect(of('hermes'), (true, '', 'own'), reason: home); // hand-made
+    }
+    made(
+      p.join(bin, 'hermes'),
+      '#!/bin/sh\nexec "\$HOMEX/.hermes/bin/hermes"\n',
+    );
+    expect(of('hermes'), (false, '', '')); // another variable's folder
     File(p.join(bin, 'hermes')).deleteSync(); // pipx
     Link(p.join(bin, 'hermes')).createSync(
       made(

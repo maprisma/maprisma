@@ -668,6 +668,10 @@ class MapLayout {
   /// drawing the agent onto signs in to.
   bool ownProvider(String agent, String provider) =>
       '${nodes[agent]?['own_provider'] ?? ''}' == provider;
+
+  /// The app can start the agent's sign-in at its own provider (the core's
+  /// own_login, as Ask AI's): without, a drop there would sign nothing in.
+  bool ownLogin(String agent) => nodes[agent]?['own_login'] == true;
   bool targetOk(String source, String target, {Map<String, dynamic>? moving}) {
     final a = nodes[source], b = nodes[target];
     if (a == null ||
@@ -699,10 +703,10 @@ class MapLayout {
     // An online provider takes only the agent it belongs to (a sign-in);
     // another provider an agent can use is chosen through its models.
     if (a['kind'] == 'agent' && b['kind'] == 'cloud') {
-      return ownProvider(source, target);
+      return ownProvider(source, target) && ownLogin(source);
     }
     if (b['kind'] == 'agent' && a['kind'] == 'cloud') {
-      return ownProvider(target, source);
+      return ownProvider(target, source) && ownLogin(target);
     }
     if (['runtime', 'cloud'].contains(a['kind']) && b['kind'] == 'model') {
       return providerFor(target) == source;

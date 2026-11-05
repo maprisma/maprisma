@@ -54,6 +54,7 @@ class Session:
     lines_added: int = 0
     lines_removed: int = 0
     cost: float = 0.0
+    estimated: bool = False        # cost is only the agent's estimate of the API value, no charge (Hermes)
     api_ms: int = 0
     # Filled in by collect_by_id from the session's subagent runs (not cached):
     # agent type -> [runs, tokens (input + output + cache write), working seconds]
