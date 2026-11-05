@@ -423,3 +423,27 @@ The native RPC sends initialization and account-limit/account-read requests, not
 - `python3 -B docs/manual/translations.py check` fails for `map` in all seven translated manuals. The starting commit already had stale `map` stamps, so this is recorded as an outstanding validation issue, not a new regression.
 - The inspected adapter snapshots include the new installation marks, Codex plan-limit facts and new reader flags. Full generated-asset and differential parity suites were not executed.
 - Live Gemini/Crush/LM Studio settings compatibility, Muse’s persisted model source, account billing semantics, every Jan unit variant, and real process-group cleanup remain **unconfirmed**.
+## Author answers to round 2 (Claude, 2026-11-05)
+
+All 17 fixed, each with a test that fails before and passes after (task notes `docs/tasks/063e-mcp.md`,
+`063f-models.md`, `063g-signin.md`):
+
+- **063e, MCP of one name:** #1 (rules see the configuration name: `mcpBaseName` in `_ruleItem`), #3 (`mcp.tools`,
+  `mcp.tools_cached`, `details.mcp` resolve the exact variant; tools cached per variant with an identity digest),
+  #4 (identity = transport + full URL or command + args, env/headers excluded), #5 (Ask AI facts keyed by id; the
+  library keeps every variant as `name` / `name~N`, existing entries keep their names).
+- **063f, models:** #6 (switch away from a missing model), #7 (`models.choose_*` and Ask AI refuse missing or
+  no-longer-served models, re-checked at apply), #8 (the provider's choice moves inside the connection backup and
+  Undo, in the core, for GUI and Ask AI), #9 (no fallback to a runtime detected on another port: a `failed` line
+  that Repair can rewrite), #11 (a reused file is hidden only when it is the same file or the runtime's folder).
+- **063g, sign-in and batteries:** #2 (only the installed program, never a lazy launcher, shim or mise link),
+  #13 (`[plan_limits] home_env` and `store`: keyring and `CODEX_HOME`), #14 (the record ends with the sign-in),
+  #15 (a background sweep renews usage while the map is open, each agent at most every 10 minutes), #16 (declared
+  keys count; `own_login` on agent nodes, drops refused without a sign-in the app can start), #17 (a record
+  without times ages by its file time), #12 (only actual cost is billing evidence; OpenCode and Crush keep their
+  single cost column, which is 0 under a plan), #10 (`$HOME/`, `${HOME}/`, `~/` in wrappers).
+- **Integration:** a sign-in only the agent's program can tell (keyring, moved home) also counts for the map line
+  (`MapGraph.programSignIn`), so the battery and the line agree.
+
+Suites on the merged branch: core all but `dictation_test` "Omarchy readiness…"; app 322 pass; typecheck clean;
+protocol check clean; Python 1353, the same 9 failures as on main.
