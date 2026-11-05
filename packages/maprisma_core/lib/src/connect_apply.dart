@@ -15,7 +15,7 @@ final class Change {
   final String path, old, next;
 }
 
-/// Load and unload steps in one plan: Ask AI's disconnect unloads each model.
+/// Load and unload steps in one plan (a model switch on the map).
 const maxModelActions = 64;
 
 final class Plan {

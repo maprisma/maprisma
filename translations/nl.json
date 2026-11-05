@@ -3403,5 +3403,7 @@
  "No setting matches “{0}”": "Geen instelling komt overeen met ‘{0}’",
  "Rules": "Regels",
  "Terminals and screenshots": "Terminals en schermafbeeldingen",
- "Local agents": "Lokale agents"
+ "Local agents": "Lokale agents",
+ "An agent can only sign in to its own online provider.": "Een agent kan alleen inloggen bij zijn eigen online aanbieder.",
+ "This agent has no sign-in that the app can start.": "Deze agent heeft geen aanmelding die de app kan starten."
 }

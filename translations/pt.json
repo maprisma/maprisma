@@ -3403,5 +3403,7 @@
  "No setting matches “{0}”": "Nenhuma definição corresponde a «{0}»",
  "Rules": "Regras",
  "Terminals and screenshots": "Terminais e capturas de ecrã",
- "Local agents": "Agentes locais"
+ "Local agents": "Agentes locais",
+ "An agent can only sign in to its own online provider.": "Um agente só pode iniciar sessão no seu próprio fornecedor online.",
+ "This agent has no sign-in that the app can start.": "Este agente não tem um início de sessão que a aplicação possa iniciar."
 }

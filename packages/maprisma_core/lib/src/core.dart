@@ -111,6 +111,9 @@ const portedRoutes = {
   'guide.choose',
   'models.remove_preview',
   'models.remove_apply',
+  'models.choose_preview',
+  'models.choose_apply',
+  'models.choose_undo',
   'existing.scan',
   'existing.preview',
   'existing.check',
@@ -3139,6 +3142,11 @@ final class CoreService {
         'inventory',
       }, true);
       final engines = providerFacts['engines'] as Map;
+      final running = {
+        for (final n in (mapGraph['nodes'] as List).cast<Map>())
+          if (n['status'] == 'running') '${n['id']}',
+      };
+      final clouds = visibleProviderFacts['cloud'] as Map? ?? const {};
       final body = utf8.encode(
         pyJsonDumps({
           'column': column,
@@ -3168,6 +3176,46 @@ final class CoreService {
                   'kind': edge['kind'],
                 },
           ],
+          // Each agent's own online provider: Ask AI signs it in there, as
+          // dropping it onto that provider does (F14).
+          'own_clouds': {
+            for (final a in agents)
+              if (a.installed && clouds[a.command] is String)
+                a.command: {
+                  'cloud': 'cloud:${'${clouds[a.command]}'.toLowerCase()}',
+                  'name': a.name,
+                  'login': reads.details.actions(a)['login'] == true,
+                  'logout':
+                      (a.adapter.table('access')['logout'] as List? ?? const [])
+                          .isNotEmpty,
+                },
+          },
+          if (column == 'agents' || column == 'providers')
+            'addons': _smartAddonFacts(column == 'agents'),
+          if (column == 'models') ...{
+            'runtime_actions': [
+              for (final rt
+                  in (reads.providersSnapshot()['local'] as List).cast<Map>())
+                if (rt['installed'] == true &&
+                    (rt['can_import'] == true || rt['can_load'] == true))
+                  {
+                    'key': rt['key'],
+                    'name': rt['name'],
+                    'import': rt['can_import'] == true,
+                    'load': rt['can_load'] == true,
+                    'models': chatModels([
+                      for (final m in rt['models'] as List? ?? const []) '$m',
+                    ]).take(40).toList(),
+                  },
+            ],
+            'provider_models': _providerModels(),
+            // The agents the manual Connect offers for a local LLM (F12).
+            'connect_agents': [
+              for (final a in agents)
+                if (a.installed && llm.supported(a.command))
+                  {'command': a.command, 'name': a.name},
+            ],
+          },
           if (column == 'providers')
             'providers': [
               for (final rt
@@ -3203,6 +3251,13 @@ final class CoreService {
                         (a.adapter.table('access')['logout'] as List? ??
                                 const [])
                             .isNotEmpty,
+                    'verify': can['verify'] == true,
+                    'key': can['key'] == true,
+                    'security': a.installed,
+                    'start': a.installed,
+                    'halt': running.contains('agent:${a.command}'),
+                    'configure': a.installed,
+                    'details': true,
                   };
                 }(),
             ],
@@ -3423,14 +3478,67 @@ final class CoreService {
     if (model == null) {
       throw const FormatException('This model is not on this PC yet');
     }
+    // Only an agent the manual Connect offers for a local LLM (F12).
+    final connect = candidate['connect'] as List? ?? const [];
+    if (!connect.any((a) => a is Map && a['command'] == params['agent'])) {
+      throw const FormatException('This agent cannot use a local LLM');
+    }
+    // As a drawn connection with the provider's model: the agent uses it now.
     return dispatch('connections.preview', {
       'kind': 'provider',
       'command': params['agent'],
       'item': action['runtime'],
       'remove': false,
       'model': model,
-      'use_now': false,
+      'use_now': true,
     });
+  }
+
+  /// The add-ons Ask AI may name in the Agents (agent add-ons) or Providers
+  /// column, with the steps their menus offer now: the add-on sheet's (details,
+  /// on, off, remove) and the catalog's (install, update) when it was read.
+  List<Map<String, dynamic>> _smartAddonFacts(bool agentsColumn) {
+    final listed =
+        (addons.snapshot(enabledAddons(), addonSignIns, addonUserDir)['addons']
+                as List)
+            .cast<Map>();
+    final rows = {for (final r in catalogRows) '${r['id']}': r};
+    bool mine(Object? kind) => (kind == 'agent') == agentsColumn;
+    bool offered(Map? row, String action) =>
+        row?['action'] == action && row?['preview'] != null;
+    return [
+      for (final a in listed)
+        if (mine(a['kind']))
+          {
+            'id': a['id'],
+            'name': a['name'],
+            'enabled': a['enabled'] == true,
+            'details': true,
+            'on':
+                a['enabled'] != true &&
+                a['supported'] == true &&
+                a['verified'] == true,
+            'off': a['enabled'] == true && a['supported'] == true,
+            'remove': a['removable'] == true,
+            'install': false,
+            'update': offered(rows[a['id']], 'update'),
+          },
+      for (final r in catalogRows)
+        if (mine(r['kind']) &&
+            offered(r, 'install') &&
+            !listed.any((a) => a['id'] == r['id']))
+          {
+            'id': r['id'],
+            'name': r['name'],
+            'enabled': false,
+            'details': false,
+            'on': false,
+            'off': false,
+            'remove': false,
+            'install': true,
+            'update': false,
+          },
+    ];
   }
 
   /// What the Models helper may move: only model folders, to known disks,
@@ -3536,7 +3644,7 @@ final class CoreService {
     if (kind == 'model_disconnect') {
       return edits.modelsDisconnect(action['key'] as String, [
         for (final p in action['pairs'] as List) p as Map,
-      ], guardModel);
+      ]);
     }
     if (kind == 'mcp_disconnect') {
       final pairs = [for (final p in action['pairs'] as List) p as Map];
@@ -4302,7 +4410,114 @@ final class CoreService {
             '${e['source']}'.startsWith('agent:'))
           '${e['source']}'.substring(6),
     ],
+    providerModel: (provider) => _providerModels()[provider],
   );
+
+  /// Settings › provider_models: the model each local LLM uses itself.
+  Map<String, String> _providerModels() => {
+    for (final e
+        in (settings.value(settings.load(), 'provider_models') as Map).entries)
+      '${e.key}': '${e.value}',
+  };
+
+  /// models.choose_*: the previews and Undos of a local LLM's own model.
+  final _choices = <String, (DateTime, String, String?, String?, bool)>{};
+
+  /// flutter: a provider → model line on the map is the local LLM's own
+  /// choice (an agent connected to it later gets that model). The rules were
+  /// checked for this preview as for models.switch_preview (actionChecks).
+  Map<String, dynamic> _chooseRoute(
+    String method,
+    Map<String, dynamic> params,
+  ) {
+    final now = DateTime.now();
+    _choices.removeWhere((_, v) => now.difference(v.$1).inMinutes >= 30);
+    while (_choices.length >= 32) {
+      _choices.remove(_choices.keys.first);
+    }
+    String keep(String provider, String? before, String? after, bool undo) {
+      final token = newHandle();
+      _choices[token] = (now, provider, before, after, undo);
+      return token;
+    }
+
+    // Changes only that local LLM's entry, and only if nothing changed it.
+    void write(String provider, String? from, String? to) {
+      final models = _providerModels();
+      if (models[provider] != from) {
+        throw const FormatException('Model choice changed; refresh');
+      }
+      if (to == null) {
+        models.remove(provider);
+      } else {
+        models[provider] = to;
+      }
+      settings.saveOwn({'provider_models': models});
+    }
+
+    if (method == 'models.choose_preview') {
+      final provider = params['provider'], model = params['model'];
+      if (params.length != 2 ||
+          !params.containsKey('model') ||
+          provider is! String ||
+          !provider.startsWith('runtime:') ||
+          model != null && model is! String) {
+        throw const FormatException('Invalid request');
+      }
+      final graph = edits.currentMap();
+      final nodes = {
+        for (final n in (graph['nodes'] as List).cast<Map>()) '${n['id']}': n,
+      };
+      if (nodes[provider]?['kind'] != 'runtime') {
+        throw const FormatException('Runtime unavailable');
+      }
+      final serves = (graph['edges'] as List).cast<Map>().any(
+        (e) =>
+            e['kind'] == 'serves' &&
+            e['source'] == provider &&
+            e['target'] == model,
+      );
+      if (model != null &&
+          (!serves ||
+              nodes[model]?['kind'] != 'model' ||
+              chatModels(['${nodes[model]!['label']}']).isEmpty)) {
+        throw FormatException(
+          i18n.text('This model cannot be connected here.'),
+        );
+      }
+      final old = _providerModels()[provider];
+      final shown = model ?? old;
+      return {
+        'preview': keep(provider, old, model as String?, false),
+        'empty': old == model,
+        'old': old,
+        'new': model,
+        'line':
+            '${nodes[provider]!['label']} → ${nodes[shown]?['label'] ?? shown ?? ''}',
+        'focus': [provider, ?model],
+      };
+    }
+    final field = method == 'models.choose_apply' ? 'preview' : 'undo';
+    final token = params[field];
+    if (method != 'models.choose_apply' && method != 'models.choose_undo' ||
+        params.length != 1 ||
+        token is! String) {
+      throw const FormatException('Invalid request');
+    }
+    final undo = method == 'models.choose_undo';
+    final kept = _choices[token];
+    if (kept == null || kept.$5 != undo) {
+      throw const FormatException('This preview has expired');
+    }
+    _choices.remove(token);
+    final (_, provider, before, after, _) = kept;
+    if (undo) {
+      write(provider, after, before);
+      return {'ok': true};
+    }
+    write(provider, before, after);
+    return {'ok': true, 'undo': keep(provider, before, after, true)};
+  }
 
   void _enforce(List<ActionCheck> checks) {
     if (checks.isEmpty) return;
@@ -4736,6 +4951,9 @@ final class CoreService {
       return edits.repairPreview(params, preview);
     }
     if (method == 'connections.forget_preview') return _forgetServer(params);
+    if (method.startsWith('models.choose_')) {
+      return _chooseRoute(method, params);
+    }
     if (method == 'connections.author_preview') {
       return edits.authorPreview(params, reads.catalog.scan());
     }
