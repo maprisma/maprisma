@@ -8,6 +8,7 @@ Providers are the cloud services the agents talk to and the local runtimes
 (llama.cpp, Ollama, …). Pure data: map_view.py draws it, tests check it.
 """
 
+import os
 import re
 from dataclasses import dataclass, field
 
@@ -198,11 +199,10 @@ def signed_in(command: str) -> bool:
     tell: signed in."""
     import agent_status
     access = agent_status.access_table().get(command)
-    if access is None or not access.files and not access.env \
-            or agent_status.credentials_present(access, agent_status.HOME):
+    if access is None or not access.files and not access.env or any(os.environ.get(n) for n in access.env):
         return True
-    import agent_details                     # a keyring store or a moved home only its program can tell
-    return agent_details.plan_limits_signed_in(command)
+    import agent_details      # the files where it keeps them (a moved home), or a keyring its program tells
+    return agent_details.plan_limits_signed_in(command, agent_status.HOME)
 
 
 def provider_name(raw: str) -> str:

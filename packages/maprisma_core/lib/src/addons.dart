@@ -492,11 +492,15 @@ Map<String, dynamic> withNewerFacts(
   }
   Map table(Map<String, dynamic> f, String key) =>
       f[key] is Map ? f[key] as Map : const {};
-  // security.sandbox / security.asks, access.logout
+  // security.sandbox / security.asks, access.logout; plan_limits.home_env
+  // and .store, newer than its rpc and argv: an add-on signed with the
+  // earlier table gets them from the app's own adapter.
   for (final (group, key) in [
     ('security', 'sandbox'),
     ('security', 'asks'),
     ('access', 'logout'),
+    ('plan_limits', 'home_env'),
+    ('plan_limits', 'store'),
   ]) {
     final mine = table(merged, group), theirs = table(own, group);
     if (_emptyFact(mine[key]) && !_emptyFact(theirs[key])) {

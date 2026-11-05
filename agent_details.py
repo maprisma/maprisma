@@ -312,7 +312,8 @@ def apply_usage(details: Details, record: dict, written: dt.datetime | None = No
 def usage_is_stale(command: str, usage_dir: Path = USAGE_DIR, root: Path = HOME) -> bool:
     """True when Omarchy collects usage for this agent and its record is old (or missing), or older
     than the agent's sign-in (a new sign-in, a changed plan: the record still tells the old one)."""
-    if not has_usage_collector(command):
+    native = not has_usage_collector(command)
+    if native:
         if plan_limits_rpc(command, root) is None:
             return False
         usage_dir = native_usage_dir()       # asked of the agent itself (native_usage)
@@ -320,6 +321,8 @@ def usage_is_stale(command: str, usage_dir: Path = USAGE_DIR, root: Path = HOME)
         written = (usage_dir / f"{command}.json").stat().st_mtime
     except OSError:
         return True
+    if native and usage_record(command, usage_dir).get("home") != usage_home(command, root):
+        return True                          # another home's: not this one's limits
     if dt.datetime.now().timestamp() - written > USAGE_MAX_AGE:
         return True
     return signed_in_since(command, written, root)
@@ -362,16 +365,55 @@ def access_paths(command: str, root: Path | None = None, environ=None) -> list:
     return [Path(moved) / Path(name).name if moved.startswith("/") else root / name for name in names]
 
 
+def usage_home(command: str, root: Path | None = None, environ=None) -> str:
+    """The agent's effective home (plan_limits.home_env, CODEX_HOME, or the home folder) as a digest:
+    Maprisma's own usage record keeps the one it was asked for, so another home's limits never show."""
+    import hashlib
+    import harnesses
+    environ = os.environ if environ is None else environ
+    root = HOME if root is None else root
+    harness = harnesses.get(command)
+    var = harness.plan_limits[2] if harness is not None and len(harness.plan_limits) > 2 else ""
+    moved = environ.get(var, "") if var else ""
+    return hashlib.sha256(f"{root}\n{moved if moved.startswith('/') else ''}".encode()).hexdigest()[:16]
+
+
+def program_answer(command: str, root: Path | None = None, environ=None) -> bool | None:
+    """What the agent's own program last said for this home (Maprisma's own record): True (its limits
+    came), False (it named no sign-in) or None (not asked yet, no answer, or Omarchy's collector asks)."""
+    if has_usage_collector(command):
+        return None
+    record = usage_record(command, native_usage_dir())
+    said = record.get("signedIn")
+    return said if record.get("home") == usage_home(command, root, environ) and isinstance(said, bool) else None
+
+
+def plan_limits_probe(command: str, root: Path | None = None, environ=None) -> bool:
+    """Whether the agent's own program may be asked for its plan limits: one of its access files is
+    there, or its store keeps the sign-in elsewhere (also after it said nobody is signed in: a new
+    sign-in in a keyring is found so)."""
+    environ = os.environ if environ is None else environ
+    root = HOME if root is None else root
+    return any(path.is_file() for path in access_paths(command, root, environ)) \
+        or _store_elsewhere(command, root, environ)
+
+
 def plan_limits_signed_in(command: str, root: Path | None = None, environ=None) -> bool:
-    """Whether the agent's own program can answer for a sign-in ([plan_limits]): one of its access
+    """Whether the agent is signed in as far as this PC can tell ([plan_limits]): one of its access
     files is there (only that, never what is in it; access_paths), or its store setting (plain
     configuration, plan_limits.store: Codex's cli_auth_credentials_store) keeps the sign-in outside
-    the files, a keyring, which only the program can tell."""
-    import harnesses
+    the files, a keyring, and its own program did not say last time (program_answer) that nobody is
+    signed in. Not asked yet or no answer: signed in, as before. The map's line, the battery and the
+    record's validity go by this."""
     environ = os.environ if environ is None else environ
     root = HOME if root is None else root
     if any(path.is_file() for path in access_paths(command, root, environ)):
         return True
+    return _store_elsewhere(command, root, environ) and program_answer(command, root, environ) is not False
+
+
+def _store_elsewhere(command: str, root: Path, environ) -> bool:
+    import harnesses
     harness = harnesses.get(command)
     facts = harness.plan_limits if harness is not None else ()
     if len(facts) < 4 or not facts[3]:
@@ -400,7 +442,7 @@ def plan_limits_rpc(command: str, root: Path = HOME, environ=None) -> tuple | No
     harness = harnesses.get(command)
     if harness is None or not harness.plan_limits or has_usage_collector(command):
         return None
-    if not plan_limits_signed_in(command, root, environ):
+    if not plan_limits_probe(command, root, environ):
         return None
     specs = [s for s in (agents.wrapper_spec(command), harness.spec,
                          *(w.spec for w in harness.install if w.kind == "mise")) if s]
@@ -419,10 +461,20 @@ def refresh_usage(command: str) -> bool:
 
 def native_usage(command: str, rpc: str, argv, program: str, environ=None) -> bool:
     """Ask the agent's own program for its plan limits and keep the answer as its usage record."""
-    record = ask_plan_limits(rpc, list(argv), dict(os.environ if environ is None else environ), program=program)
-    if record is None:
-        return False
+    environ = os.environ if environ is None else environ
+    record = ask_plan_limits(rpc, list(argv), dict(environ), program=program)
+    home = usage_home(command, HOME, environ)   # the home it was asked for: its record is that home's only
     folder = native_usage_dir()
+    if record is None:
+        # No answer: signed in or not is unknown now; an earlier "signed out" of this home goes.
+        old = usage_record(command, folder)
+        if old.get("home") != home or old.get("signedIn") is not False:
+            return False
+        record = {k: v for k, v in old.items() if k != "signedIn"}
+        answered = False
+    else:
+        record["home"] = home
+        answered = True
     try:
         folder.mkdir(parents=True, exist_ok=True)
         temporary = folder / f".{command}.json.tmp"
@@ -430,7 +482,7 @@ def native_usage(command: str, rpc: str, argv, program: str, environ=None) -> bo
         temporary.replace(folder / f"{command}.json")
     except OSError:
         return False
-    return True
+    return answered
 
 
 LIMIT_RPCS = ("codex-app-server",)
@@ -505,6 +557,7 @@ def ask_plan_limits(rpc: str, argv: list, environ: dict, answer: float = 8, tota
             if "auth" not in str(error.get("message") or "").lower():
                 return None
             record["usageStatusText"] = "Waiting for auth"
+            record["signedIn"] = False          # its own answer: nobody signed in here
             return record
         result = reply.get("result") if isinstance(reply.get("result"), dict) else {}
         limits = result.get("rateLimits") if isinstance(result.get("rateLimits"), dict) else {}
@@ -517,6 +570,7 @@ def ask_plan_limits(rpc: str, argv: list, environ: dict, answer: float = 8, tota
                 pass
         record["tierLabel"] = plan
         record["ready"] = True
+        record["signedIn"] = True               # its limits came: signed in
         for window in (limits.get("primary"), limits.get("secondary")):
             entry = _rate_window(window)
             if entry:
@@ -792,8 +846,8 @@ def details_for(command: str, usage_dir: Path = USAGE_DIR) -> Details:
     if not record and usage_dir == USAGE_DIR and not has_usage_collector(command):
         folder = native_usage_dir()
         record = usage_record(command, folder)   # asked of the agent itself (native_usage)
-        if record and not plan_limits_signed_in(command):
-            record = {}        # signed out since: the old account's plan and limits are not this PC's now
+        if record and (record.get("home") != usage_home(command) or not plan_limits_signed_in(command)):
+            record = {}        # signed out since, or another home's: not this PC's account now
     apply_usage(details, record, record_written(folder / f"{command}.json"))
     if not details.limits:
         # The agent's own store (an adapter's or an extension's limits() fact): plan and limits.

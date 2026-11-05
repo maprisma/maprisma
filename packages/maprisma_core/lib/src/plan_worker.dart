@@ -826,14 +826,16 @@ Future<int> runWorker(List<String> args) async {
       final params = request['params'] as Map;
       final command = params['command'];
       final rpc = params['rpc'], argv = params['argv'];
-      final program = params['program'];
+      final program = params['program'], home = params['home'];
       final env = AppIdentity().environment;
       // The installed program the core found (AgentCatalog.realProgram),
       // checked again here: never a launcher that installs or updates it.
       if (command is! String ||
           !(params.length == 1 ||
-              params.length == 4 &&
+              params.length == 5 &&
                   rpc is String &&
+                  home is String &&
+                  RegExp(r'^[0-9a-f]{16}$').hasMatch(home) &&
                   argv is List &&
                   Adapter.configureOk(argv, command) &&
                   program is String &&
@@ -854,6 +856,7 @@ Future<int> runWorker(List<String> args) async {
             rpc: rpc as String?,
             argv: argv == null ? null : [for (final a in argv as List) '$a'],
             program: program as String?,
+            home: home as String?,
           ),
         },
       });

@@ -41,9 +41,10 @@ String graphModelKey(String model) {
 final class MapGraph {
   MapGraph(this.files, this.i18n);
 
-  /// A sign-in that only the agent's own program can tell (a keyring store,
-  /// a moved home: DetailReaders.limitsSignedIn), beside [signedIn]'s files
-  /// and keys.
+  /// The agent's sign-in as its battery sees it (DetailReaders.limitsSignedIn):
+  /// its access files where it keeps them (a moved home, plan_limits.home_env)
+  /// or, in a keyring, what its own program last said. Beside the keys, this
+  /// is [signedIn]'s one rule; without it, the files in the home folder.
   bool Function(Adapter adapter)? programSignIn;
 
   /// Why an agent keeps a skill folder that nothing here can take away.
@@ -115,20 +116,26 @@ final class MapGraph {
   }
 
   /// An agent's sign-in to its own online provider is there: a key in the
-  /// environment or a sign-in file (a stat, never a read). An adapter that
-  /// names neither sign-in files nor keys cannot tell: signed in.
+  /// environment or a sign-in file (a stat, never a read) where the agent
+  /// keeps it ([programSignIn]: with CODEX_HOME set, ~/.codex/auth.json is
+  /// not it). An adapter that names neither sign-in files nor keys cannot
+  /// tell: signed in.
   bool signedIn(AgentRecord agent) {
     final access = agent.adapter.table('access');
     if ((access['files'] as List? ?? const []).isEmpty &&
         (access['env'] as List? ?? const []).isEmpty) {
       return true;
     }
-    return credentialsPresent(
-          access,
-          files.identity.home,
-          files.identity.environment,
-        ) ||
-        programSignIn?.call(agent.adapter) == true;
+    final keys = {'env': access['env'] ?? const []};
+    if (credentialsPresent(keys, '', files.identity.environment)) return true;
+    final program = programSignIn;
+    return program != null
+        ? program(agent.adapter)
+        : credentialsPresent(
+            access,
+            files.identity.home,
+            files.identity.environment,
+          );
   }
 
   String providerName(String raw) =>

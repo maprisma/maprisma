@@ -191,6 +191,63 @@ sleep 60
             self.assertIsNotNone(ad.plan_limits_rpc("codex", self.home))
             self.assertTrue(ad.signed_in_since("codex", 0, self.home))
 
+    def fake_codex(self, reply):
+        """A `codex app-server` answering account/rateLimits/read with `reply`, or ending at once."""
+        body = "#!/bin/sh\nexit 0\n" if reply is None else (
+            "#!/bin/sh\nread -r line\nprintf '{\"id\":1,\"result\":{}}\\n'\nread -r line\nread -r line\n"
+            f"printf '%s\\n' '{{\"id\":2,{reply}}}'\n")
+        path = self.write(".local/bin/codex", body)
+        path.chmod(0o755)
+        return path
+
+    LIMITS = '"result":{"rateLimits":{"planType":"plus","primary":{"usedPercent":25,"windowDurationMins":300}}}'
+    AUTH_FAILURE = '"error":{"code":-32600,"message":"Not authenticated"}'
+
+    def test_a_keyring_sign_in_is_what_codex_said(self):
+        """Review 063 round 3 #10: a keyring store only means Codex may be asked; its answer tells."""
+        env = {"HOME": str(self.home), "PATH": f"{self.home}/.local/bin:/usr/bin:/bin",
+               "XDG_STATE_HOME": str(self.home / "state")}
+        self.write(".codex/config.toml", 'cli_auth_credentials_store = "keyring"\n')
+        with mock.patch.object(ad, "has_usage_collector", return_value=False), \
+                mock.patch.object(ad, "HOME", self.home), mock.patch.dict(os.environ, env, clear=False):
+            os.environ.pop("CODEX_HOME", None)
+            self.assertTrue(ad.plan_limits_signed_in("codex"))                  # never asked: as before
+            self.assertIsNone(ad.program_answer("codex"))
+            self.fake_codex(self.AUTH_FAILURE)
+            self.assertTrue(ad.native_usage("codex", *ad.plan_limits_rpc("codex", self.home), environ=env))
+            self.assertIs(ad.program_answer("codex"), False)
+            self.assertFalse(ad.plan_limits_signed_in("codex"))                 # Codex said: nobody
+            self.assertIsNotNone(ad.plan_limits_rpc("codex", self.home))        # but asked again
+            self.fake_codex(None)                                               # no answer: unknown
+            self.assertFalse(ad.native_usage("codex", *ad.plan_limits_rpc("codex", self.home), environ=env))
+            self.assertIsNone(ad.program_answer("codex"))
+            self.assertTrue(ad.plan_limits_signed_in("codex"))
+            self.fake_codex(self.LIMITS)
+            self.assertTrue(ad.native_usage("codex", *ad.plan_limits_rpc("codex", self.home), environ=env))
+            self.assertIs(ad.program_answer("codex"), True)
+            self.assertEqual(ad.details_for("codex").plan, "Plus")
+
+    def test_another_codex_home_never_shows_the_first_ones_limits(self):
+        """Review 063 round 3 #12: Maprisma's own record is the home's it was asked for."""
+        first, second = self.home / "home-a", self.home / "home-b"
+        first.mkdir()
+        second.mkdir()
+        (first / "auth.json").write_text("x")
+        (second / "auth.json").write_text("x")
+        os.utime(second / "auth.json", (1, 1))                                 # signed in long before
+        env = {"HOME": str(self.home), "PATH": f"{self.home}/.local/bin:/usr/bin:/bin",
+               "XDG_STATE_HOME": str(self.home / "state"), "CODEX_HOME": str(first)}
+        self.fake_codex(self.LIMITS)
+        with mock.patch.object(ad, "has_usage_collector", return_value=False), \
+                mock.patch.object(ad, "HOME", self.home), mock.patch.dict(os.environ, env, clear=False):
+            self.assertTrue(ad.native_usage("codex", *ad.plan_limits_rpc("codex", self.home), environ=env))
+            self.assertEqual(len(ad.details_for("codex").limits), 1)
+            self.assertFalse(ad.usage_is_stale("codex", root=self.home))
+            os.environ["CODEX_HOME"] = str(second)
+            self.assertNotEqual(ad.usage_home("codex"), ad.usage_home("codex", environ=env))
+            self.assertEqual(ad.details_for("codex").limits, [])
+            self.assertTrue(ad.usage_is_stale("codex", root=self.home))
+
     def test_limits_measured_and_kept_stale(self):
         usage = self.home / "usage"
         usage.mkdir()

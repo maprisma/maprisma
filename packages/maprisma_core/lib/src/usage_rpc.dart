@@ -7,8 +7,10 @@ import 'package:path/path.dart' as p;
 /// An agent's plan limits asked of its own program where no Omarchy
 /// collector is (an adapter's `[plan_limits]`, adapter_data.LIMIT_RPCS):
 /// the record Omarchy's collector would write (limits with label, percent
-/// and resetsAt; tierLabel), or null when it could not be asked. No prompt
-/// is sent to a model and Maprisma reads no credential: the agent's program
+/// and resetsAt; tierLabel) with `signedIn`, what the program said: true
+/// when its limits came, false when it named no sign-in (an auth error);
+/// the whole record is null when it could not be asked or did not answer
+/// (signed in or not: unknown). No prompt is sent to a model and Maprisma reads no credential: the agent's program
 /// answers for its own sign-in. Each answer within [answer], the whole
 /// exchange within [total]; the program is killed afterwards. [program] is
 /// the agent's installed program (AgentCatalog.realProgram, never a
@@ -91,7 +93,9 @@ Future<Map<String, dynamic>?> _codexAppServer(
     if (!'${error['message'] ?? ''}'.toLowerCase().contains('auth')) {
       return null;
     }
-    return record..['usageStatusText'] = 'Waiting for auth';
+    return record
+      ..['usageStatusText'] = 'Waiting for auth'
+      ..['signedIn'] = false; // its own answer: nobody signed in here
   }
   final result = reply['result'] is Map ? reply['result'] as Map : const {};
   final limits = result['rateLimits'] is Map
@@ -118,6 +122,7 @@ Future<Map<String, dynamic>?> _codexAppServer(
   }
   record['tierLabel'] = plan;
   record['ready'] = true;
+  record['signedIn'] = true; // its limits came: signed in
   for (final window in [limits['primary'], limits['secondary']]) {
     final entry = _window(window);
     if (entry != null) (record['limits'] as List).add(entry);
