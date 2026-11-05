@@ -84,7 +84,8 @@ class FlutterConnectionsTest(unittest.TestCase):
                     self.controller.preview({'kind': 'mcp', 'command': command, 'item': item, 'remove': False})
             builder.assert_not_called()
             result = self.controller.preview({'kind': 'mcp', 'command': 'test-agent', 'item': 'known-server', 'remove': False})
-            builder.assert_called_once_with('test-agent', 'known-server', sources=['source-agent'], remove=False)
+            builder.assert_called_once_with('test-agent', 'known-server', sources=['source-agent'], remove=False,
+                                        library_key=None)
             self.assertEqual(result['command'], 'test-agent')
 
     def test_commands_and_oversized_plans_are_not_accepted_by_configuration_bridge(self):

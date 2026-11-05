@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'line_diff.dart' show pySplitlines;
-import 'mcp_plans.dart' show checkEntry;
+import 'mcp_plans.dart' show checkEntry, libraryKeyPattern;
 import 'model_hub.dart' show boundedOutput;
 import 'py_values.dart';
 
@@ -15,7 +15,10 @@ import 'py_values.dart';
 /// - streamable HTTP: JSON-RPC posts with the entry's headers (plain JSON or
 ///   an event-stream answer), through curl with the headers on its stdin.
 /// Legacy SSE servers are not asked. Answers are kept in
-/// ~/.cache/maprisma/mcp-tools/NAME.json, as the reference keeps them.
+/// ~/.cache/maprisma/mcp-tools/ID.json, as the reference keeps them: ID is the
+/// map's id (the name, or name~2 for another server of that name), and the
+/// answer carries the digest of the server it came from (mcpIdentityHash), so
+/// another server under that id never shows it.
 
 const toolsTimeout = Duration(seconds: 90); // npx/uvx may download it first
 const maxLine = 4 * 1024 * 1024;
@@ -431,17 +434,25 @@ Future<Map<String, dynamic>> askTools(
 }
 
 String toolsCacheFile(String home, String name) {
-  if (!_nameRe.hasMatch(name)) throw FormatException(name);
+  if (!libraryKeyPattern.hasMatch(name)) throw FormatException(name);
   return '$home/.cache/maprisma/mcp-tools/$name.json';
 }
 
-/// mcp_tools.cached.
-Map<String, dynamic>? cachedTools(String home, String name) {
+/// mcp_tools.cached. With [identity], only an answer of that server (one kept
+/// before answers carried it is taken as it is).
+Map<String, dynamic>? cachedTools(
+  String home,
+  String name, {
+  String? identity,
+}) {
   try {
     final file = File(toolsCacheFile(home, name));
     if (file.lengthSync() > 8 * maxLine) return null;
     final data = jsonDecode(file.readAsStringSync());
-    return data is Map<String, dynamic> ? data : null;
+    if (data is! Map<String, dynamic>) return null;
+    final kept = data.remove('identity');
+    if (identity != null && kept is String && kept != identity) return null;
+    return data;
   } on Object {
     return null;
   }
@@ -464,10 +475,11 @@ String askErrorText(Object error) => switch (error) {
 };
 
 /// mcp_tools.ask_and_keep: ask, and keep the answer (or the error) with the
-/// time. Never throws for an odd server.
+/// time, and with [identity] when given. Never throws for an odd server.
 Future<Map<String, dynamic>> askAndKeep(
   String name,
   Map entry, {
+  String identity = '',
   required String home,
   required Map<String, String> environment,
   required void Function(String path, List<int> bytes) write,
@@ -496,7 +508,13 @@ Future<Map<String, dynamic>> askAndKeep(
   try {
     write(
       toolsCacheFile(home, name),
-      utf8.encode(pyJsonDumps(result, indent: 1, ensureAscii: false)),
+      utf8.encode(
+        pyJsonDumps(
+          {...result, if (identity.isNotEmpty) 'identity': identity},
+          indent: 1,
+          ensureAscii: false,
+        ),
+      ),
     );
   } on Object {
     // Not kept: the answer is still shown.

@@ -51,6 +51,8 @@ class McpServer:
     target: str = ""         # command name / package, or the URL's host
     agents: list = field(default_factory=list)
     id: str = ""             # the map's id: the name, or name~2 for another server of that name
+    identity: str = field(default="", repr=False, compare=False)   # mcp_ctl.identity_hash, not shown
+    library: str = field(default="", repr=False, compare=False)    # its key in mcp_library, not shown
 
     def __post_init__(self):
         self.id = self.id or self.name
@@ -590,7 +592,8 @@ def server_target(entry: dict) -> tuple[str, str]:
     return "command", name[:80]
 
 
-def servers_in(mapping) -> list[tuple[str, str, str]]:
+def servers_in(mapping) -> list[tuple[str, str, str, str]]:
+    """(name, kind, short target to show, mcp_ctl.identity_hash) of each server in use."""
     found = []
     if isinstance(mapping, dict):
         for name, entry in list(mapping.items())[:100]:
@@ -598,11 +601,11 @@ def servers_in(mapping) -> list[tuple[str, str, str]]:
                 if entry.get("disabled") is True or entry.get("enabled") is False:
                     continue
                 kind, target = server_target(entry)
-                found.append((clean(name), kind, target))
+                found.append((clean(name), kind, target, mcp_ctl.identity_hash(entry)))
     return found
 
 
-def mcp_for(command: str) -> list[tuple[str, str, str]]:
+def mcp_for(command: str) -> list[tuple[str, str, str, str]]:
     found = servers_in(mcp_ctl.raw_entries(command))
     harness = harnesses.get(command)
     spec = harness.mcp if harness is not None else None
@@ -611,7 +614,7 @@ def mcp_for(command: str) -> list[tuple[str, str, str]]:
         text = ad._read(Path(os.path.expanduser(spec.path))) or ""
         block = re.search(rf"^{re.escape(spec.key)}:[ \t]*\n((?:[ \t]+.*\n?|\n)+)", text, re.MULTILINE)
         names = re.findall(r"^  ([A-Za-z0-9_.-]{1,64}):", block.group(1), re.MULTILINE) if block else []
-        return [(n, "", "") for n in names[:100]]
+        return [(n, "", "", mcp_ctl.identity_hash(None)) for n in names[:100]]
     return found
 
 
@@ -660,12 +663,14 @@ def skills_in(folder: Path, depth: int = 0) -> list[tuple[Path, Path]]:
 
 # --- all together -----------------------------------------------------------------------
 
-def add_server(servers: dict, name: str, kind: str, target: str) -> McpServer:
-    """The server of that name, kind and target; another of the same name gets the id name~2, …."""
+def add_server(servers: dict, name: str, kind: str, target: str, identity: str = "") -> McpServer:
+    """The server of that name and identity (mcp_ctl.identity_hash: its transport and
+    whole address, or its command and arguments); another of the same name gets the
+    id name~2, …. kind and target only show it."""
     ident, n = name, 2
-    while ident in servers and (servers[ident].kind, servers[ident].target) != (kind, target):
+    while ident in servers and servers[ident].identity != identity:
         ident, n = f"{name}~{n}", n + 1
-    return servers.setdefault(ident, McpServer(name, kind, target, id=ident))
+    return servers.setdefault(ident, McpServer(name, kind, target, id=ident, identity=identity))
 
 
 def reused_folders(runtimes, folders) -> list:
@@ -714,8 +719,8 @@ def collect(agent_list, *, remember: bool = True, model_folders=()) -> Inventory
                 if provider.active and command not in rt.active_agents:
                     rt.active_agents.append(command)
         names = []
-        for name, kind, target in mcp_for(command):
-            server = add_server(servers, name, kind, target)
+        for name, kind, target, identity in mcp_for(command):
+            server = add_server(servers, name, kind, target, identity)
             if command not in server.agents:
                 server.agents.append(command)
             names.append(name)
@@ -739,30 +744,36 @@ def collect(agent_list, *, remember: bool = True, model_folders=()) -> Inventory
             inv.agent_tools[command] = [clean(t) for t in tools[:50] if clean(t)]
     # Local LLMs with MCP servers of their own (their chat uses them, e.g. LM Studio).
     for key in mcp_ctl.llm_clients():
-        for name, kind, target in servers_in(mcp_ctl.raw_entries(key)):
-            server = add_server(servers, name, kind, target)
+        for name, kind, target, identity in servers_in(mcp_ctl.raw_entries(key)):
+            server = add_server(servers, name, kind, target, identity)
             if key not in server.agents:
                 server.agents.append(key)
-    # The servers Maprisma knows: remember what is in use, list the rest too (no agents).
+    # The servers Maprisma knows: remember what is in use (every server of a name),
+    # list the rest too (no agents).
     import mcp_library
     used = {}
-    for name, server in servers.items():
-        if server.id != server.name:
-            continue                      # another server of that name: the library keeps the first
-        _source, entry = mcp_ctl.entry_from(server.agents, name)
-        used[name] = entry
+    for ident, server in servers.items():
+        _source, entry = mcp_ctl.entry_from(server.agents, server.name)
+        used[ident] = entry
     if remember:
         try:
             mcp_library.remember(used)
         except OSError:
             pass
-    for name, entry in mcp_library.load().items():
-        if name not in servers:
-            if entry["transport"] == "stdio":
-                kind, target = server_target({"command": entry["command"], "args": entry["args"]})
-            else:
-                kind, target = server_target({"url": entry["url"]})
-            servers[name] = McpServer(name, kind, target)
+    for key, entry in mcp_library.load().items():
+        name, identity = mcp_ctl.base_name(key), mcp_ctl.identity_hash(entry)
+        same = next((s for s in servers.values() if s.name == name and s.identity == identity), None)
+        if same is not None:              # in use, or listed twice: the server it is kept for
+            same.library = same.library or key
+            continue
+        ident, n = key, 2
+        while ident in servers:
+            ident, n = f"{name}~{n}", n + 1
+        if entry["transport"] == "stdio":
+            kind, target = server_target({"command": entry["command"], "args": entry["args"]})
+        else:
+            kind, target = server_target({"url": entry["url"]})
+        servers[ident] = McpServer(name, kind, target, id=ident, identity=identity, library=key)
     inv.mcp = sorted(servers.values(), key=lambda s: s.id.lower())
     inv.model_folders = reused_folders(inv.runtimes, model_folders)
     inv.skill_sets = sorted(sets.values(), key=lambda s: (-len(s.agents), s.path))

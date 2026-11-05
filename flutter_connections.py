@@ -32,7 +32,7 @@ class Connections:
             'agents': [{'command': a.command, 'name': a.name, 'provider': a.command in connect.SUPPORTED,
                         'mcp': mcp_ctl.supported(a.command),
                         'skills': bool(skills_ctl.own_dir(a.command))} for a in catalog if a.installed],
-            'mcp': [{'id': s.name, 'name': s.name, 'kind': s.kind, 'target': s.target,
+            'mcp': [{'id': s.id, 'name': s.name, 'kind': s.kind, 'target': s.target,
                      'agents': s.agents} for s in inv.mcp],
             'skills': [{'id': s.path, 'name': s.path, 'skills': s.skills, 'agents': s.agents}
                        for s in inv.skill_sets],
@@ -68,10 +68,12 @@ class Connections:
             plan = connect.plan(command, rt, '' if params['remove'] else model,
                                 False if params['remove'] else params['use_now'], remove=params['remove'])
         elif params['kind'] == 'mcp':
-            server = next((item for item in inv.mcp if item.name == params['item']), None)
+            # The map's id: the name, or name~2 for another server of that name.
+            server = next((item for item in inv.mcp if item.id == params['item']), None)
             if server is None or not mcp_ctl.supported(command):
                 raise ValueError('MCP server unavailable')
-            plan = mcp_ctl.plan(command, server.name, sources=server.agents, remove=params['remove'])
+            plan = mcp_ctl.plan(command, server.name, sources=server.agents, remove=params['remove'],
+                                library_key=server.library or None)
         else:
             folder = next((item for item in inv.skill_sets if item.path == params['item']), None)
             if folder is None or not skills_ctl.own_dir(command):
@@ -86,12 +88,13 @@ class Connections:
         import mcp_library
         if set(params) != {'name'} or not isinstance(params['name'], str):
             raise ValueError('Invalid request')
-        name = params['name']
+        name = params['name']          # the map's id (name, or name~2): the one known server it is
         inv = inventory.collect(agents.list_agents())
-        if name not in mcp_library.load() or any(s.name == name and s.agents for s in inv.mcp):
+        server = next((s for s in inv.mcp if s.id == name), None)
+        if server is None or not server.library or server.library not in mcp_library.load() or server.agents:
             raise ValueError('MCP server unavailable')
-        change = mcp_library.change(name, None)
-        result = self.keep(connect.Plan('', '', name, changes=[change]))
+        change = mcp_library.change(server.library, None)
+        result = self.keep(connect.Plan('', '', server.library, changes=[change]))
         result.update({'kind': 'mcp', 'item': name, 'remove': True, 'focus': []})
         return result
 

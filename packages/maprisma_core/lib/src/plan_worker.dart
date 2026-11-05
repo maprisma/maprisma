@@ -28,6 +28,7 @@ import 'desktop.dart' show detectDesktop;
 import 'model_guard.dart';
 import 'mcp_catalog.dart';
 import 'mcp_tools.dart';
+import 'mcp_plans.dart' show mcpIdentityHash;
 import 'skills_web.dart' as skills_web;
 import 'llm_tuning.dart';
 import 'health_report.dart' show pcInfo;
@@ -1126,6 +1127,7 @@ Future<int> runWorker(List<String> args) async {
         result = await askAndKeep(
           request['name'] as String,
           entry,
+          identity: mcpIdentityHash(entry),
           home: identity.home,
           environment: identity.environment,
           write: posix.atomicWrite,

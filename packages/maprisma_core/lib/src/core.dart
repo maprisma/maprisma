@@ -690,7 +690,8 @@ final class CoreService {
           .where((m) => m['id'] == params['name'])
           .firstOrNull;
       if (server == null) throw const FormatException('Unknown MCP server');
-      final name = server['name'] as String;
+      final id = server['id'] as String, name = server['name'] as String;
+      final known = mcp.library()[inventory.mcpLibrary[id] ?? id];
       final users = [
         for (final a in server['agents'] as List? ?? const []) '$a',
       ];
@@ -713,7 +714,7 @@ final class CoreService {
             ],
         ];
         final entry = normalEntry(
-          command == null ? mcp.library()[name] : mcp.rawEntries(command)[name],
+          command == null ? known : mcp.rawEntries(command)[name],
         );
         if (entry == null) {
           return [
@@ -777,7 +778,7 @@ final class CoreService {
               mcp.supported(a.command))
             a.name,
       ];
-      final cached = cachedTools(identity.home, name);
+      final cached = _variantTools(id, mcpServerEntry(server, inventory));
       return {
         'title': tr('MCP server {0}').replaceAll('{0}', name),
         'intro': tr('An MCP server gives agents tools.'),
@@ -796,7 +797,7 @@ final class CoreService {
           for (final t in (cached?['tools'] as List? ?? const []).cast<Map>())
             ['${t['name']}', '${t['description'] ?? ''}'],
         ],
-        'server': name,
+        'server': id,
       };
     }
     final path = params['path'] as String;
@@ -2150,26 +2151,26 @@ final class CoreService {
       );
     }
     if (method == 'mcp.tools_cached' || method == 'mcp.tools') {
-      final name = params['name'];
+      // The map's id: the name, or name~2 for another server of that name.
+      final id = params['name'];
       if (params.length != 1 ||
-          name is! String ||
-          !RegExp(r'^[A-Za-z0-9_.-]{1,64}$').hasMatch(name)) {
+          id is! String ||
+          !libraryKeyPattern.hasMatch(id)) {
         throw const FormatException('Invalid MCP server');
       }
+      final inventory = reads.inventory.collect(
+        reads.catalog.scan(),
+        remember: false,
+      );
+      final server = inventory.mcp.where((s) => s['id'] == id).firstOrNull;
+      // mcp_pages.ask_mcp_tools: the entry as an agent that has that very
+      // server starts it; it may hold keys, so it reaches the worker privately.
+      final entry = server == null ? null : mcpServerEntry(server, inventory);
       if (method == 'mcp.tools_cached') {
-        return {'cached': cachedTools(identity.home, name)};
+        return {'cached': entry == null ? null : _variantTools(id, entry)};
       }
-      // mcp_pages.ask_mcp_tools: the entry as the first agent that has it
-      // starts it; it may hold keys, so it reaches the worker privately.
-      Map<String, dynamic>? entry;
-      for (final agent in reads.catalog.scan()) {
-        if (!agent.installed || !mcp.supported(agent.command)) continue;
-        entry = normalEntry(mcp.rawEntries(agent.command)[name]);
-        if (entry != null) break;
-      }
-      entry ??= normalEntry(mcp.library()[name]);
       if (entry == null) throw const FormatException('Server unavailable');
-      return _askTools({'name': name, 'entry': entry}, 'mcp.tools');
+      return _askTools({'name': id, 'entry': entry}, 'mcp.tools');
     }
     if (method == 'mcp.option_test') {
       if (params.length != 2 ||
@@ -3279,51 +3280,7 @@ final class CoreService {
                 }(),
             ],
           if (column == 'models') ..._moveFacts(),
-          if (column == 'mcp')
-            ...() {
-              final inventory = reads.inventory.collect(agents);
-              final installed = agents.where((a) => a.installed).toList();
-              return {
-                'agents': [
-                  for (final a in installed)
-                    if (mcp.supported(a.command) ||
-                        skills.ownDir(a.command) != null)
-                      {
-                        'command': a.command,
-                        'name': a.name,
-                        'mcp': mcp.supported(a.command),
-                      },
-                ],
-                'mcp': {
-                  for (final server in inventory.mcp)
-                    server['name']: [
-                      for (final a in installed)
-                        if (inventory.agentMcp[a.command]?.contains(
-                              server['name'],
-                            ) ==
-                            true)
-                          a.command,
-                    ],
-                },
-                // Short names: a path of this PC stays here.
-                'skill_paths': {
-                  for (final (i, set) in inventory.skillSets.indexed)
-                    's${i + 1}': set['path'],
-                },
-                'skills': {
-                  for (final (i, set) in inventory.skillSets.indexed)
-                    's${i + 1}': [
-                      for (final a in installed)
-                        if (inventory.agentSkills[a.command]?.contains(
-                                  set['path'],
-                                ) ==
-                                true &&
-                            _skillWay(a.command, set['path'] as String).isEmpty)
-                          a.command,
-                    ],
-                },
-              };
-            }(),
+          if (column == 'mcp') ...smartMcpFacts(agents),
           'runtimes': [
             for (final rt in reads.inventory.collect(agents).runtimes)
               if (rt.installed && _takesDownloads(rt, engines))
@@ -3590,6 +3547,49 @@ final class CoreService {
     };
   }
 
+  /// Ask AI's facts of the MCP column: the agents, each MCP server by the
+  /// map's id (another of one name is name~2) with the agents that use that
+  /// very server, and the skill folders by short ids.
+  Map<String, dynamic> smartMcpFacts(List<AgentRecord> agents) {
+    final inventory = reads.inventory.collect(agents);
+    final installed = agents.where((a) => a.installed).toList();
+    return {
+      'agents': [
+        for (final a in installed)
+          if (mcp.supported(a.command) || skills.ownDir(a.command) != null)
+            {
+              'command': a.command,
+              'name': a.name,
+              'mcp': mcp.supported(a.command),
+            },
+      ],
+      // By the map's id: another server of one name is name~2,
+      // with the agents that use that very server.
+      'mcp': {
+        for (final server in inventory.mcp)
+          server['id']: [
+            for (final a in installed)
+              if ((server['agents'] as List).contains(a.command)) a.command,
+          ],
+      },
+      // Short names: a path of this PC stays here.
+      'skill_paths': {
+        for (final (i, set) in inventory.skillSets.indexed)
+          's${i + 1}': set['path'],
+      },
+      'skills': {
+        for (final (i, set) in inventory.skillSets.indexed)
+          's${i + 1}': [
+            for (final a in installed)
+              if (inventory.agentSkills[a.command]?.contains(set['path']) ==
+                      true &&
+                  _skillWay(a.command, set['path'] as String).isEmpty)
+                a.command,
+          ],
+      },
+    };
+  }
+
   /// map.smart_plan: an approved MCP candidate as the app's normal preview;
   /// the agents and values come from the user, the rest from the checked
   /// proposal.
@@ -3689,17 +3689,22 @@ final class CoreService {
     if (params.length != 1 || name is! String) {
       throw const FormatException('Invalid request');
     }
+    // The map's id (name, or name~2): the one known server it is.
     final servers = mcp.library();
-    final used = reads.inventory
-        .collect(reads.catalog.scan(), remember: false)
-        .mcp
-        .where((s) => s['name'] == name)
-        .any((s) => (s['agents'] as List).isNotEmpty);
-    if (!servers.containsKey(name) || used) {
+    final inventory = reads.inventory.collect(
+      reads.catalog.scan(),
+      remember: false,
+    );
+    final server = inventory.mcp.where((s) => s['id'] == name).firstOrNull;
+    final key = inventory.mcpLibrary[name];
+    if (server == null ||
+        key == null ||
+        !servers.containsKey(key) ||
+        (server['agents'] as List).isNotEmpty) {
       throw const FormatException('MCP server unavailable');
     }
-    final keys = (servers.keys.toList()..remove(name))..sort(pyCompare);
-    final plan = Plan('', '', name);
+    final keys = (servers.keys.toList()..remove(key))..sort(pyCompare);
+    final plan = Plan('', '', key);
     plan.changes.add(
       Change(
         mcp.libraryFile,
@@ -3766,15 +3771,16 @@ final class CoreService {
         }
         continue;
       }
+      // The map's id: another server of the same name is name~2.
       final item = pair['server'] as String;
-      final server = inventory.mcp.where((s) => s['name'] == item).firstOrNull;
+      final server = inventory.mcp.where((s) => s['id'] == item).firstOrNull;
       if (server == null ||
           !mcp.supported(command) ||
           !catalog.any((a) => a.command == command && a.installed)) {
         throw const FormatException('MCP server unavailable');
       }
       builders.add(
-        () => mcp.plan(command, item, [
+        () => mcp.plan(command, server['name'] as String, [
           for (final a in server['agents'] as List) a as String,
         ], remove: true),
       );
@@ -3803,6 +3809,30 @@ final class CoreService {
     final download = (engines[rt.key] as Map?)?['download'];
     return download == 'pull' || download == 'file' && rt.modelsDir.isNotEmpty;
   }
+
+  /// The definition of the map's MCP server [server] (one of
+  /// inventory.mcp): as an agent that has that very server keeps it, else as
+  /// the app's list remembers it.
+  Map<String, dynamic>? mcpServerEntry(
+    Map server,
+    InventorySnapshot inventory,
+  ) {
+    final name = server['name'] as String;
+    for (final agent in server['agents'] as List? ?? const []) {
+      final entry = normalEntry(mcp.rawEntries('$agent')[name]);
+      if (entry != null) return entry;
+    }
+    final key = inventory.mcpLibrary['${server['id']}'];
+    return key == null ? null : normalEntry(mcp.library()[key]);
+  }
+
+  /// The tools last asked of the server [id] with [entry]: never another's.
+  Map<String, dynamic>? _variantTools(String id, Map<String, dynamic>? entry) =>
+      cachedTools(
+        identity.home,
+        id,
+        identity: entry == null ? null : mcpIdentityHash(entry),
+      );
 
   Map<String, dynamic> _askTools(Map<String, dynamic> body, String operation) {
     if (tasks.items.values.any(
@@ -4198,9 +4228,13 @@ final class CoreService {
       if (server == null || !mcp.supported(command)) {
         throw const FormatException('MCP server unavailable');
       }
-      plan = mcp.plan(command, server['name'] as String, [
-        for (final a in server['agents'] as List) a as String,
-      ], remove: params['remove'] as bool);
+      plan = mcp.plan(
+        command,
+        server['name'] as String,
+        [for (final a in server['agents'] as List) a as String],
+        remove: params['remove'] as bool,
+        libraryKey: inventory.mcpLibrary[server['id']],
+      );
     } else {
       final folder = inventory.skillSets
           .where((s) => s['path'] == params['item'])
@@ -4395,9 +4429,11 @@ final class CoreService {
           };
   }
 
-  /// One spelling per item, for rules and requests alike.
+  /// One spelling per item, for rules and requests alike. An MCP server is
+  /// its configuration name: the map's mcp:fs~2 is another server named fs.
   String _ruleItem(String category, String item) => switch (category) {
     'models' => item.toLowerCase(),
+    'mcp' => mcpBaseName(item),
     'skills' when item.isNotEmpty => config.tilde(skills.expand(item)),
     _ => item,
   };

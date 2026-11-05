@@ -61,6 +61,19 @@ class ToolsTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             mcp_tools.cache_file("../x")
 
+    def test_kept_per_server_of_one_name(self):
+        """063e #3: filesystem~2's answer is kept under its id, with its server's digest."""
+        import mcp_ctl
+        broken = dict(self.entry, args=["-c", "import sys; sys.exit(0)"])
+        result = mcp_tools.ask_and_keep("filesystem~2", broken, identity=mcp_ctl.identity_hash(broken))
+        self.assertNotIn("identity", result)
+        self.assertEqual(mcp_tools.cached("filesystem~2", mcp_ctl.identity_hash(broken))["status"], "failed")
+        self.assertIsNone(mcp_tools.cached("filesystem~2", mcp_ctl.identity_hash(self.entry)))
+        self.assertNotIn("identity", mcp_tools.cached("filesystem~2"))
+        # Env and headers do not change which server it is; arguments do.
+        self.assertEqual(mcp_ctl.identity_hash(dict(broken, env={"K": "x"})), mcp_ctl.identity_hash(broken))
+        self.assertNotEqual(mcp_ctl.identity_hash(self.entry), mcp_ctl.identity_hash(broken))
+
 
 if __name__ == "__main__":
     unittest.main()

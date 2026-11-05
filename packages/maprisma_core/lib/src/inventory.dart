@@ -3,6 +3,7 @@ import 'package:path/path.dart' as p;
 import 'adapters.dart';
 import 'dsh_profile.dart';
 import 'local_llm.dart';
+import 'mcp_plans.dart' show libraryKeyPattern, mcpBaseName, mcpIdentityHash;
 import 'skill_plans.dart' show hermesSkillDirs;
 import 'agent_catalog.dart';
 import 'agent_details.dart';
@@ -22,6 +23,10 @@ final class InventorySnapshot {
   final agentMcp = <String, List<String>>{},
       agentSkills = <String, List<String>>{},
       agentTools = <String, List<String>>{};
+
+  /// Not shown: each MCP server's id → its key in the app's list of known
+  /// servers (name or name~N), where it is remembered.
+  final mcpLibrary = <String, String>{};
   Map<String, dynamic> toJson() => {
     'runtimes': runtimes.map((r) => r.toJson()).toList(),
     'mcp': mcp,
@@ -135,8 +140,9 @@ final class InventoryReader {
     return ('command', boundedText(name, 80));
   }
 
-  List<(String, String, String)> servers(Map mapping) {
-    final out = <(String, String, String)>[];
+  /// (name, kind, short target to show, [mcpIdentityHash]) of each server in use.
+  List<(String, String, String, String)> servers(Map mapping) {
+    final out = <(String, String, String, String)>[];
     for (final e in mapping.entries.take(100)) {
       if (e.value is! Map ||
           cleanName(e.key).isEmpty ||
@@ -145,7 +151,7 @@ final class InventoryReader {
         continue;
       }
       final (kind, target) = serverTarget(e.value as Map);
-      out.add((cleanName(e.key), kind, target));
+      out.add((cleanName(e.key), kind, target, mcpIdentityHash(e.value)));
     }
     return out;
   }
@@ -245,21 +251,22 @@ final class InventoryReader {
     final inv = InventorySnapshot();
     inv.runtimes.addAll(providers.scan());
     // Keyed by id: a server's name, or for another server of the same name
-    // (another command or address, in another agent) name~2, name~3, … ("~"
-    // is no part of a name): two servers, two boxes, one label.
+    // (another command, arguments, address or transport, in another agent)
+    // name~2, name~3, … ("~" is no part of a name): two servers, two boxes,
+    // one label. Told apart by [mcpIdentityHash], shown by their short target.
     final serversByName = <String, Map<String, dynamic>>{},
+        identities = <String, String>{},
         sets = <String, Map<String, dynamic>>{};
     void addServers(Map mapping, String command) {
-      for (final (name, kind, target) in servers(mapping)) {
+      for (final (name, kind, target, identity) in servers(mapping)) {
         var id = name;
         for (var n = 2; ; n++) {
-          final known = serversByName[id];
-          if (known == null ||
-              known['kind'] == kind && known['target'] == target) {
+          if (!serversByName.containsKey(id) || identities[id] == identity) {
             break;
           }
           id = '$name~$n';
         }
+        identities[id] = identity;
         final server = serversByName.putIfAbsent(
           id,
           () => {
@@ -325,13 +332,13 @@ final class InventoryReader {
       mapOf(files.json('~/.lmstudio/mcp.json', comments: false)['mcpServers']),
       'lmstudio',
     );
-    // The servers the app knows: remember what is in use, list the rest too.
+    // The servers the app knows: remember what is in use (every server of a
+    // name), list the rest too.
     final Map library;
     if (knownServers != null) {
       library = knownServers!({
         for (final e in serversByName.entries)
-          if (e.key == e.value['name'])
-            e.key: [for (final a in e.value['agents'] as List) a as String],
+          e.key: [for (final a in e.value['agents'] as List) a as String],
       }, remember);
     } else {
       library = mapOf(
@@ -342,25 +349,46 @@ final class InventoryReader {
       );
     }
     for (final e in library.entries.take(200)) {
-      if (serversByName.containsKey(e.key) || e.value is! Map) continue;
+      if (e.value is! Map || !libraryKeyPattern.hasMatch('${e.key}')) continue;
+      final key = '${e.key}', name = mcpBaseName(key);
       final entry = e.value as Map, transport = entry['transport'];
-      if (transport == 'stdio' &&
+      if (!(transport == 'stdio' &&
               entry['command'] is String &&
               entry['args'] is List ||
-          ['http', 'sse'].contains(transport) && entry['url'] is String) {
-        final (kind, target) = serverTarget(
-          transport == 'stdio'
-              ? {'command': entry['command'], 'args': entry['args']}
-              : {'url': entry['url']},
-        );
-        serversByName[e.key] = {
-          'id': e.key,
-          'name': e.key,
-          'kind': kind,
-          'target': target,
-          'agents': <String>[],
-        };
+          ['http', 'sse'].contains(transport) && entry['url'] is String)) {
+        continue;
       }
+      final identity = mcpIdentityHash(entry);
+      // Already a box (in use, or listed twice): the server it is kept for.
+      final same = serversByName.keys
+          .where(
+            (id) =>
+                serversByName[id]!['name'] == name &&
+                identities[id] == identity,
+          )
+          .firstOrNull;
+      if (same != null) {
+        inv.mcpLibrary.putIfAbsent(same, () => key);
+        continue;
+      }
+      var id = key;
+      for (var n = 2; serversByName.containsKey(id); n++) {
+        id = '$name~$n';
+      }
+      final (kind, target) = serverTarget(
+        transport == 'stdio'
+            ? {'command': entry['command'], 'args': entry['args']}
+            : {'url': entry['url']},
+      );
+      identities[id] = identity;
+      inv.mcpLibrary[id] = key;
+      serversByName[id] = {
+        'id': id,
+        'name': name,
+        'kind': kind,
+        'target': target,
+        'agents': <String>[],
+      };
     }
     inv.mcp.addAll(serversByName.values);
     inv.mcp.sort(

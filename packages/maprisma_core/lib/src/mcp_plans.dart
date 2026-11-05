@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:collection/collection.dart';
+import 'package:crypto/crypto.dart' show sha256;
 import 'package:path/path.dart' as p;
 import 'package:toml/toml.dart';
 import 'package:yaml/yaml.dart';
@@ -16,6 +17,32 @@ import 'skill_plans.dart' show AgentProfiles;
 /// Python mcp_ctl: copy an MCP server from an agent that has it into another
 /// agent's own format (or the app's list of known servers), or remove it.
 final _name = RegExp(r'^[A-Za-z0-9_.-]{1,64}$');
+
+/// A key of the app's list of known servers: the name, or name~2, name~3, …
+/// for another server of that name ("~" is no part of a name).
+final libraryKeyPattern = RegExp(r'^[A-Za-z0-9_.-]{1,64}(?:~[0-9]{1,4})?$');
+
+/// The configuration name of a map id or library key: "fs~2" is "fs".
+String mcpBaseName(String id) => id.replaceFirst(RegExp(r'~[0-9]+$'), '');
+
+/// What makes two servers of one name the same server: how it is reached (the
+/// transport and the whole address, path, port and query included) or what is
+/// started (the transport, the command and every argument). Environment and
+/// headers stay out: they may hold keys and do not change which server it is.
+/// '' for an entry that tells neither.
+String mcpIdentity(dynamic entry) {
+  final e = normalEntry(entry);
+  if (e == null) return '';
+  return jsonEncode(
+    e['transport'] == 'stdio'
+        ? [e['transport'], e['command'], e['args']]
+        : [e['transport'], e['url']],
+  );
+}
+
+/// [mcpIdentity] as a short digest, for files kept beside a server's answer.
+String mcpIdentityHash(dynamic entry) =>
+    sha256.convert(utf8.encode(mcpIdentity(entry))).toString().substring(0, 16);
 final _fieldName = RegExp(r'^[A-Za-z_][A-Za-z0-9_-]{0,127}$');
 
 List<String> _strs(dynamic value) =>
@@ -242,7 +269,7 @@ final class McpPlans {
     final found = <String, dynamic>{};
     for (final e in servers.entries.take(200)) {
       try {
-        if (_name.hasMatch(pyStr(e.key))) {
+        if (libraryKeyPattern.hasMatch(pyStr(e.key))) {
           found[pyStr(e.key)] = checkEntry(e.value);
         }
       } on FormatException {
@@ -256,6 +283,11 @@ final class McpPlans {
 
   /// mcp_library.remember: add the servers agents use now that the list lacks
   /// or has differently, written straight away; then the list as load() reads it.
+  /// [serverAgents]: the map's ids (name, name~2, …) and their agents. Each
+  /// server keeps the key that holds the same server ([mcpIdentity]); a new one
+  /// takes its name when it is the first of that name and the name is not
+  /// another's in use, else the next free name~N, so a second server of one
+  /// name is remembered too and its definition stays when its last agent goes.
   Map<String, dynamic> knownServers(
     Map<String, List<String>> serverAgents,
     bool remember,
@@ -264,9 +296,38 @@ final class McpPlans {
       try {
         final servers = library();
         final merged = {...servers};
+        final claimed = <String>{};
+        final pending = <(String, String, Map<String, dynamic>)>[];
         for (final e in serverAgents.entries) {
-          final entry = entryFrom(e.value, e.key).$2;
-          if (entry != null) merged[e.key] = entry;
+          final name = mcpBaseName(e.key);
+          final entry = entryFrom(e.value, name).$2;
+          if (entry == null) continue;
+          final same = mcpIdentity(entry);
+          final keys = [
+            for (final k in merged.keys.toList()..sort(pyCompare))
+              if (mcpBaseName(k) == name &&
+                  !claimed.contains(k) &&
+                  mcpIdentity(merged[k]) == same)
+                k,
+          ];
+          final key = keys.contains(e.key) ? e.key : keys.firstOrNull;
+          if (key == null) {
+            pending.add((e.key, name, entry));
+          } else {
+            claimed.add(key);
+            merged[key] = entry;
+          }
+        }
+        for (final (id, name, entry) in pending) {
+          var key = name;
+          if (id != name || claimed.contains(name)) {
+            for (var n = 2; ; n++) {
+              key = '$name~$n';
+              if (!merged.containsKey(key) && !claimed.contains(key)) break;
+            }
+          }
+          claimed.add(key);
+          merged[key] = entry;
         }
         if (!const DeepCollectionEquality().equals(merged, servers)) {
           final folder = p.dirname(libraryFile);
@@ -672,13 +733,15 @@ final class McpPlans {
   }
 
   /// mcp_ctl.plan: add server [name] (copied from the first of [sources] that
-  /// has it, else from the app's list), or remove it.
+  /// has it, else from the app's list under [libraryKey], the name by
+  /// default), or remove it.
   Plan plan(
     String agent,
     String name,
     List<String> sources, {
     required bool remove,
     Map<String, dynamic>? entry,
+    String? libraryKey,
   }) {
     if (!supported(agent) || !_name.hasMatch(name)) {
       throw FormatException(agent);
@@ -693,7 +756,7 @@ final class McpPlans {
         for (final s in sources)
           if (s != agent) s,
       ], name).$2;
-      entry ??= library()[name] as Map<String, dynamic>?;
+      entry ??= library()[libraryKey ?? name] as Map<String, dynamic>?;
       if (entry == null) throw FormatException('no agent has $name set up');
     }
     final s = spec(agent);

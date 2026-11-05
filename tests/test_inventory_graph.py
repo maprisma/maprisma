@@ -123,7 +123,8 @@ class InventoryTest(unittest.TestCase):
             "remote": {"url": "https://mcp.example.com/sse?token=secret", "headers": {"Authorization": "secret"}},
             "off": {"command": "x", "disabled": True}}}))
         found = invmod.mcp_for("claude")
-        self.assertEqual(found, [("web", "command", "npx some-mcp@1"), ("remote", "url", "mcp.example.com")])
+        self.assertEqual([f[:3] for f in found],
+                         [("web", "command", "npx some-mcp@1"), ("remote", "url", "mcp.example.com")])
         self.assertNotIn("secret", repr(found))
 
     def test_skill_sets_follow_links(self):
@@ -456,6 +457,62 @@ class ReviewChainTest(unittest.TestCase):
         self.assertIn(("agent:claude", "mcp:filesystem", "mcp"), self.edges(g))
         self.assertIn(("agent:codex", "mcp:filesystem~2", "mcp"), self.edges(g))
         self.assertEqual({n.id: n.label for n in g.nodes}["mcp:filesystem~2"], "filesystem")
+
+    def test_servers_are_told_apart_by_what_they_are(self):
+        """063e #4: same host, other path or port, or the same program with other arguments,
+        are other servers; other keys are not. The label stays short."""
+        self.write(".claude.json", json.dumps({"mcpServers": {
+            "web": {"type": "http", "url": "https://example.test/a"},
+            "port": {"type": "http", "url": "https://example.test:8443/mcp"},
+            "tool": {"command": "node", "args": ["/x/server.js"]},
+            "same": {"command": "same-cli", "env": {"TOKEN": "one"}}}}))
+        self.write(".codex/config.toml", '[mcp_servers.web]\nurl = "https://example.test/b"\n'
+                   '[mcp_servers.port]\nurl = "https://example.test:9443/mcp"\n'
+                   '[mcp_servers.tool]\ncommand = "node"\nargs = ["/y/server.js"]\n'
+                   '[mcp_servers.same]\ncommand = "same-cli"\nenv = { TOKEN = "two" }\n')
+        claude, codex = self.agent("claude", "Claude Code"), self.agent("codex", "Codex")
+        with mock.patch.object(ad, "details_for", lambda c: ad.Details()):
+            inv = invmod.collect([claude, codex], remember=False)
+        servers = {s.id: s for s in inv.mcp}
+        for name in ("web", "port", "tool"):
+            self.assertEqual(servers[f"{name}~2"].agents, ["codex"], name)
+            self.assertEqual(servers[f"{name}~2"].target, servers[name].target)
+        self.assertEqual((servers["web"].target, servers["tool"].target), ("example.test", "node server.js"))
+        self.assertEqual(servers["same"].agents, ["claude", "codex"])
+        self.assertNotIn("same~2", servers)
+        self.assertNotIn("one", repr(inv.mcp))
+
+    def test_the_second_server_of_a_name_stays_known(self):
+        """063e #5: the list keeps every server of a name (an old list's plain name stays),
+        so the second one's definition stays when its last agent leaves."""
+        import flutter_connections
+        old = {"transport": "stdio", "command": "fs-a", "args": [], "env": {}, "url": "", "headers": {}}
+        self.write(".config/maprisma/mcp-servers.json", json.dumps({"servers": {"filesystem": old}}))
+        self.write(".claude.json", json.dumps({"mcpServers": {"filesystem": {"command": "fs-a"}}}))
+        self.write(".codex/config.toml", '[mcp_servers.filesystem]\ncommand = "fs-b"\n')
+        claude, codex = self.agent("claude", "Claude Code"), self.agent("codex", "Codex")
+        with mock.patch.object(ad, "details_for", lambda c: ad.Details()):
+            invmod.collect([claude, codex])
+            known = mcp_library.load()
+            self.assertEqual((known["filesystem"]["command"], known["filesystem~2"]["command"]), ("fs-a", "fs-b"))
+            self.write(".codex/config.toml", "")
+            inv = invmod.collect([claude, codex])
+            self.assertEqual(sorted(mcp_library.load()), ["filesystem", "filesystem~2"])
+            unused = {s.id: s for s in inv.mcp}["filesystem~2"]
+            self.assertEqual((unused.name, unused.target, unused.agents, unused.library),
+                             ("filesystem", "fs-b", [], "filesystem~2"))
+            # Drawing the line again sets that very server up; forgetting takes only it.
+            conn = flutter_connections.Connections(self.home / "backups")
+            with mock.patch.object(flutter_connections.agents, "list_agents", lambda: [claude, codex]):
+                again = conn.preview({"kind": "mcp", "command": "codex", "item": "filesystem~2", "remove": False})
+                text = "".join(c.new for c in conn.plans[again["plan"]][1].changes)
+                self.assertIn("fs-b", text)
+                self.assertNotIn("fs-a", text)
+                forget = conn.forget_preview({"name": "filesystem~2"})
+                self.assertEqual(list(json.loads(conn.plans[forget["plan"]][1].changes[0].new)["servers"]),
+                                 ["filesystem"])
+                with self.assertRaises(ValueError):
+                    conn.forget_preview({"name": "filesystem"})
 
     def test_lm_studio_and_jan_on_other_ports(self):
         """F8: LM Studio's server port from its settings, Jan's from its service or its router."""

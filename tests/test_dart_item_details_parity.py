@@ -63,7 +63,8 @@ class DartItemDetailsParityTest(unittest.TestCase):
                            'headers': {'Authorization': 'Bearer secret'}}}}))
             (home / '.codex').mkdir()
             (home / '.codex/config.toml').write_text(
-                '[mcp_servers.notes]\ncommand = "npx"\nargs = ["-y", "notes-mcp@1.2"]\n')
+                '[mcp_servers.notes]\ncommand = "npx"\nargs = ["-y", "notes-mcp@1.2", "--root", "/srv/my notes"]\n')
+            # The same program and arguments: one server (063e: other arguments would be another).
             skills = home / 'shared/skills'
             for name, front in (('pdf', 'description: >\n  Reads PDFs\n  and forms.\n'),
                                 ('xlsx', 'description: "Sheets."\n'), ('bare', 'name: bare\n')):

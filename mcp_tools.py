@@ -8,7 +8,9 @@ it starts the server's program or talks to its address.
   an event-stream answer).
 Legacy SSE servers are not asked.
 
-Answers are kept in ~/.cache/maprisma/mcp-tools/<name>.json.
+Answers are kept in ~/.cache/maprisma/mcp-tools/<id>.json (the map's id: the
+name, or name~2 for another server of that name), with the digest of the server
+asked (mcp_ctl.identity_hash), so another server under that id never shows them.
 """
 
 import datetime as dt
@@ -230,21 +232,28 @@ def ask(entry: dict) -> dict:
 
 
 def cache_file(name: str) -> Path:
-    if not _NAME.fullmatch(name):          # all of it: match's $ lets a trailing newline through
+    import mcp_ctl
+    if not mcp_ctl.LIBRARY_KEY_RE.fullmatch(name):          # all of it: match's $ lets a trailing newline through
         raise ValueError(name)
     return CACHE_DIR / f"{name}.json"
 
 
-def cached(name: str) -> dict | None:
+def cached(name: str, identity: str | None = None) -> dict | None:
+    """With identity, only an answer of that server (one kept before answers carried it is taken)."""
     try:
         data = json.loads(cache_file(name).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
-    return data if isinstance(data, dict) else None
+    if not isinstance(data, dict):
+        return None
+    kept = data.pop("identity", None)
+    if identity is not None and isinstance(kept, str) and kept != identity:
+        return None
+    return data
 
 
-def ask_and_keep(name: str, entry: dict) -> dict:
-    """ask() and keep the answer (or the error) with the time."""
+def ask_and_keep(name: str, entry: dict, identity: str = "") -> dict:
+    """ask() and keep the answer (or the error) with the time, and with identity when given."""
     now = dt.datetime.now().isoformat(timespec="seconds")
     try:
         result = {"status": "ok", "checked": now, **ask(entry)}
@@ -252,7 +261,8 @@ def ask_and_keep(name: str, entry: dict) -> dict:
         result = {"status": "failed", "checked": now, "error": str(error)[:300]}
     import ai_core
     try:
-        ai_core.atomic_write(cache_file(name), json.dumps(result, ensure_ascii=False, indent=1))   # 0600, no links followed
+        kept = {**result, "identity": identity} if identity else result
+        ai_core.atomic_write(cache_file(name), json.dumps(kept, ensure_ascii=False, indent=1))   # 0600, no links followed
     except (OSError, ValueError):
         pass
     return result
