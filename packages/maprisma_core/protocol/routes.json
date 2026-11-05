@@ -492,7 +492,7 @@
   "connections.forget_preview": {
    "area": "connections",
    "kind": "preview",
-   "note": "A known server no agent uses leaves mcp-servers.json; applied through connections.apply, with Undo.",
+   "note": "name: the map's id of a known server no agent uses (name, or name~2). It leaves mcp-servers.json; applied through connections.apply, with Undo.",
    "params": {
     "name": "string"
    },
@@ -676,7 +676,7 @@
   "details.mcp": {
    "area": "details",
    "kind": "read",
-   "note": "",
+   "note": "name: the map's id of the server (its name, or name~2 for another server of that name). server: that id; title: its name.",
    "params": {
     "name": "string"
    },
@@ -699,7 +699,7 @@
     "title": "string",
     "tools": []
    },
-   "source": "observed"
+   "source": "manual"
   },
   "details.skills": {
    "area": "details",
@@ -1240,20 +1240,26 @@
   "mcp.tools": {
    "area": "mcp",
    "kind": "read",
-   "note": "",
-   "params": {},
-   "result": null,
-   "source": null
+   "note": "name: the map's id (name, or name~2). Asks that very server (the command, address and agent of that id); tasks.status result: status, checked, tools, prompts, server or error, kept per id and server.",
+   "params": {
+    "name": "string"
+   },
+   "result": {
+    "task": "string"
+   },
+   "source": "manual"
   },
   "mcp.tools_cached": {
    "area": "mcp",
    "kind": "read",
-   "note": "",
+   "note": "name: the map's id (name, or name~2). cached: the last answer of mcp.tools for that very server, or null.",
    "params": {
-    "name": "?"
+    "name": "string"
    },
-   "result": null,
-   "source": null
+   "result": {
+    "cached": "?"
+   },
+   "source": "manual"
   },
   "models.attach_preview": {
    "area": "models",

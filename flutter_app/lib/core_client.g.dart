@@ -446,11 +446,10 @@ class CoreClient {
     Map<String, dynamic> params = const {},
   ]) => transport.call('mcp.search', params);
 
-  Future<Map<String, dynamic>> mcpTools([
-    Map<String, dynamic> params = const {},
-  ]) => transport.call('mcp.tools', params);
+  Future<Map<String, dynamic>> mcpTools({required String name}) =>
+      transport.call('mcp.tools', {'name': name});
 
-  Future<Map<String, dynamic>> mcpToolsCached({required Object? name}) =>
+  Future<Map<String, dynamic>> mcpToolsCached({required String name}) =>
       transport.call('mcp.tools_cached', {'name': name});
 
   Future<Map<String, dynamic>> modelsAttachPreview({

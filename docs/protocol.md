@@ -78,7 +78,7 @@ A parameter written `name?` may be left out.
 |---|---|---|---|
 | `connections.apply` | handle (plan) | `plan`: string | `ok`, `task`, `undo` |
 | `connections.author_preview` | preview | `agents`: ["string"], `entry?`: object, `folder?`: string, `kind`: string, `name?`: string | `agents`, `contexts`, `empty`, `files`, `focus`, `item`, `kind`, `links_add`, `links_remove`, `notes`, `plan` |
-| `connections.forget_preview` | preview | `name`: string | `contexts`, `empty`, `files`, `focus`, `item`, `kind`, `links_add`, `links_remove`, `plan`, `remove` A known server no agent uses leaves mcp-servers.json; applied through connections.apply, with Undo. |
+| `connections.forget_preview` | preview | `name`: string | `contexts`, `empty`, `files`, `focus`, `item`, `kind`, `links_add`, `links_remove`, `plan`, `remove` name: the map's id of a known server no agent uses (name, or name~2). It leaves mcp-servers.json; applied through connections.apply, with Undo. |
 | `connections.move_preview` | preview | `agent`: string, `new`: null|string, `old`: string | `agents`, `contexts`, `empty`, `files`, `focus`, `links_add`, `links_remove`, `model_actions`, `notes`, `plan` |
 | `connections.preview` | preview | `command`: string, `item`: string, `kind`: string, `model?`: string, `remove`: bool, `use_now?`: bool | `command`, `contexts`, `empty`, `files`, `focus`, `item`, `kind`, `links_add`, `links_remove`, `plan`, `remove` |
 | `connections.repair_preview` | preview | `agent`: string, `target`: string | `command`, `contexts`, `empty`, `files`, `focus`, `item`, `kind`, `links_add`, `links_remove`, `plan`, `remove` |
@@ -101,7 +101,7 @@ A parameter written `name?` may be left out.
 
 | Route | Kind | Params | Result |
 |---|---|---|---|
-| `details.mcp` | read | `name`: string | `intro`, `missing`, `missing_title`, `sections`, `server`, `text`, `title`, `tools` |
+| `details.mcp` | read | `name`: string | `intro`, `missing`, `missing_title`, `sections`, `server`, `text`, `title`, `tools` name: the map's id of the server (its name, or name~2 for another server of that name). server: that id; title: its name. |
 | `details.skills` | read | `path`: string | `intro`, `missing`, `missing_title`, `sections`, `text`, `title`, `tools` |
 
 ## dictation
@@ -216,8 +216,8 @@ A parameter written `name?` may be left out.
 | `mcp.option_preview` | preview | — | ? |
 | `mcp.option_test` | read | — | ? |
 | `mcp.search` | read | — | ? |
-| `mcp.tools` | read | — | ? |
-| `mcp.tools_cached` | read | `name`: ? | ? |
+| `mcp.tools` | read | `name`: string | `task` name: the map's id (name, or name~2). Asks that very server (the command, address and agent of that id); tasks.status result: status, checked, tools, prompts, server or error, kept per id and server. |
+| `mcp.tools_cached` | read | `name`: string | `cached` name: the map's id (name, or name~2). cached: the last answer of mcp.tools for that very server, or null. |
 
 ## models
 
