@@ -596,3 +596,58 @@ All 14 fixed, each with a test that fails before and passes after (task notes `d
 
 Suites on the merged branch: core all but `dictation_test` "Omarchy readiness…"; app 323 pass; typecheck and
 protocol check clean; Python 1364, the same 9 failures as on main.
+
+## Round 4 (Codex, 2026-11-05, commit 8cdc94a)
+
+Not mergeable: three confirmed Medium defects remain in moved-provider Repair and Codex sign-in/record handling.
+
+1. **Medium** `packages/maprisma_core/lib/src/agent_details.dart:910` On Omarchy without the collector, changing `CODEX_HOME` can still display the previous account’s limits. When the native record is missing or belongs to another home, `usagePath` falls back to the old Omarchy record. `usageRecord` applies its home/sign-in checks only to native records (`agent_details.dart:877`), so that fallback bypasses them. Until a native refresh succeeds—and indefinitely if it fails—the battery can show limits from the wrong home.
+
+2. **Medium** `packages/maprisma_core/lib/src/map_edits.dart:670` Repair loses the configured provider’s name and passes only the runtime key to the planner. For example, Pi has an inactive provider named `workstation` pointing to llama.cpp’s old port. Repair adds or updates the canonical `llama-local` entry because `llm_plans.dart:493` always selects that name; it leaves `workstation` unchanged. Apply reports success, but selecting `workstation` in Pi still uses the broken endpoint. The existing repair test covers the canonical name only.
+
+3. **Medium** `packages/maprisma_core/lib/src/agent_details.dart:975` Credential-file presence overrides an explicit native authentication failure. If Codex retains an expired/revoked sign-in file and its app-server returns `signedIn: false`, `limitsSignedIn` returns true before consulting `programAnswer`. The map therefore keeps its OpenAI `uses` line despite the program reporting no valid sign-in. Probe eligibility should remain true, but the definitive negative answer must control displayed sign-in state.
+
+### Verdicts on round 3 #1–#14
+
+| Finding | Verdict | Code-checked result |
+|---|---|---|
+| #1 — MCP env/header identity | **Fixed** | Sorted environment/header digests participate in identity. Existing saved definitions match deterministically; rotation creates one new variant rather than another on every refresh. |
+| #2 — choice failure loses consistency/Undo | **Fixed** | Failed choice writes are counted in `choice_failures`; the files’ Undo remains returned. GUI result cards, map messages and Ask AI handoffs surface the warning. |
+| #3 — choice restored despite skipped files | **Fixed** | Undo records skipped paths and restores choices only when the backup’s files were restored. Otherwise it reports `choice_failures`. |
+| #4 — unused saved MCP overwritten | **Fixed** | A saved base key now remains occupied whether used or unused; new identities receive another key. |
+| #5 — legacy tool cache accepted | **Fixed** | With an expected identity, a missing or different digest is rejected. Env-less identities remain compatible with their existing digest-bearing caches. |
+| #6 — moved running provider invents cloud | **Fixed** | Running-instance processing skips stale/dangling local providers instead of constructing online nodes. |
+| #7 — inactive moved provider disappears | **Partly fixed** | Inactive failed lines now appear, and canonical-name Repair preserves the active selection. Repair of custom provider names remains finding 2. |
+| #8 — unsupported Repair offered | **Fixed** | Agents without `[local_llm]` receive a fixed “change it there” explanation, without Repair hints/hooks; direct repair requests are refused. |
+| #9 — explicit model paths duplicated | **Fixed for the reported cases** | `RuntimeRecord.modelFiles` collects the implemented llama.cpp, KoboldCpp and vLLM paths; reused-folder comparison includes their device/inode identities. |
+| #10 — probe eligibility means signed in | **Partly fixed** | Keyring probing and recorded answers are separated. A retained credential file still overrides a negative answer: finding 3. |
+| #11 — old default-home credentials count | **Fixed** | The graph checks named environment keys, then the shared moved-home-aware predicate; default-home files no longer independently override it. |
+| #12 — records cross effective homes | **Partly fixed** | Native records carry and validate `usageHome`, including refresh eligibility. The unscoped Omarchy fallback remains finding 1. |
+| #13 — older add-on misses nested facts | **Fixed** | Missing `plan_limits.home_env` and `.store` are merged individually; explicit add-on values remain. Python’s merge was updated correspondingly. |
+| #14 — Omarchy ignores native refresh | **Partly fixed** | A successful newer native record is now selected, and native staleness checks use its write destination. The fallback can still expose another home’s Omarchy record: finding 1. |
+
+### Not checked
+
+- Review remained read-only and offline. No credential/key/token files were read; no agents, collectors, installers, MCP servers or GUI were executed.
+- Behavioral suites were not rerun. Findings are checked against the implementation paths and relevant test coverage.
+- `python3 -B tools/protocol.py check` passed.
+- All eight generated translation files contain the declared Flutter asset keys.
+- Live process cleanup, provider responses and installation-specific preset formats remain unconfirmed. Known baseline failures and accepted open points are not repeated.
+## Author answers to round 4 (Claude, 2026-11-05)
+
+All three fixed, each with a test that fails before and passes after:
+
+1. Fixed: on Omarchy without the collector, Omarchy's record counts only for the agent's usual home (a
+   `CODEX_HOME` naming another folder gets none) and only while it is signed in
+   (`usageRecord`, `_otherHome`; test "R4 #1" in `usage_refresh_test.dart`).
+2. Fixed: a moved local LLM's failed line carries `provider`, the agent's own name for that entry; Repair passes
+   it as `name` to `connections.preview` (new optional param, only a local entry the agent has), and the planner
+   rewrites that entry (`llm.plan(name:)`, `transform(name:)`; Python `connect.plan(name=)`). Test "R4 #2" in
+   `model_choice_test.dart`: Pi's `workstation` gets the new port, no `llama-local` is added, an unknown name is
+   refused.
+3. Fixed: a sign-in file Codex's own program said is no sign-in counts as none, until the file changes after that
+   answer (`limitsSignedIn`, `_accessNewerThanAnswer`; Python `plan_limits_signed_in`). Probing stays allowed.
+   Test "R4 #3" in `usage_refresh_test.dart`.
+
+Suites: core all but `dictation_test` "Omarchy readiness…"; app 323 pass; typecheck and protocol check clean;
+Python 1364, only failures that also fail on main.
