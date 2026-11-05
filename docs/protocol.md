@@ -198,7 +198,7 @@ A parameter written `name?` may be left out.
 
 | Route | Kind | Params | Result |
 |---|---|---|---|
-| `map.badges` | read | — | `badges`, `rate_due` |
+| `map.badges` | read | — | `badges`, `rate_due` badges: per agent box (agent:<command>) {kind: battery (its plan limits) or cost (paid per token: label, today's money), left (0..1 left; for a cost what is left of the day's limit, only with a limit), colour (green, yellow, red at the levels of Settings: Costs), tip, stale (true: the limits may be out of date: kept past a failed probe or measured over 30 minutes ago), name and red_body (a cost)}. |
 | `map.smart_ask` | read | `answer?`: string, `column`: string, `command`: string, `request`: string | `task` column: mcp, agents, providers, models. Spends the user's tokens only on their click. tasks.status result: status proposal, clarify, redirect or error; helper, local, summary, question, choices, instead {hint, column, request}, limits {gpu_name, vram, ram, free_disk}, proposal, candidates [{id, title, subtitle, reason, fit (ok, tight, too_large), size, kind, agents}]. A map_edit candidate names a checked manual map preview route and its parameters; no write occurs until preview and Apply. |
 | `map.smart_connect` | preview | `agent`: string, `candidate`: string, `proposal`: string | `plan` As connections.preview: a plan for ConnectionReview and connections.apply, with its other fields. Refused until the model is on this PC. |
 | `map.smart_helpers` | read | — | `helpers` Who can answer a smart card now; nothing is sent. |
