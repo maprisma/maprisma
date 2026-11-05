@@ -682,3 +682,35 @@ Not mergeable: named-provider Repair introduces one confirmed Medium regression 
 
 Suites: core all but `dictation_test` "Omarchy readiness…"; app 323 pass; typecheck and protocol check clean;
 Python 1365, only failures that also fail on main.
+
+## Round 6 (Codex, 2026-11-05, commit 3477f16)
+
+1. **Medium** `llm_plans.dart:43`, `adapters/hermes.py:85`, `adapters/omp.py:41` Repair still doubles a key written
+   `"workstation":` or `workstation :`.
+2. **Medium** `local_llm.dart:85` The Dart "is connected" check matches only bare keys.
+3. **Medium** `online_models.dart:128`, `adapters/hermes.py:144` The Hermes model readers keep a quoted key's quotes.
+
+## Author answer to round 6 (Claude, 2026-11-05)
+
+Past the round cap with each round finding the next key spelling, Uwe chose to simplify (6ec09be): one key
+reader (Python `connect.provider_entries` / `provider_keys` / `providers_entry_replaced`, Dart
+`LocalLlm.providerEntries` / `providerKeys` / `providerEntriesIn`) decodes bare, "double" (no escapes) and
+'single' keys with spaces before the colon; the writer, the "is connected" checks and the Hermes model readers
+all use it. Anything else (escapes, flow or complex keys, anchors, other indents) makes the writer refuse
+("edit it by hand") and the readers see no entry. Tests in `llm_plans_yaml_test.dart` and
+`tests/test_quoted_provider_keys.py`.
+
+## Round 7 (Codex, 2026-11-05, commit 6ec09be)
+
+1. **Medium** `llm_plans.dart:76`, `connect.py:241` Under a non-empty inline `providers: {…}` the writer appends a
+   block entry: invalid YAML.
+2. **Medium** `local_llm.dart:47`, `connect.py:227` A quoted `"true"` or `"1.5"` is written back bare and read as
+   another type.
+   > Author: fixed in 88dd83f: the writer appends only under `providers:` or `providers: {}`, and writes only
+   > plain identifiers that YAML reads as strings (not true/no/null/…); both refused otherwise. Tests added.
+
+## Round 8 (Codex, 2026-11-05, commit 88dd83f)
+
+Both round 7 fixes verified, Python and Dart agree, no duplicate or retyped key for the earlier inputs.
+
+CLEAN
