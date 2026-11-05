@@ -216,36 +216,30 @@ class MapLayout {
     bordered = (saved['card_border'] as Map?)?['on'] == true;
 
     // The shown columns sit in the middle of a wider window and grow to fill
-    // the free space (column width 266..360, gap about 12% of the width, as far
-    // as the columns' minimum leaves room).
+    // the free space (column width 266..360). What the columns leave is shared
+    // out evenly: the same gap left of the first column, between the columns
+    // and right of the last one.
     final count = columns?.length ?? 4;
+    final shownColumns = columns ?? const [0, 1, 2, 3];
     final minNatural = 32.0 + count * 266.0 + math.max(0, count - 1) * 36.0;
-    if (count == 0 || viewportWidth <= minNatural) {
-      columnGap = 36.0;
+    final wide = count > 0 && viewportWidth > minNatural;
+    // The gap between two columns never drops below this, so that the lines
+    // and their hooks keep room; what is left beyond it goes to the edges.
+    var least = 36.0;
+    if (!wide) {
       columnWidth = 266.0;
     } else {
       final room = count > 1
           ? (viewportWidth - 32.0 - count * 266.0) / (count - 1)
           : 240.0;
-      var gap = math
+      final gap = math
           .min(viewportWidth * 0.12, room)
           .floorToDouble()
           .clamp(36.0, 240.0);
       columnWidth = ((viewportWidth - 32.0 - (count - 1) * gap) / count)
           .floorToDouble()
           .clamp(266.0, 360.0);
-      // Fewer columns: what the cards leave goes into the gaps, so that the
-      // lines between them stay readable.
-      if (count > 1) {
-        final free =
-            viewportWidth - 32.0 - count * columnWidth - (count - 1) * gap;
-        if (free > 0) {
-          gap = math
-              .min(gap + free / (count - 1), math.max(gap, viewportWidth * 0.3))
-              .floorToDouble();
-        }
-      }
-      columnGap = gap;
+      least = math.min(gap, 140.0);
     }
     boxWidth = columnWidth - 24.0;
     // A width set by the user, else its default, else the automatic one.
@@ -261,11 +255,17 @@ class MapLayout {
         );
       }
     }
-    final shownColumns = columns ?? const [0, 1, 2, 3];
-    final natural =
-        32.0 +
-        shownColumns.fold<double>(0, (sum, c) => sum + columnWidthOf(c)) +
-        math.max(0, count - 1) * columnGap;
+    final widths = shownColumns.fold<double>(
+      0,
+      (sum, c) => sum + columnWidthOf(c),
+    );
+    columnGap = wide
+        ? math.max(
+            least,
+            ((viewportWidth - widths) / (count + 1)).floorToDouble(),
+          )
+        : 36.0;
+    final natural = 32.0 + widths + math.max(0, count - 1) * columnGap;
     final span = centerWidth ?? viewportWidth;
     _inset = count == 0 || span <= natural
         ? 0

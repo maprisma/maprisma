@@ -126,8 +126,15 @@ void main() {
         const {},
         viewportWidth: 1896,
       );
-      expect(wide.columnGap, 228);
       expect(wide.columnWidth, 295);
+      // Four columns share what is left evenly: the same gap at both edges
+      // and between the columns.
+      expect(wide.columnGap, 143);
+      expect(wide.columnX(0), closeTo(143, 2));
+      expect(
+        1896 - (wide.columnX(3) + wide.columnWidth),
+        closeTo(wide.columnGap, 2),
+      );
       final tight = MapLayout(
         const {'nodes': [], 'edges': []},
         const {},
@@ -353,16 +360,26 @@ void main() {
     expect(next['card_order'], containsAll(['3:model:', '0:mcp:', id]));
   });
 
-  test('two columns use the whole of a wide window', () {
-    final l = MapLayout(
-      fixtureGraph(),
-      {},
-      columns: const [0, 1],
-      viewportWidth: 1896,
-    );
-    expect(l.columnWidth, 360);
-    expect(l.columnGap, greaterThan(400));
-    expect(l.size.width, greaterThan(1650));
+  test('a wide window: the same gap left, between and right', () {
+    for (final columns in const [
+      [0, 1],
+      [1, 2, 3],
+    ]) {
+      final l = MapLayout(
+        fixtureGraph(),
+        {},
+        columns: columns,
+        viewportWidth: 1896,
+      );
+      expect(l.columnWidth, 360);
+      final left = l.columnX(columns.first),
+          right = 1896 - (l.columnX(columns.last) + l.columnWidth),
+          between = l.columnX(columns[1]) - (left + l.columnWidth);
+      expect(left, closeTo(l.columnGap, 2));
+      expect(right, closeTo(l.columnGap, 2));
+      expect(between, l.columnGap);
+      expect(l.columnGap, greaterThan(200));
+    }
   });
 
   test('the shown columns sit in the middle of the window', () {
