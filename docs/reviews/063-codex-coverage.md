@@ -262,3 +262,164 @@ Fixed in four parts, each with tests that fail before and pass after (task notes
 Also fixed: two fixed-table tests that tasks 061/062 left behind (`test_providers`, `test_agent_facts`).
 Suites on the merged branch: core all but `dictation_test` "Omarchy readiness…"; app 318 pass; typecheck clean;
 Python 1342, the 9 failures all fail on main too.
+
+## Round 2 (Codex, 2026-11-05, commit 5a68683)
+
+Review complete. No files changed and no network used.
+
+1. **High** `packages/maprisma_core/lib/src/action_rules.dart:241` Suffixed MCP IDs bypass rules written against the server’s configuration name. With a deny rule for connecting MCP `filesystem`, connecting `filesystem~2` is checked against that different string; `_ruleItem` leaves it unchanged (`core.dart:4399`). The operation then writes an entry named `filesystem` (`core.dart:4201`). A connection forbidden under its actual name is therefore allowed through its new map alias.
+
+2. **High** `packages/maprisma_core/lib/src/usage_rpc.dart:23` Native usage refresh executes the first `codex` on PATH without excluding Omarchy lazy launchers or mise shims. On a PC with a retained Codex sign-in file, a recognized mise installation and a lazy launcher first on PATH, opening Maprisma can execute that launcher automatically, potentially invoking installation/update work during a limits check. The Omarchy collector explicitly skips lazy launchers and resolves installed binaries offline; this new client omits that protection.
+
+3. **High** `packages/maprisma_core/lib/src/core.dart:2152` Tool queries still accept only unsuffixed MCP names and choose the first agent containing that name. Although `details.mcp` resolves `filesystem~2`, its response exposes the raw `filesystem` name (`core.dart:799`), and cached tools are also keyed by that name. Inspecting/testing the second server can consequently show the first server’s tools or start the first server’s command. Passing the suffixed ID directly instead is rejected by the name regex.
+
+4. **Medium** `packages/maprisma_core/lib/src/inventory.dart:258` MCP separation compares redacted display targets, not server identity. `serverTarget` reduces URLs to their hostname and commands to a basename or short launcher/package label. Thus `https://example.test/a` and `https://example.test/b`, different ports on the same host, or the same executable with different arguments still merge under one card. F2 remains reproducible for distinct configurations whose display labels coincide.
+
+5. **Medium** `packages/maprisma_core/lib/src/core.dart:3299` Ask AI still groups MCP candidates by raw name and unions agents by that name. With `filesystem` and `filesystem~2`, it cannot choose the second server: a connect candidate reaches `connections.preview` with the unsuffixed ID and selects the first variant. In addition, inventory deliberately excludes suffixed variants from the remembered MCP library (`inventory.dart:333`), so disconnecting the last user of the second variant loses its definition instead of retaining a reusable unused server.
+
+6. **Medium** `packages/maprisma_core/lib/src/map_edits.dart:458` A newly retained missing-model card cannot be replaced through the provider’s model hook. For example, an agent defaults to deleted model `gone`, and the user moves its provider/model line to available model `qwen`. The switch rejects the operation because the *old* model is absent from `rt.models`. The map now preserves the broken chain, but its normal replacement action cannot repair it.
+
+7. **Medium** `packages/maprisma_core/lib/src/core.dart:4497` `models.choose_preview` accepts a model marked `missing`: it checks its node kind and `serves` edge, both deliberately created for missing models, but not its status or current runtime inventory. Ask AI’s choice validator has the same omission (`smart_card.dart:662`). It can therefore offer and save a provider’s choice of a deleted model that the map refuses as a drop target. Apply also checks only whether the saved choice changed, so deletion between Preview and Apply is not detected.
+
+8. **Medium** `flutter_app/lib/main.dart:4187` Switching a provider’s chosen model when it has agent users still updates `provider_models` through `settings.update`, outside the connection backup. After switching X → Y and pressing the connection’s Undo, the agents return to X while the provider remains set to Y. Ask AI’s shared `models.switch_preview` path does not perform this GUI settings update either. F21 fixes the choice without users, but leaves this second choice-changing path inconsistent.
+
+9. **Medium** `packages/maprisma_core/lib/src/provider_scans.dart:72` Endpoint matching falls back to the usual-port runtime even when that runtime’s detected address contradicts the configuration. With llama.cpp detected on 9090 and an agent still configured for 8080, the first match fails and the fallback nevertheless returns llama.cpp. Both the graph and `rt.agents` show a valid connection to the moved server instead of exposing the stale endpoint.
+
+10. **Medium** `packages/maprisma_core/lib/src/agent_catalog.dart:257` Installation marks expand `~/` to an absolute path before searching wrapper text, but do not recognize shell home references. A valid wrapper such as `exec "$HOME/.openclaw/bin/openclaw" "$@"` contains neither the expanded absolute marker nor `/node_modules/openclaw/`, so the installed agent remains undetected. The tests cover absolute-path wrappers, not this ordinary hand-made wrapper form.
+
+11. **Medium** `packages/maprisma_core/lib/src/inventory.dart:397` Reused-folder models are suppressed by normalized model name across all installed runtimes, without checking file identity or directory. If a runtime lists `qwen-Q4_K_M` and a different reused folder contains `qwen-Q8_0.gguf`, both normalize to `qwen`; the reused file disappears from the map. Applying “Reuse model folder” still fails to reflect distinct files in this neighbouring F11 case.
+
+12. **Medium** `packages/maprisma_core/lib/src/usage_readers.dart:101` A positive session cost is now treated as evidence of API billing, but Hermes’s reader obtains that value from `COALESCE(actual_cost_usd, estimated_cost_usd)` (`session_readers.dart:585`). A session containing only an estimated API value can therefore classify Hermes as paid per token and produce a daily-budget battery without evidence of an actual charge. The reason given for withholding OMP/OpenClaw billing inference also applies to this estimated-cost fallback.
+
+13. **Medium** `packages/maprisma_core/lib/src/agent_details.dart:847` Native Codex limits require a file under the fixed home-relative `access.files` path. A signed-in Codex using its supported keyring store, or a relocated `CODEX_HOME` without `~/.codex/auth.json`, is never queried and still receives no battery. The supplied Omarchy collector recognizes non-file stores before asking Codex. The app can do the same using non-secret configuration and Codex’s RPC, without decoding credentials.
+
+14. **Medium** `packages/maprisma_core/lib/src/agent_details.dart:819` Native usage records remain readable after sign-out, while `planLimitsRpc` becomes unavailable once the sign-in file disappears. Consequently logout can change the map line to `available` while the badge and details continue showing the previous account’s plan and limits as current. Removing the sign-in file does not invalidate or stale the cached record immediately.
+
+15. **Medium** `flutter_app/lib/main.dart:5097` The minute timer reloads badges but never refreshes their native usage source. Native Codex limits are requested at startup and when details refresh, so leaving the map open without opening an agent’s details never renews them. The battery eventually fades or disappears at its reset despite a working app-server being available.
+
+16. **Medium** `packages/maprisma_core/lib/src/map_graph.dart:113` An adapter with no sign-in files is unconditionally considered signed in, even when it declares environment credentials that are absent. Grok without `XAI_API_KEY` therefore gets a `uses` line while readiness checks report missing access. The map also accepts its own-provider drop through `MapLayout.ownProvider`, although Grok has no registered login action; Ask AI correctly refuses that action. The provider identity agrees, but action availability and sign-in state do not.
+
+17. **Medium** `packages/maprisma_core/lib/src/agent_badges.dart:24` Limits with no usable measurement timestamp never become old: `_tooOld` returns false when `measured_at` is null. A legacy record with no `updatedAt`/`limitsFetchedAt`, no reset and no explicit stale flag therefore keeps a normal battery indefinitely. The F20 fix handles dated old records, but not records whose age is unknown.
+
+### F1–F23 verdicts
+
+“Fixed” below refers to the original case, with neighbouring limitations identified explicitly.
+
+| Finding | Verdict | Code check and remaining scope |
+|---|---|---|
+| F1 — wrong online-provider login | **Partly fixed** | `own_provider` now guards layout, refusal messages and `_mapEdit`. Foreign-provider login is blocked. Own-provider action availability still differs from Ask AI: #16. |
+| F2 — same-name MCP collapse | **Partly fixed** | Different display targets receive suffixes and graph edges follow them. Full identity, rules, Ask AI, tools and library preservation remain inconsistent: #1, #3–#5. |
+| F3 — non-package installations | **Partly fixed** | `install_marks` allows recognized upstream/npm/pipx paths, while retaining package restrictions. Ordinary `$HOME` wrappers remain missed: #10. |
+| F4 — custom-port identity | **Partly fixed** | Detected ports now feed both graph and inventory matching. Contradictory-address fallback remains: #9. |
+| F5 — local endpoint attributed online | **Fixed** | One active local provider supplies the qualifier for an otherwise unqualified configured model (`map_graph.dart:361`). |
+| F6 — capped/missing models | **Partly fixed** | Default, running and provider-chosen inventory models are retained beyond the cap; missing configured models retain nodes and lines. Replacement/choice validation remains inconsistent: #6–#7. |
+| F7 — unqualified running model | **Fixed** | Running instances inherit the configured provider before local/cloud resolution (`map_graph.dart:455`). |
+| F8 — LM Studio/Jan ports | **Fixed for implemented formats** | LM Studio’s server configuration and Jan’s service/router port now drive addresses. Actual installation formats remain unconfirmed offline. |
+| F9 — absent readers | **Partly fixed** | Gemini, Grok and Crush readers exist in Dart and Python. Muse remains open; live Gemini/Crush format compatibility is unconfirmed. |
+| F10 — Claude session fallback | **Fixed** | Dedicated newest-file search, age-independent tail read, aliases and cache now match the inspected reference behavior. |
+| F11 — reused model folders | **Partly fixed** | Settings reach inventory and folder model cards. Name-based suppression can hide distinct files: #11. |
+| F12 — wrong post-download agents | **Fixed** | Download candidates carry installed local-connector agents; GUI uses that list and core validates it (`core.dart:3498`). |
+| F13 — connection not activated | **Fixed** | Post-download connect now uses `use_now: true` (`core.dart:3504`), matching the equivalent manual connection. |
+| F14 — Ask AI online connection | **Fixed for supported logins** | `smartCloudSignIn` validates `own_clouds` and produces the existing login/logout action preview. Availability mismatch on the map remains #16. |
+| F15 — menu coverage | **Fixed for the documented handoffs** | Verify uses the agent preview; new menu candidates reach manual handlers. Navigation candidates open the appropriate selection workflow rather than applying an unspecified item. Local-program uninstall is absent on both sides. |
+| F16 — disconnect unload/Undo | **Fixed** | `modelsDisconnect` now changes configuration only; the extra unload actions were removed. |
+| F17 — online disconnect semantics | **Partly fixed** | Signed-out own-provider lines become `available`; foreign-provider disconnect no longer signs out the agent. Sign-in and cached-account state remain inconsistent: #14, #16. |
+| F18 — Codex without collector | **Partly fixed** | Native app-server client and cache work for the file-store gate. Launcher safety, other stores and ongoing refresh remain: #2, #13, #15. |
+| F19 — session-based billing | **Partly fixed, with a regression** | Money-bearing sessions can enable a badge; token-only OMP/OpenClaw remain intentionally undecided. Estimated Hermes costs are now incorrectly accepted as billing evidence: #12. |
+| F20 — stale limits | **Partly fixed** | Dated stale limits fade, reset limits expire and dated reset-less limits age out. Unknown-age records and sign-out invalidation remain: #14, #17. |
+| F21 — provider model rules/Undo | **Partly fixed** | New choose routes check rules and implement entry-specific Undo. Missing/stale models and the agent-user switch path remain: #7–#8. |
+| F22 — cost battery | **Fixed** | Cost badges carry remaining charge; `AgentBadge` draws battery plus monetary label. |
+| F23 — legend thresholds | **Fixed** | Legend receives Settings › Costs thresholds and uses inclusive remaining-percentage wording. |
+
+The deliberately open cases:
+
+- **Muse:** the reason holds. No persisted model source was established in the reviewed material. Existing command-line observation remains usable when the agent exposes `--model`. A reliable persisted-model fix needs evidence of a non-secret setting, session field or agent-owned interface; guessing a file/key would invent a fact.
+- **OMP/OpenClaw billing:** the reason holds. Tokens establish API value, not whether an account was charged. A sound credential-free solution is an explicit user billing classification or trustworthy provider/agent billing metadata. It should not infer payment merely from a priced model.
+- **Local LLM program uninstall:** the reason holds. There is no manual uninstall operation to mirror. Add-on removal is correctly distinguished from uninstalling the program.
+- **Gemini/Crush settings formats:** the implementations and Python counterparts agree on the stated keys. Their agreement does not independently verify the published formats. With network and live-install checks excluded, that compatibility remains **unconfirmed**, rather than a confirmed defect.
+
+### 1. Ask AI and menus — changed rows
+
+Core paths below are under `packages/maprisma_core/lib/src/`; GUI paths are under `flutter_app/lib/`.
+
+| Action | Menu path | Ask AI path | Same route and preview? | Rules, review, Undo | Remaining gap |
+|---|---|---|---|---|---|
+| Online-provider login/logout | `main.dart:4140`, `main.dart:4293` | `smart_card.dart:385` | Same `agents.action_preview/apply` for supported own-provider actions | Shared agent-action checks/review; authentication has no connection Undo | #14, #16 |
+| MCP connect/disconnect/details/tools | `main.dart:4293`; core `core.dart:4194` | Core `core.dart:3299`, `smart_card.dart:1312` | Shared connection preview, but identities differ between consumers | Alias versus raw-name checks differ | #1, #3–#5 |
+| Verify | `main.dart:3647` | `smart_card.dart:919`; core `core.dart:3344` | Shared agent preview/apply | Shared start rule and action review | Original gap closed |
+| API key/security/start/halt | `main.dart:2194` manual handoffs | `smart_card.dart:424` menu candidates | Opens existing manual handlers | Downstream manual routes enforce rules; keys stay outside helper input | Covered statically |
+| Agent details/configure | `main.dart:2228` | `smart_card.dart:424` | Details/Connections navigation | Selected follow-on changes use manual previews | Covered as navigation |
+| Add-on details/on/off/install/update/remove | `main.dart:2232` | `smart_card.dart:529`; core `core.dart:3518` | Existing add-on handlers/catalog operations | Candidate checks plus downstream manual checks | Covered for currently advertised facts |
+| Model load/unload/import | `main.dart:2242` | `smart_card.dart:620` | Existing provider operation; load/unload receive a review question | Provider-operation checks rerun | Covered statically |
+| Provider’s own model | `main.dart:4515` | `smart_card.dart:650` | New shared `models.choose_*` | Model connect/disconnect checks; entry-specific Undo | #7–#8 |
+| Post-download connect | `map_smart_card.dart:2661`; core `core.dart:3498` | Candidate `connect` list; `smart_card.dart:1807` | Shared connection preview, now activated | Same planner and connection backup | Original F12/F13 closed |
+| Find/reconnect/reuse existing AI | `main.dart:2280` | `smart_card.dart:1093` | Opens existing discovery workflow | Item selected there receives manual preview | Folder identity issue #11 |
+| Found MCP/unpack/update | `main.dart:2282` | `smart_card.dart:1221` | Opens Found on this PC | Follow-on item operations retain manual checks | MCP identity issues above |
+| Multi-model disconnect | Core `map_edits.dart:529` | Core `core.dart:3661` | Configuration-only plan | No additional unload; configuration Undo | Original F16 closed |
+| Local LLM program uninstall | No manual operation | Explicitly excluded by `smart_card.dart:1057` | Neither side offers it | Add-on removal remains separate | Accepted scope correction |
+
+All advertised `menu_action` area/step combinations have handlers in `_smartMenu`. I found no direct `menu_action` core apply path: GUI handoffs reach existing operations, and unsupported core action kinds are refused. Candidate filtering uses `smartMenuChecks`; downstream operations recheck their actual parameters.
+
+### 2. Existing installations — changed rows
+
+| Existing state | How found | Add-on switched on? | Map and lines now | Decline preserved? | Remaining gap |
+|---|---|---|---|---|---|
+| Hermes outside pacman | `agent_catalog.dart:295`; `adapters/hermes.toml:11` markers | Through existing setup/enable-found path when proven | Normal agent/settings chain | Yes; decline handling unchanged | `$HOME` wrappers #10 |
+| OpenClaw outside pacman | `agent_catalog.dart:295`; `adapters/openclaw.toml:11` markers | Same | Normal agent/settings chain | Yes | `$HOME` wrappers #10 |
+| Older signed Hermes/OpenClaw add-on | `addons.dart:470`; Python `harnesses.NEWER_FACTS` | New markers inherited when absent | Same as built-in facts | Yes | Marker limitations remain |
+| Local LLM on detected custom port | `provider_scans.dart:64`; inventory `inventory.dart:282` | Existing detection path | Graph and runtime agent lists use common matcher | Yes | Contradictory fallback #9 |
+| LM Studio custom port | `provider_scans.dart:398` | Existing directory/PATH detection | Configured address and listener check | Yes | Live format compatibility unconfirmed |
+| Jan custom service/router port | `provider_scans.dart:487` | Existing unit/data/process detection | Detected port and running state | Yes | Unit/router variants not exercised |
+| Selected/running model beyond cap | `map_graph.dart:537` | No add-on change | Retained model node; adjusted “more” count | Unchanged | Missing-model operations #6–#7 |
+| Deleted configured local model | `map_graph.dart:630` | No add-on change | Missing model plus provider/default lines | Unchanged | Replacement rejected: #6 |
+| Reused GGUF folder | `read_service.dart:339`; `inventory.dart:392` | Folder reuse does not enable a program | Folder model cards now drawn | Unchanged | Distinct quantizations suppressed: #11 |
+| Same-name MCP variants | `inventory.dart:252` | Agent detection unchanged | Separate cards when display targets differ | Unchanged | #1, #3–#5 |
+| Signed-out own online provider | `map_graph.dart:111`, `map_graph.dart:403` | Existing add-on state | Available rather than uses line | Yes | #14, #16 |
+
+### 3. Agent → provider → model — changed rows
+
+| Agent/case | Own online provider | Model source and choices | Local connection | Current chain | Gap / reference check |
+|---|---|---|---|---|---|
+| Claude | Anthropic | Settings, then cached newest-session tail and alias; `agent_details.dart:269` | Existing endpoint read | Single active local endpoint now owns unqualified model; CLI model inherits provider | Original F5/F7/F10 closed; matcher #9 |
+| Gemini | Google | `model.name`/legacy model, then newest session; `agent_details.dart:574` | No new connector | Google → discovered model | Dart/Python implementations agree; live settings format unconfirmed |
+| Grok | xAI | Newest usage file’s last model-usage turn; `agent_details.dart:613` | None added | xAI → discovered model | Reader agrees with inspected Python counterpart; access mismatch #16 |
+| Crush | Configured provider | `models.large` and configured providers; `agent_details.dart:645` | Existing local endpoint can be read; no new editor | Configured provider → model | Dart/Python agree; live settings format unconfirmed |
+| Muse | Meta | No new persisted reader | None added | Meta without persisted model | Intentionally open; no reliable source established |
+| Hermes | Configured provider | Existing YAML reader | Recognized non-package installs now participate | Cloud/local chain after detection | Marker #10; billing #12 |
+| OpenClaw | Configured provider | Existing defaults/provider reader | Recognized non-package installs now participate | Cloud/local chain after detection | Marker #10 |
+| All adapters: own provider | `own_provider` and `own_clouds` derive from visible provider facts | Login availability additionally represented in Ask AI facts | Foreign cloud login blocked | Pair identity agrees | Availability/sign-in mismatch #16 |
+| Two running local instances | Configured provider inherited for unqualified command-line models | Distinct models in runtime inventory retained beyond cap | Same matcher | Separate running-model usage labels | Original F7 closed for inspected case |
+| Missing configured model | Existing runtime | Synthetic missing node | Existing provider connection retained | Provider → missing model plus default line | Cannot switch away through model hook: #6 |
+| Provider’s chosen model | `provider_models` now reaches core graph | Retained beyond cap while runtime lists it | Future connections use choice | Choice routes added | Missing/stale acceptance and Undo: #7–#8 |
+| Older signed adapters | Built-in newer facts fill absent fields | Includes `details`, `install_marks`, `plan_limits` | Existing connectors unchanged | New readers/native limits reach old add-ons | Python newer-fact list and inspected snapshots include both new facts |
+
+The touched Python graph, inventory, installation and reader implementations generally mirror the Dart changes—including several remaining behaviors identified above. Agreement with the reference therefore does not establish correctness for those cases.
+
+### 4. Batteries — changed rows
+
+| Agent/case | Available limits/cost source | Reads now | Battery conditions | Credential-free at app level? | Remaining gap |
+|---|---|---|---|---|---|
+| Codex, no collector, file-store sign-in | Own app-server limits | `usage_rpc.dart:17`; native cache `agent_details.dart:123` | File-existence gate, successful RPC, current limits | Yes | Launcher #2; refresh #15 |
+| Codex keyring/relocated home | Same agent-owned RPC | Gate still checks fixed home-relative access files | Often never queried | Yes; non-secret configuration plus RPC suffices | #13 |
+| Codex after logout | Cached native record | `agent_details.dart:819` | Old future-reset limits remain eligible | Yes | Cache not invalidated: #14 |
+| Hermes | Actual **or estimated** session cost | `session_readers.dart:585`; `usage_readers.dart:101` | Positive cost can classify API billing | Yes | Estimate mistaken for billing: #12 |
+| OpenCode | Session-reported cost | `usage_readers.dart:101`; `core.dart:2738` | Positive billed amount with no plan/limits can enable badge | Yes | Actual billing interpretation not independently verified |
+| Crush | Session-reported cost | Same cost aggregation | Cost battery when billing recognized | Yes | Live store semantics not exercised |
+| OMP | Token-based API value | Existing sessions reader | No new billing inference | Yes for estimates | Intentionally open: billing mode unknown |
+| OpenClaw | Token-based API value | Existing sessions reader | No new billing inference | Yes for estimates | Intentionally open: billing mode unknown |
+| Every API-cost badge | Daily cost versus configured budget | `agent_badges.dart:159` | Battery plus monetary label when budget > 0 | Yes | F22 closed |
+| Every plan-limit badge | Measurement/reset/stale metadata | `agent_badges.dart:22` | Old dated limits fade; passed resets expire | Yes through records/agent APIs | Unknown-age records #17 |
+| All six local LLM GPU badges | Existing GPU/process source | Existing GPU path | Same runtime/GPU conditions as before | Yes | No new GPU acquisition change |
+| Legend | Settings › Costs thresholds | `main.dart:5364`; `map_legend.dart:8` | Configured inclusive thresholds and stale illustration | Yes | F23 closed |
+
+The native RPC sends initialization and account-limit/account-read requests, not a model prompt. Its stdout has a 1 MiB bound, answer/overall deadlines are present, and normal/error/timeout paths enter process cleanup. Actual descendant-process termination was not executed.
+
+### Not checked
+
+- No GUI, agents, collectors, installers or provider APIs were executed. No credential/key/token files were read.
+- Behavioral suites were not run; conclusions are code-checked rather than runtime reproductions. The listed known failures were not reported.
+- `python3 -B tools/protocol.py check` passed, including generated protocol documentation/client consistency.
+- All eight generated translation files contain all 860 keys declared by `tools/flutter-assets.py`.
+- `python3 -B docs/manual/translations.py check` fails for `map` in all seven translated manuals. The starting commit already had stale `map` stamps, so this is recorded as an outstanding validation issue, not a new regression.
+- The inspected adapter snapshots include the new installation marks, Codex plan-limit facts and new reader flags. Full generated-asset and differential parity suites were not executed.
+- Live Gemini/Crush/LM Studio settings compatibility, Muse’s persisted model source, account billing semantics, every Jan unit variant, and real process-group cleanup remain **unconfirmed**.
