@@ -152,7 +152,10 @@ Future<(double, String)?> usdPerEur(
 const _turnedDown = {'Waiting for auth', 'Sign-in expired'};
 
 /// agent_status.pays_per_token: paid per token (an API key or API billing)
-/// rather than with a plan whose limits the battery shows.
+/// rather than with a plan whose limits the battery shows. [billed]: its
+/// sessions of the last 30 days say they cost money (UsageReaders.costs'
+/// `billed`, from the agent's own store), which a provider billing per
+/// token sets and a plan or a local LLM does not.
 bool paysPerToken({
   required List limits,
   required String plan,
@@ -160,6 +163,7 @@ bool paysPerToken({
   required Map access,
   required String home,
   required Map<String, String> environment,
+  bool billed = false,
 }) {
   final note = '${usageRecord['usageStatusText'] ?? ''}'.trim();
   if (limits.isNotEmpty || _turnedDown.contains(note)) return false;
@@ -174,7 +178,7 @@ bool paysPerToken({
   }
   final hasUsage =
       usageRecord['ready'] == true || usageRecord['hasLocalStats'] == true;
-  return hasUsage && plan.isEmpty;
+  return (hasUsage || billed) && plan.isEmpty;
 }
 
 /// details_pages.fill_cost_card: the card's texts, from costs (null: none

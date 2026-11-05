@@ -45,6 +45,10 @@ games = ["chess"]                      # its menu offers Play chess
 effort = { quick = ["-c", "model_reasoning_effort=low"], normal = ["-c", "model_reasoning_effort=medium"], deep = ["-c", "model_reasoning_effort=high"], max = ["-c", "model_reasoning_effort=high"] }   # Thinking time
 note = "read-only sandbox, no session kept"
 
+[plan_limits]                          # its plan's limits where no Omarchy collector is: asked of its own app-server
+rpc = "codex-app-server"               # account/rateLimits/read over JSON-RPC: no prompt, no credential read here
+argv = ["codex", "-s", "read-only", "-a", "on-request", "app-server"]
+
 [access]
 logout = ["codex", "logout"]     # its own sign-out, in a terminal
 how = "A ChatGPT plan (Plus, Pro, Business), or an API key from platform.openai.com"

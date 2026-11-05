@@ -49,7 +49,12 @@ final class UsageReaders {
         models = <String, dynamic>{},
         unknown = <String, int>{};
     final prices = providerFacts['prices'] as Map;
-    var total = 0.0, week = 0.0, current = 0.0, reported = 0.0, any = false;
+    var total = 0.0,
+        week = 0.0,
+        current = 0.0,
+        reported = 0.0,
+        billed = 0.0,
+        any = false;
     for (final session in found.values) {
       final d = date(session.last != 0 ? session.last : session.first);
       if (d == null) continue;
@@ -91,6 +96,9 @@ final class UsageReaders {
         if (age == 0) current += spent;
         any = true;
       }
+      // Money the agent's own store says the session cost (Hermes, OpenCode,
+      // Crush): set only where a provider bills it, never for a plan.
+      if (session.cost > 0) billed += session.cost;
       if (session.tokens.isEmpty && session.cost > 0) {
         reported += session.cost;
         total += session.cost;
@@ -107,6 +115,7 @@ final class UsageReaders {
             'by_model': models,
             'unpriced': unknown,
             'reported': reported,
+            'billed': billed,
           }
         : null;
   }

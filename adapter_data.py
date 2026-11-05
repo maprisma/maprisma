@@ -46,7 +46,7 @@ TOP = {"command": STR, "name": STR, "label": STR, "full_name": STR, "icon": STR,
        "access": TABLE, "security": TABLE, "login_status": TABLE, "installer": STR, "usage": STR,
        "local_llm": TABLE, "ask": TABLE, "configure": TABLES, "home": STR, "activity": STRS, "details": TABLE,
        "program_dir": STR, "start": STRS, "web_search": BOOL, "chat_app": BOOL, "herdr": STR, "research": TABLE, "rewrite": TABLE, "task": TABLE, "closed": TABLE, "advise": TABLE,
-       "models": TABLE, "tools": TABLE, "replies": TABLE, "subagents": TABLE}
+       "models": TABLE, "tools": TABLE, "replies": TABLE, "subagents": TABLE, "plan_limits": TABLE}
 WAY = {"kind": STR, "spec": STR, "tool": STR, "argv": STRS, "sudo": BOOL, "url": STR, "note": STR,
        "update": STRS, "packages": "a list of [manager, name]"}
 UPDATE = {"self": STRS, "latest": STR}
@@ -78,6 +78,10 @@ OUTPUTS = ("text", "claude-json", "codex-jsonl")
 REPLIES = {"folder": STR, "depth": INT, "format": STR, "contexts": TABLE}   # contexts: model name prefix -> tokens
 REPLY_FORMATS = ("claude-jsonl", "codex-jsonl", "pi-jsonl")
 SUBAGENTS = {"format": STR, "path": STR}
+# Its plan's limits where no Omarchy collector is: asked of the agent's own program (argv: plain words,
+# starting with its command) over a protocol the app speaks (LIMIT_RPCS); no prompt, no credential read.
+PLAN_LIMITS = {"rpc": STR, "argv": STRS}
+LIMIT_RPCS = ("codex-app-server",)
 SUBAGENT_FORMATS = ("claude-projects", "opencode-db", "codex-rollouts", "copilot-events", "goose-db")
 SKILLS = {"dirs": STRS, "own": STR, "listed": TABLE_OR_HOOK, "settings_list": BOOL, "settings_file": STR,
           "write": HOOK}
@@ -266,6 +270,13 @@ def check(data: dict, name: str) -> None:
     # Arguments for the agent itself: plain words, never a shell or another program.
     if data.get("start") and not harnesses.configure_ok([data["command"], *data["start"]], (data["command"],)):
         raise AdapterError(f"{name}: start must be plain words")
+    if "plan_limits" in data:
+        _check(data["plan_limits"], PLAN_LIMITS, f"{name}: plan_limits", ("rpc", "argv"))
+        if data["plan_limits"]["rpc"] not in LIMIT_RPCS:
+            raise AdapterError(f"{name}: plan_limits.rpc “{data['plan_limits']['rpc']}” is not one the app has "
+                               f"({', '.join(LIMIT_RPCS)})")
+        if not harnesses.configure_ok(data["plan_limits"]["argv"], (data["command"],)):
+            raise AdapterError(f"{name}: plan_limits.argv must start with “{data['command']}”, plain words")
     sessions = data.get("sessions", {})
     _check(sessions, SESSIONS, f"{name}: sessions")
     if "reader" in sessions and sessions["reader"] not in READERS:
@@ -512,6 +523,7 @@ def harness(data: dict, name: str = "adapter", hooks=None) -> Harness:
         replies=(data["replies"]["folder"], data["replies"].get("depth", 1), data["replies"]["format"],
                  tuple(sorted(data["replies"].get("contexts", {}).items()))) if "replies" in data else (),
         subagents=(data["subagents"]["format"], data["subagents"]["path"]) if "subagents" in data else (),
+        plan_limits=(data["plan_limits"]["rpc"], tuple(data["plan_limits"]["argv"])) if "plan_limits" in data else (),
         session_files=data.get("sessions", {}).get("reader", ""),
         usage=ref(*USAGE[data["usage"]]) if "usage" in data else None,
         local_llm=llm, skills=skills, mcp=mcp,

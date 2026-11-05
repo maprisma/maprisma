@@ -161,6 +161,8 @@ class Harness:
     usage: Callable | None = None     # usage() -> agent_status.Usage from its own session store (else the
                                       # app derives it from `sessions`)
     limits: Callable | None = None    # limits() -> (plan, [agent_details.Limit]) from its own store
+    plan_limits: tuple = ()           # (rpc, argv): its plan's limits asked of its own program where no
+                                      # Omarchy collector is (adapter_data.LIMIT_RPCS)
     access: Callable | None = None    # access() -> agent_status.Access: what it needs to work
     login_status: tuple | None = None  # (argv, text meaning "no", text meaning "yes")
     local_llm: LocalLlm | None = None  # can be pointed at a local LLM from the map (connect)
@@ -361,7 +363,7 @@ def _extended(harness: Harness) -> Harness:
 # app's own adapter for the same agent gives them until the add-on is signed again.
 NEWER_FACTS = ("home", "activity", "details", "program_dir", "web_search", "chat_app", "herdr", "logout",
                "start", "research", "rewrite", "task", "closed", "advise", "models", "tools_setting", "sandbox_setting",
-               "asks_setting", "replies", "subagents", "sessions")
+               "asks_setting", "replies", "subagents", "sessions", "plan_limits")
 
 
 def _with_newer_facts(harness: Harness) -> Harness:

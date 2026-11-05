@@ -594,6 +594,7 @@ Future<void> main() async {
                     .table('access'),
                 home: identity.home,
                 environment: Map<String, String>.from(c['env'] as Map),
+                billed: c['billed'] == true,
               ),
           ],
         };

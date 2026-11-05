@@ -418,6 +418,7 @@ final class CoreService {
         access: agent.adapter.table('access'),
         home: identity.home,
         environment: identity.environment,
+        billed: (spent?['billed'] as num? ?? 0) > 0,
       ),
       plan: info.plan,
       currency: currency,
@@ -2712,20 +2713,33 @@ final class CoreService {
           'left': level.$1,
           'colour': level.$2,
           'tip': batteryTip(info.limits, now, i18n.text),
+          if (limitsStale(info.limits, now) != null) 'stale': true,
         };
         continue;
       }
-      final paying = paysPerToken(
+      bool paying({bool billed = false}) => paysPerToken(
         limits: info.limits,
         plan: info.plan,
         usageRecord: reads.details.usageRecord(a.command),
         access: a.adapter.table('access'),
         home: identity.home,
         environment: identity.environment,
+        billed: billed,
       );
-      if (!paying) continue;
+      // Its sessions are read only when it may pay per token: known so, or
+      // with no plan known and a store that keeps what each session cost.
+      final known = paying();
+      if (!known &&
+          (info.limits.isNotEmpty ||
+              info.plan.isNotEmpty ||
+              !SessionReaders.keepsCosts(a.adapter))) {
+        continue;
+      }
       final spent = UsageReaders(reads.files).costs(a.adapter);
       if (spent == null) continue;
+      if (!known && !paying(billed: (spent['billed'] as num? ?? 0) > 0)) {
+        continue;
+      }
       badges['agent:${a.command}'] = {
         ...costBadge(
           (spent['today'] as num).toDouble(),
@@ -4559,11 +4573,19 @@ final class CoreService {
         for (final f in agent.adapter.table('access')['files'] as List? ?? [])
           if (f is String) f,
       ];
-      if (!reads.details.usageIsStale(agent.command, access)) {
+      // Without Omarchy's collector: its own program, when its adapter says
+      // how to ask it and it is signed in.
+      final native = reads.details.planLimitsRpc(agent.adapter);
+      if (!reads.details.usageIsStale(
+        agent.command,
+        access,
+        native: native != null,
+      )) {
         return {'refreshed': false};
       }
       return tasks.start('agents.usage_refresh', {
         'command': agent.command,
+        if (native != null) ...{'rpc': native.$1, 'argv': native.$2},
       }, (result) => result);
     }
     if (method == 'gpu.snapshot') {

@@ -3403,5 +3403,11 @@
  "No setting matches “{0}”": "Geen instelling komt overeen met ‘{0}’",
  "Rules": "Regels",
  "Terminals and screenshots": "Terminals en schermafbeeldingen",
- "Local agents": "Lokale agents"
+ "Local agents": "Lokale agents",
+ "Green: what is left of an agent's plan limits or of a day's limit (paid per token), or free GPU memory on a running local LLM.": "Groen: wat er over is van de abonnementslimieten van een agent of van de daglimiet (betaald per token), of vrij GPU-geheugen bij een draaiend lokaal LLM.",
+ "Yellow: {0} % or less is left.": "Geel: {0} % of minder is over.",
+ "Red: {0} % or less is left.": "Rood: {0} % of minder is over.",
+ "Faded: its numbers may be out of date (its tooltip says when they were measured).": "Vervaagd: de cijfers zijn misschien niet meer actueel (de tooltip zegt wanneer ze gemeten zijn).",
+ "These numbers may be out of date.": "Deze cijfers zijn misschien niet meer actueel.",
+ "Measured {0}: these numbers may be out of date.": "Gemeten {0}: deze cijfers zijn misschien niet meer actueel."
 }

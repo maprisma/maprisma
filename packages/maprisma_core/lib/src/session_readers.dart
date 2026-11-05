@@ -658,6 +658,17 @@ final class SessionReaders {
     ).collect();
   }
 
+  /// The readers whose store keeps what each session cost in money, as the
+  /// agent itself was told (NumericSession.cost): none for a plan's use.
+  static const costReaders = {'hermes', 'opencode', 'crush-db'};
+
+  static bool keepsCosts(Adapter adapter) {
+    final session = adapter.table('sessions');
+    return costReaders.contains(
+      session['reader'] ?? (session['hook'] == true ? adapter.command : ''),
+    );
+  }
+
   Map<String, NumericSession> read(Adapter adapter) {
     final session = adapter.table('sessions');
     final reader =

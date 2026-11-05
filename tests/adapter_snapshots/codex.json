@@ -12,6 +12,17 @@
  "download": null,
  "short_version": false,
  "offered": true,
+ "plan_limits": [
+  "codex-app-server",
+  [
+   "codex",
+   "-s",
+   "read-only",
+   "-a",
+   "on-request",
+   "app-server"
+  ]
+ ],
  "login_status": null,
  "fixed_provider": "",
  "self_served": false,

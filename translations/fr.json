@@ -3403,5 +3403,11 @@
  "No setting matches “{0}”": "Aucun réglage ne correspond à « {0} »",
  "Rules": "Règles",
  "Terminals and screenshots": "Terminaux et captures d'écran",
- "Local agents": "Agents locaux"
+ "Local agents": "Agents locaux",
+ "Green: what is left of an agent's plan limits or of a day's limit (paid per token), or free GPU memory on a running local LLM.": "Vert : ce qui reste des limites du forfait d'un agent ou de la limite par jour (paiement au token), ou la mémoire GPU libre d'un LLM local en marche.",
+ "Yellow: {0} % or less is left.": "Jaune : il reste {0} % ou moins.",
+ "Red: {0} % or less is left.": "Rouge : il reste {0} % ou moins.",
+ "Faded: its numbers may be out of date (its tooltip says when they were measured).": "Estompée : ses chiffres ne sont peut-être plus à jour (son info-bulle dit quand ils ont été mesurés).",
+ "These numbers may be out of date.": "Ces chiffres ne sont peut-être plus à jour.",
+ "Measured {0}: these numbers may be out of date.": "Mesuré {0} : ces chiffres ne sont peut-être plus à jour."
 }

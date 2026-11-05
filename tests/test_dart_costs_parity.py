@@ -41,7 +41,7 @@ for c in case['pays']:
     record = c['record']
     details = NS(limits=c['limits'], plan=c['plan'], usage_note=str(record.get('usageStatusText', '')).strip(),
                  has_usage=bool(record.get('ready')) or bool(record.get('hasLocalStats')))
-    pays.append(agent_status.pays_per_token(c['command'], details, environ=c['env']))
+    pays.append(agent_status.pays_per_token(c['command'], details, environ=c['env'], billed=c.get('billed', False)))
 print(json.dumps({'texts': [plugin_costs.cost_text(*t) for t in case['texts']],
                   'numbers': [reference_texts.short_number(n) for n in case['numbers']],
                   'ecb': [list(x) if x else None for x in map(lambda b: plugin_costs.parse_ecb(b.encode()), case['ecb'])],
@@ -91,6 +91,8 @@ class DartCostsParityTest(unittest.TestCase):
                 {'command': 'codex', 'limits': [], 'plan': 'Plus', 'record': {'ready': True}, 'env': {}},
                 {'command': 'claude', 'limits': [], 'plan': '', 'record': {'usageStatusText': 'Sign-in expired'},
                  'env': {'ANTHROPIC_API_KEY': 'x'}},
+                {'command': 'hermes', 'limits': [], 'plan': '', 'record': {}, 'env': {}, 'billed': True},
+                {'command': 'hermes', 'limits': [], 'plan': 'Plus', 'record': {}, 'env': {}, 'billed': True},
             ]
             env = {k: v for k, v in os.environ.items() if not k.startswith('XDG_') and not k.endswith('_API_KEY')}
             env.update(HOME=str(home), LANG='C.UTF-8', MAPRISMA_DESKTOP='generic')
@@ -114,7 +116,7 @@ class DartCostsParityTest(unittest.TestCase):
         self.assertEqual(python['rates'][0], [1.07, '2026-10-28'])       # fresh: kept, not fetched
         self.assertEqual(python['rates'][1], [1.0842, '2026-10-29'])
         self.assertEqual(python['rates'][3], [1.05, '2026-10-20'])       # offline: the last one
-        self.assertEqual(python['pays'], [False, True, False, True, True, False, False])
+        self.assertEqual(python['pays'], [False, True, False, True, True, False, False, True, False])
 
 
 if __name__ == '__main__':
