@@ -25,6 +25,16 @@
   <url type="bugtracker">https://github.com/uBruckhaus/Asterism/issues</url>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.14.0" date="2026-11-05">
+      <description>
+        <p>The map shows what this PC already has: at the first start everything found is switched on,
+        agents installed outside a package count, and programs and local LLMs to install sit at the end of
+        their cards. Agents show their real sign-in (keyring, moved home), plan limits and costs as
+        batteries, and an online agent signs in only to its own provider. A provider's chosen model follows
+        its agents, two MCP servers of one name stay apart, Settings has sections with Find, and Ask AI uses
+        the same menus as the map, with its own Undo. Repair edits only provider entries it can read safely.</p>
+      </description>
+    </release>
     <release version="0.13.1" date="2026-11-04">
       <description>
         <p>Fixes the map that turned grey whenever one agent used another. The map now reads skills or
