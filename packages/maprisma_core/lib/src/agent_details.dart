@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'package:yaml/yaml.dart';
 import 'dsh_profile.dart';
@@ -11,6 +12,7 @@ import 'desktop.dart';
 import 'scan_files.dart';
 import 'service_i18n.dart';
 import 'provider_facts.dart';
+import 'posix_ffi.dart';
 
 String boundedText(dynamic value, [int limit = 80]) =>
     value is String ? String.fromCharCodes(value.trim().runes.take(limit)) : '';
@@ -64,34 +66,62 @@ final class AgentInfo {
   }
 }
 
-/// desktop_omarchy.has_usage_collector: Omarchy collects this agent's usage
-/// (`omarchy-agent-usage-<command>` in its bin folder or /usr/bin).
-bool usageCollectorExists(String command, Map<String, String> env) {
-  if (!RegExp(r'^[a-z0-9-]{1,64}$').hasMatch(command)) return false;
+/// Where Omarchy's usage records are (desktop_omarchy.USAGE_DIR); another
+/// desktop reads them from there too when Omarchy's collector is installed.
+String usageDir(Map<String, String> env) {
+  final state = (env['XDG_STATE_HOME'] ?? '').startsWith('/')
+      ? env['XDG_STATE_HOME']!
+      : '${env['HOME'] ?? ''}/.local/state';
+  return '$state/omarchy/agents/usage';
+}
+
+/// desktop_omarchy.has_usage_collector: Omarchy's collector of this agent's
+/// usage (`omarchy-agent-usage-<command>`), in Omarchy's bin folder,
+/// /usr/bin or, on another desktop, anywhere on PATH; null without one.
+String? usageCollector(String command, Map<String, String> env) {
+  if (!RegExp(r'^[a-z0-9-]{1,64}$').hasMatch(command)) return null;
   final root = (env['OMARCHY_PATH'] ?? '').isNotEmpty
       ? env['OMARCHY_PATH']!
       : '/usr/share/omarchy';
-  return ['$root/bin', '/usr/bin'].any(
-    (dir) =>
-        FileSystemEntity.typeSync('$dir/omarchy-agent-usage-$command') ==
-        FileSystemEntityType.file,
-  );
+  for (final dir in ['$root/bin', '/usr/bin']) {
+    final path = '$dir/omarchy-agent-usage-$command';
+    if (FileSystemEntity.typeSync(path) == FileSystemEntityType.file) {
+      return path;
+    }
+  }
+  return whichIn('omarchy-agent-usage-$command', env['PATH']);
 }
 
-/// desktop_omarchy.refresh_usage: Omarchy asked for this agent's usage
-/// (omarchy-agent-usage-update, at most a minute); true when it worked.
+bool usageCollectorExists(String command, Map<String, String> env) =>
+    usageCollector(command, env) != null;
+
+/// desktop_omarchy.refresh_usage: fresh usage of this agent (at most a
+/// minute); true when it worked. On Omarchy its omarchy-agent-usage-update
+/// writes the record; elsewhere the collector is run here and what it prints,
+/// one JSON object, becomes the record. Maprisma reads no credentials: the
+/// collector, Omarchy's own tool, does what it does on Omarchy.
 Future<bool> refreshUsage(String command, Map<String, String> env) async {
-  if (!usageCollectorExists(command, env)) return false;
-  final tool = whichIn('omarchy-agent-usage-update', env['PATH']);
-  if (tool == null) return false;
+  final collector = usageCollector(command, env);
+  if (collector == null) return false;
+  final update = (env['OMARCHY_PATH'] ?? '').isNotEmpty
+      ? whichIn('omarchy-agent-usage-update', env['PATH'])
+      : null;
   try {
     final process = await Process.start(
-      tool,
-      [command],
+      update ?? collector,
+      update != null ? [command] : const [],
       environment: env,
       includeParentEnvironment: false,
     );
-    unawaited(process.stdout.drain<void>());
+    final out = <int>[];
+    var tooLong = false;
+    final reading = process.stdout.listen((chunk) {
+      if (out.length + chunk.length > usageRecordLimit) {
+        tooLong = true;
+      } else {
+        out.addAll(chunk);
+      }
+    }).asFuture<void>();
     unawaited(process.stderr.drain<void>());
     await process.stdin.close();
     final code = await process.exitCode.timeout(
@@ -101,11 +131,31 @@ Future<bool> refreshUsage(String command, Map<String, String> env) async {
         return -1;
       },
     );
-    return code == 0;
+    await reading.timeout(const Duration(seconds: 5), onTimeout: () {});
+    if (code != 0) return false;
+    if (update != null) return true;
+    if (tooLong) return false;
+    final Object? record;
+    try {
+      record = jsonDecode(utf8.decode(out));
+    } on FormatException {
+      return false;
+    }
+    if (record is! Map) return false;
+    Posix().atomicWrite(
+      '${usageDir(env)}/$command.json',
+      utf8.encode('${jsonEncode(record)}\n'),
+    );
+    return true;
   } on ProcessException {
+    return false;
+  } on FileSystemException {
     return false;
   }
 }
+
+/// The most a collector may print: a record is a few kilobytes.
+const usageRecordLimit = 4 * 1024 * 1024;
 
 final class DetailReaders {
   DetailReaders(this.files, this.desktop, this.i18n);
@@ -439,9 +489,9 @@ final class DetailReaders {
   /// usage.
   static const usageMaxAge = 10 * 60;
 
-  /// desktop_omarchy.has_usage_collector, on Omarchy only.
+  /// desktop_omarchy.has_usage_collector: on Omarchy, or on another desktop
+  /// with Omarchy's collector installed (desktop_generic.has_usage_collector).
   bool hasUsageCollector(String command) =>
-      desktop.name == 'omarchy' &&
       usageCollectorExists(command, files.identity.environment);
 
   /// agent_details.usage_is_stale: Omarchy collects usage for this agent and
@@ -483,7 +533,7 @@ final class DetailReaders {
 
   Map<String, dynamic> usageRecord(String command) {
     if (!RegExp(r'^[a-z0-9-]{1,64}$').hasMatch(command)) return {};
-    final path = desktop.name == 'omarchy'
+    final path = desktop.name == 'omarchy' || hasUsageCollector(command)
         ? '${files.identity.root('XDG_STATE_HOME', '.local/state')}/omarchy/agents/usage/$command.json'
         : '~/.local/state/maprisma/no-usage/$command.json';
     return Map<String, dynamic>.from(files.json(path));

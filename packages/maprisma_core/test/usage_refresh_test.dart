@@ -79,15 +79,58 @@ void main() {
     );
   });
 
-  test('not collected or not Omarchy: never stale, never asked', () async {
+  test('not collected: never stale, never asked', () async {
     expect(details.usageIsStale('no-such-agent-x', const []), isFalse);
     expect(await refreshUsage('no-such-agent-x', env), isFalse);
-    final identity = AppIdentity(environment: env);
-    final generic = DetailReaders(
+  });
+
+  test('another desktop runs a collector found on PATH itself', () async {
+    final bin = Directory('${root.path}/local-bin')..createSync();
+    void collector(String name, String body) {
+      File(
+        '${bin.path}/omarchy-agent-usage-$name',
+      ).writeAsStringSync('#!/bin/sh\n$body\n');
+      Process.runSync('chmod', [
+        '755',
+        '${bin.path}/omarchy-agent-usage-$name',
+      ]);
+    }
+
+    collector(
+      'codex',
+      'echo \'{"tierLabel": "Plus", "limits": [{"label": "Weekly", '
+          '"percent": 0.25}]}\'',
+    );
+    collector('grok', 'echo not json');
+    collector('gemini', 'exit 3');
+    final generic = {
+      'HOME': root.path,
+      'PATH': '${bin.path}:/usr/bin:/bin',
+      'XDG_STATE_HOME': '${root.path}/state',
+      'XDG_CONFIG_HOME': '${root.path}/config',
+    };
+    final identity = AppIdentity(environment: generic);
+    final other = DetailReaders(
       ScanFiles(identity),
-      GenericDesktop(env),
+      GenericDesktop(generic),
       ServiceI18n(identity, SettingsStore(identity)),
     );
-    expect(generic.usageIsStale('claude', const []), isFalse);
+    expect(usageCollectorExists('codex', generic), isTrue);
+    expect(other.usageIsStale('codex', const []), isTrue);
+    expect(await refreshUsage('codex', generic), isTrue);
+    expect(other.usageIsStale('codex', const []), isFalse);
+    expect(other.usageRecord('codex')['tierLabel'], 'Plus');
+    // What is not one JSON object, or a failed run, writes nothing.
+    expect(await refreshUsage('grok', generic), isFalse);
+    expect(await refreshUsage('gemini', generic), isFalse);
+    for (final name in ['grok', 'gemini']) {
+      expect(
+        File('${root.path}/state/omarchy/agents/usage/$name.json').existsSync(),
+        isFalse,
+      );
+    }
+    // No collector: the generic desktop keeps no record and asks nobody.
+    expect(other.usageIsStale('copilot', const []), isFalse);
+    expect(other.usageRecord('copilot'), isEmpty);
   });
 }
