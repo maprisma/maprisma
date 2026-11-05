@@ -534,7 +534,7 @@
       <tr><td><b>vLLM</b></td><td>For NVIDIA cards, in its own Python environment.</td></tr>
       <tr><td><b>Jan</b></td><td>Its AppImage, unpacked, with Jan's engine as a background service for agents.</td></tr>
       <tr><td><b>KoboldCpp</b></td><td>The official single-file build, run as a model router.</td></tr>
-      <tr><td><b>Strata</b></td><td>Its own installer (<code>install.sh</code> of the latest release, checked against the SHA-256 the release lists), which puts Strata’s terminal in <code>~/.local/share/strata/terminal</code>. Its engine and models come later, in Strata’s own screens (see <a href="#strata">Strata</a>).</td></tr>
+      <tr><td><b>Strata</b></td><td>Its own installer (<code>install.sh</code> of the latest release, checked against the SHA-256 the release lists), which puts Strata’s terminal in <code>~/.local/share/strata/terminal</code>. Its engine and models come later, in Strata’s own screens (see <a href="#strata">Strata</a>). Maprisma offers no <b>Uninstall…</b> for it; how to remove it is in that section too.</td></tr>
     </tbody>
   </table>
   <p>Installed this way, a local LLM also offers <b>Update…</b> (the previous version is kept as a
@@ -566,7 +566,7 @@
   running server, and by its models: the run configs Strata keeps in
   <code>~/.local/share/strata/install</code>.</p>
   <p>Choosing, downloading and tuning a model happens in Strata’s own screens: run
-  <code>strata launch</code> in a terminal (<code>strata launch --status</code> shows what is serving).
+  <code>~/.local/bin/strata launch</code> in a terminal (<code>~/.local/bin/strata launch --status</code> shows what is serving).
   Once Strata has started a model this way, it remembers it as a launch preset. From then on
   <b>Start</b> on the map (the ▶ button on Strata’s box) starts the preset used last
   (<code>strata launch --preset … --no-tui</code>, which returns when the model serves; large models take
@@ -574,8 +574,7 @@
   <p>Strata and llama.cpp both use port 8080 unless told otherwise. An agent connected from the map
   names its local LLM (<code>strata-local</code>), so it stays Strata’s even when llama.cpp uses that port
   too; only one of them can serve on a port at a time.</p>
-  <p><b>Uninstall…</b> removes only Strata’s terminal and the <code>strata</code> command it installed.
-  Its engines, run configs and models stay where they are; remove them in Strata or by hand.</p>
+  <p>Maprisma does not remove Strata. To remove it yourself, delete its terminal (<code>~/.local/share/strata/terminal</code>) and the link <code>~/.local/bin/strata</code>. Its engines and run configs are in <code>~/.local/share/strata</code> (<code>components</code>, <code>install</code>), its models in the folders you chose in Strata, and the desktop app’s chats in <code>~/.strata</code>; delete those only if you no longer want them.</p>
 
   <h2 id="llm-details">A local LLM's details</h2>
   <p>Click a local LLM's card on Setup, or right-click its box on the map › <b>Details</b>. Below the

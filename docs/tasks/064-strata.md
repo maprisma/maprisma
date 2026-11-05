@@ -19,9 +19,14 @@ own way).
   folder only when it resolves into `$XDG_DATA_HOME/strata/terminal/`. The add-on's `detect.commands` is empty for
   the same reason (its folders detect it).
 - **Running and port.** Its server is its terminal's Python running `-m serve.server … --config <run config>`
-  (`strata_control/runtime.py`); `argv[0]` contains `/strata/terminal/`. The port is `--port`, else the run config's
-  `"port"` (bounded JSON, no links), else 8080. Its processes (that Python, the engine binary under
-  `strata/components/`) are Strata's by path (`BY_PATH`), so llama.cpp's claim by name never takes them.
+  (`strata_control/runtime.py`). Its server and its engine are only executables that resolve, as real paths (links
+  followed, the file must exist), into this user's own `$XDG_DATA_HOME/strata/terminal` (server and supervisor)
+  or `…/strata/components` (engine); a path that merely contains `/strata/terminal/` elsewhere is not
+  (`provider_strata.owns` / `is_server`, `StrataFacts.owns` / `isServer`; review 064 #2). They are Strata's
+  `BY_PATH`, so llama.cpp's claim by name never takes them. The port is the first `--port` that is 1-5 ASCII digits
+  in 1..65535, else the run config's `"port"` (bounded JSON, no links), else 8080. The same rule for every port read
+  from text (`gpu_usage.port_number` / `portNumber`: scans, the scan's port map, `port_of`, the watcher config,
+  `traffic.split_address`; review 064 #1).
 - **Models** are its run configs `strata-<id>.json` in `$XDG_DATA_HOME/strata/install` (Strata's own `MODEL_ID`
   rule, at most 128, no links, not `*.shared-settings.json`), read from disk; the CLI is not run on every scan.
   No Models… page, no own model folder, `can_load` False: choosing, downloading and tuning a model stays in Strata's
@@ -47,12 +52,19 @@ own way).
   there without the app's marker (then `strata update`). Afterwards the absolute `current` link's version is
   recorded in the marker (`current_version_in` reads the basename). `versions()` also counts version folders
   Strata's own update put there (bin/strata + VERSION), so uninstall removes them too.
-- **Uninstall** (Python reference only: the Dart core has no route that uninstalls a local LLM, for any of them):
-  the terminal versions, `current`, the marker and `~/.local/bin/strata`; engines, run configs, models and other
-  files stay.
+- **Removal.** The shipped app (Dart core, Flutter) has no route that uninstalls a local LLM, for any of them, and
+  none is added: the manual says how to remove Strata by hand (its terminal folder and the `~/.local/bin/strata`
+  link; engines, run configs, models and the desktop app's chats are named, to keep or delete) and that Maprisma
+  offers no Uninstall… for it (review 064 #5). The Python reference's `install_ctl.Strata.uninstall` removes only the
+  terminal versions, `current`, the marker and the link.
 - **Configure…** (Python reference): "Set up a model" (`strata launch`) and "What is serving"
-  (`strata launch --status`). The Flutter map has no Configure… for local LLMs, so texts name `strata launch` in a
-  terminal and the ▶ button.
+  (`strata launch --status`), run with Strata's verified path: a local LLM's program is resolved through its engine
+  (`Engine.resolve_program`; by name for the others as before, Strata only `strata_binary()`), also for the `--help`
+  fallback, so `/usr/bin/strata` never runs (review 064 #3). The Flutter map has no Configure… for local LLMs; texts
+  and the manual name `~/.local/bin/strata launch` and the ▶ button.
+- **Replies of another shape.** `loaded_models` / `unload_all` read every server's list through `llm_engine.rows`
+  (the Python twin of the Dart core's `_rows`): a list reply, `{"data": {}}` or a text status give no models instead of
+  an exception, for every built-in engine (review 064 #4).
 
 ## Routes
 None (`routes.json` untouched). `boundedOutput` (Dart) gained `inheritEnvironment` for the installer.
@@ -80,9 +92,13 @@ stopping with agents" and a new section `#strata`, in all 8 languages; PDFs rebu
   `tests/test_dart_installers_parity.py` installs a fake Strata release on both cores (the feed it was given, the
   link, the marker).
 
+## Review 064 (Codex round 1 on the merged main fa278c5)
+
+Five Mediums, all fixed on this branch with tests in both cores where they apply: #1 oversized `--port` (and the
+port-text class), #2 ownership by real path, #3 Configure… by name, #4 odd JSON replies, #5 Uninstall… in the
+manual. See the commits after 29677c2.
+
 ## Open
 - Release: the signed add-on `llm-strata` (25th) must be built, signed and published with the next version; until
   an add-on for it is installed, the built-in provider shows.
 - Configure… in the Flutter app does not exist for local LLMs (all of them).
-- A PC where `/usr/bin` comes before `~/.local/bin` on PATH: the Python Configure… commands run `strata` by name
-  and would start the file manager there.
