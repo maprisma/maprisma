@@ -96,9 +96,9 @@ for line in sys.stdin:
  elif m=='connections.preview':r={'plan':'opaque','empty':False,'files':[],'links_add':[],'links_remove':[],
   'command':'test','item':'known-server','remove':False,'focus':['agent:test','mcp:known-server']}
  elif m=='connections.move_preview':r={'plan':'opaque-remove','empty':False,'files':[],'links_add':[],'links_remove':[],'focus':['agent:test','mcp:known-server']}
- elif m=='connections.undo':connected=False;r={'restored':['fixture']}
+ elif m=='connections.undo':connected=False;r={'restored':['fixture'],'choice_failures':1 if Path('choice_fails').exists() else 0}
  elif m=='connections.apply' and p['plan']=='opaque-measure':Path('tuned').touch();tasks['connect']={'ok':True,'undo':'undo-tuned'};r={'task':'connect'}
- elif m=='connections.apply':connected=p['plan']!='opaque-remove';tasks['connect']={'ok':True,'undo':'undo-token'};r={'task':'connect'}
+ elif m=='connections.apply':connected=p['plan']!='opaque-remove';tasks['connect']={'ok':True,'undo':'undo-token','choice_failures':1 if Path('choice_fails').exists() else 0};r={'task':'connect'}
  elif m=='providers.run':
   op=p['operation'];tasks[op]=({'repos':[{'id':'owner/repo'}]} if op=='models.search' else
    {'files':[{'name':'model.gguf','quant':'Q4','size':123}]} if op=='models.files' else {'ok':True})
@@ -1348,6 +1348,77 @@ void main() {
     expect(tester.takeException(), isNull);
     await unmountApp(tester);
   });
+  testWidgets(
+    'a provider choice that could not follow its agents is said, and on Undo',
+    (tester) async {
+      final dir = await mountApp(
+        tester,
+        beforeStart: (d) {
+          File('${d.path}/switch').writeAsStringSync('');
+          File('${d.path}/choice_fails').writeAsStringSync('');
+          File('${d.path}/start-settings.json').writeAsStringSync(
+            jsonEncode({
+              'provider_models': {
+                'runtime:fixture': 'model:runtime:fixture:example-model',
+              },
+            }),
+          );
+        },
+      );
+      await tester.tap(find.text('Fixture provider'));
+      await tester.pumpAndSettle();
+      final old = tester.getCenter(find.text('example-model'));
+      final hooks = find.byTooltip(
+        'Move this connection to another compatible box, or to empty space to disconnect.',
+      );
+      final hook =
+          (hooks.evaluate().toList()..sort(
+                (x, y) => (tester.getCenter(find.byWidget(x.widget)) - old)
+                    .distance
+                    .compareTo(
+                      (tester.getCenter(find.byWidget(y.widget)) - old)
+                          .distance,
+                    ),
+              ))
+              .first;
+      final from = tester.getCenter(find.byWidget(hook.widget)),
+          to = tester.getCenter(find.text('other-model'));
+      await tester.dragFrom(from, to - from);
+      await settleService(tester);
+      final dialog = find.byKey(const ValueKey('map-change-dialog'));
+      if (dialog.evaluate().isNotEmpty) {
+        await tester.tap(
+          find.descendant(of: dialog, matching: find.text('Apply')),
+        );
+        await settleService(tester);
+      }
+      // The models the local LLM keeps loaded are offered afterwards: not now.
+      await tester.tap(find.text('Cancel').last);
+      await settleService(tester);
+      // Applied with its Undo, but the provider's own model stayed.
+      expect(
+        find.text(
+          "Applied, but the local LLM's own model stayed as it was: it changed meanwhile or could not be saved.",
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Succeeded'), findsNothing);
+      await tester.tap(find.widgetWithText(SnackBarAction, 'Undo'));
+      await settleService(tester);
+      expect(
+        find.textContaining(
+          "The local LLM's own model was not put back: a file or the model changed since.",
+        ),
+        findsOneWidget,
+      );
+      expect(
+        requests(dir).where((q) => q['method'] == 'connections.undo'),
+        hasLength(1),
+      );
+      expect(tester.takeException(), isNull);
+      await unmountApp(tester);
+    },
+  );
   testWidgets('a stale provider choice is not sent to an agent', (
     tester,
   ) async {

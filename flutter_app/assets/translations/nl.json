@@ -824,5 +824,8 @@
   "{0} cannot use {1}.": "{0} kan {1} niet gebruiken.",
   "To switch {0} to {1}, draw the line to one of its models.": "Om {0} naar {1} over te zetten, trek je de lijn naar een van zijn modellen.",
   "{0} uses {1} through its own settings. Change it there.": "{0} gebruikt {1} via zijn eigen instellingen. Wijzig het daar.",
-  "This agent has no sign-in that the app can start.": "Deze agent heeft geen aanmelding die de app kan starten."
+  "This agent has no sign-in that the app can start.": "Deze agent heeft geen aanmelding die de app kan starten.",
+  "This local LLM now listens on another port. Repair or remove this connection.": "Deze lokale LLM luistert nu op een andere poort. Herstel of verwijder deze verbinding.",
+  "Applied, but the local LLM's own model stayed as it was: it changed meanwhile or could not be saved.": "Toegepast, maar het eigen model van de lokale LLM bleef zoals het was: het is intussen gewijzigd of kon niet worden opgeslagen.",
+  "The local LLM's own model was not put back: a file or the model changed since.": "Het eigen model van de lokale LLM is niet teruggezet: een bestand of het model is sindsdien gewijzigd."
 }
