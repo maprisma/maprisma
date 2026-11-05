@@ -309,6 +309,9 @@ final class MapGraph {
         icon: a['icon'],
         font: a['icon_font'],
         status: instances.isEmpty ? '' : 'running',
+        // Made for a local LLM (its adapter connects one): the map's Local
+        // agents card; the others are online agents.
+        group: agent.adapter.table('local_llm').isEmpty ? '' : 'local',
       );
       var (model, modelProvider) = splitModel(info?.model ?? '');
       final local = <String, String>{};

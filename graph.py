@@ -11,6 +11,7 @@ Providers are the cloud services the agents talk to and the local runtimes
 import re
 from dataclasses import dataclass, field
 
+import harnesses
 import providers
 from i18n import _
 
@@ -109,7 +110,8 @@ class Node:
     dim: bool = False        # drawn faded
     status: str = ""         # local runtimes: "running", "stopped" (installed) or "missing"
     group: str = ""          # models: the folder they live in ("" = an online provider's); MCP servers:
-                             # "online" for one at a URL (a card of its own on the map)
+                             # "online" for one at a URL (a card of its own on the map); agents: "local"
+                             # for one made for a local LLM (its adapter has local_llm)
     active: bool = False     # models: an agent's model, or one an open agent runs
 
 
@@ -248,11 +250,14 @@ def build(agent_list, details: dict, inventory, labels: dict | None = None, fail
             continue
         aid = f"agent:{agent.command}"
         instances = running.get(agent.command, [])
+        # Made for a local LLM (its adapter connects one): the map's Local agents card.
+        harness = harnesses.get(agent.command)
+        local = "local" if harness and harness.local_llm else ""
         if instances:
             graph.add(Node(aid, 1, agent.name, " · ".join(filter(None, [agent.version, labels["running"](len(instances))])),
-                           "agent", agent.icon, agent.icon_font, status="running"))
+                           "agent", agent.icon, agent.icon_font, status="running", group=local))
         else:
-            graph.add(Node(aid, 1, agent.name, agent.version, "agent", agent.icon, agent.icon_font))
+            graph.add(Node(aid, 1, agent.name, agent.version, "agent", agent.icon, agent.icon_font, group=local))
         info = details.get(agent.command)
         model, model_provider = split_model(info.model if info else "")
 

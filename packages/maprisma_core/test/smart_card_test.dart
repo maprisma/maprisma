@@ -1282,6 +1282,33 @@ void main() {
     expect(config.readAsStringSync(), before);
   });
 
+  test('an agent made for a local LLM is in the local group', () async {
+    final home = Directory.systemTemp.createTempSync('smart');
+    addTearDown(() => home.deleteSync(recursive: true));
+    final bin = Directory('${home.path}/bin')..createSync();
+    for (final command in ['claude', 'pi']) {
+      File('${bin.path}/$command').writeAsStringSync('#!/bin/sh\necho 1.0.0\n');
+      Process.runSync('chmod', ['+x', '${bin.path}/$command']);
+    }
+    final core = CoreService(
+      environment: {
+        'HOME': home.path,
+        'PATH': bin.path,
+        'MAPRISMA_DESKTOP': 'generic',
+      },
+    );
+    var graph = core.dispatch('map.snapshot', {'force': true});
+    for (var i = 0; i < 100 && graph['pending'] == true; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      graph = core.dispatch('map.snapshot', {'poll': true});
+    }
+    final groups = {
+      for (final n in (graph['nodes'] as List).cast<Map>())
+        if (n['kind'] == 'agent') n['id']: n['group'],
+    };
+    expect(groups, {'agent:claude': '', 'agent:pi': 'local'});
+  });
+
   test('a known server without agents stays on the map', () async {
     final home = Directory.systemTemp.createTempSync('smart');
     addTearDown(() => home.deleteSync(recursive: true));
