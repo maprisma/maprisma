@@ -275,6 +275,13 @@ void main() {
       final binDir = '${temp.path}/bin';
       writeExecutable(binDir, 'omarchy-dictation', '#!/bin/sh\nexit 0\n');
       writeExecutable(binDir, 'voxtype', '#!/bin/sh\nexit 0\n');
+      // Voxtype counts only with Omarchy's helper for it; a real Omarchy has
+      // it, another desktop (this test on KDE) does not.
+      writeExecutable(
+        binDir,
+        'omarchy-dictation-voxtype',
+        '#!/bin/sh\nexit 0\n',
+      );
       writeExecutable(binDir, 'monologue', '#!/bin/sh\nexit 0\n');
       writeExecutable(
         binDir,
