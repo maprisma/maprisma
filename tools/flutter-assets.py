@@ -813,6 +813,17 @@ KEYS = (
     "This local LLM now listens on another port. Repair or remove this connection.",
     "Applied, but the local LLM's own model stayed as it was: it changed meanwhile or could not be saved.",
     "The local LLM's own model was not put back: a file or the model changed since.",
+    # Ask AI: own suggestions per category (save, edit, remove, built-in again).
+    "Save as suggestion",
+    "Edit suggestion",
+    "Remove suggestion",
+    "Back to the built-in suggestions",
+    "Write a request first, then save it as a suggestion.",
+    "That is already a suggestion.",
+    "At most {0} suggestions: remove one first.",
+    "Saved as suggestion.",
+    "Too long for a suggestion.",
+    "Could not save the suggestions.",
 )
 
 

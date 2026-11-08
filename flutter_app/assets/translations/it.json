@@ -830,5 +830,15 @@
   "This agent has no sign-in that the app can start.": "Questo agente non ha un accesso che l’app possa avviare.",
   "This local LLM now listens on another port. Repair or remove this connection.": "Questo LLM locale ora ascolta su un'altra porta. Ripara o rimuovi questa connessione.",
   "Applied, but the local LLM's own model stayed as it was: it changed meanwhile or could not be saved.": "Applicato, ma il modello proprio dell'LLM locale è rimasto com'era: è cambiato nel frattempo o non è stato possibile salvarlo.",
-  "The local LLM's own model was not put back: a file or the model changed since.": "Il modello proprio dell'LLM locale non è stato ripristinato: un file o il modello è cambiato da allora."
+  "The local LLM's own model was not put back: a file or the model changed since.": "Il modello proprio dell'LLM locale non è stato ripristinato: un file o il modello è cambiato da allora.",
+  "Save as suggestion": "Salva come suggerimento",
+  "Edit suggestion": "Modifica suggerimento",
+  "Remove suggestion": "Rimuovi suggerimento",
+  "Back to the built-in suggestions": "Torna ai suggerimenti predefiniti",
+  "Write a request first, then save it as a suggestion.": "Scrivi prima una richiesta, poi salvala come suggerimento.",
+  "That is already a suggestion.": "È già un suggerimento.",
+  "At most {0} suggestions: remove one first.": "Al massimo {0} suggerimenti: rimuovine prima uno.",
+  "Saved as suggestion.": "Salvato come suggerimento.",
+  "Too long for a suggestion.": "Troppo lungo per un suggerimento.",
+  "Could not save the suggestions.": "Impossibile salvare i suggerimenti."
 }

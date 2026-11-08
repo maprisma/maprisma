@@ -46,11 +46,35 @@ const uiSettings = {
   'ai_checks',
   'window_mode',
   'corners',
+  'ask_prompts',
 };
 const languages = {'en', 'de', 'fr', 'es', 'it', 'pt', 'nl', 'pl'};
 const mapLayers = ['agents', 'online', 'local', 'models', 'mcp', 'skills'];
 const systemMapColumns = ['pc', 'disks', 'programs', 'tools', 'folders'];
 const settingsMaxBytes = 256 * 1024;
+
+/// Ask AI's suggestions per card column (settings_schema._ask_prompts): an
+/// int keeps that built-in example, a string is the user's own request.
+bool validAskPrompts(dynamic v) {
+  if (v is! Map || v.length > 16) return false;
+  final column = RegExp(r'^[a-z_]{1,32}$');
+  for (final entry in v.entries) {
+    final items = entry.value;
+    if (entry.key is! String || !column.hasMatch(entry.key as String)) {
+      return false;
+    }
+    if (items is! List || items.length > 12) return false;
+    final seen = <String>{};
+    for (final x in items) {
+      final ok = x is int
+          ? x >= 0 && x <= 199
+          : x is String && x == x.trim() && x.isNotEmpty && x.length <= 2000;
+      if (!ok || !seen.add(x is int ? 'i$x' : 's$x')) return false;
+    }
+  }
+  return true;
+}
+
 bool texts(dynamic v) => v is List && v.every((e) => e is String);
 bool subset(dynamic v, List<String> choices) =>
     texts(v) && (v as List).every(choices.contains);
@@ -276,6 +300,8 @@ final class SettingsStore {
         return v is Map && v.values.every((e) => e is String);
       case 'agent_project_history':
         return v is Map && v.values.every(texts);
+      case 'ask_prompts':
+        return validAskPrompts(v);
     }
     final fallback = defaults[key];
     if (fallback is bool) return v is bool;

@@ -3428,5 +3428,15 @@
  "set one up in Strata's own screens: run strata launch in a terminal.": "configura uno en las pantallas propias de Strata: ejecuta strata launch en un terminal.",
  "set one up in Strata's own screens: run ~/.local/bin/strata launch in a terminal.": "configura uno en las pantallas propias de Strata: ejecuta ~/.local/bin/strata launch en un terminal.",
  "start a model in Strata (~/.local/bin/strata launch) before working with {0}.": "inicia un modelo en Strata (~/.local/bin/strata launch) antes de trabajar con {0}.",
- "Made for Asterism, this app's old name, and never loaded. Remove it: Maprisma brings its own copy.": "Hecho para Asterism, el nombre antiguo de esta app, y nunca cargado. Quítalo: Maprisma trae su propia copia."
+ "Made for Asterism, this app's old name, and never loaded. Remove it: Maprisma brings its own copy.": "Hecho para Asterism, el nombre antiguo de esta app, y nunca cargado. Quítalo: Maprisma trae su propia copia.",
+ "Save as suggestion": "Guardar como sugerencia",
+ "Edit suggestion": "Editar sugerencia",
+ "Remove suggestion": "Quitar sugerencia",
+ "Back to the built-in suggestions": "Volver a las sugerencias integradas",
+ "Write a request first, then save it as a suggestion.": "Escribe primero una petición y luego guárdala como sugerencia.",
+ "That is already a suggestion.": "Eso ya es una sugerencia.",
+ "At most {0} suggestions: remove one first.": "Como máximo {0} sugerencias: quita una primero.",
+ "Saved as suggestion.": "Guardado como sugerencia.",
+ "Too long for a suggestion.": "Demasiado largo para una sugerencia.",
+ "Could not save the suggestions.": "No se pudieron guardar las sugerencias."
 }

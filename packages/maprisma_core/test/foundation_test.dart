@@ -75,6 +75,59 @@ void main() {
       [1200, 800],
     );
   });
+  test('ask_prompts keeps own and built-in suggestions per category', () {
+    expect(core.settings.snapshot()['ask_prompts'], isEmpty);
+    core.dispatch('settings.update', {
+      'values': {
+        'ask_prompts': {
+          'agents': [2, 'Which agents run now?'],
+          'models': <Object>[],
+        },
+      },
+    });
+    expect(core.settings.snapshot()['ask_prompts'], {
+      'agents': [2, 'Which agents run now?'],
+      'models': <Object>[],
+    });
+    for (final bad in <Object>[
+      {
+        'agents': ['a', 'a'],
+      },
+      {
+        'agents': [' padded'],
+      },
+      {
+        'agents': [''],
+      },
+      {
+        'agents': [200],
+      },
+      {
+        'agents': [true],
+      },
+      {
+        'Agents': ['x'],
+      },
+      {'agents': List.generate(13, (i) => 'p$i')},
+      {
+        'agents': ['x' * 2001],
+      },
+      {for (var i = 0; i < 17; i++) 'c${String.fromCharCode(97 + i)}': []},
+      ['agents'],
+    ]) {
+      expect(
+        () => core.dispatch('settings.update', {
+          'values': {'ask_prompts': bad},
+        }),
+        throwsA(anything),
+        reason: '$bad',
+      );
+    }
+    core.dispatch('settings.update', {
+      'values': {'ask_prompts': null},
+    });
+    expect(core.settings.snapshot()['ask_prompts'], isEmpty);
+  });
   test('settings UTF-8 write overflow preserves original bytes', () {
     final prefix = '{"unknown":"';
     final source =

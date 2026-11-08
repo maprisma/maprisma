@@ -6,6 +6,7 @@ code reads and writes only declared keys."""
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Any, Callable
 
@@ -73,6 +74,27 @@ def _history_mapping(v) -> bool:
     return isinstance(v, dict) and all(isinstance(k, str) and _texts(paths) for k, paths in v.items())
 
 
+ASK_PROMPTS_COLUMNS = 16                            # Ask AI cards with own suggestions, at most
+ASK_PROMPTS_ITEMS = 12                              # suggestions per card, at most
+ASK_PROMPT_CHARS = 2000                             # characters of one suggestion, at most
+
+
+def _ask_prompts(v) -> bool:
+    """Ask AI's suggestions per card column: an int keeps that built-in example (its index),
+    a string is the user's own (or edited) request; a column left out shows the built-ins."""
+    def item(x) -> bool:
+        if isinstance(x, bool):
+            return False
+        if isinstance(x, int):
+            return 0 <= x <= 199
+        return isinstance(x, str) and x == x.strip() and 0 < len(x) <= ASK_PROMPT_CHARS
+    return isinstance(v, dict) and len(v) <= ASK_PROMPTS_COLUMNS and all(
+        isinstance(k, str) and re.fullmatch(r"[a-z_]{1,32}", k) is not None
+        and isinstance(items, list) and len(items) <= ASK_PROMPTS_ITEMS
+        and all(item(x) for x in items) and len({repr(x) for x in items}) == len(items)
+        for k, items in v.items())
+
+
 def _one_of(*choices) -> Callable[[Any], bool]:
     return lambda v: v in choices
 
@@ -107,6 +129,7 @@ SCHEMA: dict[str, Setting] = {
     "action_rules": Setting(default_rules(), _rules, "what may be done, task 019: the most specific rule decides, on a tie allow"),
     "action_rule_hints": Setting(True, _bool, "a refusal names the rule; off: it only says it is not allowed"),
     "smart_helper": Setting(None, _text, "Ask AI: the chosen helper's command, for all four cards"),
+    "ask_prompts": Setting({}, _ask_prompts, "Ask AI: the suggestions per card column, own and kept built-in ones"),
     "dictation": Setting(True, _bool, "Settings › Dictation: microphone in Ask AI"),
     "dictation_engine": Setting("auto", _one_of("auto", "omarchy", "whisper", "local", "online"),
                                 "Settings › Dictation: chosen backend"),

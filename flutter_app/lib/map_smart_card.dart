@@ -198,6 +198,41 @@ const smartPromptExamples = <(String, IconData, String, String)>[
   ),
 ];
 
+/// At most this many suggestions per category (setting ask_prompts).
+const smartPromptMax = 12;
+
+/// The built-in examples of [column]: their indexes in [smartPromptExamples].
+List<int> smartBuiltinPrompts(String column) => [
+  for (final (i, e) in smartPromptExamples.indexed)
+    if (e.$1 == column) i,
+];
+
+/// The stored setting ask_prompts as {column: [int | String]}: an int keeps
+/// that built-in example, a string is the user's own request. Anything that
+/// does not fit is left out (the core checks it too).
+Map<String, List<Object>> smartPromptsFromSetting(Object? value) {
+  final out = <String, List<Object>>{};
+  if (value is! Map) return out;
+  for (final entry in value.entries) {
+    final column = entry.key;
+    final items = entry.value;
+    if (column is! String || items is! List) continue;
+    final builtins = smartBuiltinPrompts(column);
+    out[column] = [
+      for (final item in items.take(smartPromptMax))
+        if (item is int && builtins.contains(item))
+          item
+        else if (item is String && item.trim().isNotEmpty)
+          item.trim(),
+    ];
+  }
+  return out;
+}
+
+/// One line, single spaces: how a request is kept as a suggestion.
+String smartPromptOneLine(String text) =>
+    text.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).join(' ');
+
 String smartFitLabel(String? fit, String Function(String) tr) => switch (fit) {
   'ok' => tr('Fits in VRAM'),
   'tight' => tr('Uses RAM offload'),
@@ -568,6 +603,13 @@ class _MapSmartCardState extends State<MapSmartCard> {
   final _fieldFocus = FocusNode();
   final _portal = OverlayPortalController();
   bool _windowShown = false;
+
+  /// Settings › ask_prompts: the suggestions per category (absent: built-in).
+  Map<String, List<Object>> _askPrompts = {};
+  int? _editingPrompt;
+  final _promptEdit = TextEditingController();
+  final _promptEditFocus = FocusNode();
+  String _promptNote = '';
   late String _column = widget.column;
   _SmartStep _step = _SmartStep.idle;
 
@@ -660,6 +702,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
     smartHelperChosen.addListener(_helperChanged);
     dictationChanged.addListener(_loadDictation);
     _portal.show();
+    unawaited(_loadAskPrompts());
     if (widget.initialPrompt != null && widget.initialPrompt!.isNotEmpty) {
       _prompt.text = widget.initialPrompt!;
     }
@@ -677,6 +720,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
     if (widget.column != oldWidget.column && !_atWork) {
       _retargetPrefixedPrompt(widget.column);
       _column = widget.column;
+      _editingPrompt = null;
     }
     if (widget.initialPrompt != null &&
         widget.initialPrompt != oldWidget.initialPrompt &&
@@ -1416,6 +1460,8 @@ class _MapSmartCardState extends State<MapSmartCard> {
     _runToken++;
     _prompt.dispose();
     _examplesScroll.dispose();
+    _promptEdit.dispose();
+    _promptEditFocus.dispose();
     for (final field in _mcpFields.values) {
       field.dispose();
     }
@@ -1784,6 +1830,223 @@ class _MapSmartCardState extends State<MapSmartCard> {
     );
   }
 
+  Future<void> _loadAskPrompts() async {
+    final client = widget.client;
+    if (client == null) return;
+    try {
+      final settings = await client.settingsGet();
+      if (!mounted) return;
+      setState(
+        () => _askPrompts = smartPromptsFromSetting(settings['ask_prompts']),
+      );
+    } catch (_) {
+      // Built-in suggestions until the settings can be read.
+    }
+  }
+
+  List<Object> _promptItems(String column) =>
+      _askPrompts[column] ?? smartBuiltinPrompts(column);
+
+  String _promptText(Object item) => item is int
+      ? smartPromptOneLine(widget.tr(smartPromptExamples[item].$4))
+      : item as String;
+
+  /// Keeps [items] as [column]'s suggestions (null: the built-in ones again)
+  /// and saves the setting.
+  Future<void> _storePrompts(String column, List<Object>? items) async {
+    final next = {..._askPrompts};
+    final builtins = smartBuiltinPrompts(column);
+    if (items == null ||
+        (items.length == builtins.length &&
+            [
+              for (var i = 0; i < items.length; i++) items[i] == builtins[i],
+            ].every((same) => same))) {
+      next.remove(column);
+    } else {
+      next[column] = items;
+    }
+    setState(() {
+      _askPrompts = next;
+      _editingPrompt = null;
+    });
+    final client = widget.client;
+    if (client == null) return;
+    try {
+      await client.settingsUpdate(values: {'ask_prompts': next});
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _promptNote = widget.tr('Could not save the suggestions.'),
+        );
+      }
+    }
+  }
+
+  /// The bookmark by the question: what is typed becomes a suggestion of
+  /// this category (its "Category:" prefix left out).
+  void _saveAsPrompt() {
+    final text = smartPromptOneLine(
+      smartPromptRequest(_prompt.text, _column, widget.tr).request,
+    );
+    final items = _promptItems(_column);
+    String note;
+    if (text.isEmpty) {
+      note = widget.tr('Write a request first, then save it as a suggestion.');
+    } else if (text.length > 2000) {
+      note = widget.tr('Too long for a suggestion.');
+    } else if (items.map(_promptText).contains(text)) {
+      note = widget.tr('That is already a suggestion.');
+    } else if (items.length >= smartPromptMax) {
+      note = widget
+          .tr('At most {0} suggestions: remove one first.')
+          .replaceAll('{0}', '$smartPromptMax');
+    } else {
+      unawaited(_storePrompts(_column, [...items, text]));
+      note = widget.tr('Saved as suggestion.');
+    }
+    setState(() => _promptNote = note);
+  }
+
+  void _removePrompt(int position) {
+    final items = [..._promptItems(_column)];
+    if (position < 0 || position >= items.length) return;
+    items.removeAt(position);
+    unawaited(_storePrompts(_column, items));
+  }
+
+  void _startPromptEdit(int position) {
+    final items = _promptItems(_column);
+    if (position < 0 || position >= items.length) return;
+    _promptEdit.text = _promptText(items[position]);
+    setState(() {
+      _editingPrompt = position;
+      _promptNote = '';
+    });
+    _promptEditFocus.requestFocus();
+  }
+
+  /// Enter or ✓ keeps the edit (an empty text removes the suggestion); Esc
+  /// ends it unchanged.
+  void _finishPromptEdit(bool save) {
+    final position = _editingPrompt;
+    if (position == null) return;
+    final items = [..._promptItems(_column)];
+    final text = smartPromptOneLine(_promptEdit.text);
+    if (!save ||
+        position >= items.length ||
+        text == _promptText(items[position])) {
+      setState(() => _editingPrompt = null);
+    } else if (text.isEmpty) {
+      items.removeAt(position);
+      unawaited(_storePrompts(_column, items));
+    } else if (text.length > 2000) {
+      setState(() => _promptNote = widget.tr('Too long for a suggestion.'));
+      return;
+    } else if ([
+      for (final (i, item) in items.indexed)
+        if (i != position) _promptText(item),
+    ].contains(text)) {
+      setState(() => _promptNote = widget.tr('That is already a suggestion.'));
+      return;
+    } else {
+      items[position] = text;
+      unawaited(_storePrompts(_column, items));
+    }
+    _fieldFocus.requestFocus();
+  }
+
+  void _pickPrompt(Object item) {
+    // A started prompt keeps its trailing space: the user names the item.
+    final title = _columnTitle;
+    final example = item is int ? smartPromptExamples[item].$4 : item as String;
+    final text = item is int ? widget.tr(example.trimRight()) : example;
+    final prompt =
+        '${widget.tr(title)}: $text${item is int && example.endsWith(' ') ? ' ' : ''}';
+    setState(() {
+      _prompt.text = prompt;
+      _prompt.selection = TextSelection.collapsed(offset: prompt.length);
+    });
+    _fieldFocus.requestFocus();
+  }
+
+  Widget _buildPromptChip(int position, Object item) {
+    if (_editingPrompt == position) {
+      return Row(
+        key: const ValueKey('smart-prompt-editing'),
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: 280,
+            child: Focus(
+              onKeyEvent: (_, event) {
+                if (event is KeyDownEvent &&
+                    event.logicalKey == LogicalKeyboardKey.escape) {
+                  _finishPromptEdit(false);
+                  _fieldFocus.requestFocus();
+                  return KeyEventResult.handled;
+                }
+                return KeyEventResult.ignored;
+              },
+              child: TextField(
+                key: const ValueKey('smart-prompt-edit-field'),
+                controller: _promptEdit,
+                focusNode: _promptEditFocus,
+                maxLength: 2000,
+                style: const TextStyle(fontSize: 12),
+                decoration: InputDecoration(
+                  isDense: true,
+                  counterText: '',
+                  labelText: widget.tr('Edit suggestion'),
+                  border: const OutlineInputBorder(),
+                ),
+                onSubmitted: (_) => _finishPromptEdit(true),
+              ),
+            ),
+          ),
+          IconButton(
+            key: const ValueKey('smart-prompt-edit-done'),
+            visualDensity: VisualDensity.compact,
+            tooltip: widget.tr('Save'),
+            icon: const Icon(Icons.check, size: 16),
+            onPressed: () => _finishPromptEdit(true),
+          ),
+        ],
+      );
+    }
+    final builtin = item is int ? smartPromptExamples[item] : null;
+    final text = _promptText(item);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        InputChip(
+          key: ValueKey(
+            builtin != null ? 'smart-example-$item' : 'smart-own-$position',
+          ),
+          avatar: builtin != null ? Icon(builtin.$2, size: 16) : null,
+          label: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 260),
+            child: Text(
+              builtin != null ? widget.tr(builtin.$3) : text,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          tooltip: text,
+          onPressed: () => _pickPrompt(item),
+          deleteIcon: const Icon(Icons.close, size: 14),
+          deleteButtonTooltipMessage: widget.tr('Remove suggestion'),
+          onDeleted: () => _removePrompt(position),
+        ),
+        IconButton(
+          key: ValueKey('smart-prompt-edit-$position'),
+          visualDensity: VisualDensity.compact,
+          tooltip: widget.tr('Edit suggestion'),
+          icon: const Icon(Icons.edit_outlined, size: 14),
+          onPressed: () => _startPromptEdit(position),
+        ),
+      ],
+    );
+  }
+
   /// The central window's prompt helps, as in the Launcher's Ask AI: a row
   /// to choose the category, then its card with the examples on one line
   /// that scrolls sideways when it is too long. An example only fills the
@@ -1825,6 +2088,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
                   setState(() {
                     _retargetPrefixedPrompt(col);
                     _column = col;
+                    _editingPrompt = null;
                   });
                   widget.onColumnChanged?.call(col);
                   _fieldFocus.requestFocus();
@@ -1875,30 +2139,24 @@ class _MapSmartCardState extends State<MapSmartCard> {
                   scrollDirection: Axis.horizontal,
                   child: Row(
                     children: [
-                      for (final (index, (column, exIcon, label, example))
-                          in smartPromptExamples.indexed)
-                        if (column == _column)
-                          Padding(
-                            padding: const EdgeInsets.only(right: 6),
-                            child: ActionChip(
-                              key: ValueKey('smart-example-$index'),
-                              avatar: Icon(exIcon, size: 16),
-                              label: Text(widget.tr(label)),
-                              onPressed: () {
-                                // A started prompt keeps its trailing
-                                // space: the user names the item.
-                                final prompt =
-                                    '${widget.tr(title)}: ${widget.tr(example.trimRight())}${example.endsWith(' ') ? ' ' : ''}';
-                                setState(() {
-                                  _prompt.text = prompt;
-                                  _prompt.selection = TextSelection.collapsed(
-                                    offset: prompt.length,
-                                  );
-                                });
-                                _fieldFocus.requestFocus();
-                              },
-                            ),
+                      for (final (position, item) in _promptItems(
+                        _column,
+                      ).indexed)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 6),
+                          child: _buildPromptChip(position, item),
+                        ),
+                      if (_askPrompts.containsKey(_column))
+                        IconButton(
+                          key: const ValueKey('smart-prompts-reset'),
+                          visualDensity: VisualDensity.compact,
+                          tooltip: widget.tr(
+                            'Back to the built-in suggestions',
                           ),
+                          icon: const Icon(Icons.undo, size: 16),
+                          onPressed: () =>
+                              unawaited(_storePrompts(_column, null)),
+                        ),
                     ],
                   ),
                 ),
@@ -1986,6 +2244,12 @@ class _MapSmartCardState extends State<MapSmartCard> {
                   if (showMic)
                     _buildDictationSuffix(colors, dictReady, dictActive),
                   IconButton(
+                    key: const ValueKey('smart-save-prompt'),
+                    tooltip: widget.tr('Save as suggestion'),
+                    onPressed: _saveAsPrompt,
+                    icon: const Icon(Icons.bookmark_add_outlined, size: 18),
+                  ),
+                  IconButton(
                     key: const ValueKey('smart-send'),
                     tooltip:
                         '${widget.tr('Ask')} · ${widget.tr('Enter asks, Ctrl+Enter: new line.')}',
@@ -2001,6 +2265,14 @@ class _MapSmartCardState extends State<MapSmartCard> {
         ),
         const SizedBox(height: AppSpace.sm),
         _buildPromptExamples(colors),
+        if (_promptNote.isNotEmpty) ...[
+          const SizedBox(height: AppSpace.xs),
+          Text(
+            _promptNote,
+            key: const ValueKey('smart-prompt-note'),
+            style: TextStyle(fontSize: 11, color: colors.onSurfaceVariant),
+          ),
+        ],
         if (_dictationError.isNotEmpty) ...[
           const SizedBox(height: AppSpace.xs),
           Text(
@@ -2355,6 +2627,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
                       setState(() {
                         _retargetPrefixedPrompt(col);
                         _column = col;
+                        _editingPrompt = null;
                       });
                       widget.onColumnChanged?.call(col);
                     },

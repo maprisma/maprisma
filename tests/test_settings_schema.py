@@ -57,6 +57,15 @@ class SchemaTest(unittest.TestCase):
         self.assertEqual(ai_core.setting("system_map_columns", self.path),
                          ["pc", "disks", "programs", "tools", "folders"])
 
+    def test_ask_prompts_shape(self):
+        valid = schema.SCHEMA["ask_prompts"].valid
+        self.assertTrue(valid({}))
+        self.assertTrue(valid({"agents": [2, "Which agents run now?"], "models": []}))
+        for bad in ({"agents": ["a", "a"]}, {"agents": [" padded"]}, {"agents": [""]}, {"agents": [200]},
+                    {"agents": [True]}, {"Agents": ["x"]}, {"agents": [f"p{i}" for i in range(13)]},
+                    {"agents": ["x" * 2001]}, {f"c{chr(97 + i)}": [] for i in range(17)}, ["agents"]):
+            self.assertFalse(valid(bad), bad)
+
     def test_stored_values_win(self):
         self.write({"map_zoom": 1.5, "terminal_tabs": False, "window_size": [1200, 800],
                     "system_map_columns": ["pc", "folders"]})

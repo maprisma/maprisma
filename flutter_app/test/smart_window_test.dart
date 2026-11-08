@@ -126,6 +126,99 @@ void main() {
       },
     );
 
+    testWidgets('own suggestions: save, edit, Esc, remove, built-in again', (
+      tester,
+    ) async {
+      final saved = <Object?>[];
+      Object? stored = {
+        'agents': [2, 'Old own one'],
+      };
+      final client = CoreClient.fromCall((method, params) async {
+        if (method == 'settings.get') return {'ask_prompts': stored};
+        if (method == 'settings.update') {
+          stored = (params['values'] as Map)['ask_prompts'];
+          saved.add(stored);
+          return {'ask_prompts': stored};
+        }
+        return {};
+      });
+      await tester.pumpWidget(central(client, []));
+      await tester.pumpAndSettle();
+      // Loaded: one built-in kept, one own; the others of the category gone.
+      expect(find.byKey(const ValueKey('smart-example-2')), findsOneWidget);
+      expect(find.byKey(const ValueKey('smart-example-3')), findsNothing);
+      expect(find.byKey(const ValueKey('smart-own-1')), findsOneWidget);
+      expect(find.byKey(const ValueKey('smart-prompts-reset')), findsOneWidget);
+      // Save what is typed, its category prefix left out, spaces collapsed.
+      await tester.enterText(
+        find.byType(TextField),
+        'Agents:   Which   agents run now?',
+      );
+      await tester.tap(find.byKey(const ValueKey('smart-save-prompt')));
+      await tester.pumpAndSettle();
+      expect(saved.last, {
+        'agents': [2, 'Old own one', 'Which agents run now?'],
+      });
+      await tester.tap(find.byKey(const ValueKey('smart-save-prompt')));
+      await tester.pumpAndSettle();
+      expect(find.text('That is already a suggestion.'), findsOneWidget);
+      expect(saved, hasLength(1));
+      // Edit the built-in one: Esc ends the edit only, Enter keeps it.
+      await tester.tap(find.byKey(const ValueKey('smart-prompt-edit-0')));
+      await tester.pumpAndSettle();
+      final field = find.byKey(const ValueKey('smart-prompt-edit-field'));
+      await tester.enterText(field, 'Changed');
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+      expect(find.byType(OverlayWindow), findsOneWidget);
+      expect(field, findsNothing);
+      expect(saved, hasLength(1));
+      await tester.tap(find.byKey(const ValueKey('smart-prompt-edit-0')));
+      await tester.pumpAndSettle();
+      await tester.enterText(field, '  Which agents  need sign-in now? ');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      expect(saved.last, {
+        'agents': [
+          'Which agents need sign-in now?',
+          'Old own one',
+          'Which agents run now?',
+        ],
+      });
+      // An own one fills the question with the category in front.
+      await tester.ensureVisible(find.byKey(const ValueKey('smart-own-1')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('smart-own-1')));
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller?.text,
+        'Agents: Old own one',
+      );
+      // × removes; ↺ brings back the built-in ones (the column is dropped).
+      final remove = find.descendant(
+        of: find.byKey(const ValueKey('smart-own-1')),
+        matching: find.byIcon(Icons.close),
+      );
+      await tester.ensureVisible(remove);
+      await tester.pumpAndSettle();
+      await tester.tap(remove);
+      await tester.pumpAndSettle();
+      expect(saved.last, {
+        'agents': ['Which agents need sign-in now?', 'Which agents run now?'],
+      });
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('smart-prompts-reset')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('smart-prompts-reset')));
+      await tester.pumpAndSettle();
+      expect(saved.last, <String, Object>{});
+      for (final index in smartBuiltinPrompts('agents')) {
+        expect(find.byKey(ValueKey('smart-example-$index')), findsOneWidget);
+      }
+      expect(find.byKey(const ValueKey('smart-prompts-reset')), findsNothing);
+    });
+
     testWidgets('an example fills the prompt and keeps the same window', (
       tester,
     ) async {

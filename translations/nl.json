@@ -3428,5 +3428,15 @@
  "set one up in Strata's own screens: run strata launch in a terminal.": "stel er een in via de eigen schermen van Strata: voer strata launch uit in een terminal.",
  "set one up in Strata's own screens: run ~/.local/bin/strata launch in a terminal.": "stel er een in via de eigen schermen van Strata: voer ~/.local/bin/strata launch uit in een terminal.",
  "start a model in Strata (~/.local/bin/strata launch) before working with {0}.": "start een model in Strata (~/.local/bin/strata launch) voordat je met {0} werkt.",
- "Made for Asterism, this app's old name, and never loaded. Remove it: Maprisma brings its own copy.": "Gemaakt voor Asterism, de oude naam van deze app, en nooit geladen. Verwijder het: Maprisma brengt een eigen kopie mee."
+ "Made for Asterism, this app's old name, and never loaded. Remove it: Maprisma brings its own copy.": "Gemaakt voor Asterism, de oude naam van deze app, en nooit geladen. Verwijder het: Maprisma brengt een eigen kopie mee.",
+ "Save as suggestion": "Opslaan als suggestie",
+ "Edit suggestion": "Suggestie bewerken",
+ "Remove suggestion": "Suggestie verwijderen",
+ "Back to the built-in suggestions": "Terug naar de ingebouwde suggesties",
+ "Write a request first, then save it as a suggestion.": "Schrijf eerst een verzoek en sla het dan op als suggestie.",
+ "That is already a suggestion.": "Dat is al een suggestie.",
+ "At most {0} suggestions: remove one first.": "Hoogstens {0} suggesties: verwijder er eerst een.",
+ "Saved as suggestion.": "Opgeslagen als suggestie.",
+ "Too long for a suggestion.": "Te lang voor een suggestie.",
+ "Could not save the suggestions.": "De suggesties konden niet worden opgeslagen."
 }
