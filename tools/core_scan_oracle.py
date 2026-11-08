@@ -74,7 +74,14 @@ def dispatch(current,method,params):
         return {'agents':[asdict(a) for a in agents.list_agents()]}
     if method=='scan.inventory':
         if params:raise ValueError('Unexpected fields')
-        return asdict(inventory.collect(agents.list_agents(),remember=False))
+        found=asdict(inventory.collect(agents.list_agents(),remember=False))
+        # Internal fields stay off the wire, as in the Dart records' toJson:
+        # a runtime's model_files (flutter_plan_wire.py), an MCP server's
+        # identity and library ("not shown" in inventory.py).
+        for rt in found.get('runtimes',[]):rt.pop('model_files',None)
+        for server in found.get('mcp',[]):
+            server.pop('identity',None);server.pop('library',None)
+        return found
     if method in ('scan.sessions','scan.security','scan.costs','scan.usage'):
         if set(params)!={'command'} or not isinstance(params['command'],str):raise ValueError('Expected command')
         h=harnesses.get(params['command'])
