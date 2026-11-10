@@ -1,3 +1,4 @@
+import 'dart:math' show min;
 import 'dart:ui' show lerpDouble;
 
 import 'package:flutter/material.dart';
@@ -20,17 +21,27 @@ ThemeMode appThemeMode(String mode, Map desktop) {
 
 /// Settings › Corners: the radius of the window's cards, dialogs and the
 /// map's boxes (corners.radius): "windows" follows Hyprland's rounding,
-/// "rounded" is 12, "square" 0; null keeps Material's own.
+/// "slight" is 6 (round controls beside square or tiled windows), "rounded"
+/// 12, "square" 0; null (the windows' rounding unknown) means 12.
+const slightRadius = 6, roundedRadius = 12;
 double? cornerRadius(String? setting, int? windowRounding) => switch (setting) {
+  'slight' => 6,
   'rounded' => 12,
   'square' => 0,
   _ => windowRounding?.toDouble(),
 };
 
-/// The corner radius in effect (12 when nothing set it).
+/// The corner radius in effect (12 when nothing set it), in Maprisma
+/// Playground's three sizes: cards, dialogs, pop-ups, menus and the map's
+/// boxes take [radius]; buttons, drop-downs, fields, chips and tooltips
+/// [control] (at most 8); check boxes, slider tracks, progress bars and small
+/// marks [small] (at most 4). Square squares them all, the slider's knob stays
+/// small (see [KnobShape]).
 class Corners extends ThemeExtension<Corners> {
   const Corners(this.radius);
   final double radius;
+  double get control => min(radius, 8);
+  double get small => min(radius, 4);
   @override
   Corners copyWith({double? radius}) => Corners(radius ?? this.radius);
   @override
@@ -40,6 +51,15 @@ class Corners extends ThemeExtension<Corners> {
 
 double corners(BuildContext context) =>
     Theme.of(context).extension<Corners>()?.radius ?? 12;
+
+/// Settings › Corners in its three sizes (see [Corners]).
+Corners cornerSizes(BuildContext context) =>
+    Theme.of(context).extension<Corners>() ?? const Corners(12);
+
+/// An outlined field's border with the controls' corners.
+OutlineInputBorder controlBorder(BuildContext context) => OutlineInputBorder(
+  borderRadius: BorderRadius.circular(cornerSizes(context).control),
+);
 
 ThemeData appTheme(
   Brightness brightness, {
@@ -75,23 +95,41 @@ ThemeData appTheme(
       surfaceContainerHighest: step(.14),
     );
   }
-  final shape = radius == null
-      ? null
-      : RoundedRectangleBorder(borderRadius: BorderRadius.circular(radius));
+  final r = radius ?? 12;
+  final sizes = Corners(r);
+  final control = BorderRadius.circular(sizes.control);
+  final small = BorderRadius.circular(sizes.small);
+  final controlShape = RoundedRectangleBorder(borderRadius: control);
+  final shape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(r));
   return ThemeData(
     colorScheme: colors,
     useMaterial3: true,
-    extensions: [Corners(radius ?? 12)],
+    extensions: [sizes],
     // Every card looks like the map's category cards (app_look SectionCard).
     cardTheme: CardThemeData(
       color: colors.surfaceContainerLow,
       elevation: 0,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(radius ?? 12),
+        borderRadius: BorderRadius.circular(r),
         side: BorderSide(color: colors.outlineVariant),
       ),
     ),
-    dialogTheme: shape == null ? null : DialogThemeData(shape: shape),
+    dialogTheme: DialogThemeData(shape: shape),
+    popupMenuTheme: PopupMenuThemeData(shape: shape),
+    menuTheme: MenuThemeData(
+      style: MenuStyle(shape: WidgetStatePropertyAll(shape)),
+    ),
+    dropdownMenuTheme: DropdownMenuThemeData(
+      menuStyle: MenuStyle(shape: WidgetStatePropertyAll(shape)),
+      inputDecorationTheme: InputDecorationTheme(
+        border: OutlineInputBorder(borderRadius: control),
+      ),
+    ),
+    bottomSheetTheme: BottomSheetThemeData(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(r)),
+      ),
+    ),
     // Material's default is the inverted surface: a white bar on a dark app.
     snackBarTheme: SnackBarThemeData(
       backgroundColor: colors.surfaceContainerHigh,
@@ -99,7 +137,77 @@ ThemeData appTheme(
       actionTextColor: colors.primary,
       closeIconColor: colors.onSurfaceVariant,
     ),
+    tooltipTheme: TooltipThemeData(
+      decoration: BoxDecoration(
+        color: colors.inverseSurface.withValues(alpha: .92),
+        borderRadius: control,
+      ),
+    ),
+    filledButtonTheme: FilledButtonThemeData(
+      style: FilledButton.styleFrom(shape: controlShape),
+    ),
+    outlinedButtonTheme: OutlinedButtonThemeData(
+      style: OutlinedButton.styleFrom(shape: controlShape),
+    ),
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(shape: controlShape),
+    ),
+    elevatedButtonTheme: ElevatedButtonThemeData(
+      style: ElevatedButton.styleFrom(shape: controlShape),
+    ),
+    iconButtonTheme: IconButtonThemeData(
+      style: IconButton.styleFrom(shape: controlShape),
+    ),
+    segmentedButtonTheme: SegmentedButtonThemeData(
+      style: SegmentedButton.styleFrom(shape: controlShape),
+    ),
+    chipTheme: ChipThemeData(shape: controlShape),
+    checkboxTheme: CheckboxThemeData(
+      shape: RoundedRectangleBorder(borderRadius: small),
+    ),
+    progressIndicatorTheme: ProgressIndicatorThemeData(borderRadius: small),
+    // Square squares the slider too, but keeps its knob small (no block).
+    sliderTheme: SliderThemeData(
+      trackShape: r <= 0
+          ? const RectangularSliderTrackShape()
+          : const RoundedRectSliderTrackShape(),
+      thumbShape: KnobShape(square: r <= 0),
+    ),
   );
+}
+
+/// The slider's knob: 14 px, round, or square with Square corners (not a
+/// big block).
+class KnobShape extends SliderComponentShape {
+  const KnobShape({this.square = false});
+  final bool square;
+  static const _side = 14.0;
+
+  @override
+  Size getPreferredSize(bool isEnabled, bool isDiscrete) =>
+      const Size.square(_side);
+
+  @override
+  void paint(
+    PaintingContext context,
+    Offset center, {
+    required Animation<double> activationAnimation,
+    required Animation<double> enableAnimation,
+    required bool isDiscrete,
+    required TextPainter labelPainter,
+    required RenderBox parentBox,
+    required SliderThemeData sliderTheme,
+    required TextDirection textDirection,
+    required double value,
+    required double textScaleFactor,
+    required Size sizeWithOverflow,
+  }) {
+    final paint = Paint()..color = sliderTheme.thumbColor ?? Colors.grey;
+    final box = Rect.fromCenter(center: center, width: _side, height: _side);
+    square
+        ? context.canvas.drawRect(box, paint)
+        : context.canvas.drawOval(box, paint);
+  }
 }
 
 /// The preview and the application use the same theme factory.

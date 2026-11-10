@@ -36,7 +36,7 @@
   "Like windows ({0} px)": "Like windows ({0} px)",
   "Rounded": "Rounded",
   "Square": "Square",
-  "Corners of the window, its cards and the map's boxes. “Like windows” follows Hyprland's window rounding.": "Corners of the window, its cards and the map's boxes. “Like windows” follows Hyprland's window rounding.",
+  "Corners of the window, its cards, the map's boxes and every control (buttons, choice boxes, fields). “Like windows” follows Hyprland's window rounding.": "Corners of the window, its cards, the map's boxes and every control (buttons, choice boxes, fields). “Like windows” follows Hyprland's window rounding.",
   "Window": "Window",
   "Automatic: a popup under the bar on Omarchy": "Automatic: a popup under the bar on Omarchy",
   "A popup under the bar": "A popup under the bar",
@@ -840,5 +840,9 @@
   "At most {0} suggestions: remove one first.": "At most {0} suggestions: remove one first.",
   "Saved as suggestion.": "Saved as suggestion.",
   "Too long for a suggestion.": "Too long for a suggestion.",
-  "Could not save the suggestions.": "Could not save the suggestions."
+  "Could not save the suggestions.": "Could not save the suggestions.",
+  "Slightly rounded ({0} px)": "Slightly rounded ({0} px)",
+  "Rounded ({0} px)": "Rounded ({0} px)",
+  "The screenshot could not be saved: {0}": "The screenshot could not be saved: {0}",
+  "The note could not be saved: {0}": "The note could not be saved: {0}"
 }

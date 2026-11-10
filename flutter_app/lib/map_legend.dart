@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'app_theme.dart' show cornerSizes;
 import 'map_groups.dart' show AgentBadge;
 import 'map_layout.dart' show mapCollaborationColor;
 
@@ -96,7 +97,9 @@ class MapLegend extends StatelessWidget {
                   height: 18,
                   decoration: BoxDecoration(
                     color: colors.secondaryContainer,
-                    borderRadius: BorderRadius.circular(4),
+                    borderRadius: BorderRadius.circular(
+                      cornerSizes(context).small,
+                    ),
                   ),
                 ),
                 'A tinted box is running.',
@@ -107,7 +110,9 @@ class MapLegend extends StatelessWidget {
                   height: 18,
                   decoration: BoxDecoration(
                     border: Border.all(color: colors.primary, width: 2),
-                    borderRadius: BorderRadius.circular(4),
+                    borderRadius: BorderRadius.circular(
+                      cornerSizes(context).small,
+                    ),
                   ),
                 ),
                 'A bright border: selected, or connected to the box you point at.',

@@ -36,7 +36,7 @@
   "Like windows ({0} px)": "Comme les fenêtres ({0} px)",
   "Rounded": "Arrondis",
   "Square": "Carrés",
-  "Corners of the window, its cards and the map's boxes. “Like windows” follows Hyprland's window rounding.": "Coins de la fenêtre, de ses cartes et des cases de la carte. « Comme les fenêtres » suit l'arrondi des fenêtres de Hyprland.",
+  "Corners of the window, its cards, the map's boxes and every control (buttons, choice boxes, fields). “Like windows” follows Hyprland's window rounding.": "Coins de la fenêtre, de ses cartes, des cases de la carte et de toutes les commandes (boutons, listes de choix, champs). « Comme les fenêtres » suit l'arrondi des fenêtres de Hyprland.",
   "Window": "Fenêtre",
   "Automatic: a popup under the bar on Omarchy": "Automatique : une fenêtre contextuelle sous la barre sur Omarchy",
   "A popup under the bar": "Une fenêtre contextuelle sous la barre",
@@ -840,5 +840,9 @@
   "At most {0} suggestions: remove one first.": "{0} suggestions au maximum : supprimez-en d’abord une.",
   "Saved as suggestion.": "Enregistré comme suggestion.",
   "Too long for a suggestion.": "Trop long pour une suggestion.",
-  "Could not save the suggestions.": "Impossible d’enregistrer les suggestions."
+  "Could not save the suggestions.": "Impossible d’enregistrer les suggestions.",
+  "Slightly rounded ({0} px)": "Légèrement arrondis ({0} px)",
+  "Rounded ({0} px)": "Arrondis ({0} px)",
+  "The screenshot could not be saved: {0}": "La capture n'a pas pu être enregistrée : {0}",
+  "The note could not be saved: {0}": "La note n'a pas pu être enregistrée : {0}"
 }

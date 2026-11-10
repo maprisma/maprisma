@@ -36,7 +36,7 @@
   "Like windows ({0} px)": "Zoals vensters ({0} px)",
   "Rounded": "Afgerond",
   "Square": "Hoekig",
-  "Corners of the window, its cards and the map's boxes. “Like windows” follows Hyprland's window rounding.": "Hoeken van het venster, zijn kaarten en de vakken van de kaart. ‘Zoals vensters’ volgt de vensterafronding van Hyprland.",
+  "Corners of the window, its cards, the map's boxes and every control (buttons, choice boxes, fields). “Like windows” follows Hyprland's window rounding.": "Hoeken van het venster, zijn kaarten, de vakken van de kaart en alle bedieningselementen (knoppen, keuzelijsten, velden). ‘Zoals vensters’ volgt de vensterafronding van Hyprland.",
   "Window": "Venster",
   "Automatic: a popup under the bar on Omarchy": "Automatisch: een pop-up onder de balk op Omarchy",
   "A popup under the bar": "Een pop-up onder de balk",
@@ -840,5 +840,9 @@
   "At most {0} suggestions: remove one first.": "Hoogstens {0} suggesties: verwijder er eerst een.",
   "Saved as suggestion.": "Opgeslagen als suggestie.",
   "Too long for a suggestion.": "Te lang voor een suggestie.",
-  "Could not save the suggestions.": "De suggesties konden niet worden opgeslagen."
+  "Could not save the suggestions.": "De suggesties konden niet worden opgeslagen.",
+  "Slightly rounded ({0} px)": "Licht afgerond ({0} px)",
+  "Rounded ({0} px)": "Afgerond ({0} px)",
+  "The screenshot could not be saved: {0}": "De schermafbeelding kon niet worden bewaard: {0}",
+  "The note could not be saved: {0}": "De notitie kon niet worden bewaard: {0}"
 }

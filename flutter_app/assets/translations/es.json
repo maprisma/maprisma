@@ -36,7 +36,7 @@
   "Like windows ({0} px)": "Como las ventanas ({0} px)",
   "Rounded": "Redondeadas",
   "Square": "Rectas",
-  "Corners of the window, its cards and the map's boxes. “Like windows” follows Hyprland's window rounding.": "Esquinas de la ventana, sus tarjetas y las casillas del mapa. «Como las ventanas» sigue el redondeo de ventanas de Hyprland.",
+  "Corners of the window, its cards, the map's boxes and every control (buttons, choice boxes, fields). “Like windows” follows Hyprland's window rounding.": "Esquinas de la ventana, sus tarjetas, las casillas del mapa y todos los controles (botones, listas de opciones, campos). «Como las ventanas» sigue el redondeo de ventanas de Hyprland.",
   "Window": "Ventana",
   "Automatic: a popup under the bar on Omarchy": "Automático: una ventana emergente bajo la barra en Omarchy",
   "A popup under the bar": "Una ventana emergente bajo la barra",
@@ -840,5 +840,9 @@
   "At most {0} suggestions: remove one first.": "Como máximo {0} sugerencias: quita una primero.",
   "Saved as suggestion.": "Guardado como sugerencia.",
   "Too long for a suggestion.": "Demasiado largo para una sugerencia.",
-  "Could not save the suggestions.": "No se pudieron guardar las sugerencias."
+  "Could not save the suggestions.": "No se pudieron guardar las sugerencias.",
+  "Slightly rounded ({0} px)": "Ligeramente redondeadas ({0} px)",
+  "Rounded ({0} px)": "Redondeadas ({0} px)",
+  "The screenshot could not be saved: {0}": "No se pudo guardar la captura: {0}",
+  "The note could not be saved: {0}": "No se pudo guardar la nota: {0}"
 }

@@ -3438,5 +3438,10 @@
  "At most {0} suggestions: remove one first.": "Höchstens {0} Vorschläge: entferne zuerst einen.",
  "Saved as suggestion.": "Als Vorschlag gespeichert.",
  "Too long for a suggestion.": "Zu lang für einen Vorschlag.",
- "Could not save the suggestions.": "Die Vorschläge konnten nicht gespeichert werden."
+ "Could not save the suggestions.": "Die Vorschläge konnten nicht gespeichert werden.",
+ "Slightly rounded ({0} px)": "Leicht abgerundet ({0} px)",
+ "Rounded ({0} px)": "Abgerundet ({0} px)",
+ "The screenshot could not be saved: {0}": "Das Bildschirmfoto konnte nicht gespeichert werden: {0}",
+ "The note could not be saved: {0}": "Die Notiz konnte nicht gespeichert werden: {0}",
+ "Corners of the window, its cards, the map's boxes and every control (buttons, choice boxes, fields). “Like windows” follows Hyprland's window rounding.": "Ecken des Fensters, seiner Karten, der Felder der Karte und aller Bedienelemente (Knöpfe, Auswahlfelder, Eingabefelder). „Wie Fenster“ folgt der Fensterrundung von Hyprland."
 }

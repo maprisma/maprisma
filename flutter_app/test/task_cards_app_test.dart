@@ -760,6 +760,41 @@ void main() {
     await unmountApp(tester);
   });
 
+  testWidgets('F12 with a modifier takes nothing; Esc keeps the note', (
+    tester,
+  ) async {
+    final dir = await mountApp(tester);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.f12);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await settleService(tester);
+    expect(find.byKey(const ValueKey('screenshot-note')), findsNothing);
+    expect(Directory('${dir.path}/shots').existsSync(), isFalse);
+    await tester.sendKeyEvent(LogicalKeyboardKey.f12);
+    await settleService(tester);
+    // F12 again while the note is asked for: no second picture, no second dialog.
+    await tester.sendKeyEvent(LogicalKeyboardKey.f12);
+    await settleService(tester);
+    expect(find.byKey(const ValueKey('screenshot-note')), findsOneWidget);
+    await tester.enterText(
+      find.byKey(const ValueKey('screenshot-note')),
+      'Kept on Esc',
+    );
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await settleService(tester);
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 50)),
+    );
+    expect(find.byKey(const ValueKey('screenshot-note')), findsNothing);
+    final files = Directory('${dir.path}/shots').listSync().map((f) => f.path);
+    expect(files.where((f) => f.endsWith('.png')), hasLength(1));
+    expect(
+      File(files.singleWhere((f) => f.endsWith('.txt'))).readAsStringSync(),
+      'Kept on Esc\n',
+    );
+    await unmountApp(tester);
+  });
+
   testWidgets('What we found stays until a preview is applied', (tester) async {
     final dir = await mountApp(
       tester,

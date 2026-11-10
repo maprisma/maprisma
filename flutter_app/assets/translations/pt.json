@@ -36,7 +36,7 @@
   "Like windows ({0} px)": "Como as janelas ({0} px)",
   "Rounded": "Arredondados",
   "Square": "Retos",
-  "Corners of the window, its cards and the map's boxes. “Like windows” follows Hyprland's window rounding.": "Cantos da janela, dos seus cartões e das caixas do mapa. «Como as janelas» segue o arredondamento das janelas do Hyprland.",
+  "Corners of the window, its cards, the map's boxes and every control (buttons, choice boxes, fields). “Like windows” follows Hyprland's window rounding.": "Cantos da janela, dos seus cartões, das caixas do mapa e de todos os controlos (botões, caixas de escolha, campos). «Como as janelas» segue o arredondamento das janelas do Hyprland.",
   "Window": "Janela",
   "Automatic: a popup under the bar on Omarchy": "Automático: uma janela flutuante sob a barra no Omarchy",
   "A popup under the bar": "Uma janela flutuante sob a barra",
@@ -840,5 +840,9 @@
   "At most {0} suggestions: remove one first.": "No máximo {0} sugestões: remova primeiro uma.",
   "Saved as suggestion.": "Guardado como sugestão.",
   "Too long for a suggestion.": "Demasiado longo para uma sugestão.",
-  "Could not save the suggestions.": "Não foi possível guardar as sugestões."
+  "Could not save the suggestions.": "Não foi possível guardar as sugestões.",
+  "Slightly rounded ({0} px)": "Levemente arredondados ({0} px)",
+  "Rounded ({0} px)": "Arredondados ({0} px)",
+  "The screenshot could not be saved: {0}": "Não foi possível guardar a captura: {0}",
+  "The note could not be saved: {0}": "Não foi possível guardar a nota: {0}"
 }

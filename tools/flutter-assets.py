@@ -46,7 +46,7 @@ KEYS = (
     "Like windows ({0} px)",
     "Rounded",
     "Square",
-    "Corners of the window, its cards and the map's boxes. “Like windows” follows Hyprland's window rounding.",
+    "Corners of the window, its cards, the map's boxes and every control (buttons, choice boxes, fields). “Like windows” follows Hyprland's window rounding.",
     # Popup mode on Omarchy.
     "Window",
     "Automatic: a popup under the bar on Omarchy",
@@ -824,6 +824,11 @@ KEYS = (
     "Saved as suggestion.",
     "Too long for a suggestion.",
     "Could not save the suggestions.",
+    # Settings › Corners in Maprisma Playground's sizes; F12's file errors (task 067).
+    "Slightly rounded ({0} px)",
+    "Rounded ({0} px)",
+    "The screenshot could not be saved: {0}",
+    "The note could not be saved: {0}",
 )
 
 
