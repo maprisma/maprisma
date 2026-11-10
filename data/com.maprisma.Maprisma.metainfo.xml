@@ -25,6 +25,13 @@
   <url type="bugtracker">https://github.com/uBruckhaus/Asterism/issues</url>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.14.3" date="2026-11-10">
+      <description>
+        <p>F12 saves a picture of the window privately in your Pictures folder, with an optional note about
+        what is wrong. Settings › Corners has a new choice, Slightly rounded (6 px), and every control follows
+        the setting. Smart cards take your own suggestions per category.</p>
+      </description>
+    </release>
     <release version="0.14.2" date="2026-11-06">
       <description>
         <p>Add-ons left over from Asterism, this app's old name, no longer show as "Not available in this
