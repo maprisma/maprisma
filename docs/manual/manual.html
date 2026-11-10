@@ -895,7 +895,7 @@
 <p>The Flutter app opens as a normal window that the desktop tiles (without the GTK title bar on Omarchy). Settings › <b>Window</b> chooses <b>Automatic: a normal window</b> (the default), <b>A popup under the bar</b> or <b>A normal window</b>; a change applies the next time the window opens. As a popup on Omarchy, it sits as a floating window at the top right under the bar, like the plugins' popups: <kbd>Esc</kbd> on the main page or a click elsewhere closes it, and starting the app again (or the bar icon, which runs <code>maprisma --toggle</code>) brings it back where it was, with everything as you left it. A file chooser the app opens does not close it.</p>
 
 <h2 id="omarchy-data-flutter">Usage figures and corners from Omarchy in the Flutter preview</h2>
-<p>When an agent's details open in the Flutter preview and Omarchy collects that agent's usage (plan, limits and when they reset), the app asks Omarchy for fresh figures in the background if the last ones are older than ten minutes or older than the agent's last sign-in, then shows them; at most once every ten minutes per agent. Settings › <b>Corners</b> sets the corners of the window's cards, dialogs and the map's boxes: <b>Like windows</b> follows Hyprland's window rounding (with the number of pixels shown), <b>Rounded</b> or <b>Square</b>.</p>
+<p>When an agent's details open in the Flutter preview and Omarchy collects that agent's usage (plan, limits and when they reset), the app asks Omarchy for fresh figures in the background if the last ones are older than ten minutes or older than the agent's last sign-in, then shows them; at most once every ten minutes per agent. Settings › <b>Corners</b> sets the corners of the window's cards, dialogs and the map's boxes: <b>Like windows</b> follows Hyprland's window rounding (with the number of pixels shown), <b>Slightly rounded (6 px)</b>, <b>Rounded (12 px)</b> or <b>Square</b>. Every control follows in three sizes: buttons, drop-downs, fields and chips at most 8 px, check boxes and progress bars at most 4 px.</p>
 
 <h2 id="settings-list">Settings</h2>
   <p>The gear (<kbd>Ctrl</kbd>+<kbd>,</kbd>) opens the settings. <kbd>Backspace</kbd> or <kbd>Esc</kbd> goes back. The sections are listed on the left (General, Appearance, Map, Agents, Local LLMs, Dictation, Recent changes); <b>Find in Settings</b> above them shows the settings of every section that mention what you type.</p>
@@ -909,7 +909,7 @@
       <tr><td><b>Subagents</b></td><td>For the <a href="#subagents">Subagents</a> page: how long finished subagents stay (<b>30 minutes</b> by default; 10, 30, 60 or 120) and how many at most (<b>10</b> by default; 5, 10, 20 or 40). Working ones are always shown.</td></tr>
       <tr><td><b>Costs</b></td><td><b>Currency</b>: US dollar, or Euro at the European Central Bank's daily reference rate (fetched once a day from ecb.europa.eu). <b>A day's limit</b> for an agent paid per token (<b>100</b> by default; 10 to 500). <b>Yellow from</b> and <b>Red from</b>: the share used at which a cost label or a battery turns yellow (75&nbsp;% by default) and red (90&nbsp;%). <b>Notify when red</b> (on by default): a desktop notification when an agent turns red — once for each limit until it resets, or once a day for a cost.</td></tr>
       <tr><td><b>Terminal tabs above the map</b></td><td>One tab per agent terminal in the window.</td></tr>
-      <tr><td><b>Corners</b></td><td>Like windows, rounded or square.</td></tr>
+      <tr><td><b>Corners</b></td><td>Like windows, slightly rounded (6 px), rounded (12 px) or square; buttons, drop-downs and fields take at most 8 px, check boxes and progress bars at most 4 px.</td></tr>
       <tr><td><b>Start local LLMs with their agents</b></td><td>The background watcher described in <a href="#start-with-agents">Starting and stopping with agents</a>.</td></tr>
       <tr><td><b>In the app launcher</b></td><td>The launcher entry; off removes it.</td></tr>
       <tr><td><b>Agents start in</b></td><td>The folder agents start in.</td></tr>
@@ -1407,7 +1407,7 @@
   <table class="keys">
     <tbody>
       <tr><th scope="row"><kbd>F1</kbd></th><td>Help</td></tr>
-      <tr><th scope="row"><kbd>F12</kbd></th><td>F12 saves a screenshot. A picture of the window goes to <code>~/Pictures/Maprisma</code>, on by default. In a terminal, use the camera symbol below it. You can add a note, saved as a text file next to the picture. Settings can send the pictures to another folder.</td></tr>
+      <tr><th scope="row"><kbd>F12</kbd></th><td>F12 saves a screenshot. A picture of the window goes to <code>~/Pictures/Maprisma</code>, on by default. In a terminal, use the camera symbol below it. You can add a note, saved as a text file next to the picture. Settings can send the pictures to another folder. Only F12 alone counts (not with Ctrl, Shift, Alt or Super). Only you can open the folder (0700) and its files (0600); an existing picture or note is never overwritten, and nothing is uploaded.</td></tr>
       <tr><th scope="row"><kbd>Ctrl</kbd>+<kbd>,</kbd></th><td>Settings</td></tr>
       <tr><th scope="row"><kbd>F5</kbd></th><td>Refresh (the map and Setup)</td></tr>
       <tr><th scope="row"><kbd>Ctrl</kbd>+<kbd>+</kbd> / <kbd>Ctrl</kbd>+<kbd>−</kbd> / <kbd>Ctrl</kbd>+<kbd>0</kbd></th><td>Zoom the map in, out, or fit to window</td></tr>

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'app_theme.dart' show controlBorder;
+
 import 'app_look.dart';
 import 'overlay_window.dart';
 
@@ -185,7 +187,7 @@ class _ActionRulesWindowState extends State<ActionRulesWindow> {
         decoration: InputDecoration(
           labelText: tr(label),
           isDense: true,
-          border: const OutlineInputBorder(),
+          border: controlBorder(context),
           contentPadding: const EdgeInsets.symmetric(
             horizontal: AppSpace.md,
             vertical: AppSpace.sm,

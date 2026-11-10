@@ -12,7 +12,7 @@ import 'map_zoom.dart';
 import 'map_lights.dart';
 import 'map_smart_card.dart';
 import 'map_static_cache.dart';
-import 'app_theme.dart' show corners;
+import 'app_theme.dart' show cornerSizes, corners;
 import 'map_snapshot.dart';
 
 /// The map's columns: the map_layers each stands for, and its filter label.
@@ -1012,7 +1012,11 @@ class _MapEditorState extends State<MapEditor>
                                                   'subagents-$command',
                                                 ),
                                                 borderRadius:
-                                                    BorderRadius.circular(4),
+                                                    BorderRadius.circular(
+                                                      cornerSizes(
+                                                        context,
+                                                      ).control,
+                                                    ),
                                                 onTap: () =>
                                                     widget.onSubagents!(
                                                       command,

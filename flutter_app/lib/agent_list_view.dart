@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'app_theme.dart' show controlBorder;
+
 import 'app_look.dart' show StatusColors;
 
 class AgentListView extends StatelessWidget {
@@ -37,7 +39,7 @@ class AgentListView extends StatelessWidget {
             decoration: InputDecoration(
               labelText: tr('Search'),
               prefixIcon: const Icon(Icons.search),
-              border: const OutlineInputBorder(),
+              border: controlBorder(context),
             ),
             onChanged: onSearch,
           ),

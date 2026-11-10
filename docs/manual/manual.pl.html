@@ -816,7 +816,7 @@
 <p>Ustawienia › <b>Okno</b> wybiera <b>Automatycznie</b> (domyślnie: zwykłe kafelkowane okno na każdym pulpicie, z ukrytym paskiem tytułu GTK w Omarchy), <b>Okno wyskakujące pod paskiem</b> (pływające okno w prawym górnym rogu pod paskiem w Omarchy) lub <b>Zwykłe okno</b>; zmiana obowiązuje przy następnym otwarciu okna. W trybie okna wyskakującego <kbd>Esc</kbd> na stronie głównej lub kliknięcie obok je zamyka; ponowne uruchomienie aplikacji (lub ikona na pasku, która wywołuje <code>maprisma --toggle</code>) przywraca je na miejsce, ze wszystkim tak, jak zostało. Okno wyboru pliku aplikacji go nie zamyka.</p>
 
 <h2 id="omarchy-data-flutter">Dane o użyciu i narożniki z Omarchy w podglądzie Flutter</h2>
-<p>Gdy w podglądzie Flutter otwierają się szczegóły agenta, którego użycie zbiera Omarchy (plan, limity i kiedy się odnawiają), aplikacja w tle prosi Omarchy o świeże dane, jeśli ostatnie są starsze niż dziesięć minut lub starsze niż ostatnie logowanie agenta, a potem je pokazuje; najwyżej raz na dziesięć minut na agenta. Ustawienia › <b>Narożniki</b> ustala narożniki kart, okien dialogowych i pól mapy: <b>Jak okna</b> podąża za zaokrągleniem okien Hyprland (z liczbą pikseli), <b>Zaokrąglone</b> lub <b>Proste</b>.</p>
+<p>Gdy w podglądzie Flutter otwierają się szczegóły agenta, którego użycie zbiera Omarchy (plan, limity i kiedy się odnawiają), aplikacja w tle prosi Omarchy o świeże dane, jeśli ostatnie są starsze niż dziesięć minut lub starsze niż ostatnie logowanie agenta, a potem je pokazuje; najwyżej raz na dziesięć minut na agenta. Ustawienia › <b>Narożniki</b> ustala narożniki kart, okien dialogowych i pól mapy: <b>Jak okna</b> podąża za zaokrągleniem okien Hyprland (z liczbą pikseli), <b>Lekko zaokrąglone (6 px)</b>, <b>Zaokrąglone (12 px)</b> lub <b>Proste</b>. Każda kontrolka podąża w trzech rozmiarach: przyciski, listy wyboru i pola najwyżej 8 px, pola wyboru i paski postępu najwyżej 4 px.</p>
 
 <h2 id="settings-list">Ustawienia</h2>
   <p>Koło zębate (<kbd>Ctrl</kbd>+<kbd>,</kbd>) otwiera ustawienia. <kbd>Backspace</kbd> lub <kbd>Esc</kbd> wraca. Sekcje są po lewej (Ogólne, Wygląd, Mapa, Agenci, Lokalne LLM, Dyktowanie, Ostatnie zmiany); <b>Szukaj w ustawieniach</b> nad nimi pokazuje ustawienia ze wszystkich sekcji, w których pojawia się to, co wpisujesz.</p>
@@ -830,7 +830,7 @@
       <tr><td><b>Podagenci</b></td><td>Dla strony <a href="#subagents">Podagenci</a>: jak długo zostają zakończeni podagenci (domyślnie <b>30 minut</b>; 10, 30, 60 lub 120) i ilu najwyżej (domyślnie <b>10</b>; 5, 10, 20 lub 40). Pracujący są zawsze pokazywani.</td></tr>
       <tr><td><b>Koszty</b></td><td><b>Waluta</b>: dolar amerykański albo euro po dziennym kursie referencyjnym Europejskiego Banku Centralnego (pobieranym raz dziennie z ecb.europa.eu). <b>Dzienny limit</b> dla agenta płatnego za token (domyślnie <b>100</b>; od 10 do 500). <b>Żółty od</b> i <b>Czerwony od</b>: udział zużycia, przy którym wskaźnik kosztu lub bateria robi się żółta (domyślnie 75&nbsp;%) i czerwona (90&nbsp;%). <b>Powiadom przy czerwonym</b> (domyślnie włączone): powiadomienie na pulpicie, gdy agent robi się czerwony — raz dla każdego limitu aż do jego odnowienia albo raz dziennie dla kosztu.</td></tr>
       <tr><td><b>Karty terminali nad mapą</b></td><td>Jedna karta na każdy terminal agenta w oknie.</td></tr>
-      <tr><td><b>Narożniki</b></td><td>Jak w oknach, zaokrąglone lub proste.</td></tr>
+      <tr><td><b>Narożniki</b></td><td>Jak w oknach, lekko zaokrąglone (6 px), zaokrąglone (12 px) lub proste; przyciski, listy wyboru i pola najwyżej 8 px, pola wyboru i paski postępu najwyżej 4 px.</td></tr>
       <tr><td><b>Uruchamiaj lokalne LLM razem z agentami</b></td><td>Strażnik w tle z sekcji <a href="#start-with-agents">Uruchamianie i zatrzymywanie z agentami</a>.</td></tr>
       <tr><td><b>W programie uruchamiającym</b></td><td>Wpis w programie uruchamiającym; wyłączenie go usuwa.</td></tr>
       <tr><td><b>Agenci startują w</b></td><td>Folder, w którym startują agenci.</td></tr>
@@ -1316,7 +1316,7 @@
   <table class="keys">
     <tbody>
       <tr><th scope="row"><kbd>F1</kbd></th><td>Pomoc</td></tr>
-      <tr><th scope="row"><kbd>F12</kbd></th><td>F12 zapisuje zrzut ekranu. Obraz okna trafia do <code>~/Pictures/Maprisma</code>, domyślnie włączone. W terminalu użyj symbolu aparatu pod nim. Możesz dodać notatkę, zapisaną jako plik tekstowy obok obrazu. W ustawieniach możesz wybrać inny folder.</td></tr>
+      <tr><th scope="row"><kbd>F12</kbd></th><td>F12 zapisuje zrzut ekranu. Obraz okna trafia do <code>~/Pictures/Maprisma</code>, domyślnie włączone. W terminalu użyj symbolu aparatu pod nim. Możesz dodać notatkę, zapisaną jako plik tekstowy obok obrazu. W ustawieniach możesz wybrać inny folder. Liczy się tylko sam F12 (nie z Ctrl, Shift, Alt ani Super). Tylko ty możesz otworzyć folder (0700) i jego pliki (0600); istniejący obraz ani notatka nigdy nie są nadpisywane i nic nie jest wysyłane.</td></tr>
       <tr><th scope="row"><kbd>Ctrl</kbd>+<kbd>,</kbd></th><td>Ustawienia</td></tr>
       <tr><th scope="row"><kbd>F5</kbd></th><td>Odśwież (mapę i Konfigurację)</td></tr>
       <tr><th scope="row"><kbd>Ctrl</kbd>+<kbd>+</kbd> / <kbd>Ctrl</kbd>+<kbd>−</kbd> / <kbd>Ctrl</kbd>+<kbd>0</kbd></th><td>Powiększ mapę, pomniejsz, dopasuj z powrotem do szerokości okna</td></tr>

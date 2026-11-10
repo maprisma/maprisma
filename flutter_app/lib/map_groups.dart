@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'app_look.dart' show StatusColors;
-import 'app_theme.dart' show corners;
+import 'app_theme.dart' show cornerSizes, corners;
 
 /// UI-only metadata. Never inserted into the graph or serialized.
 class MapGroup {
@@ -378,7 +378,9 @@ class AgentBadge extends StatelessWidget {
             padding: const EdgeInsets.all(1),
             decoration: BoxDecoration(
               border: Border.all(color: colour, width: 1),
-              borderRadius: BorderRadius.circular(2),
+              borderRadius: BorderRadius.circular(
+                cornerSizes(context).small.clamp(0, 2),
+              ),
             ),
             child: Align(
               alignment: Alignment.centerLeft,

@@ -136,6 +136,14 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     if (event is! KeyDownEvent || event.logicalKey != LogicalKeyboardKey.f12) {
       return false;
     }
+    // F12 alone: Ctrl, Shift, Alt or Super with it belong to someone else.
+    final keys = HardwareKeyboard.instance;
+    if (keys.isControlPressed ||
+        keys.isShiftPressed ||
+        keys.isAltPressed ||
+        keys.isMetaPressed) {
+      return false;
+    }
     if (_shots == null) {
       final on = (_snapshot?['settings'] as Map?)?['screenshot_key'] != false;
       // A program in a terminal may use F12 itself.
@@ -144,6 +152,15 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     unawaited(_takeShot());
     return true;
   }
+
+  static String _shotError(Object error) => switch (error) {
+    FileSystemException(:final osError?) when osError.message.isNotEmpty =>
+      osError.message,
+    FileSystemException(:final osError?) =>
+      '${error.message} (errno ${osError.errorCode})',
+    FileSystemException(:final message) => message,
+    _ => '$error',
+  };
 
   Future<void> _takeShot() async {
     final shots = _shots, context = _navigator.currentContext;
@@ -155,23 +172,46 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       final time = DateTime.now();
       final ratio = MediaQuery.devicePixelRatioOf(context);
       final image = await area.toImage(pixelRatio: ratio);
-      final data = await image.toByteData(format: ui.ImageByteFormat.png);
-      image.dispose();
+      final ByteData? data;
+      try {
+        data = await image.toByteData(format: ui.ImageByteFormat.png);
+      } finally {
+        image.dispose();
+      }
       if (data == null) return;
       final png = data.buffer.asUint8List();
       final folder = (_snapshot?['settings'] as Map?)?['screenshot_folder'];
-      final path =
-          await (shots?.save(png, time) ??
-              _windowShots.saveTo(folder as String?, png, time));
+      final String path;
+      try {
+        path =
+            await (shots?.save(png, time) ??
+                _windowShots.saveTo(folder as String?, png, time));
+      } catch (error) {
+        _mapNote(
+          tr(
+            'The screenshot could not be saved: {0}',
+          ).replaceAll('{0}', _shotError(error)),
+        );
+        return;
+      }
       if (!context.mounted) return;
+      // F12 again while the note is asked for opens no second dialog.
       final note = await showDialog<String>(
         context: context,
         builder: (_) => _ShotNote(path, tr),
       );
-      if (shots != null) {
-        await shots.record(path, note ?? '', time);
-      } else {
-        await _windowShots.note(path, note ?? '');
+      try {
+        if (shots != null) {
+          await shots.record(path, note ?? '', time);
+        } else {
+          await _windowShots.note(path, note ?? '');
+        }
+      } catch (error) {
+        _mapNote(
+          tr(
+            'The note could not be saved: {0}',
+          ).replaceAll('{0}', _shotError(error)),
+        );
       }
     } catch (_) {
       // A picture must never disturb the app.
@@ -5987,35 +6027,41 @@ class _ShotNoteState extends State<_ShotNote> {
     super.dispose();
   }
 
+  void _done() => Navigator.pop(context, _note.text);
+
   @override
   Widget build(BuildContext context) {
     final tr = widget.tr;
-    return AlertDialog(
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          SelectableText(
-            tr('Screenshot saved: {0}').replaceAll('{0}', widget.path),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            key: const ValueKey('screenshot-note'),
-            controller: _note,
-            autofocus: true,
-            decoration: InputDecoration(
-              labelText: tr('What is wrong? (optional)'),
+    // Done, Enter, Esc and a click beside it all keep the text typed.
+    return PopScope<String>(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _done();
+      },
+      child: AlertDialog(
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SelectableText(
+              tr('Screenshot saved: {0}').replaceAll('{0}', widget.path),
             ),
-            onSubmitted: (text) => Navigator.pop(context, text),
-          ),
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context, _note.text),
-          child: Text(tr('Done')),
+            const SizedBox(height: 12),
+            TextField(
+              key: const ValueKey('screenshot-note'),
+              controller: _note,
+              autofocus: true,
+              maxLength: screenshotNoteLimit,
+              decoration: InputDecoration(
+                labelText: tr('What is wrong? (optional)'),
+                counterText: '',
+              ),
+              onSubmitted: (_) => _done(),
+            ),
+          ],
         ),
-      ],
+        actions: [TextButton(onPressed: _done, child: Text(tr('Done')))],
+      ),
     );
   }
 }

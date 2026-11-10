@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'app_look.dart' show AppSpace, WindowFooter, WindowHeader, StatusColors;
-import 'app_theme.dart' show corners;
+import 'app_theme.dart' show controlBorder, corners;
 import 'backend.dart' show failureText;
 import 'connections_view.dart' show ConnectionReview;
 import 'agent_action_dialog.dart';
@@ -1191,7 +1191,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
                   ? null
                   : '${need['description']}',
               helperMaxLines: 2,
-              border: const OutlineInputBorder(),
+              border: controlBorder(context),
             ),
           ),
         ],
@@ -1997,7 +1997,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
                   isDense: true,
                   counterText: '',
                   labelText: widget.tr('Edit suggestion'),
-                  border: const OutlineInputBorder(),
+                  border: controlBorder(context),
                 ),
                 onSubmitted: (_) => _finishPromptEdit(true),
               ),
@@ -2236,7 +2236,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
                   : widget.showBar
                   ? widget.tr(_columnHint(_column))
                   : '${widget.tr(_columnTitle)}: ${widget.tr(_columnHint(_column))}',
-              border: const OutlineInputBorder(),
+              border: controlBorder(context),
               // The microphone (when on) and Ask in the field's right corner.
               suffixIcon: Row(
                 mainAxisSize: MainAxisSize.min,

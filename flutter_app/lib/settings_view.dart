@@ -688,6 +688,7 @@ class SettingsView extends StatelessWidget {
           initialValue:
               const [
                 'windows',
+                'slight',
                 'rounded',
                 'square',
               ].contains(settings['corners'])
@@ -706,7 +707,20 @@ class SettingsView extends StatelessWidget {
                       ).replaceAll('{0}', '$windowRounding'),
               ),
             ),
-            DropdownMenuItem(value: 'rounded', child: Text(_t('Rounded'))),
+            DropdownMenuItem(
+              value: 'slight',
+              child: Text(
+                _t(
+                  'Slightly rounded ({0} px)',
+                ).replaceAll('{0}', '$slightRadius'),
+              ),
+            ),
+            DropdownMenuItem(
+              value: 'rounded',
+              child: Text(
+                _t('Rounded ({0} px)').replaceAll('{0}', '$roundedRadius'),
+              ),
+            ),
             DropdownMenuItem(value: 'square', child: Text(_t('Square'))),
           ],
           onChanged: busy
@@ -718,7 +732,7 @@ class SettingsView extends StatelessWidget {
         const SizedBox(height: 8),
         Text(
           _t(
-            "Corners of the window, its cards and the map's boxes. “Like windows” follows Hyprland's window rounding.",
+            "Corners of the window, its cards, the map's boxes and every control (buttons, choice boxes, fields). “Like windows” follows Hyprland's window rounding.",
           ),
         ),
         const SizedBox(height: AppSpace.md),
@@ -1366,7 +1380,7 @@ class _SettingsPagesState extends State<_SettingsPages> {
                                 onPressed: () =>
                                     setState(() => _search.clear()),
                               ),
-                        border: const OutlineInputBorder(),
+                        border: controlBorder(context),
                       ),
                     ),
                   ),

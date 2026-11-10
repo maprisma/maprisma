@@ -43,6 +43,11 @@ start, if it has no settings yet, it copies the legacy **AI Agents Map** plugin'
 with a private backup, leaving the originals untouched. Verified add-ons for installed agents and
 local LLMs are enabled automatically. The legacy plugin remains supported during the transition.
 
+Settings › **Corners** follows the desktop's window rounding (**Like windows**) or is **Slightly
+rounded (6 px)**, **Rounded (12 px)** or **Square**; every control follows in three sizes (cards,
+dialogs and menus the full radius, buttons, drop-downs, fields and chips at most 8 px, check boxes
+and progress bars at most 4 px).
+
 ## Install
 
 Not released yet: the Flutter app is packaged with `plan-flutter.md` step 6 (it carries no Python). The
@@ -68,6 +73,15 @@ time limit.
 The **Healthy & Security check** reads only the security keys of the agents' settings files and
 changes one key at a time, after a preview, with a backup and Undo. **Disk space** only looks at
 file sizes (`lstat`, links not followed, bounded); nothing is opened or deleted.
+
+**F12** (alone, not with Ctrl, Shift, Alt or Super; off in Settings › F12 saves a screenshot; in a
+terminal the camera symbol instead) saves a picture of Maprisma's own window, drawn by the app
+itself (no screenshot program, nothing uploaded), with an optional note (at most 4000 characters)
+as a `.txt` next to it. It goes to `~/Pictures/Maprisma` (the pictures folder from
+`user-dirs.dirs`, read bounded and never through a link) or the folder chosen in Settings, only
+when that is a real folder of yours that others cannot write to (made `0700` when missing, checked
+on its opened handle). Each file is new (`0600`, never through a link, never over an existing
+picture or note), written completely and synced, or removed again.
 
 **Session numbers per project** (Projects, last 30 days, on an agent's details): numbers only (tokens,
 working time, sessions, lines changed, API value, subagent runs), from each agent's own session files

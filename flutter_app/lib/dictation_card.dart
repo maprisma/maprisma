@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'app_look.dart';
-import 'app_theme.dart' show corners;
+import 'app_theme.dart' show controlBorder, corners;
 import 'backend.dart' show failureText;
 import 'core_client.g.dart';
 import 'map_smart_card.dart' show SmartStatusIcon;
@@ -798,15 +798,15 @@ class _DictationSectionState extends State<DictationSection> {
                           decoration: InputDecoration(
                             isDense: true,
                             hintText: hintText,
-                            border: const OutlineInputBorder(),
+                            border: controlBorder(context),
                           ),
                         )
                       else
                         InputDecorator(
                           key: const ValueKey('dictation-test-field'),
-                          decoration: const InputDecoration(
+                          decoration: InputDecoration(
                             isDense: true,
-                            border: OutlineInputBorder(),
+                            border: controlBorder(context),
                           ),
                           child: Text(
                             hintText,
