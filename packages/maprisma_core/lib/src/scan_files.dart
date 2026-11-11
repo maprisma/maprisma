@@ -167,6 +167,7 @@ List<String> listDirectory(
   String path, {
   int limit = 4000,
   bool allowRootOwned = false,
+  bool anyOwner = false,
 }) {
   if (!p.isAbsolute(path) || path.contains('\x00') || limit <= 0) return [];
   int? fd;
@@ -175,7 +176,7 @@ List<String> listDirectory(
   try {
     fd = posix.openAt(-100, path, Posix.directory);
     final owner = posix.stat(fd).uid;
-    if (owner != posix.uid && !(allowRootOwned && owner == 0)) {
+    if (!anyOwner && owner != posix.uid && !(allowRootOwned && owner == 0)) {
       return [];
     }
     directory = ScanFiles._fdopendir(fd);
@@ -229,4 +230,28 @@ String stripJsonComments(String text) {
     }
   }
   return out.toString().replaceAllMapped(RegExp(r',\s*([}\]])'), (m) => m[1]!);
+}
+
+/// Directory.listSync(followLinks: false) with a bound: at most [limit]
+/// entries, read one at a time in the folder's own order (listSync would
+/// first allocate the entire directory). Throws FileSystemException when the
+/// folder cannot be read, as listSync does.
+List<FileSystemEntity> headEntries(String folder, int limit, [Posix? posix]) {
+  if (!p.isAbsolute(folder) ||
+      FileSystemEntity.typeSync(folder) != FileSystemEntityType.directory) {
+    throw FileSystemException('not a folder', folder);
+  }
+  return [
+    for (final path in listDirectory(
+      posix ?? Posix(),
+      folder,
+      limit: limit,
+      anyOwner: true,
+    ))
+      switch (FileSystemEntity.typeSync(path, followLinks: false)) {
+        FileSystemEntityType.directory => Directory(path),
+        FileSystemEntityType.link => Link(path),
+        _ => File(path),
+      },
+  ];
 }

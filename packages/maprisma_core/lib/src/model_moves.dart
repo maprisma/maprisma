@@ -1,11 +1,13 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 import 'adapter_assets.g.dart';
 import 'connect_apply.dart';
 import 'existing_ai.dart' as existing_ai;
 import 'posix_ffi.dart';
+import 'scan_files.dart' show headEntries;
 import 'provider_scans.dart';
 import 'py_values.dart' show pyJsonDumps;
 import 'system_actions.dart' show modelFolderChanges;
@@ -74,23 +76,29 @@ final class ModelFolder {
   bool added = false;
 }
 
+const _maxVisits = 200000; // entries one walk below a model folder looks at
+
 /// model_folders._ggufs: (path as found, its real file) below folder.
 Iterable<(String, String)> ggufs(
   String folder,
   String home, {
   int depth = 3,
 }) sync* {
-  var found = 0;
+  var found = 0, visits = 0;
   final base = p.split(folder).length;
   final stack = [folder];
   while (stack.isNotEmpty) {
     final root = stack.removeAt(0);
     List<FileSystemEntity> entries;
     try {
-      entries = Directory(root).listSync(followLinks: false);
+      // Read one entry at a time, all folders together within one budget of
+      // entries looked at (never a whole huge folder listed first).
+      entries = headEntries(p.absolute(root), math.max(0, _maxVisits - visits));
     } on FileSystemException {
       continue;
     }
+    visits += entries.length;
+    if (visits >= _maxVisits) stack.clear();
     final dirs = <String>[];
     for (final e in entries) {
       final isDir =
@@ -141,7 +149,7 @@ List<ModelFolder> discoverFolders(
   for (final entry in folders.values) {
     try {
       entry.files = [
-        for (final e in Directory(entry.path).listSync(followLinks: false))
+        for (final e in headEntries(p.absolute(entry.path), 20000))
           if (p.basename(e.path).toLowerCase().endsWith('.gguf') && e is File)
             e.path,
       ]..sort();

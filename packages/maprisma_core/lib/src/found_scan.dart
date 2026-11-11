@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 import 'desktop.dart' show whichIn;
 import 'installers.dart' show folderBytes, runWithDiskBudget;
 import 'posix_ffi.dart';
+import 'scan_files.dart' show headEntries;
 
 /// mcp_scan and skills_scan: programs on this PC that offer an MCP server
 /// and skill sets apps brought along, found without running anything. A
@@ -257,12 +258,8 @@ final class FoundScan {
   /// scandir_head: at most [limit] entries, in the folder's own order.
   List<FileSystemEntity> _head(String folder, int limit) {
     if (folder.isEmpty) throw const FileSystemException('no folder');
-    final out = <FileSystemEntity>[];
-    for (final e in Directory(folder).listSync(followLinks: false)) {
-      out.add(e);
-      if (out.length >= limit) break;
-    }
-    return out;
+    // Read one entry at a time up to the bound (never the whole folder first).
+    return headEntries(p.absolute(folder), limit, posix);
   }
 
   static FileStat? _stat(String path) {
