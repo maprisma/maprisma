@@ -14,3 +14,4 @@ export 'src/core_tasks.dart'
         coreMapEdits,
         coreFirstRoutes,
         coreProviderRun;
+export 'src/clipboard.dart' show boundedClipboardText, maxTerminalPaste;

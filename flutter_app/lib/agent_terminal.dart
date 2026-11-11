@@ -3,6 +3,8 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:maprisma_core/maprisma_core.dart'
+    show boundedClipboardText, maxTerminalPaste;
 import 'package:xterm/xterm.dart';
 
 import 'app_look.dart' show AppSpace, WindowHeader;
@@ -49,6 +51,28 @@ class AgentTerminal extends ChangeNotifier {
   bool _pumping = false;
   bool _disposed = false;
   DateTime? _retryAfter;
+
+  var _pasting = false;
+
+  /// The clipboard's text through the bounded read (wl-paste, at most 1 MiB
+  /// and 2 s: core boundedClipboardText), then into the terminal with
+  /// bracketed paste. One at a time: a paste while one is read is dropped.
+  Future<void> pasteClipboard() async {
+    if (_pasting || ended) return;
+    _pasting = true;
+    try {
+      final text = await boundedClipboardText();
+      if (text == null) {
+        terminal.write(
+          '\r\n[${tr('Clipboard text is too long to paste (max {0} KiB)').replaceAll('{0}', '${maxTerminalPaste ~/ 1024}')}]\r\n',
+        );
+      } else if (text.isNotEmpty && !ended) {
+        terminal.paste(text);
+      }
+    } finally {
+      _pasting = false;
+    }
+  }
 
   Future<void> _pump() async {
     if (_pumping ||
@@ -181,6 +205,9 @@ class AgentTerminalView extends StatelessWidget {
                 session.terminal,
                 controller: session.selection,
                 focusNode: keys,
+                // Paste only through the bounded read (AgentTerminal.pasteClipboard),
+                // never xterm's own, which takes the whole clipboard offer.
+                shortcuts: terminalShortcuts(session),
                 onSecondaryTapDown: (_, _) async {
                   final selected = session.selection.selection;
                   if (selected != null) {
@@ -188,10 +215,7 @@ class AgentTerminalView extends StatelessWidget {
                     session.selection.clearSelection();
                     await Clipboard.setData(ClipboardData(text: text));
                   } else {
-                    final clipboard = await Clipboard.getData('text/plain');
-                    if (clipboard?.text != null) {
-                      session.terminal.paste(clipboard!.text!);
-                    }
+                    await session.pasteClipboard();
                   }
                 },
               ),
@@ -218,6 +242,19 @@ class AgentTerminalView extends StatelessWidget {
 
 /// A new terminal takes the keyboard from whatever had it: `autofocus` alone
 /// leaves it there.
+/// xterm's keys (copy, select all) with paste — Ctrl+V and Ctrl+Shift+V —
+/// going to the bounded read instead of xterm's unbounded one.
+Map<ShortcutActivator, Intent> terminalShortcuts(AgentTerminal session) => {
+  const SingleActivator(LogicalKeyboardKey.keyC, control: true, shift: true):
+      CopySelectionTextIntent.copy,
+  const SingleActivator(LogicalKeyboardKey.keyA, control: true):
+      const SelectAllTextIntent(SelectionChangedCause.keyboard),
+  const SingleActivator(LogicalKeyboardKey.keyV, control: true):
+      VoidCallbackIntent(session.pasteClipboard),
+  const SingleActivator(LogicalKeyboardKey.keyV, control: true, shift: true):
+      VoidCallbackIntent(session.pasteClipboard),
+};
+
 class _TakesKeys extends StatefulWidget {
   const _TakesKeys(this.keys, {required this.child});
 
