@@ -151,39 +151,53 @@ final class ScanFiles {
     String path, {
     int limit = 4000,
     bool allowRootOwned = false,
-  }) {
-    path = expand(path);
-    if (!p.isAbsolute(path) || path.contains('\x00')) return [];
-    int? fd;
-    Pointer<Void> directory = nullptr;
-    final result = <String>[];
-    try {
-      fd = posix.openAt(-100, path, Posix.directory);
-      final owner = posix.stat(fd).uid;
-      if (owner != posix.uid && !(allowRootOwned && owner == 0)) {
-        return [];
-      }
-      directory = _fdopendir(fd);
-      if (directory == nullptr) return [];
-      fd = null; // owned by DIR after successful fdopendir
-      while (result.length < limit) {
-        final record = _readdir(directory);
-        if (record == nullptr) break;
-        final length = (record + 16).cast<Uint16>().value;
-        if (length < 20 || length > 4096) break;
-        final data = (record + 19).asTypedList(length - 19);
-        final end = data.indexOf(0);
-        if (end < 0) break;
-        final name = utf8.decode(data.sublist(0, end), allowMalformed: true);
-        if (name != '.' && name != '..') result.add(p.join(path, name));
-      }
-      return result;
-    } on FileSystemException {
+  }) => listDirectory(
+    posix,
+    expand(path),
+    limit: limit,
+    allowRootOwned: allowRootOwned,
+  );
+}
+
+/// ScanFiles.list for any caller with a Posix: at most [limit] entries of a
+/// folder of this account (or root's with [allowRootOwned]), read one at a
+/// time (readdir stops at the bound); [] when it cannot be read.
+List<String> listDirectory(
+  Posix posix,
+  String path, {
+  int limit = 4000,
+  bool allowRootOwned = false,
+}) {
+  if (!p.isAbsolute(path) || path.contains('\x00') || limit <= 0) return [];
+  int? fd;
+  Pointer<Void> directory = nullptr;
+  final result = <String>[];
+  try {
+    fd = posix.openAt(-100, path, Posix.directory);
+    final owner = posix.stat(fd).uid;
+    if (owner != posix.uid && !(allowRootOwned && owner == 0)) {
       return [];
-    } finally {
-      if (directory != nullptr) _closedir(directory);
-      if (fd != null) posix.close(fd);
     }
+    directory = ScanFiles._fdopendir(fd);
+    if (directory == nullptr) return [];
+    fd = null; // owned by DIR after successful fdopendir
+    while (result.length < limit) {
+      final record = ScanFiles._readdir(directory);
+      if (record == nullptr) break;
+      final length = (record + 16).cast<Uint16>().value;
+      if (length < 20 || length > 4096) break;
+      final data = (record + 19).asTypedList(length - 19);
+      final end = data.indexOf(0);
+      if (end < 0) break;
+      final name = utf8.decode(data.sublist(0, end), allowMalformed: true);
+      if (name != '.' && name != '..') result.add(p.join(path, name));
+    }
+    return result;
+  } on FileSystemException {
+    return [];
+  } finally {
+    if (directory != nullptr) ScanFiles._closedir(directory);
+    if (fd != null) posix.close(fd);
   }
 }
 

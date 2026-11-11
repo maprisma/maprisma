@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 import 'package:path/path.dart' as p;
 import 'posix_ffi.dart';
+import 'scan_files.dart' show listDirectory;
 import 'session_readers.dart' show NumericSession, epoch, projectFolder;
 
 /// claude_sessions: Claude Code's work per session as numbers only (tokens,
@@ -153,9 +154,9 @@ final class ClaudeSessions {
         at = 0;
       }
 
-      Uint8List readline() {
+      Uint8List readline(int cap) {
         while (true) {
-          final end = math.min(buffer.length, at + maxLine + 1);
+          final end = math.min(buffer.length, at + cap);
           for (var i = at; i < end; i++) {
             if (buffer[i] == 10) {
               final line = Uint8List.sublistView(buffer, at, i + 1);
@@ -163,7 +164,7 @@ final class ClaudeSessions {
               return line;
             }
           }
-          if (end - at >= maxLine + 1 || eof) {
+          if (end - at >= cap || eof) {
             final line = Uint8List.sublistView(buffer, at, end);
             at = end;
             return line;
@@ -172,25 +173,29 @@ final class ClaudeSessions {
         }
       }
 
+      // Inside a line longer than maxLine (from an earlier run, too): its
+      // bytes are skipped, each chunk charged against the budget and the
+      // offset moved on, so a huge line is never read twice nor past the
+      // budget; never more than what is left of the budget is read.
+      var skipping = state['skipping'] == true;
       while (read < budget) {
-        var line = readline();
+        final cap = math.max(1, math.min(maxLine + 1, budget - read));
+        if (skipping) {
+          final chunk = readline(cap);
+          if (chunk.isEmpty) break; // still being written: next run goes on
+          read += chunk.length;
+          offset += chunk.length;
+          skipping = chunk.last != 10;
+          continue;
+        }
+        var line = readline(cap);
         if (line.isEmpty) break;
         if (line.last != 10) {
-          if (line.length <= maxLine) break; // still being written
-          // Longer than maxLine: skip to its end and keep nothing of it.
-          var skipped = line.length, done = false;
-          while (true) {
-            final more = readline();
-            if (more.isEmpty) break;
-            skipped += more.length;
-            if (more.last == 10) {
-              done = true;
-              break;
-            }
-          }
-          if (!done) break;
-          read += skipped;
-          offset += skipped;
+          // Still being written, or past the budget: read again next time.
+          if (line.length <= maxLine) break;
+          skipping = true; // longer than maxLine: keep nothing of it
+          read += line.length;
+          offset += line.length;
           continue;
         }
         read += line.length;
@@ -220,6 +225,7 @@ final class ClaudeSessions {
         }
       }
       state['offset'] = offset;
+      state['skipping'] = skipping;
       return read;
     } finally {
       posix.close(fd);
@@ -262,6 +268,7 @@ final class ClaudeSessions {
         e.key: {
           'inode': e.value['inode'],
           'offset': e.value['offset'] ?? 0,
+          if (e.value['skipping'] == true) 'skipping': true,
           if (e.value['type'] is String) 'type': e.value['type'],
           'sessions': {
             for (final s in (e.value['sessions'] as Map? ?? const {}).entries)
@@ -290,10 +297,19 @@ final class ClaudeSessions {
       FileSystemEntity.typeSync(path, followLinks: false) ==
       FileSystemEntityType.directory;
 
-  List<String> _sorted(String folder) {
-    final names = [
-      for (final e in Directory(folder).listSync(followLinks: false)) e.path,
-    ]..sort();
+  /// Entries one listing may still look at in this collect (shared by all its
+  /// listings: never a whole huge folder listed and sorted).
+  var _visitsLeft = maxFiles * 20;
+
+  /// At most [limit] entries of a folder (read one at a time, charged to the
+  /// collect's budget), in name order.
+  List<String> _sorted(String folder, [int limit = maxFiles * 2]) {
+    final names = listDirectory(
+      posix,
+      folder,
+      limit: math.min(limit, _visitsLeft),
+    )..sort();
+    _visitsLeft -= names.length;
     return names;
   }
 
@@ -306,7 +322,7 @@ final class ClaudeSessions {
       final (folder, depth) = stack.removeLast();
       List<String> items;
       try {
-        items = _sorted(folder).take(maxDirs).toList();
+        items = _sorted(folder, maxDirs);
       } on FileSystemException {
         continue;
       }
@@ -354,10 +370,11 @@ final class ClaudeSessions {
     final cached = _loadCache();
     final seen = <String, Map<String, dynamic>>{};
     var budget = maxBytes;
+    _visitsLeft = maxFiles * 20;
     List<String> dirs;
     try {
       dirs = [
-        for (final d in _sorted(root))
+        for (final d in _sorted(root, maxDirs * 4))
           if (_isDir(d)) d,
       ].take(maxDirs).toList();
     } on FileSystemException {

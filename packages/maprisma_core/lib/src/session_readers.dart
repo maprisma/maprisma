@@ -533,6 +533,8 @@ final class SessionReaders {
       }
     }
     if (reader == 'openclaw-db') {
+      const hasJson =
+          '(event_json IS NOT NULL AND octet_length(event_json) > 0)';
       String extract(String key) => "json_extract(event_json, '\$.$key')";
       String usage(String key) =>
           "json_object('input',${extract('$key.input')},'output',${extract('$key.output')},'cacheRead',${extract('$key.cacheRead')},'cacheWrite',${extract('$key.cacheWrite')})";
@@ -544,7 +546,11 @@ final class SessionReaders {
       )) {
         final rows = sqlite.select(
           db,
-          "SELECT session_id, CASE WHEN json_valid(event_json) THEN $projection ELSE NULL END, CASE WHEN length(event_zstd)<=1048576 THEN event_zstd ELSE NULL END FROM transcript_events WHERE length(event_json)<=1048576 OR length(event_zstd)<=1048576 ORDER BY rowid DESC LIMIT 20000",
+          // Only the representation that is used, and only when small enough
+          // (bytes, octet_length), checked before SQLite hands it over: the
+          // JSON when there is one (not empty), else the packed copy. An
+          // unused copy is never fetched (agent_sessions.OPENCLAW_EVENTS).
+          "SELECT session_id, CASE WHEN $hasJson AND json_valid(event_json) THEN $projection ELSE NULL END, CASE WHEN NOT $hasJson THEN event_zstd ELSE NULL END FROM transcript_events WHERE ($hasJson AND octet_length(event_json)<=1048576) OR (NOT $hasJson AND event_zstd IS NOT NULL AND octet_length(event_zstd)<=1048576) ORDER BY rowid DESC LIMIT 20000",
           maxRows: 20000,
           maxText: 8192,
           blobs: true,
