@@ -179,7 +179,8 @@ class _SkillsWebViewState extends State<SkillsWebView> {
           ),
           Expanded(
             child: SelectableText(
-              '${skill['name']} · github.com/${skill['repo']}',
+              '${skill['name']} · github.com/${skill['repo']}'
+              '${skill['commit'] is String && (skill['commit'] as String).length >= 12 ? ' @ ${(skill['commit'] as String).substring(0, 12)}' : ''}',
               style: Theme.of(context).textTheme.titleMedium,
             ),
           ),

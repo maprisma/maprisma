@@ -35,10 +35,17 @@ String _cut(String text, int limit) {
   return runes.length <= limit ? text : String.fromCharCodes(runes.take(limit));
 }
 
-String treeUrl(String repo) =>
-    'https://api.github.com/repos/$repo/git/trees/HEAD?recursive=1';
-String rawUrl(String repo, String path) =>
-    'https://raw.githubusercontent.com/$repo/HEAD/${quoteUrl(path)}';
+String commitUrl(String repo) =>
+    'https://api.github.com/repos/$repo/commits/HEAD';
+String treeUrl(String repo, [String ref = 'HEAD']) =>
+    'https://api.github.com/repos/$repo/git/trees/$ref?recursive=1';
+String rawUrl(String repo, String path, [String ref = 'HEAD']) =>
+    'https://raw.githubusercontent.com/$repo/$ref/${quoteUrl(path)}';
+final _sha = RegExp(r'^[0-9a-f]{40}$');
+
+/// Git's id of a file's bytes: SHA-1 of `blob <size>\0` and the bytes.
+String gitBlobId(List<int> data) =>
+    sha1.convert([...utf8.encode('blob ${data.length}\u0000'), ...data]).toString();
 
 /// skills_web._get: only the three fixed hosts, no redirects.
 Future<List<int>> _get(
@@ -108,9 +115,9 @@ String _secondLast(String path) {
 }
 
 /// skills_web.files_of: (folder in the repository, [(path inside the skill,
-/// repo path, size, executable)]); FormatException when it is not there or
-/// too big.
-(String, List<(String, String, int, bool)>) skillFiles(
+/// repo path, size, executable, Git blob id)]); FormatException when it is not
+/// there, too big, or an entry names no blob id.
+(String, List<(String, String, int, bool, String)>) skillFiles(
   dynamic tree,
   String skillId,
 ) {
@@ -140,7 +147,7 @@ String _secondLast(String path) {
     if (f.length < folder.length) folder = f;
   }
   final prefix = folder.isEmpty ? '' : '$folder/';
-  final files = <(String, String, int, bool)>[];
+  final files = <(String, String, int, bool, String)>[];
   var total = 0;
   for (final entry in entries) {
     final path = entry is Map && entry['path'] is String
@@ -160,8 +167,12 @@ String _secondLast(String path) {
     }
     final size = entry['size'] is int ? entry['size'] as int : maxFile + 1;
     if (size > maxFile) throw FormatException('$inner is too large');
+    final blob = entry['sha'];
+    if (blob is! String || !_sha.hasMatch(blob)) {
+      throw FormatException('$inner: the file list names no Git blob id');
+    }
     total += size;
-    files.add((inner, path, size, entry['mode'] == '100755'));
+    files.add((inner, path, size, entry['mode'] == '100755', blob));
   }
   if (files.length > maxFiles || total > maxTotal) {
     throw const FormatException('the skill is too large');
@@ -210,15 +221,30 @@ Future<Map<String, dynamic>> fetchSkill(
     throw const FormatException('Invalid skill');
   }
   final fetch = get ?? _get;
+  // One snapshot: HEAD resolved to a full commit once; the file list and every
+  // file come from that commit and must have the blob ids the list names, so
+  // an install never mixes files of two versions.
+  final commit = utf8
+      .decode(
+        await fetch(commitUrl(repo), 1024, 'application/vnd.github.sha'),
+        allowMalformed: true,
+      )
+      .trim();
+  if (!_sha.hasMatch(commit)) {
+    throw const FormatException('GitHub did not name the current commit');
+  }
   final tree = jsonDecode(
     utf8.decode(
       await fetch(
-        treeUrl(repo),
+        treeUrl(repo, commit),
         8 * 1024 * 1024,
         'application/vnd.github+json',
       ),
     ),
   );
+  if (tree is Map && tree['truncated'] == true) {
+    throw const FormatException("the repository's file list is too long");
+  }
   final (_, files) = skillFiles(tree, skillId);
   _sweep(stagingRoot, now ?? DateTime.now());
   final random = Random.secure();
@@ -231,8 +257,17 @@ Future<Map<String, dynamic>> fetchSkill(
   );
   final staged = <List<dynamic>>[];
   var description = '';
-  for (final (index, (inner, path, size, executable)) in files.indexed) {
-    final data = await fetch(rawUrl(repo, path), max(size, 1) + 1024, '*/*');
+  for (final (index, (inner, path, size, executable, blob)) in files.indexed) {
+    final data = await fetch(
+      rawUrl(repo, path, commit),
+      max(size, 1) + 1024,
+      '*/*',
+    );
+    if (gitBlobId(data) != blob) {
+      throw FormatException(
+        '$inner is not the file of commit ${commit.substring(0, 12)}; nothing was added',
+      );
+    }
     final file = p.join(folder, '$index');
     posix.atomicWrite(file, data);
     staged.add([inner, file, sha256.convert(data).toString(), executable]);
@@ -244,6 +279,7 @@ Future<Map<String, dynamic>> fetchSkill(
   }
   return {
     'repo': repo,
+    'commit': commit,
     'skill_id': skillId,
     'files': staged,
     'description': description,
@@ -317,6 +353,7 @@ final class WebSkills {
       'fetched': token,
       'name': name,
       'repo': fetched['repo'],
+      'commit': fetched['commit'] ?? '',
       'skill_id': fetched['skill_id'],
       'description': fetched['description'],
       'files': [for (final f in fetched['files'] as List) f[0]],

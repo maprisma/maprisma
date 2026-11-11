@@ -899,7 +899,7 @@ Future<void> main() async {
           files = [
             folder,
             [
-              for (final f in found) [f.$1, f.$2, f.$3, f.$4],
+              for (final f in found) [f.$1, f.$2, f.$3, f.$4, f.$5],
             ],
           ];
         } on FormatException catch (e) {
