@@ -25,7 +25,14 @@ Future<String?> boundedClipboardText({
       run ??
       (List<String> argv, int max, Duration t) =>
           boundedOutput(argv, maxBytes: max, timeout: t);
-  final (types, _) = await read(['wl-paste', '--list-types'], 65536, timeout);
+  // One deadline for the whole paste (both reads together).
+  final until = DateTime.now().add(timeout);
+  Duration left() {
+    final rest = until.difference(DateTime.now());
+    return rest > Duration.zero ? rest : const Duration(milliseconds: 1);
+  }
+
+  final (types, _) = await read(['wl-paste', '--list-types'], 65536, left());
   // An empty clipboard makes wl-paste fail: nothing to paste, not an error.
   final offered = {
     for (final line in const LineSplitter().convert(
@@ -40,7 +47,7 @@ Future<String?> boundedClipboardText({
       '--no-newline',
       '--type',
       mime,
-    ], maxBytes, timeout);
+    ], maxBytes, left());
     if (!ok) return null;
     final text = utf8.decode(data, allowMalformed: true).replaceAll('\r\n', '\n');
     return String.fromCharCodes(

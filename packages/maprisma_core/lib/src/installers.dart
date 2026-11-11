@@ -339,33 +339,16 @@ Future<bool> runWithDiskBudget(
   }
 }
 
-/// install_ctl.private_group: whether [gid] is this account's own group —
-/// its primary group, with no other member in /etc/group and no other
-/// account having it as primary group in /etc/passwd.
+/// install_ctl.private_group: whether [gid] is this account's own group in
+/// the system account database (NSS): its primary group, named as the
+/// account (a user private group), with no other member.
 bool privateGroup(int? gid, [Posix? posix]) {
   final px = posix ?? _posix;
   if (gid == null || gid != px.gid) return false;
-  String? me;
-  try {
-    for (final line in File('/etc/passwd').readAsLinesSync()) {
-      final f = line.split(':');
-      if (f.length < 4) continue;
-      if (int.tryParse(f[2]) == px.uid) {
-        me = f[0];
-      } else if (int.tryParse(f[3]) == gid) {
-        return false; // another account's primary group too
-      }
-    }
-    for (final line in File('/etc/group').readAsLinesSync()) {
-      final f = line.split(':');
-      if (f.length < 4 || int.tryParse(f[2]) != gid) continue;
-      final members = f[3].split(',').where((m) => m.isNotEmpty);
-      if (members.any((m) => m != me)) return false;
-    }
-  } on FileSystemException {
-    return false;
-  }
-  return me != null;
+  final me = px.userName;
+  final group = px.group(gid);
+  if (me == null || group == null) return false;
+  return group.$1 == me && group.$2.every((m) => m == me);
 }
 
 /// install_ctl.check_trusted: the program folder must be safe from other

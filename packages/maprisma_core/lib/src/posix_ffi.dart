@@ -84,6 +84,38 @@ class Posix {
   );
   int get gid => _gid();
 
+  static final _getgrgid = _lib
+      .lookupFunction<Pointer<Pointer<Utf8>> Function(Uint32), Pointer<Pointer<Utf8>> Function(int)>(
+        'getgrgid',
+      );
+  static final _getpwuid = _lib
+      .lookupFunction<Pointer<Pointer<Utf8>> Function(Uint32), Pointer<Pointer<Utf8>> Function(int)>(
+        'getpwuid',
+      );
+
+  /// This account's name from the system account database (NSS), or null.
+  String? get userName {
+    final entry = _getpwuid(uid);
+    return entry == nullptr || entry[0] == nullptr ? null : entry[0].toDartString();
+  }
+
+  /// A group's name and members from the system account database (NSS):
+  /// struct group { gr_name, gr_passwd, gr_gid, gr_mem }; null when unknown.
+  (String, List<String>)? group(int gid) {
+    final entry = _getgrgid(gid);
+    if (entry == nullptr || entry[0] == nullptr) return null;
+    final name = entry[0].toDartString();
+    // gr_mem follows gr_name, gr_passwd (pointers) and gr_gid (padded to 8).
+    final members = Pointer<Pointer<Pointer<Utf8>>>.fromAddress(entry.address + 24).value;
+    final list = <String>[];
+    for (var i = 0; members != nullptr && i < 4096; i++) {
+      final member = members[i];
+      if (member == nullptr) break;
+      list.add(member.toDartString());
+    }
+    return (name, list);
+  }
+
   /// The group of a path (lstat: a link's own), or null.
   int? lstatGid(String path) {
     final buffer = calloc<Uint8>(256);

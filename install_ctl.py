@@ -169,19 +169,18 @@ def check_folder(text: str) -> Path:
 
 
 def private_group(gid: int) -> bool:
-    """Whether gid is this account's own group: its primary group, with no other member and no
-    other account having it as primary group."""
+    """Whether gid is this account's own group in the system account database: its primary group,
+    named as the account (a user private group), with no other member."""
     import grp
     import pwd
     if gid != os.getgid():
         return False
     try:
         me = pwd.getpwuid(os.getuid()).pw_name
-        if any(m != me for m in grp.getgrgid(gid).gr_mem):
-            return False
-        return not any(p.pw_gid == gid and p.pw_uid != os.getuid() for p in pwd.getpwall())
+        group = grp.getgrgid(gid)
     except (KeyError, OSError):
         return False
+    return group.gr_name == me and all(m == me for m in group.gr_mem)
 
 
 def check_trusted(path: Path) -> None:
