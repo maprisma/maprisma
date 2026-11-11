@@ -191,6 +191,11 @@ final class ModelFiles {
     return fd;
   }
 
+  /// curl's deadlines (install_ctl CONNECT_TIMEOUT, STALL_SECONDS, TRANSFER_TIMEOUT).
+  static const connectTimeout = 30;
+  static const stallSeconds = 60;
+  static const transferSeconds = 6 * 3600;
+
   /// install_ctl.download: curl into `<target>.part` (an open descriptor:
   /// curl never opens a path), resumed at our own file's size, capped by the
   /// announced size, renamed into place while the name still points at it.
@@ -223,6 +228,17 @@ final class ModelFiles {
         '5',
         '--max-filesize',
         '$limit',
+        // Deadlines in curl itself: reaching the server, a transfer that
+        // stalls or only trickles (under 1 KiB/s for a minute), and the whole
+        // file (resumable: Install again continues it).
+        '--connect-timeout',
+        '$connectTimeout',
+        '--speed-limit',
+        '1024',
+        '--speed-time',
+        '$stallSeconds',
+        '--max-time',
+        '$transferSeconds',
         if (have > 0) ...['-C', '$have'],
         '--',
         url,
@@ -251,6 +267,14 @@ final class ModelFiles {
         const Duration(milliseconds: 400),
         (_) => report(),
       );
+      // curl's own --max-time, plus a margin: the program is killed (and
+      // reaped below) if it is still there.
+      final deadline = Timer(Duration(seconds: transferSeconds + 60), () {
+        failure ??= DownloadError(
+          'the download took too long; Install again continues it',
+        );
+        process.kill(ProcessSignal.sigkill);
+      });
       try {
         await for (final chunk in process.stdout) {
           if (have + chunk.length > limit) {
@@ -263,10 +287,12 @@ final class ModelFiles {
         }
       } finally {
         ticker.cancel();
+        deadline.cancel();
       }
       final code = await process.exitCode;
       await errorsDone.catchError((_) {});
-      if (failure != null) throw failure;
+      final failed = failure;
+      if (failed != null) throw failed;
       if (code != 0) {
         final text = utf8.decode(
           errors.take(400).toList(),

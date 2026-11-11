@@ -268,10 +268,10 @@ void _rmtree(String path) {
 }
 
 /// extract: the archive checked first, then tar without owners or modes.
-Future<void> extract(String archive, String folder) async {
+Future<void> extract(String archive, String folder, {String? name}) async {
   await checkArchive(archive);
   Directory(folder).createSync(recursive: true);
-  final name = p.basename(archive);
+  name ??= p.basename(archive); // an fd path comes with the asset's name
   final flag = name.endsWith('.zst')
       ? '--zstd'
       : name.endsWith('.tgz') || name.endsWith('.gz')
@@ -336,6 +336,109 @@ Future<bool> runWithDiskBudget(
     group.signal(9);
     group.close();
     await process.exitCode;
+  }
+}
+
+/// install_ctl.check_trusted: the program folder must be safe from other
+/// accounts all the way. The path is resolved here one part at a time, as the
+/// kernel would, and every folder and every link met on the way (also links
+/// inside a link's target) must belong to this account or root; a folder
+/// others may write must have the sticky bit (as /tmp), so they cannot rename
+/// or replace what is in it; the program folder itself must be writable only
+/// by this account and not be a link. Parts not there yet are created by
+/// claim() inside the last checked folder, which checks again afterwards.
+void checkTrusted(String path, [Posix? posix]) {
+  final px = posix ?? _posix;
+  if (!p.isAbsolute(path)) {
+    throw StateError('$path: the program folder must be an absolute path');
+  }
+  if (p.split(path).contains('..')) {
+    throw StateError("$path: no '..' in the program folder's path");
+  }
+  final me = px.uid;
+  const typeMask = 0xf000, dirType = 0x4000, linkType = 0xa000;
+  void owned(String where, int uid) {
+    if (uid != 0 && uid != me) {
+      throw StateError('$where belongs to another account; choose a folder of your own');
+    }
+  }
+
+  void folderOk(String where, int mode, bool leaf) {
+    if (mode & typeMask != dirType) {
+      throw StateError('$where is not a folder; nothing was installed');
+    }
+    final othersWrite = mode & 0x12 != 0; // group or other write
+    if (othersWrite && (leaf || mode & 0x200 == 0)) {
+      throw StateError('other accounts can change $where; choose a folder only you can write');
+    }
+  }
+
+  var current = '/';
+  final root = px.lstatFull('/');
+  if (root == null) throw StateError('/ cannot be read');
+  owned('/', root.uid);
+  folderOk('/', root.mode, false);
+  // (name, the last part as written?) — the program folder may not be a link.
+  final names = p.split(path).skip(1).toList();
+  final parts = [
+    for (final (i, name) in names.indexed) (name, i == names.length - 1),
+  ];
+  var hops = 0;
+  while (parts.isNotEmpty) {
+    final (name, lastWritten) = parts.removeAt(0);
+    if (name.isEmpty || name == '.') continue;
+    if (name == '..') {
+      current = p.dirname(current); // only from a link's target
+      continue;
+    }
+    final next = p.join(current, name);
+    final st = px.lstatFull(next);
+    if (st == null) return; // the rest is created in `current` (checked)
+    owned(next, st.uid);
+    if (st.mode & typeMask == linkType) {
+      if (lastWritten) {
+        throw StateError('$next is a link; choose the folder itself');
+      }
+      if (++hops > 40) throw StateError('$path: too many links');
+      final target = Link(next).targetSync();
+      if (p.isAbsolute(target)) current = '/';
+      parts.insertAll(0, [
+        for (final part in p.split(target))
+          if (part != '/') (part, false),
+      ]);
+      continue;
+    }
+    folderOk(next, st.mode, parts.isEmpty);
+    current = next;
+  }
+}
+
+/// install_ctl.open_verified: a downloaded file opened once (no link), this
+/// account's own regular file with one name that no other account can write,
+/// its bytes checked against `digest` through that descriptor. Close the fd.
+int openVerified(ModelFiles files, String path, String digest) {
+  final posix = files.posix;
+  final int fd;
+  try {
+    fd = posix.openAt(-100, path, 0x20000); // O_RDONLY | O_NOFOLLOW (+ O_CLOEXEC)
+  } on FileSystemException catch (error) {
+    throw StateError('${p.basename(path)}: ${error.message}; nothing was installed');
+  }
+  try {
+    final st = posix.statFull(fd);
+    if (st.mode & 0xf000 != 0x8000 || st.uid != posix.uid || st.nlink != 1) {
+      throw StateError("${p.basename(path)} is not this account's own download; nothing was installed");
+    }
+    if (st.mode & 0x12 != 0) {
+      throw StateError('other accounts can write ${p.basename(path)}; nothing was installed');
+    }
+    if (files.digestOfFd(fd, digest) != digest) {
+      throw StateError("${p.basename(path)} does not match the release's checksum; nothing was installed");
+    }
+    return fd;
+  } catch (_) {
+    posix.close(fd);
+    rethrow;
   }
 }
 
@@ -426,8 +529,10 @@ abstract class Installer {
   String get defaultFolder => '$home/.local/share/maprisma/$key';
   String defaultBuild(Gpu gpu) => builds.isEmpty ? '' : builds.first.$1;
   Future<Release> latest(Gpu gpu, String build);
-  Future<void> unpack(String archive, String folder) =>
-      extract(archive, folder);
+  /// `name`: the release file's name (its kind) when `archive` is the open,
+  /// checked file's `/proc/<pid>/fd` path (openVerified).
+  Future<void> unpack(String archive, String folder, {String? name}) =>
+      extract(archive, folder, name: name);
   String envText(String? models, Gpu gpu) => '';
   String unitText(String? models) => '';
   Future<void> configure(String? models) async {}
@@ -484,7 +589,9 @@ abstract class Installer {
 
   /// claim: a new or empty folder (the model folder may be in it), or ours.
   void claim(String folder, String? models) {
+    checkTrusted(folder);
     Directory(folder).createSync(recursive: true);
+    checkTrusted(folder); // also what was just created
     if (_isLink(folder) || !FileSystemEntity.isDirectorySync(folder)) {
       throw StateError(
         '$folder is not a folder of its own; nothing was installed',
@@ -661,7 +768,14 @@ abstract class Installer {
     makeRoom(folder, partial, models);
     Directory(partial).createSync();
     for (final (asset, _, _) in release.assets) {
-      await unpack('$downloads/$asset', partial);
+      // The checked bytes, not whatever has that name now: opened once, its
+      // checksum checked on that descriptor, read through /proc/<pid>/fd.
+      final fd = openVerified(files, '$downloads/$asset', release.digests[asset]!);
+      try {
+        await unpack('/proc/$pid/fd/$fd', partial, name: asset);
+      } finally {
+        host.posix.close(fd);
+      }
     }
     if (!_exists('$partial/$binRel')) flatten(partial);
     if (!_exists('$partial/$binRel')) {
@@ -987,7 +1101,7 @@ final class KoboldCppInstaller extends Installer {
 
   /// One program file: copied in as `koboldcpp`, made executable.
   @override
-  Future<void> unpack(String archive, String folder) async {
+  Future<void> unpack(String archive, String folder, {String? name}) async {
     final target = '$folder/$binRel';
     File(archive).copySync(target);
     host.posix.chmodPath(target, 0x1ed);
@@ -1230,7 +1344,7 @@ final class JanInstaller extends Installer {
 
   /// unpack_appimage: its own --appimage-extract, closed in by bubblewrap.
   @override
-  Future<void> unpack(String archive, String folder) async {
+  Future<void> unpack(String archive, String folder, {String? name}) async {
     host.posix.chmodPath(archive, 0x1ed);
     try {
       final bwrap = whichIn('bwrap', host.path);
@@ -1531,6 +1645,7 @@ final class StrataInstaller extends Installer {
         'Strata is installed already in $folder; update it with `~/.local/bin/strata update`',
       );
     }
+    checkTrusted(folder);
     final (asset, url, size) = release.assets.first;
     final work = Directory.systemTemp.createTempSync('maprisma-strata-');
     List<int> out;
@@ -1554,14 +1669,22 @@ final class StrataInstaller extends Installer {
           if (!e.key.startsWith('STRATA_')) e.key: e.value,
         'STRATA_FEED': '$downloads${release.version}',
       };
-      (out, ok) = await boundedOutput(
-        ['sh', script],
-        maxBytes: 256 * 1024,
-        timeout: timeout,
-        mergeStderr: true,
-        environment: env,
-        inheritEnvironment: false,
-      );
+      // The checked bytes run: install.sh opened once, its checksum checked
+      // on that descriptor, run through /proc/<pid>/fd.
+      final files = ModelFiles(host.posix);
+      final fd = openVerified(files, script, release.digests[asset]!);
+      try {
+        (out, ok) = await boundedOutput(
+          ['sh', '/proc/$pid/fd/$fd'],
+          maxBytes: 256 * 1024,
+          timeout: timeout,
+          mergeStderr: true,
+          environment: env,
+          inheritEnvironment: false,
+        );
+      } finally {
+        host.posix.close(fd);
+      }
     } finally {
       work.deleteSync(recursive: true);
     }
