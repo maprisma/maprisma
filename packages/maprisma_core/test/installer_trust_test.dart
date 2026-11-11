@@ -25,17 +25,10 @@ void main() {
 
   test('a program folder others can write is refused, sticky or not', () {
     final shared = Directory('${root.path}/shared')..createSync();
-    for (final mode in ['772', '777', '1777']) {
+    for (final mode in ['775', '777', '1777']) {
       chmod(shared.path, mode);
       expect(() => checkTrusted(shared.path), throwsStateError);
     }
-  });
-
-  test('a group of its own is private', () {
-    final folder = Directory('${root.path}/home-like')..createSync();
-    chmod(folder.path, '770');
-    if (privateGroup(posix.gid, posix)) checkTrusted(folder.path);
-    expect(privateGroup(posix.gid + 1, posix), isFalse);
   });
 
   test('a writable folder above needs the sticky bit', () {

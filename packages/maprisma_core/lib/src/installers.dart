@@ -339,18 +339,6 @@ Future<bool> runWithDiskBudget(
   }
 }
 
-/// install_ctl.private_group: whether [gid] is this account's own group in
-/// the system account database (NSS): its primary group, named as the
-/// account (a user private group), with no other member.
-bool privateGroup(int? gid, [Posix? posix]) {
-  final px = posix ?? _posix;
-  if (gid == null || gid != px.gid) return false;
-  final me = px.userName;
-  final group = px.group(gid);
-  if (me == null || group == null) return false;
-  return group.$1 == me && group.$2.every((m) => m == me);
-}
-
 /// install_ctl.check_trusted: the program folder must be safe from other
 /// accounts all the way. The path is resolved here one part at a time, as the
 /// kernel would, and every folder and every link met on the way (also links
@@ -379,10 +367,7 @@ void checkTrusted(String path, [Posix? posix]) {
     if (mode & typeMask != dirType) {
       throw StateError('$where is not a folder; nothing was installed');
     }
-    // Group write counts only when the group is not this account's own
-    // private group (a 0770 home with a group of its own is private).
-    final groupWrite = mode & 0x10 != 0 && !privateGroup(px.lstatGid(where), px);
-    final othersWrite = groupWrite || mode & 0x02 != 0;
+    final othersWrite = mode & 0x12 != 0; // group or other write
     if (othersWrite && (leaf || mode & 0x200 == 0)) {
       throw StateError('other accounts can change $where; choose a folder only you can write');
     }

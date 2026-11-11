@@ -168,21 +168,6 @@ def check_folder(text: str) -> Path:
     return path
 
 
-def private_group(gid: int) -> bool:
-    """Whether gid is this account's own group in the system account database: its primary group,
-    named as the account (a user private group), with no other member."""
-    import grp
-    import pwd
-    if gid != os.getgid():
-        return False
-    try:
-        me = pwd.getpwuid(os.getuid()).pw_name
-        group = grp.getgrgid(gid)
-    except (KeyError, OSError):
-        return False
-    return group.gr_name == me and all(m == me for m in group.gr_mem)
-
-
 def check_trusted(path: Path) -> None:
     """The program folder must be safe from other accounts all the way: the path is resolved here
     one part at a time, as the kernel would, and every folder and every link met on the way
@@ -205,10 +190,7 @@ def check_trusted(path: Path) -> None:
     def folder_ok(where: Path, st, leaf: bool) -> None:
         if not stat.S_ISDIR(st.st_mode):
             raise RuntimeError(f"{where} is not a folder; nothing was installed")
-        # Group write counts only when the group is not this account's own private group
-        # (a 0770 home with a group of its own is private).
-        group_write = st.st_mode & stat.S_IWGRP and not private_group(st.st_gid)
-        others_write = group_write or st.st_mode & stat.S_IWOTH
+        others_write = st.st_mode & (stat.S_IWGRP | stat.S_IWOTH)
         if others_write and (leaf or not st.st_mode & stat.S_ISVTX):
             raise RuntimeError(f"other accounts can change {where}; choose a folder only you can write")
 
