@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'provider_ops.dart' show withHttpDeadline;
 import 'package:path/path.dart' as p;
 import 'context.dart';
 import 'desktop.dart' show whichIn;
@@ -115,18 +116,22 @@ final class LlamaTuner {
   static Future<String?> _fetch(String url) async {
     final client = HttpClient()..connectionTimeout = const Duration(seconds: 2);
     try {
-      final request = await client
-          .getUrl(Uri.parse(url))
-          .timeout(const Duration(seconds: 3));
-      final response = await request.close().timeout(
+      // One deadline for the whole exchange, not per step or chunk.
+      return await withHttpDeadline<String?>(
+        client,
         const Duration(seconds: 3),
+        () async {
+          final request = await client.getUrl(Uri.parse(url));
+          final response = await request.close();
+          if (response.statusCode != 200) return null;
+          final bytes = <int>[];
+          await for (final chunk in response) {
+            bytes.addAll(chunk);
+            if (bytes.length > 1024 * 1024) return null;
+          }
+          return utf8.decode(bytes, allowMalformed: true);
+        },
       );
-      if (response.statusCode != 200) return null;
-      return await utf8
-          .decodeStream(response)
-          .timeout(const Duration(seconds: 3));
-    } on Object {
-      return null;
     } finally {
       client.close(force: true);
     }

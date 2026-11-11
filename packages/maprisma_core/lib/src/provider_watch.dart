@@ -302,25 +302,34 @@ final class WatchSystem {
     return owners.isNotEmpty && owners.every((o) => o == uid);
   }
 
+  /// Seconds for a whole unload request.
+  static const unloadTotal = Duration(seconds: 15);
+
   /// unload: free a runtime that stays up (its config entry's request).
   Future<bool> unload(Map entry, int port) async {
     if (port == 0 || !ownListener(port)) return false;
     final request = entry['unload'] as Map;
-    final client = HttpClient()
-      ..connectionTimeout = const Duration(seconds: 30);
+    final client = HttpClient()..connectionTimeout = unloadTotal;
     try {
-      final call = await client.postUrl(
-        Uri.parse('http://127.0.0.1:$port${request['path']}'),
-      );
-      final body = utf8.encode(pyJsonDumps(request['body']));
-      call.headers.contentType = ContentType.json;
-      call.contentLength = body.length;
-      call.add(body);
-      final response = await call.close().timeout(const Duration(seconds: 30));
-      await response.take(64).drain<void>();
-      return response.statusCode < 400;
-    } catch (_) {
-      return false;
+      // One deadline for the whole request (a trickling reply would hold the
+      // watcher's tick otherwise).
+      return await withHttpDeadline<bool>(client, unloadTotal, () async {
+            final call = await client.postUrl(
+              Uri.parse('http://127.0.0.1:$port${request['path']}'),
+            );
+            final body = utf8.encode(pyJsonDumps(request['body']));
+            call.headers.contentType = ContentType.json;
+            call.contentLength = body.length;
+            call.add(body);
+            final response = await call.close();
+            var read = 0;
+            await for (final chunk in response) {
+              read += chunk.length;
+              if (read > 64 * 1024) break;
+            }
+            return response.statusCode < 400;
+          }) ??
+          false;
     } finally {
       client.close(force: true);
     }

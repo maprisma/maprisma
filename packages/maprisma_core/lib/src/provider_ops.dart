@@ -57,7 +57,32 @@ int portOf(RuntimeRecord rt) {
   return at < 0 ? 0 : portNumber(rt.address.substring(at + 1));
 }
 
+/// One deadline for a whole local HTTP exchange (connect, headers and body):
+/// at `total` the client is closed by force, which ends a read in progress —
+/// also a reply that trickles in below any per-chunk timeout. null then.
+Future<T?> withHttpDeadline<T>(
+  HttpClient client,
+  Duration total,
+  Future<T> Function() exchange,
+) async {
+  final timer = Timer(total, () => client.close(force: true));
+  try {
+    return await exchange().timeout(
+      total + const Duration(milliseconds: 200),
+      onTimeout: () {
+        client.close(force: true);
+        throw TimeoutException('the local server took too long');
+      },
+    );
+  } on Object {
+    return null;
+  } finally {
+    timer.cancel();
+  }
+}
+
 /// gpu_usage.http_json: a JSON reply from our own server on 127.0.0.1, or null.
+/// `timeout` is the budget for the whole exchange (withHttpDeadline).
 Future<dynamic> httpJson(
   int port,
   String path,
@@ -69,26 +94,27 @@ Future<dynamic> httpJson(
   if (port == 0 || !ownPort(port, uid)) return null;
   final client = HttpClient()..connectionTimeout = timeout;
   try {
-    final request = await client
-        .openUrl(method, Uri.parse('http://127.0.0.1:$port$path'))
-        .timeout(timeout);
-    if (body != null) {
-      // One body with its length, as http.client sends it (no chunked encoding).
-      final data = utf8.encode(jsonEncode(body));
-      request.headers.contentType = ContentType.json;
-      request.contentLength = data.length;
-      request.add(data);
-    }
-    final response = await request.close().timeout(timeout);
-    final bytes = <int>[];
-    await for (final chunk in response.timeout(timeout)) {
-      bytes.addAll(chunk);
-      if (bytes.length > 1024 * 1024) return null;
-    }
-    if (response.statusCode >= 400) return null;
-    return bytes.isEmpty ? null : jsonDecode(utf8.decode(bytes));
-  } catch (_) {
-    return null;
+    return await withHttpDeadline<dynamic>(client, timeout, () async {
+      final request = await client.openUrl(
+        method,
+        Uri.parse('http://127.0.0.1:$port$path'),
+      );
+      if (body != null) {
+        // One body with its length, as http.client sends it (no chunked encoding).
+        final data = utf8.encode(jsonEncode(body));
+        request.headers.contentType = ContentType.json;
+        request.contentLength = data.length;
+        request.add(data);
+      }
+      final response = await request.close();
+      final bytes = <int>[];
+      await for (final chunk in response) {
+        bytes.addAll(chunk);
+        if (bytes.length > 1024 * 1024) return null;
+      }
+      if (response.statusCode >= 400) return null;
+      return bytes.isEmpty ? null : jsonDecode(utf8.decode(bytes));
+    });
   } finally {
     client.close(force: true);
   }

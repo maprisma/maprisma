@@ -300,22 +300,35 @@ final class ModelRemovals {
     final client = HttpClient()
       ..connectionTimeout = const Duration(seconds: 10);
     try {
-      final request = await client.openUrl(
-        'DELETE',
-        Uri.parse('http://127.0.0.1:$port/api/delete'),
-      );
-      final body = utf8.encode(jsonEncode({'model': name}));
-      request
-        ..persistentConnection = false
-        ..headers.contentType = ContentType.json
-        ..contentLength = body.length
-        ..add(body);
-      final response = await request.close().timeout(
+      // One deadline for the whole exchange (a trickling reply never holds it).
+      final status = await withHttpDeadline<int>(
+        client,
         const Duration(seconds: 60),
+        () async {
+          final request = await client.openUrl(
+            'DELETE',
+            Uri.parse('http://127.0.0.1:$port/api/delete'),
+          );
+          final body = utf8.encode(jsonEncode({'model': name}));
+          request
+            ..persistentConnection = false
+            ..headers.contentType = ContentType.json
+            ..contentLength = body.length
+            ..add(body);
+          final response = await request.close();
+          var read = 0;
+          await for (final chunk in response) {
+            read += chunk.length;
+            if (read > 1024 * 1024) break;
+          }
+          return response.statusCode;
+        },
       );
-      await response.drain<void>();
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw StateError('Ollama: the server answered ${response.statusCode}');
+      if (status == null) {
+        throw StateError('Ollama: no answer in time');
+      }
+      if (status < 200 || status >= 300) {
+        throw StateError('Ollama: the server answered $status');
       }
     } finally {
       client.close(force: true);
