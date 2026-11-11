@@ -83,7 +83,7 @@ void main() {
 
   test('endGroup: the leader ended first', () async {
     final process = await Process.start('setsid', ['--', 'sh', script, pidfile, 'exit']);
-    final group = ProcessGroup(process.pid); // taken while it runs, as the callers do
+    final group = ProcessGroup(process.pid)..watch(); // as the callers do
     final child = await childPid();
     await process.exitCode;
     group.signal(15);
@@ -92,5 +92,16 @@ void main() {
     group.signal(9);
     group.close();
     await _gone(child);
+  });
+
+  test('nothing found once no held member is left (a reused group id)', () async {
+    final process = await Process.start('setsid', ['--', 'sh', '-c', 'exit 0']);
+    final group = ProcessGroup(process.pid);
+    await process.exitCode;
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    // Whatever now has that group id is not looked up: nothing anchors it.
+    group.signal(0);
+    expect(group.alive, isFalse);
+    group.close();
   });
 }

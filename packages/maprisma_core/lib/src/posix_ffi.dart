@@ -79,6 +79,23 @@ class Posix {
       cloexec = 0x80000,
       directory = 0x10000;
   int get uid => _uid();
+  static final _gid = _lib.lookupFunction<Uint32 Function(), int Function()>(
+    'getgid',
+  );
+  int get gid => _gid();
+
+  /// The group of a path (lstat: a link's own), or null.
+  int? lstatGid(String path) {
+    final buffer = calloc<Uint8>(256);
+    try {
+      var ok = false;
+      _path(path, (name) => ok = _statx(-100, name, 0x100, 0x7ff, buffer) == 0);
+      if (!ok) return null;
+      return ByteData.sublistView(buffer.asTypedList(256)).getUint32(24, Endian.host);
+    } finally {
+      calloc.free(buffer);
+    }
+  }
   Never _fail() => throw FileSystemException(
     'POSIX operation failed',
     '',

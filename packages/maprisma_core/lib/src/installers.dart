@@ -315,7 +315,7 @@ Future<bool> runWithDiskBudget(
   Duration timeout,
 ) async {
   final process = await Process.start('setsid', argv, workingDirectory: cwd);
-  final group = ProcessGroup(process.pid); // never signalled by number
+  final group = ProcessGroup(process.pid)..watch(); // never by number
   process.stdin.close();
   process.stdout.drain<void>();
   process.stderr.drain<void>();
@@ -337,6 +337,35 @@ Future<bool> runWithDiskBudget(
     group.close();
     await process.exitCode;
   }
+}
+
+/// install_ctl.private_group: whether [gid] is this account's own group —
+/// its primary group, with no other member in /etc/group and no other
+/// account having it as primary group in /etc/passwd.
+bool privateGroup(int? gid, [Posix? posix]) {
+  final px = posix ?? _posix;
+  if (gid == null || gid != px.gid) return false;
+  String? me;
+  try {
+    for (final line in File('/etc/passwd').readAsLinesSync()) {
+      final f = line.split(':');
+      if (f.length < 4) continue;
+      if (int.tryParse(f[2]) == px.uid) {
+        me = f[0];
+      } else if (int.tryParse(f[3]) == gid) {
+        return false; // another account's primary group too
+      }
+    }
+    for (final line in File('/etc/group').readAsLinesSync()) {
+      final f = line.split(':');
+      if (f.length < 4 || int.tryParse(f[2]) != gid) continue;
+      final members = f[3].split(',').where((m) => m.isNotEmpty);
+      if (members.any((m) => m != me)) return false;
+    }
+  } on FileSystemException {
+    return false;
+  }
+  return me != null;
 }
 
 /// install_ctl.check_trusted: the program folder must be safe from other
@@ -367,7 +396,10 @@ void checkTrusted(String path, [Posix? posix]) {
     if (mode & typeMask != dirType) {
       throw StateError('$where is not a folder; nothing was installed');
     }
-    final othersWrite = mode & 0x12 != 0; // group or other write
+    // Group write counts only when the group is not this account's own
+    // private group (a 0770 home with a group of its own is private).
+    final groupWrite = mode & 0x10 != 0 && !privateGroup(px.lstatGid(where), px);
+    final othersWrite = groupWrite || mode & 0x02 != 0;
     if (othersWrite && (leaf || mode & 0x200 == 0)) {
       throw StateError('other accounts can change $where; choose a folder only you can write');
     }

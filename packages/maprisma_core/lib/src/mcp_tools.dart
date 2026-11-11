@@ -140,7 +140,7 @@ final class _Stdio implements _Link {
       includeParentEnvironment: false,
       workingDirectory: home,
     );
-    return _Stdio(process)..group = ProcessGroup(process.pid);
+    return _Stdio(process)..group = (ProcessGroup(process.pid)..watch());
   }
 
   final Process process;

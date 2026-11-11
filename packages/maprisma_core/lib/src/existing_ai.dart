@@ -927,7 +927,7 @@ Future<Map<String, dynamic>> checkProgram(
       includeParentEnvironment: false,
       workingDirectory: folder.path,
     );
-    final group = ProcessGroup(process.pid); // never signalled by number
+    final group = ProcessGroup(process.pid)..watch(); // never by number
     process.stdin.close();
     process.stdout.drain<void>();
     process.stderr.drain<void>();

@@ -289,7 +289,14 @@ final class ModelFiles {
         ticker.cancel();
         deadline.cancel();
       }
-      final code = await process.exitCode;
+      // Its output is closed: it ends now, else it is killed and reaped.
+      final code = await process.exitCode.timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          process.kill(ProcessSignal.sigkill);
+          return process.exitCode;
+        },
+      );
       await errorsDone.catchError((_) {});
       final failed = failure;
       if (failed != null) throw failed;

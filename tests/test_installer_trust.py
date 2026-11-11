@@ -26,10 +26,21 @@ class TrustTest(unittest.TestCase):
     def test_group_or_world_writable_program_folder_refused(self):
         shared = self.root / "shared"
         shared.mkdir()
-        for mode in (0o775, 0o777, 0o1777):         # sticky does not help the program folder itself
+        for mode in (0o772, 0o777, 0o1777):         # sticky does not help the program folder itself
             shared.chmod(mode)
             with self.assertRaises(RuntimeError):
                 ic.check_trusted(shared)
+
+    def test_a_group_of_its_own_is_private(self):
+        folder = self.root / "home-like"
+        folder.mkdir()
+        folder.chmod(0o770)
+        if ic.private_group(os.getgid()):
+            ic.check_trusted(folder)                 # a 0770 home with a group of its own
+        with mock.patch.object(ic, "private_group", return_value=False):
+            with self.assertRaises(RuntimeError):
+                ic.check_trusted(folder)
+        folder.chmod(0o755)
 
     def test_writable_ancestor_needs_the_sticky_bit(self):
         parent = self.root / "parent"

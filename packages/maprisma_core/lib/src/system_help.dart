@@ -724,7 +724,7 @@ Future<(List<int>, bool, bool)> runLookUp(
     includeParentEnvironment: false,
     workingDirectory: cwd,
   );
-  final group = ProcessGroup(process.pid); // never signalled by number
+  final group = ProcessGroup(process.pid)..watch(); // never by number
   var cancelled = false;
   final sigterm = ProcessSignal.sigterm.watch().listen((_) {
     cancelled = true;

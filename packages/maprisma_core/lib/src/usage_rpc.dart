@@ -45,7 +45,7 @@ Future<Map<String, dynamic>?> askPlanLimits(
   } on ProcessException {
     return null;
   }
-  final group = ProcessGroup(process.pid); // never signalled by number
+  final group = ProcessGroup(process.pid)..watch(); // never by number
   final rpcs = _JsonLines(process);
   final deadline = Timer(total, rpcs.stop);
   try {

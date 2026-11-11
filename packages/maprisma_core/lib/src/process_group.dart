@@ -30,13 +30,32 @@ final class ProcessGroup {
   final Posix posix;
   final _fds = <int, int>{}; // pid -> pidfd
   String? _leaderStart;
+  Timer? _watch;
+
+  /// Held processes still alive and still in the group: only while one
+  /// exists is the group's id taken, so every process found in the group
+  /// then is one of ours.
+  bool get _anchored => _fds.entries.any(
+    (e) => !posix.pidfdExited(e.value) && processIdentity(e.key)?.$1 == leader,
+  );
+
+  /// Look through the group every [every] while the program runs, so what it
+  /// starts is held before it may end (Dart reaps it at once).
+  void watch([Duration every = const Duration(milliseconds: 100)]) {
+    _watch ??= Timer.periodic(every, (_) => _take());
+  }
 
   void _take() {
+    // The leader before anything is held (just started), else only while a
+    // held member anchors the group; checked again after the look-up.
+    if (_fds.isNotEmpty && !_anchored) return;
     final own = processIdentity(leader);
     if (own != null && own.$1 == leader && own.$2 == leader) {
       _leaderStart ??= own.$3;
       _hold(leader, own.$3);
     }
+    if (_fds.isEmpty) return; // the leader is gone or not ours: nothing anchors
+    final before = Map.of(_fds);
     for (final e in groupMembers(leader).entries) {
       final start = _leaderStart;
       // A member is never older than the leader of its group.
@@ -45,6 +64,16 @@ final class ProcessGroup {
         continue;
       }
       _hold(e.key, e.value);
+    }
+    final anchor = before.entries.any(
+      (e) => !posix.pidfdExited(e.value) && processIdentity(e.key)?.$1 == leader,
+    );
+    if (!anchor) {
+      // The group may have been empty during the look-up: what it found is
+      // not known to be ours.
+      for (final pid in _fds.keys.toList()) {
+        if (!before.containsKey(pid)) posix.close(_fds.remove(pid)!);
+      }
     }
   }
 
@@ -72,6 +101,8 @@ final class ProcessGroup {
   bool get alive => _fds.values.any((fd) => !posix.pidfdExited(fd));
 
   void close() {
+    _watch?.cancel();
+    _watch = null;
     for (final fd in _fds.values) {
       posix.close(fd);
     }

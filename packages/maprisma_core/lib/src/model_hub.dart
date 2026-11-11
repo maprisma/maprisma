@@ -30,7 +30,7 @@ Future<(List<int>, bool)> boundedOutput(
   } on ProcessException {
     return (<int>[], false);
   }
-  final group = ProcessGroup(process.pid); // its identity, while it runs
+  final group = ProcessGroup(process.pid)..watch(); // held while it runs
   if (stdin != null) {
     process.stdin.add(stdin);
   }
