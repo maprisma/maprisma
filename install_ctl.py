@@ -238,6 +238,14 @@ class VerifiedFile(type(Path())):
     AppImage to unpack it) gets those very bytes, whatever happens to the name meanwhile.
     `asset_name` is the release file's name (its kind: .tar.zst, .AppImage…)."""
 
+    def __new__(cls, fd: int, asset_name: str):
+        # Path parses its arguments in __new__ on Python 3.11 and older: give it the path there.
+        path = f"/proc/{os.getpid()}/fd/{fd}"
+        try:
+            return super().__new__(cls, path)
+        except TypeError:
+            return super().__new__(cls)
+
     def __init__(self, fd: int, asset_name: str):
         super().__init__(f"/proc/{os.getpid()}/fd/{fd}")
         self.fd = fd

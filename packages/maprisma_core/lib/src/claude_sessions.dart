@@ -140,7 +140,13 @@ final class ClaudeSessions {
       var at = 0, filePos = offset, eof = false;
       void fill() {
         if (eof) return;
-        final chunk = posix.readAt(fd, filePos, 4 * 1024 * 1024);
+        // Never ahead of the budget: only what is left of it after the buffered bytes.
+        final left = budget - read - (buffer.length - at);
+        if (left <= 0) {
+          eof = true;
+          return;
+        }
+        final chunk = posix.readAt(fd, filePos, left < 4 * 1024 * 1024 ? left : 4 * 1024 * 1024);
         if (chunk.isEmpty) {
           eof = true;
           return;
