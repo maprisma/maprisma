@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:path/path.dart' as p;
 import 'connect_apply.dart';
 import 'provider_scans.dart' show RuntimeRecord;
+import 'posix_ffi.dart';
 import 'py_values.dart';
 import 'scan_files.dart';
 
@@ -39,9 +40,28 @@ const _wanted = [
   '.sliding_window_pattern',
 ];
 
+/// context_ctl.open_regular: the file for reading only when the opened
+/// descriptor is a regular file — opened without blocking, so a FIFO (or a
+/// device) with a .gguf name returns at once instead of waiting for a writer,
+/// and checked on that descriptor (no race with a replaced name). Links to a
+/// regular file are fine. FormatException for anything else.
+RandomAccessFile openRegular(String path) {
+  final posix = Posix();
+  final fd = posix.openAt(-100, path, Posix.nonBlock);
+  try {
+    if (posix.statFull(fd).mode & 0xf000 != 0x8000) {
+      throw const FormatException('not a regular file');
+    }
+    // The same open file (its inode), now as a blocking reader.
+    return File('/proc/self/fd/$fd').openSync();
+  } finally {
+    posix.close(fd);
+  }
+}
+
 /// context_ctl.read_gguf: the header values needed here (bounded).
 Map<String, dynamic> readGguf(String path) {
-  final file = File(path).openSync();
+  final file = openRegular(path);
   try {
     Uint8List take(int n) {
       final data = file.readSync(n);
@@ -429,20 +449,21 @@ final class ContextReader {
     return lines.join();
   }
 
+  /// The model's file: `<name>.gguf` first, else the first `<name>*.gguf` of a
+  /// small listing (it may run while a page is built: never a whole huge
+  /// folder). Regular files only (or links to them), never a FIFO.
   String? llamaModelFile(String folder, String name) {
-    final candidates = [p.join(folder, '$name.gguf')];
-    try {
-      for (final e in Directory(folder).listSync()) {
-        final base = p.basename(e.path);
-        if (base.startsWith(name) && base.endsWith('.gguf')) {
-          candidates.add(e.path);
-        }
-      }
-    } on FileSystemException {
-      // no folder
+    final exact = p.join(folder, '$name.gguf');
+    final candidates = [exact];
+    if (FileSystemEntity.typeSync(exact) != FileSystemEntityType.file) {
+      final listed = [
+        for (final e in files.list(folder, limit: 5000, allowRootOwned: true))
+          if (p.basename(e).startsWith(name) && e.endsWith('.gguf')) e,
+      ]..sort();
+      candidates.addAll(listed);
     }
     for (final c in candidates) {
-      if (FileSystemEntity.typeSync(c) != FileSystemEntityType.notFound) {
+      if (FileSystemEntity.typeSync(c) == FileSystemEntityType.file) {
         try {
           return File(c).resolveSymbolicLinksSync();
         } on FileSystemException {

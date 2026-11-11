@@ -297,19 +297,24 @@ final class ProviderScans {
     return name.substring(0, name.length - 5);
   }
 
-  /// The GGUF files of a folder (or links to them), one level deep.
+  /// The GGUF files of a folder (or links to them), one level deep: regular
+  /// files only (a FIFO or device with a .gguf name is no model).
   List<String> ggufFiles(String folder) {
     final found = <String>[];
     final entries = files.list(folder, limit: 4000)..sort();
     for (final entry in entries.take(1000)) {
       final name = p.basename(entry), lower = p.basename(entry).toLowerCase();
       if (lower.endsWith('.gguf') && !lower.startsWith('mmproj')) {
-        found.add(entry);
+        if (FileSystemEntity.typeSync(entry) == FileSystemEntityType.file) {
+          found.add(entry);
+        }
       } else if (!name.startsWith('.') &&
           FileSystemEntity.typeSync(entry) == FileSystemEntityType.directory) {
         for (final file in files.list(entry, limit: 50)) {
           final lower = p.basename(file).toLowerCase();
-          if (lower.endsWith('.gguf') && !lower.startsWith('mmproj')) {
+          if (lower.endsWith('.gguf') &&
+              !lower.startsWith('mmproj') &&
+              FileSystemEntity.typeSync(file) == FileSystemEntityType.file) {
             found.add(file);
           }
         }
