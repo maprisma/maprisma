@@ -426,39 +426,60 @@ def _identity(path: Path):
     return st.st_dev, st.st_ino
 
 
-def seen_by(runtime_key: str, folder: Path) -> set:
+def seen_by(runtime_key: str, folder: Path, budget=None) -> set:
     """The files a local LLM reads from its folder (as (device, inode)): LM Studio
     those at least two folders down (<publisher>/<model>/…), Ollama its blobs
-    (hard links count), llama.cpp and KoboldCpp the folder and one level below."""
+    (hard links count), llama.cpp and KoboldCpp the folder and one level below.
+    Every entry looked at is charged to `budget` (scan_budget.Budget; a scan of its own)."""
+    import model_layout
+    import scan_budget
+    budget = budget if budget is not None else scan_budget.Budget()
     folder = Path(folder)
     kind = llm_engine.layout(runtime_key)
-    if kind == "publisher":
-        paths = folder.glob("*/*/**/*.gguf")
-    elif kind == "blobs":
-        paths = (folder / "blobs").glob("sha256-*")
-    else:
-        paths = [*folder.glob("*.gguf"), *folder.glob("*/*.gguf")]
+    paths = []
+    try:
+        if kind == "publisher":
+            for publisher in budget.entries(folder, 5000):
+                if not publisher.is_dir() or publisher.is_symlink():
+                    continue
+                for model in budget.entries(publisher, 5000):
+                    if model.is_dir() and not model.is_symlink():
+                        files, links = model_layout.walk_gguf(model, set(), budget=budget)
+                        paths += files + links
+        elif kind == "blobs":
+            paths = [p for p in budget.entries(folder / "blobs", 20000) if p.name.startswith("sha256-")]
+        else:
+            for entry in budget.entries(folder, 20000):
+                if entry.name.endswith(".gguf"):
+                    paths.append(entry)
+                elif entry.is_dir() and not entry.is_symlink():
+                    paths += [p for p in budget.entries(entry, 5000) if p.name.endswith(".gguf")]
+    except OSError:
+        pass
     found = set()
-    for count, path in enumerate(paths):
-        if count > 5000:
-            break
+    for path in paths[:5001]:
         found.add(_identity(path))
     return found - {None}
 
 
-def local_ggufs(roots: list, have: set) -> list[LocalFile]:
+def local_ggufs(roots: list, have: set, budget=None) -> list[LocalFile]:
     """GGUF models under roots (real files and what links point at) that the local
     LLM does not read yet (have = seen_by(...): same file = same inode, so hard
     links and symlinks count as had). No vision projectors, a split model by its
-    first part."""
+    first part. `budget` (scan_budget.Budget): one for all roots; its `stopped` says the list is
+    partial (a limit or a cancel)."""
     import model_layout
+    import scan_budget
+    budget = budget if budget is not None else scan_budget.Budget()
     had = set(have)
     found, seen = [], set()
     for root in roots:
         root = Path(root)
+        if budget.stopped:
+            break
         if not root.is_dir():
             continue
-        files, links = model_layout.walk_gguf(root, set())
+        files, links = model_layout.walk_gguf(root, set(), budget=budget)
         for path in files + [Path(os.path.realpath(l)) for l in links]:
             name = path.name.lower()
             ident = _identity(path)

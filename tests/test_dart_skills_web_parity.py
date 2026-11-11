@@ -27,7 +27,7 @@ SEARCH = {'skills': [
 
 
 def blob(path, size=10, mode='100644'):
-    return {'path': path, 'type': 'blob', 'mode': mode, 'size': size}
+    return {'path': path, 'type': 'blob', 'mode': mode, 'size': size, 'sha': 'a' * 40}
 
 
 TREES = [

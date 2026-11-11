@@ -114,26 +114,37 @@ def model_dir_name(file_name: str) -> str:
     return (_NAME_RE.sub("-", stem).strip(" .-") or "model")[:120]
 
 
-def walk_gguf(folder: Path, skip: set, depth: int = 0, found=None) -> tuple[list, list]:
-    """(real .gguf files, symlinks to .gguf) under folder; skip = folders left out."""
+def walk_gguf(folder: Path, skip: set, depth: int = 0, found=None, budget=None) -> tuple[list, list]:
+    """(real .gguf files, symlinks to .gguf) under folder; skip = folders left out. Each folder's
+    entries are read one at a time and charged to `budget` (scan_budget.Budget, shared by a whole
+    scan: visited entries, time, cancel) before anything is kept, then taken in name order as before
+    (the order decides which of two copies counts); at most MAX_FILES results in all."""
+    import scan_budget
     files, links = found if found is not None else ([], [])
-    if depth > MAX_DEPTH or len(files) + len(links) > MAX_FILES:
+    budget = budget if budget is not None else scan_budget.Budget()
+    if depth > MAX_DEPTH or budget.stopped:
         return files, links
     try:
-        entries = sorted(folder.iterdir())
+        entries = budget.entries(folder, MAX_FILES + 1)
     except OSError:
         return files, links
     for entry in entries:
+        if len(files) + len(links) >= MAX_FILES:
+            budget.stopped = True
+            break
         if entry.name.startswith(".") or entry in skip:
             continue
-        if entry.is_symlink():
-            if entry.name.lower().endswith(".gguf"):
-                links.append(entry)
+        try:
+            if entry.is_symlink():
+                if entry.name.lower().endswith(".gguf"):
+                    links.append(entry)
+                continue
+            if entry.is_dir():
+                walk_gguf(entry, skip, depth + 1, (files, links), budget)
+            elif entry.is_file() and entry.name.lower().endswith(".gguf"):
+                files.append(entry)
+        except OSError:
             continue
-        if entry.is_dir():
-            walk_gguf(entry, skip, depth + 1, (files, links))
-        elif entry.is_file() and entry.name.lower().endswith(".gguf"):
-            files.append(entry)
     return files, links
 
 
@@ -191,10 +202,15 @@ def plan(root: Path, providers: list, keep_old_paths: bool = True) -> Plan:
         if p.folder:
             skip |= {Path(os.path.realpath(p.folder)) / name for name in p.store}
     bases = [Path(os.path.realpath(p.folder)) for p in gguf_providers] + [root]
+    import scan_budget
     files, links = [], []
+    budget = scan_budget.Budget()           # one for all model folders
     for base in dict.fromkeys(bases):
         if base.is_dir():
-            walk_gguf(base, skip, 0, (files, links))
+            walk_gguf(base, skip, 0, (files, links), budget)
+    if budget.stopped:                      # a partial picture is no base for moving files
+        result.problems.append("too-many")
+        return result
     # Files the links point at (a link folder's models can live anywhere).
     for link in links:
         target = Path(os.path.realpath(link))
@@ -249,7 +265,10 @@ def plan(root: Path, providers: list, keep_old_paths: bool = True) -> Plan:
             for name in store.store:
                 item = current / name
                 if item.is_dir() and not item.is_symlink():
-                    size = _tree_size(item)
+                    size = _tree_size(item, budget)
+                    if budget.stopped:      # a partial size is no base for moving or copying
+                        result.problems.append("too-many")
+                        return result
                     copy = device(item) != device(root)
                     result.steps.append(Step("move", str(item), str(store_dir / name), size, copy=copy,
                                              ident=_ident(item)))
@@ -274,7 +293,14 @@ def plan(root: Path, providers: list, keep_old_paths: bool = True) -> Plan:
         elif not p.ours:
             result.steps.append(Step("note", provider=p.key, source=str(p.folder)))
     if any(s.kind == "folder" and s.target == str(flat) for s in result.steps) or flat.is_dir():
-        have = {Path(os.path.realpath(l)) for l in flat.glob("*.gguf")} if flat.is_dir() else set()
+        try:
+            listed = budget.entries(flat, MAX_FILES) if flat.is_dir() else []
+        except OSError:
+            listed = []
+        if budget.stopped:                  # the plan's shared budget: a partial picture moves nothing
+            result.problems.append("too-many")
+            return result
+        have = {Path(os.path.realpath(l)) for l in listed if l.name.endswith(".gguf")}
         for model in models:
             link = flat / model.name
             if model not in have and not link.exists() and not link.is_symlink():
@@ -286,14 +312,27 @@ def plan(root: Path, providers: list, keep_old_paths: bool = True) -> Plan:
     return result
 
 
-def _tree_size(folder: Path) -> int:
-    total = 0
-    for dirpath, _dirs, names in os.walk(folder):
-        for name in names:
-            try:
-                total += os.lstat(os.path.join(dirpath, name)).st_size
-            except OSError:
-                pass
+def _tree_size(folder: Path, budget=None) -> int:
+    """The bytes of the files below folder (links not followed), every entry charged to `budget`."""
+    import scan_budget
+    budget = budget if budget is not None else scan_budget.Budget()
+    total, stack = 0, [folder]
+    while stack and not budget.stopped:
+        try:
+            listing = os.scandir(stack.pop())
+        except OSError:
+            continue
+        with listing:
+            for entry in listing:
+                if not budget.take():
+                    break
+                try:
+                    if entry.is_dir(follow_symlinks=False):
+                        stack.append(Path(entry.path))
+                    else:
+                        total += entry.stat(follow_symlinks=False).st_size
+                except OSError:
+                    pass
     return total
 
 
