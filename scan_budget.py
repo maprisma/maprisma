@@ -23,6 +23,7 @@ class Budget:
         self.deadline = time.monotonic() + seconds
         self.cancel = cancel
         self.stopped = False
+        self.truncated = False        # a listing stopped at its own limit (entries): partial too
 
     def take(self) -> bool:
         """Charge one entry; False (and stopped) once the budget is used up."""
@@ -40,7 +41,10 @@ class Budget:
         found = []
         with os.scandir(folder) as listing:
             for entry in listing:
-                if len(found) >= limit or not self.take():
+                if len(found) >= limit:
+                    self.truncated = True       # more entries than the listing takes
+                    break
+                if not self.take():
                     break
                 found.append(Path(entry.path))
         return sorted(found)

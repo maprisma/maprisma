@@ -208,7 +208,7 @@ def plan(root: Path, providers: list, keep_old_paths: bool = True) -> Plan:
     for base in dict.fromkeys(bases):
         if base.is_dir():
             walk_gguf(base, skip, 0, (files, links), budget)
-    if budget.stopped:                      # a partial picture is no base for moving files
+    if budget.stopped or budget.truncated:  # a partial picture is no base for moving files
         result.problems.append("too-many")
         return result
     # Files the links point at (a link folder's models can live anywhere).
@@ -297,7 +297,7 @@ def plan(root: Path, providers: list, keep_old_paths: bool = True) -> Plan:
             listed = budget.entries(flat, MAX_FILES) if flat.is_dir() else []
         except OSError:
             listed = []
-        if budget.stopped:                  # the plan's shared budget: a partial picture moves nothing
+        if budget.stopped or budget.truncated:  # the plan's shared budget: a partial picture moves nothing
             result.problems.append("too-many")
             return result
         have = {Path(os.path.realpath(l)) for l in listed if l.name.endswith(".gguf")}

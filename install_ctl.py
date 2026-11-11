@@ -247,7 +247,10 @@ class VerifiedFile(type(Path())):
             return super().__new__(cls)
 
     def __init__(self, fd: int, asset_name: str):
-        super().__init__(f"/proc/{os.getpid()}/fd/{fd}")
+        try:
+            super().__init__(f"/proc/{os.getpid()}/fd/{fd}")   # Python 3.12+
+        except TypeError:
+            pass                                               # 3.11 and older: set in __new__
         self.fd = fd
         self.asset_name = asset_name
 

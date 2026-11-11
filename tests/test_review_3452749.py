@@ -81,6 +81,17 @@ class ScanBudgetTest(unittest.TestCase):
         self.assertEqual(model_layout.walk_gguf(self.dir, set(), budget=budget), ([], []))
         self.assertTrue(budget.stopped)
 
+    def test_a_listing_cut_at_its_limit_is_flagged(self):
+        for number in range(12):
+            (self.dir / f"f{number}").write_bytes(b"")
+        budget = scan_budget.Budget()
+        self.assertEqual(len(budget.entries(self.dir, 5)), 5)
+        self.assertTrue(budget.truncated)
+        self.assertFalse(budget.stopped)
+        full = scan_budget.Budget()
+        full.entries(self.dir, 50)
+        self.assertFalse(full.truncated)
+
     def test_entries_never_more_than_the_limit(self):
         for number in range(50):
             (self.dir / f"f{number}").write_bytes(b"")
