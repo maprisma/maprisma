@@ -387,12 +387,12 @@ MAX_EVENT = 1024 * 1024     # bytes of one OpenClaw transcript event, packed or 
 MAX_EVENTS = 20_000         # events read per database
 
 
-_HAS_JSON = "(event_json IS NOT NULL AND octet_length(event_json) > 0)"
+_HAS_JSON = "(event_json IS NOT NULL AND length(CAST(event_json AS BLOB)) > 0)"
 OPENCLAW_EVENTS = (
     f"SELECT session_id, CASE WHEN {_HAS_JSON} THEN event_json END AS event_json,"
     f" CASE WHEN NOT {_HAS_JSON} THEN event_zstd END AS event_zstd FROM transcript_events"
-    f" WHERE ({_HAS_JSON} AND octet_length(event_json) <= ?)"
-    f" OR (NOT {_HAS_JSON} AND event_zstd IS NOT NULL AND octet_length(event_zstd) <= ?)"
+    f" WHERE ({_HAS_JSON} AND length(CAST(event_json AS BLOB)) <= ?)"
+    f" OR (NOT {_HAS_JSON} AND event_zstd IS NOT NULL AND length(CAST(event_zstd AS BLOB)) <= ?)"
     " ORDER BY rowid DESC LIMIT ?")
 
 
@@ -405,7 +405,7 @@ def openclaw_db(root: Path | None = None, now: float | None = None) -> dict:
     for _mtime, db, _info in _files(root, "*/agent/openclaw-agent.sqlite", now):
         since = (now - DAYS * 86400)
         # Only the representation that is used is returned, and only when it is small enough: the
-        # JSON when there is one (not empty), else the packed copy; sizes in bytes (octet_length),
+        # JSON when there is one (not empty), else the packed copy; sizes in bytes (length of the cell as a BLOB, any SQLite version),
         # checked before SQLite hands the cell over. An unused copy is never fetched.
         rows = _sqlite_rows(db, OPENCLAW_EVENTS, (MAX_EVENT, MAX_EVENT, MAX_EVENTS))
         for row in rows:
