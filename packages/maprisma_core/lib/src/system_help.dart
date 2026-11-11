@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' show Random;
+import 'process_group.dart' show ProcessGroup;
 import 'package:crypto/crypto.dart' show sha256;
 import 'package:path/path.dart' as p;
 import 'package:toml/toml.dart';
@@ -723,10 +724,11 @@ Future<(List<int>, bool, bool)> runLookUp(
     includeParentEnvironment: false,
     workingDirectory: cwd,
   );
+  final group = ProcessGroup(process.pid); // never signalled by number
   var cancelled = false;
   final sigterm = ProcessSignal.sigterm.watch().listen((_) {
     cancelled = true;
-    Process.runSync('kill', ['-KILL', '--', '-${process.pid}']);
+    group.signal(9);
   });
   try {
     if (stdin != null) process.stdin.add(stdin);
@@ -742,7 +744,7 @@ Future<(List<int>, bool, bool)> runLookUp(
     final code = await process.exitCode.timeout(
       const Duration(seconds: 600),
       onTimeout: () {
-        Process.runSync('kill', ['-KILL', '--', '-${process.pid}']);
+        group.signal(9);
         return -1;
       },
     );
@@ -750,6 +752,7 @@ Future<(List<int>, bool, bool)> runLookUp(
     return (out, code == 0, cancelled);
   } finally {
     await sigterm.cancel();
-    Process.runSync('kill', ['-KILL', '--', '-${process.pid}']);
+    group.signal(9);
+    group.close();
   }
 }

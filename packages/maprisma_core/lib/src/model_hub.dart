@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'process_group.dart' show ProcessGroup;
 import 'package:path/path.dart' as p;
 import 'py_time.dart';
 
@@ -15,17 +16,21 @@ Future<(List<int>, bool)> boundedOutput(
   Map<String, String>? environment,
   bool inheritEnvironment = true,
 }) async {
+  // A session of its own (setsid, no fork: Dart's child is no group leader),
+  // so everything it starts is ended with it afterwards — on success too
+  // (a child with output streams of its own outlives the program's EOF).
   final Process process;
   try {
     process = await Process.start(
-      argv.first,
-      argv.skip(1).toList(),
+      'setsid',
+      ['--', ...argv],
       environment: environment,
       includeParentEnvironment: inheritEnvironment,
     );
   } on ProcessException {
     return (<int>[], false);
   }
+  final group = ProcessGroup(process.pid); // its identity, while it runs
   if (stdin != null) {
     process.stdin.add(stdin);
   }
@@ -63,14 +68,34 @@ Future<(List<int>, bool)> boundedOutput(
   } on TimeoutException {
     over = true;
   }
-  if (over) process.kill(ProcessSignal.sigkill);
-  final code = await process.exitCode.timeout(
-    const Duration(seconds: 2),
-    onTimeout: () {
-      process.kill(ProcessSignal.sigkill);
-      return -1;
-    },
-  );
+  int code;
+  try {
+    if (over) {
+      group.signal(9); // the program and its group, at once
+    } else {
+      // Its output is closed: a moment to end on its own, then the rest of
+      // its group gets SIGTERM, a grace and SIGKILL.
+      await process.exitCode.timeout(
+        const Duration(seconds: 2),
+        onTimeout: () => -1,
+      );
+      group.signal(15);
+      final until = DateTime.now().add(const Duration(milliseconds: 500));
+      while (group.alive && DateTime.now().isBefore(until)) {
+        await Future<void>.delayed(const Duration(milliseconds: 25));
+      }
+      group.signal(9);
+    }
+    code = await process.exitCode.timeout(
+      const Duration(seconds: 2),
+      onTimeout: () {
+        process.kill(ProcessSignal.sigkill);
+        return -1;
+      },
+    );
+  } finally {
+    group.close();
+  }
   return (
     out.length > maxBytes ? out.sublist(0, maxBytes) : out,
     code == 0 && !over,

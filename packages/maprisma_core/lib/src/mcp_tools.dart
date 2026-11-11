@@ -4,6 +4,7 @@ import 'dart:io';
 import 'line_diff.dart' show pySplitlines;
 import 'mcp_plans.dart' show checkEntry, libraryKeyPattern;
 import 'model_hub.dart' show boundedOutput;
+import 'process_group.dart' show ProcessGroup, endGroup;
 import 'py_values.dart';
 
 /// mcp_tools: ask an MCP server which tools (and prompts) it offers, the way
@@ -139,10 +140,11 @@ final class _Stdio implements _Link {
       includeParentEnvironment: false,
       workingDirectory: home,
     );
-    return _Stdio(process);
+    return _Stdio(process)..group = ProcessGroup(process.pid);
   }
 
   final Process process;
+  ProcessGroup? group; // taken while the server runs (its start time known)
   final DateTime deadline;
   final _buffer = <int>[];
   late final StreamSubscription<List<int>> _reading;
@@ -195,14 +197,13 @@ final class _Stdio implements _Link {
     }
   }
 
+  /// The server and everything it started: SIGTERM to its group, a grace,
+  /// SIGKILL to what is left — also when the server itself ended first (a
+  /// child ignoring SIGTERM) — through identity-checked pidfds, never by
+  /// group number (process_group.endGroup).
   @override
   Future<void> close() async {
-    final group = '-${process.pid}';
-    await Process.run('kill', ['-TERM', '--', group]);
-    final code = await process.exitCode
-        .then<int?>((c) => c)
-        .timeout(const Duration(seconds: 5), onTimeout: () => null);
-    if (code == null) await Process.run('kill', ['-KILL', '--', group]);
+    await endGroup(process, taken: group);
     await _reading.cancel();
   }
 }

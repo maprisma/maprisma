@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:ffi' show Abi;
 import 'dart:io';
+import 'process_group.dart' show ProcessGroup;
 import 'package:path/path.dart' as p;
 import 'context.dart' show bestContext;
 import 'desktop.dart' show whichIn;
@@ -314,6 +315,7 @@ Future<bool> runWithDiskBudget(
   Duration timeout,
 ) async {
   final process = await Process.start('setsid', argv, workingDirectory: cwd);
+  final group = ProcessGroup(process.pid); // never signalled by number
   process.stdin.close();
   process.stdout.drain<void>();
   process.stderr.drain<void>();
@@ -330,7 +332,9 @@ Future<bool> runWithDiskBudget(
       }
     }
   } finally {
-    await Process.run('kill', ['-KILL', '--', '-${process.pid}']);
+    // Always the whole group, also after the program itself has ended.
+    group.signal(9);
+    group.close();
     await process.exitCode;
   }
 }

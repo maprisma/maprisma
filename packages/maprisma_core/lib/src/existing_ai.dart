@@ -1,6 +1,7 @@
 import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
+import 'process_group.dart' show ProcessGroup;
 import 'package:path/path.dart' as p;
 import 'connect_apply.dart';
 import 'desktop.dart' show shellJoin, shellQuote;
@@ -926,6 +927,7 @@ Future<Map<String, dynamic>> checkProgram(
       includeParentEnvironment: false,
       workingDirectory: folder.path,
     );
+    final group = ProcessGroup(process.pid); // never signalled by number
     process.stdin.close();
     process.stdout.drain<void>();
     process.stderr.drain<void>();
@@ -936,7 +938,8 @@ Future<Map<String, dynamic>> checkProgram(
       );
       return {'ok': code == 0, 'checked': true};
     } finally {
-      await Process.run('kill', ['-KILL', '--', '-${process.pid}']);
+      group.signal(9);
+      group.close();
     }
   } finally {
     folder.deleteSync(recursive: true);

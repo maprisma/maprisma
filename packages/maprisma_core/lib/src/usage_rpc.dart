@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'process_group.dart' show ProcessGroup;
 
 import 'package:path/path.dart' as p;
 
@@ -44,6 +45,7 @@ Future<Map<String, dynamic>?> askPlanLimits(
   } on ProcessException {
     return null;
   }
+  final group = ProcessGroup(process.pid); // never signalled by number
   final rpcs = _JsonLines(process);
   final deadline = Timer(total, rpcs.stop);
   try {
@@ -54,7 +56,8 @@ Future<Map<String, dynamic>?> askPlanLimits(
     deadline.cancel();
     rpcs.stop();
     process.kill(ProcessSignal.sigterm);
-    Process.runSync('kill', ['-KILL', '--', '-${process.pid}']);
+    group.signal(9);
+    group.close();
     await process.exitCode.timeout(
       const Duration(seconds: 2),
       onTimeout: () {
