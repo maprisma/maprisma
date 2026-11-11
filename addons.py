@@ -53,7 +53,7 @@ USER_DIR = Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local/share")
 # addons from the package, inside the AppImage; a newer copy in USER_DIR (from the catalog) wins.
 SYSTEM_DIR = Path(__file__).resolve().parent / "addons"
 
-MAPRISMA_VERSION = "0.14.3"       # an add-on whose "needs" names a newer Maprisma is refused
+MAPRISMA_VERSION = "0.14.4"       # an add-on whose "needs" names a newer Maprisma is refused
 KINDS = ("feature", "agent", "provider", "extension")
 MAX_FILES = 64
 MAX_FILE = 1024 * 1024

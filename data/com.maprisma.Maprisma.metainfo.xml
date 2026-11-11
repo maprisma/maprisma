@@ -25,6 +25,15 @@
   <url type="bugtracker">https://github.com/uBruckhaus/Asterism/issues</url>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.14.4" date="2026-11-12">
+      <description>
+        <p>Hardening from a security review: programs run for a short job end together with everything they
+          started; local requests and downloads have one deadline each; a program folder other accounts could
+          change is refused and the checked download is the one unpacked; terminal paste is size-limited; model
+          files must be regular files; folder scans stay within a budget; skills from the web come from one
+          commit, every file checked.</p>
+      </description>
+    </release>
     <release version="0.14.3" date="2026-11-10">
       <description>
         <p>F12 saves a picture of the window privately in your Pictures folder, with an optional note about
