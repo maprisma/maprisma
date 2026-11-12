@@ -2321,14 +2321,34 @@ void main() {
     await unmountApp(tester);
   });
 
-  testWidgets('a normal window elsewhere: Esc on the main page stays', (
+  testWidgets('a normal window elsewhere: Esc on the main page closes it', (
     tester,
   ) async {
+    final calls = <String>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      const MethodChannel('window_manager'),
+      (call) async {
+        calls.add(call.method);
+        return null;
+      },
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        const MethodChannel('window_manager'),
+        null,
+      ),
+    );
     final dir = await mountApp(tester);
     await settleService(tester);
+    await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
+    await settleService(tester);
+    expect(calls, isNot(contains('close'))); // Backspace never closes it
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await settleService(tester);
     expect(requests(dir).where((q) => q['method'] == 'window.popup'), isEmpty);
+    // As its close button (the maprisma-layout rule), not hidden as a popup.
+    expect(calls, contains('close'));
+    expect(calls, isNot(contains('hide')));
     expect(tester.takeException(), isNull);
     await unmountApp(tester);
   });

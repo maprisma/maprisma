@@ -63,6 +63,7 @@ import 'provider_task_dialog.dart';
 import 'connections_view.dart';
 import 'model_removal_dialog.dart';
 import 'subagents_dialog.dart';
+import 'window_size.dart';
 
 /// When the background tuning (task 029) first looks after the start, and
 /// how often it tries again while the core is busy with other tasks; tests
@@ -84,11 +85,23 @@ void main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
   await windowManager.ensureInitialized();
   await windowManager.setPreventClose(true);
-  runApp(const MaprismaApp());
+  // The size the user gave the window last time (window.json).
+  final sizes = WindowSizeStore(windowSizePath(Platform.environment));
+  final size = sizes.load();
+  if (size != null) await windowManager.setSize(size);
+  runApp(MaprismaApp(windowSizes: sizes));
 }
 
 class MaprismaApp extends StatefulWidget {
-  const MaprismaApp({super.key, this.connectBackend, this.windowShots});
+  const MaprismaApp({
+    super.key,
+    this.connectBackend,
+    this.windowShots,
+    this.windowSizes,
+  });
+
+  /// Remembers the window's size after a resize; tests leave it out.
+  final WindowSizeStore? windowSizes;
 
   /// Allows isolated service fixtures; production always starts its bundled service.
   final Future<Backend> Function()? connectBackend;
@@ -842,6 +855,20 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       return _refresh(refreshMap: _mapOnScreen);
     }
     return _refresh();
+  }
+
+  @override
+  void onWindowResize() => unawaited(_rememberSize());
+
+  /// A size the user chose (not a popup's, not maximised or full screen).
+  Future<void> _rememberSize() async {
+    final sizes = widget.windowSizes;
+    if (sizes == null || _popup) return;
+    if (await windowManager.isMaximized() ||
+        await windowManager.isFullScreen()) {
+      return;
+    }
+    sizes.resized(await windowManager.getSize());
   }
 
   @override
@@ -2597,15 +2624,27 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       _showSettings || _showProviders || _showConnections || _showGuide;
 
   /// Esc on the main page in popup mode closes the popup (Backspace never).
+  /// Esc on the main page with nothing open closes the window (the
+  /// maprisma-layout rule): a popup hides, a window closes as its close button
+  /// does (asking first while agents run).
   bool get _canCloseTopLevel =>
-      _popup &&
       !_navigationBlocked &&
       _card == null &&
       _browser == null &&
       _visibleTerminal == null;
 
-  void _backOrClose() =>
-      _canGoBack ? _goBack() : unawaited(windowManager.hide());
+  void _backOrClose() {
+    if (_canGoBack) return _goBack();
+    // Esc in a text field leaves the field first; the next Esc closes.
+    final focused = FocusManager.instance.primaryFocus?.context;
+    if (focused != null &&
+        (focused.widget is EditableText ||
+            focused.findAncestorWidgetOfExactType<EditableText>() != null)) {
+      FocusManager.instance.primaryFocus?.unfocus();
+      return;
+    }
+    unawaited(_popup ? windowManager.hide() : windowManager.close());
+  }
 
   /// A page back to what lay under it; an agent's details or the list back
   /// to the map, the main page.
@@ -5235,6 +5274,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     _mcpTimer?.cancel();
     _tuneTimer?.cancel();
     _blurHide?.cancel();
+    widget.windowSizes?.flush();
     windowManager.removeListener(this);
     _liveTimer?.cancel();
     _mapLayoutTimer?.cancel();
