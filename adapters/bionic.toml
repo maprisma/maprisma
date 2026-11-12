@@ -31,3 +31,8 @@ local_ok = true
 
 [details]                              # always LM Studio's engine and models
 reader = "lmstudio-app"
+
+# The AI helper of the other Maprisma apps (tools/export-helpers.py -> data/helpers.json, docs/adapter-format.md).
+
+# No [task], no [ask]: LM Studio Bionic is a desktop app; its docs name no command-line options.
+# Source: https://lmstudio.ai/docs/bionic

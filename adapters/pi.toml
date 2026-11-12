@@ -96,3 +96,11 @@ background = []                        # its advise argv says it already
 
 [models]                               # its online models on the map: "provider/model" (its hooks)
 hook = true
+
+# The AI helper of the other Maprisma apps (tools/export-helpers.py -> data/helpers.json, docs/adapter-format.md).
+
+[task]                                 # interactive with a first message ("Provide an initial prompt"); "--"
+                                       # so a prompt that starts with "-" stays a message
+# Source: https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/cli.md
+argv = ["pi", "--", "{prompt}"]
+verified = false

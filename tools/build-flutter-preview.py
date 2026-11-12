@@ -41,6 +41,7 @@ def main():
     data.mkdir(exist_ok=True)
     for manual in sorted((root / 'data').glob('user-manual*.pdf')):
         shutil.copy2(manual, data / manual.name)
+    shutil.copy2(root / 'data/helpers.json', data / 'helpers.json')   # the AI helpers of the other apps
     print(f'\nDevelopment preview: {stage / "build/linux/x64/release/bundle/maprisma"}', flush=True)
 
 

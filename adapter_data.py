@@ -53,7 +53,11 @@ WAY = {"kind": STR, "spec": STR, "tool": STR, "argv": STRS, "sudo": BOOL, "url":
 UPDATE = {"self": STRS, "latest": STR}
 # One prompt, one answer, without tools: argv with "{prompt}" where the text goes, and the games the
 # app may play with it (AI Playground's chess tab).
-ASK = {"argv": STRS, "note": STR, "games": STRS, "effort": TABLE}
+# verified = false (ask and task): taken from the agent's documentation only, not yet tried with the
+# agent; exported for the other Maprisma apps (tools/export-helpers.py -> data/helpers.json) but
+# not used by this app until someone has tried it and removed the line.
+# helper = false: not offered to the other apps (its tools cannot be switched off).
+ASK = {"argv": STRS, "note": STR, "games": STRS, "effort": TABLE, "verified": BOOL, "helper": BOOL}
 GAMES = ("chess",)
 # How long the agent may think (AI Playground's Thinking time): per level, its own options for how
 # hard the model thinks (ask.effort), put in before the prompt.
@@ -66,7 +70,7 @@ TOOLS = {"file": STR, "key": STR}                       # the tools it is given 
 # output: how its answer and token use come back, ai_helper.OUTPUTS), or none at all (rewrite: a
 # skill rewritten for an MCP server's new tools); the agent itself, never a shell. task: the agent
 # started in a terminal tab with a first prompt ("Do it with …"), asking before each step itself.
-RESEARCH, REWRITE, TASK = {"argv": STRS, "output": STR}, {"argv": STRS}, {"argv": STRS}
+RESEARCH, REWRITE, TASK = {"argv": STRS, "output": STR}, {"argv": STRS}, {"argv": STRS, "verified": BOOL}
 # What closes it in when the map starts it (agent_guard): options right after the program for its
 # look-ups and rewrites, for its task tabs, and per MCP server in its [mcp] file ("{name}").
 CLOSED = {"background": STRS, "task": STRS, "mcp_off": STRS, "home_env": STR}
@@ -463,9 +467,16 @@ def _installer(name: str):
     return installer
 
 
+def in_use(data: dict) -> dict:
+    """The facts this app uses: an [ask] or [task] marked verified = false (documentation only) left out."""
+    return {key: value for key, value in data.items()
+            if not (key in ("ask", "task") and value.get("verified", True) is False)}
+
+
 def harness(data: dict, name: str = "adapter", hooks=None) -> Harness:
     """The Harness of a checked adapter file; hooks: its hook functions (a module), where it says "hook"."""
     check(data, name)
+    data = in_use(data)
 
     def hook(function: str) -> Callable:
         found = getattr(hooks, function, None) if hooks is not None else None

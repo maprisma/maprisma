@@ -2,8 +2,9 @@
 """Build a Maprisma release: dist/maprisma-<version>-x86_64.tar.gz and its SHA-256.
 
 The app with its own id (com.maprisma.Maprisma, MAPRISMA_RELEASE=true), the core's helper
-(lib/maprisma-core), the manuals (data/) and the signed add-ons from Uwe's maprisma-addons checkout
-(addons/, unpacked from dist/adapters-<version>.zip: the version must be this one, signed with
+(lib/maprisma-core), the manuals and the AI helpers of the other Maprisma apps (data/; helpers.json from
+tools/export-helpers.py, installed as /usr/lib/maprisma/data/helpers.json), the signed add-ons from Uwe's
+maprisma-addons checkout (addons/, unpacked from dist/adapters-<version>.zip: the version must be this one, signed with
 tools/release-adapters.sh there), then the bundle gate (tools/check-bundle.py). The archive holds one
 folder maprisma-<version>/ with:
     app/                      the bundle (maprisma, lib/, data/, addons/)
@@ -52,6 +53,8 @@ def main():
     if not adapters.is_file():
         sys.exit(f'{adapters} is missing: sign the {ver} add-ons first '
                  f'(cd {args.addons} && MAPRISMA={ROOT} tools/release-adapters.sh)')
+    if subprocess.run([sys.executable, '-I', str(ROOT / 'tools/export-helpers.py'), '--check']).returncode:
+        sys.exit('data/helpers.json is out of date: run tools/export-helpers.py and commit it')
     sys.path.insert(0, str(ROOT / 'tools'))
     from dart_sdk import resolve_dart
     dist = ROOT / 'dist'
@@ -75,6 +78,7 @@ def main():
         (bundle / 'data').mkdir(exist_ok=True)
         for manual in sorted((ROOT / 'data').glob('user-manual*.pdf')):
             shutil.copy2(manual, bundle / 'data' / manual.name)
+        shutil.copy2(ROOT / 'data/helpers.json', bundle / 'data/helpers.json')   # the AI helpers (JSON)
         subprocess.run([sys.executable, str(ROOT / 'packaging/unpack-adapters.py'), str(adapters),
                         str(bundle / 'addons')], check=True)
         subprocess.run([sys.executable, str(ROOT / 'tools/check-bundle.py'), str(bundle)], check=True)

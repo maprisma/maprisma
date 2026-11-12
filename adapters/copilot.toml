@@ -67,3 +67,18 @@ also = "~/.copilot/config.json"
 
 [details]                              # its model (the agent's card)
 reader = "copilot"
+
+# The AI helper of the other Maprisma apps (tools/export-helpers.py -> data/helpers.json, docs/adapter-format.md).
+
+[ask]                                  # one prompt, only the answer (-s); shell, file writes, URLs and memory
+                                       # denied ("Deny rules always take precedence"), no questions to the user
+# Source: https://docs.github.com/en/copilot/reference/cli-command-reference,
+# https://docs.github.com/en/copilot/how-tos/copilot-cli/automate-copilot-cli/run-cli-programmatically
+argv = ["copilot", "-p", "{prompt}", "-s", "--no-ask-user", "--deny-tool=shell", "--deny-tool=write",
+        "--deny-tool=url", "--deny-tool=memory"]
+verified = false                       # documentation only, not yet tried with it
+
+[task]                                 # interactive, the prompt executed first (-i, --interactive)
+# Source: https://docs.github.com/en/copilot/reference/cli-command-reference
+argv = ["copilot", "-i", "{prompt}"]
+verified = false

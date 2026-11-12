@@ -78,6 +78,43 @@ signed before these facts existed gets them from the app's own adapter for the s
 every file yields (made from the Python adapter it replaced) — after an intended change:
 `python3 tests/test_adapter_data.py --update-snapshots`.
 
+## The helpers export (`data/helpers.json`)
+
+The other Maprisma apps (Playground, Launcher, Video Translator, …) offer any installed agent as
+their "AI helper". They do not read the adapters; `tools/export-helpers.py` (stdlib only,
+`python3 -I`) turns the adapters' `[ask]` and `[task]` into `data/helpers.json`, installed with the
+app as `/usr/lib/maprisma/data/helpers.json` (`tools/build-release.py`, the AUR package copies the
+bundle to `/usr/lib/maprisma`):
+
+```json
+{"version": 2, "helpers": [
+  {"id": "claude", "name": "Claude Code", "command": "claude",
+   "ask": {"argv": ["claude", "-p", "--tools", "", "…", "{prompt}"], "stdin": false},
+   "task": {"argv": ["claude", "{prompt}"]}, "verified": true}, …]}
+```
+
+- One entry per adapter that has an `[ask]` or a `[task]`; `id` is the file stem (= `command`).
+  Order of preference: Claude Code, Codex, Gemini, Antigravity, OpenCode, Cursor, Copilot, then the
+  rest alphabetically.
+- `ask`: one prompt, one answer on stdout, no tools or read-only (`null` when the agent has no
+  safe way to do it). `stdin`: the prompt goes on stdin instead of an argument. Maprisma's Thinking
+  time (`{effort}`) is left out: the agent's default.
+- `task`: the agent started interactively in a terminal with a first prompt (`null` when it takes
+  none). It asks before each step by its own settings; Maprisma's own task tabs add `closed.task`,
+  the export does not.
+- `{prompt}` is a placeholder the caller replaces as ONE argv element; never through a shell. Most
+  agents take it as a positional argument: a prompt that starts with `-` may be read as an option,
+  so a caller makes sure it does not (Pi's task puts `--` before it).
+- An `[ask]` with `helper = false` stays Maprisma's own (OpenCode's first-agent test) and is exported as
+  `null`: its tools cannot be switched off.
+- `verified`: `false` when an entry says `verified = false` (taken from the agent's documentation
+  only, not yet tried with it). Maprisma itself does not use such an entry (`adapter_data.in_use`,
+  `Adapter.inUse`): no Test button, no "Do it with …", no first-agent test question, until someone
+  has tried it and removed the line. Each entry has its source URL as a comment in the TOML.
+- `version` goes up by one whenever the helpers change. After changing an `[ask]` or `[task]`:
+  `tools/export-helpers.py` and commit `data/helpers.json`; `tests/test_export_helpers.py` fails
+  while it is out of date, and the release build refuses to start.
+
 ## Texts and languages
 
 Texts (descriptions, button labels, setting explanations) are written in English in the TOML. The

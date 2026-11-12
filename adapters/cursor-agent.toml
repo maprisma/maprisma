@@ -99,3 +99,18 @@ title = "Never allowed"
 
 [details]                              # its model (the agent's card)
 reader = "cursor"
+
+# The AI helper of the other Maprisma apps (tools/export-helpers.py -> data/helpers.json, docs/adapter-format.md).
+
+[ask]                                  # one prompt, one answer: Ask mode ("read-only exploration"), sandboxed;
+                                       # the docs do not say Ask mode holds in print mode, so not yet trusted
+# Source: https://cursor.com/docs/cli/reference/parameters (-p, --mode ask, --sandbox, --output-format),
+# https://cursor.com/docs/cli/overview, https://cursor.com/docs/cli/headless (the docs call it "agent";
+# "cursor-agent" is the name this adapter knows it by)
+argv = ["cursor-agent", "-p", "--mode", "ask", "--sandbox", "enabled", "--output-format", "text", "{prompt}"]
+verified = false                       # documentation only, not yet tried with it
+
+[task]                                 # interactive, with a first prompt (the positional "Initial prompt")
+# Source: https://cursor.com/docs/cli/reference/parameters
+argv = ["cursor-agent", "{prompt}"]
+verified = false

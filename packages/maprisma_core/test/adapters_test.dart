@@ -34,6 +34,38 @@ void main() {
       throwsA(isA<AdapterError>()),
     );
   });
+  test('an [ask] or [task] marked verified = false is not used by the app', () {
+    const base = {'command': 'x', 'name': 'X'};
+    final a = Adapter({
+      ...base,
+      'ask': {
+        'argv': ['x', '-p', '{prompt}'],
+        'verified': false,
+      },
+      'task': {
+        'argv': ['x', '{prompt}'],
+      },
+    });
+    expect(a.table('ask'), isEmpty);
+    expect(a.table('task')['argv'], ['x', '{prompt}']);
+    expect(
+      () => Adapter({
+        ...base,
+        'task': {
+          'argv': ['x', '{prompt}'],
+          'verified': 'no',
+        },
+      }),
+      throwsA(isA<AdapterError>()),
+    );
+    // The documentation-only entries of the shipped adapters stay out.
+    final gemini = builtinAdapters().firstWhere((a) => a.command == 'gemini');
+    expect(gemini.table('task'), isEmpty);
+    expect(gemini.table('ask'), isEmpty);
+    final hermes = builtinAdapters().firstWhere((a) => a.command == 'hermes');
+    expect(hermes.table('ask'), isNotEmpty);
+    expect(hermes.table('task'), isEmpty);
+  });
   test(
     'prompt/configure declarations never select a shell or embedded template',
     () {

@@ -45,3 +45,17 @@ dir = "~/.omp/agent"
 [tools]                                # the tools it is given
 file = "~/.omp/agent/settings.json"
 key = "defaultTools"
+
+# The AI helper of the other Maprisma apps (tools/export-helpers.py -> data/helpers.json, docs/adapter-format.md).
+
+[ask]                                  # one prompt, no TUI: built-in tools and extensions off (a plugin's
+                                       # own tools can still load, the docs say)
+# Source: https://omp.sh/docs/cli
+argv = ["omp", "-p", "--no-tools", "--no-extensions", "{prompt}"]
+verified = false                       # documentation only, not yet tried with it
+
+[task]                                 # interactive; the words are its initial request (a first word that is
+                                       # one of its commands is read as that command)
+# Source: https://omp.sh/docs/cli
+argv = ["omp", "{prompt}"]
+verified = false

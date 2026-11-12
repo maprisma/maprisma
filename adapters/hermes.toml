@@ -129,3 +129,10 @@ reader = "hermes"
 
 [models]                               # its online models on the map: "provider/model" (its hooks)
 hook = true
+
+# The AI helper of the other Maprisma apps (tools/export-helpers.py -> data/helpers.json, docs/adapter-format.md).
+
+[task]                                 # chat seeded with the prompt (-q, --query), the session stays open
+# Source: https://hermes-agent.nousresearch.com/docs/reference/cli-commands
+argv = ["hermes", "chat", "-q", "{prompt}"]
+verified = false

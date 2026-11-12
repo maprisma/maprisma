@@ -13,9 +13,20 @@ final class AdapterError extends FormatException {
 
 /// Facts only. Hook names select built-in Dart implementations, never loaded code.
 final class Adapter {
-  Adapter(Map<String, dynamic> facts) : facts = Map.unmodifiable(facts) {
+  Adapter(Map<String, dynamic> facts) : facts = Map.unmodifiable(inUse(facts)) {
     validate(facts);
   }
+
+  /// adapter_data.in_use: the facts the app uses; an [ask] or [task] marked
+  /// verified = false (documentation only, exported for the other Maprisma
+  /// apps by tools/export-helpers.py) is left out.
+  static Map<String, dynamic> inUse(Map<String, dynamic> facts) => {
+    for (final e in facts.entries)
+      if (!(['ask', 'task'].contains(e.key) &&
+          e.value is Map &&
+          (e.value as Map)['verified'] == false))
+        e.key: e.value,
+  };
 
   /// An agent the desktop offers without an adapter (Python: harnesses.get() is
   /// None): no facts beyond its name, so every reader treats it as empty.

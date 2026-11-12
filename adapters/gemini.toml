@@ -45,3 +45,18 @@ note = "Choose “Sign in with Google” when it asks."
 var = "GEMINI_API_KEY"
 url = "https://aistudio.google.com/apikey"
 env_file = "~/.gemini/.env"
+
+# The AI helper of the other Maprisma apps (tools/export-helpers.py -> data/helpers.json, docs/adapter-format.md).
+
+[ask]                                  # one prompt, one answer: in "default" approval mode a tool that needs
+                                       # approval is denied without a terminal; plan mode is not used (it
+                                       # switches to YOLO when it leaves the plan in headless runs)
+# Source: https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/cli-reference.md (-p, -o, --approval-mode),
+# docs/reference/policy-engine.md ("In non-interactive mode, this is treated as deny"), docs/cli/plan-mode.md
+argv = ["gemini", "--approval-mode", "default", "-o", "text", "-p", "{prompt}"]
+verified = false                       # documentation only, not yet tried with it
+
+[task]                                 # interactive, with a first prompt (-i, --prompt-interactive)
+# Source: https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/cli-reference.md
+argv = ["gemini", "-i", "{prompt}"]
+verified = false

@@ -49,3 +49,11 @@ reader = "dsh"
 
 [models]                               # its online models on the map: "provider/model" (its hooks)
 hook = true
+
+# The AI helper of the other Maprisma apps (tools/export-helpers.py -> data/helpers.json, docs/adapter-format.md).
+
+# No [task]: no interactive terminal mode with a first prompt is shipped (dsh web is a browser UI).
+# No [ask]: dsh headless answers one task, but its shipped presets (workspace-write, danger-full-access)
+# let it write; there is no read-only or no-tools option.
+# Source: https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/cli-help.md,
+# docs/subsystems/permission-presets.md

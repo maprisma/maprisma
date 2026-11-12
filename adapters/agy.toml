@@ -120,3 +120,17 @@ title = "Never allowed"
 [[security.rules]]
 key = "trustedWorkspaces"
 title = "Trusted folders"
+
+# The AI helper of the other Maprisma apps (tools/export-helpers.py -> data/helpers.json, docs/adapter-format.md).
+
+[ask]                                  # one prompt, one answer on stdout (diagnostics on stderr): plan mode,
+                                       # sandboxed; a tool it may not use without approval is soft-denied headless
+# Source: https://antigravity.google/docs/cli/headless.md, https://antigravity.google/docs/cli/reference.md,
+# https://antigravity.google/docs/cli/modes.md
+argv = ["agy", "-p", "{prompt}", "--output-format", "text", "--mode=plan", "--sandbox"]
+verified = false                       # documentation only, not yet tried with it
+
+[task]                                 # interactive, with a first prompt (-i, --prompt-interactive)
+# Source: https://antigravity.google/docs/cli/reference.md
+argv = ["agy", "-i", "{prompt}"]
+verified = false

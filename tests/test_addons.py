@@ -87,6 +87,7 @@ class AddonsTest(unittest.TestCase):
     def agent_addon(self, toml_text, meta=None):
         gemini = (Path(__file__).resolve().parent.parent / "adapters/gemini.toml").read_text()
         gemini = gemini.replace('command = "gemini"', 'command = "gemini-test"')   # not the built-in one
+        gemini = gemini.replace('argv = ["gemini", ', 'argv = ["gemini-test", ')     # its own commands too
         return self.build("agent-gemini", code=None, extra={"agent.toml": toml_text if toml_text else gemini},
                           meta={"kind": "agent", "capabilities": ["agent"], "provides": ["gemini-test"],
                                 "privacy": "numbers", **(meta or {})})

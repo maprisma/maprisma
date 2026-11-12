@@ -20,3 +20,10 @@ path = "~/.config/muse/settings.json"
 key = "mcp_servers"
 shape = "muse"
 defaults = { schema_version = 1 }      # Muse refuses a settings file without it
+
+# The AI helper of the other Maprisma apps (tools/export-helpers.py -> data/helpers.json, docs/adapter-format.md).
+
+# No [task]: muse starts interactively without a first prompt (none documented).
+# No [ask]: muse exec runs one prompt, but no option makes it read-only or turns its tools off (the
+# read-only profile is a setting only).
+# Source: https://dev.meta.ai/docs/muse-code/extending#headless, https://dev.meta.ai/docs/muse-code/permissions

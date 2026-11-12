@@ -140,6 +140,7 @@ argv = ["claude", "-p", "--tools", "WebSearch", "WebFetch", "--allowedTools", "W
 output = "claude-json"                 # the answer and its token use
 
 [task]                                 # Do it with Claude…: in a terminal tab, it asks before each step
+# Checked with claude --help (2.1.322): "Usage: claude [options] [command] [prompt]"; -p, --tools, --strict-mcp-config
 argv = ["claude", "{prompt}"]
 
 [rewrite]                              # a skill rewritten for an MCP server: no tools at all, the prompt on stdin

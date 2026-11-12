@@ -61,3 +61,13 @@ hook = true
 [ask]                                  # one prompt, one answer (the first-agent guide's test)
 argv = ["opencode", "run", "{prompt}"]
 note = "tools are not switched off, but it asks before using one (no --auto); the test's question needs none"
+helper = false                         # not for the other apps: run allows its shell without asking
+# (https://opencode.ai/docs/permissions.md: the base policy allows "*"); --agent plan only blocks edits
+
+# The AI helper of the other Maprisma apps (tools/export-helpers.py -> data/helpers.json, docs/adapter-format.md).
+
+[task]                                 # its TUI with a first prompt (--prompt, OpenCode 1.x docs); the 2.x docs
+                                       # name it only for the minimal UI (opencode mini --prompt)
+# Source: https://opencode.ai/v1/docs/cli/, https://opencode.ai/docs/cli/commands.md
+argv = ["opencode", "--prompt", "{prompt}"]
+verified = false

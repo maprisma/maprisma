@@ -53,3 +53,15 @@ argv = ["goose", "configure"]
 
 [details]                              # its model and providers (the agent's card)
 reader = "goose"
+
+# The AI helper of the other Maprisma apps (tools/export-helpers.py -> data/helpers.json, docs/adapter-format.md).
+
+# No [ask]: goose run uses its default mode "auto" (tools without asking); only GOOSE_MODE=chat (an
+# environment variable, no option) keeps it to chat, and an argv here is the agent itself.
+# Source: https://github.com/aaif-goose/goose/blob/main/documentation/docs/guides/managing-tools/goose-permissions.md
+
+[task]                                 # the prompt first, then on interactively (-t, -s/--interactive); it acts
+                                       # by its own goose mode (default "auto": it does not ask first)
+# Source: https://github.com/aaif-goose/goose/blob/main/documentation/docs/guides/goose-cli-commands.md
+argv = ["goose", "run", "-t", "{prompt}", "-s"]
+verified = false

@@ -42,3 +42,10 @@ per_token = true                       # API keys only (its flat-rate models rep
 [[access.logins]]
 label = "Inside Crush (it asks for a key)"
 argv = ["crush"]
+
+# The AI helper of the other Maprisma apps (tools/export-helpers.py -> data/helpers.json, docs/adapter-format.md).
+
+# No [task]: crush takes no first prompt (its flags: -c -D -d -H -y -s -C).
+# No [ask]: crush run approves every tool of its non-interactive session itself; only a crushrc
+# (permissions deny …) limits it, no option does.
+# Source: https://github.com/charmbracelet/crush (README), internal/cmd/root.go, internal/cmd/run.go
