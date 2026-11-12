@@ -864,7 +864,11 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   Future<void> _rememberSize() async {
     final sizes = widget.windowSizes;
     if (sizes == null || _popup) return;
-    if (await windowManager.isMaximized() ||
+    // Hyprland reports every window as maximised, floating ones too: there
+    // only full screen means the size isn't the user's.
+    final hyprland =
+        (Platform.environment['HYPRLAND_INSTANCE_SIGNATURE'] ?? '').isNotEmpty;
+    if ((!hyprland && await windowManager.isMaximized()) ||
         await windowManager.isFullScreen()) {
       return;
     }
