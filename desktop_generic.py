@@ -87,6 +87,159 @@ def theme_colors(path=None) -> dict:
     return colors
 
 
+def desktop_palette(environ=None) -> dict:
+    """The desktop's colours as every Maprisma app reads them (Dart: desktop_palette.dart): COSMIC's
+    theme, Plasma's kdeglobals, Maprisma Shell's scheme.json on Hyprland; {} elsewhere."""
+    env = os.environ if environ is None else environ
+    names = env.get("XDG_CURRENT_DESKTOP", "").upper().split(":")
+    home = env.get("HOME", "")
+
+    def xdg(key, fallback):
+        value = env.get(key)
+        return value if value and os.path.isabs(value) else os.path.join(home, fallback)
+
+    if "COSMIC" in names:
+        colors = cosmic_palette(xdg("XDG_CONFIG_HOME", ".config"))
+    elif "KDE" in names:
+        colors = kde_palette(_read_small(os.path.join(xdg("XDG_CONFIG_HOME", ".config"), "kdeglobals"), 1 << 20) or "")
+    elif "HYPRLAND" in names:
+        colors = shell_palette(_read_small(os.path.join(xdg("XDG_STATE_HOME", ".local/state"), "maprisma-shell",
+                                                        "scheme.json"), 256 * 1024) or "")
+    else:
+        return {}
+    return {key: value for key, value in colors.items() if value is not None}
+
+
+def _read_small(path, limit):
+    try:
+        if not os.path.isfile(path) or os.path.getsize(path) > limit:
+            return None
+        with open(path, "rb") as handle:
+            return handle.read().decode("utf-8", "replace")
+    except OSError:
+        return None
+
+
+def shell_palette(text: str) -> dict:
+    try:
+        data = json.loads(text)
+    except ValueError:
+        return {}
+    colours = data.get("colours") if isinstance(data, dict) else None
+    if not isinstance(colours, dict):
+        return {}
+
+    def c(key):
+        value = colours.get(key)
+        if isinstance(value, str) and re.fullmatch(r"#?[0-9a-fA-F]{6}", value):
+            return "#" + value.lstrip("#").lower()
+        return None
+
+    return {"accent": c("primary"), "background": c("surface") or c("background"), "foreground": c("onSurface"),
+            "muted": c("outline"), "selection": c("surfaceContainerHighest"), "red": c("error") or c("red"),
+            "yellow": c("yellow"), "orange": c("peach"), "green": c("green")}
+
+
+def _ini(text, group, key):
+    current = found = None
+    for raw in text.splitlines():
+        line = raw.strip()
+        if line.startswith("[") and line.endswith("]"):
+            current = line[1:-1]
+        elif current == group and "=" in line and line.index("=") > 0:
+            name, value = line.split("=", 1)
+            if name.strip() == key:
+                found = value.strip()
+    return found
+
+
+def _rgb(value):
+    if value is None:
+        return None
+    parts = [int(v.strip()) if v.strip().lstrip("-").isdigit() else None for v in value.split(",")]
+    if len(parts) not in (3, 4) or any(v is None or not 0 <= v <= 255 for v in parts):
+        return None
+    return "#" + "".join("%02x" % v for v in parts[:3])
+
+
+def kde_palette(text: str) -> dict:
+    def c(group, key):
+        return _rgb(_ini(text, group, key))
+    return {"accent": c("General", "AccentColor") or c("Colors:View", "DecorationFocus")
+            or c("Colors:Selection", "BackgroundNormal"),
+            "background": c("Colors:Window", "BackgroundNormal"), "foreground": c("Colors:Window", "ForegroundNormal"),
+            "selection": c("Colors:Selection", "BackgroundNormal"), "muted": c("Colors:Window", "ForegroundInactive"),
+            "red": c("Colors:View", "ForegroundNegative"), "yellow": c("Colors:View", "ForegroundNeutral"),
+            "green": c("Colors:View", "ForegroundPositive")}
+
+
+def cosmic_palette(config_home: str) -> dict:
+    def config(component, key):
+        for base in (os.path.join(config_home, "cosmic"), "/usr/share/cosmic"):
+            text = _read_small(os.path.join(base, component, "v1", key), 256 * 1024)
+            if text is not None:
+                return text
+        return None
+
+    dark = (config("com.system76.CosmicTheme.Mode", "is_dark") or "true").strip() != "false"
+    theme = "com.system76.CosmicTheme.Dark" if dark else "com.system76.CosmicTheme.Light"
+
+    def field(key, name):
+        text = config(theme, key)
+        return None if text is None else ron_color(ron_field(text, name))
+
+    return {"accent": field("accent", "base") or ron_color(config(theme, "accent")),
+            "background": field("background", "base"), "foreground": field("background", "on"),
+            "green": field("success", "base"), "yellow": field("warning", "base"), "red": field("destructive", "base")}
+
+
+def ron_field(text: str, key: str):
+    depth, i = 0, 0
+    while i < len(text):
+        c = text[i]
+        if c in "([":
+            depth += 1
+        elif c in ")]":
+            depth -= 1
+        elif depth == 1 and text.startswith(key, i) and (i == 0 or not re.match(r"\w", text[i - 1])):
+            j = i + len(key)
+            while j < len(text) and text[j] == " ":
+                j += 1
+            if j < len(text) and text[j] == ":":
+                start = j = j + 1
+                d = 0
+                while j < len(text):
+                    cj = text[j]
+                    if cj in "([":
+                        d += 1
+                    if cj in ")]":
+                        if d == 0:
+                            break
+                        d -= 1
+                    if cj == "," and d == 0:
+                        break
+                    j += 1
+                return text[start:j].strip()
+        i += 1
+    return None
+
+
+def ron_color(value):
+    if value is None:
+        return None
+
+    def part(name):
+        m = re.search(name + r":\s*([0-9.eE+-]+)", value)
+        try:
+            v = float(m.group(1)) if m else None
+        except ValueError:
+            v = None
+        return None if v is None else int(min(max(v, 0.0), 1.0) * 255 + 0.5)  # as Dart's round()
+
+    r, g, b = part("red"), part("green"), part("blue")
+    return None if None in (r, g, b) else "#%02x%02x%02x" % (r, g, b)
+
+
 def _adw_style():
     """(dark, accent hex) from libadwaita's style manager (the system's style, also through
     the desktop portal on KDE), or None before there is a display (tests, the watcher)."""

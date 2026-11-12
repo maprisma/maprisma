@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:toml/toml.dart';
+import 'desktop_palette.dart';
 import 'identity.dart';
 import 'posix_ffi.dart';
 
@@ -198,10 +199,11 @@ final class GenericDesktop implements Desktop {
 
   @override
   String? get themeDir => null;
-  // app.theme is deliberately empty on generic desktops, as in Python.
-  // Flutter follows platform brightness there; no GTK import or gsettings call.
+  // The desktop's palette where Maprisma's sister apps read it (COSMIC's
+  // theme, kdeglobals, Maprisma Shell's scheme on Hyprland); empty elsewhere:
+  // Flutter follows platform brightness there, no GTK import or gsettings call.
   @override
-  Map<String, String> themeColors() => {};
+  Map<String, String> themeColors() => desktopPalette(environment);
 }
 
 final class OmarchyDesktop implements Desktop {

@@ -590,6 +590,65 @@ void main() {
       expect(c.dispatch('app.theme', {}), {'theme': {}});
     },
   );
+  test('generic desktops: the palette of Maprisma Shell, Plasma, COSMIC', () {
+    Map<String, dynamic> theme(String desktop) => CoreService(
+      environment: {
+        'HOME': temp.path,
+        'MAPRISMA_DESKTOP': 'generic',
+        'XDG_CURRENT_DESKTOP': desktop,
+      },
+    ).dispatch('app.theme', {});
+    final scheme = File('${temp.path}/.local/state/maprisma-shell/scheme.json')
+      ..parent.createSync(recursive: true)
+      ..writeAsStringSync(
+        '{"colours":{"primary":"E78A4E","surface":"231a13","onSurface":"e8d5b7","error":"zzz"}}',
+      );
+    expect(theme('Hyprland')['theme'], {
+      'accent': '#e78a4e',
+      'background': '#231a13',
+      'foreground': '#e8d5b7',
+    });
+    // Settings › Look is Omarchy's: elsewhere the desktop's palette counts.
+    File('${temp.path}/.config/maprisma/settings.json')
+      ..parent.createSync(recursive: true)
+      ..writeAsStringSync('{"look": "adwaita"}');
+    expect(theme('Hyprland')['theme']['accent'], '#e78a4e');
+    scheme.writeAsStringSync('not json');
+    expect(theme('Hyprland')['theme'], <String, String>{});
+    File('${temp.path}/.config/kdeglobals').writeAsStringSync(
+      '[Colors:Window]\nBackgroundNormal=239,240,241\nForegroundNormal=35,38,41\n'
+      '[Colors:Selection]\nBackgroundNormal=61,174,233\n[General]\nAccentColor=300,1,1\n',
+    );
+    expect(theme('KDE')['theme'], {
+      'accent': '#3daee9',
+      'background': '#eff0f1',
+      'foreground': '#232629',
+      'selection': '#3daee9',
+    });
+    final cosmic = '${temp.path}/.config/cosmic';
+    File('$cosmic/com.system76.CosmicTheme.Mode/v1/is_dark')
+      ..parent.createSync(recursive: true)
+      ..writeAsStringSync('false');
+    final light = '$cosmic/com.system76.CosmicTheme.Light/v1';
+    Directory(light).createSync(recursive: true);
+    File('$light/accent').writeAsStringSync(
+      '(base: (red: 1.0, green: 0.5, blue: 0.0, alpha: 1.0), hover: (red: 0.0, green: 0.0, blue: 0.0))',
+    );
+    File('$light/background').writeAsStringSync(
+      '(base: (red: 0.98, green: 0.98, blue: 0.98, alpha: 1.0), on: (red: 0.1, green: 0.1, blue: 0.1, alpha: 1.0))',
+    );
+    for (final k in ['success', 'warning', 'destructive']) {
+      File('$light/$k').writeAsStringSync(
+        '(base: (red: 0.0, green: 0.0, blue: 0.0, alpha: 1.0))',
+      );
+    }
+    final t = theme('COSMIC')['theme'] as Map;
+    expect(
+      [t['accent'], t['background'], t['foreground']],
+      ['#ff8000', '#fafafa', '#1a1a1a'],
+    );
+    expect(theme('GNOME')['theme'], <String, String>{});
+  });
 }
 
 class _SwapPosix extends Posix {

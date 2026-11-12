@@ -149,7 +149,11 @@ class Service:
 
     def theme(self, settings: dict) -> dict:
         import desktop
-        if desktop.NAME != "omarchy" or settings_schema.value(settings, "look") != "omarchy":
+        if desktop.NAME != "omarchy":
+            # Settings › Look is Omarchy's; elsewhere the desktop's palette (desktop_palette.dart).
+            import desktop_generic
+            return desktop_generic.desktop_palette()
+        if settings_schema.value(settings, "look") != "omarchy":
             return {}
         return {key: value for key, value in desktop.theme_colors().items()
                 if isinstance(key, str) and isinstance(value, str) and re.fullmatch(r"#[0-9a-fA-F]{6}", value)}

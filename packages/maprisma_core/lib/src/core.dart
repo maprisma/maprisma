@@ -5102,9 +5102,11 @@ final class CoreService {
         return settings.snapshot();
       case 'app.theme':
         return {
+          // Settings › Look exists on Omarchy only; elsewhere the desktop's
+          // palette (empty where none is known).
           'theme':
-              settings.value(settings.load(), 'look') == 'omarchy' &&
-                  desktop.name == 'omarchy'
+              desktop.name != 'omarchy' ||
+                  settings.value(settings.load(), 'look') == 'omarchy'
               ? desktop.themeColors()
               : <String, String>{},
         };

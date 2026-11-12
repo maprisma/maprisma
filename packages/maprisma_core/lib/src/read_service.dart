@@ -174,7 +174,7 @@ final class ReadService {
         'language': settings.value(saved, 'language'),
         'settings': settings.snapshot(),
         'theme':
-            desktop.name == 'omarchy' &&
+            desktop.name != 'omarchy' ||
                 settings.value(saved, 'look') == 'omarchy'
             ? desktop.themeColors()
             : {},

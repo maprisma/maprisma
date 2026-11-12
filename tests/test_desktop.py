@@ -51,6 +51,37 @@ class GenericTest(unittest.TestCase):
             light = g.theme_colors()
         self.assertEqual((light["background"], light["accent"]), (g.LIGHT["background"], g.ACCENTS["blue"]))
 
+    def test_desktop_palette_of_the_sister_apps(self):
+        """desktop_palette.dart's reference: Maprisma Shell, Plasma, COSMIC; nothing elsewhere."""
+        with tempfile.TemporaryDirectory() as home:
+            env = lambda d: {"HOME": home, "XDG_CURRENT_DESKTOP": d}  # noqa: E731
+            scheme = Path(home, ".local/state/maprisma-shell/scheme.json")
+            scheme.parent.mkdir(parents=True)
+            scheme.write_text('{"colours":{"primary":"E78A4E","surface":"231a13","onSurface":"e8d5b7","error":"zzz"}}')
+            self.assertEqual(g.desktop_palette(env("Hyprland")),
+                             {"accent": "#e78a4e", "background": "#231a13", "foreground": "#e8d5b7"})
+            scheme.write_text("not json")
+            self.assertEqual(g.desktop_palette(env("Hyprland")), {})
+            Path(home, ".config").mkdir()
+            Path(home, ".config/kdeglobals").write_text(
+                "[Colors:Window]\nBackgroundNormal=239,240,241\nForegroundNormal=35,38,41\n"
+                "[Colors:Selection]\nBackgroundNormal=61,174,233\n[General]\nAccentColor=300,1,1\n")
+            self.assertEqual(g.desktop_palette(env("KDE")), {"accent": "#3daee9", "background": "#eff0f1",
+                                                             "foreground": "#232629", "selection": "#3daee9"})
+            cosmic = Path(home, ".config/cosmic")
+            (cosmic / "com.system76.CosmicTheme.Mode/v1").mkdir(parents=True)
+            (cosmic / "com.system76.CosmicTheme.Mode/v1/is_dark").write_text("false")
+            light = cosmic / "com.system76.CosmicTheme.Light/v1"
+            light.mkdir(parents=True)
+            (light / "accent").write_text("(base: (red: 1.0, green: 0.5, blue: 0.0, alpha: 1.0), hover: (red: 0.0))")
+            (light / "background").write_text("(base: (red: 0.98, green: 0.98, blue: 0.98, alpha: 1.0), "
+                                              "on: (red: 0.1, green: 0.1, blue: 0.1, alpha: 1.0))")
+            for key in ("success", "warning", "destructive"):
+                (light / key).write_text("(base: (red: 0.0, green: 0.0, blue: 0.0, alpha: 1.0))")
+            t = g.desktop_palette(env("COSMIC"))
+            self.assertEqual((t["accent"], t["background"], t["foreground"]), ("#ff8000", "#fafafa", "#1a1a1a"))
+            self.assertEqual(g.desktop_palette(env("GNOME")), {})
+
     def test_terminal_choice(self):
         found = {"cosmic-term": "/usr/bin/cosmic-term", "xterm": "/usr/bin/xterm"}     # COSMIC's own
         with mock.patch.object(g.shutil, "which", side_effect=found.get), mock.patch.dict(g.os.environ, {"TERMINAL": ""}):
