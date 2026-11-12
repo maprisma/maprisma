@@ -136,21 +136,29 @@ void main() {
   });
 
   test('small declared sizes cannot add up past the total budget', () {
-    // Five entries of 1 MiB - 1 each (under maxFile), each declared as 10
-    // bytes: the declared total passes, the real one (> 4 MiB) does not.
-    final real = maxFile - 1;
+    // Four honest entries fill the total budget up to 40 bytes; the fifth
+    // declares 10 bytes but inflates to almost 1 MiB. It must be cut off at
+    // the remaining 40 bytes while inflating ("too large"), not only after
+    // inflating its full output (which would be the header mismatch).
+    final full = maxFile - 10;
     final bomb = _zip([
-      for (var i = 0; i < 5; i++)
+      for (var i = 0; i < 4; i++)
         (
           name: 'agent-bomb/f$i',
-          body: _deflatedZeros(real),
+          body: _deflatedZeros(full),
           method: 8,
-          declared: 10,
+          declared: full,
         ),
+      (
+        name: 'agent-bomb/f4',
+        body: _deflatedZeros(maxFile - 1),
+        method: 8,
+        declared: 10,
+      ),
     ]);
     expect(
       () => store.unpack(bomb, '${temp.path}/staging'),
-      throwsA(isA<InstallError>()),
+      refused('too large'),
     );
   });
 
