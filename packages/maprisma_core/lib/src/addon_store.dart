@@ -242,7 +242,11 @@ List<_ZipEntry> _zipEntries(Uint8List data) {
   return entries;
 }
 
-List<int> _zipRead(Uint8List data, _ZipEntry entry) {
+/// One entry's bytes, at most [limit] of them: deflate is inflated in
+/// bounded steps and stops as soon as the real output passes the limit, so
+/// neither the sizes a zip declares nor its compression ratio decide how much
+/// memory a preview takes. The real size must also match the declared one.
+List<int> _zipRead(Uint8List data, _ZipEntry entry, int limit) {
   final view = ByteData.sublistView(data);
   final at = entry.header;
   if (at + 30 > data.length ||
@@ -257,10 +261,51 @@ List<int> _zipRead(Uint8List data, _ZipEntry entry) {
   if (start + entry.compressed > data.length) {
     throw InstallError('not a zip file');
   }
-  final raw = data.sublist(start, start + entry.compressed);
-  if (entry.method == 0) return raw;
-  if (entry.method == 8) return ZLibDecoder(raw: true).convert(raw);
-  throw InstallError('not a zip file');
+  if (entry.size > limit) throw InstallError('too large');
+  final List<int> body;
+  if (entry.method == 0) {
+    if (entry.compressed > limit) throw InstallError('too large');
+    body = Uint8List.sublistView(data, start, start + entry.compressed);
+  } else if (entry.method == 8) {
+    body = _inflateBounded(data, start, start + entry.compressed, limit);
+  } else {
+    throw InstallError('not a zip file');
+  }
+  if (body.length != entry.size) throw InstallError('not a zip file');
+  return body;
+}
+
+/// Raw deflate of data[start, end) inflated in input steps of 16 KiB, each
+/// drained in the filter's own bounded output chunks; InstallError('too
+/// large') once more than [limit] bytes come out.
+Uint8List _inflateBounded(Uint8List data, int start, int end, int limit) {
+  final filter = RawZLibFilter.inflateFilter(raw: true);
+  final out = BytesBuilder(copy: false);
+  void drain({bool last = false}) {
+    while (true) {
+      final List<int>? chunk;
+      try {
+        chunk = filter.processed(flush: last, end: last);
+      } on FormatException {
+        throw InstallError('not a zip file');
+      }
+      if (chunk == null) return;
+      if (out.length + chunk.length > limit) throw InstallError('too large');
+      out.add(chunk);
+    }
+  }
+
+  const step = 16 * 1024;
+  try {
+    for (var i = start; i < end; i += step) {
+      filter.process(data, i, math.min(i + step, end));
+      drain();
+    }
+    drain(last: true);
+  } on FormatException {
+    throw InstallError('not a zip file');
+  }
+  return out.takeBytes();
 }
 
 final class AddonStore {
@@ -383,6 +428,7 @@ final class AddonStore {
       throw InstallError('not one add-on folder');
     }
     final aid = ids.first;
+    var written = 0;
     for (final entry in entries) {
       if (entry.isDir) continue;
       final path = p.join(target, entry.name);
@@ -390,8 +436,8 @@ final class AddonStore {
       if (!folder.existsSync()) {
         folder.createSync(recursive: true);
       }
-      final body = _zipRead(data, entry);
-      if (body.length > maxFile) throw InstallError('too large');
+      final body = _zipRead(data, entry, math.min(maxFile, maxTotal - written));
+      written += body.length;
       final fd = posix.openAt(
         -100,
         path,
