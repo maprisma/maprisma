@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:maprisma/window_popup.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -22,4 +24,25 @@ void main() {
     expect(seen, isTrue);
     expect(PopupGuard.busy, isFalse);
   });
+
+  test(
+    'Hyprland: XDG_CURRENT_DESKTOP decides; a stale signature needs its socket',
+    () {
+      final dir = Directory.systemTemp.createTempSync('popup-hypr');
+      addTearDown(() => dir.deleteSync(recursive: true));
+      final live = {
+        'HYPRLAND_INSTANCE_SIGNATURE': 'abc',
+        'XDG_RUNTIME_DIR': '${dir.path}/run',
+      };
+      expect(hyprlandSession({'XDG_CURRENT_DESKTOP': 'Hyprland'}), isTrue);
+      expect(hyprlandSession(live), isFalse);
+      File('${dir.path}/run/hypr/abc/.socket.sock').createSync(recursive: true);
+      expect(hyprlandSession(live), isTrue);
+      expect(hyprlandSession({...live, 'XDG_CURRENT_DESKTOP': 'KDE'}), isFalse);
+      expect(
+        hyprlandSession({...live, 'XDG_CURRENT_DESKTOP': 'COSMIC'}),
+        isFalse,
+      );
+    },
+  );
 }

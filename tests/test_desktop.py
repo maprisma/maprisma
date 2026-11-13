@@ -94,6 +94,13 @@ class GenericTest(unittest.TestCase):
             (cosmic / "com.system76.CosmicTheme.Light/v2/accent").write_text(
                 "(base: (red: 0.0, green: 0.5, blue: 1.0, alpha: 1.0))")
             self.assertEqual(g.desktop_palette(env("COSMIC"))["accent"], "#0080ff")
+            # as COSMIC 1.0 writes v2: colours as "#RRGGBBAA" strings
+            (cosmic / "com.system76.CosmicTheme.Light/v2/accent").write_text(
+                '(\n    base: "#4DD6C8FF",\n    on: "#000000FF",\n)')
+            (cosmic / "com.system76.CosmicTheme.Light/v2/background").write_text(
+                '(\n    base: "#1A2234FF",\n    component: (\n        on: "#000000FF",\n    ),\n    on: "#CDD6EEFF",\n)')
+            t = g.desktop_palette(env("COSMIC"))
+            self.assertEqual((t["accent"], t["background"], t["foreground"]), ("#4dd6c8", "#1a2234", "#cdd6ee"))
             self.assertEqual(g.desktop_palette(env("GNOME")), {})
 
     def test_terminal_choice(self):

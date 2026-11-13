@@ -229,6 +229,10 @@ def ron_field(text: str, key: str):
 def ron_color(value):
     if value is None:
         return None
+    # COSMIC 1.x (schema v2) writes colours as "#RRGGBBAA" strings.
+    m = re.fullmatch(r'"?#([0-9a-fA-F]{6})(?:[0-9a-fA-F]{2})?"?', value.strip())
+    if m:
+        return "#" + m.group(1).lower()
 
     def part(name):
         m = re.search(name + r":\s*([0-9.eE+-]+)", value)

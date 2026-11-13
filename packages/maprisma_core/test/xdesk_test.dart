@@ -2,7 +2,8 @@ import 'dart:io';
 
 import 'package:maprisma_core/src/desktop.dart' show otherSession;
 import 'package:maprisma_core/src/desktop_palette.dart';
-import 'package:maprisma_core/src/hyprland.dart' show WindowRounding;
+import 'package:maprisma_core/src/hyprland.dart'
+    show WindowRounding, hyprlandSession, placePopup;
 import 'package:test/test.dart';
 
 /// COSMIC and Plasma next to Hyprland: which desktop adapter, and the
@@ -66,5 +67,44 @@ void main() {
       ..parent.createSync(recursive: true)
       ..writeAsStringSync('v2');
     expect(cosmicConfig(home.path, 'C', 'k', systemRoot: system), 'v2');
+  });
+
+  test(
+    'a stale Hyprland signature (left in systemd\'s environment) is no Hyprland',
+    () {
+      final dir = Directory.systemTemp.createTempSync('xdesk-hypr');
+      addTearDown(() => dir.deleteSync(recursive: true));
+      final kde = {
+        'HOME': dir.path,
+        'XDG_CURRENT_DESKTOP': 'KDE',
+        'HYPRLAND_INSTANCE_SIGNATURE': 'abc',
+        'XDG_RUNTIME_DIR': '${dir.path}/run',
+      };
+      File('${dir.path}/run/hypr/abc/.socket.sock').createSync(recursive: true);
+      expect(hyprlandSession(kde), isFalse);
+      // KDE's corners, not hyprctl's; and no popup placement
+      expect(WindowRounding(kde).value, 8);
+      expect(placePopup(kde, 1, 100, 100)['reason'], 'not Hyprland');
+      final unset = {...kde}..remove('XDG_CURRENT_DESKTOP');
+      expect(hyprlandSession(unset), isTrue, reason: 'its socket is there');
+      File('${dir.path}/run/hypr/abc/.socket.sock').deleteSync();
+      expect(hyprlandSession(unset), isFalse);
+      expect(
+        hyprlandSession({
+          'XDG_CURRENT_DESKTOP': 'Hyprland',
+          'HYPRLAND_INSTANCE_SIGNATURE': 'x',
+        }),
+        isTrue,
+      );
+    },
+  );
+
+  test('ronColor reads COSMIC 1.x\'s "#RRGGBBAA" strings too', () {
+    expect(ronColor('"#4DD6C8FF"'), '#4dd6c8');
+    expect(
+      ronColor('(red: 1.0, green: 0.5, blue: 0.0, alpha: 1.0)'),
+      '#ff8000',
+    );
+    expect(ronColor('"#4DD"'), isNull);
   });
 }

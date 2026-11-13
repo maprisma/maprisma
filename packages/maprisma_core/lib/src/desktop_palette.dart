@@ -244,6 +244,11 @@ String? ronField(String text, String key) {
 /// A RON colour `(red: 0.1, green: …, blue: …)` as #rrggbb.
 String? ronColor(String? value) {
   if (value == null) return null;
+  // COSMIC 1.x (schema v2) writes colours as "#RRGGBBAA" strings.
+  final hexString = RegExp(
+    r'^"?#([0-9a-fA-F]{6})(?:[0-9a-fA-F]{2})?"?$',
+  ).firstMatch(value.trim());
+  if (hexString != null) return '#${hexString[1]!.toLowerCase()}';
   int? part(String name) {
     final m = RegExp('$name:\\s*([0-9.eE+-]+)').firstMatch(value);
     final v = m == null ? null : double.tryParse(m[1]!);

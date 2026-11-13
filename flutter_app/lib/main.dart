@@ -866,12 +866,13 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     if (sizes == null || _popup) return;
     // Hyprland reports every window as maximised, floating ones too: there
     // only full screen means the size isn't the user's.
-    final hyprland =
-        (Platform.environment['HYPRLAND_INSTANCE_SIGNATURE'] ?? '').isNotEmpty;
+    final hyprland = hyprlandSession(Platform.environment);
     if ((!hyprland && await windowManager.isMaximized()) ||
         await windowManager.isFullScreen()) {
       return;
     }
+    // Maprisma Tiling on KDE sizes the window without GTK knowing.
+    if (tiledByMaprismaTiling('com.maprisma.Maprisma')) return;
     sizes.resized(await windowManager.getSize());
   }
 

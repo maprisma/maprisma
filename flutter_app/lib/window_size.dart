@@ -3,6 +3,65 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' show Size;
 
+/// Maprisma Tiling (the KWin script) sizes the windows it tiles itself, and no tiled state reaches
+/// GTK (it only moves the frame), so the runner's "free" can't see it: on Plasma with the script
+/// on, only an app it always floats (its `floatingClasses`, by default the Launcher) keeps a size.
+/// [environment] and [systemData] are for tests.
+bool tiledByMaprismaTiling(
+  String appId, {
+  Map<String, String>? environment,
+  String systemData = '/usr/share',
+}) {
+  final env = environment ?? Platform.environment;
+  final names = (env['XDG_CURRENT_DESKTOP'] ?? '').toUpperCase().split(':');
+  if (!names.contains('KDE')) return false;
+  final home = env['HOME'] ?? '/';
+  String xdg(String key, String fallback) {
+    final v = env[key] ?? '';
+    return v.startsWith('/') ? v : '$home/$fallback';
+  }
+
+  String text;
+  try {
+    final file = File('${xdg('XDG_CONFIG_HOME', '.config')}/kwinrc');
+    text = file.lengthSync() > 1024 * 1024 ? '' : file.readAsStringSync();
+  } on Object {
+    text = '';
+  }
+  String? value(String group, String key) {
+    String? current, found;
+    for (final raw in text.split('\n')) {
+      final line = raw.trim();
+      if (line.startsWith('[') && line.endsWith(']')) {
+        current = line.substring(1, line.length - 1);
+      } else if (current == group) {
+        final eq = line.indexOf('=');
+        if (eq > 0 && line.substring(0, eq).trim() == key) {
+          found = line.substring(eq + 1).trim();
+        }
+      }
+    }
+    return found;
+  }
+
+  final enabled = value('Plugins', 'maprisma-tilingEnabled');
+  if (enabled == 'false') return false;
+  // Not switched either way: on by default once installed.
+  if (enabled != 'true' &&
+      !Directory(
+        '${xdg('XDG_DATA_HOME', '.local/share')}/kwin/scripts/maprisma-tiling',
+      ).existsSync() &&
+      !Directory('$systemData/kwin/scripts/maprisma-tiling').existsSync()) {
+    return false;
+  }
+  final floating =
+      (value('Script-maprisma-tiling', 'floatingClasses') ??
+              'com.maprisma.Launcher')
+          .split(',')
+          .map((c) => c.trim().toLowerCase());
+  return !floating.contains(appId.toLowerCase());
+}
+
 /// `<XDG_CONFIG_HOME or ~/.config>/maprisma/window.json` (the core's
 /// AppIdentity.configDir).
 String windowSizePath(Map<String, String> env) {

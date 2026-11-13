@@ -54,4 +54,28 @@ void main() {
     File(path).writeAsStringSync('not json');
     expect(store.load(), isNull);
   });
+
+  test(
+    'Maprisma Tiling on KDE sizes the window itself: no size of its is saved',
+    () {
+      final home = Directory.systemTemp.createTempSync('ws-kwin');
+      addTearDown(() => home.deleteSync(recursive: true));
+      bool tiled(String desktop) => tiledByMaprismaTiling(
+        'com.maprisma.Maprisma',
+        environment: {'HOME': home.path, 'XDG_CURRENT_DESKTOP': desktop},
+        systemData: '${home.path}/none',
+      );
+      expect(tiled('KDE'), isFalse, reason: 'not installed');
+      File('${home.path}/.config/kwinrc')
+        ..createSync(recursive: true)
+        ..writeAsStringSync('[Plugins]\nmaprisma-tilingEnabled=true\n');
+      expect(tiled('KDE'), isTrue);
+      expect(tiled('COSMIC'), isFalse);
+      File('${home.path}/.config/kwinrc').writeAsStringSync(
+        '[Plugins]\nmaprisma-tilingEnabled=true\n'
+        '[Script-maprisma-tiling]\nfloatingClasses=com.maprisma.Maprisma\n',
+      );
+      expect(tiled('KDE'), isFalse, reason: 'it always floats');
+    },
+  );
 }

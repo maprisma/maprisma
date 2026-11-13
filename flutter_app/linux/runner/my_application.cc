@@ -6,6 +6,7 @@
 #endif
 
 #include "flutter/generated_plugin_registrant.h"
+#include "toggle_rule.h"
 
 struct _MyApplication {
   GtkApplication parent_instance;
@@ -13,6 +14,11 @@ struct _MyApplication {
   // "maprisma/window": tells the app its window is shown again (popup mode
   // places it then).
   FlMethodChannel* window_channel;
+  // When the window last hid by itself (popup mode: a click elsewhere, which
+  // the bar click also is), so the toggle that click sends leaves it hidden.
+  gint64 hidden_at;
+  // The toggle is hiding the window (that hide is not "by itself").
+  gboolean toggling;
 };
 
 G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
@@ -48,8 +54,16 @@ static void first_frame_cb(MyApplication* self, FlView* view) {
   notify_shown(self);
 }
 
-// The "toggle" action (maprisma --toggle, the bar icon): the window hides
-// when it is shown and focused, else it is shown and focused.
+static void window_hidden_cb(GtkWidget* widget, gpointer user_data) {
+  MyApplication* self = MY_APPLICATION(user_data);
+  self->hidden_at = self->toggling ? 0 : g_get_monotonic_time();
+}
+
+// The "toggle" action (maprisma --toggle, the bar icon, a shortcut): a shown
+// window hides, focused or not (on COSMIC a panel click takes the focus
+// first, and a window behind others is shown too: the family's rule); a
+// hidden one is shown and focused. A popup that just hid itself on the bar
+// click stays hidden instead of coming straight back.
 static void toggle_activated(GSimpleAction* action, GVariant* parameter,
                              gpointer user_data) {
   MyApplication* self = MY_APPLICATION(user_data);
@@ -59,11 +73,17 @@ static void toggle_activated(GSimpleAction* action, GVariant* parameter,
     g_application_activate(G_APPLICATION(self));
     return;
   }
-  if (gtk_widget_get_visible(GTK_WIDGET(window)) &&
-      gtk_window_is_active(window)) {
+  const MaprismaToggle step = maprisma_toggle_step(
+      gtk_widget_get_visible(GTK_WIDGET(window)), self->hidden_at,
+      g_get_monotonic_time());
+  self->hidden_at = 0;
+  if (step == MAPRISMA_TOGGLE_HIDE) {
+    self->toggling = TRUE;
     gtk_widget_hide(GTK_WIDGET(window));
+    self->toggling = FALSE;
     return;
   }
+  if (step == MAPRISMA_TOGGLE_STAY) return;
   gtk_widget_show(GTK_WIDGET(window));
   gtk_window_present(window);
   notify_shown(self);
@@ -110,6 +130,7 @@ static void my_application_activate(GApplication* application) {
   }
 
   gtk_window_set_default_size(window, 1280, 720);
+  g_signal_connect(window, "hide", G_CALLBACK(window_hidden_cb), self);
 
   g_autoptr(FlDartProject) project = fl_dart_project_new();
   fl_dart_project_set_dart_entrypoint_arguments(

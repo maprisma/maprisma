@@ -100,6 +100,34 @@ String? _hyprctl(List<String> args, Map<String, String> env) {
   }
 }
 
+/// Whether this is a Hyprland session. XDG_CURRENT_DESKTOP decides when it
+/// is set; only without it does HYPRLAND_INSTANCE_SIGNATURE count, and only
+/// when that Hyprland's socket is there
+/// (`$XDG_RUNTIME_DIR/hypr/<signature>/.socket.sock`): after a Hyprland session the variable stays in the systemd
+/// user environment, so a COSMIC or KDE session sees a stale one.
+bool hyprlandSession(Map<String, String> env) {
+  final names = (env['XDG_CURRENT_DESKTOP'] ?? '')
+      .toLowerCase()
+      .split(':')
+      .where((n) => n.trim().isNotEmpty)
+      .toList();
+  if (names.isNotEmpty) {
+    // hyprctl needs the signature too
+    return names.contains('hyprland') &&
+        (env['HYPRLAND_INSTANCE_SIGNATURE'] ?? '').isNotEmpty;
+  }
+  final signature = env['HYPRLAND_INSTANCE_SIGNATURE'] ?? '';
+  final runtime = env['XDG_RUNTIME_DIR'] ?? '';
+  if (signature.isEmpty ||
+      signature.contains('/') ||
+      signature.startsWith('.') ||
+      !runtime.startsWith('/')) {
+    return false;
+  }
+  return FileSystemEntity.typeSync('$runtime/hypr/$signature/.socket.sock') !=
+      FileSystemEntityType.notFound;
+}
+
 /// Places this process's window as the popup; what was done.
 Map<String, dynamic> placePopup(
   Map<String, String> env,
@@ -107,7 +135,7 @@ Map<String, dynamic> placePopup(
   int width,
   int height,
 ) {
-  if ((env['HYPRLAND_INSTANCE_SIGNATURE'] ?? '').isEmpty) {
+  if (!hyprlandSession(env)) {
     return {'placed': false, 'reason': 'not Hyprland'};
   }
   List read(String what) {
@@ -166,7 +194,7 @@ final class WindowRounding {
     final now = DateTime.now();
     if (_read != null && now.difference(_read!).inSeconds < 30) return _value;
     _read = now;
-    if ((env['HYPRLAND_INSTANCE_SIGNATURE'] ?? '').isEmpty) {
+    if (!hyprlandSession(env)) {
       // COSMIC's theme corners, Plasma's 8 (the family's rule), else none.
       return _value = desktopRounding(env);
     }

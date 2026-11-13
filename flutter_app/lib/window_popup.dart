@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/services.dart';
 
 /// Popup mode (plan-flutter step 5): on Omarchy the window sits floating at
@@ -37,3 +39,27 @@ abstract final class PopupGuard {
 /// The runner's channel: "shown" when the window is shown again (first
 /// frame, a second launch, --toggle).
 const windowChannel = MethodChannel('maprisma/window');
+
+/// Whether this is a Hyprland session (the same rule as the core's
+/// hyprlandSession in hyprland.dart): XDG_CURRENT_DESKTOP decides when it is
+/// set; only without it does HYPRLAND_INSTANCE_SIGNATURE count, and only when
+/// that Hyprland's socket is there. A stale signature stays in the systemd
+/// user environment after a Hyprland session.
+bool hyprlandSession(Map<String, String> env) {
+  final names = (env['XDG_CURRENT_DESKTOP'] ?? '')
+      .toLowerCase()
+      .split(':')
+      .where((n) => n.trim().isNotEmpty)
+      .toList();
+  if (names.isNotEmpty) return names.contains('hyprland');
+  final signature = env['HYPRLAND_INSTANCE_SIGNATURE'] ?? '';
+  final runtime = env['XDG_RUNTIME_DIR'] ?? '';
+  if (signature.isEmpty ||
+      signature.contains('/') ||
+      signature.startsWith('.') ||
+      !runtime.startsWith('/')) {
+    return false;
+  }
+  return FileSystemEntity.typeSync('$runtime/hypr/$signature/.socket.sock') !=
+      FileSystemEntityType.notFound;
+}
