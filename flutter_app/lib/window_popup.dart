@@ -9,8 +9,15 @@ import 'package:flutter/services.dart';
 const popupSize = (width: 1100, height: 760);
 
 /// The window mode in effect: `window_mode` is auto, popup or window; only
-/// popup floats, auto is an ordinary window that the desktop tiles.
-bool popupWanted(String? mode, String desktop) => mode == 'popup';
+/// popup floats, auto is an ordinary window that the desktop tiles. The
+/// popup exists on Omarchy only (the core places it there through Hyprland);
+/// on COSMIC, Plasma or any other desktop the window stays an ordinary,
+/// decorated one that remembers its size.
+bool popupWanted(String? mode, String desktop) =>
+    mode == 'popup' && popupAvailable(desktop);
+
+/// Whether the desktop can show the popup under the bar.
+bool popupAvailable(String desktop) => desktop == 'omarchy';
 
 /// While a dialog of another window runs (the file chooser), the popup loses
 /// the focus on purpose and must stay open.

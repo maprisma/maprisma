@@ -33,6 +33,7 @@ class SettingsView extends StatelessWidget {
     this.onCheckMcp,
     this.changes,
     this.windowRounding,
+    this.popupAvailable = true,
     this.onUndoChange,
     this.unitName = '',
     this.client,
@@ -79,6 +80,10 @@ class SettingsView extends StatelessWidget {
 
   /// Hyprland's window rounding, for Corners "Like windows" (null: unknown).
   final int? windowRounding;
+
+  /// Whether this desktop has the popup under the bar (Omarchy only); else
+  /// the choice is shown disabled with the reason.
+  final bool popupAvailable;
   final ValueChanged<String>? onUndoChange;
 
   /// The provider watcher's user service, as the user sees it in systemctl.
@@ -667,7 +672,13 @@ class SettingsView extends StatelessWidget {
             ])
               DropdownMenuItem(
                 value: value,
-                child: Text(_t(label), overflow: TextOverflow.ellipsis),
+                enabled: value != 'popup' || popupAvailable,
+                child: Text(
+                  value == 'popup' && !popupAvailable
+                      ? _t('A popup under the bar (only on Omarchy)')
+                      : _t(label),
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
           ],
           onChanged: busy
@@ -732,7 +743,7 @@ class SettingsView extends StatelessWidget {
         const SizedBox(height: 8),
         Text(
           _t(
-            "Corners of the window, its cards, the map's boxes and every control (buttons, choice boxes, fields). “Like windows” follows Hyprland's window rounding.",
+            "Corners of the window, its cards, the map's boxes and every control (buttons, choice boxes, fields). “Like windows” follows the desktop's window corners.",
           ),
         ),
         const SizedBox(height: AppSpace.md),

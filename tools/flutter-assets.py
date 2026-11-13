@@ -46,11 +46,12 @@ KEYS = (
     "Like windows ({0} px)",
     "Rounded",
     "Square",
-    "Corners of the window, its cards, the map's boxes and every control (buttons, choice boxes, fields). “Like windows” follows Hyprland's window rounding.",
+    "Corners of the window, its cards, the map's boxes and every control (buttons, choice boxes, fields). “Like windows” follows the desktop's window corners.",
     # Popup mode on Omarchy.
     "Window",
     "Automatic: a popup under the bar on Omarchy",
     "A popup under the bar",
+    "A popup under the bar (only on Omarchy)",
     "A normal window",
     "The popup sits at the top right under the bar and closes with Esc or a click elsewhere; the bar icon or starting the app again brings it back. A change applies the next time the window opens.",
     # Updating an agent that runs now.

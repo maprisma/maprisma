@@ -3443,5 +3443,6 @@
  "Rounded ({0} px)": "Afgerond ({0} px)",
  "The screenshot could not be saved: {0}": "De schermafbeelding kon niet worden bewaard: {0}",
  "The note could not be saved: {0}": "De notitie kon niet worden bewaard: {0}",
- "Corners of the window, its cards, the map's boxes and every control (buttons, choice boxes, fields). “Like windows” follows Hyprland's window rounding.": "Hoeken van het venster, zijn kaarten, de vakken van de kaart en alle bedieningselementen (knoppen, keuzelijsten, velden). ‘Zoals vensters’ volgt de vensterafronding van Hyprland."
+ "Corners of the window, its cards, the map's boxes and every control (buttons, choice boxes, fields). “Like windows” follows the desktop's window corners.": "Hoeken van het venster, zijn kaarten, de vakken van de kaart en elk bedieningselement (knoppen, keuzelijsten, velden). ‘Zoals vensters’ volgt de vensterhoeken van het bureaublad.",
+ "A popup under the bar (only on Omarchy)": "Een pop-up onder de balk (alleen op Omarchy)"
 }

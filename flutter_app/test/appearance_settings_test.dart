@@ -87,6 +87,50 @@ void main() {
     },
   );
   testWidgets(
+    'off Omarchy the popup under the bar is shown disabled with the reason',
+    (tester) async {
+      Future<void> show(bool available) => tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SettingsView(
+              key: ValueKey(available),
+              section: 'all',
+              settings: const {
+                'map_layers': ['agents'],
+                'window_mode': 'popup',
+              },
+              popupAvailable: available,
+              busy: false,
+              tr: (s) => s,
+              onUpdate: (_) async {},
+              onBack: () {},
+            ),
+          ),
+        ),
+      );
+      DropdownMenuItem<String> popupItem() => tester
+          .widget<DropdownButton<String>>(
+            find.byWidgetPredicate(
+              (w) =>
+                  w is DropdownButton<String> &&
+                  (w.items ?? const []).any((i) => i.value == 'popup'),
+            ),
+          )
+          .items!
+          .firstWhere((i) => i.value == 'popup');
+      await show(false);
+      expect(popupItem().enabled, isFalse);
+      expect(
+        find.text('A popup under the bar (only on Omarchy)'),
+        findsWidgets,
+      );
+      await show(true);
+      expect(popupItem().enabled, isTrue);
+      expect(find.text('A popup under the bar'), findsWidgets);
+      expect(tester.takeException(), isNull);
+    },
+  );
+  testWidgets(
     'theme previews respond to platform brightness and are disabled while saving',
     (tester) async {
       await tester.pumpWidget(

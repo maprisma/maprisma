@@ -5767,6 +5767,9 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                                       onCheckMcp: () => _checkMcp(force: true),
                                       changes: _changes,
                                       windowRounding: _windowRounding,
+                                      popupAvailable: popupAvailable(
+                                        _desktopName,
+                                      ),
                                       onUndoChange: _undoChange,
                                       unitName: _shortName == null
                                           ? ''
