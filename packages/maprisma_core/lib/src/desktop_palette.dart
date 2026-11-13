@@ -133,23 +133,65 @@ Map<String, String?> kdePalette(String text) {
   };
 }
 
-/// COSMIC's theme (Dark or Light by its Mode), from the user's config, else
-/// the system's defaults.
-Map<String, String?> cosmicPalette(String configHome) {
-  String? config(String component, String key) {
-    for (final base in [p.join(configHome, 'cosmic'), '/usr/share/cosmic']) {
-      final text = _read(p.join(base, component, 'v1', key), 256 * 1024);
+/// A COSMIC config entry from the user's config, else the system's
+/// defaults; in each the newest schema first (COSMIC 1.x keeps its themes in
+/// `v2`, leaving `v1` empty or stale; the Mode is still `v1`).
+String? cosmicConfig(
+  String configHome,
+  String component,
+  String key, {
+  String systemRoot = '/usr/share/cosmic',
+}) {
+  for (final base in [p.join(configHome, 'cosmic'), systemRoot]) {
+    for (final version in const ['v2', 'v1']) {
+      final text = _read(p.join(base, component, version, key), 256 * 1024);
       if (text != null) return text;
     }
-    return null;
   }
+  return null;
+}
 
-  final dark =
-      (config('com.system76.CosmicTheme.Mode', 'is_dark') ?? 'true').trim() !=
-      'false';
-  final theme = dark
-      ? 'com.system76.CosmicTheme.Dark'
-      : 'com.system76.CosmicTheme.Light';
+/// The COSMIC theme in use: Dark or Light by its Mode.
+String _cosmicTheme(String? Function(String component, String key) config) =>
+    (config('com.system76.CosmicTheme.Mode', 'is_dark') ?? 'true').trim() !=
+        'false'
+    ? 'com.system76.CosmicTheme.Dark'
+    : 'com.system76.CosmicTheme.Light';
+
+/// The desktop's window corners where Hyprland does not tell them (the
+/// maprisma-layout table): COSMIC's `corner_radii.radius_s`, 8 on Plasma,
+/// null elsewhere.
+int? desktopRounding(
+  Map<String, String> env, {
+  String systemRoot = '/usr/share/cosmic',
+}) {
+  final names = (env['XDG_CURRENT_DESKTOP'] ?? '').toUpperCase().split(':');
+  if (names.contains('KDE')) return 8;
+  if (!names.contains('COSMIC')) return null;
+  final x = env['XDG_CONFIG_HOME'];
+  final configHome = x != null && p.isAbsolute(x)
+      ? x
+      : p.join(env['HOME'] ?? '', '.config');
+  String? config(String component, String key) =>
+      cosmicConfig(configHome, component, key, systemRoot: systemRoot);
+  final radii = config(_cosmicTheme(config), 'corner_radii');
+  final small = radii == null ? null : ronField(radii, 'radius_s');
+  final first = small == null
+      ? null
+      : RegExp(r'([0-9.]+)').firstMatch(small)?[1];
+  final value = first == null ? null : double.tryParse(first)?.round();
+  return (value ?? 8).clamp(0, 24);
+}
+
+/// COSMIC's theme (Dark or Light by its Mode), from the user's config, else
+/// the system's defaults.
+Map<String, String?> cosmicPalette(
+  String configHome, {
+  String systemRoot = '/usr/share/cosmic',
+}) {
+  String? config(String component, String key) =>
+      cosmicConfig(configHome, component, key, systemRoot: systemRoot);
+  final theme = _cosmicTheme(config);
   String? field(String key, String name) {
     final text = config(theme, key);
     return text == null ? null : ronColor(ronField(text, name));

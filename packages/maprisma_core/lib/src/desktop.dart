@@ -120,12 +120,25 @@ const terminals = [
   ('xterm', ['-e']),
 ];
 
+/// desktop.other_session: XDG_CURRENT_DESKTOP names a desktop and none of
+/// its names is Hyprland (a COSMIC or Plasma session on a PC that also has
+/// Omarchy); unset says nothing (a user service may not see the variable).
+bool otherSession(Map<String, String> env) {
+  final names = (env['XDG_CURRENT_DESKTOP'] ?? '')
+      .toUpperCase()
+      .split(':')
+      .where((n) => n.isNotEmpty)
+      .toList();
+  return names.isNotEmpty && !names.contains('HYPRLAND');
+}
+
 Desktop detectDesktop(AppIdentity identity, Posix posix) {
   final env = identity.environment;
   final wanted = env['MAPRISMA_DESKTOP'];
   final omarchy =
       wanted == 'omarchy' ||
       wanted != 'generic' &&
+          !otherSession(env) &&
           Directory(
             env['OMARCHY_PATH']?.isNotEmpty == true
                 ? env['OMARCHY_PATH']!

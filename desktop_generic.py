@@ -175,10 +175,12 @@ def kde_palette(text: str) -> dict:
 
 def cosmic_palette(config_home: str) -> dict:
     def config(component, key):
+        # The newest schema first in each: COSMIC 1.x keeps its themes in v2 (v1 empty or stale).
         for base in (os.path.join(config_home, "cosmic"), "/usr/share/cosmic"):
-            text = _read_small(os.path.join(base, component, "v1", key), 256 * 1024)
-            if text is not None:
-                return text
+            for version in ("v2", "v1"):
+                text = _read_small(os.path.join(base, component, version, key), 256 * 1024)
+                if text is not None:
+                    return text
         return None
 
     dark = (config("com.system76.CosmicTheme.Mode", "is_dark") or "true").strip() != "false"

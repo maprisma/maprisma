@@ -8,7 +8,9 @@ desktop offers and their usage records.
 Two implementations: desktop_omarchy (Omarchy, Hyprland) and desktop_generic
 (any other desktop: GNOME, KDE, …; Maprisma). current() picks one at start:
 MAPRISMA_DESKTOP=omarchy|generic decides when set (for testing), else Omarchy
-when its files are there (/usr/share/omarchy or $OMARCHY_PATH), else generic.
+when its files are there (/usr/share/omarchy or $OMARCHY_PATH) and the session
+is not another desktop's (XDG_CURRENT_DESKTOP naming COSMIC, KDE, … but not
+Hyprland: Omarchy with Plasma installed beside it), else generic.
 
 App name, app id and configuration paths come from identity.py. The facade also
 decides whether this edition needs the legacy plugin launcher entry.
@@ -77,8 +79,17 @@ def detect(environ=None) -> str:
     if wanted in ("omarchy", "generic"):
         return wanted
     # Omarchy's own folder is enough: the watcher service (systemd --user) may not see Hyprland's variables.
+    if other_session(environ):
+        return "generic"
     omarchy = Path(environ.get("OMARCHY_PATH") or OMARCHY_ROOT)
     return "omarchy" if omarchy.is_dir() else "generic"
+
+
+def other_session(environ) -> bool:
+    """Whether XDG_CURRENT_DESKTOP names a desktop and none of its names is Hyprland (a COSMIC or Plasma
+    session on a PC that also has Omarchy); unset says nothing."""
+    names = [n for n in environ.get("XDG_CURRENT_DESKTOP", "").upper().split(":") if n]
+    return bool(names) and "HYPRLAND" not in names
 
 
 _current = None

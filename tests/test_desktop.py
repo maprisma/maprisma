@@ -20,6 +20,15 @@ class DetectTest(unittest.TestCase):
         self.assertEqual(desktop.detect({"OMARCHY_PATH": "/nowhere/omarchy"}), "generic")
         self.assertEqual(desktop.detect({"MAPRISMA_DESKTOP": "kde", "OMARCHY_PATH": "/nowhere"}), "generic")
 
+    def test_omarchy_installed_but_another_session(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            for session in ("COSMIC", "KDE", "GNOME:Plasma"):
+                self.assertEqual(desktop.detect({"OMARCHY_PATH": tmp, "XDG_CURRENT_DESKTOP": session}), "generic")
+            for session in ("Hyprland", "hyprland:omarchy", ""):
+                self.assertEqual(desktop.detect({"OMARCHY_PATH": tmp, "XDG_CURRENT_DESKTOP": session}), "omarchy")
+            self.assertEqual(desktop.detect({"OMARCHY_PATH": tmp, "XDG_CURRENT_DESKTOP": "KDE",
+                                             "MAPRISMA_DESKTOP": "omarchy"}), "omarchy")
+
     def test_both_implement_the_whole_interface(self):
         names = [line.split()[0].split("(")[0] for line in desktop.__doc__.split("The interface")[1].splitlines()
                  if line.startswith("    ") and line.split()[0][0].islower() and "(" in line.split()[0]
@@ -80,6 +89,11 @@ class GenericTest(unittest.TestCase):
                 (light / key).write_text("(base: (red: 0.0, green: 0.0, blue: 0.0, alpha: 1.0))")
             t = g.desktop_palette(env("COSMIC"))
             self.assertEqual((t["accent"], t["background"], t["foreground"]), ("#ff8000", "#fafafa", "#1a1a1a"))
+            # COSMIC 1.x: the theme in v2 wins over a stale v1.
+            (cosmic / "com.system76.CosmicTheme.Light/v2").mkdir(parents=True)
+            (cosmic / "com.system76.CosmicTheme.Light/v2/accent").write_text(
+                "(base: (red: 0.0, green: 0.5, blue: 1.0, alpha: 1.0))")
+            self.assertEqual(g.desktop_palette(env("COSMIC"))["accent"], "#0080ff")
             self.assertEqual(g.desktop_palette(env("GNOME")), {})
 
     def test_terminal_choice(self):

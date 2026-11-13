@@ -647,6 +647,13 @@ void main() {
       [t['accent'], t['background'], t['foreground']],
       ['#ff8000', '#fafafa', '#1a1a1a'],
     );
+    // COSMIC 1.x keeps the theme in v2: it wins over a stale v1.
+    File('$cosmic/com.system76.CosmicTheme.Light/v2/accent')
+      ..parent.createSync(recursive: true)
+      ..writeAsStringSync(
+        '(base: (red: 0.0, green: 0.5, blue: 1.0, alpha: 1.0))',
+      );
+    expect((theme('COSMIC')['theme'] as Map)['accent'], '#0080ff');
     expect(theme('GNOME')['theme'], <String, String>{});
   });
 }

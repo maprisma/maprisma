@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'desktop.dart' show whichIn;
+import 'desktop_palette.dart' show desktopRounding;
 
 /// The app's popup mode on Omarchy (plan-flutter step 5): its own window,
 /// floated by Hyprland at the top right under the bar, the way the plugins'
@@ -153,7 +154,8 @@ int? parseRounding(String text) {
   }
 }
 
-/// desktop_omarchy.window_rounding, read at most every 30 seconds.
+/// desktop_omarchy.window_rounding, read at most every 30 seconds; off
+/// Hyprland the desktop's own corners (desktop_palette.desktopRounding).
 final class WindowRounding {
   WindowRounding(this.env);
   final Map<String, String> env;
@@ -165,7 +167,8 @@ final class WindowRounding {
     if (_read != null && now.difference(_read!).inSeconds < 30) return _value;
     _read = now;
     if ((env['HYPRLAND_INSTANCE_SIGNATURE'] ?? '').isEmpty) {
-      return _value = null;
+      // COSMIC's theme corners, Plasma's 8 (the family's rule), else none.
+      return _value = desktopRounding(env);
     }
     final text = _hyprctl(['getoption', 'decoration:rounding', '-j'], env);
     return _value = text == null ? null : parseRounding(text);
