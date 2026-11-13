@@ -55,6 +55,11 @@ env_file = "~/.gemini/.env"
 # docs/reference/policy-engine.md ("In non-interactive mode, this is treated as deny"), docs/cli/plan-mode.md
 argv = ["gemini", "--approval-mode", "default", "-o", "text", "-p", "{prompt}"]
 verified = false                       # documentation only, not yet tried with it
+# Not a helper (2026-11-13, Codex review): "default" denies only tools that need approval; read tools
+# (read_file, glob, grep, web_fetch) still run, and the user's own policy files can allow more, so a
+# prompt-injected mail or app description could pull private files into the answer. Plan mode reads
+# files too and turns into YOLO when it leaves the plan headless. Until a verified tool-free mode exists:
+helper = false
 
 [task]                                 # interactive, with a first prompt (-i, --prompt-interactive)
 # Source: https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/cli-reference.md
