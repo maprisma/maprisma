@@ -259,3 +259,58 @@ String? ronColor(String? value) {
   if (r == null || g == null || b == null) return null;
   return '#${[r, g, b].map((v) => v.toRadixString(16).padLeft(2, '0')).join()}';
 }
+
+// --- fonts (the same in every Maprisma app; Maprisma Theme's Font & effects sets them) ------
+
+/// The desktop's interface and monospace font families, `{ui, mono}`, each
+/// left out when it can't be read: COSMIC's CosmicTk interface_font /
+/// monospace_font, Plasma's kdeglobals font / fixed, elsewhere (Hyprland,
+/// GNOME) GTK's gsettings font-name / monospace-font-name through [gtk]
+/// (see [GtkFonts], which asks at most every 30 s). Python reference:
+/// desktop_generic.desktop_fonts.
+Map<String, String> desktopFonts(
+  Map<String, String> env, {
+  (String?, String?) Function()? gtk,
+  String systemRoot = '/usr/share/cosmic',
+}) {
+  final names = (env['XDG_CURRENT_DESKTOP'] ?? '').toUpperCase().split(':');
+  final x = env['XDG_CONFIG_HOME'];
+  final configHome = x != null && p.isAbsolute(x)
+      ? x
+      : p.join(env['HOME'] ?? '', '.config');
+  String? clean(String? v) {
+    final t = v?.trim();
+    return t == null || t.isEmpty || t.length > 100 ? null : t;
+  }
+
+  String? ui, mono;
+  if (names.contains('COSMIC')) {
+    String? family(String key) {
+      final text = cosmicConfig(
+        configHome,
+        'com.system76.CosmicTk',
+        key,
+        systemRoot: systemRoot,
+      );
+      return (text == null ? null : ronField(text, 'family'))?.replaceAll(
+        '"',
+        '',
+      );
+    }
+
+    (ui, mono) = (family('interface_font'), family('monospace_font'));
+  } else if (names.contains('KDE')) {
+    final text = _read(p.join(configHome, 'kdeglobals'), 1 << 20) ?? '';
+    (ui, mono) = (
+      _ini(text, 'General', 'font')?.split(',').first,
+      _ini(text, 'General', 'fixed')?.split(',').first,
+    );
+  } else {
+    (ui, mono) = gtk == null ? (null, null) : gtk();
+  }
+  return {'ui': ?clean(ui), 'mono': ?clean(mono)};
+}
+
+/// A Pango font ("Noto Sans  10", "Hack, 10") without its size.
+String pangoFamily(String font) =>
+    font.trim().replaceFirst(RegExp(r',?\s+\d+(\.\d+)?$'), '').trim();

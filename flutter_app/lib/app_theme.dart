@@ -56,16 +56,40 @@ double corners(BuildContext context) =>
 Corners cornerSizes(BuildContext context) =>
     Theme.of(context).extension<Corners>() ?? const Corners(12);
 
+/// The desktop's monospace family (app.theme `fonts.mono`) for code, logs
+/// and commands; the interface font is the theme's own fontFamily.
+class AppFonts extends ThemeExtension<AppFonts> {
+  const AppFonts({this.mono});
+  final String? mono;
+  @override
+  AppFonts copyWith({String? mono}) => AppFonts(mono: mono ?? this.mono);
+  @override
+  AppFonts lerp(AppFonts? other, double t) => other ?? this;
+}
+
+/// The monospace family to use: the desktop's, else the system's 'monospace'.
+String monoFont(BuildContext context) =>
+    Theme.of(context).extension<AppFonts>()?.mono ?? 'monospace';
+
+/// [fonts] (app.theme `fonts`) as a family: a non-empty string, else null.
+String? fontFamily(Map? fonts, String key) {
+  final v = fonts?[key];
+  return v is String && v.trim().isNotEmpty ? v.trim() : null;
+}
+
 /// An outlined field's border with the controls' corners.
 OutlineInputBorder controlBorder(BuildContext context) => OutlineInputBorder(
   borderRadius: BorderRadius.circular(cornerSizes(context).control),
 );
 
+/// [fonts] (app.theme `fonts`): the desktop's interface font for all text,
+/// its monospace font for [monoFont].
 ThemeData appTheme(
   Brightness brightness, {
   String mode = 'system',
   Map desktop = const {},
   double? radius,
+  Map? fonts,
 }) {
   var colors = ColorScheme.fromSeed(
     seedColor: desktopThemeColor(desktop, 'accent') ?? const Color(0xff517f70),
@@ -104,7 +128,11 @@ ThemeData appTheme(
   return ThemeData(
     colorScheme: colors,
     useMaterial3: true,
-    extensions: [sizes],
+    fontFamily: fontFamily(fonts, 'ui'),
+    extensions: [
+      sizes,
+      AppFonts(mono: fontFamily(fonts, 'mono')),
+    ],
     // Every card looks like the map's category cards (app_look SectionCard).
     cardTheme: CardThemeData(
       color: colors.surfaceContainerLow,
@@ -133,7 +161,10 @@ ThemeData appTheme(
     // Material's default is the inverted surface: a white bar on a dark app.
     snackBarTheme: SnackBarThemeData(
       backgroundColor: colors.surfaceContainerHigh,
-      contentTextStyle: TextStyle(color: colors.onSurface),
+      contentTextStyle: TextStyle(
+        color: colors.onSurface,
+        fontFamily: fontFamily(fonts, 'ui'),
+      ),
       actionTextColor: colors.primary,
       closeIconColor: colors.onSurfaceVariant,
     ),

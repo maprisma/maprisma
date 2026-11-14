@@ -12,6 +12,10 @@ abstract interface class Desktop {
   String? get themeDir;
   Map<String, String> themeColors();
 
+  /// The desktop's interface and monospace font families, `{ui, mono}`
+  /// (desktop_palette.desktopFonts), on every desktop.
+  Map<String, String> fonts();
+
   /// A program in the user's terminal, a window of its own.
   bool openTerminal(List<String> argv, String cwd);
 
@@ -44,6 +48,50 @@ String? whichIn(String program, String? path) {
     }
   }
   return null;
+}
+
+/// GTK's interface and monospace fonts from `gsettings get
+/// org.gnome.desktop.interface font-name / monospace-font-name` (without
+/// the size), asked at most every 30 s; meanwhile the last answer stands.
+/// Without gsettings (or `timeout`) on [env]'s PATH: none.
+final class GtkFonts {
+  GtkFonts(this.env, {DateTime Function()? clock})
+    : _clock = clock ?? DateTime.now;
+  final Map<String, String> env;
+  final DateTime Function() _clock;
+  DateTime? _read;
+  (String?, String?) _value = (null, null);
+
+  (String?, String?) read() {
+    final now = _clock();
+    if (_read != null && now.difference(_read!).abs().inSeconds < 30) {
+      return _value;
+    }
+    _read = now;
+    final path = env['PATH'];
+    final gsettings = whichIn('gsettings', path);
+    final timeout = whichIn('timeout', path);
+    if (gsettings == null || timeout == null) return _value = (null, null);
+    String? get(String key) {
+      try {
+        final r = Process.runSync(
+          timeout,
+          ['3', gsettings, 'get', 'org.gnome.desktop.interface', key],
+          environment: env,
+          includeParentEnvironment: false,
+          stdoutEncoding: utf8,
+        );
+        final out = r.exitCode == 0 ? (r.stdout as String).trim() : '';
+        return out.length > 2 && out.startsWith("'") && out.endsWith("'")
+            ? pangoFamily(out.substring(1, out.length - 1))
+            : null;
+      } on ProcessException {
+        return null;
+      }
+    }
+
+    return _value = (get('font-name'), get('monospace-font-name'));
+  }
 }
 
 /// Started in a session of its own; a launcher found on PATH that then fails
@@ -217,6 +265,9 @@ final class GenericDesktop implements Desktop {
   // Flutter follows platform brightness there, no GTK import or gsettings call.
   @override
   Map<String, String> themeColors() => desktopPalette(environment);
+  late final _gtkFonts = GtkFonts(environment);
+  @override
+  Map<String, String> fonts() => desktopFonts(environment, gtk: _gtkFonts.read);
 }
 
 final class OmarchyDesktop implements Desktop {
@@ -250,6 +301,11 @@ final class OmarchyDesktop implements Desktop {
     final launcher = whichIn('xdg-terminal-exec', identity.environment['PATH']);
     return launcher != null && _detached([launcher, ...argv], cwd);
   }
+
+  late final _gtkFonts = GtkFonts(identity.environment);
+  @override
+  Map<String, String> fonts() =>
+      desktopFonts(identity.environment, gtk: _gtkFonts.read);
 
   @override
   String get themeDir =>

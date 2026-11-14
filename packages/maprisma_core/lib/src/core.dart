@@ -5109,6 +5109,8 @@ final class CoreService {
                   settings.value(settings.load(), 'look') == 'omarchy'
               ? desktop.themeColors()
               : <String, String>{},
+          // The desktop's interface and monospace fonts, on every desktop.
+          'fonts': desktop.fonts(),
         };
       case 'app.identity':
         return {

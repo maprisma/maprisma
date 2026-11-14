@@ -178,6 +178,7 @@ final class ReadService {
                 settings.value(saved, 'look') == 'omarchy'
             ? desktop.themeColors()
             : {},
+        'fonts': desktop.fonts(),
         'setup_needed': settings.value(saved, 'setup_done') != true,
         'agents': agents.map((a) => a.toJson()).toList(),
         'projects': {

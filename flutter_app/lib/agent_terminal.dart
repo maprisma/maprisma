@@ -8,6 +8,7 @@ import 'package:maprisma_core/maprisma_core.dart'
 import 'package:xterm/xterm.dart';
 
 import 'app_look.dart' show AppSpace, WindowHeader;
+import 'app_theme.dart' show monoFont;
 import 'backend.dart';
 
 class AgentTerminal extends ChangeNotifier {
@@ -205,6 +206,8 @@ class AgentTerminalView extends StatelessWidget {
                 session.terminal,
                 controller: session.selection,
                 focusNode: keys,
+                // The desktop's monospace font (xterm's fallbacks stay).
+                textStyle: TerminalStyle(fontFamily: monoFont(context)),
                 // Paste only through the bounded read (AgentTerminal.pasteClipboard),
                 // never xterm's own, which takes the whole clipboard offer.
                 shortcuts: terminalShortcuts(session),

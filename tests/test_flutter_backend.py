@@ -27,6 +27,10 @@ class FlutterBackendTest(unittest.TestCase):
         patcher = mock.patch.object(agents, 'list_agents', return_value=self.catalog)
         patcher.start()
         self.addCleanup(patcher.stop)
+        # The desktop's fonts: never the session's gsettings (test_desktop has their tests).
+        fonts = mock.patch.object(self.service, 'fonts', return_value={})
+        fonts.start()
+        self.addCleanup(fonts.stop)
 
     def request(self, value):
         source = io.BytesIO((json.dumps(value) + '\n').encode())
@@ -253,8 +257,10 @@ class FlutterBackendTest(unittest.TestCase):
 
     def test_live_theme_is_lightweight_and_does_not_scan_catalog(self):
         with mock.patch.object(self.service, 'theme', return_value={'background':'#123456'}) as theme, \
+                mock.patch.object(self.service, 'fonts', return_value={'ui':'Noto Sans'}), \
                 mock.patch.object(self.service, 'snapshot', side_effect=AssertionError('catalog scan')):
-            self.assertEqual(self.service.dispatch('app.theme', {}), {'theme':{'background':'#123456'}})
+            self.assertEqual(self.service.dispatch('app.theme', {}),
+                             {'theme':{'background':'#123456'}, 'fonts':{'ui':'Noto Sans'}})
         theme.assert_called_once()
         with self.assertRaises(ValueError):
             self.service.dispatch('app.theme', {'path':'/arbitrary'})

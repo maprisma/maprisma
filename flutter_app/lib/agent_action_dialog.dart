@@ -1,6 +1,7 @@
 import 'task_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'app_theme.dart' show monoFont;
 
 String actionLabel(String action) =>
     const {
@@ -51,7 +52,7 @@ class AgentActionReview extends StatelessWidget {
             if ((plan['commands'] as List).isNotEmpty)
               SelectableText(
                 (plan['commands'] as List).join('\n'),
-                style: const TextStyle(fontFamily: 'monospace'),
+                style: TextStyle(fontFamily: monoFont(context)),
               ),
             if ((plan['url'] as String? ?? '').isNotEmpty)
               SelectableText(plan['url'] as String),

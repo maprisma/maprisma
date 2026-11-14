@@ -110,6 +110,79 @@ def desktop_palette(environ=None) -> dict:
     return {key: value for key, value in colors.items() if value is not None}
 
 
+# --- fonts (the same in every Maprisma app; Maprisma Theme's Font & effects sets them) --------
+
+FONT_EVERY = 30          # seconds between two gsettings reads
+_gtk_font_cache = {}     # gsettings program -> (monotonic time, (ui, mono))
+
+
+def desktop_fonts(environ=None, system_root="/usr/share/cosmic") -> dict:
+    """The desktop's interface and monospace font families, {ui, mono}, each left out when it can't be
+    read (Dart: desktop_palette.dart desktopFonts): COSMIC's CosmicTk interface_font / monospace_font,
+    KDE's kdeglobals font / fixed, elsewhere (Hyprland, GNOME) GTK's gsettings font-name /
+    monospace-font-name, asked at most every 30 s."""
+    env = os.environ if environ is None else environ
+    names = env.get("XDG_CURRENT_DESKTOP", "").upper().split(":")
+    home = env.get("HOME", "")
+    value = env.get("XDG_CONFIG_HOME")
+    config_home = value if value and os.path.isabs(value) else os.path.join(home, ".config")
+
+    def clean(v):
+        t = None if v is None else v.strip()
+        return None if not t or len(t) > 100 else t
+
+    if "COSMIC" in names:
+        def family(key):
+            text = _cosmic_config(config_home, "com.system76.CosmicTk", key, system_root)
+            v = None if text is None else ron_field(text, "family")
+            return None if v is None else v.replace('"', "")
+        ui, mono = family("interface_font"), family("monospace_font")
+    elif "KDE" in names:
+        text = _read_small(os.path.join(config_home, "kdeglobals"), 1 << 20) or ""
+        ui, mono = [None if v is None else v.split(",")[0] for v in (_ini(text, "General", "font"),
+                                                                     _ini(text, "General", "fixed"))]
+    else:
+        ui, mono = _gtk_fonts(env)
+    return {key: v for key, v in (("ui", clean(ui)), ("mono", clean(mono))) if v is not None}
+
+
+def pango_family(font: str) -> str:
+    """A Pango font ("Noto Sans  10", "Hack, 10") without its size."""
+    return re.sub(r",?\s+\d+(\.\d+)?$", "", font.strip()).strip()
+
+
+def _gtk_fonts(env):
+    import ai_core
+    import time
+    gsettings = shutil.which("gsettings", path=env.get("PATH", ""))
+    if gsettings is None:
+        return None, None
+    now = time.monotonic()
+    cached = _gtk_font_cache.get(gsettings)
+    if cached is not None and abs(now - cached[0]) < FONT_EVERY:
+        return cached[1]
+
+    def get(key):
+        out, ok = ai_core.read_bounded_output([gsettings, "get", "org.gnome.desktop.interface", key],
+                                              max_bytes=1024, timeout=3, env=dict(env))
+        text = out.decode("utf-8", "replace").strip() if ok else ""
+        return pango_family(text[1:-1]) if len(text) > 2 and text[0] == "'" and text[-1] == "'" else None
+
+    value = (get("font-name"), get("monospace-font-name"))
+    _gtk_font_cache[gsettings] = (now, value)
+    return value
+
+
+def _cosmic_config(config_home, component, key, system_root="/usr/share/cosmic"):
+    # The newest schema first in each: COSMIC 1.x keeps its themes in v2 (v1 empty or stale).
+    for base in (os.path.join(config_home, "cosmic"), system_root):
+        for version in ("v2", "v1"):
+            text = _read_small(os.path.join(base, component, version, key), 256 * 1024)
+            if text is not None:
+                return text
+    return None
+
+
 def _read_small(path, limit):
     try:
         if not os.path.isfile(path) or os.path.getsize(path) > limit:

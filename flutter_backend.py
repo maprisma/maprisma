@@ -139,6 +139,7 @@ class Service:
             "language": settings_schema.value(settings, "language"),
             "settings": self.settings(settings),
             "theme": self.theme(settings),
+            "fonts": self.fonts(),
             "setup_needed": self.adapters is not None and not settings_schema.value(settings, "setup_done"),
             "agents": [asdict(agent) for agent in catalog],
             "projects": {
@@ -157,6 +158,11 @@ class Service:
             return {}
         return {key: value for key, value in desktop.theme_colors().items()
                 if isinstance(key, str) and isinstance(value, str) and re.fullmatch(r"#[0-9a-fA-F]{6}", value)}
+
+    def fonts(self) -> dict:
+        # The desktop's interface and monospace fonts, on every desktop (desktop_fonts).
+        import desktop_generic
+        return desktop_generic.desktop_fonts()
 
     def settings(self, saved: dict | None = None) -> dict:
         saved = ai_core.load_settings(self.settings_path) if saved is None else saved
@@ -623,7 +629,7 @@ class Service:
         if method == 'app.theme':
             if params:
                 raise ValueError('Unexpected theme parameters')
-            return {'theme': self.theme(ai_core.load_settings(self.settings_path))}
+            return {'theme': self.theme(ai_core.load_settings(self.settings_path)), 'fonts': self.fonts()}
         if method == "app.snapshot":
             if params:
                 raise ValueError("Unexpected parameters")

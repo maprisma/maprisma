@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:test/test.dart';
 import 'package:maprisma_core/maprisma_core.dart';
 import 'package:maprisma_core/src/core_assets.g.dart' show defaults;
+import 'package:maprisma_core/src/desktop_palette.dart' show pangoFamily;
 
 void main() {
   late Directory temp;
@@ -583,11 +584,12 @@ void main() {
       );
       expect(c.dispatch('app.theme', {}), {
         'theme': {'background': '#112233', 'foreground': '#aBcDeF'},
+        'fonts': <String, String>{},
       });
       file.writeAsStringSync('not valid toml [');
-      expect(c.dispatch('app.theme', {}), {'theme': {}});
+      expect(c.dispatch('app.theme', {}), {'theme': {}, 'fonts': {}});
       file.writeAsStringSync('x' * (256 * 1024 + 1));
-      expect(c.dispatch('app.theme', {}), {'theme': {}});
+      expect(c.dispatch('app.theme', {}), {'theme': {}, 'fonts': {}});
     },
   );
   test('generic desktops: the palette of Maprisma Shell, Plasma, COSMIC', () {
@@ -656,6 +658,76 @@ void main() {
     expect((theme('COSMIC')['theme'] as Map)['accent'], '#0080ff');
     expect(theme('GNOME')['theme'], <String, String>{});
   });
+  test('app.theme\'s fonts: CosmicTk\'s and kdeglobals\' families', () {
+    Map<String, dynamic> look(String desktop) => CoreService(
+      environment: {
+        'HOME': temp.path,
+        'PATH': '${temp.path}/none',
+        'MAPRISMA_DESKTOP': 'generic',
+        'XDG_CURRENT_DESKTOP': desktop,
+      },
+    ).dispatch('app.theme', {});
+    expect(look('COSMIC')['fonts'], isEmpty);
+    final tk = '${temp.path}/.config/cosmic/com.system76.CosmicTk/v1';
+    File('$tk/interface_font')
+      ..parent.createSync(recursive: true)
+      ..writeAsStringSync(
+        '(\n    family: "Open Sans",\n    weight: Normal,\n)',
+      );
+    File(
+      '$tk/monospace_font',
+    ).writeAsStringSync('(\n    family: "Hack",\n    weight: Normal,\n)');
+    expect(look('COSMIC')['fonts'], {'ui': 'Open Sans', 'mono': 'Hack'});
+    // COSMIC 1.x: v2 first.
+    File('$tk/../v2/interface_font')
+      ..parent.createSync(recursive: true)
+      ..writeAsStringSync('(family: "Inter")');
+    expect(look('COSMIC')['fonts'], {'ui': 'Inter', 'mono': 'Hack'});
+    expect(look('KDE')['fonts'], isEmpty);
+    File('${temp.path}/.config/kdeglobals').writeAsStringSync(
+      '[General]\nfixed=Hack,10,-1,5,400,0,0,0,0,0\nfont=Noto Sans,10,-1,5,400,0,0,0,0,0\n',
+    );
+    expect(look('KDE')['fonts'], {'ui': 'Noto Sans', 'mono': 'Hack'});
+    File(
+      '${temp.path}/.config/kdeglobals',
+    ).writeAsStringSync('[General]\nfont= ,10\nfixed=${'x' * 101}\n');
+    expect(look('KDE')['fonts'], isEmpty);
+    expect(look('GNOME')['fonts'], isEmpty); // no gsettings on PATH
+  });
+  test(
+    'app.theme\'s fonts elsewhere: gsettings without the size, asked at most every 30 s',
+    () {
+      final bin = Directory('${temp.path}/bin')..createSync();
+      final log = '${temp.path}/gs.log';
+      File('${bin.path}/gsettings').writeAsStringSync(
+        '#!/bin/sh\necho "\$@" >> "$log"\n'
+        'case "\$3" in font-name) echo "\'Noto Sans  10\'";; '
+        'monospace-font-name) echo "\'Hack, 10.5\'";; esac\n',
+      );
+      Process.runSync('chmod', ['755', '${bin.path}/gsettings']);
+      final timeout = whichIn('timeout', Platform.environment['PATH'])!;
+      Link('${bin.path}/timeout').createSync(timeout);
+      final core = CoreService(
+        environment: {
+          'HOME': temp.path,
+          'PATH': bin.path,
+          'MAPRISMA_DESKTOP': 'generic',
+          'XDG_CURRENT_DESKTOP': 'Hyprland',
+        },
+      );
+      expect(core.dispatch('app.theme', {})['fonts'], {
+        'ui': 'Noto Sans',
+        'mono': 'Hack',
+      });
+      core.dispatch('app.theme', {});
+      expect(File(log).readAsLinesSync(), hasLength(2));
+      expect(
+        pangoFamily('JetBrains Mono Nerd Font 12'),
+        'JetBrains Mono Nerd Font',
+      );
+      expect(pangoFamily('Hack'), 'Hack');
+    },
+  );
 }
 
 class _SwapPosix extends Posix {

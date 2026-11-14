@@ -54,7 +54,7 @@ A parameter written `name?` may be left out.
 | `app.identity` | read | — | `app_id`, `cache_dir`, `config_dir`, `name`, `short_name` |
 | `app.settings_changed` | change | — | ? |
 | `app.snapshot` | read | — | ? |
-| `app.theme` | read | — | `theme` |
+| `app.theme` | read | — | `fonts`, `theme` |
 
 ## changes
 

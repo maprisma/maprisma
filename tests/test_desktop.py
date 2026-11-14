@@ -103,6 +103,46 @@ class GenericTest(unittest.TestCase):
             self.assertEqual((t["accent"], t["background"], t["foreground"]), ("#4dd6c8", "#1a2234", "#cdd6ee"))
             self.assertEqual(g.desktop_palette(env("GNOME")), {})
 
+    def test_desktop_fonts_of_cosmic_and_plasma(self):
+        """desktop_palette.dart desktopFonts' reference: CosmicTk's RON families (v2 first), kdeglobals' first field."""
+        with tempfile.TemporaryDirectory() as home:
+            env = lambda d: {"HOME": home, "XDG_CURRENT_DESKTOP": d, "PATH": ""}  # noqa: E731
+            fonts = lambda d: g.desktop_fonts(env(d), system_root=home + "/none")  # noqa: E731
+            self.assertEqual(fonts("COSMIC"), {})
+            tk = Path(home, ".config/cosmic/com.system76.CosmicTk/v1")
+            tk.mkdir(parents=True)
+            (tk / "interface_font").write_text('(\n    family: "Open Sans",\n    weight: Normal,\n)')
+            (tk / "monospace_font").write_text('(\n    family: "Hack",\n    weight: Normal,\n)')
+            self.assertEqual(fonts("COSMIC"), {"ui": "Open Sans", "mono": "Hack"})
+            Path(home, ".config/cosmic/com.system76.CosmicTk/v2").mkdir()
+            Path(home, ".config/cosmic/com.system76.CosmicTk/v2/interface_font").write_text('(family: "Inter")')
+            self.assertEqual(fonts("COSMIC"), {"ui": "Inter", "mono": "Hack"})
+            self.assertEqual(fonts("KDE"), {})
+            Path(home, ".config/kdeglobals").write_text(
+                "[General]\nfixed=Hack,10,-1,5,400,0,0,0,0,0\nfont=Noto Sans,10,-1,5,400,0,0,0,0,0\n")
+            self.assertEqual(fonts("KDE"), {"ui": "Noto Sans", "mono": "Hack"})
+            Path(home, ".config/kdeglobals").write_text("[General]\nfont= ,10\nfixed=" + "x" * 101 + "\n")
+            self.assertEqual(fonts("KDE"), {})
+
+    def test_desktop_fonts_elsewhere_from_gsettings(self):
+        """Hyprland, GNOME: gsettings without the size, asked at most every 30 s; without it none."""
+        with tempfile.TemporaryDirectory() as home:
+            bin_dir = Path(home, "bin")
+            bin_dir.mkdir()
+            log = Path(home, "gs.log")
+            fake = bin_dir / "gsettings"
+            fake.write_text(f'#!/bin/sh\necho "$@" >> "{log}"\ncase "$3" in font-name) echo "\'Noto Sans  10\'";; '
+                            "monospace-font-name) echo \"'Hack, 10.5'\";; esac\n")
+            fake.chmod(0o755)
+            env = {"HOME": home, "XDG_CURRENT_DESKTOP": "Hyprland", "PATH": str(bin_dir)}
+            with mock.patch.dict(g._gtk_font_cache, clear=True):
+                self.assertEqual(g.desktop_fonts(env), {"ui": "Noto Sans", "mono": "Hack"})
+                self.assertEqual(g.desktop_fonts(env), {"ui": "Noto Sans", "mono": "Hack"})
+                self.assertEqual(len(log.read_text().splitlines()), 2)
+            self.assertEqual(g.desktop_fonts({"HOME": home, "XDG_CURRENT_DESKTOP": "GNOME", "PATH": home + "/none"}), {})
+        self.assertEqual(g.pango_family("JetBrains Mono Nerd Font 12"), "JetBrains Mono Nerd Font")
+        self.assertEqual(g.pango_family("Hack"), "Hack")
+
     def test_terminal_choice(self):
         found = {"cosmic-term": "/usr/bin/cosmic-term", "xterm": "/usr/bin/xterm"}     # COSMIC's own
         with mock.patch.object(g.shutil, "which", side_effect=found.get), mock.patch.dict(g.os.environ, {"TERMINAL": ""}):

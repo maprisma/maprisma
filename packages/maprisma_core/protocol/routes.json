@@ -410,13 +410,17 @@
    "note": "",
    "params": {},
    "result": {
+    "fonts": {
+     "mono": "string",
+     "ui": "string"
+    },
     "theme": {
      "accent": "string",
      "background": "string",
      "foreground": "string"
     }
    },
-   "source": "observed"
+   "source": "manual"
   },
   "changes.history": {
    "area": "changes",

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'app_look.dart' show StatusColors;
+import 'app_theme.dart' show monoFont;
 
 const _badges = {
   'ok': 'Healthy',
@@ -120,7 +121,7 @@ class _HealthCardState extends State<HealthCard> {
                         Expanded(
                           child: SelectableText(
                             '${c['command']}',
-                            style: const TextStyle(fontFamily: 'monospace'),
+                            style: TextStyle(fontFamily: monoFont(context)),
                           ),
                         ),
                         IconButton(

@@ -1056,6 +1056,13 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
           )) {
         setState(() => _snapshot!['theme'] = appearance['theme']);
       }
+      // The desktop's fonts ride the same refresh (Maprisma Theme's Font & effects sets them).
+      if (mounted &&
+          _snapshot != null &&
+          appearance['fonts'] is Map &&
+          !mapEquals(_snapshot!['fonts'] as Map?, appearance['fonts'] as Map)) {
+        setState(() => _snapshot!['fonts'] = appearance['fonts']);
+      }
       final rounding = (await _client.windowRounding())['rounding'];
       if (mounted &&
           rounding != _windowRounding &&
@@ -5316,6 +5323,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       brightness,
       mode: _themePreference,
       desktop: _desktopTheme,
+      fonts: _snapshot?['fonts'] as Map?,
       radius: cornerRadius(
         (_snapshot?['settings'] as Map?)?['corners'] as String?,
         _windowRounding,

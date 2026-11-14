@@ -243,7 +243,9 @@ def run_side(command, case, home):
     env = {**os.environ, 'HOME': str(home), 'XDG_CONFIG_HOME': str(home / '.config'),
            'XDG_CACHE_HOME': str(home / '.cache'), 'XDG_STATE_HOME': str(home / '.local/state'),
            'XDG_DATA_HOME': str(home / '.local/share'), 'MAPRISMA_DESKTOP': 'generic',
-           'LANG': 'en_US.UTF-8', 'LC_ALL': '', 'LC_MESSAGES': '', 'PYTHONDONTWRITEBYTECODE': '1'}
+           'LANG': 'en_US.UTF-8', 'LC_ALL': '', 'LC_MESSAGES': '', 'PYTHONDONTWRITEBYTECODE': '1',
+           # app.theme's fonts may ask gsettings: its defaults, never the session's settings.
+           'GSETTINGS_BACKEND': 'memory'}
     env.update(expand(case.get('environment', {}), home))
     script = []
     for i, request in enumerate(case['requests']):

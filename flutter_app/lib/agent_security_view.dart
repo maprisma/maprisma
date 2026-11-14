@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'app_theme.dart' show monoFont;
 import 'task_card.dart';
 
 const _riskNames = {
@@ -178,7 +179,7 @@ class AgentSecurityView extends StatelessWidget {
                     dense: true,
                     title: SelectableText(
                       '$entry',
-                      style: const TextStyle(fontFamily: 'monospace'),
+                      style: TextStyle(fontFamily: monoFont(context)),
                     ),
                   ),
               ],
