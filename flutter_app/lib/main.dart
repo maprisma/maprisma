@@ -67,6 +67,7 @@ import 'connections_view.dart';
 import 'model_removal_dialog.dart';
 import 'subagents_dialog.dart';
 import 'window_size.dart';
+import 'window_style.dart';
 
 /// When the background tuning (task 029) first looks after the start, and
 /// how often it tries again while the core is busy with other tasks; tests
@@ -101,7 +102,7 @@ void main(List<String> args) async {
   final sizes = WindowSizeStore(windowSizePath(Platform.environment));
   final size = sizes.load();
   if (size != null) await windowManager.setSize(size);
-  runApp(MaprismaApp(windowSizes: sizes));
+  runApp(MaprismaApp(windowSizes: sizes, followWindowStyle: true));
 }
 
 /// Shown instead of Maprisma while its install is being replaced or removed (task 073). The core is
@@ -158,7 +159,12 @@ class MaprismaApp extends StatefulWidget {
     this.connectBackend,
     this.windowShots,
     this.windowSizes,
+    this.followWindowStyle = false,
   });
+
+  /// App windows (~/.config/maprisma/windows.json, chosen in Maprisma
+  /// Settings): main() follows it; tests leave it out and stay solid.
+  final bool followWindowStyle;
 
   /// Remembers the window's size after a resize; tests leave it out.
   final WindowSizeStore? windowSizes;
@@ -745,6 +751,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       _refreshTheme();
       _refreshLive();
     });
+    if (widget.followWindowStyle) _windowStyle = WindowStyleWatcher();
     _connect();
   }
 
@@ -5304,15 +5311,22 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   String get _themePreference =>
       _snapshot?['settings']['flutter_theme_mode'] as String? ?? 'system';
   Map get _desktopTheme => _snapshot?['theme'] as Map? ?? const {};
-  ThemeData _theme(Brightness brightness) => appTheme(
-    brightness,
-    mode: _themePreference,
-    desktop: _desktopTheme,
-    radius: cornerRadius(
-      (_snapshot?['settings'] as Map?)?['corners'] as String?,
-      _windowRounding,
+  ThemeData _theme(Brightness brightness, double alpha) => withWindowAlpha(
+    appTheme(
+      brightness,
+      mode: _themePreference,
+      desktop: _desktopTheme,
+      radius: cornerRadius(
+        (_snapshot?['settings'] as Map?)?['corners'] as String?,
+        _windowRounding,
+      ),
     ),
+    alpha,
   );
+
+  /// App windows (window_style.dart): the window's background alpha; the
+  /// app rebuilds only when it changes.
+  WindowStyleWatcher? _windowStyle;
 
   /// The window's title bar is GTK's, not Flutter's: it takes the app's
   /// light or dark (COSMIC gives GTK apps no dark theme of their own).
@@ -5353,6 +5367,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     widget.windowSizes?.flush();
     windowManager.removeListener(this);
     _liveTimer?.cancel();
+    _windowStyle?.dispose();
     _mapLayoutTimer?.cancel();
     _startMenu.dispose();
     _aiTransform.dispose();
@@ -5377,6 +5392,15 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         if (mounted) unawaited(_refresh(refreshMap: true));
       });
     }
+    final style = _windowStyle;
+    if (style == null) return _app(1);
+    return ValueListenableBuilder<double>(
+      valueListenable: style,
+      builder: (context, alpha, _) => _app(alpha),
+    );
+  }
+
+  Widget _app(double alpha) {
     return MaterialApp(
       title: 'Maprisma',
       navigatorKey: _navigator,
@@ -5457,8 +5481,8 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         Locale('pt'),
       ],
       localizationsDelegates: GlobalMaterialLocalizations.delegates,
-      theme: _theme(Brightness.light),
-      darkTheme: _theme(Brightness.dark),
+      theme: _theme(Brightness.light, alpha),
+      darkTheme: _theme(Brightness.dark, alpha),
       themeMode: appThemeMode(_themePreference, _desktopTheme),
       builder: (context, child) {
         _followTitleBar(Theme.of(context).brightness == Brightness.dark);
