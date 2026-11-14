@@ -23,17 +23,24 @@ const _maxBytes = 4096;
 
 String _home(Map<String, String> env) => env['HOME'] ?? '';
 String _configHome(Map<String, String> env) =>
-    (env['XDG_CONFIG_HOME'] ?? '').startsWith('/') ? env['XDG_CONFIG_HOME']! : '${_home(env)}/.config';
+    (env['XDG_CONFIG_HOME'] ?? '').startsWith('/')
+    ? env['XDG_CONFIG_HOME']!
+    : '${_home(env)}/.config';
 String _stateHome(Map<String, String> env) =>
-    (env['XDG_STATE_HOME'] ?? '').startsWith('/') ? env['XDG_STATE_HOME']! : '${_home(env)}/.local/state';
+    (env['XDG_STATE_HOME'] ?? '').startsWith('/')
+    ? env['XDG_STATE_HOME']!
+    : '${_home(env)}/.local/state';
 
-String windowsFilePath([Map<String, String>? env]) => '${_configHome(env ?? Platform.environment)}/maprisma/windows.json';
+String windowsFilePath([Map<String, String>? env]) =>
+    '${_configHome(env ?? Platform.environment)}/maprisma/windows.json';
 
 /// The file's settings; {} when it is missing, not a regular file, too big or not JSON.
 Map<String, dynamic> readWindowsFile([Map<String, String>? env]) {
   final path = windowsFilePath(env);
   try {
-    if (FileSystemEntity.typeSync(path, followLinks: false) != FileSystemEntityType.file) return {};
+    if (FileSystemEntity.typeSync(path, followLinks: false) !=
+        FileSystemEntityType.file)
+      return {};
     final file = File(path).openSync();
     try {
       final bytes = file.readSync(_maxBytes + 1);
@@ -58,39 +65,52 @@ String chosenWindowStyle([Map<String, String>? env]) {
 String resolvedWindowStyle([Map<String, String>? env]) {
   env ??= Platform.environment;
   final settings = readWindowsFile(env);
-  final style = windowStyles.contains(settings['style']) ? settings['style'] as String : 'solid';
+  final style = windowStyles.contains(settings['style'])
+      ? settings['style'] as String
+      : 'solid';
   if (style != 'follow') return style;
   final omarchy = '${_stateHome(env)}/omarchy';
   if (FileSystemEntity.typeSync(omarchy) == FileSystemEntityType.directory) {
     final toggles = '$omarchy/toggles/hypr';
-    if (FileSystemEntity.typeSync('$toggles/window-opaque.lua') != FileSystemEntityType.notFound) return 'solid';
-    if (FileSystemEntity.typeSync('$toggles/window-glassy.lua') != FileSystemEntityType.notFound) return 'glassy';
+    if (FileSystemEntity.typeSync('$toggles/window-opaque.lua') !=
+        FileSystemEntityType.notFound)
+      return 'solid';
+    if (FileSystemEntity.typeSync('$toggles/window-glassy.lua') !=
+        FileSystemEntityType.notFound)
+      return 'glassy';
     return 'transparent';
   }
   return settings['theme_blur'] == true ? 'glassy' : 'solid';
 }
 
 double windowAlpha(String resolved) => switch (resolved) {
-      'glassy' => glassyAlpha,
-      'transparent' => transparentAlpha,
-      _ => 1.0,
-    };
+  'glassy' => glassyAlpha,
+  'transparent' => transparentAlpha,
+  _ => 1.0,
+};
 
 /// Writes one key, keeping the others; the folder is created, the file replaced atomically.
-Future<void> writeWindowsSetting(String key, Object value, [Map<String, String>? env]) async {
+Future<void> writeWindowsSetting(
+  String key,
+  Object value, [
+  Map<String, String>? env,
+]) async {
   final path = windowsFilePath(env);
   final dir = Directory(File(path).parent.path);
   await dir.create(recursive: true);
   final settings = readWindowsFile(env)..[key] = value;
   final tmp = File('$path.$pid.tmp');
-  await tmp.writeAsString('${const JsonEncoder.withIndent('  ').convert(settings)}\n', flush: true);
+  await tmp.writeAsString(
+    '${const JsonEncoder.withIndent('  ').convert(settings)}\n',
+    flush: true,
+  );
   await tmp.rename(path);
 }
 
 /// The window's background alpha, checked every few seconds (and on [refresh]).
 class WindowStyleWatcher extends ValueNotifier<double> {
   WindowStyleWatcher({Duration every = const Duration(seconds: 3), this.env})
-      : super(windowAlpha(resolvedWindowStyle(env))) {
+    : super(windowAlpha(resolvedWindowStyle(env))) {
     _timer = Timer.periodic(every, (_) => refresh());
     _all.add(this);
   }
@@ -102,6 +122,7 @@ class WindowStyleWatcher extends ValueNotifier<double> {
       w.refresh();
     }
   }
+
   final Map<String, String>? env;
   late final Timer _timer;
 
@@ -123,7 +144,9 @@ ThemeData withWindowAlpha(ThemeData theme, double alpha) {
   final s = theme.colorScheme;
   final cardAlpha = (1 + alpha) / 2;
   Color see(Color c, double a) => c.withValues(alpha: c.a * a);
-  final solidMenu = theme.menuTheme.style?.backgroundColor ?? WidgetStatePropertyAll(s.surfaceContainer);
+  final solidMenu =
+      theme.menuTheme.style?.backgroundColor ??
+      WidgetStatePropertyAll(s.surfaceContainer);
   return theme.copyWith(
     scaffoldBackgroundColor: see(theme.scaffoldBackgroundColor, alpha),
     canvasColor: see(theme.canvasColor, alpha),
@@ -132,20 +155,32 @@ ThemeData withWindowAlpha(ThemeData theme, double alpha) {
       surfaceContainerLow: see(s.surfaceContainerLow, cardAlpha),
       surfaceContainer: see(s.surfaceContainer, cardAlpha),
     ),
-    cardTheme: theme.cardTheme.copyWith(color: see(theme.cardTheme.color ?? s.surfaceContainerLow, cardAlpha)),
-    dialogTheme: theme.dialogTheme.copyWith(backgroundColor: theme.dialogTheme.backgroundColor ?? s.surfaceContainerHigh),
-    popupMenuTheme: theme.popupMenuTheme.copyWith(color: theme.popupMenuTheme.color ?? s.surfaceContainer),
-    menuTheme: MenuThemeData(style: (theme.menuTheme.style ?? const MenuStyle()).copyWith(backgroundColor: solidMenu)),
+    cardTheme: theme.cardTheme.copyWith(
+      color: see(theme.cardTheme.color ?? s.surfaceContainerLow, cardAlpha),
+    ),
+    dialogTheme: theme.dialogTheme.copyWith(
+      backgroundColor:
+          theme.dialogTheme.backgroundColor ?? s.surfaceContainerHigh,
+    ),
+    popupMenuTheme: theme.popupMenuTheme.copyWith(
+      color: theme.popupMenuTheme.color ?? s.surfaceContainer,
+    ),
+    menuTheme: MenuThemeData(
+      style: (theme.menuTheme.style ?? const MenuStyle()).copyWith(
+        backgroundColor: solidMenu,
+      ),
+    ),
     dropdownMenuTheme: theme.dropdownMenuTheme.copyWith(
-      menuStyle: (theme.dropdownMenuTheme.menuStyle ?? const MenuStyle()).copyWith(backgroundColor: solidMenu),
+      menuStyle: (theme.dropdownMenuTheme.menuStyle ?? const MenuStyle())
+          .copyWith(backgroundColor: solidMenu),
     ),
   );
 }
 
 /// Settings › Window › App windows: the choices, in the app's language.
 List<(String, String)> windowStyleChoices(String Function(String) tr) => [
-      ('solid', tr('Solid')),
-      ('transparent', tr('Transparent')),
-      ('glassy', tr('Glassy (blurred)')),
-      ('follow', tr('Follow the desktop')),
-    ];
+  ('solid', tr('Solid')),
+  ('transparent', tr('Transparent')),
+  ('glassy', tr('Glassy (blurred)')),
+  ('follow', tr('Follow the desktop')),
+];
