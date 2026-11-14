@@ -89,13 +89,36 @@ void writeLaunchRecord(
   final px = posix ?? Posix();
   try {
     Directory(p.dirname(dir)).createSync(recursive: true);
-    if (!Directory(dir).existsSync()) px.mkdirAt(-100, dir, 0x1c0 /* 0700 */);
+    if (px.lstatFull(dir) == null) {
+      px.mkdirAt(-100, dir, 0x1c0 /* 0700 */);
+    }
+    // Only a real folder of this user (never through a link); private, as Control requires.
+    final folder = px.lstatFull(dir);
+    if (folder == null ||
+        folder.mode & 0xf000 != 0x4000 ||
+        folder.uid != px.uid) {
+      return;
+    }
+    if (folder.mode & 0x3f != 0) {
+      final fd = px.openAt(
+        -100,
+        dir,
+        0x10000 | 0x20000 /* O_DIRECTORY|O_NOFOLLOW, read-only */,
+      );
+      try {
+        px.chmod(fd, 0x1c0);
+      } finally {
+        px.close(fd);
+      }
+    }
     final target = p.join(dir, 'launch.json');
     final text = '${jsonEncode({'exec': record.exec, 'mode': record.mode})}\n';
-    final existing = File(target);
-    if (FileSystemEntity.typeSync(target, followLinks: false) ==
-            FileSystemEntityType.file &&
-        existing.readAsStringSync() == text) {
+    final current = px.lstatFull(target);
+    if (current != null &&
+        current.mode & 0xf000 == 0x8000 &&
+        current.mode & 0x1ff == 0x180 &&
+        current.uid == px.uid &&
+        File(target).readAsStringSync() == text) {
       return;
     }
     final temp = p.join(dir, '.launch.json.$pid');

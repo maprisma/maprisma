@@ -125,6 +125,31 @@ void main() {
       },
     );
 
+    test('loose modes are made private; a linked folder is never written', () {
+      final env = {'HOME': dir.path, 'XDG_STATE_HOME': '${dir.path}/state'};
+      writeLaunchRecord(env, '/opt/m/maprisma');
+      final f = File('${dir.path}/state/maprisma/launch.json');
+      Process.runSync('chmod', ['0666', f.path]);
+      Process.runSync('chmod', ['0777', '${dir.path}/state/maprisma']);
+      writeLaunchRecord(
+        env,
+        '/opt/m/maprisma',
+      ); // same text: still made private
+      expect(f.statSync().mode & 0x1ff, 0x180);
+      expect(
+        Directory('${dir.path}/state/maprisma').statSync().mode & 0x1ff,
+        0x1c0,
+      );
+      final elsewhere = Directory('${dir.path}/elsewhere')..createSync();
+      Directory('${dir.path}/state2').createSync();
+      Link('${dir.path}/state2/maprisma').createSync(elsewhere.path);
+      writeLaunchRecord({
+        'HOME': dir.path,
+        'XDG_STATE_HOME': '${dir.path}/state2',
+      }, '/opt/m/maprisma');
+      expect(elsewhere.listSync(), isEmpty);
+    });
+
     test(
       'a symlink in place of the record is replaced, never written through',
       () {
