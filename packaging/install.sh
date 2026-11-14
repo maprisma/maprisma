@@ -261,26 +261,33 @@ ldd_all() { # bundle folder -> ldd output of every ELF in it
   local f
   while IFS= read -r -d '' f; do
     [[ $(head -c 4 "$f" | od -An -c | tr -d ' ') == 177ELF ]] || continue
-    LD_LIBRARY_PATH="$1/lib" ldd "$f" 2>&1 || true
+    # -r: also symbols a library of this system lacks (e.g. too old a GLib)
+    LD_LIBRARY_PATH="$1/lib" ldd -r "$f" 2>&1 || true
   done < <(find "$1" -type f -print0)
 }
 ldd_out=$(ldd_all "$here/app")
 missing=$(awk '/=> not found/ {print $1}' <<<"$ldd_out" | sort -u | tr '\n' ' ')
 too_old=$(grep -o "version \`[^']*' not found" <<<"$ldd_out" | sort -u | tr '\n' ' ' || true)
 [[ -z $too_old ]] || blocker "the system's libraries are older than this build needs: $too_old"
+# (only meaningful when every library is there: a missing one leaves its symbols undefined too)
+if [[ -z ${missing// } ]]; then
+  undefined=$(grep -o 'undefined symbol: [A-Za-z0-9_]*' <<<"$ldd_out" | sort -u | head -5 | tr '\n' ' ' || true)
+  [[ -z $undefined ]] || blocker "this system's libraries lack what this build needs (too old?): $undefined"
+fi
 ldconfig=$(command -v ldconfig || echo /sbin/ldconfig)
-for so in libsqlite3.so.0 libzstd.so.1; do
+# loaded at run time, not linked: SQLite and zstd by the core, EGL and GLES by Flutter's renderer
+for so in libsqlite3.so.0 libzstd.so.1 libEGL.so.1 libGLESv2.so.2; do
   "$ldconfig" -p 2>/dev/null | awk -v so="$so" '$1 == so {found = 1} END {exit !found}' || missing+="$so "
 done
 if [[ -n ${missing// } ]]; then
   problem "missing libraries: $missing"
   . /etc/os-release 2>/dev/null || true
   case " ${ID:-} ${ID_LIKE:-} " in
-    *" arch "*) hint="sudo pacman -S --needed gtk3 sqlite zstd" ;;
-    *" debian "*|*" ubuntu "*) hint="sudo apt install libgtk-3-0t64 libsqlite3-0 libzstd1   (before 24.04: libgtk-3-0)" ;;
-    *" fedora "*|*" rhel "*) hint="sudo dnf install gtk3 sqlite-libs libzstd" ;;
-    *" suse "*|*" opensuse "*) hint="sudo zypper install libgtk-3-0 libsqlite3-0 libzstd1" ;;
-    *) hint="GTK 3, SQLite and zstd from your package manager" ;;
+    *" arch "*) hint="sudo pacman -S --needed gtk3 sqlite zstd libglvnd" ;;
+    *" debian "*|*" ubuntu "*) hint="sudo apt install libgtk-3-0t64 libsqlite3-0 libzstd1 libegl1 libgles2   (before 24.04: libgtk-3-0)" ;;
+    *" fedora "*|*" rhel "*) hint="sudo dnf install gtk3 sqlite-libs libzstd libglvnd-egl libglvnd-gles" ;;
+    *" suse "*|*" opensuse "*) hint="sudo zypper install libgtk-3-0 libsqlite3-0 libzstd1 libEGL1 libGLESv2-2" ;;
+    *) hint="GTK 3, SQLite, zstd, EGL and GLES from your package manager" ;;
   esac
   say "    Install them with:  $hint"
 fi
@@ -345,7 +352,7 @@ chmod 755 "$new"
 ((system)) && chown -R 0:0 "$new"
 # the staged copy must load (every ELF), and its core must start
 staged=$(ldd_all "$new")
-if grep -q "=> not found\|version \`[^']*' not found" <<<"$staged" && ! ((ignore_missing)); then
+if grep -q "=> not found\|version \`[^']*' not found\|undefined symbol" <<<"$staged" && ! ((ignore_missing)); then
   say "The installed copy does not load:"; grep "not found" <<<"$staged" | sort -u | head -5
   false
 fi
@@ -417,6 +424,11 @@ case ":$PATH:" in
   *":$bin:"*) say "Start it with: maprisma" ;;
   *) say "Start it from the menu or with: $lib/maprisma   ($bin is not in your PATH)" ;;
 esac
+# A desktop without any font (a bare Hyprland) shows every text as boxes.
+if command -v fc-list >/dev/null && [[ -z $(fc-list 2>/dev/null | head -1) ]]; then
+  say "  ! No font is installed: Maprisma's text would show as boxes. Install one, e.g. noto-fonts (Arch),"
+  say "    fonts-noto-core (Debian, Ubuntu) or google-noto-sans-fonts (Fedora)."
+fi
 # What some features need (not required to start).
 declare -A feature=([curl]="downloads of agents, models and updates" [tar]="installing local LLMs" [setsid]="starting programs"
   [xdg-open]="opening links and the manual" [notify-send]="limit warnings" [wl-paste]="pasting into agent terminals"
