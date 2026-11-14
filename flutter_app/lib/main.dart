@@ -942,6 +942,8 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     }
     // Maprisma Tiling on KDE sizes the window without GTK knowing.
     if (tiledByMaprismaTiling('com.maprisma.Maprisma')) return;
+    // Hyprland: only a floating window's size is the user's.
+    if (hyprland && await hyprlandSizeNotUsers()) return;
     sizes.resized(await windowManager.getSize());
   }
 
