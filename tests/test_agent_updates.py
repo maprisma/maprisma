@@ -9,6 +9,8 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import agent_updates as au  # noqa: E402
 import agents  # noqa: E402
+import desktop  # noqa: E402
+import desktop_omarchy  # noqa: E402
 import install_ctl  # noqa: E402
 import netfetch  # noqa: E402
 
@@ -117,7 +119,8 @@ class AgentUpdatesTest(unittest.TestCase):
         self.assertEqual([(u.available, u.command) for u in found], [("2.1.302", ["mise", "upgrade", "claude"])])
 
     def test_mise_upgrade_reads_the_tool_releases(self):
-        with mock.patch.object(au.subprocess, "Popen") as popen, \
+        with mock.patch.object(desktop, "current", return_value=desktop_omarchy), \
+                mock.patch.object(au.subprocess, "Popen") as popen, \
                 mock.patch.object(au.shutil, "which", side_effect=lambda n: None if n.startswith("omarchy") else f"/usr/bin/{n}"):
             self.assertTrue(au.run_in_terminal(["mise", "upgrade", "claude"]))
         self.assertEqual(popen.call_args[0][0][1:], ["env", "MISE_USE_VERSIONS_HOST=0", "mise", "upgrade", "claude"])
@@ -139,7 +142,8 @@ class AgentUpdatesTest(unittest.TestCase):
         self.assertEqual(au.check([agent("x", "1", "mise")], [], now=2, cache=self.cache), [])
 
     def test_run_in_terminal_only_update_commands(self):
-        with mock.patch.object(au.subprocess, "Popen") as popen, \
+        with mock.patch.object(desktop, "current", return_value=desktop_omarchy), \
+                mock.patch.object(au.subprocess, "Popen") as popen, \
                 mock.patch.object(au.shutil, "which", return_value="/usr/bin/omarchy-launch-floating-terminal-with-presentation"):
             self.assertFalse(au.run_in_terminal(["bash", "-c", "x"]))
             self.assertFalse(au.run_in_terminal(["mise", "upgrade", "a;rm"]))

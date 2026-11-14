@@ -26,6 +26,10 @@ class AgentsTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         root = Path(self.tmp.name)
+        # Installation detection must not discover agents on the developer's PC.
+        environment = unittest.mock.patch.dict(os.environ, {"HOME": str(root), "PATH": ""})
+        environment.start()
+        self.addCleanup(environment.stop)
         self.menu = root / "menu.jsonc"
         self.menu.write_text(MENU)
         self.agent_file = root / "agent"

@@ -187,12 +187,30 @@ class GenericTest(unittest.TestCase):
         import tempfile
         from unittest import mock
         with tempfile.TemporaryDirectory() as tmp:
-            with mock.patch.object(g, "OMARCHY_USAGE", Path(tmp) / "omarchy/agents/usage"):
-                self.assertIsNone(g.usage_dir())                  # another desktop: none
+            with mock.patch.object(g, "OMARCHY_USAGE", Path(tmp) / "omarchy/agents/usage"), \
+                    mock.patch.object(g, "usage_collector", return_value=None), \
+                    mock.patch.object(g.subprocess, "run") as run:
+                self.assertIsNone(g.usage_dir())                  # no records yet
                 self.assertFalse(g.refresh_usage("claude"))
+                run.assert_not_called()
                 (Path(tmp) / "omarchy/agents/usage").mkdir(parents=True)
                 self.assertEqual(g.usage_dir(), Path(tmp) / "omarchy/agents/usage")   # this PC runs Omarchy too
-                self.assertFalse(g.has_usage_collector("../x"))
+            # Validate the real lookup's input guard, independently of installed collectors.
+            self.assertFalse(g.has_usage_collector("../x"))
+
+    def test_usage_collector_can_create_records_on_another_desktop(self):
+        # A collector on PATH works without an existing Omarchy usage directory.
+        with tempfile.TemporaryDirectory() as tmp:
+            usage = Path(tmp) / "omarchy/agents/usage"
+            with mock.patch.object(g, "OMARCHY_USAGE", usage), \
+                    mock.patch.dict(g.os.environ, {"OMARCHY_PATH": ""}), \
+                    mock.patch.object(g, "usage_collector", return_value="/fake/bin/omarchy-agent-usage-claude"), \
+                    mock.patch.object(g.subprocess, "run", return_value=mock.Mock(returncode=0, stdout=b'{}')) as run:
+                self.assertIsNone(g.usage_dir())
+                self.assertTrue(g.refresh_usage("claude"))
+                self.assertEqual(run.call_args.args[0], ["/fake/bin/omarchy-agent-usage-claude"])
+                self.assertEqual(g.usage_dir(), usage)
+                self.assertEqual((usage / "claude.json").read_text(), "{}\n")
 
 
 class LookTest(unittest.TestCase):
