@@ -931,6 +931,15 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         await windowManager.isFullScreen()) {
       return;
     }
+    // A tiled window (COSMIC's auto-tiling, KWin's quick tiles) has the
+    // compositor's size; Hyprland marks floating windows as tiled too.
+    if (!hyprland &&
+        await windowChannel
+                .invokeMethod<bool>('tiled')
+                .catchError((_) => false) ==
+            true) {
+      return;
+    }
     // Maprisma Tiling on KDE sizes the window without GTK knowing.
     if (tiledByMaprismaTiling('com.maprisma.Maprisma')) return;
     sizes.resized(await windowManager.getSize());

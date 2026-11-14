@@ -42,6 +42,19 @@ static void window_call_cb(FlMethodChannel* channel, FlMethodCall* call,
                    nullptr);
     }
     response = FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr));
+  } else if (g_strcmp0(fl_method_call_get_name(call), "tiled") == 0) {
+    // Whether the compositor tiles the window (COSMIC's auto-tiling, KWin's quick tiles):
+    // its size then isn't the user's, so it isn't remembered. window_manager only knows
+    // maximised and full screen.
+    GtkWindow* window =
+        gtk_application_get_active_window(GTK_APPLICATION(user_data));
+    GdkWindow* gdk_window =
+        window != nullptr ? gtk_widget_get_window(GTK_WIDGET(window)) : nullptr;
+    gboolean tiled =
+        gdk_window != nullptr &&
+        (gdk_window_get_state(gdk_window) & GDK_WINDOW_STATE_TILED) != 0;
+    response = FL_METHOD_RESPONSE(
+        fl_method_success_response_new(fl_value_new_bool(tiled)));
   } else {
     response = FL_METHOD_RESPONSE(fl_method_not_implemented_response_new());
   }
