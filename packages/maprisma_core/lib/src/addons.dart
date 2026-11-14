@@ -25,7 +25,7 @@ const legacyNamespace = 'asterism-addon';
 const legacyKey =
     'AAAAC3NzaC1lZDI1NTE5AAAAIEIPZnfPIkyy+IX1J0jfB5g/U8U5jjJTapOogzlKrxlo';
 const legacyReason = "made for Asterism, this app's old name";
-const maprismaVersion = '0.14.6';
+const maprismaVersion = '0.14.7';
 const apiVersion = 1;
 const addonKinds = {'feature', 'agent', 'provider', 'extension'};
 const addonCapabilities = {'agent', 'provider', 'installer', 'updater'};

@@ -25,6 +25,12 @@
   <url type="bugtracker">https://github.com/uBruckhaus/Asterism/issues</url>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.14.7" date="2026-11-14">
+      <description>
+        <p>The window uses the desktop's fonts: its interface font for all text and its monospace font for
+          logs, commands, paths and the terminal (COSMIC, KDE Plasma, Hyprland and GNOME).</p>
+      </description>
+    </release>
     <release version="0.14.6" date="2026-11-14">
       <description>
         <p>Installs on a fresh Linux desktop from the release archive (install.sh, per user or for every user),
