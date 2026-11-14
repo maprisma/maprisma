@@ -1928,7 +1928,9 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   /// needs fixing or there are tips; the smart cards list them.
   Map<String, dynamic>? _healthReport;
   int get _healthCount =>
+      (_healthReport?['error'] as int? ?? 0) +
       (_healthReport?['warn'] as int? ?? 0) +
+      _limitWarnings.length +
       (_healthReport?['hint'] as int? ?? 0) +
       _updates.length +
       _mcpUpdates.length +
@@ -2208,9 +2210,11 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     final yes = await _cardReview(
       tr('Update all'),
       (yes, no) => TaskReview(
-        title: Text(
-          tr('Update all'),
-          style: Theme.of(context).textTheme.titleLarge,
+        title: Builder(
+          builder: (context) => Text(
+            tr('Update all'),
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
         ),
         content: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -2771,8 +2775,30 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   bool _askOpen = false;
   String _askColumn = 'agents';
 
+  /// Warnings of the GUI's own: agents with little left of their limits
+  /// (map.badges' yellow or red, not stale); the core's report has none.
+  List<Map<String, dynamic>> get _limitWarnings => [
+    for (final MapEntry(:key, :value) in _agentBadges.entries)
+      if (value is Map &&
+          (value['colour'] == 'yellow' || value['colour'] == 'red') &&
+          value['stale'] != true)
+        {
+          'level': 'warn',
+          'column': 'agents',
+          'title': tr('{0}: little left of its limits').replaceAll(
+            '{0}',
+            _catalog.where((a) => a['command'] == key).firstOrNull?['name']
+                    as String? ??
+                key,
+          ),
+          'text': '${value['tip'] ?? ''}',
+          'action': ['details', key],
+        },
+  ];
+
   SmartStatusData get _smartStatusData => SmartStatusData(
     report: _healthReport,
+    findings: _limitWarnings,
     updates: _updates,
     addonHints: [..._foundHints, ..._addonHints],
     mcpUpdates: _mcpUpdates,
@@ -4152,10 +4178,12 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                 onPressed: () => terminals.isNotEmpty
                     ? _stopTerminal(terminals.first)
                     : _haltMapAgent(command),
-                icon: Icon(
-                  Icons.stop,
-                  size: 16,
-                  color: Theme.of(context).colorScheme.error,
+                icon: Builder(
+                  builder: (context) => Icon(
+                    Icons.stop,
+                    size: 16,
+                    color: Theme.of(context).colorScheme.error,
+                  ),
                 ),
               ),
           ],
@@ -5563,14 +5591,18 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                     isLabelVisible: _smartHelpers.isEmpty,
                     smallSize: 7,
                     backgroundColor: StatusColors.warn,
-                    child: Icon(
-                      _smartHelpers.isNotEmpty
-                          ? Icons.auto_awesome
-                          : Icons.auto_awesome_outlined,
-                      size: 18,
-                      color: _smartHelpers.isNotEmpty
-                          ? Theme.of(context).colorScheme.primary
-                          : null,
+                    // A Builder: this State builds the MaterialApp, so its
+                    // own context has Flutter's default (purple) theme.
+                    child: Builder(
+                      builder: (context) => Icon(
+                        _smartHelpers.isNotEmpty
+                            ? Icons.auto_awesome
+                            : Icons.auto_awesome_outlined,
+                        size: 18,
+                        color: _smartHelpers.isNotEmpty
+                            ? Theme.of(context).colorScheme.primary
+                            : null,
+                      ),
                     ),
                   ),
                   onPressed: _keysBlocked || _busy || _snapshot == null

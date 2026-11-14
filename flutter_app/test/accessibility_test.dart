@@ -70,7 +70,7 @@ void main() {
         tr: (key) => key,
         status: SmartStatusData(
           report: const {
-            'warn': 1,
+            'error': 1,
             'hint': 0,
             'open_text': '1 open problem',
             'areas': [
@@ -79,7 +79,7 @@ void main() {
                 'title': 'Agents',
                 'findings': [
                   {
-                    'level': 'warn',
+                    'level': 'error',
                     'column': 'agents',
                     'title': 'Pi: Not signed in',
                     'text': '',

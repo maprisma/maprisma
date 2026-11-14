@@ -3535,7 +3535,7 @@ void main() {
         final actions = <List<String>>[];
         final status = SmartStatusData(
           report: const {
-            'warn': 1,
+            'error': 1,
             'hint': 1,
             'areas': [
               {
@@ -3543,7 +3543,7 @@ void main() {
                 'title': 'Agents',
                 'findings': [
                   {
-                    'level': 'warn',
+                    'level': 'error',
                     'column': 'agents',
                     'title': 'Pi: Not signed in',
                     'text': 'Sign in: pi login',

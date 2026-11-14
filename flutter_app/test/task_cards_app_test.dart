@@ -170,7 +170,7 @@ for line in sys.stdin:
  elif m=='found.update_preview':r={'plan':'opaque-update','empty':False,'files':[{'path':'~/.claude.json','added':1,'removed':1}],'links_add':[['~/.local/bin/gridcraft','/h/Applications/gridcraft-0.8.0/usr/bin/gridcraft-cli']],'links_remove':[['~/.local/bin/gridcraft','/h/Applications/gridcraft-0.7.0/usr/bin/gridcraft-cli']],'retire':['~/Applications/gridcraft-0.7.0'],'notes':['The old version is kept with the backup for 7 days: Undo brings everything back.'],'kind':'mcp','focus':['mcp:gridcraft']}
  elif m in ('found.look_inside','found.unpack'):tasks[m]={'ok':True};r={'task':m}
  elif m=='addons.hints':r={'lines':[{'kind':'new','text':'Goose is on this PC but not on the map','ids':['agent-goose'],'column':'agents'},{'kind':'updates','column':'agents','text':'Add-on updates ready: Catalog adapter','updates':[{'id':'catalog-addon','name':'Catalog adapter','version':'2.1','current':'2.0','preview':'catalog-1'}]}]}
- elif m=='health.report':tasks['hr']=(json.loads(Path('health.json').read_text()) if Path('health.json').exists() else {'warn':1,'hint':0,'level':'warn','summary':'1 thing to fix','open_text':'1 open problem','areas':[{'key':'agents','title':'Agents','icon':'','findings':[{'level':'warn','column':'agents','title':'Test agent: Not signed in','text':'','action':['details','test']}]}],'uses':[{'key':'coding','title':'Vibe coding','icon':'','blurb':'Describe what you want.','have':['Test agent'],'steps':[{'level':'hint','column':'mcp','title':'Add skills','text':'Ready-made workflows.','action':['addskills']}],'level':'almost'}]});r={'task':'hr'}
+ elif m=='health.report':tasks['hr']=(json.loads(Path('health.json').read_text()) if Path('health.json').exists() else {'error':1,'hint':0,'level':'error','summary':'1 thing to fix','open_text':'1 open problem','areas':[{'key':'agents','title':'Agents','icon':'','findings':[{'level':'error','column':'agents','title':'Test agent: Not signed in','text':'','action':['details','test']}]}],'uses':[{'key':'coding','title':'Vibe coding','icon':'','blurb':'Describe what you want.','have':['Test agent'],'steps':[{'level':'hint','column':'mcp','title':'Add skills','text':'Ready-made workflows.','action':['addskills']}],'level':'almost'}]});r={'task':'hr'}
  elif m=='agents.health':r={'state':'warn','summary':'Works, one thing to look at: No model chosen','checks':[{'state':'warn','title':'No model chosen','detail':'','step':'Select it on the map.','command':'','sign_in':''}]}
  elif m=='help.snapshot':r={'manual':True}
  elif m=='help.open_manual':r={'opened':True}
@@ -2617,9 +2617,9 @@ void main() {
         beforeStart: (d) {
           File('${d.path}/health.json').writeAsStringSync(
             jsonEncode({
-              'warn': 1,
+              'error': 1,
               'hint': 3,
-              'level': 'warn',
+              'level': 'error',
               'summary': '1 thing to fix · 3 tips',
               'open_text': '1 open problem',
               'areas': [
@@ -2643,7 +2643,7 @@ void main() {
                   'icon': '',
                   'findings': [
                     {
-                      'level': 'warn',
+                      'level': 'error',
                       'column': 'agents',
                       'title': 'Agent finding in column 1',
                       'text': '',
@@ -2707,9 +2707,9 @@ void main() {
         beforeStart: (d) {
           File('${d.path}/health.json').writeAsStringSync(
             jsonEncode({
-              'warn': 1,
+              'error': 1,
               'hint': 0,
-              'level': 'warn',
+              'level': 'error',
               'summary': '1 thing to fix',
               'open_text': '1 open problem',
               'areas': [
@@ -2719,7 +2719,7 @@ void main() {
                   'icon': '',
                   'findings': [
                     {
-                      'level': 'warn',
+                      'level': 'error',
                       'column': 'models',
                       'title': 'Hidden model problem',
                       'text': 'Fix model folder.',
@@ -2747,7 +2747,7 @@ void main() {
           matching: find.byType(SmartStatusIcon),
         ),
       );
-      expect(headerIcon.level, 'warn');
+      expect(headerIcon.level, 'error');
 
       // Clicking the header symbol reveals Models and opens its smart card on the status list.
       await tester.tap(find.byKey(const ValueKey('problems-open')));

@@ -357,8 +357,10 @@ const smartActionLabels = {
   'addskills': 'Add skills',
 };
 
-/// A column's or header's state: check mark in green circle ('ok'),
-/// Tips and updates are information; only actionable problems use an alarm.
+/// A column's or header's state (Uwe, 2026-11-15): red "!" only for errors
+/// (something broken: a model too big for the GPU, a broken line, a full
+/// disk, an agent not ready); amber warning only for low limits and updates;
+/// tips an "i"; green check when all is well ('ok').
 class SmartStatusIcon extends StatelessWidget {
   const SmartStatusIcon({super.key, required this.level, this.size = 16});
   final String level;
@@ -368,7 +370,12 @@ class SmartStatusIcon extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     return switch (level) {
-      'warn' => Icon(Icons.error, size: size, color: colors.error),
+      'error' => Icon(Icons.error, size: size, color: colors.error),
+      'warn' => Icon(
+        Icons.warning_amber_rounded,
+        size: size,
+        color: StatusColors.warn,
+      ),
       'hint' => Icon(Icons.info_outline, size: size, color: colors.primary),
       _ => Icon(Icons.check_circle, size: size, color: StatusColors.ok),
     };
@@ -439,10 +446,9 @@ class SmartStatusData {
   List<Map<String, dynamic>> findingsFor(String column) {
     final all = _allFindings;
     return [
-      for (final f in all)
-        if (_findingColumn(f) == column && f['level'] == 'warn') f,
-      for (final f in all)
-        if (_findingColumn(f) == column && f['level'] == 'hint') f,
+      for (final level in const ['error', 'warn', 'hint'])
+        for (final f in all)
+          if (_findingColumn(f) == column && f['level'] == level) f,
     ];
   }
 
@@ -463,13 +469,18 @@ class SmartStatusData {
 
   String columnLevel(String column) {
     final colFindings = findingsFor(column);
-    // The core marks only real problems 'warn' (no agent, not signed in, a
-    // broken connection, a full disk); tips and updates stay information.
-    if (colFindings.any((f) => f['level'] == 'warn')) return 'warn';
-    if (colFindings.isNotEmpty ||
+    // The core marks broken things 'error'; warnings are only low limits
+    // (the GUI's findings) and anything outdated (updates); the rest are tips.
+    if (colFindings.any((f) => f['level'] == 'error')) return 'error';
+    if (colFindings.any((f) => f['level'] == 'warn') ||
         updatesFor(column).isNotEmpty ||
-        addonHintsFor(column).isNotEmpty ||
-        mcpUpdatesFor(column).isNotEmpty) {
+        mcpUpdatesFor(column).isNotEmpty ||
+        addonHintsFor(
+          column,
+        ).any((h) => (h['updates'] as List? ?? const []).isNotEmpty)) {
+      return 'warn';
+    }
+    if (colFindings.isNotEmpty || addonHintsFor(column).isNotEmpty) {
       return 'hint';
     }
     return 'ok';
@@ -481,22 +492,18 @@ class SmartStatusData {
       addonHintsFor(column).length +
       mcpUpdatesFor(column).length;
 
+  static const _levels = ['error', 'warn', 'hint'];
+
   String get overallLevel {
-    var hasHint = false;
-    for (final (col, _) in mapSmartColumns) {
-      final l = columnLevel(col);
-      if (l == 'warn') return 'warn';
-      if (l == 'hint') hasHint = true;
-    }
-    return hasHint ? 'hint' : 'ok';
+    final found = {for (final (col, _) in mapSmartColumns) columnLevel(col)};
+    return _levels.firstWhere(found.contains, orElse: () => 'ok');
   }
 
   String get firstConcernedColumn {
-    for (final (col, _) in mapSmartColumns) {
-      if (columnLevel(col) == 'warn') return col;
-    }
-    for (final (col, _) in mapSmartColumns) {
-      if (columnLevel(col) == 'hint') return col;
+    for (final level in _levels) {
+      for (final (col, _) in mapSmartColumns) {
+        if (columnLevel(col) == level) return col;
+      }
     }
     return 'agents';
   }

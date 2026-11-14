@@ -31,10 +31,10 @@ class UseCaseCards extends StatelessWidget {
       dense: true,
       contentPadding: EdgeInsets.zero,
       leading: Text(
-        const {'ok': '✓', 'hint': '→', 'warn': '!'}[level] ?? '·',
+        const {'ok': '✓', 'hint': '→', 'warn': '⚠', 'error': '!'}[level] ?? '·',
         style: TextStyle(
           fontWeight: FontWeight.bold,
-          color: level == 'warn'
+          color: level == 'error'
               ? scheme.error
               : level == 'ok'
               ? StatusColors.ok
