@@ -195,9 +195,20 @@ recover() {
     [[ -n $old && -d $old && $(txn_of "$old") != "$txn" ]] && rm -rf -- "$old"
   else
     say "Rolling back an install that did not finish…"
-    for name in "${!outer[@]}"; do            # outer files back as they were
-      if [[ -e $bak/$name || -L $bak/$name ]]; then mv -fT -- "$bak/$name" "${target[$name]}"
-      elif [[ -e $bak/$name.absent ]]; then rm -f -- "${target[$name]}"; fi
+    # Outer files back as they were, but only while they are still what this run wrote (its
+    # receipt, in its folder): a file changed since the interruption is kept.
+    local txn_dir=""
+    if [[ -d $lib && $(txn_of "$lib") == "$txn" ]]; then txn_dir=$lib; elif [[ -d $new ]]; then txn_dir=$new; fi
+    receipt_ok=0
+    [[ -n $txn_dir ]] && read_receipt "$txn_dir/.install-receipt"
+    for name in "${!outer[@]}"; do
+      local t=${target[$name]}
+      if [[ -e $t || -L $t ]] && ! ours "$name"; then
+        say "Kept $t: it was changed after the interrupted install."
+        continue
+      fi
+      if [[ -e $bak/$name || -L $bak/$name ]]; then mv -fT -- "$bak/$name" "$t"
+      elif [[ -e $bak/$name.absent ]]; then rm -f -- "$t"; fi
     done
     step recover-outer
     for name in "${!tmp_of[@]}"; do rm -f -- "${tmp_of[$name]}"; done
@@ -436,6 +447,10 @@ command -v update-desktop-database >/dev/null && update-desktop-database -q "$sh
 command -v gtk-update-icon-cache >/dev/null && gtk-update-icon-cache -q -t "$share/icons/hicolor" 2>/dev/null || true
 
 say "Done: Maprisma ${version:-} is in your app menu."
+# COSMIC's dock reads the menu entries once per login: until the next one it shows a gear for it.
+case ":${XDG_CURRENT_DESKTOP:-}:" in
+  *:COSMIC:*) say "COSMIC shows Maprisma's icon in the dock after your next login." ;;
+esac
 case ":$PATH:" in
   *":$bin:"*) say "Start it with: maprisma" ;;
   *) say "Start it from the menu or with: $lib/maprisma   ($bin is not in your PATH)" ;;

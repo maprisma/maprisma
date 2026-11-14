@@ -151,6 +151,15 @@ out=$(run "$T/a2/install.sh" --ignore-missing 2>&1); rc=$?
 check "journal symlink refused" '[[ $rc != 0 && $(cat "$T/victim/file") == keep ]]'
 rm -f "$H/.local/lib/.maprisma-install.journal"
 
+# 9c2 an outer file changed after the interruption is kept by the rollback
+fresh
+run "$T/a1/install.sh" --ignore-missing >/dev/null 2>&1
+run env MAPRISMA_INSTALL_TEST_FAIL_AT=outer "$T/a2/install.sh" --ignore-missing >/dev/null 2>&1
+echo "# mine" >>"$ENTRY"
+out=$(run "$T/a1/install.sh" --ignore-missing 2>&1); rc=$?
+check "rollback keeps a file changed after the interruption ($out)" '[[ $out == *"Kept $ENTRY"* ]] && grep -q "# mine" "$ENTRY"'
+check "the rest rolled back (icon of version 1)" 'grep -q 1.0.0 "$ICON"'
+
 # 9d an incomplete journal (no bak) is refused before anything moves
 fresh
 run "$T/a1/install.sh" --ignore-missing >/dev/null 2>&1

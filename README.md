@@ -89,7 +89,8 @@ install starts local LLMs together with their agents in the background (the prov
 **The AppImage.** `Maprisma-<version>-x86_64.AppImage` runs without installing:
 `chmod +x Maprisma-*.AppImage && ./Maprisma-*.AppImage`. It needs the same libraries, and FUSE 3
 (`fusermount3`, from the `fuse3` package; most desktops have it); without FUSE start it with
-`--appimage-extract-and-run`. It does not add a menu entry and does not run the providers service.
+`--appimage-extract-and-run` (the AppImage then unpacks itself to `/tmp/appimage_extracted_…`, about
+100 MB, which stays until the next restart or until you delete it). It does not add a menu entry and does not run the providers service.
 
 **The bar icon** is [Maprisma Control](https://github.com/maprisma/control), a release of its own: a
 COSMIC panel applet and a tray icon for KDE Plasma and Hyprland (in a bar with a system tray, e.g.
