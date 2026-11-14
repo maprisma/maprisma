@@ -69,8 +69,11 @@ def glibc_needs(bundle: Path) -> dict[str, str]:
         with path.open('rb') as f:
             if f.read(4) != b'\x7fELF':
                 continue
-        out = subprocess.run(['objdump', '-T', str(path)], capture_output=True, text=True).stdout
-        found = sorted(set(re.findall(r'\bGLIBC_([0-9]+(?:\.[0-9]+)+)\b', out)), key=_version)
+        result = subprocess.run(['objdump', '-T', str(path)], capture_output=True, text=True)
+        if result.returncode != 0:
+            # an ELF that can't be read must not pass as needing nothing
+            raise SystemExit(f'objdump -T {path} failed: {result.stderr.strip()[:200]}')
+        found = sorted(set(re.findall(r'\bGLIBC_([0-9]+(?:\.[0-9]+)+)\b', result.stdout)), key=_version)
         if found:
             needs[str(path.relative_to(bundle))] = found[-1]
     return needs

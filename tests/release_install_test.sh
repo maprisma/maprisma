@@ -4,7 +4,8 @@
 #   tests/release_install_test.sh
 set -uo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
-T=$(mktemp -d "${TMPDIR:-/tmp}/release install.XXXXXX")   # a space on purpose
+T=$(mktemp -d "${TMPDIR:-/tmp}/release install.XXXXXX") || { echo "no temp folder" >&2; exit 1; }   # a space on purpose
+[[ $T == */release\ install.* && -d $T ]] || { echo "unexpected temp folder: $T" >&2; exit 1; }
 trap 'rm -rf "$T"' EXIT
 pass=0 fail=0
 ok() { pass=$((pass + 1)); }
@@ -28,7 +29,7 @@ archive() { # dir version
 archive "$T/a1" 1.0.0
 archive "$T/a2" 2.0.0
 H="$T/home"
-fresh() { rm -rf "$H"; mkdir -p "$H"; }
+fresh() { [[ $H == "$T"/home ]] || exit 1; rm -rf "$H"; mkdir -p "$H"; }
 # the host's own Maprisma package is not this test's business
 TESTENV=(MAPRISMA_INSTALL_TEST=1 MAPRISMA_INSTALL_TEST_SYSAPP=/nonexistent/maprisma)
 run() { env -i HOME="$H" PATH="$PATH" USER=tester LANG=C "${TESTENV[@]}" "$@"; }
@@ -121,6 +122,32 @@ for at in staged prepared moved-old activated outer; do
   check "after a stop at $at: version 1 in place" 'grep -q 1.0.0 "$L/data/flutter_assets/version.json" && grep -q 1.0.0 "$ICON"'
   check "after a stop at $at: no leftovers" '[[ -z $(leftovers) ]]'
 done
+
+# 9b recovery itself interrupted (after a stop at "outer"): running again still ends in the old state
+for rat in recover-outer recover-folder recover-cleanup; do
+  fresh
+  run "$T/a1/install.sh" --ignore-missing >/dev/null 2>&1
+  run env MAPRISMA_INSTALL_TEST_FAIL_AT=outer "$T/a2/install.sh" --ignore-missing >/dev/null 2>&1
+  run env MAPRISMA_INSTALL_TEST_FAIL_AT=$rat "$T/a1/install.sh" --ignore-missing >/dev/null 2>&1
+  out=$(run "$T/a1/install.sh" --ignore-missing 2>&1); rc=$?
+  check "recovery stopped at $rat, then run again: succeeds ($out)" '[[ $rc == 0 ]]'
+  check "recovery stopped at $rat: version 1 in place" 'grep -q 1.0.0 "$L/data/flutter_assets/version.json" && grep -q 1.0.0 "$ICON"'
+  check "recovery stopped at $rat: no leftovers" '[[ -z $(leftovers) ]]'
+done
+
+# 9c a journal that names anything outside this install is refused; nothing is touched
+fresh
+run "$T/a1/install.sh" --ignore-missing >/dev/null 2>&1
+mkdir -p "$T/victim"; echo keep >"$T/victim/file"
+printf 'txn\tabcdef\nnew\t%s\n' "$L.new.abcdef/../../../victim" >"$H/.local/lib/.maprisma-install.journal"
+out=$(run "$T/a2/install.sh" --ignore-missing 2>&1); rc=$?
+check "forged journal refused ($out)" '[[ $rc != 0 && $out == *"journal"* && -f $T/victim/file ]]'
+check "forged journal: install untouched" 'grep -q 1.0.0 "$L/data/flutter_assets/version.json"'
+rm -f "$H/.local/lib/.maprisma-install.journal"
+ln -s "$T/victim/file" "$H/.local/lib/.maprisma-install.journal"
+out=$(run "$T/a2/install.sh" --ignore-missing 2>&1); rc=$?
+check "journal symlink refused" '[[ $rc != 0 && $(cat "$T/victim/file") == keep ]]'
+rm -f "$H/.local/lib/.maprisma-install.journal"
 
 # 10 custom XDG_DATA_HOME with a space
 fresh

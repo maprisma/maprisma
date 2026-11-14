@@ -73,7 +73,7 @@ root_safe() { # path
   done
 }
 if ((system)); then
-  for p in "$lib" "$bin" "$share/applications" "$share/metainfo" "$share/icons"; do
+  for p in "$lib" "$bin" "$share/applications" "$share/metainfo" "$share/icons/hicolor/scalable/apps"; do
     root_safe "$p" || die "$p (or a folder above it) is not root-owned or is writable by others: nothing was changed"
   done
 fi
@@ -120,56 +120,81 @@ ours() { # name
 mkdir -p "$parent"
 exec {install_lock}>>"$parent/.maprisma-install.lock"
 flock -n "$install_lock" || die "another Maprisma install or uninstall is running: nothing was changed"
-# A running Maprisma of this install holds data/instance.lock shared; we take it exclusively.
+# A running Maprisma holds <bundle>/data/instance.lock shared; we take it exclusively, for the old
+# bundle now and for the new one before it is activated (the descriptors follow the folders' renames).
+lock_instance() { # bundle folder
+  local fd
+  [[ -f $1/data/instance.lock && ! -L $1/data/instance.lock ]] || return 0
+  exec {fd}<"$1/data/instance.lock"
+  flock -n -x "$fd"
+}
 if [[ -f $lib/data/instance.lock ]]; then
-  exec {instance_lock}<"$lib/data/instance.lock"
-  flock -n -x "$instance_lock" || die "Maprisma is running (for you or another user): close it first; nothing was changed"
+  lock_instance "$lib" || die "Maprisma is running (for you or another user): close it first; nothing was changed"
 elif [[ -d $lib ]]; then
   for exe in /proc/[0-9]*/exe; do
     case $(readlink "$exe" 2>/dev/null) in "$lib"/*) die "Maprisma is running: close it first; nothing was changed" ;; esac
   done
 fi
 
+# Tests only (MAPRISMA_INSTALL_TEST=1): stop at a named step, as a crash there would.
+[[ -n ${MAPRISMA_INSTALL_TEST:-} && -n ${MAPRISMA_INSTALL_TEST_FAIL_AT:-} ]] && fail_at=$MAPRISMA_INSTALL_TEST_FAIL_AT || fail_at=""
+step() { [[ $fail_at != "$1" ]] || { say "(test: stopping at $1)"; trap - EXIT; exit 99; }; }
+
 # ---------------------------------------------------------------- recovery of an interrupted run
-# The journal lists what a run did; an unfinished one is rolled back to the complete old state.
+# The journal lists what a run did, each staged folder carries the run's id (.install-id): an
+# unfinished run is rolled back to the complete old state, a finished one cleaned up. Every step
+# looks at the state first, so an interrupted recovery can simply run again.
+own_uid=$(id -u)
+id_re='[A-Za-z0-9]{6}'
+re_quote() { printf '%s' "$1" | sed 's/[][\.*^$+?(){}|/]/\\&/g'; }
+lib_re=$(re_quote "$lib") parent_re=$(re_quote "$parent")
+private_file() { # a regular file of ours (root's for --system) nobody else can write
+  [[ -f $1 && ! -L $1 && $(stat -c %u "$1") == "$own_uid" ]] && (( (8#$(stat -c %a "$1") & 8#022) == 0 ))
+}
+txn_of() { [[ -f $1/.install-id && ! -L $1/.install-id ]] && head -c 64 "$1/.install-id" || true; }
 recover() {
-  [[ -f $journal ]] || return 0
-  local key a b new="" old="" bak="" done=0
-  local -a tmps=() outers=()
-  while IFS=$'\t' read -r key a b; do
+  [[ -e $journal || -L $journal ]] || return 0
+  private_file "$journal" || die "the install journal $journal is not a private file of yours: check and remove it"
+  local key a b extra txn="" new="" old="" bak="" done=0 n=0
+  local -A tmp_of=() outer=()
+  while IFS=$'\t' read -r key a b extra || [[ -n ${key:-} ]]; do
+    n=$((n + 1)); ((n <= 32)) && [[ -z ${extra:-} ]] || die "the install journal $journal is not valid: check and remove it"
     case $key in
-      new) new=$a ;; old) old=$a ;; bak) bak=$a ;; done) done=1 ;;
-      tmp) tmps+=("$b") ;; outer) outers+=("$a") ;;
+      txn) [[ -z $txn && $a =~ ^$id_re$ && -z $b ]] || die "the install journal $journal is not valid" ; txn=$a ;;
+      new) [[ -z $new && $a =~ ^$lib_re\.new\.$id_re$ ]] || die "the install journal $journal is not valid"; new=$a ;;
+      old) [[ -z $old && $a =~ ^$lib_re\.old\.$id_re$ ]] || die "the install journal $journal is not valid"; old=$a ;;
+      bak) [[ -z $bak && $a =~ ^$parent_re/\.maprisma-backup\.$id_re$ ]] || die "the install journal $journal is not valid"; bak=$a ;;
+      tmp) [[ -n ${target[$a]:-} && -z ${tmp_of[$a]:-} && $b =~ ^$(re_quote "$(dirname "${target[$a]}")")/\.maprisma-new\.$id_re$ ]] ||
+             die "the install journal $journal is not valid"; tmp_of[$a]=$b ;;
+      outer) [[ -n ${target[$a]:-} ]] || die "the install journal $journal is not valid"; outer[$a]=1 ;;
+      done) done=1 ;;
+      *) die "the install journal $journal is not valid" ;;
     esac
   done <"$journal"
-  # only paths of this install (a journal is ours, but never trusted beyond our own folders)
-  for p in "$new" "$old"; do [[ -z $p || $p == "$lib".new.* || $p == "$lib".old.* ]] || die "the install journal $journal is not valid: fix or remove it"; done
-  [[ -z $bak || $bak == "$parent"/.maprisma-backup.* ]] || die "the install journal $journal is not valid: fix or remove it"
+  [[ -n $txn ]] || die "the install journal $journal is not valid"
   if ((done)); then
-    [[ -n $old ]] && rm -rf -- "$old"
+    [[ -n $old && -d $old && $(txn_of "$old") != "$txn" ]] && rm -rf -- "$old"
   else
     say "Rolling back an install that did not finish…"
-    for name in "${outers[@]}"; do
-      case $name in bin|desktop|metainfo|icon) ;; *) continue ;; esac
+    for name in "${!outer[@]}"; do            # outer files back as they were
       if [[ -e $bak/$name || -L $bak/$name ]]; then mv -fT -- "$bak/$name" "${target[$name]}"
       elif [[ -e $bak/$name.absent ]]; then rm -f -- "${target[$name]}"; fi
     done
-    for t in "${tmps[@]}"; do [[ $t == */.maprisma-new.* ]] && rm -f -- "$t"; done
-    if [[ -n $new && -e $new ]]; then
-      rm -rf -- "$new"                                    # never activated
-    elif [[ -n $new ]]; then
-      rm -rf -- "$lib"                                    # activated: the new folder is $lib
-    fi
-    [[ -n $old && -e $old && ! -e $lib ]] && mv -T -- "$old" "$lib"
+    step recover-outer
+    for name in "${!tmp_of[@]}"; do rm -f -- "${tmp_of[$name]}"; done
+    # the folder: $lib is the new one only when it carries this run's id
+    if [[ -d $lib && $(txn_of "$lib") == "$txn" ]]; then rm -rf -- "$lib"; fi
+    step recover-folder
+    if [[ ! -e $lib && -n $old && -d $old ]]; then mv -T -- "$old" "$lib"; fi
+    if [[ -n $new && -d $new ]]; then rm -rf -- "$new"; fi
   fi
-  [[ -n $bak ]] && rm -rf -- "$bak"
+  step recover-cleanup
+  [[ -n $bak && -d $bak ]] && rm -rf -- "$bak"
   rm -f -- "$journal"
   return 0
 }
 recover
 note() { printf '%s\n' "$*" >>"$journal"; }
-[[ -n ${MAPRISMA_INSTALL_TEST:-} && -n ${MAPRISMA_INSTALL_TEST_FAIL_AT:-} ]] && fail_at=$MAPRISMA_INSTALL_TEST_FAIL_AT || fail_at=""
-step() { [[ $fail_at != "$1" ]] || { say "(test: stopping at $1)"; trap - EXIT; exit 99; }; }
 
 # ---------------------------------------------------------------- uninstall
 if [[ $action == uninstall ]]; then
@@ -225,10 +250,18 @@ if [[ -z $have ]]; then
 elif [[ $(printf '%s\n%s\n' "$need" "$have" | sort -V | head -1) != "$need" ]]; then
   blocker "glibc $have is too old: this build needs $need or newer"
 fi
-ldd_out=$(for f in "$here/app/maprisma" "$here"/app/lib/*.so "$here/app/lib/maprisma-core"; do
-  LD_LIBRARY_PATH="$here/app/lib" ldd "$f" 2>&1; done)
+# every ELF file of the bundle: missing libraries and too old versions of present ones
+ldd_all() { # bundle folder -> ldd output of every ELF in it
+  local f
+  while IFS= read -r -d '' f; do
+    [[ $(head -c 4 "$f" | od -An -c | tr -d ' ') == 177ELF ]] || continue
+    LD_LIBRARY_PATH="$1/lib" ldd "$f" 2>&1 || true
+  done < <(find "$1" -type f -print0)
+}
+ldd_out=$(ldd_all "$here/app")
 missing=$(awk '/=> not found/ {print $1}' <<<"$ldd_out" | sort -u | tr '\n' ' ')
-grep -q "version \`GLIBC" <<<"$ldd_out" && blocker "the system's C library is older than this build needs"
+too_old=$(grep -o "version \`[^']*' not found" <<<"$ldd_out" | sort -u | tr '\n' ' ' || true)
+[[ -z $too_old ]] || blocker "the system's libraries are older than this build needs: $too_old"
 ldconfig=$(command -v ldconfig || echo /sbin/ldconfig)
 for so in libsqlite3.so.0 libzstd.so.1; do
   "$ldconfig" -p 2>/dev/null | awk -v so="$so" '$1 == so {found = 1} END {exit !found}' || missing+="$so "
@@ -249,8 +282,8 @@ fi
 pkg="" sys_app=/usr/lib/maprisma/maprisma
 [[ -n ${MAPRISMA_INSTALL_TEST:-} && -n ${MAPRISMA_INSTALL_TEST_SYSAPP:-} ]] && sys_app=$MAPRISMA_INSTALL_TEST_SYSAPP
 if [[ -e $sys_app ]]; then
-  pkg=$(pacman -Qqo "$sys_app" 2>/dev/null || dpkg -S "$sys_app" 2>/dev/null | cut -d: -f1 ||
-        rpm -qf "$sys_app" 2>/dev/null || true)
+  pkg=$(pacman -Qqo "$sys_app" 2>/dev/null) || pkg=$(dpkg -S "$sys_app" 2>/dev/null) || pkg=$(rpm -qf "$sys_app" 2>/dev/null) || pkg=""
+  pkg=${pkg%%:*}
   if [[ -n $pkg ]]; then
     blocker "Maprisma is installed as the package $pkg: remove it first (two installs would show two menu entries)"
   else
@@ -281,21 +314,41 @@ fi
 
 # ---------------------------------------------------------------- install: the transaction
 mkdir -p "$bin" "$(dirname "${target[desktop]}")" "$(dirname "${target[metainfo]}")" "$(dirname "${target[icon]}")"
+if ((system)); then   # again, now that they exist
+  for name in "${NAMES[@]}"; do
+    root_safe "$(dirname "${target[$name]}")" || die "$(dirname "${target[$name]}") is not root-owned or is writable by others: nothing was changed"
+  done
+fi
+txn=$(od -An -N3 -tx1 /dev/urandom | tr -d ' \n')   # 6 hex digits, no SIGPIPE under pipefail
 new=$(mktemp -d "$lib.new.XXXXXX")
+printf '%s\n' "$txn" >"$new/.install-id"     # first: recovery knows the folder by it
 bak=$(mktemp -d "$parent/.maprisma-backup.XXXXXX")
+: >"$journal"
+note "txn	$txn"
 note "new	$new"
 note "bak	$bak"
 trap 'say "Install failed: rolling back."; recover; exit 1' ERR
 trap 'recover' EXIT
-cp -a "$here/app/." "$new/"
+cp -R --preserve=mode,timestamps,links --no-preserve=ownership -- "$here/app/." "$new/"
 install -m755 "$here/uninstall.sh" "$new/uninstall.sh"
 install -m755 "$0" "$new/.installer.sh"
 install -m644 "$here/LICENSE" "$new/LICENSE"
+chmod -R go-w "$new"
 chmod 755 "$new"
-# the staged copy must load
-if LD_LIBRARY_PATH="$new/lib" ldd "$new/maprisma" "$new/lib/maprisma-core" 2>&1 | grep -q "version \`GLIBC"; then
+((system)) && chown -R 0:0 "$new"
+# the staged copy must load (every ELF), and its core must start
+staged=$(ldd_all "$new")
+if grep -q "=> not found\|version \`[^']*' not found" <<<"$staged" && ! ((ignore_missing)); then
+  say "The installed copy does not load:"; grep "not found" <<<"$staged" | sort -u | head -5
   false
 fi
+# an unknown subcommand: 64 (or 0) from a core that loaded; 127 when the loader fails
+core_rc=0
+"$new/lib/maprisma-core" --installer-check </dev/null >/dev/null 2>&1 || core_rc=$?
+if ! ((ignore_missing)) && [[ $core_rc != 0 && $core_rc != 64 ]]; then
+  say "The installed copy's core does not start (exit $core_rc)."; false
+fi
+lock_instance "$new"   # a Maprisma started from the new folder waits until we are done
 step staged
 
 desktop_exec() { # quoted for a desktop file: spaces, quotes, $, `, \ and % escaped
@@ -304,22 +357,27 @@ desktop_exec() { # quoted for a desktop file: spaces, quotes, $, `, \ and % esca
   printf '"%s"' "$v"
 }
 declare -A tmp=()
-for name in desktop metainfo icon; do
-  tmp[$name]=$(mktemp "$(dirname "${target[$name]}")/.maprisma-new.XXXXXX")
+for name in "${NAMES[@]}"; do
+  tmp[$name]=$(mktemp -u "$(dirname "${target[$name]}")/.maprisma-new.XXXXXX")
   note "tmp	$name	${tmp[$name]}"
 done
-{
-  grep -v -e '^Exec=' -e '^TryExec=' "$here/share/applications/$APP_ID.desktop"
-  printf 'Exec=%s\nTryExec=%s\nX-Maprisma-Install=%s\n' "$(desktop_exec "$lib/maprisma")" "$lib/maprisma" "$lib"
-} >"${tmp[desktop]}"
-cat "$here/share/metainfo/$APP_ID.metainfo.xml" >"${tmp[metainfo]}"
-cat "$here/share/icons/hicolor/scalable/apps/$APP_ID.svg" >"${tmp[icon]}"
-chmod 644 "${tmp[desktop]}" "${tmp[metainfo]}" "${tmp[icon]}"
+ln -sT -- "$lib/maprisma" "${tmp[bin]}"
+(
+  umask 022
+  set -o noclobber
+  {
+    grep -v -e '^Exec=' -e '^TryExec=' "$here/share/applications/$APP_ID.desktop"
+    printf 'Exec=%s\nTryExec=%s\nX-Maprisma-Install=%s\n' "$(desktop_exec "$lib/maprisma")" "$lib/maprisma" "$lib"
+  } >"${tmp[desktop]}"
+  cat "$here/share/metainfo/$APP_ID.metainfo.xml" >"${tmp[metainfo]}"
+  cat "$here/share/icons/hicolor/scalable/apps/$APP_ID.svg" >"${tmp[icon]}"
+)
 {
   printf 'bin\tlink\t%s\n' "$lib/maprisma"
   for name in desktop metainfo icon; do printf '%s\tsha256\t%s\n' "$name" "$(sha256sum "${tmp[$name]}" | cut -d' ' -f1)"; done
 } >"$new/.install-receipt"
 chmod 644 "$new/.install-receipt"
+((system)) && chown 0:0 "$new/.install-receipt"
 # backups of what is there now (ours, checked above)
 for name in "${NAMES[@]}"; do
   t=${target[$name]}
@@ -336,9 +394,7 @@ if [[ -e $lib ]]; then
 fi
 mv -T -- "$new" "$lib"
 step activated
-note "outer	bin"
-ln -sfnT -- "$lib/maprisma" "$bin/.maprisma-new.$$" && mv -fT -- "$bin/.maprisma-new.$$" "${target[bin]}"
-for name in desktop metainfo icon; do
+for name in "${NAMES[@]}"; do
   note "outer	$name"
   mv -fT -- "${tmp[$name]}" "${target[$name]}"
 done
