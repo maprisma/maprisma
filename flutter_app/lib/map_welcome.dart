@@ -146,7 +146,26 @@ class MapWelcome extends StatelessWidget {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
-        actions: actions,
+        // the whole welcome text (where to start, privacy) stays one click away
+        actions: [
+          TextButton(
+            key: const ValueKey('welcome-details'),
+            onPressed: () => showDialog<void>(
+              context: context,
+              builder: (context) => AlertDialog(
+                content: SingleChildScrollView(child: intro),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: Text(tr('Close')),
+                  ),
+                ],
+              ),
+            ),
+            child: Text(tr('Details…')),
+          ),
+          ...actions,
+        ],
       );
     }
     final maxHeight = (height * 0.2).clamp(48.0, 110.0);

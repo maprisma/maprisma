@@ -37,6 +37,12 @@ void main() {
     (tester) async {
       final h = await introHeight(tester, const Size(855, 465));
       expect(h, lessThan(30)); // one line
+      // the whole text one click away
+      await tester.tap(find.byKey(const ValueKey('welcome-details')));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Only this PC is inspected'), findsOneWidget);
+      await tester.tap(find.text('Close'));
+      await tester.pumpAndSettle();
       expect(
         tester.getSize(find.byKey(const ValueKey('below'))).height,
         greaterThan(330),
