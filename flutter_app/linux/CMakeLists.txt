@@ -55,6 +55,10 @@ function(APPLY_STANDARD_SETTINGS TARGET)
   target_compile_options(${TARGET} PRIVATE -Wall -Werror)
   target_compile_options(${TARGET} PRIVATE "$<$<NOT:$<CONFIG:Debug>>:-O3>")
   target_compile_definitions(${TARGET} PRIVATE "$<$<NOT:$<CONFIG:Debug>>:NDEBUG>")
+  # Task 073: the release runs on GLib 2.68 and newer (Rocky 9, Debian 12, Ubuntu 22.04). Newer
+  # headers would otherwise make G_DEFINE_TYPE call g_once_init_enter_pointer (GLib 2.80+); with -Werror
+  # any newer GLib API fails the build.
+  target_compile_definitions(${TARGET} PRIVATE GLIB_VERSION_MIN_REQUIRED=GLIB_VERSION_2_68 GLIB_VERSION_MAX_ALLOWED=GLIB_VERSION_2_68)
 endfunction()
 
 # Flutter library and tool build rules.
