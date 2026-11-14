@@ -25,6 +25,13 @@
   <url type="bugtracker">https://github.com/uBruckhaus/Asterism/issues</url>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.14.6" date="2026-11-14">
+      <description>
+        <p>Installs on a fresh Linux desktop from the release archive (install.sh, per user or for every user),
+          checking the system first. The window follows Maprisma Settings › App windows (Solid, Transparent,
+          Glassy or Follow the desktop), and a tiled window's size is no longer remembered.</p>
+      </description>
+    </release>
     <release version="0.14.5" date="2026-11-12">
       <description>
         <p>Add-on files are unpacked within a fixed size limit on what really comes out, so a damaged or
