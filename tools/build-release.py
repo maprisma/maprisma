@@ -12,6 +12,8 @@ folder maprisma-<version>/ with:
     share/metainfo/           com.maprisma.Maprisma.metainfo.xml
     share/icons/hicolor/scalable/apps/com.maprisma.Maprisma.svg
     LICENSE
+    install.sh, uninstall.sh  the installer for a fresh system (task 073; per user or --system)
+    glibc                     the highest glibc version the bundle needs (read by install.sh)
 The AUR package maprisma-bin and the AppImage are made from it (packaging/).
 
     tools/build-release.py [--addons <maprisma-addons checkout>]
@@ -81,7 +83,11 @@ def main():
         shutil.copy2(ROOT / 'data/helpers.json', bundle / 'data/helpers.json')   # the AI helpers (JSON)
         subprocess.run([sys.executable, str(ROOT / 'packaging/unpack-adapters.py'), str(adapters),
                         str(bundle / 'addons')], check=True)
+        # Task 073: the running app's shared lock, taken exclusively by install.sh while it replaces the bundle.
+        (bundle / 'data/instance.lock').write_bytes(b'')
         subprocess.run([sys.executable, str(ROOT / 'tools/check-bundle.py'), str(bundle)], check=True)
+        glibc = subprocess.run([sys.executable, str(ROOT / 'tools/check-bundle.py'), '--glibc', str(bundle)],
+                               check=True, capture_output=True, text=True).stdout.strip()
         top = Path(temp) / f'maprisma-{ver}'
         shutil.copytree(bundle, top / 'app', symlinks=True)
         for source, target in ((f'data/{APP_ID}.desktop', 'share/applications'),
@@ -90,6 +96,11 @@ def main():
                                ('LICENSE', '.')):
             (top / target).mkdir(parents=True, exist_ok=True)
             shutil.copy2(ROOT / source, top / target / Path(source).name)
+        # The installer (task 073): install.sh / uninstall.sh and the glibc version the bundle needs.
+        for script in ('install.sh', 'uninstall.sh'):
+            shutil.copy2(ROOT / 'packaging' / script, top / script)
+            (top / script).chmod(0o755)
+        (top / 'glibc').write_text(f'{glibc}\n')
         archive = dist / f'maprisma-{ver}-x86_64.tar.gz'
 
         def owned(info):          # root-owned in any package made from it, no build user's names
