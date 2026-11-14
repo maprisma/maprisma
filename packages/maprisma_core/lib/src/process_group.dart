@@ -66,7 +66,8 @@ final class ProcessGroup {
       _hold(e.key, e.value);
     }
     final anchor = before.entries.any(
-      (e) => !posix.pidfdExited(e.value) && processIdentity(e.key)?.$1 == leader,
+      (e) =>
+          !posix.pidfdExited(e.value) && processIdentity(e.key)?.$1 == leader,
     );
     if (!anchor) {
       // The group may have been empty during the look-up: what it found is

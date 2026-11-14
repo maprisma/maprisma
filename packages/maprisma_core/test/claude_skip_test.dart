@@ -9,7 +9,9 @@ void main() {
     addTearDown(() => dir.deleteSync(recursive: true));
     final path = '${dir.path}/s.jsonl';
     final long = maxLine * 3;
-    File(path).writeAsBytesSync(List.filled(long, 120)); // unfinished, > maxLine
+    File(
+      path,
+    ).writeAsBytesSync(List.filled(long, 120)); // unfinished, > maxLine
     final reader = ClaudeSessions(dir.path, null);
     final state = <String, dynamic>{};
     final budget = maxLine + 100;

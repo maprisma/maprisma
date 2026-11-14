@@ -146,7 +146,11 @@ final class ClaudeSessions {
           eof = true;
           return;
         }
-        final chunk = posix.readAt(fd, filePos, left < 4 * 1024 * 1024 ? left : 4 * 1024 * 1024);
+        final chunk = posix.readAt(
+          fd,
+          filePos,
+          left < 4 * 1024 * 1024 ? left : 4 * 1024 * 1024,
+        );
         if (chunk.isEmpty) {
           eof = true;
           return;

@@ -56,33 +56,49 @@ void main() {
   }
 
   test('bounded output: success ends what the program left behind', () async {
-    final (out, ok) = await boundedOutput(
-      ['sh', script, pidfile, 'exit'],
-      timeout: const Duration(seconds: 10),
-    );
+    final (out, ok) = await boundedOutput([
+      'sh',
+      script,
+      pidfile,
+      'exit',
+    ], timeout: const Duration(seconds: 10));
     expect(ok, isTrue);
     expect(String.fromCharCodes(out).trim(), 'done');
     await _gone(await childPid());
   });
 
   test('bounded output: the deadline ends the whole group', () async {
-    final (_, ok) = await boundedOutput(
-      ['sh', script, pidfile, 'wait'],
-      timeout: const Duration(seconds: 1),
-    );
+    final (_, ok) = await boundedOutput([
+      'sh',
+      script,
+      pidfile,
+      'wait',
+    ], timeout: const Duration(seconds: 1));
     expect(ok, isFalse);
     await _gone(await childPid());
   });
 
   test('endGroup: leader running, child ignoring SIGTERM', () async {
-    final process = await Process.start('setsid', ['--', 'sh', script, pidfile, 'wait']);
+    final process = await Process.start('setsid', [
+      '--',
+      'sh',
+      script,
+      pidfile,
+      'wait',
+    ]);
     final child = await childPid();
     await endGroup(process, grace: const Duration(milliseconds: 300));
     await _gone(child);
   });
 
   test('endGroup: the leader ended first', () async {
-    final process = await Process.start('setsid', ['--', 'sh', script, pidfile, 'exit']);
+    final process = await Process.start('setsid', [
+      '--',
+      'sh',
+      script,
+      pidfile,
+      'exit',
+    ]);
     final group = ProcessGroup(process.pid)..watch(); // as the callers do
     final child = await childPid();
     await process.exitCode;
@@ -94,14 +110,22 @@ void main() {
     await _gone(child);
   });
 
-  test('nothing found once no held member is left (a reused group id)', () async {
-    final process = await Process.start('setsid', ['--', 'sh', '-c', 'exit 0']);
-    final group = ProcessGroup(process.pid);
-    await process.exitCode;
-    await Future<void>.delayed(const Duration(milliseconds: 50));
-    // Whatever now has that group id is not looked up: nothing anchors it.
-    group.signal(0);
-    expect(group.alive, isFalse);
-    group.close();
-  });
+  test(
+    'nothing found once no held member is left (a reused group id)',
+    () async {
+      final process = await Process.start('setsid', [
+        '--',
+        'sh',
+        '-c',
+        'exit 0',
+      ]);
+      final group = ProcessGroup(process.pid);
+      await process.exitCode;
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      // Whatever now has that group id is not looked up: nothing anchors it.
+      group.signal(0);
+      expect(group.alive, isFalse);
+      group.close();
+    },
+  );
 }

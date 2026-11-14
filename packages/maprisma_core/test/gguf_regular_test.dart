@@ -12,7 +12,9 @@ void main() {
   late ScanFiles files;
   setUp(() {
     dir = Directory.systemTemp.createTempSync('maprisma-gguf-');
-    files = ScanFiles(AppIdentity(environment: {'HOME': dir.path, 'PATH': '/usr/bin'}));
+    files = ScanFiles(
+      AppIdentity(environment: {'HOME': dir.path, 'PATH': '/usr/bin'}),
+    );
   });
   tearDown(() => dir.deleteSync(recursive: true));
 
@@ -36,7 +38,9 @@ void main() {
       file.closeSync();
     }
     expect(
-      ProviderScans(files).ggufFiles(dir.path).map((f) => f.split('/').last).toList()..sort(),
+      ProviderScans(
+        files,
+      ).ggufFiles(dir.path).map((f) => f.split('/').last).toList()..sort(),
       ['l.gguf', 'm.gguf'],
     );
     final context = ContextReader(files, ConfigFiles(files.posix, dir.path));

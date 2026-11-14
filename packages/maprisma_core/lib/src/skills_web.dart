@@ -44,8 +44,10 @@ String rawUrl(String repo, String path, [String ref = 'HEAD']) =>
 final _sha = RegExp(r'^[0-9a-f]{40}$');
 
 /// Git's id of a file's bytes: SHA-1 of `blob <size>\0` and the bytes.
-String gitBlobId(List<int> data) =>
-    sha1.convert([...utf8.encode('blob ${data.length}\u0000'), ...data]).toString();
+String gitBlobId(List<int> data) => sha1.convert([
+  ...utf8.encode('blob ${data.length}\u0000'),
+  ...data,
+]).toString();
 
 /// skills_web._get: only the three fixed hosts, no redirects.
 Future<List<int>> _get(

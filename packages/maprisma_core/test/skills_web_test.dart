@@ -186,11 +186,20 @@ void main() {
   });
 
   test('every file comes from one resolved commit', () async {
-    final result = await fetchSkill('someone/skills', 'pdf', staging, posix, get: _get);
+    final result = await fetchSkill(
+      'someone/skills',
+      'pdf',
+      staging,
+      posix,
+      get: _get,
+    );
     expect(result['commit'], _commit);
     expect(_urls.first, commitUrl('someone/skills'));
     expect(_urls.skip(1).every((u) => u.contains(_commit)), isTrue);
-    expect(_urls.any((u) => u.contains('/HEAD')), isTrue); // only the commit lookup
+    expect(
+      _urls.any((u) => u.contains('/HEAD')),
+      isTrue,
+    ); // only the commit lookup
     expect(_urls.skip(1).any((u) => u.contains('/HEAD')), isFalse);
   });
 
@@ -204,6 +213,9 @@ void main() {
 
   test('Git blob id', () {
     // `printf 'hello\n' | git hash-object --stdin`
-    expect(gitBlobId(utf8.encode('hello\n')), 'ce013625030ba8dba906f756967f9e9ca394464a');
+    expect(
+      gitBlobId(utf8.encode('hello\n')),
+      'ce013625030ba8dba906f756967f9e9ca394464a',
+    );
   });
 }

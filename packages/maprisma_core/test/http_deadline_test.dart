@@ -12,13 +12,17 @@ Future<ServerSocket> _serve(String mode) async {
   server.listen((socket) async {
     socket.listen((_) {}, onError: (_) {});
     if (mode == 'ok') {
-      socket.write('HTTP/1.1 200 OK\r\nContent-Length: 12\r\nConnection: close\r\n\r\n{"ok": true}');
+      socket.write(
+        'HTTP/1.1 200 OK\r\nContent-Length: 12\r\nConnection: close\r\n\r\n{"ok": true}',
+      );
       await socket.flush();
       await socket.close();
       return;
     }
-    socket.write('HTTP/1.1 200 OK\r\nContent-Length: 100000\r\n'
-        '${mode == 'close' ? 'Connection: close\r\n' : ''}\r\n');
+    socket.write(
+      'HTTP/1.1 200 OK\r\nContent-Length: 100000\r\n'
+      '${mode == 'close' ? 'Connection: close\r\n' : ''}\r\n',
+    );
     try {
       for (var i = 0; i < 400; i++) {
         socket.add([32]);
@@ -40,7 +44,12 @@ void main() {
       final server = await _serve(mode);
       addTearDown(server.close);
       final watch = Stopwatch()..start();
-      final reply = await httpJson(server.port, '/', uid, timeout: const Duration(milliseconds: 600));
+      final reply = await httpJson(
+        server.port,
+        '/',
+        uid,
+        timeout: const Duration(milliseconds: 600),
+      );
       expect(reply, isNull);
       expect(watch.elapsedMilliseconds, lessThan(1500));
     });
@@ -50,7 +59,15 @@ void main() {
     final server = await _serve('ok');
     addTearDown(server.close);
     for (var i = 0; i < 2; i++) {
-      expect(await httpJson(server.port, '/', uid, timeout: const Duration(seconds: 2)), {'ok': true});
+      expect(
+        await httpJson(
+          server.port,
+          '/',
+          uid,
+          timeout: const Duration(seconds: 2),
+        ),
+        {'ok': true},
+      );
     }
   });
 }

@@ -359,7 +359,9 @@ void checkTrusted(String path, [Posix? posix]) {
   const typeMask = 0xf000, dirType = 0x4000, linkType = 0xa000;
   void owned(String where, int uid) {
     if (uid != 0 && uid != me) {
-      throw StateError('$where belongs to another account; choose a folder of your own');
+      throw StateError(
+        '$where belongs to another account; choose a folder of your own',
+      );
     }
   }
 
@@ -369,7 +371,9 @@ void checkTrusted(String path, [Posix? posix]) {
     }
     final othersWrite = mode & 0x12 != 0; // group or other write
     if (othersWrite && (leaf || mode & 0x200 == 0)) {
-      throw StateError('other accounts can change $where; choose a folder only you can write');
+      throw StateError(
+        'other accounts can change $where; choose a folder only you can write',
+      );
     }
   }
 
@@ -420,20 +424,32 @@ int openVerified(ModelFiles files, String path, String digest) {
   final posix = files.posix;
   final int fd;
   try {
-    fd = posix.openAt(-100, path, 0x20000); // O_RDONLY | O_NOFOLLOW (+ O_CLOEXEC)
+    fd = posix.openAt(
+      -100,
+      path,
+      0x20000,
+    ); // O_RDONLY | O_NOFOLLOW (+ O_CLOEXEC)
   } on FileSystemException catch (error) {
-    throw StateError('${p.basename(path)}: ${error.message}; nothing was installed');
+    throw StateError(
+      '${p.basename(path)}: ${error.message}; nothing was installed',
+    );
   }
   try {
     final st = posix.statFull(fd);
     if (st.mode & 0xf000 != 0x8000 || st.uid != posix.uid || st.nlink != 1) {
-      throw StateError("${p.basename(path)} is not this account's own download; nothing was installed");
+      throw StateError(
+        "${p.basename(path)} is not this account's own download; nothing was installed",
+      );
     }
     if (st.mode & 0x12 != 0) {
-      throw StateError('other accounts can write ${p.basename(path)}; nothing was installed');
+      throw StateError(
+        'other accounts can write ${p.basename(path)}; nothing was installed',
+      );
     }
     if (files.digestOfFd(fd, digest) != digest) {
-      throw StateError("${p.basename(path)} does not match the release's checksum; nothing was installed");
+      throw StateError(
+        "${p.basename(path)} does not match the release's checksum; nothing was installed",
+      );
     }
     return fd;
   } catch (_) {
@@ -529,6 +545,7 @@ abstract class Installer {
   String get defaultFolder => '$home/.local/share/maprisma/$key';
   String defaultBuild(Gpu gpu) => builds.isEmpty ? '' : builds.first.$1;
   Future<Release> latest(Gpu gpu, String build);
+
   /// `name`: the release file's name (its kind) when `archive` is the open,
   /// checked file's `/proc/<pid>/fd` path (openVerified).
   Future<void> unpack(String archive, String folder, {String? name}) =>
@@ -770,7 +787,11 @@ abstract class Installer {
     for (final (asset, _, _) in release.assets) {
       // The checked bytes, not whatever has that name now: opened once, its
       // checksum checked on that descriptor, read through /proc/<pid>/fd.
-      final fd = openVerified(files, '$downloads/$asset', release.digests[asset]!);
+      final fd = openVerified(
+        files,
+        '$downloads/$asset',
+        release.digests[asset]!,
+      );
       try {
         await unpack('/proc/$pid/fd/$fd', partial, name: asset);
       } finally {

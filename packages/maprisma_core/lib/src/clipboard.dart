@@ -19,7 +19,12 @@ const _textTypes = [
 Future<String?> boundedClipboardText({
   int maxBytes = maxTerminalPaste,
   Duration timeout = const Duration(seconds: 2),
-  Future<(List<int>, bool)> Function(List<String> argv, int maxBytes, Duration timeout)? run,
+  Future<(List<int>, bool)> Function(
+    List<String> argv,
+    int maxBytes,
+    Duration timeout,
+  )?
+  run,
 }) async {
   final read =
       run ??
@@ -42,14 +47,15 @@ Future<String?> boundedClipboardText({
   };
   for (final mime in _textTypes) {
     if (!offered.contains(mime)) continue;
-    final (data, ok) = await read([
-      'wl-paste',
-      '--no-newline',
-      '--type',
-      mime,
-    ], maxBytes, left());
+    final (data, ok) = await read(
+      ['wl-paste', '--no-newline', '--type', mime],
+      maxBytes,
+      left(),
+    );
     if (!ok) return null;
-    final text = utf8.decode(data, allowMalformed: true).replaceAll('\r\n', '\n');
+    final text = utf8
+        .decode(data, allowMalformed: true)
+        .replaceAll('\r\n', '\n');
     return String.fromCharCodes(
       text.runes.where(
         (c) => c == 10 || c == 9 || !(c < 32 || (c >= 127 && c < 160)),
