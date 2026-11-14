@@ -11,6 +11,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:window_manager/window_manager.dart';
 
+import 'package:maprisma_core/maprisma_core.dart'
+    show InstanceLockState, takeInstanceLock, writeLaunchRecord;
+
 import 'backend.dart';
 import 'map_benchmark.dart';
 import 'map_snapshot.dart';
@@ -84,12 +87,69 @@ void main(List<String> args) async {
   }
   WidgetsFlutterBinding.ensureInitialized();
   await windowManager.ensureInitialized();
+  // Task 073: the release installer replaces this bundle only while no Maprisma of it runs.
+  final bundle = File(Platform.resolvedExecutable).parent.path;
+  if (takeInstanceLock(bundle) == InstanceLockState.busy) {
+    await windowManager.setSize(const Size(520, 200));
+    runApp(const InstallBusyApp());
+    return;
+  }
+  // How Maprisma Control can start this Maprisma again (an AppImage, an /opt install).
+  writeLaunchRecord(Platform.environment, Platform.resolvedExecutable);
   await windowManager.setPreventClose(true);
   // The size the user gave the window last time (window.json).
   final sizes = WindowSizeStore(windowSizePath(Platform.environment));
   final size = sizes.load();
   if (size != null) await windowManager.setSize(size);
   runApp(MaprismaApp(windowSizes: sizes));
+}
+
+/// Shown instead of Maprisma while its install is being replaced or removed (task 073). The core is
+/// not started yet, so the text comes from here, in the 8 languages of translations/.
+class InstallBusyApp extends StatelessWidget {
+  const InstallBusyApp({super.key});
+
+  static const texts = {
+    'en': 'Maprisma is being installed or removed. Start it again in a moment.',
+    'de':
+        'Maprisma wird gerade installiert oder entfernt. Starte es gleich noch einmal.',
+    'fr':
+        'Maprisma est en cours d’installation ou de suppression. Relancez-le dans un instant.',
+    'es':
+        'Maprisma se está instalando o eliminando. Vuelve a iniciarlo en un momento.',
+    'it':
+        'Maprisma è in fase di installazione o rimozione. Riavvialo tra un momento.',
+    'pt':
+        'O Maprisma está a ser instalado ou removido. Inicie-o de novo daqui a pouco.',
+    'nl': 'Maprisma wordt geïnstalleerd of verwijderd. Start het zo opnieuw.',
+    'pl':
+        'Maprisma jest właśnie instalowana lub usuwana. Uruchom ją ponownie za chwilę.',
+  };
+
+  static String text(String locale) =>
+      texts[locale.split(RegExp('[_.-]')).first] ?? texts['en']!;
+
+  @override
+  Widget build(BuildContext context) => MaterialApp(
+    debugShowCheckedModeBanner: false,
+    home: Scaffold(
+      body: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              text(Platform.localeName),
+              key: const ValueKey('install-busy'),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            FilledButton(onPressed: () => exit(0), child: const Text('OK')),
+          ],
+        ),
+      ),
+    ),
+  );
 }
 
 class MaprismaApp extends StatefulWidget {
