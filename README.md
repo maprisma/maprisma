@@ -50,22 +50,25 @@ and progress bars at most 4 px).
 
 ## Install
 
-Maprisma runs on x86_64 Linux with glibc 2.34 or newer (Arch, Fedora, Debian 12+, Ubuntu 22.04+,
-Pop!_OS …); tested on fresh COSMIC, KDE Plasma and Hyprland installs. Download from
+Maprisma runs on x86_64 Linux with glibc 2.34 and GLib 2.68 or newer (Arch, Fedora, Debian 12+,
+Ubuntu 22.04+, Pop!_OS, Rocky/Alma 9 …); tested on fresh Arch installs of COSMIC, KDE Plasma and
+Hyprland, and on Rocky Linux 9. Download from
 the [releases](https://github.com/maprisma/maprisma/releases) and check the download:
 `sha256sum -c <file>.sha256`.
 
-**What your system needs.** GTK 3, SQLite and zstd. A fresh COSMIC, Plasma or Hyprland install
-may lack GTK 3: none of these desktops needs it.
+**What your system needs.** GTK 3, SQLite, zstd, EGL/GLES and a font. A fresh KDE Plasma or
+Hyprland install lacks GTK 3 (COSMIC brings it), and a bare Hyprland has no font at all (add e.g.
+`noto-fonts`).
 
 | Distribution | Command |
 |---|---|
-| Arch, CachyOS, EndeavourOS | `sudo pacman -S --needed gtk3 sqlite zstd` |
-| Debian, Ubuntu, Pop!_OS | `sudo apt install libgtk-3-0t64 libsqlite3-0 libzstd1` (before 24.04: `libgtk-3-0`) |
-| Fedora | `sudo dnf install gtk3 sqlite-libs libzstd` |
-| openSUSE | `sudo zypper install libgtk-3-0 libsqlite3-0 libzstd1` |
+| Arch, CachyOS, EndeavourOS | `sudo pacman -S --needed gtk3 sqlite zstd libglvnd` |
+| Debian, Ubuntu, Pop!_OS | `sudo apt install libgtk-3-0t64 libsqlite3-0 libzstd1 libegl1 libgles2` (before 24.04: `libgtk-3-0`) |
+| Fedora, Rocky, Alma | `sudo dnf install gtk3 sqlite-libs libzstd libglvnd-egl libglvnd-gles` |
+| openSUSE | `sudo zypper install libgtk-3-0 libsqlite3-0 libzstd1 libEGL1 libGLESv2-2` |
 
-No font is needed: the icons are in the app.
+No icon font is needed: the icons are in the app. `install.sh` checks all of this and names the
+command for your distribution.
 
 **The archive (recommended).** `maprisma-<version>-x86_64.tar.gz`:
 

@@ -105,3 +105,19 @@ Round-1 verification: **1, 6–11 are fixed; 3–5 have the remaining issues abo
 3. **Incomplete journal** — confirmed. The journal is written whole (txn, new, bak) to a temp file and
    renamed into place before the folders exist; recovery requires all three; duplicate `outer`/`done`
    refused. Test 9d. 57 installer checks.
+
+## Round 3 — Codex (2026-11-14), review of 0c64cb5
+
+**CLEAN.** All three round-2 findings are fixed. No new bugs found in the lock loop, `recover()`, or journal creation.
+
+`bash -n packaging/install.sh` passed. Integration tests were not run because the filesystem is read-only. No files changed.
+## Round 4 — Codex (2026-11-14), review of dec529d and 7b887f6
+
+**CLEAN — no findings in dec529d or 7b887f6.**
+
+- GLib 2.68 definitions cover the runner, generated registrant, and every current plugin. All three plugin CMakeLists call `apply_standard_settings`; none overrides it. Flutter’s engine is prebuilt, so these definitions do not govern it.
+- `ldd -r` produced no undefined-symbol false positives in the available bundle. `libapp.so` has no external relocations; each plugin explicitly links `libflutter_linux_gtk.so`. `-r` also checks lazy function relocations. The missing-library guard is sound.
+- EGL/GLES package names match the distro packaging: [Arch](https://archlinux.org/packages/extra/x86_64/libglvnd/), [Debian](https://packages.debian.org/bookworm/libgles2), [Ubuntu](https://packages.ubuntu.com/noble/libgles2), [Fedora](https://packages.fedoraproject.org/pkgs/libglvnd/), and [openSUSE](https://download.opensuse.org/tumbleweed/repo/oss/x86_64/).
+- Empty `fc-list` output correctly indicates no fonts visible to that invocation’s Fontconfig configuration. The warning remains advisory.
+
+`bash -n` passed. No files changed; no fresh build or VM installation performed.
