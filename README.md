@@ -50,15 +50,61 @@ and progress bars at most 4 px).
 
 ## Install
 
-Not released yet: the Flutter app is packaged with `plan-flutter.md` step 6 (it carries no Python). The
-earlier GTK app's AUR and AppImage packages were removed from this tree (phase 7); its frozen source is
-the AI Agents Map plugin repository.
+Maprisma runs on x86_64 Linux with glibc 2.34 or newer (Arch, Fedora, Debian 12+, Ubuntu 22.04+,
+Pop!_OS …); tested on fresh COSMIC, KDE Plasma and Hyprland installs. Download from
+the [releases](https://github.com/maprisma/maprisma/releases) and check the download:
+`sha256sum -c <file>.sha256`.
 
-- **From source:** `tools/flutter-dev build` makes a development bundle in `.flutter-previews/` (not
-  installed, not started); `tools/check-bundle.py` checks that it has no Python in it.
+**What your system needs.** GTK 3, SQLite and zstd. A fresh COSMIC, Plasma or Hyprland install
+may lack GTK 3: none of these desktops needs it.
 
-Agent icons need a Nerd Font (Symbols Nerd Font). Optional: `bubblewrap` (`bwrap`) for unpacking
-AppImages (MCP server apps, Jan): they are unpacked closed in, and without it not at all.
+| Distribution | Command |
+|---|---|
+| Arch, CachyOS, EndeavourOS | `sudo pacman -S --needed gtk3 sqlite zstd` |
+| Debian, Ubuntu, Pop!_OS | `sudo apt install libgtk-3-0t64 libsqlite3-0 libzstd1` (before 24.04: `libgtk-3-0`) |
+| Fedora | `sudo dnf install gtk3 sqlite-libs libzstd` |
+| openSUSE | `sudo zypper install libgtk-3-0 libsqlite3-0 libzstd1` |
+
+No font is needed: the icons are in the app.
+
+**The archive (recommended).** `maprisma-<version>-x86_64.tar.gz`:
+
+```sh
+tar -xzf maprisma-<version>-x86_64.tar.gz
+cd maprisma-<version>
+./install.sh                 # for you: ~/.local/lib/maprisma, the command maprisma, the app menu
+sudo ./install.sh --system   # or for every user: /opt/maprisma, /usr/local/bin, /usr/local/share
+```
+
+`install.sh` checks the system first and changes nothing when something is missing; it tells you the
+command for your distribution. It never replaces files that are not its own, nor a Maprisma installed
+as a package or by Maprisma Settings. Running it again with a newer archive updates Maprisma (close
+Maprisma first). Remove it with `~/.local/lib/maprisma/uninstall.sh` (or `sudo
+/opt/maprisma/uninstall.sh`); `--purge` also removes your settings in `~/.config/maprisma`. Only this
+install starts local LLMs together with their agents in the background (the providers service).
+
+**The AppImage.** `Maprisma-<version>-x86_64.AppImage` runs without installing:
+`chmod +x Maprisma-*.AppImage && ./Maprisma-*.AppImage`. It needs the same libraries, and FUSE 3
+(`fusermount3`, from the `fuse3` package; most desktops have it); without FUSE start it with
+`--appimage-extract-and-run`. It does not add a menu entry and does not run the providers service.
+
+**The bar icon** is [Maprisma Control](https://github.com/maprisma/control), a release of its own: a
+COSMIC panel applet and a tray icon for KDE Plasma and Hyprland (in a bar with a system tray, e.g.
+Waybar or Quickshell). It starts and stops Maprisma, whether installed from the archive, in `/opt`, or
+an AppImage (after its first start).
+
+**Switching to a package later** (`maprisma-bin`, or through Maprisma Settings): run
+`~/.local/lib/maprisma/uninstall.sh` first, so there are not two menu entries.
+
+**Features that need a program** (Maprisma says so when it is missing): `curl` (downloads),
+`tar` (local LLMs), `xdg-open` (links, the manual), `notify-send` (limit warnings), `wl-paste` (pasting
+into agent terminals), `ss` (the traffic view), `pw-record`, `arecord` or `ffmpeg` (dictation), a
+terminal (agent terminals). Optional: `bubblewrap` (`bwrap`) for unpacking AppImages (MCP server
+apps, Jan): they are unpacked closed in, and without it not at all.
+
+**From source:** `tools/flutter-dev build` makes a development bundle in `.flutter-previews/` (not
+installed, not started); `tools/build-release.py` the release archive (needs the signed add-ons);
+`tools/check-bundle.py` checks that it has no Python in it and needs at most glibc 2.34.
 
 Settings live in `~/.config/maprisma/`. Light or dark and the accent colour follow your system.
 

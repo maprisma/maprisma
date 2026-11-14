@@ -36,7 +36,7 @@
     <tbody>
       <tr><th>What it is</th><td>A stand-alone GTK&nbsp;4 / libadwaita app for any Linux desktop</td>
           <td>A plugin for the Omarchy desktop, opened from a button in the bar</td></tr>
-      <tr><th>Install from</th><td>AUR (<code>maprisma-bin</code>) or AppImage</td><td>The Omarchy Plugin Marketplace</td></tr>
+      <tr><th>Install from</th><td>Release archive (<code>install.sh</code>), AppImage or <code>maprisma-bin</code></td><td>The Omarchy Plugin Marketplace</td></tr>
       <tr><th>Look</th><td>Follows the system's light/dark mode and accent colour</td>
           <td>Omarchy theme colours, or GNOME's Adwaita look</td></tr>
       <tr><th>Settings folder</th><td><code>~/.config/maprisma/</code></td><td><code>~/.config/omarchy/ai-agents-map/</code></td></tr>
@@ -116,17 +116,21 @@
   <h1>Installation</h1>
 
   <h2 id="install-asterism">Installing Maprisma</h2>
-  <p>Maprisma is one program for Linux on x86-64 computers. It needs no Python and brings its own icons and its signed add-ons. Choose one of these ways:</p>
+  <p>Maprisma is one program for Linux on x86-64 computers with glibc 2.34 or newer. It needs no Python and brings its own icons and its signed add-ons. Download it from <code>github.com/maprisma/maprisma/releases</code> and check the download with <code>sha256sum -c</code> and the <code>.sha256</code> file next to it. Choose one of these ways:</p>
   <ul>
-    <li><b>Arch Linux and Omarchy (AUR):</b> install the package <code>maprisma-bin</code> with your AUR helper, for example <code>yay -S maprisma-bin</code>. It puts the app in <code>/usr/lib/maprisma</code>, the command <code>maprisma</code> on your path and Maprisma in the app launcher.</li>
-    <li><b>AppImage, for other distributions:</b> download <code>Maprisma-&lt;version&gt;-x86_64.AppImage</code> from <code>github.com/maprisma/maprisma/releases</code>, make it executable (<code>chmod +x Maprisma-*.AppImage</code>) and run it. It uses the GTK&nbsp;3 that nearly every Linux desktop has.</li>
+    <li><b>The archive (recommended):</b> unpack <code>maprisma-&lt;version&gt;-x86_64.tar.gz</code> and run <code>./install.sh</code> in its folder. It installs Maprisma for you, without root: the app in <code>~/.local/lib/maprisma</code>, the command <code>maprisma</code> in <code>~/.local/bin</code> and Maprisma in the app launcher. <code>sudo ./install.sh --system</code> installs it for every user of the computer instead (<code>/opt/maprisma</code>, <code>/usr/local</code>). Running it again with a newer archive updates Maprisma; close Maprisma first.</li>
+    <li><b>AppImage:</b> download <code>Maprisma-&lt;version&gt;-x86_64.AppImage</code>, make it executable (<code>chmod +x Maprisma-*.AppImage</code>) and run it. Nothing is installed. It needs FUSE 3 (the <code>fuse3</code> package, which most desktops have); without it, start it with <code>--appimage-extract-and-run</code>.</li>
+    <li><b>Arch Linux and Omarchy:</b> the package <code>maprisma-bin</code>, when your package source offers it, or through Maprisma Settings.</li>
   </ul>
-  <div class="note"><p><b>Note</b> The AppImage runs from a temporary folder, so it does not set up the background service behind Settings › <b>Start local LLMs with their agents</b>. Use the AUR package if local LLMs should start and stop with their agents.</p></div>
-  <p>Optional programs: <code>xdg-terminal-exec</code> starts agents in your own terminal, <code>xdg-utils</code> opens the manual and web pages, and <code>mise</code> installs and updates agents.</p>
+  <p>Maprisma needs GTK&nbsp;3, SQLite and zstd from your system. A freshly installed COSMIC, KDE Plasma or Hyprland desktop may not have GTK&nbsp;3. <code>install.sh</code> checks this before it changes anything and shows the command for your distribution, for example <code>sudo pacman -S --needed gtk3 sqlite zstd</code> on Arch, <code>sudo apt install libgtk-3-0t64 libsqlite3-0 libzstd1</code> on Debian, Ubuntu and Pop!_OS, or <code>sudo dnf install gtk3 sqlite-libs libzstd</code> on Fedora.</p>
+  <p><code>install.sh</code> never replaces a file that is not its own, nor a Maprisma installed as a package or by Maprisma Settings. While it updates or removes Maprisma, a Maprisma you start says it is being installed and does not open.</p>
+  <div class="note"><p><b>Note</b> The AppImage runs from a temporary folder, so it does not set up the background service behind Settings › <b>Start local LLMs with their agents</b>. Use the archive (or the package) if local LLMs should start and stop with their agents.</p></div>
+  <p>The bar icon is <b>Maprisma Control</b>, a release of its own at <code>github.com/maprisma/control</code>: a panel applet on COSMIC and a tray icon on KDE Plasma and Hyprland (in a bar with a system tray). It starts and stops Maprisma, also an AppImage once it has been started.</p>
+  <p>Optional programs: <code>xdg-terminal-exec</code> starts agents in your own terminal, <code>xdg-utils</code> opens the manual and web pages, <code>curl</code> downloads agents and models, <code>libnotify</code> shows limit warnings, and <code>mise</code> installs and updates agents.</p>
   <p>Maprisma keeps its settings in <code>~/.config/maprisma</code>; an absolute <code>XDG_CONFIG_HOME</code> moves that folder to <code>$XDG_CONFIG_HOME/maprisma</code>. On Omarchy it uses the desktop integration by itself: <code>maprisma --toggle</code> opens the window as a popup under the bar, brings it to the front, or hides it.</p>
 
   <h2 id="first-start">First start</h2>
-  <p>The package and the AppImage need no further setup. If you used Maprisma under its earlier name Asterism, the first start copies Asterism’s folders once; the originals stay untouched.</p>
+  <p>The archive, the package and the AppImage need no further setup. If you used Maprisma under its earlier name Asterism, the first start copies Asterism’s folders once; the originals stay untouched.</p>
   <p>The window is a normal app window: it can be tiled, floated, moved to another workspace and
   reached with <kbd>Alt</kbd>+<kbd>Tab</kbd>. <span class="badge">Maprisma</span> A fresh Maprisma opens on
   its <b>welcome page</b>: the agents and local LLMs installed on this computer are cards that are
@@ -146,7 +150,7 @@
   a moment; a click closes it at once. The window opens at once, with this overview as a box in its middle; the map fills in behind it.</p>
 
   <h2 id="remove">Removing the app</h2>
-  <p>AUR: <code>sudo pacman -R maprisma-bin</code>. AppImage: delete the file.</p>
+  <p>Archive: <code>~/.local/lib/maprisma/uninstall.sh</code> (for <code>--system</code>: <code>sudo /opt/maprisma/uninstall.sh</code>). It removes only what <code>install.sh</code> put there, keeps a file you changed, and also removes your background service when it ran this Maprisma; <code>--purge</code> also deletes your settings. Package: <code>sudo pacman -R maprisma-bin</code>. AppImage: delete the file. Before switching from the archive to the package, remove the archive install, so there are not two Maprismas in the launcher.</p>
   <p>Before removing, switch off Settings › <b>Start local LLMs with their agents</b> so the background watcher is removed too. Changes you made with the app stay: agents’ settings, MCP servers, skills and installed local LLMs. Uninstall a local LLM first (right-click › <b>Uninstall…</b>) if you want it gone. To delete the app’s own state as well:</p>
   <pre>rm -rf ~/.config/maprisma ~/.cache/maprisma \
        ~/.local/share/maprisma ~/.local/state/maprisma</pre>
