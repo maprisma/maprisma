@@ -39,7 +39,10 @@ if [[ $action == uninstall ]]; then
   [[ $folder == /opt/maprisma ]] && system=1
 fi
 if ((system)); then
-  [[ $(id -u) -eq 0 ]] || die "a system install needs root: sudo $0 ${action/uninstall/--uninstall} --system"
+  if [[ $(id -u) -ne 0 ]]; then
+    [[ $action == uninstall ]] && die "removing a system install needs root: sudo $folder/uninstall.sh"
+    die "a system install needs root: sudo $0 --system"
+  fi
   lib=/opt/maprisma bin=/usr/local/bin share=/usr/local/share
 else
   [[ $(id -u) -ne 0 ]] || die "as root, use --system (or run it as your user for a personal install)"
@@ -117,9 +120,20 @@ ours() { # name
 }
 
 # ---------------------------------------------------------------- locks
-mkdir -p "$parent"
-exec {install_lock}>>"$parent/.maprisma-install.lock"
-flock -n "$install_lock" || die "another Maprisma install or uninstall is running: nothing was changed"
+# A refused install leaves nothing behind: the folders and the lock file made only for the lock go
+# again (drop_lock, until the transaction starts); an uninstall removes the lock file at its end.
+made_dirs=$(LC_ALL=C mkdir -pv -- "$parent" | sed -n "s/^mkdir: created directory '\(.*\)'$/\1/p")
+lock_file=$parent/.maprisma-install.lock
+lock_made=0; [[ -e $lock_file ]] || lock_made=1
+exec {install_lock}>>"$lock_file"
+drop_lock() {
+  ((lock_made)) && rm -f -- "$lock_file"
+  local d
+  while IFS= read -r d; do [[ -n $d ]] && rmdir -- "$d" 2>/dev/null; done < <(tac <<<"$made_dirs")
+  return 0
+}
+trap drop_lock EXIT
+flock -n "$install_lock" || { lock_made=0; made_dirs=""; die "another Maprisma install or uninstall is running: nothing was changed"; }
 # A running Maprisma holds <bundle>/data/instance.lock shared; we take it exclusively, for the old
 # bundle now and for the new one before it is activated (the descriptors follow the folders' renames).
 lock_instance() { # bundle folder
@@ -222,6 +236,7 @@ if [[ $action == uninstall ]]; then
     fi
   fi
   rm -rf -- "$lib"
+  lock_made=1 made_dirs=""   # the lock file goes with the install (drop_lock at exit)
   command -v update-desktop-database >/dev/null && update-desktop-database -q "$share/applications" 2>/dev/null || true
   command -v gtk-update-icon-cache >/dev/null && gtk-update-icon-cache -q -t "$share/icons/hicolor" 2>/dev/null || true
   if ((system)); then
@@ -341,6 +356,7 @@ mv -fT -- "$journal.tmp" "$journal"
 mkdir -m 700 -- "$new"
 printf '%s\n' "$txn" >"$new/.install-id"     # first: recovery knows the folder by it
 mkdir -m 700 -- "$bak"
+lock_made=0 made_dirs=""   # installed from here on: the lock file stays with the install
 trap 'say "Install failed: rolling back."; recover; exit 1' ERR
 trap 'recover' EXIT
 cp -R --preserve=mode,timestamps,links --no-preserve=ownership -- "$here/app/." "$new/"

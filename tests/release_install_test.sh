@@ -91,6 +91,7 @@ fresh
 mkdir -p "$T/fakebin"; printf '#!/bin/sh\necho "1 libs found"\n' >"$T/fakebin/ldconfig"; chmod +x "$T/fakebin/ldconfig"
 out=$(env -i HOME="$H" PATH="$T/fakebin:$PATH" USER=tester LANG=C "${TESTENV[@]}" "$T/a1/install.sh" 2>&1); rc=$?
 check "missing libs refused ($out)" '[[ $rc != 0 && $out == *libsqlite3* && ! -e $L ]]'
+check "a refused install writes nothing (not even ~/.local)" '[[ ! -e $H/.local ]]'
 
 # 7 an edited file is kept on uninstall, the rest goes; providers unit of this install removed
 fresh
@@ -103,6 +104,7 @@ check "uninstall succeeds ($out)" '[[ $rc == 0 && ! -e $L ]]'
 check "edited entry kept" '[[ -f $ENTRY && $out == *"Kept $ENTRY"* ]]'
 check "icon and link removed" '[[ ! -e $ICON && ! -L $H/.local/bin/maprisma ]]'
 check "providers unit removed" '[[ ! -e $H/.config/systemd/user/maprisma-providers.service ]]'
+check "no lock file left after uninstall" '[[ ! -e $H/.local/lib/.maprisma-install.lock ]]'
 
 # 8 an invalid receipt removes nothing
 fresh
