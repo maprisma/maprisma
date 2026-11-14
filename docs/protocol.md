@@ -152,7 +152,7 @@ A parameter written `name?` may be left out.
 
 | Route | Kind | Params | Result |
 |---|---|---|---|
-| `health.report` | read | — | `task` A task. Its result: areas (key, icon, title, findings), uses (key, icon, title, blurb, have, level, steps), warn, hint, level, summary, open_text. Every finding and use step has level, title, text, action and column (mcp, agents, providers, models). |
+| `health.report` | read | — | `task` A task. Its result: areas (key, icon, title, findings), uses (key, icon, title, blurb, have, level, steps), error, warn, hint, level, summary, open_text. Levels: error (broken: the header's red "!"), warn (only low limits and updates), hint (a tip), ok. Every finding and use step has level, title, text, action and column (mcp, agents, providers, models). |
 
 ## help
 
