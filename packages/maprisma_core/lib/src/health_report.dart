@@ -320,7 +320,7 @@ final class HealthReport {
       if (bytes < 20 * gib) {
         pcArea.add(
           finding(
-            'warn',
+            'error',
             f('Little free space for models: {0}', [gbText(bytes)]),
             f('In {0}. A model needs 2–30 GB; remove models no agent uses.', [
               where,
@@ -365,7 +365,7 @@ final class HealthReport {
     if (installed.isEmpty) {
       agentArea.add(
         finding(
-          'warn',
+          'error',
           tr('No agent installed'),
           desktopText('install_agent_first'),
           ['firstagent'],
@@ -382,7 +382,7 @@ final class HealthReport {
       if (missing.isNotEmpty) {
         agentArea.add(
           finding(
-            'warn',
+            'error',
             '${agent['name']}: ${missing.first['title']}',
             stepOf(missing.first),
             ['details', '${agent['command']}'],
@@ -455,11 +455,24 @@ final class HealthReport {
         final first = bad.first;
         localArea.add(
           finding(
-            first['state'] == 'missing' ? 'warn' : 'hint',
+            first['state'] == 'missing' ? 'error' : 'hint',
             '$name: ${first['title']}',
             '${first['step']}'.isNotEmpty
                 ? '${first['step']}'
                 : '${first['detail']}',
+            ['runtime', key],
+            'providers',
+          ),
+        );
+      } else if (runtimeChecks.containsKey(key) &&
+          (rt['agents'] as List? ?? const []).isEmpty) {
+        // Nothing broken: a local LLM no agent uses yet is a tip (Uwe). Only
+        // where its checks ran: the system map knows no agents.
+        localArea.add(
+          finding(
+            'hint',
+            '$name: ${tr('No agent connected')}',
+            tr('Draw a line from an agent to this box on the map.'),
             ['runtime', key],
             'providers',
           ),
@@ -513,7 +526,7 @@ final class HealthReport {
       for (final hint in slotHints(need, vram, tr)) {
         localArea.add(
           finding(
-            'warn',
+            'error',
             f('{0}: its agents use {1} different models', [
               need['name'],
               needCount(need),
@@ -610,7 +623,7 @@ final class HealthReport {
           : 'mcp';
       tools.add(
         finding(
-          'warn',
+          'error',
           f('A connection does not work: {0} → {1}', [
             names[last(source)] ?? last(source),
             last(target),
@@ -748,7 +761,7 @@ final class HealthReport {
     if (installed.isEmpty) {
       (u['steps'] as List).add(
         finding(
-          'warn',
+          'error',
           tr('Install an agent'),
           desktopText('install_agent_short'),
         ),
@@ -783,7 +796,7 @@ final class HealthReport {
     if (coding.isEmpty) {
       (u['steps'] as List).add(
         finding(
-          'warn',
+          'error',
           tr('Install a coding agent'),
           desktopText('install_coding_agent'),
         ),
@@ -928,24 +941,27 @@ final class HealthReport {
     for (final x in uses) {
       x['have'] = {...(x['have'] as List).cast<String>()}.toList();
       final steps = (x['steps'] as List).cast<Map>();
-      final warn = steps.any((s) => s['level'] == 'warn');
-      x['level'] = warn || (x['have'] as List).isEmpty
+      final error = steps.any((s) => s['level'] == 'error');
+      x['level'] = error || (x['have'] as List).isEmpty
           ? 'missing'
           : steps.isNotEmpty
           ? 'almost'
           : 'ready';
     }
-    var warnCount = 0, hintCount = 0;
+    // error: something broken (the header's red "!"); warn: only low limits
+    // and updates, which the GUI adds; hint: tips (Uwe, 2026-11-15).
+    var errorCount = 0, warnCount = 0, hintCount = 0;
     for (final a in areas) {
       for (final x in (a['findings'] as List).cast<Map>()) {
+        if (x['level'] == 'error') errorCount++;
         if (x['level'] == 'warn') warnCount++;
         if (x['level'] == 'hint') hintCount++;
       }
     }
     final String summary;
-    if (warnCount != 0) {
+    if (errorCount != 0) {
       summary =
-          n('1 thing to fix', '{0} things to fix', warnCount) +
+          n('1 thing to fix', '{0} things to fix', errorCount) +
           (hintCount != 0 ? ' · ${n('1 tip', '{0} tips', hintCount)}' : '');
     } else if (hintCount != 0) {
       summary = '${tr('Works well')} · ${n('1 tip', '{0} tips', hintCount)}';
@@ -955,9 +971,12 @@ final class HealthReport {
     return {
       'areas': areas,
       'uses': uses,
+      'error': errorCount,
       'warn': warnCount,
       'hint': hintCount,
-      'level': warnCount != 0
+      'level': errorCount != 0
+          ? 'error'
+          : warnCount != 0
           ? 'warn'
           : hintCount != 0
           ? 'hint'

@@ -31,7 +31,7 @@ class SmartCheckTest(unittest.TestCase):
             mcp=[inventory.McpServer("photocraft", "command", "photocraft-cli", ["claude"])],
             agent_mcp={"claude": ["photocraft"]})
         report = types.SimpleNamespace(areas=[types.SimpleNamespace(findings=[
-            types.SimpleNamespace(level="warn", title="OpenClaw: No model set up", text="Draw a line"),
+            types.SimpleNamespace(level="error", title="OpenClaw: No model set up", text="Draw a line"),
             types.SimpleNamespace(level="ok", title="All good", text="")])])
         pc = types.SimpleNamespace(gpu="RX 7900", vendor="amd", vram=24 * 2**30, ram=64 * 2**30, cpus=32)
         library = {"photocraft": {"command": "/x/photocraft-cli", "env": {"API_KEY": "sk-secret-123"},

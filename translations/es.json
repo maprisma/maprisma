@@ -3444,5 +3444,6 @@
  "The screenshot could not be saved: {0}": "No se pudo guardar la captura: {0}",
  "The note could not be saved: {0}": "No se pudo guardar la nota: {0}",
  "Corners of the window, its cards, the map's boxes and every control (buttons, choice boxes, fields). “Like windows” follows the desktop's window corners.": "Esquinas de la ventana, sus tarjetas, las casillas del mapa y todos los controles (botones, listas de opciones, campos). «Como las ventanas» sigue las esquinas de las ventanas del escritorio.",
- "A popup under the bar (only on Omarchy)": "Una ventana emergente bajo la barra (solo en Omarchy)"
+ "A popup under the bar (only on Omarchy)": "Una ventana emergente bajo la barra (solo en Omarchy)",
+ "{0}: little left of its limits": "{0}: le queda poco de sus límites"
 }

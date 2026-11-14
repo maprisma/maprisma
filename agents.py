@@ -131,6 +131,19 @@ def own_install(command: str, bin_dir: Path = BIN_DIR) -> bool:
     return text is None or not re.search(r"^mise use -g", text, re.MULTILINE) and wrapper_spec(command, bin_dir) is None
 
 
+def link_version(command: str, bin_dir: Path = BIN_DIR) -> str:
+    """The version an own install's link names: ~/.local/bin/claude ->
+    ~/.local/share/claude/versions/2.1.322 (Claude Code's own installer). "" otherwise."""
+    path = bin_dir / command
+    if not path.is_symlink():
+        return ""
+    try:
+        name = path.readlink().name
+    except OSError:
+        return ""
+    return name if _SEMVERISH.fullmatch(name) else ""
+
+
 def install_dir_candidates(spec: str) -> list[str]:
     """mise's folder names for a tool spec: "opencode", "npm:@a/b" -> "npm-a-b",
     "http:muse[...]" -> "http-muse"."""
@@ -332,7 +345,7 @@ def detect(command: str, bin_dir: Path = BIN_DIR, mise_dir: Path = MISE_DIR,
     folder = None if only else mise_install(spec, mise_dir)
     if own_install(command, bin_dir) and (anything or proven(bin_dir / command, marks)):
         # A script of the user's own may still run mise's copy: show its version.
-        return True, mise_version(folder) if folder is not None else "", "own"
+        return True, mise_version(folder) if folder is not None else link_version(command, bin_dir), "own"
     if folder is not None:
         return True, mise_version(folder), "mise"
     program = system_program(command, bin_dir, mise_dir)

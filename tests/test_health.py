@@ -44,6 +44,7 @@ class HealthTest(unittest.TestCase):
         report = run(models=("Qwen3-Coder-30B-Q4_K_M", "gemma-4-12B-it-Q4_0", "whisper-large-v3"),
                      mcp=("chrome-devtools", "photocraft"), skills=("pdf", "release"))
         self.assertEqual(report.warn, 0)
+        self.assertEqual(report.error, 0)
         self.assertEqual(self.use(report, "coding").level, "ready")
         self.assertIn("Qwen3-Coder-30B-Q4_K_M", self.use(report, "coding").have)
         self.assertEqual(self.use(report, "images").level, "ready")
@@ -64,10 +65,19 @@ class HealthTest(unittest.TestCase):
 
     def test_things_to_fix(self):
         report = run(free=10 * GiB, signed_in=False)
-        self.assertEqual(report.level, "warn")
-        found = [(f.level, f.title, f.action) for a in report.areas for f in a.findings if f.level == "warn"]
-        self.assertIn(("warn", "Pi: Not signed in", ("details", "pi")), found)
+        self.assertEqual(report.level, "error")
+        found = [(f.level, f.title, f.action) for a in report.areas for f in a.findings if f.level == "error"]
+        self.assertIn(("error", "Pi: Not signed in", ("details", "pi")), found)
         self.assertTrue(any(f[2] == ("reorganize",) for f in found))      # little disk space
+
+    def test_local_llm_without_agent_is_a_tip(self):
+        agent_list, details, inv, built, pc, checks = setup()
+        inv.runtimes[0].agents, inv.runtimes[0].active_agents = [], []
+        report = health.check(agent_list, details, inv, built, pc, checks, {"llamacpp": []}, {},
+                              path_has=lambda _name: None)
+        found = [(f.level, f.title) for a in report.areas for f in a.findings]
+        self.assertIn(("hint", "llama.cpp: No agent connected"), found)
+        self.assertEqual(report.error, 0)
 
     def test_small_card_and_no_card(self):
         small = run(vram=6 * GiB)

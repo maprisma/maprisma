@@ -159,7 +159,7 @@ class DartHealthReportParityTest(unittest.TestCase):
         self.assertEqual(by_title['A connection does not work: ghost → x'], 'mcp')
         self.assertEqual({u['key']: u['level'] for u in full['uses']}['images'], 'ready')
         empty = results[0][0][1]
-        self.assertEqual(empty['level'], 'warn')             # no agent installed
+        self.assertEqual(empty['level'], 'error')            # no agent installed
         self.assertTrue(empty['summary'].startswith('1 thing to fix'))
         self.assertEqual([f['action'] for f in empty['areas'][2]['findings']], [['install', 'llamacpp']])
         self.assertEqual([f['column'] for f in empty['areas'][2]['findings']], ['providers'])

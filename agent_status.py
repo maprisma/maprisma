@@ -725,7 +725,7 @@ def runtime_checks(rt, hints: dict, agent_names: dict, login: bool | None) -> li
         checks.append(Check("ok", _("Connected agents"), ", ".join(users)
                             + (" · " + _("in use by {0}").format(", ".join(now)) if now else "")))
     else:
-        checks.append(Check("missing", _("No agent connected"), "",
+        checks.append(Check("info", _("No agent connected"), "",
                             _("Draw a line from an agent to this box on the map.")))
     for link_key, entry in sorted(hints.items()):
         if link_key.endswith(f"|runtime:{rt.key}"):

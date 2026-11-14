@@ -587,7 +587,7 @@ final class SetupChecks {
     } else {
       checks.add(
         check(
-          'missing',
+          'info',
           tr('No agent connected'),
           '',
           tr('Draw a line from an agent to this box on the map.'),

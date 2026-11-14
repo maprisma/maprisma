@@ -104,6 +104,25 @@ final class AgentCatalog {
             wrapperSpec(command) == null;
   }
 
+  /// Python link_version(): the version an own install's link names
+  /// (~/.local/bin/claude -> ~/.local/share/claude/versions/2.1.322, Claude
+  /// Code's own installer); '' otherwise.
+  String linkVersion(String command) {
+    final path = files.expand('~/.local/bin/$command');
+    if (FileSystemEntity.typeSync(path, followLinks: false) !=
+        FileSystemEntityType.link) {
+      return '';
+    }
+    try {
+      final name = p.basename(Link(path).targetSync());
+      return RegExp(r'^[0-9][0-9A-Za-z.+_\-]{0,63}$').hasMatch(name)
+          ? name
+          : '';
+    } on FileSystemException {
+      return '';
+    }
+  }
+
   String? miseInstall(String spec) {
     for (final name in installCandidates(spec)) {
       final path = files.expand('~/.local/share/mise/installs/$name');
@@ -408,7 +427,11 @@ final class AgentCatalog {
     final folder = only ? null : miseInstall(spec);
     if (ownInstall(command) &&
         (anything || proven(files.expand('~/.local/bin/$command'), marks))) {
-      return (true, folder == null ? '' : miseVersion(folder), 'own');
+      return (
+        true,
+        folder == null ? linkVersion(command) : miseVersion(folder),
+        'own',
+      );
     }
     if (folder != null) return (true, miseVersion(folder), 'mise');
     final program = systemProgram(command);

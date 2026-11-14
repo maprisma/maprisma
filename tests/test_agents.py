@@ -98,6 +98,16 @@ class AgentsTest(unittest.TestCase):
         self.assertTrue(found.installed)
         self.assertEqual(found.source, "own")
 
+    def test_own_install_link_names_its_version(self):
+        """Claude Code's own installer: ~/.local/bin/claude -> .../claude/versions/2.1.322."""
+        (self.bin / "claude").unlink()
+        versions = self.bin.parent / "share/claude/versions"
+        versions.mkdir(parents=True)
+        (versions / "2.1.322").write_text("#!/bin/sh\n")
+        os.symlink(versions / "2.1.322", self.bin / "claude")
+        found = self.listed()["claude"]
+        self.assertEqual((found.installed, found.version, found.source), (True, "2.1.322", "own"))
+
     def test_openclaw_package(self):
         (self.db / "openclaw-desktop-1.0-1").mkdir()
         self.assertFalse(self.listed()["openclaw"].installed)

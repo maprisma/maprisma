@@ -107,10 +107,10 @@ def snapshot(agent_list, details: dict, inventory, report=None, pc=None, updates
                      f"start {candidate.update_from} (the app's Update moves them)")
     lines.append(f"Skills: {sum(len(s.skills) for s in inventory.skill_sets)} in {len(inventory.skill_sets)} folders")
     if report is not None:
-        found = [(f.level, f.title, f.text) for area in report.areas for f in area.findings if f.level in ("warn", "hint")]
+        found = [(f.level, f.title, f.text) for area in report.areas for f in area.findings if f.level in ("error", "warn", "hint")]
         if found:
             lines.append("The app's own setup check found:")
-            lines += [f"- {'problem' if level == 'warn' else 'tip'}: {title}" + (f" ({text})" if text else "")
+            lines += [f"- {'problem' if level == 'error' else 'warning' if level == 'warn' else 'tip'}: {title}" + (f" ({text})" if text else "")
                       for level, title, text in found[:30]]
     text = "\n".join(lines)
     return text[:MAX_SNAPSHOT]

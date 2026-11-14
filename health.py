@@ -7,7 +7,7 @@ statvfs). Nothing is changed, started or sent anywhere.
 
 The report has
 - areas (This PC, Agents, Local LLMs and models, Tools) with findings: ok, a tip
-  ("hint") or something to fix ("warn"), each with what to do and, where the window
+  ("hint") or something to fix ("error"), each with what to do and, where the window
   can do it, an action;
 - use cases (everyday help on the PC, vibe coding, images, voice, research and
   writing): what is there for it and the next step.
@@ -40,7 +40,7 @@ VOICE_APPS = ("whisper", "whisper-cli", "piper", "kokoro", "espeak-ng")
 
 @dataclass
 class Finding:
-    level: str                  # "ok", "hint" (a tip), "warn" (something to fix)
+    level: str                  # "ok", "hint" (a tip), "warn" (low limits, updates), "error" (to fix)
     title: str
     text: str = ""
     action: tuple = ()          # ("details", agent) ("runtime", key) ("models", key, query)
@@ -71,16 +71,17 @@ class UseCase:
 class Report:
     areas: list
     uses: list
-    warn: int = 0
+    warn: int = 0               # only low limits and updates, which the GUI adds
     hint: int = 0
+    error: int = 0              # something broken: the header's red "!"
 
     @property
     def level(self) -> str:
-        return "warn" if self.warn else "hint" if self.hint else "ok"
+        return "error" if self.error else "warn" if self.warn else "hint" if self.hint else "ok"
 
     def summary(self) -> str:
-        if self.warn:
-            return ngettext("1 thing to fix", "{0} things to fix", self.warn).format(self.warn) + (
+        if self.error:
+            return ngettext("1 thing to fix", "{0} things to fix", self.error).format(self.error) + (
                 " · " + ngettext("1 tip", "{0} tips", self.hint).format(self.hint) if self.hint else "")
         if self.hint:
             return _("Works well") + " · " + ngettext("1 tip", "{0} tips", self.hint).format(self.hint)
@@ -200,7 +201,7 @@ def check(agent_list, details: dict, inventory, built, pc: PC, agent_checks: dic
     for folder, free in sorted(pc.free.items()):
         where = folder.replace(str(Path.home()), "~", 1)
         if free < 20 * GiB:
-            area.findings.append(Finding("warn", _("Little free space for models: {0}").format(gb(free)),
+            area.findings.append(Finding("error", _("Little free space for models: {0}").format(gb(free)),
                                          _("In {0}. A model needs 2–30 GB; remove models no agent uses.").format(where),
                                          ("reorganize",), "models"))
         elif free < 60 * GiB:
@@ -214,7 +215,7 @@ def check(agent_list, details: dict, inventory, built, pc: PC, agent_checks: dic
     # Agents -------------------------------------------------------------------------------------
     area = Area("agents", _("Agents"), "\U000f06a9")
     if not installed:
-        area.findings.append(Finding("warn", _("No agent installed"),
+        area.findings.append(Finding("error", _("No agent installed"),
                                      desktop.text("install_agent_first"), ("firstagent",)))
     ready = []
     for agent in installed:
@@ -222,7 +223,7 @@ def check(agent_list, details: dict, inventory, built, pc: PC, agent_checks: dic
         missing = [c for c in checks if c.state == "missing"]
         warn = [c for c in checks if c.state == "warn"]
         if missing:
-            area.findings.append(Finding("warn", f"{agent.name}: {missing[0].title}", missing[0].step or missing[0].detail,
+            area.findings.append(Finding("error", f"{agent.name}: {missing[0].title}", missing[0].step or missing[0].detail,
                                          ("details", agent.command)))
         elif warn:
             area.findings.append(Finding("hint", f"{agent.name}: {warn[0].title}", warn[0].step or warn[0].detail,
@@ -249,8 +250,14 @@ def check(agent_list, details: dict, inventory, built, pc: PC, agent_checks: dic
         checks = runtime_checks.get(rt.key, [])
         bad = [c for c in checks if c.state in ("missing", "warn")]
         if bad:
-            level = "warn" if bad[0].state == "missing" else "hint"
+            level = "error" if bad[0].state == "missing" else "hint"
             area.findings.append(Finding(level, f"{rt.name}: {bad[0].title}", bad[0].step or bad[0].detail,
+                                         ("runtime", rt.key), "providers"))
+        elif rt.key in runtime_checks and not rt.agents:
+            # Nothing broken: a local LLM no agent uses yet is a tip (Uwe). Only
+            # where its checks ran: the system map knows no agents.
+            area.findings.append(Finding("hint", f"{rt.name}: {_('No agent connected')}",
+                                         _("Draw a line from an agent to this box on the map."),
                                          ("runtime", rt.key), "providers"))
         elif not rt.models:
             area.findings.append(Finding("hint", _("{0} has no models yet").format(rt.name),
@@ -268,7 +275,7 @@ def check(agent_list, details: dict, inventory, built, pc: PC, agent_checks: dic
     try:
         for need in model_slots.plan(runtimes, model_slots.models_in_use(built)):
             for hint in model_slots.hints(need, pc.vram):
-                area.findings.append(Finding("warn", _("{0}: its agents use {1} different models")
+                area.findings.append(Finding("error", _("{0}: its agents use {1} different models")
                                              .format(need.name, need.count), hint["text"], ("runtime", need.key),
                                              "providers"))
     except (OSError, ValueError):
@@ -300,7 +307,7 @@ def check(agent_list, details: dict, inventory, built, pc: PC, agent_checks: dic
     for link_key, hint in sorted(failed_links.items()) if isinstance(failed_links, dict) else []:
         source, target = link_hints.split(str(link_key))
         link_col = "providers" if str(target).startswith(("runtime:", "provider:")) else "mcp"
-        area.findings.append(Finding("warn", _("A connection does not work: {0} → {1}").format(
+        area.findings.append(Finding("error", _("A connection does not work: {0} → {1}").format(
             names.get(str(source).split(":", 1)[-1], str(source).split(":", 1)[-1]), str(target).split(":", 1)[-1]),
             _("Click its dotted red line on the map for what to do."), ("link", str(source), str(target)), link_col))
     unused = [m.name for m in inventory.mcp if not m.agents]
@@ -338,7 +345,7 @@ def check(agent_list, details: dict, inventory, built, pc: PC, agent_checks: dic
                   _("Ask questions, sort files, fix settings, explain errors."))
     use.have = [a.name for a in installed][:4] + matches(PC_TOOL, [m.name for m in inventory.mcp])[:3]
     if not installed:
-        use.steps.append(Finding("warn", _("Install an agent"), desktop.text("install_agent_short")))
+        use.steps.append(Finding("error", _("Install an agent"), desktop.text("install_agent_short")))
     elif not runtimes:
         use.steps.append(Finding("hint", _("Quick answers offline"),
                                  _("A small local model (2–4 GB) answers simple questions without internet or costs."),
@@ -351,7 +358,7 @@ def check(agent_list, details: dict, inventory, built, pc: PC, agent_checks: dic
     use.have = coding[:4] + coder_models[:2] + ([ngettext("1 skill", "{0} skills", skill_count).format(skill_count)]
                                                 if skill_count else [])
     if not coding:
-        use.steps.append(Finding("warn", _("Install a coding agent"),
+        use.steps.append(Finding("error", _("Install a coding agent"),
                                  desktop.text("install_coding_agent")))
     if runtimes and not coder_models and pc.vram >= 6 * GiB:
         rt = runtimes[0]
@@ -406,10 +413,11 @@ def check(agent_list, details: dict, inventory, built, pc: PC, agent_checks: dic
 
     for use in uses:
         use.have = list(dict.fromkeys(use.have))
-        warn = any(s.level == "warn" for s in use.steps)
-        use.level = "missing" if warn or not use.have else "almost" if use.steps else "ready"
+        error = any(s.level == "error" for s in use.steps)
+        use.level = "missing" if error or not use.have else "almost" if use.steps else "ready"
 
     report = Report(areas, uses)
+    report.error = sum(1 for a in areas for f in a.findings if f.level == "error")
     report.warn = sum(1 for a in areas for f in a.findings if f.level == "warn")
     report.hint = sum(1 for a in areas for f in a.findings if f.level == "hint")
     return report
