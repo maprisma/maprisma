@@ -39,8 +39,9 @@ Map<String, dynamic> readWindowsFile([Map<String, String>? env]) {
   final path = windowsFilePath(env);
   try {
     if (FileSystemEntity.typeSync(path, followLinks: false) !=
-        FileSystemEntityType.file)
+        FileSystemEntityType.file) {
       return {};
+    }
     final file = File(path).openSync();
     try {
       final bytes = file.readSync(_maxBytes + 1);
@@ -73,11 +74,13 @@ String resolvedWindowStyle([Map<String, String>? env]) {
   if (FileSystemEntity.typeSync(omarchy) == FileSystemEntityType.directory) {
     final toggles = '$omarchy/toggles/hypr';
     if (FileSystemEntity.typeSync('$toggles/window-opaque.lua') !=
-        FileSystemEntityType.notFound)
+        FileSystemEntityType.notFound) {
       return 'solid';
+    }
     if (FileSystemEntity.typeSync('$toggles/window-glassy.lua') !=
-        FileSystemEntityType.notFound)
+        FileSystemEntityType.notFound) {
       return 'glassy';
+    }
     return 'transparent';
   }
   return settings['theme_blur'] == true ? 'glassy' : 'solid';
