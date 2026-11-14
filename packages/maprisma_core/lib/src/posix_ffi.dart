@@ -135,6 +135,11 @@ class Posix {
     }
   }
 
+  /// flock(2) without waiting: false when another holds a conflicting lock.
+  /// [shared]: LOCK_SH, else LOCK_EX (task 073: the install's instance lock).
+  bool tryFlock(int fd, {required bool shared}) =>
+      _flock(fd, (shared ? 1 : 2) | 4) == 0;
+
   void truncate(int fd, int length) {
     if (_ftruncate(fd, length) != 0) _fail();
   }
