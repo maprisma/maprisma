@@ -129,9 +129,9 @@ static void my_application_activate(GApplication* application) {
     gtk_window_set_title(window, "Maprisma");
   }
 
-  // 1280×720, but never more than 90 % × 80 % of the screen: a window that does not fit gets
-  // placed at about two thirds of the screen by COSMIC (1280×800 laptops, task 073). The size the
-  // user gave the window last time (window.json) is applied by the Dart side afterwards.
+  // 1280×720, but never more than 90 % × 80 % of the screen (small screens, task 073). COSMIC
+  // decides a floating window's first size itself (about two thirds of the screen) and ignores
+  // this; the size the user gave the window last time (window.json) is applied by the Dart side.
   gint width = 1280, height = 720;
   GdkDisplay* display = gtk_widget_get_display(GTK_WIDGET(window));
   GdkMonitor* monitor = display != nullptr ? gdk_display_get_primary_monitor(display) : nullptr;
