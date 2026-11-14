@@ -124,11 +124,41 @@ class MapWelcome extends StatelessWidget {
     final intro = Text(
       '${tr('Welcome to {0}').replaceAll('{0}', 'Maprisma')}\n${tr(_separateMountHint)}\n${tr(_simplifyHint)}\n${tr('Only this PC is inspected. Nothing is sent and no detected program is run. You can skip the disk search.')}',
     );
+    final actions = [
+      if (!skipSearch && !searched) ...[
+        TextButton(
+          onPressed: busy ? null : onLook,
+          child: Text(tr('Look at this PC')),
+        ),
+        TextButton(onPressed: busy ? null : onSkip, child: Text(tr('Skip'))),
+      ],
+      TextButton(onPressed: busy ? null : onAgents, child: Text(tr('Agents'))),
+    ];
+    // A short window (a fresh COSMIC places one that doesn't fit at about 855×465, task 073):
+    // only the welcome line and the buttons, so the Agents card below keeps room for its list.
+    // Taller: the text, at most a fifth of the window (and 110 px), scrolling.
+    final height = MediaQuery.sizeOf(context).height;
+    if (height < 560) {
+      return MaterialBanner(
+        content: Text(
+          tr('Welcome to {0}').replaceAll('{0}', 'Maprisma'),
+          key: const ValueKey('welcome-intro'),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        actions: actions,
+      );
+    }
+    final maxHeight = (height * 0.2).clamp(48.0, 110.0);
     return MaterialBanner(
       content: uses.isEmpty
-          ? intro
+          ? ConstrainedBox(
+              key: const ValueKey('welcome-intro'),
+              constraints: BoxConstraints(maxHeight: maxHeight),
+              child: SingleChildScrollView(child: intro),
+            )
           : ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 110),
+              constraints: BoxConstraints(maxHeight: maxHeight),
               child: SingleChildScrollView(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -145,19 +175,7 @@ class MapWelcome extends StatelessWidget {
                 ),
               ),
             ),
-      actions: [
-        if (!skipSearch && !searched) ...[
-          TextButton(
-            onPressed: busy ? null : onLook,
-            child: Text(tr('Look at this PC')),
-          ),
-          TextButton(onPressed: busy ? null : onSkip, child: Text(tr('Skip'))),
-        ],
-        TextButton(
-          onPressed: busy ? null : onAgents,
-          child: Text(tr('Agents')),
-        ),
-      ],
+      actions: actions,
     );
   }
 }

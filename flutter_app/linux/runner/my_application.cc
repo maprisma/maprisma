@@ -129,7 +129,24 @@ static void my_application_activate(GApplication* application) {
     gtk_window_set_title(window, "Maprisma");
   }
 
-  gtk_window_set_default_size(window, 1280, 720);
+  // 1280×720, but never more than 90 % × 80 % of the screen: a window that does not fit gets
+  // placed at about two thirds of the screen by COSMIC (1280×800 laptops, task 073). The size the
+  // user gave the window last time (window.json) is applied by the Dart side afterwards.
+  gint width = 1280, height = 720;
+  GdkDisplay* display = gtk_widget_get_display(GTK_WIDGET(window));
+  GdkMonitor* monitor = display != nullptr ? gdk_display_get_primary_monitor(display) : nullptr;
+  if (monitor == nullptr && display != nullptr && gdk_display_get_n_monitors(display) > 0) {
+    monitor = gdk_display_get_monitor(display, 0);
+  }
+  if (monitor != nullptr) {
+    GdkRectangle area;
+    gdk_monitor_get_workarea(monitor, &area);
+    if (area.width > 0 && area.height > 0) {
+      width = MIN(width, area.width * 9 / 10);
+      height = MIN(height, area.height * 8 / 10);
+    }
+  }
+  gtk_window_set_default_size(window, width, height);
   g_signal_connect(window, "hide", G_CALLBACK(window_hidden_cb), self);
 
   g_autoptr(FlDartProject) project = fl_dart_project_new();
