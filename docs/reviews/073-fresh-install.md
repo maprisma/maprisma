@@ -70,3 +70,38 @@ Found issues; **not CLEAN**. Most severe first:
 
 Also found while fixing: under `pipefail`, `tr </dev/urandom | head` ended the script (SIGPIPE); the
 run id comes from `od -N3` now. Tests: 52 installer checks, 8 Dart tests.
+
+## Round 2 — Codex (2026-11-14), review of cb9ecd9 and 27cd60c
+
+**Not CLEAN — three findings remain.**
+
+1. **P1 — Recovery restores a bundle without locking it.** [packaging/install.sh:188](/mnt/Data/Projects/maprisma-claude/packaging/install.sh:188)  
+   After a crash at `moved-old`, `$lib` is absent, so the initial instance-lock check acquires nothing. Recovery restores `$old` to `$lib`, then installation proceeds without locking that restored bundle. A GUI launched after restoration can acquire its shared lock; the installer subsequently replaces and deletes its running bundle. After a crash at `activated`, the initially acquired lock similarly belongs to the discarded new bundle. Acquire the restored bundle’s lock before proceeding.
+
+2. **P1 — Interrupted recursive deletion can destroy recovery’s transaction identity.** [packaging/install.sh:186](/mnt/Data/Projects/maprisma-claude/packaging/install.sh:186)  
+   Recovery identifies the activated folder through its internal `.install-id`, then recursively deletes that same folder. If recovery is killed after `.install-id` is removed but before the directory disappears, the next run no longer recognizes `$lib` as this transaction’s folder. It leaves the partial bundle and cannot restore `$old`, because `$lib` still exists. The new tests interrupt between recovery steps; they do not cover interruption inside this deletion. Recovery needs identity/state that survives partial folder removal.
+
+3. **P2 — Journal validation still accepts incomplete records and can operate on `/bin`.** [packaging/install.sh:174](/mnt/Data/Projects/maprisma-claude/packaging/install.sh:174)  
+   Only `txn` is required after parsing. A journal containing:
+   
+   ```text
+   txn	abcdef
+   outer	bin
+   ```
+   
+   passes validation with `bak=""`. Line 180 consequently evaluates `$bak/$name` as `/bin` and attempts to move it onto the command target. Under `--system`, this can move the system’s `/bin` symlink. I confirmed the attempted operation using the actual parser/recovery with mutations mocked. Validate required records and their relationships before recovery performs any mutations; duplicate `outer` and `done` records also remain accepted.
+
+Round-1 verification: **1, 6–11 are fixed; 3–5 have the remaining issues above. Finding 2 was incorrect:** the original journal entries contain actual tabs.
+
+`bash -n` passed. Path-escaping probes passed, and the function-local lock descriptor remains open after return. Integration and Dart tests were skipped because filesystem access is read-only. No files changed.
+### Answers (Claude)
+
+1. **Restored bundle unlocked** — confirmed. Before recovery the installer locks every candidate:
+   `$lib`, `$lib.old.*`, `$lib.new.*`; the locks follow the folders through renames. Test 9f: a
+   Maprisma running from the moved-away old folder blocks the next run, which recovers once it ends.
+2. **Deletion destroys the id** — confirmed. Recovery first renames the activated folder back to its
+   staged name (atomic) and only then deletes it; a cut-short deletion is finished next time without
+   needing the id. Test 9e.
+3. **Incomplete journal** — confirmed. The journal is written whole (txn, new, bak) to a temp file and
+   renamed into place before the folders exist; recovery requires all three; duplicate `outer`/`done`
+   refused. Test 9d. 57 installer checks.

@@ -149,6 +149,37 @@ out=$(run "$T/a2/install.sh" --ignore-missing 2>&1); rc=$?
 check "journal symlink refused" '[[ $rc != 0 && $(cat "$T/victim/file") == keep ]]'
 rm -f "$H/.local/lib/.maprisma-install.journal"
 
+# 9d an incomplete journal (no bak) is refused before anything moves
+fresh
+run "$T/a1/install.sh" --ignore-missing >/dev/null 2>&1
+printf 'txn\tabcdef\nouter\tbin\n' >"$H/.local/lib/.maprisma-install.journal"
+out=$(run "$T/a2/install.sh" --ignore-missing 2>&1); rc=$?
+check "incomplete journal refused ($out)" '[[ $rc != 0 && -L $H/.local/bin/maprisma ]]'
+rm -f "$H/.local/lib/.maprisma-install.journal"
+
+# 9e recovery's deletion of the activated folder cut short (its id file already gone): finished next time
+fresh
+run "$T/a1/install.sh" --ignore-missing >/dev/null 2>&1
+run env MAPRISMA_INSTALL_TEST_FAIL_AT=activated "$T/a2/install.sh" --ignore-missing >/dev/null 2>&1
+run env MAPRISMA_INSTALL_TEST_FAIL_AT=recover-folder "$T/a1/install.sh" --ignore-missing >/dev/null 2>&1
+staged=$(ls -d "$L".new.* 2>/dev/null | head -1)
+check "the activated folder was moved back to its staged name" '[[ -n $staged && ! -e $L ]]'
+rm -f "$staged/.install-id" "$staged/maprisma"     # a deletion cut short
+out=$(run "$T/a1/install.sh" --ignore-missing 2>&1); rc=$?
+check "partial deletion finished, old restored, then installed ($out)" '[[ $rc == 0 ]] && grep -q 1.0.0 "$L/data/flutter_assets/version.json" && [[ -z $(leftovers) ]]'
+
+# 9f a Maprisma running from the moved-away old folder blocks the next run (lock before recovery)
+fresh
+run "$T/a1/install.sh" --ignore-missing >/dev/null 2>&1
+run env MAPRISMA_INSTALL_TEST_FAIL_AT=moved-old "$T/a2/install.sh" --ignore-missing >/dev/null 2>&1
+oldd=$(ls -d "$L".old.* | head -1)
+exec {held2}<"$oldd/data/instance.lock"; flock -s "$held2"
+out=$(run "$T/a1/install.sh" --ignore-missing 2>&1); rc=$?
+check "running old bundle blocks recovery ($out)" '[[ $rc != 0 && $out == *"is running"* && -d $oldd ]]'
+exec {held2}<&-
+out=$(run "$T/a1/install.sh" --ignore-missing 2>&1); rc=$?
+check "then recovered and installed" '[[ $rc == 0 && -z $(leftovers) ]]'
+
 # 10 custom XDG_DATA_HOME with a space
 fresh
 D="$H/my data"

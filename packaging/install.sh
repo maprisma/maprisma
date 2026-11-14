@@ -128,9 +128,13 @@ lock_instance() { # bundle folder
   exec {fd}<"$1/data/instance.lock"
   flock -n -x "$fd"
 }
-if [[ -f $lib/data/instance.lock ]]; then
-  lock_instance "$lib" || die "Maprisma is running (for you or another user): close it first; nothing was changed"
-elif [[ -d $lib ]]; then
+# Every bundle this run or an interrupted one may touch: $lib and leftovers of a run. The locks
+# follow the folders through recovery's renames.
+for d in "$lib" "$lib".old.* "$lib".new.*; do
+  [[ -d $d && ! -L $d ]] || continue
+  lock_instance "$d" || die "Maprisma is running (for you or another user): close it first; nothing was changed"
+done
+if [[ -d $lib && ! -f $lib/data/instance.lock ]]; then
   for exe in /proc/[0-9]*/exe; do
     case $(readlink "$exe" 2>/dev/null) in "$lib"/*) die "Maprisma is running: close it first; nothing was changed" ;; esac
   done
@@ -166,12 +170,13 @@ recover() {
       bak) [[ -z $bak && $a =~ ^$parent_re/\.maprisma-backup\.$id_re$ ]] || die "the install journal $journal is not valid"; bak=$a ;;
       tmp) [[ -n ${target[$a]:-} && -z ${tmp_of[$a]:-} && $b =~ ^$(re_quote "$(dirname "${target[$a]}")")/\.maprisma-new\.$id_re$ ]] ||
              die "the install journal $journal is not valid"; tmp_of[$a]=$b ;;
-      outer) [[ -n ${target[$a]:-} ]] || die "the install journal $journal is not valid"; outer[$a]=1 ;;
-      done) done=1 ;;
+      outer) [[ -n ${target[$a]:-} && -z ${outer[$a]:-} ]] || die "the install journal $journal is not valid"; outer[$a]=1 ;;
+      done) ((!done)) || die "the install journal $journal is not valid"; done=1 ;;
       *) die "the install journal $journal is not valid" ;;
     esac
   done <"$journal"
-  [[ -n $txn ]] || die "the install journal $journal is not valid"
+  # written whole before anything else happens: txn, new and bak are always there
+  [[ -n $txn && -n $new && -n $bak ]] || die "the install journal $journal is not valid: check and remove it"
   if ((done)); then
     [[ -n $old && -d $old && $(txn_of "$old") != "$txn" ]] && rm -rf -- "$old"
   else
@@ -183,10 +188,11 @@ recover() {
     step recover-outer
     for name in "${!tmp_of[@]}"; do rm -f -- "${tmp_of[$name]}"; done
     # the folder: $lib is the new one only when it carries this run's id
-    if [[ -d $lib && $(txn_of "$lib") == "$txn" ]]; then rm -rf -- "$lib"; fi
+    # (moved back to its staged name first: a deletion cut short is finished by the next run)
+    if [[ -d $lib && ! -e $new && $(txn_of "$lib") == "$txn" ]]; then mv -T -- "$lib" "$new"; fi
     step recover-folder
+    if [[ -d $new ]]; then rm -rf -- "$new"; fi
     if [[ ! -e $lib && -n $old && -d $old ]]; then mv -T -- "$old" "$lib"; fi
-    if [[ -n $new && -d $new ]]; then rm -rf -- "$new"; fi
   fi
   step recover-cleanup
   [[ -n $bak && -d $bak ]] && rm -rf -- "$bak"
@@ -320,13 +326,14 @@ if ((system)); then   # again, now that they exist
   done
 fi
 txn=$(od -An -N3 -tx1 /dev/urandom | tr -d ' \n')   # 6 hex digits, no SIGPIPE under pipefail
-new=$(mktemp -d "$lib.new.XXXXXX")
+new=$(mktemp -u "$lib.new.XXXXXX")
+bak=$(mktemp -u "$parent/.maprisma-backup.XXXXXX")
+# the journal appears whole (renamed into place) before the folders it names exist
+printf 'txn\t%s\nnew\t%s\nbak\t%s\n' "$txn" "$new" "$bak" >"$journal.tmp"
+mv -fT -- "$journal.tmp" "$journal"
+mkdir -m 700 -- "$new"
 printf '%s\n' "$txn" >"$new/.install-id"     # first: recovery knows the folder by it
-bak=$(mktemp -d "$parent/.maprisma-backup.XXXXXX")
-: >"$journal"
-note "txn	$txn"
-note "new	$new"
-note "bak	$bak"
+mkdir -m 700 -- "$bak"
 trap 'say "Install failed: rolling back."; recover; exit 1' ERR
 trap 'recover' EXIT
 cp -R --preserve=mode,timestamps,links --no-preserve=ownership -- "$here/app/." "$new/"
