@@ -680,4 +680,16 @@ sleep 60
       },
     );
   });
+  test('a collector linked into ~/.local/bin counts without it on PATH '
+      '(Hyprland session)', () {
+    final local = Directory('${root.path}/.local/bin')
+      ..createSync(recursive: true);
+    File('${local.path}/omarchy-agent-usage-grok').writeAsStringSync('');
+    final plain = {'HOME': root.path, 'PATH': '/usr/bin:/bin'};
+    expect(
+      usageCollector('grok', plain),
+      '${local.path}/omarchy-agent-usage-grok',
+    );
+    expect(usageCollector('nobody', plain), isNull);
+  });
 }

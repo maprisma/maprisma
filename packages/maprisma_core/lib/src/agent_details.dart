@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:crypto/crypto.dart' show sha256;
 import 'package:path/path.dart' as p;
 import 'package:yaml/yaml.dart';
+
 import 'dsh_profile.dart';
 import 'py_time.dart';
 import 'adapters.dart';
@@ -101,13 +103,20 @@ String usageDir(Map<String, String> env) {
 
 /// desktop_omarchy.has_usage_collector: Omarchy's collector of this agent's
 /// usage (`omarchy-agent-usage-<command>`), in Omarchy's bin folder,
-/// /usr/bin or, on another desktop, anywhere on PATH; null without one.
+/// /usr/bin, ~/.local/bin (a link to Omarchy's on another desktop, whose
+/// session's PATH may lack that folder: Hyprland's) or anywhere on PATH;
+/// null without one.
 String? usageCollector(String command, Map<String, String> env) {
   if (!RegExp(r'^[a-z0-9-]{1,64}$').hasMatch(command)) return null;
   final root = (env['OMARCHY_PATH'] ?? '').isNotEmpty
       ? env['OMARCHY_PATH']!
       : '/usr/share/omarchy';
-  for (final dir in ['$root/bin', '/usr/bin']) {
+  final home = env['HOME'] ?? '';
+  for (final dir in [
+    '$root/bin',
+    '/usr/bin',
+    if (home.startsWith('/')) '$home/.local/bin',
+  ]) {
     final path = '$dir/omarchy-agent-usage-$command';
     if (FileSystemEntity.typeSync(path) == FileSystemEntityType.file) {
       return path;
