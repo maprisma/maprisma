@@ -96,23 +96,32 @@ class AgentMap extends StatelessWidget {
     final children = activity?['children'] as List? ?? [];
     return Row(
       children: [
+        // The name and the usage text share the room; the battery and the
+        // buttons stay at the right edge.
         Expanded(
-          child: Text(
-            tr(node['label'] as String),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontWeight: FontWeight.w600),
+          child: Row(
+            children: [
+              Flexible(
+                child: Text(
+                  tr(node['label'] as String),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+              if ((graph['usage_boxes'] as Map?)?[node['id']]
+                  case final Map box)
+                Flexible(
+                  child: UsageBoxLabel(
+                    box: box,
+                    size: (graph['usage_box_size'] as int? ?? 7).toDouble(),
+                  ),
+                ),
+            ],
           ),
         ),
         if ((graph['agent_badges'] as Map?)?[node['id']] case final Map badge)
           AgentBadge(badge: badge),
-        if ((graph['usage_boxes'] as Map?)?[node['id']] case final Map box)
-          Flexible(
-            child: UsageBoxLabel(
-              box: box,
-              size: (graph['usage_box_size'] as int? ?? 7).toDouble(),
-            ),
-          ),
         if (node['kind'] == 'agent' &&
             activity?['subagents_supported'] == true &&
             children.isNotEmpty)

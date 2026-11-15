@@ -854,30 +854,41 @@ class _MapEditorState extends State<MapEditor>
                                           ),
                                         ),
                                       ),
+                                      // The name and the usage text share
+                                      // the room; the battery and the menu
+                                      // stay at the right edge.
                                       Expanded(
-                                        child: Text(
-                                          widget.tr(node['label'] as String),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
+                                        child: Row(
+                                          children: [
+                                            Flexible(
+                                              child: Text(
+                                                widget.tr(
+                                                  node['label'] as String,
+                                                ),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                            if ((widget.graph['usage_boxes']
+                                                    as Map?)?[id]
+                                                case final Map box)
+                                              Flexible(
+                                                child: UsageBoxLabel(
+                                                  box: box,
+                                                  size:
+                                                      (widget.graph['usage_box_size']
+                                                                  as int? ??
+                                                              7)
+                                                          .toDouble(),
+                                                ),
+                                              ),
+                                          ],
                                         ),
                                       ),
                                       if ((widget.graph['agent_badges']
                                               as Map?)?[id]
                                           case final Map badge)
                                         AgentBadge(badge: badge),
-                                      if ((widget.graph['usage_boxes']
-                                              as Map?)?[id]
-                                          case final Map box)
-                                        Flexible(
-                                          child: UsageBoxLabel(
-                                            box: box,
-                                            size:
-                                                (widget.graph['usage_box_size']
-                                                            as int? ??
-                                                        7)
-                                                    .toDouble(),
-                                          ),
-                                        ),
                                       PopupMenuButton<String>(
                                         tooltip: widget.tr('Actions'),
                                         onSelected: (action) {

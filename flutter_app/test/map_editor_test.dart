@@ -651,7 +651,8 @@ void main() {
       await mount(tester, edits: edits);
       await tester.dragFrom(
         tester.getCenter(find.text('agent:a')),
-        const Offset(302, 0),
+        tester.getCenter(find.text('runtime:r')) -
+            tester.getCenter(find.text('agent:a')),
       );
       await tester.pump();
       expect(edits.single['source'], 'agent:a');
@@ -3083,6 +3084,31 @@ void main() {
         expect(find.text('80%'), findsOneWidget);
         expect(find.byType(UsageBoxLabel), findsOneWidget);
         expect(find.text(r'$1.20'), findsOneWidget);
+
+        // The usage text floats after the name; the badge sits right before
+        // the menu, and the menu stays where it is on cards without them.
+        final badge = tester.getRect(find.byType(AgentBadge));
+        final usage = tester.getRect(find.byType(UsageBoxLabel));
+        final menus = [
+          for (final e in find.byType(PopupMenuButton<String>).evaluate())
+            tester.getRect(find.byWidget(e.widget)),
+        ];
+        final own =
+            (menus
+                    .where(
+                      (m) =>
+                          (m.center.dy - badge.center.dy).abs() < 20 &&
+                          m.left >= badge.left,
+                    )
+                    .toList()
+                  ..sort((a, b) => a.left.compareTo(b.left)))
+                .first;
+        expect(usage.right, lessThanOrEqualTo(badge.left));
+        expect(own.left - badge.right, inInclusiveRange(-0.5, 8));
+        expect(
+          menus.where((m) => (m.left - own.left).abs() < 0.5).length,
+          greaterThan(1),
+        );
 
         // Subagents compact symbol + count shown on agent:a only.
         expect(find.byKey(const ValueKey('subagents-a')), findsOneWidget);
