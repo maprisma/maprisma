@@ -3409,7 +3409,6 @@
  "{0} uses {1} through its own settings. Change it there.": "{0} gebruikt {1} via zijn eigen instellingen. Wijzig het daar.",
  "An agent can only sign in to its own online provider.": "Een agent kan alleen inloggen bij zijn eigen online aanbieder.",
  "This agent has no sign-in that the app can start.": "Deze agent heeft geen aanmelding die de app kan starten.",
- "Green: what is left of an agent's plan limits or of a day's limit (paid per token), or free GPU memory on a running local LLM.": "Groen: wat er over is van de abonnementslimieten van een agent of van de daglimiet (betaald per token), of vrij GPU-geheugen bij een draaiend lokaal LLM.",
  "Yellow: {0} % or less is left.": "Geel: {0} % of minder is over.",
  "Red: {0} % or less is left.": "Rood: {0} % of minder is over.",
  "Faded: its numbers may be out of date (its tooltip says when they were measured).": "Vervaagd: de cijfers zijn misschien niet meer actueel (de tooltip zegt wanneer ze gemeten zijn).",
@@ -3445,5 +3444,9 @@
  "The note could not be saved: {0}": "De notitie kon niet worden bewaard: {0}",
  "Corners of the window, its cards, the map's boxes and every control (buttons, choice boxes, fields). “Like windows” follows the desktop's window corners.": "Hoeken van het venster, zijn kaarten, de vakken van de kaart en elk bedieningselement (knoppen, keuzelijsten, velden). ‘Zoals vensters’ volgt de vensterhoeken van het bureaublad.",
  "A popup under the bar (only on Omarchy)": "Een pop-up onder de balk (alleen op Omarchy)",
- "{0}: little left of its limits": "{0}: nog weinig over van zijn limieten"
+ "{0}: little left of its limits": "{0}: nog weinig over van zijn limieten",
+ "{0} reports no plan limits Maprisma can read, so there is no battery.": "{0} geeft geen planlimieten door die Maprisma kan lezen, dus er is geen batterij.",
+ "Green: what is left of an agent's plan limits or of a day's limit (paid per token).": "Groen: wat er over is van de planlimieten van een agent of van een daglimiet (betaling per token).",
+ "In its place on an online agent: it reports no plan limits Maprisma can read.": "Op die plek bij een online agent: hij geeft geen planlimieten door die Maprisma kan lezen.",
+ "A chip: free GPU memory on a running local LLM, in the battery's colours.": "Een chip: vrij GPU-geheugen van een draaiend lokaal LLM, in de kleuren van de batterij."
 }

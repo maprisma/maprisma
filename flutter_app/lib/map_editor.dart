@@ -882,7 +882,20 @@ class _MapEditorState extends State<MapEditor>
                                       if ((widget.graph['agent_badges']
                                               as Map?)?[id]
                                           case final Map badge)
-                                        AgentBadge(badge: badge),
+                                        AgentBadge(badge: badge)
+                                      else if (onlineAgent(node))
+                                        NoBatteryHint(
+                                          message: widget
+                                              .tr(
+                                                '{0} reports no plan limits Maprisma can read, so there is no battery.',
+                                              )
+                                              .replaceAll(
+                                                '{0}',
+                                                widget.tr(
+                                                  node['label'] as String,
+                                                ),
+                                              ),
+                                        ),
                                       PopupMenuButton<String>(
                                         tooltip: widget.tr('Actions'),
                                         onSelected: (action) {

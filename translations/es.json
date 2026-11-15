@@ -3409,7 +3409,6 @@
  "{0} uses {1} through its own settings. Change it there.": "{0} usa {1} mediante sus propios ajustes. Cámbialo allí.",
  "An agent can only sign in to its own online provider.": "Un agente solo puede iniciar sesión en su propio proveedor en línea.",
  "This agent has no sign-in that the app can start.": "Este agente no tiene un inicio de sesión que la aplicación pueda iniciar.",
- "Green: what is left of an agent's plan limits or of a day's limit (paid per token), or free GPU memory on a running local LLM.": "Verde: lo que queda de los límites del plan de un agente o del límite diario (pago por token), o memoria GPU libre en un LLM local en marcha.",
  "Yellow: {0} % or less is left.": "Amarillo: queda un {0} % o menos.",
  "Red: {0} % or less is left.": "Rojo: queda un {0} % o menos.",
  "Faded: its numbers may be out of date (its tooltip says when they were measured).": "Atenuada: sus cifras pueden estar desactualizadas (su información emergente dice cuándo se midieron).",
@@ -3445,5 +3444,9 @@
  "The note could not be saved: {0}": "No se pudo guardar la nota: {0}",
  "Corners of the window, its cards, the map's boxes and every control (buttons, choice boxes, fields). “Like windows” follows the desktop's window corners.": "Esquinas de la ventana, sus tarjetas, las casillas del mapa y todos los controles (botones, listas de opciones, campos). «Como las ventanas» sigue las esquinas de las ventanas del escritorio.",
  "A popup under the bar (only on Omarchy)": "Una ventana emergente bajo la barra (solo en Omarchy)",
- "{0}: little left of its limits": "{0}: le queda poco de sus límites"
+ "{0}: little left of its limits": "{0}: le queda poco de sus límites",
+ "{0} reports no plan limits Maprisma can read, so there is no battery.": "{0} no informa de límites del plan que Maprisma pueda leer, así que no hay batería.",
+ "Green: what is left of an agent's plan limits or of a day's limit (paid per token).": "Verde: lo que queda de los límites del plan de un agente o del límite diario (pago por token).",
+ "In its place on an online agent: it reports no plan limits Maprisma can read.": "En su lugar en un agente en línea: no informa de límites del plan que Maprisma pueda leer.",
+ "A chip: free GPU memory on a running local LLM, in the battery's colours.": "Un chip: memoria de GPU libre de un LLM local en marcha, con los colores de la batería."
 }

@@ -1287,7 +1287,12 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       : {
           ...withAgentLinks(_graph!),
           'provider_models': _providerModels,
-          'agent_badges': {..._agentBadges, ..._gpuBadges},
+          'agent_badges': {
+            ..._agentBadges,
+            // A local LLM's free GPU memory: a chip, not a battery.
+            for (final MapEntry(:key, :value) in _gpuBadges.entries)
+              key: value is Map ? {...value, 'kind': 'gpu'} : value,
+          },
           'usage_boxes': _usageBoxes,
           'usage_box_size': _usageBoxSize,
           'traffic': _agentTraffic,

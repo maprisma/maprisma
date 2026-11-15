@@ -405,7 +405,16 @@ class AgentBadge extends StatelessWidget {
     }
 
     final Widget child;
-    if (badge['kind'] == 'battery') {
+    if (badge['kind'] == 'gpu') {
+      // A local LLM's free GPU memory: a memory chip in the battery's colours.
+      final chip = Icon(
+        Icons.memory,
+        key: const ValueKey('gpu-memory'),
+        size: 18,
+        color: colour,
+      );
+      child = badge['stale'] == true ? Opacity(opacity: .4, child: chip) : chip;
+    } else if (badge['kind'] == 'battery') {
       child = battery(badge['left'] as num? ?? 0);
     } else {
       final cost = Text(
@@ -435,6 +444,34 @@ class AgentBadge extends StatelessWidget {
     );
   }
 }
+
+/// In the battery's place on an online agent's card that has none (no plan
+/// limits Maprisma can read, e.g. Antigravity CLI): an "i" saying so.
+class NoBatteryHint extends StatelessWidget {
+  const NoBatteryHint({super.key, required this.message});
+  final String message;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 4),
+    child: Tooltip(
+      message: message,
+      child: SizedBox(
+        key: const ValueKey('agent-no-battery'),
+        width: 24,
+        child: Icon(
+          Icons.info_outline,
+          size: 16,
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
+      ),
+    ),
+  );
+}
+
+/// Whether [node] is an online agent's box (no battery gets NoBatteryHint).
+bool onlineAgent(Map node) =>
+    node['kind'] == 'agent' && node['group'] != 'local';
 
 /// A card's title row left of its battery and menu: the [name], and the
 /// [usage] text (UsageBoxLabel) centred in the room between the name and the

@@ -10,7 +10,7 @@ import 'map_editor.dart';
 import 'map_smart_card.dart';
 import 'map_zoom.dart';
 
-export 'map_groups.dart' show AgentBadge, UsageBoxLabel;
+export 'map_groups.dart' show AgentBadge, NoBatteryHint, UsageBoxLabel;
 
 class AgentMap extends StatelessWidget {
   const AgentMap({
@@ -116,7 +116,13 @@ class AgentMap extends StatelessWidget {
           ),
         ),
         if ((graph['agent_badges'] as Map?)?[node['id']] case final Map badge)
-          AgentBadge(badge: badge),
+          AgentBadge(badge: badge)
+        else if (onlineAgent(node))
+          NoBatteryHint(
+            message: tr(
+              '{0} reports no plan limits Maprisma can read, so there is no battery.',
+            ).replaceAll('{0}', tr(node['label'] as String)),
+          ),
         if (node['kind'] == 'agent' &&
             activity?['subagents_supported'] == true &&
             children.isNotEmpty)

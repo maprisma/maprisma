@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_theme.dart' show cornerSizes;
-import 'map_groups.dart' show AgentBadge;
+import 'map_groups.dart' show AgentBadge, NoBatteryHint;
 import 'map_layout.dart' show mapCollaborationColor;
 
 /// agent_details.warn_levels: Settings › Costs' (yellow, red) as % used,
@@ -120,7 +120,7 @@ class MapLegend extends StatelessWidget {
               _heading(context, 'Battery'),
               _row(
                 _battery('green', .9),
-                "Green: what is left of an agent's plan limits or of a day's limit (paid per token), or free GPU memory on a running local LLM.",
+                "Green: what is left of an agent's plan limits or of a day's limit (paid per token).",
               ),
               // The cards' levels (agent_badges.charge: this much left or
               // less), not fixed ones.
@@ -137,6 +137,16 @@ class MapLegend extends StatelessWidget {
               _row(
                 _battery('green', .6, stale: true),
                 'Faded: its numbers may be out of date (its tooltip says when they were measured).',
+              ),
+              _row(
+                const NoBatteryHint(message: ''),
+                'In its place on an online agent: it reports no plan limits Maprisma can read.',
+              ),
+              _row(
+                AgentBadge(
+                  badge: const {'kind': 'gpu', 'colour': 'green', 'tip': ''},
+                ),
+                "A chip: free GPU memory on a running local LLM, in the battery's colours.",
               ),
               _heading(context, 'Lines'),
               _row(
