@@ -3104,6 +3104,18 @@ void main() {
                   ..sort((a, b) => a.left.compareTo(b.left)))
                 .first;
         expect(usage.right, lessThanOrEqualTo(badge.left));
+        // ... centred between the end of the name and the battery.
+        final title = find.ancestor(
+          of: find.byType(UsageBoxLabel),
+          matching: find.byType(CardTitle),
+        );
+        final name = tester.getRect(
+          find.descendant(of: title, matching: find.byType(Text)).first,
+        );
+        expect(
+          (usage.center.dx - (name.right + badge.left) / 2).abs(),
+          lessThan(1),
+        );
         expect(own.left - badge.right, inInclusiveRange(-0.5, 8));
         expect(
           menus.where((m) => (m.left - own.left).abs() < 0.5).length,

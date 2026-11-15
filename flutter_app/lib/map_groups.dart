@@ -436,6 +436,32 @@ class AgentBadge extends StatelessWidget {
   }
 }
 
+/// A card's title row left of its battery and menu: the [name], and the
+/// [usage] text (UsageBoxLabel) centred in the room between the name and the
+/// battery. The name takes at most 60 % while usage text is shown.
+class CardTitle extends StatelessWidget {
+  const CardTitle({super.key, required this.name, this.usage});
+  final Widget name;
+  final Widget? usage;
+
+  @override
+  Widget build(BuildContext context) {
+    final usage = this.usage;
+    if (usage == null) return name;
+    return LayoutBuilder(
+      builder: (context, size) => Row(
+        children: [
+          ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: size.maxWidth * .6),
+            child: name,
+          ),
+          Expanded(child: Center(child: usage)),
+        ],
+      ),
+    );
+  }
+}
+
 /// The usage statistics box of a working agent (map.usage): tokens per
 /// second of its latest reply, its context size and the share in use
 /// (yellow from 75 %, red over 90 %), in the chosen text size.
