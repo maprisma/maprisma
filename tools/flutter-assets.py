@@ -456,7 +456,6 @@ KEYS = (
     'Fix it with AI',
     "Follow the vendor's instructions for this distribution.",
     'GPU stacks',
-    'Hold and drag to connect or move. A preview appears before changes.',
     'Last 30 days',
     'Last checked',
     'Links and model references will be updated.',
