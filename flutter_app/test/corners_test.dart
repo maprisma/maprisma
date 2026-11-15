@@ -98,4 +98,23 @@ void main() {
       expect(theme.colorScheme.onPrimary, Colors.black);
     },
   );
+
+  test('a dark theme\'s tooltip is dark with light text', () {
+    for (final desktop in [
+      const <String, String>{},
+      const {
+        'accent': '#e78a4e',
+        'background': '#231a13',
+        'foreground': '#e8d5b7',
+      },
+    ]) {
+      final theme = appTheme(Brightness.dark, desktop: desktop);
+      final box = theme.tooltipTheme.decoration as BoxDecoration;
+      expect(box.color!.computeLuminance(), lessThan(.15));
+      expect(
+        theme.tooltipTheme.textStyle!.color!.computeLuminance(),
+        greaterThan(.5),
+      );
+    }
+  });
 }

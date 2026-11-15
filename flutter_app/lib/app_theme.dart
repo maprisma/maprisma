@@ -168,10 +168,22 @@ ThemeData appTheme(
       actionTextColor: colors.primary,
       closeIconColor: colors.onSurfaceVariant,
     ),
+    // Dark with light text (Uwe): on a dark theme the inverted surface is a
+    // light box that is hard to read, so it takes a dark card tone there.
     tooltipTheme: TooltipThemeData(
       decoration: BoxDecoration(
-        color: colors.inverseSurface.withValues(alpha: .92),
+        color: brightness == Brightness.dark
+            ? colors.surfaceContainerHighest
+            : colors.inverseSurface.withValues(alpha: .92),
         borderRadius: control,
+        border: Border.all(color: colors.outlineVariant),
+      ),
+      textStyle: TextStyle(
+        color: brightness == Brightness.dark
+            ? colors.onSurface
+            : colors.onInverseSurface,
+        fontSize: 13,
+        fontFamily: fontFamily(fonts, 'ui'),
       ),
     ),
     filledButtonTheme: FilledButtonThemeData(
