@@ -25,6 +25,16 @@
   <url type="bugtracker">https://github.com/uBruckhaus/Asterism/issues</url>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.14.8" date="2026-11-15">
+      <description>
+        <p>Clearer status: a red ! only for errors (a model too big for the GPU, a broken connection, a full
+          disk, an agent not ready), an amber warning only for updates and low limits, tips for the rest.</p>
+        <p>Agent cards: the battery and the menu stay at the right edge, the usage text sits between the
+          name and the battery; an i where an online agent has no battery; free GPU memory is a chip.
+          Claude Code's version and battery show again; the title bar and the Ask AI symbol take the
+          theme's colours; tooltips are dark with light text, and only symbols have them.</p>
+      </description>
+    </release>
     <release version="0.14.7" date="2026-11-14">
       <description>
         <p>The window uses the desktop's fonts: its interface font for all text and its monospace font for
