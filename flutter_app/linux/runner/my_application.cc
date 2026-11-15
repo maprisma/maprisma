@@ -1,6 +1,7 @@
 #include "my_application.h"
 
 #include <flutter_linux/flutter_linux.h>
+#include <string.h>
 #ifdef GDK_WINDOWING_X11
 #include <gdk/gdkx.h>
 #endif
@@ -30,7 +31,46 @@ static void notify_shown(MyApplication* self) {
   }
 }
 
-// "titlebar": GTK draws the title bar, so it takes the app's light or dark.
+// "#rrggbb" or null.
+static const gchar* hex_arg(FlValue* map, const gchar* key) {
+  FlValue* v = fl_value_lookup_string(map, key);
+  if (v == nullptr || fl_value_get_type(v) != FL_VALUE_TYPE_STRING) return nullptr;
+  const gchar* s = fl_value_get_string(v);
+  if (strlen(s) != 7 || s[0] != '#') return nullptr;
+  for (int i = 1; i < 7; i++) {
+    if (!g_ascii_isxdigit(s[i])) return nullptr;
+  }
+  return s;
+}
+
+// GTK draws the header bar in the GTK theme's colours (Adwaita's blue-grey
+// on Hyprland), so it takes the app's background and text through a CSS
+// provider of its own, as Maprisma Settings and Theme do.
+static void set_header_colors(const gchar* bg, const gchar* fg,
+                              const gchar* border) {
+  static GtkCssProvider* provider = nullptr;
+  GdkScreen* screen = gdk_screen_get_default();
+  if (screen == nullptr) return;
+  if (provider == nullptr) {
+    provider = gtk_css_provider_new();
+    gtk_style_context_add_provider_for_screen(
+        screen, GTK_STYLE_PROVIDER(provider),
+        GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+  }
+  g_autofree gchar* css = g_strdup_printf(
+      "headerbar, headerbar:backdrop, .titlebar, .titlebar:backdrop {"
+      " background: %s; background-image: none; color: %s;"
+      " border-color: %s; box-shadow: none; }"
+      " headerbar .title, headerbar button, headerbar button image {"
+      " color: %s; }"
+      " headerbar:backdrop .title, headerbar:backdrop button {"
+      " color: alpha(%s, 0.7); }",
+      bg, fg, border, fg, fg);
+  gtk_css_provider_load_from_data(provider, css, -1, nullptr);
+}
+
+// "titlebar": GTK draws the title bar, so it takes the app's light or dark
+// (a bool) or {dark, background, foreground, border} with its colours.
 static void window_call_cb(FlMethodChannel* channel, FlMethodCall* call,
                            gpointer user_data) {
   g_autoptr(FlMethodResponse) response = nullptr;
@@ -40,6 +80,19 @@ static void window_call_cb(FlMethodChannel* channel, FlMethodCall* call,
       g_object_set(gtk_settings_get_default(),
                    "gtk-application-prefer-dark-theme", fl_value_get_bool(args),
                    nullptr);
+    } else if (args != nullptr && fl_value_get_type(args) == FL_VALUE_TYPE_MAP) {
+      FlValue* dark = fl_value_lookup_string(args, "dark");
+      if (dark != nullptr && fl_value_get_type(dark) == FL_VALUE_TYPE_BOOL) {
+        g_object_set(gtk_settings_get_default(),
+                     "gtk-application-prefer-dark-theme",
+                     fl_value_get_bool(dark), nullptr);
+      }
+      const gchar* bg = hex_arg(args, "background");
+      const gchar* fg = hex_arg(args, "foreground");
+      const gchar* border = hex_arg(args, "border");
+      if (bg != nullptr && fg != nullptr) {
+        set_header_colors(bg, fg, border != nullptr ? border : bg);
+      }
     }
     response = FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr));
   } else if (g_strcmp0(fl_method_call_get_name(call), "tiled") == 0) {

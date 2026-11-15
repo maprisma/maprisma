@@ -5366,11 +5366,24 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
 
   /// The window's title bar is GTK's, not Flutter's: it takes the app's
   /// light or dark (COSMIC gives GTK apps no dark theme of their own).
-  bool? _titleBarDark;
-  void _followTitleBar(bool dark) {
-    if (_titleBarDark == dark) return;
-    _titleBarDark = dark;
-    windowChannel.invokeMethod('titlebar', dark).catchError((_) => null);
+
+  Map<String, Object>? _titleBarLook;
+
+  /// GTK's title bar in the app's light or dark and its colours (the
+  /// desktop theme's background and text), not the GTK theme's own.
+  void _followTitleBar(ThemeData theme) {
+    String hex(Color c) =>
+        '#${(c.toARGB32() & 0xffffff).toRadixString(16).padLeft(6, '0')}';
+    final colors = theme.colorScheme;
+    final look = {
+      'dark': theme.brightness == Brightness.dark,
+      'background': hex(colors.surface),
+      'foreground': hex(colors.onSurface),
+      'border': hex(colors.outlineVariant),
+    };
+    if (sameMapJson(_titleBarLook, look)) return;
+    _titleBarLook = look;
+    windowChannel.invokeMethod('titlebar', look).catchError((_) => null);
   }
 
   /// Hyprland's window rounding (window.rounding; the core reads it at most
@@ -5521,7 +5534,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       darkTheme: _theme(Brightness.dark, alpha),
       themeMode: appThemeMode(_themePreference, _desktopTheme),
       builder: (context, child) {
-        _followTitleBar(Theme.of(context).brightness == Brightness.dark);
+        _followTitleBar(Theme.of(context));
         return RepaintBoundary(key: _shotArea, child: child);
       },
       // Esc on the window's page: back from a page (the route's own dismiss
