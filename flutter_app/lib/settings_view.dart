@@ -1116,6 +1116,23 @@ class SettingsView extends StatelessWidget {
         Text(_t('Updates apply only while the map is visible.')),
         const SizedBox(height: AppSpace.md),
         _Heading('map', _t('Map')),
+        SwitchListTile(
+          key: const ValueKey('map-3d'),
+          contentPadding: EdgeInsets.zero,
+          title: Text(_t('3D map layout')),
+          subtitle: Text(
+            _t(
+              'Raised cards, layered boxes, shadowed lines and a depth grid. Off: flat map.',
+            ),
+          ),
+          value:
+              (settings['flutter_map_layout'] as Map? ?? const {})['three_d'] !=
+              false,
+          onChanged: busy || onMapLayout == null
+              ? null
+              : (on) => onMapLayout!((latest) => {...latest, 'three_d': on}),
+        ),
+        const SizedBox(height: 8),
         ..._columnWidthRows(),
         ..._cardBorderRows(context),
         ..._lineColorRows(context),

@@ -273,12 +273,15 @@ void main() {
             'line_colors': {'mcp': '#ef5350', 'model': 'theme:tertiary'},
             'used_only': ['0:mcp:'],
             'dim_lines': false,
+            'three_d': false,
           },
         },
       });
       for (final bad in [
         {'dim_lines': 'no'},
         {'dim_lines': 0},
+        {'three_d': 'no'},
+        {'three_d': 1},
         {
           'line_colors': {'mcp': 'theme:pink'},
         },

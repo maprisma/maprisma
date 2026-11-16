@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import 'app_look.dart' show StatusColors;
 import 'app_theme.dart' show cornerSizes, corners;
+import 'map_3d.dart';
 
 /// UI-only metadata. Never inserted into the graph or serialized.
 class MapGroup {
@@ -42,73 +43,85 @@ class MapGroupCard extends StatelessWidget {
     required this.group,
     required this.tr,
     required this.onExpand,
+    this.threeD = false,
   });
   final MapGroup group;
   final String Function(String) tr;
   final VoidCallback onExpand;
+  final bool threeD;
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final radius = corners(context);
+    final face = group.dummy
+        ? colors.surfaceContainerLowest
+        : colors.surfaceContainerHigh;
     return Tooltip(
       message: tr(
         group.dummy ? 'Nothing set up yet. Expand to add one' : 'Expand',
       ),
-      child: CustomPaint(
-        foregroundPainter: group.dummy
-            ? _DashedBorder(colors.outline, corners(context))
-            : null,
-        child: Card(
-          margin: EdgeInsets.zero,
-          color: group.dummy
-              ? colors.surfaceContainerLowest
-              : colors.surfaceContainerHigh,
-          // The empty card has only its dashed border.
-          shape: group.dummy
-              ? RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(corners(context)),
-                )
+      child: Map3dBlock(
+        enabled: threeD,
+        radius: radius,
+        faceColor: face,
+        depth: map3dColumnDepth(group.category),
+        dimmed: group.dummy,
+        child: CustomPaint(
+          foregroundPainter: group.dummy
+              ? _DashedBorder(colors.outline, radius)
               : null,
-          child: InkWell(
-            onTap: onExpand,
-            borderRadius: BorderRadius.circular(corners(context)),
-            child: Padding(
-              padding: const EdgeInsets.all(10),
-              child: Row(
-                children: [
-                  if (group.dummy) const Icon(Icons.add, size: 18),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          tr(group.label),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        Text(
-                          group.dummy
-                              ? group.found > 0
-                                    ? tr(
-                                        '{0} found on this PC · Expand',
-                                      ).replaceAll('{0}', '${group.found}')
-                                    : tr('None yet · Expand to add one')
-                              : tr('{0} on · {1} more available')
-                                    .replaceAll('{0}', '${group.count}')
-                                    .replaceAll('{1}', '${group.available}'),
-                          maxLines: 2,
-                          style: const TextStyle(fontSize: 11),
-                        ),
-                      ],
+          child: Card(
+            margin: EdgeInsets.zero,
+            color: face,
+            elevation: threeD ? 0 : null,
+            // The empty card has only its dashed border.
+            shape: group.dummy
+                ? RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(radius),
+                  )
+                : null,
+            child: InkWell(
+              onTap: onExpand,
+              borderRadius: BorderRadius.circular(radius),
+              child: Padding(
+                padding: const EdgeInsets.all(10),
+                child: Row(
+                  children: [
+                    if (group.dummy) const Icon(Icons.add, size: 18),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            tr(group.label),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          Text(
+                            group.dummy
+                                ? group.found > 0
+                                      ? tr(
+                                          '{0} found on this PC · Expand',
+                                        ).replaceAll('{0}', '${group.found}')
+                                      : tr('None yet · Expand to add one')
+                                : tr('{0} on · {1} more available')
+                                      .replaceAll('{0}', '${group.count}')
+                                      .replaceAll('{1}', '${group.available}'),
+                            maxLines: 2,
+                            style: const TextStyle(fontSize: 11),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  IconButton(
-                    tooltip: tr('Expand'),
-                    onPressed: onExpand,
-                    icon: const Icon(Icons.open_in_full, size: 18),
-                  ),
-                ],
+                    IconButton(
+                      tooltip: tr('Expand'),
+                      onPressed: onExpand,
+                      icon: const Icon(Icons.open_in_full, size: 18),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

@@ -100,6 +100,7 @@ bool validLayout(dynamic v) {
           'used_only',
           'line_colors',
           'dim_lines',
+          'three_d',
         ].contains(k),
       )) {
     return false;
@@ -131,6 +132,7 @@ bool validLayout(dynamic v) {
     return false;
   }
   if (v.containsKey('dim_lines') && v['dim_lines'] is! bool) return false;
+  if (v.containsKey('three_d') && v['three_d'] is! bool) return false;
   final lines = v.containsKey('line_colors')
       ? v['line_colors']
       : <String, dynamic>{};

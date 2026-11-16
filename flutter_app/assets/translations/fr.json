@@ -848,5 +848,7 @@
   "Slightly rounded ({0} px)": "Légèrement arrondis ({0} px)",
   "Rounded ({0} px)": "Arrondis ({0} px)",
   "The screenshot could not be saved: {0}": "La capture n'a pas pu être enregistrée : {0}",
-  "The note could not be saved: {0}": "La note n'a pas pu être enregistrée : {0}"
+  "The note could not be saved: {0}": "La note n'a pas pu être enregistrée : {0}",
+  "3D map layout": "Disposition 3D de la carte",
+  "Raised cards, layered boxes, shadowed lines and a depth grid. Off: flat map.": "Cartes en relief, cases étagées, lignes ombrées et grille de profondeur. Désactivé : carte plate."
 }

@@ -833,6 +833,9 @@ KEYS = (
     "Rounded ({0} px)",
     "The screenshot could not be saved: {0}",
     "The note could not be saved: {0}",
+    # Settings › Map › 3D map layout (task 069).
+    "3D map layout",
+    "Raised cards, layered boxes, shadowed lines and a depth grid. Off: flat map.",
 )
 
 

@@ -848,5 +848,7 @@
   "Slightly rounded ({0} px)": "Lekko zaokrąglone ({0} px)",
   "Rounded ({0} px)": "Zaokrąglone ({0} px)",
   "The screenshot could not be saved: {0}": "Nie udało się zapisać zrzutu ekranu: {0}",
-  "The note could not be saved: {0}": "Nie udało się zapisać notatki: {0}"
+  "The note could not be saved: {0}": "Nie udało się zapisać notatki: {0}",
+  "3D map layout": "Układ 3D mapy",
+  "Raised cards, layered boxes, shadowed lines and a depth grid. Off: flat map.": "Wypukłe karty, warstwowe pola, linie z cieniem i siatka głębi. Wyłączone: płaska mapa."
 }

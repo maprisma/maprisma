@@ -848,5 +848,7 @@
   "Slightly rounded ({0} px)": "Leicht abgerundet ({0} px)",
   "Rounded ({0} px)": "Abgerundet ({0} px)",
   "The screenshot could not be saved: {0}": "Das Bildschirmfoto konnte nicht gespeichert werden: {0}",
-  "The note could not be saved: {0}": "Die Notiz konnte nicht gespeichert werden: {0}"
+  "The note could not be saved: {0}": "Die Notiz konnte nicht gespeichert werden: {0}",
+  "3D map layout": "3D-Kartenansicht",
+  "Raised cards, layered boxes, shadowed lines and a depth grid. Off: flat map.": "Erhabene Karten, gestufte Felder, Linien mit Schatten und Tiefenraster. Aus: flache Karte."
 }

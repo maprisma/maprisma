@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/gestures.dart' show GestureBinding, PointerScrollEvent;
 import 'package:flutter/material.dart';
 import 'core_client.g.dart';
+import 'map_3d.dart';
 import 'map_groups.dart';
 import 'app_theme.dart' show corners;
 import 'map_editor.dart';
@@ -226,6 +227,7 @@ class AgentMap extends StatelessWidget {
         )
         .toDouble();
     final colors = Theme.of(context).colorScheme;
+    final threeD = map3dEnabled(savedLayout);
 
     Widget buildCanvas({
       required double colWidth,
@@ -262,7 +264,9 @@ class AgentMap extends StatelessWidget {
                   positions,
                   edges,
                   colors.outlineVariant,
+                  colors: colors,
                   boxWidth: boxWidth,
+                  threeD: threeD,
                 ),
               ),
             ),
@@ -283,6 +287,7 @@ class AgentMap extends StatelessWidget {
                     : MapGroupCard(
                         group: groups[col],
                         tr: tr,
+                        threeD: threeD,
                         onExpand: () => onExpandGroup?.call(col),
                       ),
               ),
@@ -295,81 +300,105 @@ class AgentMap extends StatelessWidget {
                 child: Semantics(
                   button: onNode != null || node['kind'] == 'agent',
                   label: node['label'] as String,
-                  child: Card(
-                    shape: focusedNode == node['id']
-                        ? RoundedRectangleBorder(
-                            side: BorderSide(color: colors.primary, width: 2),
-                            borderRadius: BorderRadius.circular(
-                              corners(context),
-                            ),
-                          )
-                        : null,
-                    color: node['dim'] == true
+                  child: Map3dBlock(
+                    enabled: threeD,
+                    radius: corners(context),
+                    inset: 4.0,
+                    faceColor: node['dim'] == true
                         ? colors.surfaceContainerLowest
                         : node['status'] == 'running'
                         ? colors.secondaryContainer
                         : node['status'] == 'missing'
                         ? colors.surfaceContainerLowest
                         : colors.surfaceContainer,
-                    clipBehavior: Clip.antiAlias,
-                    child: InkWell(
-                      onSecondaryTap: onNodeMenu == null
-                          ? null
-                          : () => onNodeMenu!(context, node),
-                      onTap: onNode != null
-                          ? () => onNode!(node)
-                          : node['kind'] == 'agent'
-                          ? () => onAgent(
-                              (node['id'] as String).substring('agent:'.length),
+                    depth: map3dColumnDepth(node['column'] as int? ?? 1),
+                    accent: focusedNode == node['id']
+                        ? colors.primary
+                        : node['status'] == 'running'
+                        ? colors.secondary
+                        : null,
+                    elevated:
+                        focusedNode == node['id'] ||
+                        node['status'] == 'running',
+                    dimmed: node['dim'] == true || node['status'] == 'missing',
+                    child: Card(
+                      shape: focusedNode == node['id']
+                          ? RoundedRectangleBorder(
+                              side: BorderSide(color: colors.primary, width: 2),
+                              borderRadius: BorderRadius.circular(
+                                corners(context),
+                              ),
                             )
                           : null,
-                      // The Actions button keeps its place in the title row
-                      // but takes a 44 × 44 corner of the box (tap targets).
-                      child: Stack(
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 8,
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Row(
-                                  children: [
-                                    Expanded(child: _title(node)),
-                                    if (onNodeMenu != null)
-                                      const SizedBox(width: 28, height: 28),
-                                  ],
+                      color: node['dim'] == true
+                          ? colors.surfaceContainerLowest
+                          : node['status'] == 'running'
+                          ? colors.secondaryContainer
+                          : node['status'] == 'missing'
+                          ? colors.surfaceContainerLowest
+                          : colors.surfaceContainer,
+                      clipBehavior: Clip.antiAlias,
+                      child: InkWell(
+                        onSecondaryTap: onNodeMenu == null
+                            ? null
+                            : () => onNodeMenu!(context, node),
+                        onTap: onNode != null
+                            ? () => onNode!(node)
+                            : node['kind'] == 'agent'
+                            ? () => onAgent(
+                                (node['id'] as String).substring(
+                                  'agent:'.length,
                                 ),
-                                if ('${node['detail'] ?? ''}'.isNotEmpty)
-                                  Text(
-                                    node['detail'] as String,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: colors.onSurfaceVariant,
-                                    ),
+                              )
+                            : null,
+                        // The Actions button keeps its place in the title row
+                        // but takes a 44 × 44 corner of the box (tap targets).
+                        child: Stack(
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Expanded(child: _title(node)),
+                                      if (onNodeMenu != null)
+                                        const SizedBox(width: 28, height: 28),
+                                    ],
                                   ),
-                              ],
-                            ),
-                          ),
-                          if (onNodeMenu != null)
-                            Positioned(
-                              top: 11,
-                              right: 4,
-                              width: 44,
-                              height: 44,
-                              child: IconButton(
-                                padding: EdgeInsets.zero,
-                                tooltip: tr('Actions'),
-                                onPressed: () => onNodeMenu!(context, node),
-                                icon: const Icon(Icons.more_vert, size: 18),
+                                  if ('${node['detail'] ?? ''}'.isNotEmpty)
+                                    Text(
+                                      node['detail'] as String,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: colors.onSurfaceVariant,
+                                      ),
+                                    ),
+                                ],
                               ),
                             ),
-                        ],
+                            if (onNodeMenu != null)
+                              Positioned(
+                                top: 11,
+                                right: 4,
+                                width: 44,
+                                height: 44,
+                                child: IconButton(
+                                  padding: EdgeInsets.zero,
+                                  tooltip: tr('Actions'),
+                                  onPressed: () => onNodeMenu!(context, node),
+                                  icon: const Icon(Icons.more_vert, size: 18),
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -518,14 +547,26 @@ class _InteractiveBoardState extends State<_InteractiveBoard> {
 }
 
 class _Connections extends CustomPainter {
-  _Connections(this.positions, this.edges, this.color, {this.boxWidth = 242});
+  _Connections(
+    this.positions,
+    this.edges,
+    this.color, {
+    required this.colors,
+    this.boxWidth = 242,
+    this.threeD = false,
+  });
   final Map<String, Offset> positions;
   final List<Map<String, dynamic>> edges;
   final Color color;
+  final ColorScheme colors;
   final double boxWidth;
+  final bool threeD;
 
   @override
   void paint(Canvas canvas, Size size) {
+    if (threeD) {
+      paintMap3dStage(canvas, size, colors);
+    }
     final paint = Paint()
       ..color = color
       ..strokeWidth = 1.5
@@ -538,12 +579,23 @@ class _Connections extends CustomPainter {
       final start = source + Offset(forward ? boxWidth : 0, 41);
       final end = target + Offset(forward ? 0 : boxWidth, 41);
       final middle = (start.dx + end.dx) / 2;
-      canvas.drawPath(
-        Path()
-          ..moveTo(start.dx, start.dy)
-          ..cubicTo(middle, start.dy, middle, end.dy, end.dx, end.dy),
-        paint,
-      );
+      final path = Path()
+        ..moveTo(start.dx, start.dy)
+        ..cubicTo(middle, start.dy, middle, end.dy, end.dx, end.dy);
+      if (threeD) {
+        paintMap3dCable(
+          canvas,
+          path,
+          start: start,
+          end: end,
+          color: color,
+          width: 1.8,
+          colors: colors,
+          castShadow: true,
+        );
+      } else {
+        canvas.drawPath(path, paint);
+      }
     }
   }
 
@@ -552,5 +604,7 @@ class _Connections extends CustomPainter {
       positions != oldDelegate.positions ||
       edges != oldDelegate.edges ||
       color != oldDelegate.color ||
-      boxWidth != oldDelegate.boxWidth;
+      colors != oldDelegate.colors ||
+      boxWidth != oldDelegate.boxWidth ||
+      threeD != oldDelegate.threeD;
 }

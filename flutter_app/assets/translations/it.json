@@ -848,5 +848,7 @@
   "Slightly rounded ({0} px)": "Leggermente arrotondati ({0} px)",
   "Rounded ({0} px)": "Arrotondati ({0} px)",
   "The screenshot could not be saved: {0}": "Impossibile salvare lo screenshot: {0}",
-  "The note could not be saved: {0}": "Impossibile salvare la nota: {0}"
+  "The note could not be saved: {0}": "Impossibile salvare la nota: {0}",
+  "3D map layout": "Disposizione 3D della mappa",
+  "Raised cards, layered boxes, shadowed lines and a depth grid. Off: flat map.": "Schede in rilievo, riquadri a livelli, linee ombreggiate e griglia di profondità. Disattivato: mappa piatta."
 }

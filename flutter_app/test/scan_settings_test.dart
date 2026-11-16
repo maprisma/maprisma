@@ -65,6 +65,19 @@ void main() {
     await tester.pumpWidget(view());
     expect(tester.widget<SwitchListTile>(faded).value, isFalse);
 
+    // 3D map layout: on by default, off stores three_d: false, on again stores true.
+    final map3d = find.byKey(const ValueKey('map-3d'));
+    await tester.scrollUntilVisible(map3d, -250, scrollable: settingsList);
+    await tester.ensureVisible(map3d);
+    await tester.pumpAndSettle();
+    expect(tester.widget<SwitchListTile>(map3d).value, isTrue);
+    await tester.tap(map3d);
+    expect(layout['three_d'], isFalse);
+    await tester.pumpWidget(view());
+    expect(tester.widget<SwitchListTile>(map3d).value, isFalse);
+    await tester.tap(map3d);
+    expect(layout['three_d'], isTrue);
+
     // A width changed elsewhere shows while Settings stays open.
     layout = {
       'card_border': {'on': true, 'width': 5},

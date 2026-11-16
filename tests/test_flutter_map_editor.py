@@ -178,6 +178,11 @@ class MapEditorTest(unittest.TestCase):
         self.assertTrue(api.valid_layout({'dim_lines':False}))
         for bad in ('no', 0, None):
             with self.subTest(dim_lines=bad):self.assertFalse(api.valid_layout({'dim_lines':bad}))
+        # Settings › Map › 3D map layout: a plain bool.
+        self.assertTrue(api.valid_layout({'three_d':False}))
+        self.assertTrue(api.valid_layout({'three_d':True}))
+        for bad in ('no', 0, None):
+            with self.subTest(three_d=bad):self.assertFalse(api.valid_layout({'three_d':bad}))
 
     def test_wire_v3_validates_actions_and_keeps_v1_v2_compatibility(self):
         p=self.plan();p.model_actions=[{'operation':'model.load','key':'r','model':'new','agents':[]}]

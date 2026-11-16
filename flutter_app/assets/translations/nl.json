@@ -848,5 +848,7 @@
   "Slightly rounded ({0} px)": "Licht afgerond ({0} px)",
   "Rounded ({0} px)": "Afgerond ({0} px)",
   "The screenshot could not be saved: {0}": "De schermafbeelding kon niet worden bewaard: {0}",
-  "The note could not be saved: {0}": "De notitie kon niet worden bewaard: {0}"
+  "The note could not be saved: {0}": "De notitie kon niet worden bewaard: {0}",
+  "3D map layout": "3D-kaartindeling",
+  "Raised cards, layered boxes, shadowed lines and a depth grid. Off: flat map.": "Verhoogde kaarten, gelaagde vakken, lijnen met schaduw en diepteraster. Uit: platte kaart."
 }

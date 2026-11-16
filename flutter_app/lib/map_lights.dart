@@ -108,7 +108,12 @@ class MapLightTile extends ChangeNotifier {
 }
 
 class MapLightTiles {
-  MapLightTiles(this.layout, this.mode, {this.collaboration}) {
+  MapLightTiles(
+    this.layout,
+    this.mode, {
+    this.collaboration,
+    this.radius = defaultRadius,
+  }) {
     // Avoid allocating an unbounded grid for a very large saved layout. Retry
     // with coarser tiles as soon as the budget is reached, before building UI.
     while (!_makeTiles()) {
@@ -125,11 +130,12 @@ class MapLightTiles {
         ? [for (final c in layout.cards.values) c.rect]
         : const [];
   }
-  static const radius = 4.0;
+  static const defaultRadius = 4.0;
   static const maxTiles = 4096;
   final MapLayout layout;
   String mode;
   final bool? collaboration;
+  final double radius;
   List<MapCurve> get curves => layout.curves
       .where(
         (c) =>
@@ -233,6 +239,7 @@ class MapLightLayer extends StatefulWidget {
     required this.mode,
     this.collaboration,
     this.style = defaultMapLightStyle,
+    this.threeD = false,
   });
   final MapLayout layout;
   final ValueListenable<double> clock;
@@ -240,6 +247,7 @@ class MapLightLayer extends StatefulWidget {
   final String mode;
   final bool? collaboration;
   final MapLightStyle style;
+  final bool threeD;
   @override
   State<MapLightLayer> createState() => _MapLightLayerState();
 }
@@ -259,6 +267,7 @@ class _MapLightLayerState extends State<MapLightLayer> {
       widget.layout,
       widget.mode,
       collaboration: widget.collaboration,
+      radius: widget.threeD ? 6.0 : MapLightTiles.defaultRadius,
     )..update(widget.clock.value);
     _makeSprite();
   }
@@ -268,6 +277,45 @@ class _MapLightLayerState extends State<MapLightLayer> {
     _sprite = null;
     if (widget.style != MapLightStyle.sprites) return;
     final recorder = ui.PictureRecorder();
+    if (widget.threeD) {
+      final canvas = Canvas(recorder)..scale(4);
+      const center = Offset(6, 6);
+      canvas.drawCircle(
+        center,
+        5.8,
+        Paint()
+          ..shader = RadialGradient(
+            colors: [
+              widget.color.withValues(alpha: 0.42),
+              widget.color.withValues(alpha: 0),
+            ],
+          ).createShader(Rect.fromCircle(center: center, radius: 5.8)),
+      );
+      canvas.drawCircle(
+        center,
+        3.4,
+        Paint()
+          ..shader = RadialGradient(
+            center: const Alignment(-0.35, -0.35),
+            radius: 0.9,
+            colors: [
+              Color.lerp(widget.color, Colors.white, 0.55)!,
+              widget.color,
+              Color.lerp(widget.color, Colors.black, 0.35)!,
+            ],
+            stops: const [0.0, 0.55, 1.0],
+          ).createShader(Rect.fromCircle(center: center, radius: 3.4)),
+      );
+      canvas.drawCircle(
+        const Offset(4.9, 4.8),
+        1.1,
+        Paint()..color = Colors.white.withValues(alpha: 0.85),
+      );
+      final picture = recorder.endRecording();
+      _sprite = picture.toImageSync(48, 48);
+      picture.dispose();
+      return;
+    }
     final canvas = Canvas(recorder)..scale(4);
     canvas.drawCircle(const Offset(4, 4), 3, Paint()..color = widget.color);
     final picture = recorder.endRecording();
@@ -284,7 +332,8 @@ class _MapLightLayerState extends State<MapLightLayer> {
       widget.clock.addListener(_frame);
     }
     if (old.layout != widget.layout ||
-        old.collaboration != widget.collaboration) {
+        old.collaboration != widget.collaboration ||
+        old.threeD != widget.threeD) {
       _tiles.dispose();
       _create();
     } else {
@@ -311,7 +360,12 @@ class _MapLightLayerState extends State<MapLightLayer> {
             rect: tile.rect,
             child: RepaintBoundary(
               child: CustomPaint(
-                painter: _LightTilePaint(tile, widget.color, _sprite),
+                painter: _LightTilePaint(
+                  tile,
+                  widget.color,
+                  _sprite,
+                  threeD: widget.threeD,
+                ),
               ),
             ),
           ),
@@ -321,22 +375,40 @@ class _MapLightLayerState extends State<MapLightLayer> {
 }
 
 class _LightTilePaint extends CustomPainter {
-  _LightTilePaint(this.tile, this.color, this.sprite) : super(repaint: tile);
+  _LightTilePaint(this.tile, this.color, this.sprite, {this.threeD = false})
+    : super(repaint: tile);
   final MapLightTile tile;
   final Color color;
   final ui.Image? sprite;
+  final bool threeD;
   @override
   void paint(Canvas canvas, Size size) {
     canvas.clipRect(Offset.zero & size);
     final paint = Paint()..color = color;
     for (final mark in tile.marks) {
       if (sprite == null) {
-        canvas.drawCircle(mark, 3, paint);
+        if (threeD) {
+          canvas.drawCircle(
+            mark,
+            5.5,
+            Paint()..color = color.withValues(alpha: 0.24),
+          );
+          canvas.drawCircle(mark, 3.3, paint);
+          canvas.drawCircle(
+            mark + const Offset(-1.0, -1.1),
+            1.1,
+            Paint()..color = Colors.white.withValues(alpha: 0.82),
+          );
+        } else {
+          canvas.drawCircle(mark, 3, paint);
+        }
       } else {
+        final srcSize = sprite!.width.toDouble();
+        final dstSize = threeD ? 12.0 : 8.0;
         canvas.drawImageRect(
           sprite!,
-          const Rect.fromLTWH(0, 0, 32, 32),
-          Rect.fromCenter(center: mark, width: 8, height: 8),
+          Rect.fromLTWH(0, 0, srcSize, srcSize),
+          Rect.fromCenter(center: mark, width: dstSize, height: dstSize),
           paint..filterQuality = FilterQuality.low,
         );
       }
@@ -345,5 +417,8 @@ class _LightTilePaint extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _LightTilePaint old) =>
-      tile != old.tile || color != old.color || sprite != old.sprite;
+      tile != old.tile ||
+      color != old.color ||
+      sprite != old.sprite ||
+      threeD != old.threeD;
 }

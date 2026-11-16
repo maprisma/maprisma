@@ -848,5 +848,7 @@
   "Slightly rounded ({0} px)": "Slightly rounded ({0} px)",
   "Rounded ({0} px)": "Rounded ({0} px)",
   "The screenshot could not be saved: {0}": "The screenshot could not be saved: {0}",
-  "The note could not be saved: {0}": "The note could not be saved: {0}"
+  "The note could not be saved: {0}": "The note could not be saved: {0}",
+  "3D map layout": "3D map layout",
+  "Raised cards, layered boxes, shadowed lines and a depth grid. Off: flat map.": "Raised cards, layered boxes, shadowed lines and a depth grid. Off: flat map."
 }
