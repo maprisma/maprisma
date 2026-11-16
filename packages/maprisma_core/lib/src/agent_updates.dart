@@ -388,3 +388,50 @@ final class AgentUpdates {
     }
   }
 }
+
+/// updates.task: an update the check found as a task for an AI helper
+/// (Update with AI…). With an update command (mise, the agent's own
+/// updater) the helper checks the release first and runs it after the user
+/// agrees; an update of the app's own installer is only looked into, as the
+/// Update page downloads it and checks its SHA-256.
+String taskPrompt(Map update) {
+  final name = '${update['name']}',
+      current = '${update['current']}',
+      available = '${update['available']}';
+  final argv = [for (final w in update['command'] as List? ?? const []) '$w'];
+  if (argv.isEmpty) {
+    return '"$name" $available is out (I have $current). Maprisma installed it with its own installer, '
+        'which downloads the release and checks its SHA-256. Look up on the program\'s official release page '
+        'or changelog what changes from $current to $available for me (breaking changes, new requirements, '
+        'models or settings that need care) and tell me in a few lines whether to update now. Do not '
+        'download, install or change anything: Maprisma\'s Update page installs it.';
+  }
+  final command = [
+    if (argv.first == 'mise') ...['env', 'MISE_USE_VERSIONS_HOST=0'],
+    ...argv,
+  ].join(' ');
+  return 'Update "$name" from $current to $available. It was installed so that this command updates it: '
+      '$command\n'
+      'First check on the program\'s official release page or changelog that $available is out, and show '
+      'me in a few lines what changes for me (breaking changes, new requirements). If it runs right now, '
+      'tell me: the update replaces its program while it works. Then, after I agree, run that command and '
+      'show me the version it reports afterwards. Do not change its settings, sign-ins or any other '
+      'program. Ask me before each step that changes something.';
+}
+
+/// updates.task's helper among [taskers] (agents that can take a task): Ask
+/// AI's [picked] when it is one, else [fallback] ("Do it with …"), else the
+/// first; the agent [key] being updated only when no other can.
+String? updateHelper(
+  String key,
+  List<String> taskers,
+  String? fallback,
+  String picked,
+) {
+  final order = [
+    if (taskers.contains(picked)) picked,
+    if (fallback != null && taskers.contains(fallback)) fallback,
+    ...taskers,
+  ];
+  return order.where((c) => c != key).firstOrNull ?? order.firstOrNull;
+}

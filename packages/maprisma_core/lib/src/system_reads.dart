@@ -67,6 +67,7 @@ final class UsageReader {
     'agent-setup': 'Looking up new agents',
     'setup-analysis': 'Setup analysis',
     'mcp-update': 'MCP server update tasks',
+    'program-update': 'Program update tasks',
     'fix': 'Fixes after a failed install',
     'smart-fix': 'Fixes from Smart Check',
     'model-advice': 'Model advice',

@@ -324,6 +324,7 @@ List<ActionCheck> actionChecks(
     case 'system.fix_preview':
       return [ActionCheck('start', 'agents', text('command'))];
     case 'updates.run':
+    case 'updates.task':
       return [
         ActionCheck(
           'update',

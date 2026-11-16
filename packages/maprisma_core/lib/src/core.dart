@@ -166,6 +166,7 @@ const portedRoutes = {
   'health.report',
   'updates.check',
   'updates.run',
+  'updates.task',
   'models.slots_preview',
   'models.slots_reload',
   'limits.notify',
@@ -1735,6 +1736,7 @@ final class CoreService {
         switch (topic) {
           'fix' => 'smart-fix',
           'mcp-update' => 'mcp-update',
+          'update' => 'program-update',
           'smart-card' => 'smart-card',
           _ => 'setup-help',
         },
@@ -2969,6 +2971,31 @@ final class CoreService {
   /// The updates the last check found (updates.check), for updates.run.
   List<Map<String, dynamic>> lastUpdates = [];
 
+  /// agent_updates.forget: ask again on the next check (after an update,
+  /// or one handed to a helper: a cancelled one is simply found again).
+  void _forgetUpdates() {
+    try {
+      final cache = File(p.join(identity.cacheDir, 'updates.json'));
+      if (cache.existsSync()) cache.deleteSync();
+    } on FileSystemException {
+      // Asked again after six hours at the latest.
+    }
+  }
+
+  /// updates.task's helper: Ask AI's (smart_helper) when it can take a task,
+  /// else the one "Do it with …" starts, else any; the agent being updated
+  /// only when no other can (its program is replaced under its feet).
+  String? _updateHelper(String key) {
+    final (_, taskers) = _aiHelpers();
+    final (_, fallback) = _checksAgents();
+    return updateHelper(
+      key,
+      taskers,
+      fallback,
+      '${settings.load()['smart_helper'] ?? ''}',
+    );
+  }
+
   /// updates.check / updates.run (agent_updates and the GTK hint area's
   /// "X is available (you have Y)" with Update).
   Map<String, dynamic> updatesRoute(
@@ -2995,6 +3022,31 @@ final class CoreService {
       );
     }
     final key = params['key'];
+    if (method == 'updates.task') {
+      final found = lastUpdates.where((u) => u['key'] == key).firstOrNull;
+      if (params.length != 1 || found == null) {
+        throw const FormatException('Unknown update');
+      }
+      final task = _updateHelper('$key');
+      if (task == null) throw const FormatException('Helper unavailable');
+      _enforce([ActionCheck('start', 'agents', task)]);
+      final prompt = taskPrompt(found);
+      final adapter = addons.adapters
+          .where((a) => a.command == task)
+          .firstOrNull;
+      final argv = taskArgv(
+        adapter,
+        task,
+        prompt,
+        identity.environment,
+        identity.home,
+      );
+      if (argv == null || argv.isEmpty) {
+        throw const FormatException('Guarded helper unavailable');
+      }
+      _forgetUpdates();
+      return helpPreviews.keep(task, _nameOf(task), prompt, argv, 'update');
+    }
     final runningOk = params['running_ok'] ?? false;
     final found = lastUpdates.where((u) => u['key'] == key).firstOrNull;
     if (found == null ||
@@ -3037,13 +3089,7 @@ final class CoreService {
     ], i18n.text('Done. Press Enter to close.'))) {
       throw const FormatException('No terminal available');
     }
-    // agent_updates.forget: ask again on the next check.
-    try {
-      final cache = File(p.join(identity.cacheDir, 'updates.json'));
-      if (cache.existsSync()) cache.deleteSync();
-    } on FileSystemException {
-      // Asked again after six hours at the latest.
-    }
+    _forgetUpdates();
     lastUpdates.remove(found);
     return {'started': true};
   }
@@ -4128,6 +4174,37 @@ final class CoreService {
     starter
       ..onRead = made.observe
       ..onStop = made.forget;
+    // An agent's Update (its page, Ask AI) runs what updates.check found,
+    // as the hint's Update does: mise's version service can lag behind a
+    // release, and an agent with its own channel updates with its updater.
+    made.foundUpdate = (command) {
+      final argv = [
+        for (final w
+            in lastUpdates
+                        .where(
+                          (u) => u['kind'] == 'agent' && u['key'] == command,
+                        )
+                        .firstOrNull?['command']
+                    as List? ??
+                const [])
+          '$w',
+      ];
+      if (argv.isEmpty ||
+          !allowedUpdate(argv, addons.adapters) ||
+          !argv.every(toolRe.hasMatch)) {
+        return null;
+      }
+      return [
+        if (argv.first == 'mise') ...['env', 'MISE_USE_VERSIONS_HOST=0'],
+        ...argv,
+      ];
+    };
+    made.onUpdated = (command) {
+      _forgetUpdates();
+      lastUpdates.removeWhere(
+        (u) => u['kind'] == 'agent' && u['key'] == command,
+      );
+    };
     return made;
   }();
   late final halt = AgentHalt(
@@ -4992,7 +5069,9 @@ final class CoreService {
     if (method == 'dictation.stop') return dictation.stop(params);
     if (method == 'dictation.run') return dictation.run(params);
     if (method.startsWith('map.smart_')) return smartRoute(method, params);
-    if (method == 'updates.check' || method == 'updates.run') {
+    if (method == 'updates.check' ||
+        method == 'updates.run' ||
+        method == 'updates.task') {
       return updatesRoute(method, params);
     }
     if (method == 'help.snapshot' || method == 'help.open_manual') {

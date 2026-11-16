@@ -499,6 +499,71 @@ class CardTitle extends StatelessWidget {
   }
 }
 
+/// The ↑ version in a box whose program, MCP server or add-on has a newer
+/// version (task 068, the graph's update_badges); its menu has the update.
+class UpdateBadge extends StatelessWidget {
+  const UpdateBadge({super.key, required this.updates, required this.tr});
+  final List updates;
+  final String Function(String) tr;
+
+  @override
+  Widget build(BuildContext context) {
+    final version = '${(updates.first as Map)['version']}';
+    return Padding(
+      key: const ValueKey('update-badge'),
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Tooltip(
+        message: tr('Update available: {0}').replaceAll('{0}', version),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.upgrade, size: 14, color: StatusColors.warn),
+            Flexible(
+              child: Text(
+                version,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                // The yellow arrow marks it; the text keeps its contrast.
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Theme.of(context).colorScheme.onSurface,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The menu items of a box's update badge: (action, label) for
+/// MapEditor.onUpdate.
+List<(String, String)> updateMenuItems(
+  List updates,
+  String Function(String) tr,
+) => [
+  for (final u in updates.cast<Map>())
+    ...switch (u['kind']) {
+      'program' => [
+        if (u['ai'] == true) ('update_ai', tr('Update with AI…')),
+        ('update_now', tr('Update now')),
+      ],
+      'mcp' => [
+        if (u['ai'] == true) ('update_ai', tr('Update with AI…')),
+        if (u['on_pc'] == true) ('update_use', tr('Use the new version…')),
+      ],
+      'addon' => [
+        (
+          'update_addon',
+          tr('Update add-on to {0}').replaceAll('{0}', '${u['version']}'),
+        ),
+      ],
+      _ => const <(String, String)>[],
+    },
+];
+
 /// The usage statistics box of a working agent (map.usage): tokens per
 /// second of its latest reply, its context size and the share in use
 /// (yellow from 75 %, red over 90 %), in the chosen text size.

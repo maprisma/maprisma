@@ -3648,4 +3648,78 @@ void main() {
       },
     );
   });
+
+  testWidgets(
+    'task 068: an update badge on the box and its update items first',
+    (tester) async {
+      final graph = <String, dynamic>{
+        ...fixtureGraph(),
+        'update_badges': {
+          'agent:a': [
+            {'kind': 'program', 'version': '2.1', 'ai': true},
+            {'kind': 'addon', 'version': '0.15.0'},
+          ],
+          'mcp:c': [
+            {'kind': 'mcp', 'version': '1.5', 'ai': false, 'on_pc': true},
+          ],
+        },
+      };
+      final asked = <(String, String)>[];
+      tester.view.physicalSize = const Size(1100, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: MapEditor(
+              graph: graph,
+              saved: const {},
+              onEdit: (_) async {},
+              tr: (s) => s,
+              onMenu: (_, _) {},
+              onUpdate: (node, action) => asked.add(('${node['id']}', action)),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(find.byKey(const ValueKey('update-badge')), findsNWidgets(2));
+      expect(find.text('2.1'), findsOneWidget);
+      expect(find.text('1.5'), findsOneWidget);
+      Finder menuOf(String label) => find.descendant(
+        of: find
+            .ancestor(of: find.text(label), matching: find.byType(Row))
+            .first,
+        matching: find.byType(PopupMenuButton<String>),
+      );
+      for (final item in [
+        'Update with AI…',
+        'Update now',
+        'Update add-on to {0}'.replaceAll('{0}', '0.15.0'),
+      ]) {
+        await tester.tap(menuOf('agent:a'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text(item).last);
+        await tester.pumpAndSettle();
+      }
+      await tester.tap(menuOf('mcp:c'));
+      await tester.pumpAndSettle();
+      // No helper for AI: only the version already on this PC.
+      expect(find.text('Update with AI…'), findsNothing);
+      await tester.tap(find.text('Use the new version…').last);
+      await tester.pumpAndSettle();
+      // A box without an update has none of the items.
+      await tester.tap(menuOf('agent:b'));
+      await tester.pumpAndSettle();
+      expect(find.text('Update now'), findsNothing);
+      expect(asked, [
+        ('agent:a', 'update_ai'),
+        ('agent:a', 'update_now'),
+        ('agent:a', 'update_addon'),
+        ('mcp:c', 'update_use'),
+      ]);
+      expect(tester.takeException(), isNull);
+    },
+  );
 }

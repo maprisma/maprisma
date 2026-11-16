@@ -198,6 +198,7 @@ void main() {
     ),
     'jobs.continue': ({'id': 'j'}, 'install', 'models', ''),
     'updates.run': ({'key': 'pi'}, 'update', 'agents', 'pi'),
+    'updates.task': ({'key': 'pi'}, 'update', 'agents', 'pi'),
     'installers.preview': (
       {'kind': 'runtime', 'key': 'o'},
       'install',

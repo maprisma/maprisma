@@ -3448,5 +3448,10 @@
  "{0} reports no plan limits Maprisma can read, so there is no battery.": "{0} no informa de límites del plan que Maprisma pueda leer, así que no hay batería.",
  "Green: what is left of an agent's plan limits or of a day's limit (paid per token).": "Verde: lo que queda de los límites del plan de un agente o del límite diario (pago por token).",
  "In its place on an online agent: it reports no plan limits Maprisma can read.": "En su lugar en un agente en línea: no informa de límites del plan que Maprisma pueda leer.",
- "A chip: free GPU memory on a running local LLM, in the battery's colours.": "Un chip: memoria de GPU libre de un LLM local en marcha, con los colores de la batería."
+ "A chip: free GPU memory on a running local LLM, in the battery's colours.": "Un chip: memoria de GPU libre de un LLM local en marcha, con los colores de la batería.",
+ "Update available: {0}": "Actualización disponible: {0}",
+ "Update with AI…": "Actualizar con IA…",
+ "Update now": "Actualizar ahora",
+ "Use the new version…": "Usar la nueva versión…",
+ "Program update tasks": "Tareas de actualización de programas"
 }

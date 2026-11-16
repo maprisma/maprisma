@@ -2090,6 +2090,21 @@
    "result": null,
    "source": null
   },
+  "updates.task": {
+   "area": "updates",
+   "kind": "preview",
+   "note": "An update the last updates.check found, as a task for the Ask AI helper (else the one Do it with … uses; not the agent being updated while another can). Applied with system.help_apply.",
+   "params": {
+    "key": "string"
+   },
+   "result": {
+    "name": "string",
+    "preview": "string",
+    "prompt": "string",
+    "topic": "string"
+   },
+   "source": "manual"
+  },
   "usage.snapshot": {
    "area": "usage",
    "kind": "read",

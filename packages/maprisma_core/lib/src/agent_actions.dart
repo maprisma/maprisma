@@ -265,6 +265,14 @@ final class AgentActions {
   final Desktop desktop;
   final PtySessions sessions;
   final String Function(String) translate;
+
+  /// The command the last update check found for an agent (updates.check:
+  /// its own updater or mise from the tool's releases), so Update installs
+  /// what was found; null: the install recipe's update.
+  List<String>? Function(String command)? foundUpdate;
+
+  /// After an update started in its terminal: the check asks again.
+  void Function(String command)? onUpdated;
   final _previews = <String, (DateTime, Map<String, dynamic>, ActionPlan)>{};
   final _verifications = <String, (String, Directory, String)>{};
 
@@ -395,9 +403,18 @@ final class AgentActions {
           action != 'install' && !agent.installed) {
         throw const FormatException('Invalid lifecycle action');
       }
-      final step = Recipes(
-        path,
-      ).choose(facts['install'] as List? ?? const [], action, agent.source);
+      final found = action == 'update' ? foundUpdate?.call(command) : null;
+      final step = found != null
+          ? Step(
+              'found',
+              commands: [shellJoin(found)],
+              run: Recipes.runnable([found]),
+            )
+          : Recipes(path).choose(
+              facts['install'] as List? ?? const [],
+              action,
+              agent.source,
+            );
       if (step == null) throw const FormatException('No installation recipe');
       public
         ..['commands'] = step.commands
@@ -501,6 +518,9 @@ final class AgentActions {
         translate('Done. Press Enter to close.'),
       )) {
         throw const FormatException('No terminal available');
+      }
+      if (params['action'] == 'update') {
+        onUpdated?.call(params['command'] as String);
       }
       result = {'external': true};
     } else {

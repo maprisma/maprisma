@@ -494,6 +494,8 @@
   the update the same way the agent was installed — for example <code>mise upgrade &lt;tool&gt;</code>
   or <code>claude update</code> — in a terminal window of its own, so you can follow it.</p>
 
+  <p>On the map, a box whose agent, local LLM, MCP server or add-on has a newer version shows the yellow <b>↑ version</b> too, and its <b>⋮</b> menu starts with the update. <b>Update with AI…</b> gives it to the Ask AI helper (another agent than the one being updated, when there is one): you read its task first, then it runs in a terminal tab here, looks up what changes and asks before each step; for a local LLM that Maprisma installed it only says what changes, as the Update page installs it. <b>Update now</b> runs the update directly, as above. An MCP server whose newer version is already on this PC has <b>Use the new version…</b>, an add-on <b>Update add-on to …</b> (add-ons are signed, so not with AI). <b>Check again</b> in the column's status list shows when it is done.</p>
+
   <h2 id="update-running-flutter">Updating a running agent in the Flutter preview</h2>
   <p>When you click <b>Update</b> for an agent that is running right now — in a terminal tab here or in a terminal of its own — the Flutter preview first says so: an update replaces the agent's program while it works, so its sessions may stop or behave oddly, and some updaters refuse. <b>Cancel</b> leaves everything as it is; finish the agent's work and update later. <b>Update anyway</b> starts the update in a terminal as usual.</p>
 

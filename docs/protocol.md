@@ -325,6 +325,7 @@ A parameter written `name?` may be left out.
 |---|---|---|---|
 | `updates.check` | read | — | `task` A task. Its result: updates, each with kind (agent, runtime), key, name, current, available, command, column (agents, providers). |
 | `updates.run` | change | `key`: string, `running_ok?`: ? | ? |
+| `updates.task` | preview | `key`: string | `name`, `preview`, `prompt`, `topic` An update the last updates.check found, as a task for the Ask AI helper (else the one Do it with … uses; not the agent being updated while another can). Applied with system.help_apply. |
 
 ## usage
 

@@ -38,6 +38,7 @@ class AgentMap extends StatelessWidget {
     this.onAdd,
     this.onMissing,
     this.onNodeMenu,
+    this.onNodeUpdate,
     this.smartCards = false,
     this.smartAskColumns,
     this.onSmartProvider,
@@ -87,6 +88,9 @@ class AgentMap extends StatelessWidget {
   final void Function(BuildContext, String action, Map<String, dynamic>)?
   onMissing;
   final void Function(BuildContext, Map<String, dynamic>)? onNodeMenu;
+
+  /// A box's update item (task 068), see MapEditor.onUpdate.
+  final void Function(Map<String, dynamic> node, String action)? onNodeUpdate;
   final List<String>? layers;
   final FutureOr<void> Function(List<String>)? onLayers;
 
@@ -115,6 +119,9 @@ class AgentMap extends StatelessWidget {
             },
           ),
         ),
+        if ((graph['update_badges'] as Map?)?[node['id']]
+            case final List updates when updates.isNotEmpty)
+          UpdateBadge(updates: updates, tr: tr),
         if ((graph['agent_badges'] as Map?)?[node['id']] case final Map badge)
           AgentBadge(badge: badge)
         else if (onlineAgent(node))
@@ -176,6 +183,7 @@ class AgentMap extends StatelessWidget {
         onMissing: onMissing,
         onOpen: onNode,
         onMenu: onNodeMenu,
+        onUpdate: onNodeUpdate,
         animate: animate,
         lightFps: lightFps,
         smartCards: smartCards,

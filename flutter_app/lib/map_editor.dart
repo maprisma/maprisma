@@ -42,6 +42,7 @@ class MapEditor extends StatefulWidget {
     this.onMissing,
     this.onOpen,
     this.onMenu,
+    this.onUpdate,
     this.animate = 'all',
     this.lightFps = 20,
     this.selection,
@@ -95,6 +96,10 @@ class MapEditor extends StatefulWidget {
   onMissing;
   final ValueChanged<Map<String, dynamic>>? onOpen;
   final void Function(BuildContext, Map<String, dynamic>)? onMenu;
+
+  /// A box's update item (task 068: update_ai, update_now, update_use,
+  /// update_addon), for the graph's update_badges.
+  final void Function(Map<String, dynamic> node, String action)? onUpdate;
   final String animate;
   final int lightFps;
 
@@ -873,6 +878,14 @@ class _MapEditorState extends State<MapEditor>
                                         },
                                       ),
                                     ),
+                                    if ((widget.graph['update_badges']
+                                            as Map?)?[id]
+                                        case final List updates
+                                        when updates.isNotEmpty)
+                                      UpdateBadge(
+                                        updates: updates,
+                                        tr: widget.tr,
+                                      ),
                                     if ((widget.graph['agent_badges']
                                             as Map?)?[id]
                                         case final Map badge)
@@ -932,6 +945,9 @@ class _MapEditorState extends State<MapEditor>
                                             _chooseMove(id, layout);
                                           case 'forget':
                                             widget.onEdit({'forget': id});
+                                          case final update
+                                              when update.startsWith('update_'):
+                                            widget.onUpdate?.call(node, update);
                                           default:
                                             final edge = layout.allEdges
                                                 .firstWhere(
@@ -944,6 +960,21 @@ class _MapEditorState extends State<MapEditor>
                                         }
                                       },
                                       itemBuilder: (_) => [
+                                        // An update first (task 068).
+                                        if (widget.onUpdate != null)
+                                          for (final (action, label)
+                                              in updateMenuItems(
+                                                (widget.graph['update_badges']
+                                                            as Map?)?[id]
+                                                        as List? ??
+                                                    const [],
+                                                widget.tr,
+                                              ))
+                                            PopupMenuItem(
+                                              key: ValueKey('$action-$id'),
+                                              value: action,
+                                              child: Text(label),
+                                            ),
                                         PopupMenuItem(
                                           value: 'connect',
                                           child: Text(widget.tr('Connect')),

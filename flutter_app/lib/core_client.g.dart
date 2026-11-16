@@ -710,6 +710,9 @@ class CoreClient {
     Object? runningOk,
   }) => transport.call('updates.run', {'key': key, 'running_ok': ?runningOk});
 
+  Future<Map<String, dynamic>> updatesTask({required String key}) =>
+      transport.call('updates.task', {'key': key});
+
   Future<Map<String, dynamic>> usageSnapshot([
     Map<String, dynamic> params = const {},
   ]) => transport.call('usage.snapshot', params);

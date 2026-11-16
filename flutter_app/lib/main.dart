@@ -1293,6 +1293,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
             for (final MapEntry(:key, :value) in _gpuBadges.entries)
               key: value is Map ? {...value, 'kind': 'gpu'} : value,
           },
+          'update_badges': _updateBadges,
           'usage_boxes': _usageBoxes,
           'usage_box_size': _usageBoxSize,
           'traffic': _agentTraffic,
@@ -2593,38 +2594,122 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       }
       final plan = await _client.checksMcpTask(name: update['name'] as String);
       if (!mounted) return;
-      final yes = await _review(
-        () => showDialog<bool>(
-          context: _navigator.currentContext!,
-          builder: (context) => AlertDialog(
-            title: Text(
-              '${tr('Update {0}').replaceAll('{0}', '${update['name']}')} · ${plan['name']}',
-            ),
-            content: SizedBox(
-              width: 760,
-              child: SingleChildScrollView(
-                child: SelectableText(plan['prompt'] as String),
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: Text(tr('Cancel')),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: Text(tr('Continue')),
-              ),
-            ],
-          ),
-        ),
-      );
-      if (yes != true || !mounted) return;
-      _mapStale = true;
-      _systemSession(await _client.systemHelpApply(preview: plan['preview']));
+      await _reviewedUpdateTask('${update['name']}', plan);
     } catch (_) {
       _actionFailed();
     }
+  }
+
+  /// An update as a task for an agent (MCP's "Do it with …", task 068's
+  /// Update with AI…): its prompt to read, then the agent in a terminal tab.
+  Future<void> _reviewedUpdateTask(String name, Map plan) async {
+    final yes = await _review(
+      () => showDialog<bool>(
+        context: _navigator.currentContext!,
+        builder: (context) => AlertDialog(
+          title: Text(
+            '${tr('Update {0}').replaceAll('{0}', name)} · ${plan['name']}',
+          ),
+          content: SizedBox(
+            width: 760,
+            child: SingleChildScrollView(
+              child: SelectableText(plan['prompt'] as String),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(tr('Cancel')),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(tr('Continue')),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (yes != true || !mounted) return;
+    _mapStale = true;
+    _systemSession(await _client.systemHelpApply(preview: plan['preview']));
+  }
+
+  /// Update with AI… on an agent's or local LLM's box (updates.task).
+  Future<void> _aiUpdate(Map<String, dynamic> update) async {
+    try {
+      final plan = await _client.updatesTask(key: update['key'] as String);
+      if (!mounted) return;
+      await _reviewedUpdateTask('${update['name']}', plan);
+    } catch (_) {
+      _actionFailed();
+    }
+  }
+
+  /// The map boxes with a newer version (task 068): node id → what is
+  /// newer, for the box's ↑ badge and its menu (MapEditor.onUpdate).
+  Map<String, List<Map<String, dynamic>>> get _updateBadges {
+    final ai = _mcpChecks?['task_agent'] != null;
+    final out = <String, List<Map<String, dynamic>>>{};
+    void add(String id, Map<String, dynamic> badge) =>
+        (out[id] ??= []).add(badge);
+    for (final u in _updates) {
+      add('${u['kind'] == 'runtime' ? 'runtime' : 'agent'}:${u['key']}', {
+        'kind': 'program',
+        'version': '${u['available']}',
+        'ai': ai,
+      });
+    }
+    for (final u in _mcpUpdates) {
+      add('mcp:${u['name']}', {
+        'kind': 'mcp',
+        'version': '${u['latest']}',
+        'ai': ai,
+        'on_pc': u['on_pc'] == true,
+      });
+    }
+    for (final e in _addonEntries ?? const <Map<String, dynamic>>[]) {
+      if (e['action'] != 'update' || e['preview'] == null) continue;
+      final item = _addons.where((a) => a['id'] == e['id']).firstOrNull;
+      for (final name in (item?['provides'] as List? ?? const [])) {
+        for (final id in ['agent:$name', 'runtime:$name']) {
+          add(id, {'kind': 'addon', 'version': '${e['version']}'});
+        }
+      }
+    }
+    return out;
+  }
+
+  /// A box's update item (task 068).
+  void _mapUpdate(Map<String, dynamic> node, String action) {
+    if (_busy) return;
+    final id = '${node['id']}';
+    final key = id.split(':').skip(1).join(':');
+    if (action == 'update_addon') {
+      final item = _addons
+          .where((a) => (a['provides'] as List? ?? []).contains(key))
+          .firstOrNull;
+      final entry = (_addonEntries ?? [])
+          .where(
+            (e) =>
+                e['id'] == item?['id'] &&
+                e['action'] == 'update' &&
+                e['preview'] != null,
+          )
+          .firstOrNull;
+      if (entry != null) unawaited(_installAddon(entry));
+      return;
+    }
+    if (id.startsWith('mcp:')) {
+      final update = _mcpUpdates.where((u) => u['name'] == key).firstOrNull;
+      if (update == null) return;
+      unawaited(
+        _mcpUpdateAction(update, action == 'update_use' ? 'use' : 'task'),
+      );
+      return;
+    }
+    final update = _updates.where((u) => u['key'] == key).firstOrNull;
+    if (update == null) return;
+    unawaited(action == 'update_ai' ? _aiUpdate(update) : _runUpdate(update));
   }
 
   /// Settings › Recent changes (changes.history / changes.undo).
@@ -5988,6 +6073,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                                               onAgent: _selectAgent,
                                               onSubagents: _openSubagents,
                                               onNodeMenu: _nodeMenu,
+                                              onNodeUpdate: _mapUpdate,
                                               groups: MapGroup.fromGraph(
                                                 _mapGraph,
                                                 const [

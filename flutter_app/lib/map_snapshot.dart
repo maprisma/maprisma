@@ -46,6 +46,7 @@ Object mapAppearance(Map<String, dynamic> graph) => [
   graph['missing'],
   graph['provider_models'],
   graph['agent_badges'],
+  graph['update_badges'],
   graph['usage_boxes'],
   graph['usage_box_size'],
   {
