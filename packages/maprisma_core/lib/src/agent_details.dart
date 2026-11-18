@@ -1112,7 +1112,16 @@ final class DetailReaders {
       final own = mtime(path);
       if (own == null) continue;
       if (own > newest) newest = own;
-      if (!isDir(path)) continue;
+      if (!isDir(path)) {
+        final lower = path.toLowerCase();
+        if (lower.endsWith('.sqlite') ||
+            lower.endsWith('.sqlite3') ||
+            lower.endsWith('.db')) {
+          final wal = mtime('$path-wal');
+          if (wal != null && wal > newest) newest = wal;
+        }
+        continue;
+      }
       final stack = [(path, 0)];
       while (stack.isNotEmpty && seen < maxScan) {
         final (folder, depth) = stack.removeLast();

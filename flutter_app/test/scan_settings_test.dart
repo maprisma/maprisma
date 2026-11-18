@@ -1,3 +1,4 @@
+import 'package:maprisma/main.dart' show effectiveMapAnimate;
 import 'package:maprisma/settings_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -200,6 +201,37 @@ void main() {
     pause.onChanged!(false);
     expect(updated, {'map_scan_pause_unfocused': false});
   });
+
+  test(
+    'effectiveMapAnimate keeps lights flowing unfocused when pause is off',
+    () {
+      expect(
+        effectiveMapAnimate({'map_animations': 'all'}, focused: false),
+        'off',
+      );
+      expect(
+        effectiveMapAnimate({
+          'map_animations': 'all',
+          'map_scan_pause_unfocused': false,
+        }, focused: false),
+        'all',
+      );
+      expect(
+        effectiveMapAnimate({
+          'map_animations': 'agents',
+          'map_scan_pause_unfocused': false,
+        }, focused: false),
+        'agents',
+      );
+      expect(
+        effectiveMapAnimate({
+          'map_animations': 'off',
+          'map_scan_pause_unfocused': false,
+        }, focused: true),
+        'off',
+      );
+    },
+  );
 }
 
 /// The page's own list in Settings (not the Find in Settings field).

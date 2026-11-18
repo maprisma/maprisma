@@ -6053,11 +6053,10 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                                                           >? ??
                                                       {}),
                                               onLayout: _saveMapLayout,
-                                              animate: _windowFocused
-                                                  ? (_snapshot!['settings']['map_animations']
-                                                            as String? ??
-                                                        'all')
-                                                  : 'off',
+                                              animate: effectiveMapAnimate(
+                                                _snapshot!['settings'] as Map,
+                                                focused: _windowFocused,
+                                              ),
                                               controller: _aiTransform,
                                               layers:
                                                   (_snapshot!['settings']['map_layers']
@@ -6351,4 +6350,12 @@ class _ShotNoteState extends State<_ShotNote> {
       ),
     );
   }
+}
+
+/// Effective map light animation mode: respects `map_animations`, pausing
+/// while unfocused only when `map_scan_pause_unfocused` is enabled (default).
+String effectiveMapAnimate(Map settings, {required bool focused}) {
+  final pauseUnfocused = settings['map_scan_pause_unfocused'] != false;
+  if (!focused && pauseUnfocused) return 'off';
+  return settings['map_animations'] as String? ?? 'all';
 }
