@@ -34,6 +34,16 @@ class CoreClient {
 
   final ServiceTransport transport;
 
+  Future<Map<String, dynamic>> activitylogReport({
+    int? cursor,
+    String? fromDay,
+    String? throughDay,
+  }) => transport.call('activitylog.report', {
+    'cursor': ?cursor,
+    'from_day': ?fromDay,
+    'through_day': ?throughDay,
+  });
+
   Future<Map<String, dynamic>> addonsCatalog([
     Map<String, dynamic> params = const {},
   ]) => transport.call('addons.catalog', params);
@@ -92,6 +102,14 @@ class CoreClient {
   Future<Map<String, dynamic>> agentsActivity({required Object? command}) =>
       transport.call('agents.activity', {'command': command});
 
+  Future<Map<String, dynamic>> agentsActivityReport({
+    required String command,
+    String? instance,
+  }) => transport.call('agents.activity_report', {
+    'command': command,
+    'instance': ?instance,
+  });
+
   Future<Map<String, dynamic>> agentsCosts({required String command}) =>
       transport.call('agents.costs', {'command': command});
 
@@ -116,6 +134,14 @@ class CoreClient {
   Future<Map<String, dynamic>> agentsKeyPreview({required Object? command}) =>
       transport.call('agents.key_preview', {'command': command});
 
+  Future<Map<String, dynamic>> agentsProgress({
+    required String command,
+    required String instance,
+  }) => transport.call('agents.progress', {
+    'command': command,
+    'instance': instance,
+  });
+
   Future<Map<String, dynamic>> agentsProjects({required String command}) =>
       transport.call('agents.projects', {'command': command});
 
@@ -125,6 +151,14 @@ class CoreClient {
   Future<Map<String, dynamic>> agentsSecurityPreview([
     Map<String, dynamic> params = const {},
   ]) => transport.call('agents.security_preview', params);
+
+  Future<Map<String, dynamic>> agentsSessionActivity({
+    required String command,
+    required String instance,
+  }) => transport.call('agents.session_activity', {
+    'command': command,
+    'instance': instance,
+  });
 
   Future<Map<String, dynamic>> agentsTraffic([
     Map<String, dynamic> params = const {},
@@ -426,7 +460,7 @@ class CoreClient {
     'proposal': proposal,
   });
 
-  Future<Map<String, dynamic>> mapSnapshot({Object? force, Object? poll}) =>
+  Future<Map<String, dynamic>> mapSnapshot({bool? force, bool? poll}) =>
       transport.call('map.snapshot', {'force': ?force, 'poll': ?poll});
 
   Future<Map<String, dynamic>> mapUsage({required Object? commands}) =>

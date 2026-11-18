@@ -202,3 +202,28 @@ final class WindowRounding {
     return _value = text == null ? null : parseRounding(text);
   }
 }
+
+/// Finds a unique mapped window for one verified ancestor process.
+String? hyprlandWindowTitle(Map<String, String> env, int ownerPid) {
+  if (!hyprlandSession(env)) return null;
+  final text = _hyprctl(['clients', '-j'], env);
+  if (text == null || text.length > 256 * 1024) return null;
+  try {
+    final entries = jsonDecode(text);
+    if (entries is! List) return null;
+    final windows = entries
+        .whereType<Map>()
+        .where((entry) => entry['pid'] == ownerPid && entry['mapped'] == true)
+        .toList();
+    if (windows.length != 1 || windows.single['title'] is! String) return null;
+    final title = (windows.single['title'] as String)
+        .replaceAll(
+          RegExp(r'[\x00-\x1f\x7f-\x9f\u202a-\u202e\u2066-\u2069]'),
+          ' ',
+        )
+        .trim();
+    return title.isEmpty ? null : String.fromCharCodes(title.runes.take(200));
+  } on FormatException {
+    return null;
+  }
+}

@@ -1458,5 +1458,12 @@
   </dl>
 </section>
 
+<section id="agent-activity">
+  <h2>Agent activity and local history</h2>
+  <p>Open <b>What is it doing?</b> from an agent’s details, or use its menu on the map. The report refreshes while open. Use <b>Copy</b> to copy the current report as text and Esc to close it. You can also open the report from the activity button below a running terminal. The timeline shows recent file modification times. A change in the same project may have come from another process.</p>
+  <p>To let a compatible agent send its own progress, configure the installed Maprisma core as a local stdio MCP server with the argument <code>activity-mcp</code>. The <code>report_progress</code> tool accepts a step, a completed count, a total, and an optional note. The agent’s process must own the MCP server.</p>
+  <p>In Settings, enable <b>AI activity log</b> to collect observed agent activity while the map is running. Logging is off by default and the default retention is two calendar days including today. Review the retained log in Settings and use Copy, TXT or JSON to take the selected page elsewhere. To read the log through MCP, explicitly configure the separate <code>activity-log-mcp</code> command and call <code>activity_log_report</code>.</p>
+  <p>When a local helper has been selected in Settings, you can turn on <b>Topic summaries by local LLM</b>. The report may then classify a page of entries using sanitized project and file names. When both token samples belong to the same live Pi or Codex session, the report includes their difference.</p>
+</section>
 </body>
 </html>

@@ -26,6 +26,91 @@
  ],
  "protocol": 2,
  "routes": {
+  "activitylog.report": {
+   "area": "activitylog",
+   "kind": "read",
+   "note": "Retained local activity, paginated after aggregating the requested date range. Missing usage is unknown.",
+   "optional": [
+    "from_day",
+    "through_day",
+    "cursor"
+   ],
+   "params": {
+    "cursor": "int",
+    "from_day": "string",
+    "through_day": "string"
+   },
+   "result": {
+    "by_day": [
+     {
+      "count": "int",
+      "duration_ms": "int",
+      "key": "string",
+      "tokens_in": "int|null",
+      "tokens_out": "int|null",
+      "usage_unknown": "int"
+     }
+    ],
+    "by_project": [
+     {
+      "count": "int",
+      "duration_ms": "int",
+      "key": "string",
+      "tokens_in": "int|null",
+      "tokens_out": "int|null",
+      "usage_unknown": "int"
+     }
+    ],
+    "by_source": [
+     {
+      "count": "int",
+      "duration_ms": "int",
+      "key": "string",
+      "tokens_in": "int|null",
+      "tokens_out": "int|null",
+      "usage_unknown": "int"
+     }
+    ],
+    "by_week": [
+     {
+      "count": "int",
+      "duration_ms": "int",
+      "key": "string",
+      "tokens_in": "int|null",
+      "tokens_out": "int|null",
+      "usage_unknown": "int"
+     }
+    ],
+    "entries": [
+     {
+      "cost": "null",
+      "duration_ms": "int",
+      "ended_at": "string",
+      "files": [
+       "string"
+      ],
+      "helpers": [
+       "string"
+      ],
+      "id": "string",
+      "model": "string|null",
+      "outcome": "string",
+      "project": "string|null",
+      "source": "string",
+      "source_kind": "string",
+      "started_at": "string",
+      "tokens_in": "int|null",
+      "tokens_out": "int|null",
+      "topic": "string|null",
+      "version": "int"
+     }
+    ],
+    "from_day": "string",
+    "next_cursor": "int|null",
+    "through_day": "string"
+   },
+   "source": "manual"
+  },
   "addons.catalog": {
    "area": "addons",
    "kind": "read",
@@ -251,6 +336,106 @@
    "result": null,
    "source": null
   },
+  "agents.activity_report": {
+   "area": "agents",
+   "kind": "read",
+   "note": "Local observations for a running agent. Omit instance to pick the only live process or list choices. The report, its progress and stuck evidence, and the details request may be null.",
+   "optional": [
+    "instance"
+   ],
+   "params": {
+    "command": "string",
+    "instance": "string"
+   },
+   "result": {
+    "instances": [
+     {
+      "id": "string",
+      "label": "string",
+      "pid": "int"
+     }
+    ],
+    "observed_at": "string",
+    "report": {
+     "details": {
+      "answers": [
+       {
+        "at": "string|null",
+        "text": "string"
+       }
+      ],
+      "edited_files": [
+       {
+        "at": "string|null",
+        "path": "string"
+       }
+      ],
+      "request": {
+       "at": "string|null",
+       "text": "string"
+      },
+      "session_id": "string|null",
+      "status": "string",
+      "tool_calls": [
+       {
+        "at": "string|null",
+        "name": "string",
+        "status": "string|null"
+       }
+      ]
+     },
+     "helpers": [
+      {
+       "elapsed_ms": "int",
+       "label": "string",
+       "pid": "int"
+      }
+     ],
+     "instance": {
+      "id": "string",
+      "label": "string",
+      "pid": "int"
+     },
+     "origin": {
+      "ancestors": [
+       {
+        "label": "string",
+        "pid": "int"
+       }
+      ],
+      "close_risk": "string",
+      "terminal_title": "string|null"
+     },
+     "phase": "string",
+     "progress": {
+      "at": "string",
+      "done": "int",
+      "note": "string|null",
+      "step": "string",
+      "total": "int"
+     },
+     "stuck": {
+      "idle_ms": "int"
+     },
+     "timeline": [
+      {
+       "files": [
+        {
+         "at": "string",
+         "attribution": "string",
+         "path": "string"
+        }
+       ],
+       "from": "string",
+       "kind": "string",
+       "to": "string"
+      }
+     ]
+    },
+    "status": "string"
+   },
+   "source": "manual"
+  },
   "agents.costs": {
    "area": "agents",
    "kind": "read",
@@ -323,6 +508,25 @@
    "result": null,
    "source": null
   },
+  "agents.progress": {
+   "area": "agents",
+   "kind": "read",
+   "note": "Latest local self-report for a verified live instance, or null.",
+   "params": {
+    "command": "string",
+    "instance": "string"
+   },
+   "result": {
+    "progress": {
+     "at": "string",
+     "done": "int",
+     "note": "string|null",
+     "step": "string",
+     "total": "int"
+    }
+   },
+   "source": "manual"
+  },
   "agents.projects": {
    "area": "agents",
    "kind": "read",
@@ -352,6 +556,43 @@
    "params": {},
    "result": null,
    "source": null
+  },
+  "agents.session_activity": {
+   "area": "agents",
+   "kind": "read",
+   "note": "On-demand details for a verified running instance. Status is available, partial or unavailable. Nullable fields indicate unavailable evidence.",
+   "params": {
+    "command": "string",
+    "instance": "string"
+   },
+   "result": {
+    "answers": [
+     {
+      "at": "string|null",
+      "text": "string"
+     }
+    ],
+    "edited_files": [
+     {
+      "at": "string|null",
+      "path": "string"
+     }
+    ],
+    "request": {
+     "at": "string|null",
+     "text": "string"
+    },
+    "session_id": "string|null",
+    "status": "string",
+    "tool_calls": [
+     {
+      "at": "string|null",
+      "name": "string",
+      "status": "string|null"
+     }
+    ]
+   },
+   "source": "manual"
   },
   "agents.traffic": {
    "area": "agents",
@@ -1253,21 +1494,56 @@
   "map.snapshot": {
    "area": "map",
    "kind": "read",
-   "note": "nodes: dim marks a known server without agents; an agent's own_provider is the id of its own online provider (\"\" for none); own_login: the app can start its sign-in there (a drop onto that provider signs it in only then); a model with status missing is one an agent is set to that its local LLM no longer has; a model:folder:<path>:<name> model is in a reused model folder no local LLM lists. mcp:<name>~2 is another server of that name. edges: fixed says why a line cannot be taken away here; a failed agent → runtime line with no recorded failure is a local provider whose LLM moved (dangling: the model the agent is set to there, \"\" for an inactive one), repaired by connections.repair_preview unless fixed says where to change it instead; available from an agent to its own online provider: not signed in.",
+   "note": "nodes: dim marks a known server without agents; an agent's own_provider is the id of its own online provider (\"\" for none); own_login: the app can start its sign-in there (a drop onto that provider signs it in only then); a model with status missing is one an agent is set to that its local LLM no longer has; a model:folder:<path>:<name> model is in a reused model folder no local LLM lists. mcp:<name>~2 is another server of that name. edges: fixed says why a line cannot be taken away here; a failed agent → runtime line with no recorded failure is a local provider whose LLM moved (dangling: the model the agent is set to there, \"\" for an inactive one), repaired by connections.repair_preview unless fixed says where to change it instead; available from an agent to its own online provider: not signed in. Agent nodes may include activity_instances with an opaque id, PID and optional progress report per live instance. activity_progress is the most recent report and includes its instance ID. Both activity_progress and each instance’s progress may be unavailable.",
    "optional": [
     "force",
     "poll"
    ],
    "params": {
-    "force": "?",
-    "poll": "?"
+    "force": "bool",
+    "poll": "bool"
    },
    "result": {
     "edges": [
      "object"
     ],
     "nodes": [
-     "object"
+     {
+      "active": "bool",
+      "activity_instances": [
+       {
+        "id": "string",
+        "pid": "int",
+        "progress": {
+         "at": "string",
+         "done": "int",
+         "note": "string|null",
+         "step": "string",
+         "total": "int"
+        }
+       }
+      ],
+      "activity_progress": {
+       "at": "string",
+       "done": "int",
+       "instance": "string",
+       "note": "string|null",
+       "step": "string",
+       "total": "int"
+      },
+      "column": "int",
+      "detail": "string",
+      "dim": "bool",
+      "group": "string",
+      "icon": "string",
+      "icon_font": "string",
+      "id": "string",
+      "kind": "string",
+      "label": "string",
+      "own_login": "bool",
+      "own_provider": "string",
+      "status": "string"
+     }
     ],
     "pending": "bool"
    },
@@ -1632,12 +1908,18 @@
    "area": "sessions",
    "handle": "session",
    "kind": "handle",
-   "note": "",
+   "note": "activity_instance is an optional opaque ID for the live agent in this terminal.",
    "params": {
-    "session": "?"
+    "session": "string"
    },
-   "result": null,
-   "source": null
+   "result": {
+    "activity_instance": "string|null",
+    "ended": "bool",
+    "exit_code": "int|null",
+    "text": "string",
+    "verification_failed": "bool"
+   },
+   "source": "manual"
   },
   "sessions.resize": {
    "area": "sessions",
@@ -1699,6 +1981,9 @@
     ],
     "addons_online": "bool",
     "agent_folder": "null|string",
+    "ai_activity_local_topics": "bool",
+    "ai_activity_log": "bool",
+    "ai_activity_log_days": "int",
     "ai_checks": "bool",
     "ai_checks_agent": "string",
     "ai_local_helper": {},
@@ -1768,6 +2053,9 @@
     ],
     "addons_online": "bool",
     "agent_folder": "null|string",
+    "ai_activity_local_topics": "bool",
+    "ai_activity_log": "bool",
+    "ai_activity_log_days": "int",
     "ai_checks": "bool",
     "ai_checks_agent": "string",
     "ai_local_helper": {},

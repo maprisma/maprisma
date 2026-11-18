@@ -62,7 +62,8 @@ GAMES = ("chess",)
 # How long the agent may think (AI Playground's Thinking time): per level, its own options for how
 # hard the model thinks (ask.effort), put in before the prompt.
 THINKING = ("quick", "normal", "deep", "max")
-SESSIONS = {"reader": STR, "hook": BOOL, "note": STR, "note_args": STRS}
+SESSIONS = {"reader": STR, "hook": BOOL, "note": STR, "note_args": STRS,
+            "activity_reader": STR, "activity_dir": STR, "extra_dir_option": STR}
 DETAILS = {"reader": STR, "dir": STR, "hook": BOOL}     # its model and providers, read from its settings
 MODELS = {"reader": STR, "hook": BOOL}                  # the online models it can be switched to
 TOOLS = {"file": STR, "key": STR}                       # the tools it is given (a JSON list)

@@ -60,6 +60,7 @@ import 'map_smart_card.dart'
         smartHelperChosen,
         smartOpenRules,
         smartWindowsShown;
+import 'agent_activity_dialog.dart';
 import 'agent_action_dialog.dart';
 import 'providers_view.dart';
 import 'provider_task_dialog.dart';
@@ -1490,7 +1491,15 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         .where((a) => (a['provides'] as List? ?? []).contains(id))
         .firstOrNull;
     if (item != null) {
-      _addonMenu(context, item);
+      final instances = node['activity_instances'] as List?;
+      _addonMenu(
+        context,
+        item,
+        activityCommand: node['kind'] == 'agent' ? id : null,
+        activityInstance: instances?.length == 1
+            ? instances!.single['id'] as String?
+            : null,
+      );
     } else {
       _aiNode(node);
     }
@@ -1498,8 +1507,10 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
 
   Future<void> _addonMenu(
     BuildContext context,
-    Map<String, dynamic> item,
-  ) async {
+    Map<String, dynamic> item, {
+    String? activityCommand,
+    String? activityInstance,
+  }) async {
     final update = (_addonEntries ?? [])
         .where(
           (e) =>
@@ -1533,6 +1544,11 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                     style: Theme.of(sheet).textTheme.titleLarge,
                   ),
                   AddonDetails(item: item, tr: tr),
+                  if (activityCommand != null)
+                    TextButton(
+                      onPressed: () => Navigator.pop(sheet, 'activity'),
+                      child: Text(tr('What is it doing?')),
+                    ),
                   if (lock != null) ...[
                     Text(
                       addonsLockedText(tr, lock),
@@ -1627,6 +1643,10 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         ),
       ),
     );
+    if (choice == 'activity' && activityCommand != null) {
+      await _openAgentActivity(activityCommand, instance: activityInstance);
+      return;
+    }
     if (choice == 'terminal') _showRunningTerminal(item['id'] as String);
   }
 
@@ -3910,11 +3930,30 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     await _refresh();
   }
 
+  Future<void> _openAgentActivity(String command, {String? instance}) async {
+    final context = _navigator.currentContext;
+    if (context == null) return;
+    await showDialog<void>(
+      context: context,
+      builder: (_) => AgentActivityDialog(
+        fetch: (selected) => _client.agentsActivityReport(
+          command: command,
+          instance: selected ?? instance,
+        ),
+        tr: tr,
+      ),
+    );
+  }
+
   Future<void> _agentAction(
     String command,
     String action, {
     String? kind,
   }) async {
+    if (action == 'activity') {
+      await _openAgentActivity(command);
+      return;
+    }
     if (action == 'key') {
       await _apiKey(command);
       return;
@@ -6192,6 +6231,10 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                                   }
                                 },
                                 onStop: () => _stopTerminal(_visibleTerminal!),
+                                onActivity: (instance) => _openAgentActivity(
+                                  _visibleTerminal!.command,
+                                  instance: instance,
+                                ),
                                 onScreenshot:
                                     (_snapshot?['settings']
                                             as Map?)?['screenshot_key'] ==

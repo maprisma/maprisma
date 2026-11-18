@@ -52,6 +52,9 @@ class AgentTerminal extends ChangeNotifier {
   bool _pumping = false;
   bool _disposed = false;
   DateTime? _retryAfter;
+  DateTime? _progressChecked;
+  String? activityInstance;
+  Map<String, dynamic>? activityProgress;
 
   var _pasting = false;
 
@@ -106,6 +109,20 @@ class AgentTerminal extends ChangeNotifier {
       final reply = await client.sessionsRead(session: id);
       if (_disposed) return;
       terminal.write(reply['text'] as String);
+      final instance = reply['activity_instance'] as String?;
+      final now = DateTime.now();
+      if (instance != activityInstance) {
+        activityInstance = instance;
+        activityProgress = null;
+        _progressChecked = null;
+        notifyListeners();
+      }
+      if (instance != null &&
+          (_progressChecked == null ||
+              now.difference(_progressChecked!).inSeconds >= 3)) {
+        _progressChecked = now;
+        unawaited(_loadProgress(client, instance));
+      }
       if (reply['verification_failed'] == true) {
         failed = true;
         terminal.write('\r\n${tr('The action could not be completed.')}\r\n');
@@ -130,6 +147,26 @@ class AgentTerminal extends ChangeNotifier {
       }
     } finally {
       _pumping = false;
+    }
+  }
+
+  Future<void> _loadProgress(CoreClient client, String instance) async {
+    final checked = _progressChecked;
+    try {
+      final response = await client.agentsProgress(
+        command: command,
+        instance: instance,
+      );
+      if (_disposed ||
+          ended ||
+          instance != activityInstance ||
+          checked != _progressChecked) {
+        return;
+      }
+      activityProgress = response['progress'] as Map<String, dynamic>?;
+      notifyListeners();
+    } on Exception {
+      // An optional report can fail independently of terminal input and output.
     }
   }
 
@@ -160,6 +197,7 @@ class AgentTerminalView extends StatelessWidget {
     required this.onBack,
     required this.onStop,
     this.onScreenshot,
+    this.onActivity,
   });
 
   final AgentTerminal session;
@@ -172,6 +210,7 @@ class AgentTerminalView extends StatelessWidget {
 
   /// F12 belongs to the program in the terminal: the footer's symbol instead.
   final VoidCallback? onScreenshot;
+  final ValueChanged<String>? onActivity;
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
@@ -197,6 +236,16 @@ class AgentTerminalView extends StatelessWidget {
             ),
           ],
         ),
+        if (session.activityProgress case final progress? when !session.ended)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpace.sm),
+            child: Text(
+              "${progress['done']}/${progress['total']} · ${progress['step']}"
+              "${progress['note'] == null ? '' : " · ${progress['note']}"}",
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
         Expanded(
           child: Padding(
             padding: const EdgeInsets.all(AppSpace.sm),
@@ -225,17 +274,30 @@ class AgentTerminalView extends StatelessWidget {
             ),
           ),
         ),
-        if (onScreenshot != null)
-          Align(
-            alignment: Alignment.centerRight,
-            // A click leaves the keyboard with the terminal.
-            child: ExcludeFocus(
-              child: IconButton(
-                key: const ValueKey('terminal-screenshot'),
-                tooltip: tr('Save a screenshot'),
-                onPressed: onScreenshot,
-                icon: const Icon(Icons.photo_camera_outlined),
-              ),
+        if (onScreenshot != null ||
+            onActivity != null &&
+                session.activityInstance != null &&
+                !session.ended)
+          ExcludeFocus(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                if (onActivity != null &&
+                    session.activityInstance != null &&
+                    !session.ended)
+                  IconButton(
+                    tooltip: tr('What is it doing?'),
+                    onPressed: () => onActivity!(session.activityInstance!),
+                    icon: const Icon(Icons.monitor_heart_outlined),
+                  ),
+                if (onScreenshot != null)
+                  IconButton(
+                    key: const ValueKey('terminal-screenshot'),
+                    tooltip: tr('Save a screenshot'),
+                    onPressed: onScreenshot,
+                    icon: const Icon(Icons.photo_camera_outlined),
+                  ),
+              ],
             ),
           ),
       ],

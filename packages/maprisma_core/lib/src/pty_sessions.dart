@@ -252,7 +252,11 @@ final class _Utf8Stream {
 }
 
 final class PtySession {
-  PtySession(this.pid, this.pidfd, this.master, this.command, this.cwd);
+  PtySession(this.pid, this.pidfd, this.master, this.command, this.cwd)
+    : birth = processIdentity(pid)?.$3;
+  final String? birth;
+  DateTime? activityChecked;
+  String? activityInstance;
   final int pid, pidfd, master;
   final String command, cwd;
   var decoder = _Utf8Stream();

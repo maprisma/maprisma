@@ -1,10 +1,13 @@
 import 'dart:io';
 import 'dart:convert';
 import 'agent_catalog.dart';
+import 'agent_halt.dart' show agentInstancePids;
 import 'agent_projects.dart';
 import 'desktop.dart';
 import 'identity.dart';
 import 'pty_sessions.dart';
+import 'provider_scans.dart';
+import 'scan_files.dart';
 import 'settings.dart';
 
 /// ai_core: the variables an agent sets for what it starts itself.
@@ -43,6 +46,7 @@ final class AgentStart {
   final Desktop desktop;
   final AgentProjects projects;
   final sessions = PtySessions();
+  late final _scans = ProviderScans(ScanFiles(identity));
 
   /// The agent-action tests watch their sessions (observe / forget).
   void Function(String ident, Map<String, dynamic> result)? onRead;
@@ -174,6 +178,18 @@ final class AgentStart {
     switch (method) {
       case 'sessions.read':
         final result = sessions.read(ident);
+        final terminal = sessions.items[ident]!;
+        if (result['exit_code'] == null) {
+          final now = DateTime.now();
+          if (terminal.activityChecked == null ||
+              now.difference(terminal.activityChecked!).inSeconds >= 1) {
+            terminal.activityChecked = now;
+            terminal.activityInstance = _activityInstance(terminal);
+          }
+          if (terminal.activityInstance case final id?) {
+            result['activity_instance'] = id;
+          }
+        }
         onRead?.call(ident, result);
         return result;
       case 'sessions.stop':
@@ -194,6 +210,29 @@ final class AgentStart {
       throw const FormatException('Invalid terminal input');
     }
     return sessions.write(ident, bytes);
+  }
+
+  String? _activityInstance(PtySession terminal) {
+    final leader = processIdentity(terminal.pid);
+    if (leader == null ||
+        leader.$3 != terminal.birth ||
+        catalog.adapter(terminal.command) == null) {
+      return null;
+    }
+    final pids =
+        agentInstancePids(_scans, {terminal.command})[terminal.command] ??
+        const <int>[];
+    final matches = <int, String>{};
+    for (final pid in pids) {
+      final info = processIdentity(pid);
+      if (info != null && info.$2 == terminal.pid) matches[pid] = info.$3;
+    }
+    if (matches.length > 1) matches.remove(terminal.pid);
+    if (matches.length != 1 || processIdentity(terminal.pid) != leader) {
+      return null;
+    }
+    final agent = matches.entries.single;
+    return '${agent.key}:${agent.value}';
   }
 
   Map<String, dynamic> project(String method, Map<String, dynamic> params) {

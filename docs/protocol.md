@@ -11,6 +11,12 @@ takes the handle a preview or start returned (`plan`, `undo`, `task`, `session`)
 `?` marks a parameter type or a result shape not described yet: describe it when you touch the route.
 A parameter written `name?` may be left out.
 
+## activitylog
+
+| Route | Kind | Params | Result |
+|---|---|---|---|
+| `activitylog.report` | read | `cursor?`: int, `from_day?`: string, `through_day?`: string | `by_day`, `by_project`, `by_source`, `by_week`, `entries`, `from_day`, `next_cursor`, `through_day` Retained local activity, paginated after aggregating the requested date range. Missing usage is unknown. |
+
 ## addons
 
 | Route | Kind | Params | Result |
@@ -34,6 +40,7 @@ A parameter written `name?` may be left out.
 | `agents.action_apply` | change | `preview`: ? | ? |
 | `agents.action_preview` | preview | `action`: ?, `command`: ?, `kind?`: ?, `login?`: ? | ? |
 | `agents.activity` | read | `command`: ? | ? |
+| `agents.activity_report` | read | `command`: string, `instance?`: string | `instances`, `observed_at`, `report`, `status` Local observations for a running agent. Omit instance to pick the only live process or list choices. The report, its progress and stuck evidence, and the details request may be null. |
 | `agents.costs` | read | `command`: string | `card`, `rate_due` |
 | `agents.details` | read | `command`: ? | ? |
 | `agents.halt_apply` | change | `preview`: ? | ? |
@@ -41,9 +48,11 @@ A parameter written `name?` may be left out.
 | `agents.health` | read | — | ? |
 | `agents.key_apply` | change | `key`: ?, `preview`: ? | ? |
 | `agents.key_preview` | preview | `command`: ? | ? |
+| `agents.progress` | read | `command`: string, `instance`: string | `progress` Latest local self-report for a verified live instance, or null. |
 | `agents.projects` | read | `command`: string | `card` |
 | `agents.security` | read | `command`: ? | ? |
 | `agents.security_preview` | preview | — | ? |
+| `agents.session_activity` | read | `command`: string, `instance`: string | `answers`, `edited_files`, `request`, `session_id`, `status`, `tool_calls` On-demand details for a verified running instance. Status is available, partial or unavailable. Nullable fields indicate unavailable evidence. |
 | `agents.traffic` | read | — | `agents`, `available` Each agent's TCP traffic while the app is open (ss -tinpeHn, UDP not counted): poll every few seconds, a new sample at most every 3 s. available is false when ss is missing. Per command: since, received, sent, connections, rate_in, rate_out (bytes/s), places [{name, kind (api, local-llm, local, lan, web), received, sent, connections}], programs [{name, received, sent}], history [[time, in, out]]. |
 | `agents.usage_refresh` | change | `command`: ? | ? |
 
@@ -205,7 +214,7 @@ A parameter written `name?` may be left out.
 | `map.smart_plan` | preview | `agents`: ["string"], `candidate`: string, `proposal`: string, `values`: object | `plan` An approved MCP or map_edit candidate as the app's normal preview: a plan for ConnectionReview, then connections.apply. For map_edit the core validates the selected route, its parameters and the current action rules before calling the same preview as a manual map edit. agents and values come from the user; a secret goes no further than the preview. |
 | `map.smart_review` | read | `candidate`: string, `proposal`: string | `fit`, `runtime`, `size`, `subtitle`, `title` The facts for the review of one candidate; for a model removal or an agent action its normal preview; for a folder move a task whose result is the plan. For a task after a web look-up: {preview, name, prompt, topic} for system.help_apply. |
 | `map.smart_run` | change | `candidate`: string, `proposal`: string | `focus`, `task` After the user's OK: starts it, once. A candidate that is too large is refused; a removal, a folder move or an agent action needs its review first. An agent action answers like agents.action_apply. |
-| `map.snapshot` | read | `force?`: ?, `poll?`: ? | `edges`, `nodes`, `pending` nodes: dim marks a known server without agents; an agent's own_provider is the id of its own online provider ("" for none); own_login: the app can start its sign-in there (a drop onto that provider signs it in only then); a model with status missing is one an agent is set to that its local LLM no longer has; a model:folder:<path>:<name> model is in a reused model folder no local LLM lists. mcp:<name>~2 is another server of that name. edges: fixed says why a line cannot be taken away here; a failed agent → runtime line with no recorded failure is a local provider whose LLM moved (dangling: the model the agent is set to there, "" for an inactive one), repaired by connections.repair_preview unless fixed says where to change it instead; available from an agent to its own online provider: not signed in. |
+| `map.snapshot` | read | `force?`: bool, `poll?`: bool | `edges`, `nodes`, `pending` nodes: dim marks a known server without agents; an agent's own_provider is the id of its own online provider ("" for none); own_login: the app can start its sign-in there (a drop onto that provider signs it in only then); a model with status missing is one an agent is set to that its local LLM no longer has; a model:folder:<path>:<name> model is in a reused model folder no local LLM lists. mcp:<name>~2 is another server of that name. edges: fixed says why a line cannot be taken away here; a failed agent → runtime line with no recorded failure is a local provider whose LLM moved (dangling: the model the agent is set to there, "" for an inactive one), repaired by connections.repair_preview unless fixed says where to change it instead; available from an agent to its own online provider: not signed in. Agent nodes may include activity_instances with an opaque id, PID and optional progress report per live instance. activity_progress is the most recent report and includes its instance ID. Both activity_progress and each instance’s progress may be unavailable. |
 | `map.usage` | read | `commands`: ? | ? |
 
 ## mcp
@@ -263,7 +272,7 @@ A parameter written `name?` may be left out.
 
 | Route | Kind | Params | Result |
 |---|---|---|---|
-| `sessions.read` | handle (session) | `session`: ? | ? |
+| `sessions.read` | handle (session) | `session`: string | `activity_instance`, `ended`, `exit_code`, `text`, `verification_failed` activity_instance is an optional opaque ID for the live agent in this terminal. |
 | `sessions.resize` | handle (session) | `cols`: ?, `rows`: ?, `session`: ? | ? |
 | `sessions.start` | change | `command`: string, `outside`: bool, `path`: string|null | ? |
 | `sessions.stop` | handle (session) | `session`: ? | ? |
@@ -273,8 +282,8 @@ A parameter written `name?` may be left out.
 
 | Route | Kind | Params | Result |
 |---|---|---|---|
-| `settings.get` | read | — | `action_rule_hints`, `action_rules`, `addons_online`, `agent_folder`, `ai_checks`, `ai_checks_agent`, `ai_local_helper`, `ask_prompts`, `corners`, `cost_currency`, `cost_limit`, `dictation`, `dictation_engine`, `dictation_whisper_model`, `flutter_map_layout`, `flutter_theme_mode`, `language`, `look`, `map_animations`, `map_layers`, `map_light_fps`, `map_scan_interval`, `map_scan_pause_unfocused`, `map_scan_targets`, `providers_with_agents`, `screenshot_folder`, `screenshot_key`, `smart_helper`, `subagents_kept`, `subagents_minutes`, `system_map_columns`, `terminal_tabs`, `usage_box`, `usage_box_items`, `usage_box_size`, `warn_notify`, `warn_red`, `warn_yellow`, `window_mode` |
-| `settings.update` | change | `values`: object | `action_rule_hints`, `action_rules`, `addons_online`, `agent_folder`, `ai_checks`, `ai_checks_agent`, `ai_local_helper`, `ask_prompts`, `corners`, `cost_currency`, `cost_limit`, `dictation`, `dictation_engine`, `dictation_whisper_model`, `flutter_map_layout`, `flutter_theme_mode`, `language`, `look`, `map_animations`, `map_layers`, `map_light_fps`, `map_scan_interval`, `map_scan_pause_unfocused`, `map_scan_targets`, `providers_with_agents`, `screenshot_folder`, `screenshot_key`, `smart_helper`, `subagents_kept`, `subagents_minutes`, `system_map_columns`, `terminal_tabs`, `usage_box`, `usage_box_items`, `usage_box_size`, `warn_notify`, `warn_red`, `warn_yellow`, `window_mode` |
+| `settings.get` | read | — | `action_rule_hints`, `action_rules`, `addons_online`, `agent_folder`, `ai_activity_local_topics`, `ai_activity_log`, `ai_activity_log_days`, `ai_checks`, `ai_checks_agent`, `ai_local_helper`, `ask_prompts`, `corners`, `cost_currency`, `cost_limit`, `dictation`, `dictation_engine`, `dictation_whisper_model`, `flutter_map_layout`, `flutter_theme_mode`, `language`, `look`, `map_animations`, `map_layers`, `map_light_fps`, `map_scan_interval`, `map_scan_pause_unfocused`, `map_scan_targets`, `providers_with_agents`, `screenshot_folder`, `screenshot_key`, `smart_helper`, `subagents_kept`, `subagents_minutes`, `system_map_columns`, `terminal_tabs`, `usage_box`, `usage_box_items`, `usage_box_size`, `warn_notify`, `warn_red`, `warn_yellow`, `window_mode` |
+| `settings.update` | change | `values`: object | `action_rule_hints`, `action_rules`, `addons_online`, `agent_folder`, `ai_activity_local_topics`, `ai_activity_log`, `ai_activity_log_days`, `ai_checks`, `ai_checks_agent`, `ai_local_helper`, `ask_prompts`, `corners`, `cost_currency`, `cost_limit`, `dictation`, `dictation_engine`, `dictation_whisper_model`, `flutter_map_layout`, `flutter_theme_mode`, `language`, `look`, `map_animations`, `map_layers`, `map_light_fps`, `map_scan_interval`, `map_scan_pause_unfocused`, `map_scan_targets`, `providers_with_agents`, `screenshot_folder`, `screenshot_key`, `smart_helper`, `subagents_kept`, `subagents_minutes`, `system_map_columns`, `terminal_tabs`, `usage_box`, `usage_box_items`, `usage_box_size`, `warn_notify`, `warn_red`, `warn_yellow`, `window_mode` |
 
 ## setup
 

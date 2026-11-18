@@ -111,6 +111,11 @@ class AgentDetailsView extends StatelessWidget {
                   ),
               if (agent['installed'] == true)
                 OutlinedButton(
+                  onPressed: busy ? null : () => onAction!(command, 'activity'),
+                  child: Text(tr('What is it doing?')),
+                ),
+              if (agent['installed'] == true)
+                OutlinedButton(
                   onPressed: busy ? null : () => onAction!(command, 'security'),
                   child: Text(tr('Security settings')),
                 ),

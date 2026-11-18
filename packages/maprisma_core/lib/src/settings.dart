@@ -39,6 +39,9 @@ const uiSettings = {
   'dictation_whisper_model',
   'action_rules',
   'action_rule_hints',
+  'ai_activity_log',
+  'ai_activity_log_days',
+  'ai_activity_local_topics',
   'usage_box',
   'usage_box_items',
   'usage_box_size',
@@ -248,6 +251,8 @@ final class SettingsStore {
 
   bool valid(String key, dynamic v) {
     switch (key) {
+      case 'ai_activity_log_days':
+        return v is int && v >= 1 && v <= 365;
       case 'flutter_theme_mode':
         return ['system', 'light', 'dark'].contains(v);
       case 'map_light_fps':

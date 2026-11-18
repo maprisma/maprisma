@@ -1,3 +1,4 @@
+import 'activity_log_dialog.dart';
 import 'dart:convert';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
@@ -958,6 +959,52 @@ class SettingsView extends StatelessWidget {
         _Heading('map', _t('Usage statistics box')),
         const SizedBox(height: 8),
         ..._usageBoxRows(),
+        SwitchListTile(
+          title: Text(_t('AI activity log')),
+          value: settings['ai_activity_log'] == true,
+          onChanged: busy ? null : (v) => onUpdate({'ai_activity_log': v}),
+        ),
+        ListTile(
+          title: Text(_t('Keep log for (days)')),
+          trailing: DropdownButton<int>(
+            value: settings['ai_activity_log_days'] as int? ?? 2,
+            items: [
+              for (final days in <int>{
+                1,
+                2,
+                7,
+                30,
+                90,
+                365,
+                settings['ai_activity_log_days'] as int? ?? 2,
+              }.toList()..sort())
+                DropdownMenuItem(value: days, child: Text('$days')),
+            ],
+            onChanged: busy
+                ? null
+                : (v) {
+                    if (v != null) onUpdate({'ai_activity_log_days': v});
+                  },
+          ),
+        ),
+        if (helpers?['chosen'] != null)
+          SwitchListTile(
+            title: Text(_t('Topic summaries by local LLM')),
+            value: settings['ai_activity_local_topics'] == true,
+            onChanged: busy
+                ? null
+                : (v) => onUpdate({'ai_activity_local_topics': v}),
+          ),
+        if (client != null)
+          Builder(
+            builder: (context) => TextButton(
+              onPressed: () => showDialog<void>(
+                context: context,
+                builder: (_) => ActivityLogDialog(client: client!, tr: tr),
+              ),
+              child: Text(_t('Review activity log')),
+            ),
+          ),
         const SizedBox(height: AppSpace.md),
         _Heading('agents', _t('Costs')),
         const SizedBox(height: 16),

@@ -1,11 +1,17 @@
 import 'provider_ops.dart' show ProviderOps;
-import 'provider_scans.dart' show RuntimeRecord;
+import 'provider_scans.dart' show ProviderScans, RuntimeRecord;
+import 'model_guard.dart' show GpuUsage;
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'activity_readers.dart';
+import 'ai_activity_log.dart';
 import 'agent_catalog.dart';
+import 'agent_progress.dart';
+import 'agent_halt.dart' show agentInstancePids, cwdOf;
+import 'pty_sessions.dart' show processIdentity;
+import 'session_readers.dart' show SessionReaders;
 import 'agent_details.dart';
 import 'desktop.dart';
 import 'identity.dart';
@@ -54,6 +60,112 @@ final class ReadService {
   late final DetailReaders details;
   late final InventoryReader inventory;
   late final ActivityReaders activity;
+  late final activityLog = AiActivityLog(files, settings);
+  bool _samplingActivityLog = false;
+
+  ActivityUsage? _activityUsage(String source) {
+    if (!source.startsWith('agent:')) return null;
+    final command = source.substring(6);
+    final sessions = catalog.adapter(command)?.table('sessions');
+    final reader = sessions?['reader'];
+    final folder = sessions?['activity_dir'];
+    if (reader is! String ||
+        !{'pi-files', 'codex-files'}.contains(reader) ||
+        folder is! String ||
+        !folder.startsWith('~/')) {
+      return null;
+    }
+    final root = p.normalize(files.expand(folder));
+    if (!p.isWithin(files.identity.home, root)) return null;
+    final pids = agentInstancePids(ProviderScans(files), {command})[command];
+    if (pids == null || pids.length != 1) return null;
+    final pid = pids.single;
+    final identity = processIdentity(pid);
+    if (identity == null) return null;
+    final logs = <String>{};
+    for (final fd in files.list('/proc/$pid/fd', limit: 512)) {
+      try {
+        final target = Link(fd).targetSync();
+        if (target.endsWith('.jsonl') &&
+            p.isWithin(root, target) &&
+            (reader != 'codex-files' ||
+                p.basename(target).startsWith('rollout-'))) {
+          logs.add(target);
+        }
+      } on FileSystemException {
+        // The descriptor may have closed while the process was sampled.
+      }
+    }
+    if (logs.length != 1) return null;
+    final log = logs.single;
+    final bytes = files.bytes(log, limit: 4 * 1024 * 1024);
+    if (bytes == null) return null;
+    final numeric = SessionReaders(files).parse(reader, bytes);
+    if (numeric == null ||
+        numeric.tokens.isEmpty ||
+        processIdentity(pid) != identity) {
+      return null;
+    }
+    return (
+      session: '$pid:${identity.$3}:$log',
+      model: numeric.tokens.length == 1 ? numeric.tokens.keys.single : null,
+      input: numeric.tokens.values.fold(0, (n, counts) => n + counts[0]),
+      output: numeric.tokens.values.fold(0, (n, counts) => n + counts[1]),
+    );
+  }
+
+  void _observeActivity(Map<String, dynamic> options) {
+    final enabled = settings.value(options, 'ai_activity_log') == true;
+    final agents = <String>{
+      if (enabled)
+        for (final e in _activity!.entries)
+          if (e.value is Map && e.value['working'] == true) 'agent:${e.key}',
+    };
+    final activeAgents = agents.map((source) => source.substring(6)).toSet();
+    final paths = <String, String>{
+      if (activeAgents.isNotEmpty)
+        for (final e in agentInstancePids(
+          ProviderScans(files),
+          activeAgents,
+        ).entries)
+          if (e.value.length == 1)
+            'agent:${e.key}': cwdOf(e.value.single, files.posix),
+    };
+    final runtimes = _inventory!.runtimes.where((rt) => rt.running).toList();
+    if (!enabled || runtimes.length != 1) {
+      activityLog.observe(
+        agents,
+        workingDirectories: paths,
+        usageFor: _activityUsage,
+      );
+    } else if (!_samplingActivityLog) {
+      _samplingActivityLog = true;
+      unawaited(() async {
+        try {
+          if (await GpuUsage(
+            files,
+            ProviderScans(files),
+          ).generating(runtimes)) {
+            agents.add('runtime:${runtimes.single.key}');
+          }
+          activityLog.observe(
+            agents,
+            workingDirectories: paths,
+            usageFor: _activityUsage,
+          );
+        } on Exception {
+          activityLog.observe(
+            agents,
+            workingDirectories: paths,
+            usageFor: _activityUsage,
+          );
+        } finally {
+          _samplingActivityLog = false;
+        }
+      }());
+    }
+  }
+
   late final MapGraph graph;
 
   /// Called after each inventory scan (the provider watcher's config).
@@ -359,8 +471,9 @@ final class ReadService {
       );
       _running = state.$1;
       _activity = state.$2;
+      _observeActivity(saved);
     }
-    return graph.build(
+    final graphData = graph.build(
       _agents!,
       _details!,
       _inventory!,
@@ -375,6 +488,32 @@ final class ReadService {
         for (final e in chosen.entries) '${e.key}': '${e.value}',
       },
     );
+    final instances = AgentProgress(
+      ProviderScans(files),
+    ).snapshot(_running!.keys.toSet());
+    for (final node in (graphData['nodes'] as List).cast<Map>()) {
+      final id = node['id'];
+      if (id is! String || !id.startsWith('agent:')) continue;
+      final live = instances[id.substring(6)];
+      if (live == null) continue;
+      node['activity_instances'] = live;
+      Map<String, dynamic>? latest;
+      for (final instance in live) {
+        final report = instance['progress'] as Map<String, dynamic>?;
+        if (report != null &&
+            (latest == null ||
+                DateTime.parse(
+                  report['at'] as String,
+                ).isAfter(DateTime.parse(latest['at'] as String)))) {
+          latest = {...report, 'instance': instance['id']};
+        }
+      }
+      if (latest == null) continue;
+      node['activity_progress'] = latest;
+      node['detail'] =
+          "${latest['done']}/${latest['total']} · ${latest['step']}";
+    }
+    return graphData;
   }
 
   /// Who is set to which model of a local LLM: fresh, with no layer hidden and

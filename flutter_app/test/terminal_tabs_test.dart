@@ -1,3 +1,5 @@
+import 'package:maprisma/agent_terminal.dart';
+import 'package:maprisma/backend.dart';
 import 'package:maprisma/settings_view.dart';
 import 'package:maprisma/terminal_tabs.dart';
 import 'package:flutter/material.dart';
@@ -39,6 +41,49 @@ void main() {
     await tester.tap(find.text('Pi'));
     expect(shown, 2);
     expect(find.byTooltip('ended'), findsOneWidget);
+  });
+
+  testWidgets('the terminal shows its own progress and opens that instance', (
+    tester,
+  ) async {
+    final transport = _ActivityTransport();
+    final terminal = AgentTerminal(
+      Backend.fromTransport(transport),
+      'terminal-handle',
+      'fixture',
+      '/project',
+      tr: (text) => text,
+    );
+    final keys = FocusNode();
+    addTearDown(keys.dispose);
+    String? opened;
+    try {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: AgentTerminalView(
+              session: terminal,
+              keys: keys,
+              tr: (text) => text,
+              onBack: () {},
+              onStop: () {},
+              onActivity: (instance) => opened = instance,
+            ),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 40));
+      await tester.pump();
+      expect(transport.progressRequests, [
+        {'command': 'fixture', 'instance': '7:42'},
+      ]);
+      expect(find.text('2/5 · Build'), findsOneWidget);
+      await tester.tap(find.byTooltip('What is it doing?'));
+      expect(opened, '7:42');
+    } finally {
+      await tester.pumpWidget(const SizedBox());
+      terminal.dispose();
+    }
   });
 
   testWidgets('Settings: the terminal tabs switch, on by default', (
@@ -124,6 +169,37 @@ void main() {
       'usage_box_items': ['used'],
     });
   });
+}
+
+class _ActivityTransport implements ServiceTransport {
+  final progressRequests = <Map<String, dynamic>>[];
+
+  @override
+  bool get isConnected => true;
+
+  @override
+  Future<Map<String, dynamic>> call(
+    String method, [
+    Map<String, dynamic> params = const {},
+  ]) async {
+    if (method == 'sessions.read') {
+      return {'text': '', 'ended': false, 'activity_instance': '7:42'};
+    }
+    if (method == 'agents.progress') {
+      progressRequests.add(params);
+      return {
+        'progress': {'step': 'Build', 'done': 2, 'total': 5},
+      };
+    }
+    if (method == 'sessions.resize') return {};
+    throw StateError('Unexpected method $method');
+  }
+
+  @override
+  void dispose() {}
+
+  @override
+  Future<void> shutdown() async {}
 }
 
 /// The page's own list in Settings (not the Find in Settings field).

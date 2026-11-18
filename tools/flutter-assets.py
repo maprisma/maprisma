@@ -836,6 +836,30 @@ KEYS = (
     # Settings › Map › 3D map layout (task 069).
     "3D map layout",
     "Raised cards, layered boxes, shadowed lines and a depth grid. Off: flat map.",
+    # Agent activity and local history (task 074).
+    "What is it doing?",
+    "Planning",
+    "Editing",
+    "Writing or running tests",
+    "Finished",
+    "No details available",
+    "Current work",
+    "Activity timeline",
+    "Helper processes",
+    "Started by",
+    "AI activity log",
+    "Keep log for (days)",
+    "Review activity log",
+    "Could not save the log.",
+    "Next",
+    "Possibly stuck",
+    "By agent or runtime",
+    "By project",
+    "By day",
+    "By week",
+    "Date range",
+    "Closing this terminal may stop the work.",
+    "Topic summaries by local LLM",
 )
 
 
