@@ -1,5 +1,7 @@
 # Maprisma
 
+**Website & App Suite:** [https://maprisma.com](https://maprisma.com) · **Releases:** [GitHub Releases](https://github.com/maprisma/maprisma/releases) · **Organization:** [github.com/maprisma](https://github.com/maprisma)
+
 Your AI agents, models and tools on one map: a Flutter app with its service written in Dart.
 
 Maprisma was called Asterism until 2026-10-30; its settings move over by themselves at the first start.
