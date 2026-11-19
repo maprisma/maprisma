@@ -30,6 +30,9 @@
         <p>Live agent activity reporting (“What is it doing?”) across map, agent details, and terminals,
           with reported progress in Follow and an opt-in local AI activity log (with TXT/JSON export and
           stdio MCP tools).</p>
+        <p>New Reports page in the header: the activity log with its settings (kept one week by default),
+          AI topic reports from the log with local or (opt-in) online helpers, and a private library of
+          saved reports with search, notes and TXT/Markdown/JSON export.</p>
         <p>3D map layout toggleable in Settings › Map, card update badges with Update with AI, and more
           reliable live activity indications (SQLite WAL mtime, in-flight session turn detection, and
           unfocused map lights whenever unfocused scans remain enabled).</p>
