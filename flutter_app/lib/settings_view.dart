@@ -1,4 +1,3 @@
-import 'activity_log_dialog.dart';
 import 'dart:convert';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
@@ -24,6 +23,7 @@ class SettingsView extends StatelessWidget {
     required this.tr,
     required this.onUpdate,
     this.onRules,
+    this.onOpenReports,
     this.onMapLayout,
     required this.onBack,
     this.desktopTheme = const {},
@@ -61,6 +61,7 @@ class SettingsView extends StatelessWidget {
 
   /// Opens the window with the rules of what may be done.
   final VoidCallback? onRules;
+  final VoidCallback? onOpenReports;
   final VoidCallback onBack;
 
   /// The installed agents that can do the checks (command, name).
@@ -967,7 +968,7 @@ class SettingsView extends StatelessWidget {
         ListTile(
           title: Text(_t('Keep log for (days)')),
           trailing: DropdownButton<int>(
-            value: settings['ai_activity_log_days'] as int? ?? 2,
+            value: settings['ai_activity_log_days'] as int? ?? 7,
             items: [
               for (final days in <int>{
                 1,
@@ -976,9 +977,12 @@ class SettingsView extends StatelessWidget {
                 30,
                 90,
                 365,
-                settings['ai_activity_log_days'] as int? ?? 2,
+                settings['ai_activity_log_days'] as int? ?? 7,
               }.toList()..sort())
-                DropdownMenuItem(value: days, child: Text('$days')),
+                DropdownMenuItem(
+                  value: days,
+                  child: Text(days == 7 ? '$days · ${_t('Default')}' : '$days'),
+                ),
             ],
             onChanged: busy
                 ? null
@@ -995,15 +999,10 @@ class SettingsView extends StatelessWidget {
                 ? null
                 : (v) => onUpdate({'ai_activity_local_topics': v}),
           ),
-        if (client != null)
-          Builder(
-            builder: (context) => TextButton(
-              onPressed: () => showDialog<void>(
-                context: context,
-                builder: (_) => ActivityLogDialog(client: client!, tr: tr),
-              ),
-              child: Text(_t('Review activity log')),
-            ),
+        if (onOpenReports != null)
+          TextButton(
+            onPressed: onOpenReports,
+            child: Text(_t('Review activity log')),
           ),
         const SizedBox(height: AppSpace.md),
         _Heading('agents', _t('Costs')),

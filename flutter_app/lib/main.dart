@@ -27,6 +27,7 @@ import 'agent_usage.dart';
 import 'usage_sweep.dart';
 import 'cost_card.dart';
 import 'settings_view.dart';
+import 'reports_page.dart';
 import 'app_theme.dart';
 import 'map_zoom.dart';
 import 'test_shots.dart';
@@ -380,6 +381,37 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   VoidCallback? _cancelReview;
   bool _reconnecting = false;
   String? _view;
+  final _reportsKey = GlobalKey<ReportsPageState>();
+  int _reportsTab = 0;
+  bool get _showReports => _view == 'reports';
+
+  void _openReports({bool log = false}) {
+    if (_showReports && !log) return;
+    setState(() {
+      _card = null;
+      _browser = null;
+      _showSettings = false;
+      _showMap = true;
+      _showGuide = false;
+      _focusCategory = null;
+      _guideReturn = false;
+      _visibleTerminal = null;
+      _askOpen = false;
+      if (log) _reportsTab = 0;
+      _view = 'reports';
+    });
+    unawaited(_loadHelpers());
+  }
+
+  Future<bool> _leaveReports() async {
+    if (!_showReports) return true;
+    final state = _reportsKey.currentState;
+    if (state != null && !await state.allowExit()) return false;
+    if (!mounted) return false;
+    setState(() => _view = null);
+    return true;
+  }
+
   String? _connectionCommand;
   Map<String, dynamic>? _browser;
   bool get _showGuide => _view == 'guide';
@@ -476,6 +508,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       _navigationBlocked || _card != null || _visibleTerminal != null;
 
   bool get _hasTaskView =>
+      _showReports ||
       _showGuide ||
       _showConnections ||
       _showProviders ||
@@ -794,6 +827,10 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   void onWindowClose() async {
     if (_closing) return;
     _closing = true;
+    if (!await _leaveReports()) {
+      _closing = false;
+      return;
+    }
     if (_terminals.any((terminal) => !terminal.ended) ||
         _taskActive ||
         _reviewDepth > 0 ||
@@ -1090,7 +1127,12 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     if (_busy || _livePending || !(_backend?.isConnected ?? false)) return;
     _livePending = true;
     try {
-      if (_taskActive || _reviewDepth > 0 || _card?.closable == false) return;
+      if (_showReports ||
+          _taskActive ||
+          _reviewDepth > 0 ||
+          _card?.closable == false) {
+        return;
+      }
       final idleTaskSurface = _card != null || _browser != null;
       if (!idleTaskSurface &&
           (!_showMap ||
@@ -2800,19 +2842,22 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     }
   }
 
-  void _toggleSettings() => setState(() {
-    _card = null;
-    _browser = null;
-    _guideReturn = false; // chosen from the menu
-    _showSettings = !_showSettings;
-    if (_showSettings && _shortName == null) _loadShortName();
-    if (_showSettings && _helpers == null) _loadHelpers();
-    if (_showSettings) _loadChanges();
-    _showConnections = false;
-    _showProviders = false;
-    _showGuide = false;
-    _visibleTerminal = null;
-  });
+  Future<void> _toggleSettings() async {
+    if (_showReports && !await _leaveReports()) return;
+    setState(() {
+      _card = null;
+      _browser = null;
+      _guideReturn = false; // chosen from the menu
+      _showSettings = !_showSettings;
+      if (_showSettings && _shortName == null) _loadShortName();
+      if (_showSettings && _helpers == null) _loadHelpers();
+      if (_showSettings) _loadChanges();
+      _showConnections = false;
+      _showProviders = false;
+      _showGuide = false;
+      _visibleTerminal = null;
+    });
+  }
 
   /// Esc / Backspace (the manual's keyboard shortcuts): back from a page to
   /// the map. Text fields, dialogs, cards and terminals keep these keys:
@@ -2825,7 +2870,11 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       (_pageOpen || !_showMap);
 
   bool get _pageOpen =>
-      _showSettings || _showProviders || _showConnections || _showGuide;
+      _showReports ||
+      _showSettings ||
+      _showProviders ||
+      _showConnections ||
+      _showGuide;
 
   /// Esc on the main page in popup mode closes the popup (Backspace never).
   /// Esc on the main page with nothing open closes the window (the
@@ -2853,6 +2902,10 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   /// A page back to what lay under it; an agent's details or the list back
   /// to the map, the main page.
   void _goBack() {
+    if (_showReports) {
+      unawaited(_leaveReports());
+      return;
+    }
     if (_showGuide) _guideReturn = false;
     setState(() {
       if (!_pageOpen) {
@@ -2954,7 +3007,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   }
 
   Future<void> _openProblems([String? column]) async {
-    if (_busy) return;
+    if (_busy || _showReports && !await _leaveReports()) return;
     final targetCol = column ?? _smartStatusData.firstConcernedColumn;
     final updatedLayers = _neededLayersForColumn(targetCol);
     setState(() {
@@ -2981,6 +3034,14 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
 
   void _openAskAi([String? column]) {
     if (_busy) return;
+    if (_showReports) {
+      unawaited(
+        _leaveReports().then((left) {
+          if (left && mounted) _openAskAi(column);
+        }),
+      );
+      return;
+    }
     final targetCol = column ?? _askColumn;
     final updatedLayers = _neededLayersForColumn(targetCol);
     setState(() {
@@ -3102,7 +3163,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
 
   /// Help (F1): the user manual and where to start.
   Future<void> _openHelp() async {
-    if (_busy) return;
+    if (_busy || _showReports && !await _leaveReports()) return;
     var manual = false;
     try {
       manual = (await _client.helpSnapshot())['manual'] == true;
@@ -5689,7 +5750,8 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                     // From a page or the agent list, back to the map.
                     onPressed: _keysBlocked
                         ? null
-                        : () {
+                        : () async {
+                            if (_showReports && !await _leaveReports()) return;
                             setState(() {
                               _card = null;
                               _browser = null;
@@ -5750,6 +5812,16 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                   onPressed: _keysBlocked || _busy || _snapshot == null
                       ? null
                       : () => _openAskAi(),
+                ),
+                IconButton(
+                  key: const ValueKey('reports-open'),
+                  tooltip: tr('Reports'),
+                  icon: const Icon(Icons.assessment_outlined),
+                  isSelected: _showReports,
+                  selectedIcon: const Icon(Icons.assessment),
+                  onPressed: _keysBlocked || _snapshot == null
+                      ? null
+                      : _openReports,
                 ),
                 MapLegendButton(
                   tr: tr,
@@ -5812,7 +5884,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                       ),
                     ],
                   ),
-                if (_welcome)
+                if (_welcome && !_showReports)
                   MapWelcome(
                     tr: tr,
                     busy: _keysBlocked,
@@ -5824,7 +5896,8 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                     uses: _uses,
                     onAction: _healthAction,
                   ),
-                if (_terminals.isNotEmpty &&
+                if (!_showReports &&
+                    _terminals.isNotEmpty &&
                     (_snapshot?['settings'] as Map?)?['terminal_tabs'] != false)
                   TerminalTabs(
                     tabs: [
@@ -5877,7 +5950,25 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                               visible: _browser == null,
                               focusable:
                                   _card == null && _visibleTerminal == null,
-                              child: _showGuide
+                              child: _showReports
+                                  ? ReportsPage(
+                                      key: _reportsKey,
+                                      client: _client,
+                                      tr: tr,
+                                      tab: _reportsTab,
+                                      onTab: (tab) =>
+                                          setState(() => _reportsTab = tab),
+                                      onBack: _goBack,
+                                      settings:
+                                          _snapshot?['settings']
+                                              as Map<String, dynamic>? ??
+                                          const {},
+                                      onUpdate: _updateSettings,
+                                      localHelperReady:
+                                          _helpers?['chosen'] != null,
+                                      active: _windowFocused && !_keysBlocked,
+                                    )
+                                  : _showGuide
                                   ? _viewHost(
                                       'Your first agent',
                                       FirstAgentView(
@@ -6011,6 +6102,8 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                                     )
                                   : _showSettings && _snapshot != null
                                   ? SettingsView(
+                                      onOpenReports: () =>
+                                          _openReports(log: true),
                                       onRules: _openRules,
                                       settings: {
                                         ...(_snapshot!['settings']

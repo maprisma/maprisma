@@ -8,6 +8,7 @@ import 'package:maprisma/action_rules_window.dart';
 import 'package:maprisma/overlay_window.dart';
 import 'package:maprisma/agent_map.dart';
 import 'package:maprisma/settings_view.dart';
+import 'package:maprisma/reports_page.dart';
 import 'package:maprisma/main.dart';
 import 'package:maprisma/connections_view.dart';
 import 'package:maprisma/test_shots.dart';
@@ -2127,6 +2128,30 @@ void main() {
     expect(find.byKey(const ValueKey('help-manual')), findsNothing);
     expect(tester.takeException(), isNull);
     semantics.dispose();
+    await unmountApp(tester);
+  });
+
+  testWidgets('Reports header, Esc and Settings history use the same page', (
+    tester,
+  ) async {
+    await mountApp(tester);
+    await tester.tap(find.byTooltip('Reports'));
+    await settleService(tester);
+    expect(find.byType(ReportsPage), findsOneWidget);
+    expect(find.text('Topic reports'), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await settleService(tester);
+    expect(find.byType(ReportsPage), findsNothing);
+    await tester.tap(find.byTooltip('Settings').first);
+    await settleService(tester);
+    final settings = tester.widget<SettingsView>(find.byType(SettingsView));
+    settings.onOpenReports!();
+    await settleService(tester);
+    expect(tester.widget<ReportsPage>(find.byType(ReportsPage)).tab, 0);
+    await tester.tap(find.widgetWithText(TextButton, 'Back'));
+    await settleService(tester);
+    expect(find.byType(ReportsPage), findsNothing);
+    expect(find.byType(SettingsView), findsNothing);
     await unmountApp(tester);
   });
 
