@@ -262,6 +262,19 @@ A parameter written `name?` may be left out.
 | `providers.run` | change | `operation`: ?, `params`: ? | ? |
 | `providers.snapshot` | read | — | ? |
 
+## reports
+
+| Route | Kind | Params | Result |
+|---|---|---|---|
+| `reports.delete` | change | `id`: int | `deleted` Deletes a saved report. |
+| `reports.generate` | read | `focus?`: string, `from_day?`: string, `helper`: string, `project?`: string, `source?`: string, `through_day?`: string | `task` Starts a cancellable job. tasks.status returns a draft_id and draft with the report fields except id, saved_at and note, or error and code. |
+| `reports.get` | read | `id`: int | `report` Reads one saved report. |
+| `reports.helpers` | read | — | `chosen`, `helpers`, `online_allowed`, `rules_broken` Available helpers after applying the Ask AI data rules. |
+| `reports.list` | read | `cursor?`: int, `query?`: string | `next_cursor`, `read_only`, `reports`, `schema_version` Up to 50 newest reports. The next cursor is an exclusive upper bound on report id. Library errors include reports_db_unavailable (SQLite unavailable or unsafe file), reports_db_corrupt, reports_db_locked and reports_db_read_only. |
+| `reports.move_aside` | change | — | `moved_to` Moves a corrupt library and its sidecars aside. |
+| `reports.save` | change | `draft_id`: string, `note?`: string, `title`: string | `report` Saves a validated in-session draft by handle. |
+| `reports.update` | change | `id`: int, `note?`: string, `title?`: string | `report` Supply a title or note. An empty note clears it. |
+
 ## rules
 
 | Route | Kind | Params | Result |

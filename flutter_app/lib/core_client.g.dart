@@ -581,6 +581,59 @@ class CoreClient {
     Map<String, dynamic> params = const {},
   ]) => transport.call('providers.snapshot', params);
 
+  Future<Map<String, dynamic>> reportsDelete({required int id}) =>
+      transport.call('reports.delete', {'id': id});
+
+  Future<Map<String, dynamic>> reportsGenerate({
+    String? focus,
+    String? fromDay,
+    required String helper,
+    String? project,
+    String? source,
+    String? throughDay,
+  }) => transport.call('reports.generate', {
+    'focus': ?focus,
+    'from_day': ?fromDay,
+    'helper': helper,
+    'project': ?project,
+    'source': ?source,
+    'through_day': ?throughDay,
+  });
+
+  Future<Map<String, dynamic>> reportsGet({required int id}) =>
+      transport.call('reports.get', {'id': id});
+
+  Future<Map<String, dynamic>> reportsHelpers([
+    Map<String, dynamic> params = const {},
+  ]) => transport.call('reports.helpers', params);
+
+  Future<Map<String, dynamic>> reportsList({int? cursor, String? query}) =>
+      transport.call('reports.list', {'cursor': ?cursor, 'query': ?query});
+
+  Future<Map<String, dynamic>> reportsMoveAside([
+    Map<String, dynamic> params = const {},
+  ]) => transport.call('reports.move_aside', params);
+
+  Future<Map<String, dynamic>> reportsSave({
+    required String draftId,
+    String? note,
+    required String title,
+  }) => transport.call('reports.save', {
+    'draft_id': draftId,
+    'note': ?note,
+    'title': title,
+  });
+
+  Future<Map<String, dynamic>> reportsUpdate({
+    required int id,
+    String? note,
+    String? title,
+  }) => transport.call('reports.update', {
+    'id': id,
+    'note': ?note,
+    'title': ?title,
+  });
+
   Future<Map<String, dynamic>> rulesTest({
     required String action,
     required String agent,

@@ -38,7 +38,10 @@ Review: [round 1](reviews/075-reports.md), all findings accepted below.
   `core.dart` and `local_helper.dart`, and the `smart_helper` setting (not
   `helpers.json`, which is exported for the other apps). Online helpers run
   through `smartAgent` / `guardBackground` with the adapter's `[rewrite]`
-  form (no tools, prompt on stdin). Local helpers run through `adviseArgv`
+  form (no tools, prompt on stdin). Reports checks that the rewrite argv
+  explicitly disables tools. A read-only sandbox alone still permits file
+  reads, so helpers with that form are unavailable for reports. Local
+  helpers run through `adviseArgv`
   against configured loopback runtimes, with no online fallback. **Never**
   `taskArgv`: it starts an interactive session with tools.
 - Jobs: start like `map.smart_ask` (kind `read`, result `{task}`, polled
@@ -105,11 +108,10 @@ Review: [round 1](reviews/075-reports.md), all findings accepted below.
 - Location `${XDG_DATA_HOME:-~/.local/share}/maprisma/reports/reports.db`.
   The folder is created through `Posix.privateDirectory` (0700, owner
   checked, no symlinks). `reports.db`, `-wal` and `-shm` must not be
-  symlinks. They are created ahead as 0600 and checked again after WAL
-  starts.
+  symlinks or foreign-owned. Pre-create only the main file as 0600.
+  Tighten existing sidecars to 0600 after enabling WAL.
 - FFI binding in a new file, with the library opened lazily and guarded (a
-  missing `libsqlite3.so.0` becomes `reports_db_locked`'s sibling error,
-  not a crash). It binds: `open_v2`, `close_v2`, `busy_timeout`, `exec`,
+  missing `libsqlite3.so.0` becomes `reports_db_unavailable`). It binds: `open_v2`, `close_v2`, `busy_timeout`, `exec`,
   `prepare_v2`, `bind_text` / `bind_int64` / `bind_null`, `step`,
   `column_*`, `finalize`, `last_insert_rowid`, `changes`,
   `extended_errcode` and `errmsg`. Text is bound as UTF-8 with the byte

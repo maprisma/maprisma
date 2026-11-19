@@ -85,6 +85,14 @@ const portedRoutes = {
   'agents.progress',
   'agents.activity_report',
   'activitylog.report',
+  'reports.helpers',
+  'reports.generate',
+  'reports.save',
+  'reports.list',
+  'reports.get',
+  'reports.update',
+  'reports.delete',
+  'reports.move_aside',
   'settings.get',
   'settings.update',
   'app.settings_changed',
@@ -4737,6 +4745,9 @@ final class CoreService {
   }
 
   Map<String, dynamic> _route(String method, Map<String, dynamic> params) {
+    if (method.startsWith('reports.')) {
+      throw ServiceError('reports_unavailable');
+    }
     if (method == 'activitylog.report') {
       return reads.activityLog.report(params);
     }

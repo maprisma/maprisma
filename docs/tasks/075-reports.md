@@ -37,7 +37,7 @@ through_day, topic_count}`, 50 per page.
 
 Error codes: `no_helper`, `online_blocked`, `no_entries`, `log_off`,
 `helper_failed`, `bad_answer`, `draft_unknown`, `reports_db_corrupt`,
-`reports_db_locked`, `reports_db_read_only`, `report_not_found`.
+`reports_db_locked`, `reports_db_unavailable`, `reports_db_read_only`, `report_not_found`.
 
 All `reports.*` change routes go into `rulesExempt` (they change only the
 user's own library, never on an AI proposal).

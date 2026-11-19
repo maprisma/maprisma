@@ -7,6 +7,7 @@
   "general.architecture",
   "health.pc",
   "llama.cpp",
+  "maprisma.activity_log_online",
   "mcp.registry_refresh",
   "mcp.tools_test",
   "model.import",
@@ -1887,6 +1888,256 @@
    "params": {},
    "result": null,
    "source": null
+  },
+  "reports.delete": {
+   "area": "reports",
+   "kind": "change",
+   "note": "Deletes a saved report.",
+   "optional": [],
+   "params": {
+    "id": "int"
+   },
+   "result": {
+    "deleted": "bool"
+   },
+   "source": "manual"
+  },
+  "reports.generate": {
+   "area": "reports",
+   "kind": "read",
+   "note": "Starts a cancellable job. tasks.status returns a draft_id and draft with the report fields except id, saved_at and note, or error and code.",
+   "optional": [
+    "from_day",
+    "through_day",
+    "project",
+    "source",
+    "focus"
+   ],
+   "params": {
+    "focus": "string",
+    "from_day": "string",
+    "helper": "string",
+    "project": "string",
+    "source": "string",
+    "through_day": "string"
+   },
+   "result": {
+    "task": "string"
+   },
+   "source": "manual"
+  },
+  "reports.get": {
+   "area": "reports",
+   "kind": "read",
+   "note": "Reads one saved report.",
+   "optional": [],
+   "params": {
+    "id": "int"
+   },
+   "result": {
+    "report": {
+     "capped": "bool",
+     "entry_count": "int",
+     "filters": {
+      "focus": "string|null",
+      "project": "string|null",
+      "source": "string|null"
+     },
+     "from_day": "string",
+     "generated_at": "string",
+     "helper": "string",
+     "id": "int",
+     "note": "string|null",
+     "saved_at": "string",
+     "text": "string",
+     "through_day": "string",
+     "title": "string",
+     "topics": [
+      {
+       "elapsed_ms": "int",
+       "name": "string",
+       "projects": [
+        "string"
+       ],
+       "sources": [
+        "string"
+       ],
+       "spans": "int",
+       "summary": "string",
+       "tokens_in": "int|null",
+       "tokens_out": "int|null",
+       "usage_unknown": "int"
+      }
+     ],
+     "total_entries": "int"
+    }
+   },
+   "source": "manual"
+  },
+  "reports.helpers": {
+   "area": "reports",
+   "kind": "read",
+   "note": "Available helpers after applying the Ask AI data rules.",
+   "optional": [],
+   "params": {},
+   "result": {
+    "chosen": "string|null",
+    "helpers": [
+     {
+      "command": "string",
+      "local": "bool",
+      "name": "string"
+     }
+    ],
+    "online_allowed": "bool",
+    "rules_broken": "bool"
+   },
+   "source": "manual"
+  },
+  "reports.list": {
+   "area": "reports",
+   "kind": "read",
+   "note": "Up to 50 newest reports. The next cursor is an exclusive upper bound on report id. Library errors include reports_db_unavailable (SQLite unavailable or unsafe file), reports_db_corrupt, reports_db_locked and reports_db_read_only.",
+   "optional": [
+    "query",
+    "cursor"
+   ],
+   "params": {
+    "cursor": "int",
+    "query": "string"
+   },
+   "result": {
+    "next_cursor": "int|null",
+    "read_only": "bool",
+    "reports": [
+     {
+      "from_day": "string",
+      "id": "int",
+      "saved_at": "string",
+      "through_day": "string",
+      "title": "string",
+      "topic_count": "int"
+     }
+    ],
+    "schema_version": "int"
+   },
+   "source": "manual"
+  },
+  "reports.move_aside": {
+   "area": "reports",
+   "kind": "change",
+   "note": "Moves a corrupt library and its sidecars aside.",
+   "optional": [],
+   "params": {},
+   "result": {
+    "moved_to": "string"
+   },
+   "source": "manual"
+  },
+  "reports.save": {
+   "area": "reports",
+   "kind": "change",
+   "note": "Saves a validated in-session draft by handle.",
+   "optional": [
+    "note"
+   ],
+   "params": {
+    "draft_id": "string",
+    "note": "string",
+    "title": "string"
+   },
+   "result": {
+    "report": {
+     "capped": "bool",
+     "entry_count": "int",
+     "filters": {
+      "focus": "string|null",
+      "project": "string|null",
+      "source": "string|null"
+     },
+     "from_day": "string",
+     "generated_at": "string",
+     "helper": "string",
+     "id": "int",
+     "note": "string|null",
+     "saved_at": "string",
+     "text": "string",
+     "through_day": "string",
+     "title": "string",
+     "topics": [
+      {
+       "elapsed_ms": "int",
+       "name": "string",
+       "projects": [
+        "string"
+       ],
+       "sources": [
+        "string"
+       ],
+       "spans": "int",
+       "summary": "string",
+       "tokens_in": "int|null",
+       "tokens_out": "int|null",
+       "usage_unknown": "int"
+      }
+     ],
+     "total_entries": "int"
+    }
+   },
+   "source": "manual"
+  },
+  "reports.update": {
+   "area": "reports",
+   "kind": "change",
+   "note": "Supply a title or note. An empty note clears it.",
+   "optional": [
+    "title",
+    "note"
+   ],
+   "params": {
+    "id": "int",
+    "note": "string",
+    "title": "string"
+   },
+   "result": {
+    "report": {
+     "capped": "bool",
+     "entry_count": "int",
+     "filters": {
+      "focus": "string|null",
+      "project": "string|null",
+      "source": "string|null"
+     },
+     "from_day": "string",
+     "generated_at": "string",
+     "helper": "string",
+     "id": "int",
+     "note": "string|null",
+     "saved_at": "string",
+     "text": "string",
+     "through_day": "string",
+     "title": "string",
+     "topics": [
+      {
+       "elapsed_ms": "int",
+       "name": "string",
+       "projects": [
+        "string"
+       ],
+       "sources": [
+        "string"
+       ],
+       "spans": "int",
+       "summary": "string",
+       "tokens_in": "int|null",
+       "tokens_out": "int|null",
+       "usage_unknown": "int"
+      }
+     ],
+     "total_entries": "int"
+    }
+   },
+   "source": "manual"
   },
   "rules.test": {
    "area": "rules",

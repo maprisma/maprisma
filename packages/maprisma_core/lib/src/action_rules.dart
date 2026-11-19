@@ -383,6 +383,11 @@ List<ActionCheck> actionChecks(
 
 /// Routes that need no rule of their own.
 const rulesExempt = {
+  // Manual changes to the user's report library.
+  'reports.save',
+  'reports.update',
+  'reports.delete',
+  'reports.move_aside',
   // Their handler knows what they touch and checks that itself.
   'addons.file_preview', 'addons.install', 'found.unpack',
   'found.update_preview',

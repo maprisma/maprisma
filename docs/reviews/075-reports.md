@@ -71,3 +71,27 @@ Checked against the code. Confirmed: `maxRequest` 64 KiB, `test_protocol.py:90` 
 9. 50 rows per page with a cursor, an MCP cursor and errors, the `reports.update` rules, CLI markdown and `migrate: false`.
 
 Next: round 2 on the revised plan.
+
+## Round 2 (Antigravity, relayed by Uwe)
+
+1. **SQLite sidecars.** Creating WAL/SHM files ahead of SQLite can disrupt
+   recovery and create files when opening a newer library.
+   - **Answer (Codex):** Check existing files with a no-follow stat and verify
+     ownership before SQLite opens the library. Pre-create only the main file.
+     Tighten sidecar modes after enabling WAL for a supported schema. Use a
+     lock on the existing directory for recovery.
+2. **Database error codes.** An unavailable SQLite library or unsafe filesystem
+   path needs its own code.
+   - **Answer (Codex):** Add `reports_db_unavailable` to the task and wire
+     documentation. Offer move-aside only for SQLite corruption errors.
+3. **Generation refusals.** A known but disallowed online helper and an unknown
+   helper need different responses. A worker refusal must reach task status.
+   - **Answer (Codex):** Resolve the helper before applying the gate. The worker
+     returns a result with `error` and `code` for typed failures. Finalization
+     keeps only successful drafts. Discovery also checks that online
+     rewrite argv explicitly disables tools. A read-only sandbox can still
+     read files.
+4. **Protocol tooling.** Route classification and the shared data id must
+   survive protocol regeneration.
+   - **Answer (Codex):** Extend the change-route matcher and register
+     `maprisma.activity_log_online` as a non-route identifier.
