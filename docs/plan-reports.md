@@ -3,6 +3,7 @@
 Task [075](tasks/075-reports.md). Builds on task 074
 ([plan](plan-agent-activity.md)): the activity log, `activitylog.report`,
 the history CLI/MCP server and the three log settings already exist.
+Review: [round 1](reviews/075-reports.md), all findings accepted below.
 
 ## Decisions (Uwe, 2026-11-19)
 
@@ -16,85 +17,147 @@ the history CLI/MCP server and the three log settings already exist.
 
 ## Existing code
 
-- `ai_activity_log.dart`: writing, sanitizing, pruning and the report
-  aggregation. Reuse its sanitizer and `report()` for the generator input.
-- `activity_log_dialog.dart`: date range, entries, copy and export. Move
-  the body into a widget the Log tab reuses; keep the dialog entry points
-  opening the page on the Log tab.
-- `settings.dart`, `settings_schema.py`, `settings_view.dart` (the
-  `ai_activity_log*` keys): change the default in all three.
-- `sqlite_numbers.dart` opens `libsqlite3.so.0` through FFI read-only on a
-  memory image. The library needs a real writable connection: add a small
-  FFI binding in a new file (open_v2 with READWRITE|CREATE, prepare,
-  bind, step, column, finalize, close, busy_timeout). No new pub package.
-  `tools/check-bundle.py` must stay green.
-- AI helper: the shared choice in `~/.config/maprisma-ai/settings.json`
-  (`helper`), helpers catalog `helpers.json`, and the task prompt helpers
-  in `system_help.dart` (`task_prompt_path`, `write_task_prompt`,
-  `task_argv`). Run the helper as a worker job like the map analysis
-  (`analyzeMap`): cancellable with SIGTERM, progress on the handle.
+- `ai_activity_log.dart`: writing, sanitizing, pruning and `report()`.
+  `report()` filters neither project nor source and goes through
+  `_activityReportWithTopics()` in `core.dart`, which may start the local
+  LLM per page. The generator therefore gets its own bounded, filterable
+  read method on `AiActivityLog` that does not use the topic helper.
+- `activity_log_dialog.dart` has no refresh timer. Move its body into a
+  widget the Log tab reuses. `settings_view.dart` opens it with
+  `showDialog`; replace this with an `onOpenReports` callback.
+- Settings default: change `settings_schema.py` (the source), run
+  `tools/core-assets.py` to regenerate `core_assets.g.dart` (the Dart
+  defaults), and change both `?? 2` fallbacks in `settings_view.dart`.
+  Update `ai_activity_log_test.dart` (pruning assumed 2 days) and add a
+  test that a stored 2 stays. Translation keys stay `Keep log for (days)`;
+  new keys go in `translations/*.json` plus `tools/flutter-assets.py`.
+- `sqlite_numbers.dart` opens `libsqlite3.so.0` read-only on a memory
+  image. The library gets its own writable binding (see Library). No new
+  pub package; no bundled `.so`; `tools/check-bundle.py` stays green.
+- Helpers: Maprisma's own `smartHelpers()` / `localHelpers()` in
+  `core.dart` and `local_helper.dart`, and the `smart_helper` setting (not
+  `helpers.json`, which is exported for the other apps). Online helpers run
+  through `smartAgent` / `guardBackground` with the adapter's `[rewrite]`
+  form (no tools, prompt on stdin). Local helpers run through `adviseArgv`
+  against configured loopback runtimes, with no online fallback. **Never**
+  `taskArgv`: it starts an interactive session with tools.
+- Jobs: start like `map.smart_ask` (kind `read`, result `{task}`, polled
+  through `tasks.status`, stopped through `tasks.cancel`). The finished
+  draft is held in core memory behind `draft_id`, filled in the
+  `tasks.startPrivate` finalize callback (like `SmartProposals` /
+  `HelpPreviews`). Drafts expire with the session, and only the newest 8
+  are kept.
+- Request frames are capped at 64 KiB (`protocol.dart` `maxRequest`), so
+  no route takes a draft. The worker reads the log itself from the
+  validated filters; its stdin carries only parameters.
+- `action_rules_test.dart` requires every change route in `actionChecks`
+  or `rulesExempt`. All `reports.*` change routes go into `rulesExempt`.
 - Ask AI rules: `/mnt/Data/Projects/maprisma-settings/docs/ask-ai-rules.md`.
 
 ## Generator
 
-1. Read `activitylog.report` for the range and filters, all pages, capped
-   (e.g. 2,000 entries and 200 KiB of prompt). When capped, say so in the
-   draft and in the prompt.
-2. Build a prompt from sanitized entries only: agent/runtime, model,
-   project label, topic heuristic, start/end/duration, counts of files and
-   helper tools, tokens. No file paths beyond the project label, no file
-   contents, no raw tool arguments. The optional focus line is plain user
-   text, bounded to 500 characters.
-3. Ask the helper for JSON: `{title, topics:[{name, summary, entry_ids[]}],
-   text}`. The core validates it, recomputes `spans`, `elapsed_ms`, tokens,
-   `sources` and `projects` per topic from the referenced entries (never
-   trusts the AI's numbers), drops unknown ids, bounds lengths, strips
-   control characters. Invalid JSON → one retry with the error, then
-   `{error}`.
-4. Without a helper, without log entries in range, or with the log off and
-   no files: a clear error, no job.
+1. `reports.generate` validates its parameters and the helper (must come
+   from `reports.helpers`) and checks the online gate, then starts the job.
+   Pre-job refusals throw `ServiceError` with a code (`no_helper`,
+   `online_blocked`, `no_entries`, `log_off`).
+2. The worker reads up to 2,000 entries (filtered by range, project and
+   source) through the new log method, capped at 200 KiB of prompt. When
+   capped, `capped: true` and `total_entries` go into the draft and the
+   prompt says so.
+3. The prompt holds only sanitized entries with compact ids `1..N`: agent
+   or runtime, model, project label, heuristic topic, start/end/duration,
+   counts of files and helper tools, tokens. It contains no file paths
+   beyond the project label, no file contents and no raw tool arguments.
+   The focus line is user text, at most 500 characters with control
+   characters stripped, and is wrapped in explicit "untrusted data"
+   markers.
+4. The online gate is checked again right before the helper runs (rules
+   may have changed during preparation).
+5. The helper answers with JSON `{title, topics:[{name, summary,
+   ids[]}], text}`. The core validates it:
+   - it maps the compact ids back to entries, drops unknown ids and counts
+     duplicates once;
+   - it recomputes `spans`, `elapsed_ms`, tokens, `usage_unknown`,
+     `sources` and `projects` per topic, never trusting the AI's numbers;
+   - it bounds lengths (title 200, 64 topics, text 200 KiB) and strips
+     control characters.
+
+   Invalid JSON gets one retry with the error. A second failure ends with
+   `{error, code: bad_answer}`. A crashed or timed-out helper ends with
+   `helper_failed`.
 
 ## Privacy and Ask AI rules
 
 - A report is an **answer** of Ask AI, not an action. It runs in both
   levels (`review`, `answers`).
-- New data id `maprisma.activity_log_online` (**default off**, in the
-  "off unless switched on" list): with an online helper the log is sent
-  only when it is on; otherwise only local helpers (pi loopback models,
-  local runtimes) are offered and the dropdown says why. The log promise
-  "never uploaded" stays true unless the user switches this on. The
-  Maprisma Settings › AI table needs the id and its text (small follow-up
-  in the maprisma-settings repo, listed as an open point, not in this
-  branch).
-- Read the rules file exactly as the contract says (missing = defaults,
-  broken = restrictive). Never write it.
+- New data id `maprisma.activity_log_online`, in the "off unless switched
+  on" list: only an explicit `true` allows it. A missing file, missing key,
+  non-object `data`, non-boolean value, an unreadable file or a file over
+  64 KiB all deny, and a broken file also sets `rules_broken`. Without it
+  only local helpers are offered, and `reports.helpers` says why. The log
+  promise "never uploaded" stays true unless the user switches this on.
+- Read the rules file read-only, exactly as the contract says. Never write
+  it. The Maprisma Settings › AI table needs the id and its text: a
+  follow-up in the maprisma-settings repo, not in this branch.
 
 ## Library
 
-- `${XDG_DATA_HOME:-~/.local/share}/maprisma/reports/reports.db`, folder
-  0700, file 0600, WAL mode, `busy_timeout`, `user_version` = 1.
+- Location `${XDG_DATA_HOME:-~/.local/share}/maprisma/reports/reports.db`.
+  The folder is created through `Posix.privateDirectory` (0700, owner
+  checked, no symlinks). `reports.db`, `-wal` and `-shm` must not be
+  symlinks. They are created ahead as 0600 and checked again after WAL
+  starts.
+- FFI binding in a new file, with the library opened lazily and guarded (a
+  missing `libsqlite3.so.0` becomes `reports_db_locked`'s sibling error,
+  not a crash). It binds: `open_v2`, `close_v2`, `busy_timeout`, `exec`,
+  `prepare_v2`, `bind_text` / `bind_int64` / `bind_null`, `step`,
+  `column_*`, `finalize`, `last_insert_rowid`, `changes`,
+  `extended_errcode` and `errmsg`. Text is bound as UTF-8 with the byte
+  length and `SQLITE_TRANSIENT`.
+- Open order:
+  1. `open_v2` (READWRITE|CREATE|NOFOLLOW)
+  2. `busy_timeout` 5 s
+  3. read `user_version`
+  4. if it is above 1: `query_only=ON`, read only, `read_only: true`,
+     never write
+  5. otherwise `journal_mode=WAL`, `synchronous=NORMAL`, then create or
+     migrate the schema inside `BEGIN IMMEDIATE`
+
+  All writes use `BEGIN IMMEDIATE`.
 - Table `reports(id INTEGER PRIMARY KEY, title, note, saved_at, from_day,
   through_day, filters_json, helper, generated_at, entry_count,
-  topics_json, text)`. Search with LIKE on title, note, text and topic
-  names (FTS5 only if available, with LIKE fallback).
+  total_entries, capped, topic_names, topics_json, text)`. Search uses
+  LIKE on title, note, topic_names and text, with `%`, `_` and `\`
+  escaped (`ESCAPE '\'`).
 - Never pruned with the log, never touched by log settings.
-- A corrupt database: list/get return an error with a "Move aside and
-  start new" action (renames to `reports.db.broken-<time>`), never a
-  silent rebuild. A newer `user_version`: read-only with a notice.
-- Bounds: title 200, note 2,000, text 200 KiB, 64 topics.
+- Errors: `SQLITE_CORRUPT` / `SQLITE_NOTADB` → `reports_db_corrupt`, BUSY
+  after the timeout → `reports_db_locked`, newer schema on a write →
+  `reports_db_read_only`, a missing id → `report_not_found`.
+- `reports.move_aside` closes the handle, takes a lock in the folder and
+  renames `reports.db` **and** its `-wal` / `-shm` to
+  `*.broken-<UTC time>`. It never rebuilds silently.
+- `reports.update` needs at least one of `title` / `note`, and an empty
+  note clears it to null. Bounds: title 200, note 2,000.
 
 ## UI notes
 
 - Follow the maprisma-layout and maprisma-app skills: theme colours,
   corners, Esc, remembered tab, eight languages.
-- The page refreshes the Log tab while open (same interval as the history
-  dialog). Generation keeps running when switching tabs; leaving the page
-  asks whether to cancel it.
+- `_view = 'reports'` in `main.dart` with `WindowHeader`. It pauses
+  `_refreshLive()` like the other pages and calls `_loadHelpers()` on open
+  so "Topic summaries by local LLM" shows.
+- The Log tab refreshes when it opens, after a settings change, with its
+  Refresh button, and every 30 s while visible and focused, keeping cursor,
+  scroll and selection.
+- While generating, every way out (Esc, Backspace, Back, `_toggleSettings`,
+  and the header's AI Map, Ask AI, Help and Settings buttons) goes through
+  an async guard. It asks "Cancel the report?" and calls `tasks.cancel`.
+  Switching tabs inside the page keeps the job running.
 - Export file names: `maprisma-report-<from>-<through>.<ext>`.
 
 ## Delivery
 
-Commits `protocol:`, `core:`, `gui:` with `tools/test-changed` green, then
-`tools/test-changed --base main` and the full suites from AGENTS.md. New
-routes are Dart only, like 074 (Python reference only for the settings
-default).
+Commit in the order `protocol:`, `core:`, `gui:`, each with
+`tools/test-changed` green, then run `tools/test-changed --base main` and
+the full suites from AGENTS.md. New routes are Dart only, like 074. The
+Python reference changes only for the settings default.
