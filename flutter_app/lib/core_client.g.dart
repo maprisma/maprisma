@@ -413,11 +413,13 @@ class CoreClient {
     String? answer,
     required String column,
     required String command,
+    String? context,
     required String request,
   }) => transport.call('map.smart_ask', {
     'answer': ?answer,
     'column': column,
     'command': command,
+    'context': ?context,
     'request': request,
   });
 

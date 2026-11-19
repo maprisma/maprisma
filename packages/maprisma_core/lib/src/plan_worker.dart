@@ -1360,6 +1360,10 @@ Future<int> runWorker(List<String> args) async {
           identity.environment,
           identity.home,
           identity.shortName,
+          progress: data['column'] != 'auto'
+              ? null
+              : (stage) =>
+                    send({'type': 'progress', 'fraction': 0, 'text': stage}),
           mcpSearch: (query) async {
             final found = await searchPage(
               query,

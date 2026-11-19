@@ -39,6 +39,7 @@ class AgentMap extends StatelessWidget {
     this.onAdd,
     this.onMissing,
     this.onNodeMenu,
+    this.onNodeAsk,
     this.onNodeUpdate,
     this.smartCards = false,
     this.smartAskColumns,
@@ -89,6 +90,7 @@ class AgentMap extends StatelessWidget {
   final void Function(BuildContext, String action, Map<String, dynamic>)?
   onMissing;
   final void Function(BuildContext, Map<String, dynamic>)? onNodeMenu;
+  final ValueChanged<Map<String, dynamic>>? onNodeAsk;
 
   /// A box's update item (task 068), see MapEditor.onUpdate.
   final void Function(Map<String, dynamic> node, String action)? onNodeUpdate;
@@ -184,6 +186,7 @@ class AgentMap extends StatelessWidget {
         onMissing: onMissing,
         onOpen: onNode,
         onMenu: onNodeMenu,
+        onAsk: onNodeAsk,
         onUpdate: onNodeUpdate,
         animate: animate,
         lightFps: lightFps,

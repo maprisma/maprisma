@@ -2849,48 +2849,84 @@ void main() {
   });
 
   testWidgets(
-    'the header Ask AI button opens examples that fill categorized prompts',
+    'a map item opens Ask AI with an editable question about that item',
     (tester) async {
-      await mountApp(
-        tester,
-        beforeStart: (d) =>
-            File('${d.path}/smart_helpers').writeAsStringSync('1'),
+      final dir = await mountApp(tester);
+      await settleService(tester);
+      final card = find
+          .ancestor(of: find.text('Test agent'), matching: find.byType(Card))
+          .first;
+      await tester.tap(
+        find.descendant(
+          of: card,
+          matching: find.byType(PopupMenuButton<String>),
+        ),
       );
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(PopupMenuItem<String>, 'Ask AI'));
       await settleService(tester);
-      await tester.tap(find.byKey(const ValueKey('ask-ai-open')));
-      await settleService(tester);
-      expect(find.byType(OverlayWindow), findsOneWidget);
-      for (final (index, column, title, text) in const [
-        (0, 'mcp', 'MCP servers and skills', 'Find an MCP server for my notes'),
-        (2, 'agents', 'Agents', 'Which agents need sign-in?'),
-        (4, 'providers', 'Providers', 'Why is my local LLM slow?'),
-        (6, 'models', 'Models', 'Find a model that fits my PC'),
-      ]) {
-        await tester.tap(find.byKey(ValueKey('smart-category-$column')));
-        await settleService(tester);
-        await tester.tap(find.byKey(ValueKey('smart-example-$index')));
-        await settleService(tester);
-        expect(find.text('Ask AI · $title'), findsOneWidget);
-        expect(
-          tester
-              .widget<TextField>(
-                find.descendant(
-                  of: find.byKey(const ValueKey('smart-card')),
-                  matching: find.byType(TextField),
-                ),
-              )
-              .controller
-              ?.text,
-          '$title: $text',
-        );
-      }
-      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
-      await settleService(tester);
-      expect(find.byType(OverlayWindow), findsNothing);
-      expect(tester.takeException(), isNull);
+      final field = find.descendant(
+        of: find.byKey(const ValueKey('smart-card')),
+        matching: find.byType(TextField),
+      );
+      expect(
+        tester.widget<TextField>(field).controller!.text,
+        'Tell me about Test agent',
+      );
+      expect(
+        requests(dir).where((q) => q['method'] == 'map.smart_ask'),
+        isEmpty,
+      );
       await unmountApp(tester);
     },
   );
+
+  testWidgets('the header Ask AI button offers examples from across the map', (
+    tester,
+  ) async {
+    await mountApp(
+      tester,
+      beforeStart: (d) =>
+          File('${d.path}/smart_helpers').writeAsStringSync('1'),
+    );
+    await settleService(tester);
+    await tester.tap(find.byKey(const ValueKey('ask-ai-open')));
+    await settleService(tester);
+    expect(find.byType(OverlayWindow), findsOneWidget);
+    for (final (index, text) in const [
+      (0, 'Help my agent search my notes'),
+      (2, 'Which agents need sign-in?'),
+      (4, 'Why are answers slow on this PC?'),
+      (6, 'Find a model that fits my PC'),
+    ]) {
+      await tester.tap(find.byKey(ValueKey('smart-example-$index')));
+      await settleService(tester);
+      expect(
+        find.descendant(
+          of: find.byType(OverlayWindow),
+          matching: find.text('Ask AI'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<TextField>(
+              find.descendant(
+                of: find.byKey(const ValueKey('smart-card')),
+                matching: find.byType(TextField),
+              ),
+            )
+            .controller
+            ?.text,
+        text,
+      );
+    }
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await settleService(tester);
+    expect(find.byType(OverlayWindow), findsNothing);
+    expect(tester.takeException(), isNull);
+    await unmountApp(tester);
+  });
 
   testWidgets(
     'Review on an Ask AI Performance proposal shows Performance inside the window',
@@ -3231,7 +3267,7 @@ void main() {
   );
 
   testWidgets(
-    'the status chips switch the category in the same window, and a category shows the columns it needs',
+    'the status chips switch the category in the same window, and asking keeps the saved layers',
     (tester) async {
       final dir = await mountApp(
         tester,
@@ -3239,17 +3275,22 @@ void main() {
             File('${d.path}/smart_helpers').writeAsStringSync('1'),
       );
       await settleService(tester);
-      // Models hidden: asking about models brings its column (and Providers) back.
+      // Reading about a model preserves the hidden Models layer.
       await tester.tap(find.byKey(const ValueKey('map-column-3')));
       await settleService(tester);
       await tester.tap(find.byKey(const ValueKey('ask-ai-open')));
       await settleService(tester);
       final window = tester.state(find.byType(OverlayWindow));
-      await tester.tap(find.byKey(const ValueKey('smart-category-models')));
-      await settleService(tester);
+      expect(find.byKey(const ValueKey('smart-category-models')), findsNothing);
       await tester.tap(find.byKey(const ValueKey('smart-example-6')));
       await settleService(tester);
-      expect(find.text('Ask AI · Models'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(OverlayWindow),
+          matching: find.text('Ask AI'),
+        ),
+        findsOneWidget,
+      );
       expect(tester.state(find.byType(OverlayWindow)), same(window));
       final layers =
           requests(
@@ -3258,7 +3299,7 @@ void main() {
               as Map;
       expect(
         (layers['values'] as Map)['map_layers'],
-        containsAll(['models', 'online', 'local']),
+        isNot(contains('models')),
       );
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       await settleService(tester);

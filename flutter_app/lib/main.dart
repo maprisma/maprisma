@@ -52,7 +52,7 @@ import 'item_details_view.dart';
 import 'map_layout.dart' show withAgentLinks;
 import 'map_editor.dart' show mapColumnLayers;
 import 'action_rules_window.dart';
-import 'app_look.dart' show AppSpace, StatusColors;
+import 'app_look.dart' show AppSpace;
 import 'map_smart_card.dart'
     show
         MapSmartCard,
@@ -2938,6 +2938,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   int _smartStatusSeq = 0;
   int _askPromptSeq = 0;
   bool _askOpen = false;
+  String? _askInitialPrompt;
   String _askColumn = 'agents';
 
   /// Warnings of the GUI's own: agents with little left of their limits
@@ -3034,18 +3035,44 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     }
   }
 
-  void _openAskAi([String? column]) {
+  int _helperCheck = 0;
+  bool _checkingAskHelpers = false, _askHelpersFailed = false;
+  Future<void> _checkAskHelpers() async {
+    final client = _maybeClient;
+    if (client == null) return;
+    final check = ++_helperCheck;
+    setState(() {
+      _checkingAskHelpers = true;
+      _askHelpersFailed = false;
+    });
+    try {
+      final result = await client.mapSmartHelpers();
+      final helpers = (result['helpers'] as List).cast<Map<String, dynamic>>();
+      if (mounted && check == _helperCheck) {
+        setState(() => _smartHelpers = helpers);
+      }
+    } catch (_) {
+      if (mounted && check == _helperCheck) {
+        setState(() => _askHelpersFailed = true);
+      }
+    } finally {
+      if (mounted && check == _helperCheck) {
+        setState(() => _checkingAskHelpers = false);
+      }
+    }
+  }
+
+  void _openAskAi([String? column, String? initialPrompt]) {
     if (_busy) return;
     if (_showReports) {
       unawaited(
         _leaveReports().then((left) {
-          if (left && mounted) _openAskAi(column);
+          if (left && mounted) _openAskAi(column, initialPrompt);
         }),
       );
       return;
     }
     final targetCol = column ?? _askColumn;
-    final updatedLayers = _neededLayersForColumn(targetCol);
     setState(() {
       _card = null;
       _browser = null;
@@ -3056,16 +3083,12 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       _showProviders = false;
       _showConnections = false;
       _visibleTerminal = null;
-      if (updatedLayers != null && _snapshot?['settings'] is Map) {
-        (_snapshot!['settings'] as Map)['map_layers'] = updatedLayers;
-      }
       _askColumn = targetCol;
+      _askInitialPrompt = initialPrompt;
       _askPromptSeq++;
       _askOpen = true;
     });
-    if (updatedLayers != null) {
-      unawaited(_updateSettings({'map_layers': updatedLayers}));
-    }
+    unawaited(_checkAskHelpers());
   }
 
   void _onSmartApplied(Map<String, dynamic> result) {
@@ -5406,6 +5429,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       final firstSnapshot = !_startupChecked;
       final openSetup = firstSnapshot && snapshot['setup_needed'] == true;
       final addons = await _client.addonsList();
+      final helperCheck = _helperCheck;
       var smartHelpers = _smartHelpers;
       try {
         final smart = await _client.mapSmartHelpers();
@@ -5471,7 +5495,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
           _setupRevision++;
         }
         _addons = (addons['addons'] as List).cast<Map<String, dynamic>>();
-        _smartHelpers = smartHelpers;
+        if (_helperCheck == helperCheck) _smartHelpers = smartHelpers;
         _graph = graph;
         if (_selected == selected) _agentInfo = info;
         _strings = strings;
@@ -5796,30 +5820,31 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                     ),
                     onPressed: _keysBlocked ? null : _openProblems,
                   ),
-                IconButton(
-                  key: const ValueKey('ask-ai-open'),
-                  tooltip: tr('Ask AI'),
-                  icon: Badge(
-                    isLabelVisible: _smartHelpers.isEmpty,
-                    smallSize: 7,
-                    backgroundColor: StatusColors.warn,
-                    // A Builder: this State builds the MaterialApp, so its
-                    // own context has Flutter's default (purple) theme.
-                    child: Builder(
-                      builder: (context) => Icon(
-                        _smartHelpers.isNotEmpty
-                            ? Icons.auto_awesome
-                            : Icons.auto_awesome_outlined,
-                        size: 18,
-                        color: _smartHelpers.isNotEmpty
-                            ? Theme.of(context).colorScheme.primary
-                            : null,
-                      ),
-                    ),
-                  ),
-                  onPressed: _keysBlocked || _busy || _snapshot == null
-                      ? null
-                      : () => _openAskAi(),
+                Builder(
+                  builder: (context) {
+                    final open = _keysBlocked || _busy || _snapshot == null
+                        ? null
+                        : () => _openAskAi();
+                    final icon = Icon(
+                      _smartHelpers.isEmpty
+                          ? Icons.auto_awesome_outlined
+                          : Icons.auto_awesome,
+                      size: 18,
+                    );
+                    return MediaQuery.sizeOf(context).width >= 900
+                        ? TextButton.icon(
+                            key: const ValueKey('ask-ai-open'),
+                            onPressed: open,
+                            icon: icon,
+                            label: Text(tr('Ask AI')),
+                          )
+                        : IconButton(
+                            key: const ValueKey('ask-ai-open'),
+                            onPressed: open,
+                            icon: icon,
+                            tooltip: tr('Ask AI'),
+                          );
+                  },
                 ),
                 IconButton(
                   key: const ValueKey('reports-open'),
@@ -6213,6 +6238,15 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                                               onAgent: _selectAgent,
                                               onSubagents: _openSubagents,
                                               onNodeMenu: _nodeMenu,
+                                              onNodeAsk: (node) => _openAskAi(
+                                                null,
+                                                tr(
+                                                  'Tell me about {0}',
+                                                ).replaceAll(
+                                                  '{0}',
+                                                  "${node['label']}",
+                                                ),
+                                              ),
                                               onNodeUpdate: _mapUpdate,
                                               groups: MapGroup.fromGraph(
                                                 _mapGraph,
@@ -6279,30 +6313,18 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                             open: _askOpen,
                             onToggle: () =>
                                 setState(() => _askOpen = !_askOpen),
-                            onColumnChanged: (col) {
-                              final updatedLayers = _neededLayersForColumn(col);
-                              setState(() {
-                                _askColumn = col;
-                                if (updatedLayers != null &&
-                                    _snapshot?['settings'] is Map) {
-                                  (_snapshot!['settings']
-                                          as Map)['map_layers'] =
-                                      updatedLayers;
-                                }
-                              });
-                              if (updatedLayers != null) {
-                                unawaited(
-                                  _updateSettings({
-                                    'map_layers': updatedLayers,
-                                  }),
-                                );
-                              }
-                            },
+                            onColumnChanged: (col) =>
+                                setState(() => _askColumn = col),
                             tr: tr,
                             helpers: _smartHelpers,
+                            checkingHelpers:
+                                _checkingAskHelpers || !_helperLoaded,
+                            helpersFailed: _askHelpersFailed,
+                            onCheckHelpers: _checkAskHelpers,
                             status: _smartStatusData,
                             statusTrigger: _smartStatusSeq,
                             promptTrigger: _askPromptSeq,
+                            initialPrompt: _askInitialPrompt,
                             client: _maybeClient,
                             onProvider: _smartProvider,
                             onMenu: _smartMenu,

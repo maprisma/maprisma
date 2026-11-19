@@ -183,6 +183,9 @@ final class ReadService {
   List<AgentRecord>? _agents;
   Map<String, AgentInfo>? _details;
   InventorySnapshot? _inventory;
+
+  /// Inventory from the most recent map refresh, including user model folders.
+  InventorySnapshot get mapInventory => _inventory!;
   Map<String, List<String>>? _running;
   Map<String, dynamic>? _activity;
   Map<String, dynamic> dispatch(String method, Map<String, dynamic> params) {

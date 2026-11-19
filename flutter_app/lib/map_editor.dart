@@ -43,6 +43,7 @@ class MapEditor extends StatefulWidget {
     this.onMissing,
     this.onOpen,
     this.onMenu,
+    this.onAsk,
     this.onUpdate,
     this.animate = 'all',
     this.lightFps = 20,
@@ -97,6 +98,7 @@ class MapEditor extends StatefulWidget {
   onMissing;
   final ValueChanged<Map<String, dynamic>>? onOpen;
   final void Function(BuildContext, Map<String, dynamic>)? onMenu;
+  final ValueChanged<Map<String, dynamic>>? onAsk;
 
   /// A box's update item (task 068: update_ai, update_now, update_use,
   /// update_addon), for the graph's update_badges.
@@ -955,6 +957,8 @@ class _MapEditorState extends State<MapEditor>
                                                       1,
                                                 ),
                                               );
+                                            case 'ask':
+                                              widget.onAsk?.call(node);
                                             case 'open':
                                               widget.onOpen?.call(node);
                                             case 'actions':
@@ -1020,6 +1024,18 @@ class _MapEditorState extends State<MapEditor>
                                             value: 'open',
                                             child: Text(widget.tr('Details')),
                                           ),
+                                          if (widget.onAsk != null &&
+                                              const {
+                                                'agent',
+                                                'runtime',
+                                                'model',
+                                                'cloud',
+                                                'mcp',
+                                              }.contains(node['kind']))
+                                            PopupMenuItem(
+                                              value: 'ask',
+                                              child: Text(widget.tr('Ask AI')),
+                                            ),
                                           if (widget.onMenu != null)
                                             PopupMenuItem(
                                               value: 'actions',

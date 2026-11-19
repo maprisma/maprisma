@@ -1,5 +1,10 @@
 import 'dart:async';
+import 'dart:io';
+import 'package:maprisma_core/maprisma_core.dart' show openWebPage, smartSource;
+import 'mic_button.dart';
+import 'voice_input.dart';
 
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'app_look.dart' show AppSpace, WindowFooter, WindowHeader, StatusColors;
@@ -542,6 +547,9 @@ class MapSmartCard extends StatefulWidget {
     this.onColumnChanged,
     required this.tr,
     this.helpers = const [],
+    this.checkingHelpers = false,
+    this.helpersFailed = false,
+    this.onCheckHelpers,
     this.client,
     this.initialPrompt,
     this.onMoveToColumn,
@@ -588,6 +596,8 @@ class MapSmartCard extends StatefulWidget {
   final ValueChanged<String>? onColumnChanged;
   final String Function(String) tr;
   final List<Map<String, dynamic>> helpers;
+  final bool checkingHelpers, helpersFailed;
+  final VoidCallback? onCheckHelpers;
   final CoreClient? client;
   final String? initialPrompt;
   final void Function(String column, String request)? onMoveToColumn;
@@ -608,12 +618,52 @@ class _MapSmartCardState extends State<MapSmartCard> {
   final _barFocus = FocusNode();
   final _cardFocus = FocusNode();
   final _fieldFocus = FocusNode();
+  final _followFocus = FocusNode();
   final _portal = OverlayPortalController();
   bool _windowShown = false;
 
   /// Settings › ask_prompts: the suggestions per category (absent: built-in).
   Map<String, List<Object>> _askPrompts = {};
   int? _editingPrompt;
+  String? _editGroup;
+  bool _showSuggestions = false;
+  bool _suggestionsReady = false;
+  bool _savingSuggestions = false;
+  int _suggestionsRead = 0;
+  final _follow = TextEditingController();
+  String? _previousContext;
+  String? _previousHelper;
+  bool _sharePrevious = false;
+  String _partial = '';
+  String _askStage = '';
+  VoiceStatus _voiceStatus = VoiceStatus.missing;
+
+  Future<void> _refreshVoice() async {
+    if (widget.showBar || !widget.open) return;
+    final status = await VoiceInput.available(fresh: true);
+    if (mounted && widget.open) setState(() => _voiceStatus = status);
+  }
+
+  Widget _voiceNotice() {
+    if (!_voiceStatus.usable) return const SizedBox.shrink();
+    final local = const {
+      'whisper',
+      'whisper.cpp',
+      'local',
+    }.contains(_voiceStatus.engine);
+    return Text(
+      [
+        if (_voiceStatus.engine.isNotEmpty)
+          "${widget.tr('Dictation engine')} · ${_voiceStatus.engine}",
+        if (!local) widget.tr('Online dictation may use API credit.'),
+      ].join(' · '),
+      style: Theme.of(context).textTheme.bodySmall,
+    );
+  }
+
+  String? _lastClarification;
+  _SmartStep _previewOrigin = _SmartStep.proposal;
+  bool _previewBusy = false;
   final _promptEdit = TextEditingController();
   final _promptEditFocus = FocusNode();
   String _promptNote = '';
@@ -676,18 +726,29 @@ class _MapSmartCardState extends State<MapSmartCard> {
   }
 
   Map<String, dynamic>? get _activeHelper {
-    if (widget.helpers.isEmpty) return null;
+    if (widget.helpers.isEmpty ||
+        widget.checkingHelpers ||
+        widget.helpersFailed) {
+      return null;
+    }
     for (final h in widget.helpers) {
       if (h['command'] == smartHelperChosen.value) return h;
     }
-    return widget.helpers.first;
+    return !widget.showBar && smartHelperChosen.value != null
+        ? null
+        : widget.helpers.first;
   }
 
   bool _chosen(Map<String, dynamic> helper) =>
       helper['command'] == smartHelperChosen.value;
 
   void _helperChanged() {
-    if (mounted) setState(() {});
+    if (mounted) {
+      setState(() {
+        _sharePrevious = false;
+        if (_previousHelper != smartHelperChosen.value) _previousContext = null;
+      });
+    }
   }
 
   void _focusOpenCard() {
@@ -707,10 +768,13 @@ class _MapSmartCardState extends State<MapSmartCard> {
   void initState() {
     super.initState();
     smartHelperChosen.addListener(_helperChanged);
+    if (widget.open) unawaited(_refreshVoice());
     dictationChanged.addListener(_loadDictation);
     _portal.show();
     unawaited(_loadAskPrompts());
+    if (widget.open && widget.showBar) unawaited(_loadDictation());
     if (widget.initialPrompt != null && widget.initialPrompt!.isNotEmpty) {
+      _clearExchange();
       _prompt.text = widget.initialPrompt!;
     }
     if (widget.statusTrigger > 0) {
@@ -724,14 +788,24 @@ class _MapSmartCardState extends State<MapSmartCard> {
   @override
   void didUpdateWidget(covariant MapSmartCard oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if ((oldWidget.client == null && widget.client != null) ||
+        (!oldWidget.open && widget.open)) {
+      unawaited(_loadAskPrompts());
+      if (widget.showBar) unawaited(_loadDictation());
+    }
     if (widget.column != oldWidget.column && !_atWork) {
-      _retargetPrefixedPrompt(widget.column);
+      if (widget.showBar) _retargetPrefixedPrompt(widget.column);
       _column = widget.column;
       _editingPrompt = null;
     }
-    if (widget.initialPrompt != null &&
-        widget.initialPrompt != oldWidget.initialPrompt &&
+    if (!_atWork &&
+        !_previewBusy &&
+        widget.initialPrompt != null &&
+        (widget.initialPrompt != oldWidget.initialPrompt ||
+            widget.promptTrigger != oldWidget.promptTrigger) &&
         widget.initialPrompt!.isNotEmpty) {
+      _leaveMcpForm();
+      _clearExchange();
       _prompt.text = widget.initialPrompt!;
       _step = _SmartStep.idle;
     }
@@ -751,8 +825,12 @@ class _MapSmartCardState extends State<MapSmartCard> {
       _abortWorking();
     }
     if (!oldWidget.open && widget.open) {
+      unawaited(_refreshVoice());
       _focusOpenCard();
     } else if (oldWidget.open && !widget.open) {
+      if (_step == _SmartStep.working) _abortWorking();
+      _clearExchange();
+      _leaveMcpForm();
       _cancelDictationRecording();
       _showDictationSetup = false;
       _dictationError = '';
@@ -819,6 +897,21 @@ class _MapSmartCardState extends State<MapSmartCard> {
   /// [refocus] false when what comes next takes the keyboard: a task card, a
   /// terminal, a page.
   void _close({bool refocus = true}) {
+    _clearExchange();
+    _leaveMcpForm();
+    if (!widget.showBar &&
+        refocus &&
+        {
+          _SmartStep.redirect,
+          _SmartStep.clarify,
+          _SmartStep.proposal,
+          _SmartStep.mcpForm,
+        }.contains(_step)) {
+      setState(() {
+        _step = _SmartStep.idle;
+        _reply = const {};
+      });
+    }
     _cancelDictationRecording();
     // A Performance page still loading never lands in a closed window; opened
     // again, Ask AI shows the proposal (Codex review).
@@ -915,6 +1008,20 @@ class _MapSmartCardState extends State<MapSmartCard> {
   /// there to the map (Esc closes at once). A download or a connection under way
   /// goes on in the background: the window only closes.
   void _back() {
+    if (_previewBusy) return;
+    if (_step == _SmartStep.connectReview && !_applyingConnect) {
+      setState(() => _step = _previewOrigin);
+      return;
+    }
+    if (_step == _SmartStep.review || _step == _SmartStep.mcpForm) {
+      if (_step == _SmartStep.mcpForm) _clearMcpFields();
+      setState(() => _step = _SmartStep.proposal);
+      return;
+    }
+    if (_step == _SmartStep.error && _errorReturnTo != _SmartStep.idle) {
+      setState(() => _step = _errorReturnTo);
+      return;
+    }
     if (_step == _SmartStep.idle ||
         _step == _SmartStep.status ||
         _step == _SmartStep.running ||
@@ -930,6 +1037,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
   }
 
   void _backToIdle() {
+    _clearExchange();
     setState(() {
       _step = _SmartStep.idle;
       _errorText = '';
@@ -942,16 +1050,68 @@ class _MapSmartCardState extends State<MapSmartCard> {
     });
   }
 
-  void _tryAgain() {
-    if (_errorReturnTo == _SmartStep.proposal &&
-        _reply['status'] == 'proposal') {
-      setState(() {
-        _errorText = '';
-        _step = _SmartStep.proposal;
-      });
-    } else {
-      _backToIdle();
+  void _clearExchange() {
+    _previousContext = null;
+    _previousHelper = null;
+    _sharePrevious = false;
+    _lastClarification = null;
+    _partial = '';
+    _follow.clear();
+  }
+
+  bool get _mcpFormReady =>
+      _mcpAgents.isNotEmpty &&
+      (_activeCandidate?['needs'] as List? ?? const []).every(
+        (need) => _mcpFields[need['name']]?.text.trim().isNotEmpty == true,
+      );
+
+  void _leaveMcpForm() {
+    if (_applyingConnect) {
+      // The confirmed job only needs its plan handle after this window closes.
+      _previewOrigin = _SmartStep.proposal;
+      _errorReturnTo = _SmartStep.proposal;
+      _clearMcpFields();
+      return;
     }
+    if (_step == _SmartStep.mcpForm ||
+        (_step == _SmartStep.connectReview &&
+            _previewOrigin == _SmartStep.mcpForm) ||
+        (_step == _SmartStep.error && _errorReturnTo == _SmartStep.mcpForm)) {
+      _runToken++;
+      _previewBusy = false;
+      _step = _SmartStep.proposal;
+      _previewOrigin = _SmartStep.proposal;
+      _errorReturnTo = _SmartStep.proposal;
+      _connectPlan = const {};
+    }
+    _clearMcpFields();
+  }
+
+  void _clearMcpFields() {
+    final detached = _mcpFields.values.toList();
+    _mcpFields.clear();
+    // EditableText removes its listeners when the old form leaves the tree.
+    if (detached.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        for (final field in detached) {
+          field.clear();
+          field.dispose();
+        }
+      });
+    }
+  }
+
+  void _newQuestion() {
+    if (_previewBusy) return;
+    _runToken++;
+    _prompt.clear();
+    _activeProposal = null;
+    _activeCandidate = null;
+    _reviewData = const {};
+    _connectPlan = const {};
+    _clearMcpFields();
+    _reply = const {};
+    _backToIdle();
   }
 
   void _cancelTask({_SmartStep returnTo = _SmartStep.idle}) {
@@ -971,18 +1131,41 @@ class _MapSmartCardState extends State<MapSmartCard> {
   }
 
   Future<void> _ask({String? answer}) async {
-    final parsed = smartPromptRequest(_prompt.text, _column, widget.tr);
-    final request = parsed.request;
+    final parsed = smartPromptRequest(
+      _prompt.text,
+      widget.showBar ? _column : 'auto',
+      widget.tr,
+    );
+    final request = !widget.showBar && parsed.request.isNotEmpty
+        ? _prompt.text.trim()
+        : parsed.request;
     final helper = _activeHelper;
     final client = widget.client;
-    if (request.isEmpty || helper == null || client == null) return;
-    if (parsed.column != _column) {
+    if (_step == _SmartStep.working ||
+        _partial.isNotEmpty ||
+        request.isEmpty ||
+        request.length > 2000 ||
+        helper == null ||
+        client == null) {
+      return;
+    }
+    if (!widget.showBar && _step == _SmartStep.clarify && answer != null) {
+      final context = [
+        if (_previousContext != null) _previousContext,
+        _reply['question'],
+      ].join('\n');
+      _previousContext = context.substring(0, context.length.clamp(0, 3000));
+      _previousHelper = helper['command'] as String;
+    }
+    _lastClarification = answer;
+    if (widget.showBar && parsed.column != _column) {
       setState(() => _column = parsed.column);
       widget.onColumnChanged?.call(parsed.column);
     }
     final token = ++_runToken;
     setState(() {
       _step = _SmartStep.working;
+      _askStage = '';
       _activeTask = null;
       _errorText = '';
       _errorReturnTo = _SmartStep.idle;
@@ -990,13 +1173,19 @@ class _MapSmartCardState extends State<MapSmartCard> {
     _focusOpenCard();
     try {
       final started = await client.mapSmartAsk(
-        column: parsed.column,
+        column: widget.showBar ? parsed.column : 'auto',
+        context: widget.showBar || helper['command'] != _previousHelper
+            ? null
+            : _previousContext,
         command: '${helper['command']}',
         request: request,
         answer: answer,
       );
-      if (!mounted || token != _runToken) return;
       final taskId = started['task'] as String?;
+      if (!mounted || token != _runToken) {
+        if (taskId != null) await client.tasksCancel(task: taskId);
+        return;
+      }
       if (taskId == null || taskId.isEmpty) {
         setState(() {
           _errorText = failureText(widget.tr);
@@ -1014,10 +1203,12 @@ class _MapSmartCardState extends State<MapSmartCard> {
           final result =
               (status['result'] as Map?)?.cast<String, dynamic>() ?? const {};
           setState(() {
+            _sharePrevious = false;
             _reply = result;
             switch (result['status']) {
               case 'clarify':
                 _step = _SmartStep.clarify;
+              case 'answer':
               case 'redirect':
                 _step = _SmartStep.redirect;
               case 'proposal':
@@ -1043,13 +1234,17 @@ class _MapSmartCardState extends State<MapSmartCard> {
           });
           return;
         }
+        final stage = status['text'];
+        if (stage is String && stage != _askStage) {
+          setState(() => _askStage = stage);
+        }
         await Future<void>.delayed(const Duration(milliseconds: 200));
       }
-    } catch (_) {
+    } catch (error) {
       if (!mounted || token != _runToken) return;
       _activeTask = null;
       setState(() {
-        _errorText = failureText(widget.tr);
+        _errorText = failureText(widget.tr, error);
         _step = _SmartStep.error;
       });
     }
@@ -1069,33 +1264,40 @@ class _MapSmartCardState extends State<MapSmartCard> {
     final client = widget.client;
     final proposal = _reply['proposal'] as String?;
     if (client == null || proposal == null) return;
+    if (_previewBusy) return;
+    final token = ++_runToken;
+    final origin = _step;
+    setState(() {
+      _previewBusy = true;
+      _errorReturnTo = origin;
+    });
     try {
       final plan = await client.mapSmartReview(
         proposal: proposal,
         candidate: '${candidate['id']}',
       );
-      if (!mounted) return;
+      if (!mounted || token != _runToken) return;
       _close(refocus: false);
       widget.onTask?.call(plan);
-    } catch (_) {
-      if (!mounted) return;
+    } catch (error) {
+      if (!mounted || token != _runToken) return;
       setState(() {
-        _errorText = failureText(widget.tr);
+        _errorText = failureText(widget.tr, error);
         _step = _SmartStep.error;
       });
+    } finally {
+      if (mounted) setState(() => _previewBusy = false);
     }
   }
 
   /// An MCP candidate: the form when something is to choose or fill in, else
   /// the normal review at once.
   void _openMcp(String proposal, Map<String, dynamic> candidate) {
+    if (_previewBusy) return;
     _activeProposal = proposal;
     _activeCandidate = candidate;
     if (candidate['kind'] != 'mcp_add') {
-      for (final field in _mcpFields.values) {
-        field.dispose();
-      }
-      _mcpFields.clear();
+      _clearMcpFields();
       unawaited(
         _planMcp([
           for (final a in candidate['agents'] as List? ?? const []) '$a',
@@ -1103,10 +1305,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
       );
       return;
     }
-    for (final field in _mcpFields.values) {
-      field.dispose();
-    }
-    _mcpFields.clear();
+    _clearMcpFields();
     for (final need in (candidate['needs'] as List? ?? const []).cast<Map>()) {
       _mcpFields['${need['name']}'] = TextEditingController(
         text: '${need['value'] ?? ''}',
@@ -1125,7 +1324,13 @@ class _MapSmartCardState extends State<MapSmartCard> {
     final proposal = _activeProposal;
     final candidate = _activeCandidate;
     if (client == null || proposal == null || candidate == null) return;
+    if (_previewBusy || (_step == _SmartStep.mcpForm && !_mcpFormReady)) return;
     final token = ++_runToken;
+    final origin = _step;
+    setState(() {
+      _previewBusy = true;
+      _errorReturnTo = origin;
+    });
     try {
       final plan = await client.mapSmartPlan(
         proposal: proposal,
@@ -1135,6 +1340,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
       );
       if (!mounted || token != _runToken) return;
       setState(() {
+        _previewOrigin = origin;
         _connectPlan = plan;
         _step = _SmartStep.connectReview;
       });
@@ -1144,6 +1350,8 @@ class _MapSmartCardState extends State<MapSmartCard> {
         _errorText = failureText(widget.tr, error);
         _step = _SmartStep.error;
       });
+    } finally {
+      if (mounted && token == _runToken) setState(() => _previewBusy = false);
     }
   }
 
@@ -1212,12 +1420,24 @@ class _MapSmartCardState extends State<MapSmartCard> {
   ) async {
     final client = widget.client;
     if (client == null) return;
+    if (_previewBusy) return;
     final token = ++_runToken;
+    final origin = _step;
+    setState(() {
+      _previewBusy = true;
+      _errorReturnTo = origin;
+    });
     try {
       var review = await client.mapSmartReview(
         proposal: proposal,
         candidate: '${candidate['id']}',
       );
+      if (!mounted || token != _runToken) {
+        if (review['task'] is String) {
+          await client.tasksCancel(task: review['task'] as String);
+        }
+        return;
+      }
       // A folder move works out its preview as a task.
       if (review['task'] is String) {
         setState(() => _step = _SmartStep.working);
@@ -1246,13 +1466,15 @@ class _MapSmartCardState extends State<MapSmartCard> {
         _reviewData = review;
         _step = _SmartStep.review;
       });
-    } catch (_) {
+    } catch (error) {
       if (!mounted || token != _runToken) return;
       _activeTask = null;
       setState(() {
-        _errorText = failureText(widget.tr);
+        _errorText = failureText(widget.tr, error);
         _step = _SmartStep.error;
       });
+    } finally {
+      if (mounted) setState(() => _previewBusy = false);
     }
   }
 
@@ -1297,7 +1519,12 @@ class _MapSmartCardState extends State<MapSmartCard> {
         proposal: proposal,
         candidate: '${candidate['id']}',
       );
-      if (!mounted || token != _runToken) return;
+      if (!mounted || token != _runToken) {
+        if (started['task'] is String) {
+          await client.tasksCancel(task: started['task'] as String);
+        }
+        return;
+      }
       if (candidate['kind'] == 'agent_action') {
         // It runs in a terminal, not as a task: the app shows that terminal.
         _closeForTerminal();
@@ -1366,11 +1593,11 @@ class _MapSmartCardState extends State<MapSmartCard> {
         });
         await Future<void>.delayed(const Duration(milliseconds: 200));
       }
-    } catch (_) {
+    } catch (error) {
       if (!mounted || token != _runToken) return;
       _activeTask = null;
       setState(() {
-        _errorText = failureText(widget.tr);
+        _errorText = failureText(widget.tr, error);
         _step = _SmartStep.error;
       });
     }
@@ -1381,7 +1608,13 @@ class _MapSmartCardState extends State<MapSmartCard> {
     final proposal = _activeProposal;
     final candidate = _activeCandidate;
     if (client == null || proposal == null || candidate == null) return;
+    if (_previewBusy) return;
     final token = ++_runToken;
+    final origin = _step;
+    setState(() {
+      _previewBusy = true;
+      _errorReturnTo = origin;
+    });
     try {
       final plan = await client.mapSmartConnect(
         proposal: proposal,
@@ -1390,15 +1623,18 @@ class _MapSmartCardState extends State<MapSmartCard> {
       );
       if (!mounted || token != _runToken) return;
       setState(() {
+        _previewOrigin = origin;
         _connectPlan = plan;
         _step = _SmartStep.connectReview;
       });
-    } catch (_) {
+    } catch (error) {
       if (!mounted || token != _runToken) return;
       setState(() {
-        _errorText = failureText(widget.tr);
+        _errorText = failureText(widget.tr, error);
         _step = _SmartStep.error;
       });
+    } finally {
+      if (mounted) setState(() => _previewBusy = false);
     }
   }
 
@@ -1407,7 +1643,10 @@ class _MapSmartCardState extends State<MapSmartCard> {
     final planToken = _connectPlan['plan'] as String?;
     if (client == null || planToken == null || _applyingConnect) return;
     final token = ++_runToken;
-    _applyingConnect = true;
+    setState(() {
+      _applyingConnect = true;
+      _errorReturnTo = _previewOrigin;
+    });
     try {
       var result = await client.connectionsApply(plan: planToken);
       if (!mounted || token != _runToken) return;
@@ -1434,6 +1673,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
           await Future<void>.delayed(const Duration(milliseconds: 200));
         }
       }
+      _clearMcpFields();
       widget.onApplied?.call({
         ...result,
         if (_activeCandidate?['kind'] == 'model_disconnect')
@@ -1454,17 +1694,19 @@ class _MapSmartCardState extends State<MapSmartCard> {
         _step = _SmartStep.error;
       });
     } finally {
-      _applyingConnect = false;
+      if (mounted) setState(() => _applyingConnect = false);
     }
   }
 
   @override
   void dispose() {
+    if (_step == _SmartStep.working) _abortWorking();
     _cancelDictationRecording();
     smartHelperChosen.removeListener(_helperChanged);
     dictationChanged.removeListener(_loadDictation);
     if (_windowShown) _countWindow(-1);
     _runToken++;
+    _follow.dispose();
     _prompt.dispose();
     _examplesScroll.dispose();
     _promptEdit.dispose();
@@ -1475,6 +1717,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
     _barFocus.dispose();
     _cardFocus.dispose();
     _fieldFocus.dispose();
+    _followFocus.dispose();
     super.dispose();
   }
 
@@ -1482,13 +1725,26 @@ class _MapSmartCardState extends State<MapSmartCard> {
   /// while nothing has been asked yet.
   Widget _buildHelperChoice(ColorScheme colors) {
     final helper = _activeHelper;
-    if (helper == null) return const SizedBox.shrink();
+    if (widget.helpers.isEmpty ||
+        widget.checkingHelpers ||
+        widget.helpersFailed) {
+      return const SizedBox.shrink();
+    }
     final cost = widget.tr(
-      helper['local'] == true ? 'Local, no tokens' : 'Uses plan/tokens',
+      helper == null
+          ? ''
+          : helper['local'] == true
+          ? 'Local, no tokens'
+          : widget.showBar
+          ? 'Uses plan/tokens'
+          : 'Online · uses plan/tokens',
     );
     final free =
         _step == _SmartStep.idle ||
-        _step == _SmartStep.clarify ||
+        (!widget.showBar &&
+            !_previewBusy &&
+            (_step == _SmartStep.redirect || _step == _SmartStep.proposal)) ||
+        (_step == _SmartStep.clarify && widget.showBar) ||
         _step == _SmartStep.error ||
         _step == _SmartStep.status;
     return Row(
@@ -1496,7 +1752,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
       children: [
         Flexible(
           flex: 3,
-          child: widget.helpers.length > 1
+          child: widget.helpers.length > 1 || helper == null
               ? SizedBox(
                   width: 220,
                   child: DropdownButtonHideUnderline(
@@ -1504,7 +1760,8 @@ class _MapSmartCardState extends State<MapSmartCard> {
                       key: const ValueKey('smart-helper-select'),
                       isExpanded: true,
                       isDense: true,
-                      value: '${helper['command']}',
+                      value: helper?['command'] as String?,
+                      hint: Text(widget.tr('Choose a helper')),
                       onChanged: free
                           ? (value) {
                               if (value != null) {
@@ -1567,23 +1824,31 @@ class _MapSmartCardState extends State<MapSmartCard> {
     // Back in the header leaves the window; the footer only goes on.
     final back = TextButton(
       key: const ValueKey('smart-ask-again'),
-      onPressed: _backToIdle,
-      child: Text(tr('Ask again')),
+      onPressed: _previewBusy
+          ? null
+          : widget.showBar
+          ? _backToIdle
+          : _newQuestion,
+      child: Text(tr(widget.showBar ? 'Ask again' : 'New question')),
     );
     final onFirstAgent = widget.status?.onAction;
     return switch (_step) {
       _SmartStep.idle when !widget.takesRequests => const [],
-      _SmartStep.idle when widget.helpers.isEmpty => [
-        if (onFirstAgent != null)
-          OutlinedButton(
-            key: const ValueKey('smart-no-helper-action'),
-            onPressed: () {
-              _close(refocus: false);
-              onFirstAgent(const ['firstagent']);
-            },
-            child: Text(tr('Get started')),
-          ),
-      ],
+      _SmartStep.idle
+          when widget.helpers.isEmpty &&
+              !widget.checkingHelpers &&
+              !widget.helpersFailed =>
+        [
+          if (onFirstAgent != null)
+            OutlinedButton(
+              key: const ValueKey('smart-no-helper-action'),
+              onPressed: () {
+                _close(refocus: false);
+                onFirstAgent(const ['firstagent']);
+              },
+              child: Text(tr('Get started')),
+            ),
+        ],
       // Ask is the symbol in the field's corner (Enter).
       _SmartStep.idle => const [],
       _SmartStep.status => [
@@ -1607,14 +1872,12 @@ class _MapSmartCardState extends State<MapSmartCard> {
       _SmartStep.proposal => [back],
       _SmartStep.mcpForm => [
         TextButton(
-          onPressed: () => setState(() => _step = _SmartStep.proposal),
+          onPressed: _previewBusy ? null : _back,
           child: Text(tr('Cancel')),
         ),
         FilledButton(
           key: const ValueKey('smart-mcp-review'),
-          onPressed:
-              _mcpAgents.isNotEmpty &&
-                  _mcpFields.values.every((f) => f.text.trim().isNotEmpty)
+          onPressed: !_previewBusy && _mcpFormReady
               ? () => _planMcp(_mcpAgents.toList())
               : null,
           child: Text(tr('Review')),
@@ -1636,7 +1899,39 @@ class _MapSmartCardState extends State<MapSmartCard> {
         ),
       ],
       _SmartStep.error => [
-        FilledButton.tonal(onPressed: _tryAgain, child: Text(tr('Try again'))),
+        if (!widget.showBar && widget.helpers.isEmpty && onFirstAgent != null)
+          OutlinedButton(
+            onPressed: () {
+              _backToIdle();
+              _close(refocus: false);
+              onFirstAgent(const ['firstagent']);
+            },
+            child: Text(tr('Get started')),
+          ),
+        if (!widget.showBar && _errorReturnTo == _SmartStep.idle)
+          TextButton(onPressed: _backToIdle, child: Text(tr('Edit question'))),
+        FilledButton.tonal(
+          onPressed: widget.showBar
+              ? () {
+                  if (_errorReturnTo == _SmartStep.idle) {
+                    _backToIdle();
+                  } else {
+                    setState(() => _step = _errorReturnTo);
+                  }
+                }
+              : _errorReturnTo == _SmartStep.idle
+              ? (_activeHelper == null
+                    ? null
+                    : () => _ask(answer: _lastClarification))
+              : () => setState(() => _step = _errorReturnTo),
+          child: Text(
+            tr(
+              widget.showBar || _errorReturnTo == _SmartStep.idle
+                  ? 'Try again'
+                  : 'Back',
+            ),
+          ),
+        ),
       ],
       // Its own footer (TaskReview).
       _SmartStep.performance ||
@@ -1840,12 +2135,16 @@ class _MapSmartCardState extends State<MapSmartCard> {
   Future<void> _loadAskPrompts() async {
     final client = widget.client;
     if (client == null) return;
+    final generation = ++_suggestionsRead;
     try {
       final settings = await client.settingsGet();
-      if (!mounted) return;
-      setState(
-        () => _askPrompts = smartPromptsFromSetting(settings['ask_prompts']),
-      );
+      if (!mounted || generation != _suggestionsRead || _savingSuggestions) {
+        return;
+      }
+      setState(() {
+        _askPrompts = smartPromptsFromSetting(settings['ask_prompts']);
+        _suggestionsReady = true;
+      });
     } catch (_) {
       // Built-in suggestions until the settings can be read.
     }
@@ -1861,31 +2160,39 @@ class _MapSmartCardState extends State<MapSmartCard> {
   /// Keeps [items] as [column]'s suggestions (null: the built-in ones again)
   /// and saves the setting.
   Future<void> _storePrompts(String column, List<Object>? items) async {
-    final next = {..._askPrompts};
-    final builtins = smartBuiltinPrompts(column);
-    if (items == null ||
-        (items.length == builtins.length &&
-            [
-              for (var i = 0; i < items.length; i++) items[i] == builtins[i],
-            ].every((same) => same))) {
-      next.remove(column);
-    } else {
-      next[column] = items;
-    }
-    setState(() {
-      _askPrompts = next;
-      _editingPrompt = null;
-    });
     final client = widget.client;
-    if (client == null) return;
+    if (client == null || !_suggestionsReady || _savingSuggestions) return;
+    _suggestionsRead++;
+    setState(() => _savingSuggestions = true);
     try {
+      final settings = await client.settingsGet();
+      final raw = settings['ask_prompts'];
+      final next = {if (raw is Map) ...raw.cast<String, dynamic>()};
+      final current = smartPromptsFromSetting(raw);
+      if (!listEquals(current[column], _askPrompts[column])) {
+        if (mounted) setState(() => _askPrompts = current);
+        throw StateError('Suggestions changed');
+      }
+      if (items == null || listEquals(items, smartBuiltinPrompts(column))) {
+        next.remove(column);
+      } else {
+        next[column] = items;
+      }
       await client.settingsUpdate(values: {'ask_prompts': next});
+      if (mounted) {
+        setState(() {
+          _askPrompts = smartPromptsFromSetting(next);
+          _editingPrompt = null;
+        });
+      }
     } catch (_) {
       if (mounted) {
         setState(
           () => _promptNote = widget.tr('Could not save the suggestions.'),
         );
       }
+    } finally {
+      if (mounted) setState(() => _savingSuggestions = false);
     }
   }
 
@@ -1895,7 +2202,8 @@ class _MapSmartCardState extends State<MapSmartCard> {
     final text = smartPromptOneLine(
       smartPromptRequest(_prompt.text, _column, widget.tr).request,
     );
-    final items = _promptItems(_column);
+    final group = widget.showBar ? _column : 'general';
+    final items = _promptItems(group);
     String note;
     if (text.isEmpty) {
       note = widget.tr('Write a request first, then save it as a suggestion.');
@@ -1908,25 +2216,26 @@ class _MapSmartCardState extends State<MapSmartCard> {
           .tr('At most {0} suggestions: remove one first.')
           .replaceAll('{0}', '$smartPromptMax');
     } else {
-      unawaited(_storePrompts(_column, [...items, text]));
+      unawaited(_storePrompts(group, [...items, text]));
       note = widget.tr('Saved as suggestion.');
     }
     setState(() => _promptNote = note);
   }
 
-  void _removePrompt(int position) {
-    final items = [..._promptItems(_column)];
+  void _removePrompt(String group, int position) {
+    final items = [..._promptItems(group)];
     if (position < 0 || position >= items.length) return;
     items.removeAt(position);
-    unawaited(_storePrompts(_column, items));
+    unawaited(_storePrompts(group, items));
   }
 
-  void _startPromptEdit(int position) {
-    final items = _promptItems(_column);
+  void _startPromptEdit(String group, int position) {
+    final items = _promptItems(group);
     if (position < 0 || position >= items.length) return;
     _promptEdit.text = _promptText(items[position]);
     setState(() {
       _editingPrompt = position;
+      _editGroup = group;
       _promptNote = '';
     });
     _promptEditFocus.requestFocus();
@@ -1935,9 +2244,10 @@ class _MapSmartCardState extends State<MapSmartCard> {
   /// Enter or ✓ keeps the edit (an empty text removes the suggestion); Esc
   /// ends it unchanged.
   void _finishPromptEdit(bool save) {
+    final group = _editGroup ?? _column;
     final position = _editingPrompt;
     if (position == null) return;
-    final items = [..._promptItems(_column)];
+    final items = [..._promptItems(group)];
     final text = smartPromptOneLine(_promptEdit.text);
     if (!save ||
         position >= items.length ||
@@ -1945,7 +2255,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
       setState(() => _editingPrompt = null);
     } else if (text.isEmpty) {
       items.removeAt(position);
-      unawaited(_storePrompts(_column, items));
+      unawaited(_storePrompts(group, items));
     } else if (text.length > 2000) {
       setState(() => _promptNote = widget.tr('Too long for a suggestion.'));
       return;
@@ -1957,18 +2267,19 @@ class _MapSmartCardState extends State<MapSmartCard> {
       return;
     } else {
       items[position] = text;
-      unawaited(_storePrompts(_column, items));
+      unawaited(_storePrompts(group, items));
     }
     _fieldFocus.requestFocus();
   }
 
   void _pickPrompt(Object item) {
+    _clearExchange();
     // A started prompt keeps its trailing space: the user names the item.
     final title = _columnTitle;
     final example = item is int ? smartPromptExamples[item].$4 : item as String;
     final text = item is int ? widget.tr(example.trimRight()) : example;
     final prompt =
-        '${widget.tr(title)}: $text${item is int && example.endsWith(' ') ? ' ' : ''}';
+        '${widget.showBar ? '${widget.tr(title)}: ' : ''}$text${item is int && example.endsWith(' ') ? ' ' : ''}';
     setState(() {
       _prompt.text = prompt;
       _prompt.selection = TextSelection.collapsed(offset: prompt.length);
@@ -1976,8 +2287,8 @@ class _MapSmartCardState extends State<MapSmartCard> {
     _fieldFocus.requestFocus();
   }
 
-  Widget _buildPromptChip(int position, Object item) {
-    if (_editingPrompt == position) {
+  Widget _buildPromptChip(String group, int position, Object item) {
+    if (_editingPrompt == position && _editGroup == group) {
       return Row(
         key: const ValueKey('smart-prompt-editing'),
         mainAxisSize: MainAxisSize.min,
@@ -2027,7 +2338,9 @@ class _MapSmartCardState extends State<MapSmartCard> {
       children: [
         InputChip(
           key: ValueKey(
-            builtin != null ? 'smart-example-$item' : 'smart-own-$position',
+            builtin != null
+                ? 'smart-saved-example-$item'
+                : 'smart-own-$group-$position',
           ),
           avatar: builtin != null ? Icon(builtin.$2, size: 16) : null,
           label: ConstrainedBox(
@@ -2041,14 +2354,14 @@ class _MapSmartCardState extends State<MapSmartCard> {
           onPressed: () => _pickPrompt(item),
           deleteIcon: const Icon(Icons.close, size: 14),
           deleteButtonTooltipMessage: widget.tr('Remove suggestion'),
-          onDeleted: () => _removePrompt(position),
+          onDeleted: () => _removePrompt(group, position),
         ),
         IconButton(
-          key: ValueKey('smart-prompt-edit-$position'),
+          key: ValueKey('smart-prompt-edit-$group-$position'),
           visualDensity: VisualDensity.compact,
           tooltip: widget.tr('Edit suggestion'),
           icon: const Icon(Icons.edit_outlined, size: 14),
-          onPressed: () => _startPromptEdit(position),
+          onPressed: () => _startPromptEdit(group, position),
         ),
       ],
     );
@@ -2151,7 +2464,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
                       ).indexed)
                         Padding(
                           padding: const EdgeInsets.only(right: 6),
-                          child: _buildPromptChip(position, item),
+                          child: _buildPromptChip(_column, position, item),
                         ),
                       if (_askPrompts.containsKey(_column))
                         IconButton(
@@ -2187,7 +2500,268 @@ class _MapSmartCardState extends State<MapSmartCard> {
     );
   }
 
+  Widget _unifiedComposer(ColorScheme colors) {
+    final tr = widget.tr;
+    final groups = ['general', for (final entry in mapSmartColumns) entry.$1];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        CallbackShortcuts(
+          bindings: {
+            const SingleActivator(LogicalKeyboardKey.enter, control: true):
+                _newLine,
+            const SingleActivator(
+              LogicalKeyboardKey.numpadEnter,
+              control: true,
+            ): _newLine,
+          },
+          child: ValueListenableBuilder<TextEditingValue>(
+            valueListenable: _prompt,
+            builder: (context, value, _) {
+              final valid =
+                  smartPromptRequest(value.text, 'auto', tr).request.isEmpty
+                  ? ''
+                  : value.text.trim();
+              final ready =
+                  _activeHelper != null &&
+                  widget.client != null &&
+                  _partial.isEmpty &&
+                  valid.isNotEmpty &&
+                  valid.length <= 2000;
+              return TextField(
+                controller: _prompt,
+                focusNode: _fieldFocus,
+                autofocus: true,
+                minLines: 1,
+                maxLines: 4,
+                textInputAction: TextInputAction.send,
+                onSubmitted: (_) => _ask(),
+                decoration: InputDecoration(
+                  hintText: tr('Ask about your AI setup…'),
+                  helperText: _partial.isEmpty ? null : _partial,
+                  errorText: valid.length > 2000
+                      ? tr('Keep your question within 2,000 characters.')
+                      : null,
+                  border: controlBorder(context),
+                  suffixIcon: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (_voiceStatus.usable)
+                        MicButton(
+                          appId: 'com.maprisma.Maprisma',
+                          tr: tr,
+                          controller: _prompt,
+                          focusNode: _fieldFocus,
+                          onPartial: (text) {
+                            if (mounted) setState(() => _partial = text);
+                          },
+                        ),
+                      IconButton(
+                        key: const ValueKey('smart-send'),
+                        tooltip: tr('Ask'),
+                        onPressed: ready ? () => _ask() : null,
+                        icon: const Icon(Icons.send),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        _voiceNotice(),
+        if (widget.checkingHelpers)
+          Text(tr('Checking…'))
+        else if (widget.helpersFailed) ...[
+          Text(tr('This helper is not ready')),
+          OutlinedButton(
+            onPressed: widget.onCheckHelpers,
+            child: Text(tr('Try again')),
+          ),
+        ] else if (widget.helpers.isEmpty)
+          Text(tr('No AI helper is set up yet.')),
+        if (!widget.checkingHelpers &&
+            !widget.helpersFailed &&
+            widget.helpers.isNotEmpty &&
+            _activeHelper == null)
+          Text(tr('Choose a helper')),
+        const SizedBox(height: AppSpace.md),
+        Wrap(
+          key: const ValueKey('smart-prompt-examples'),
+          spacing: 8,
+          runSpacing: 6,
+          children: [
+            for (final (i, question) in [
+              (6, smartPromptExamples[6].$4),
+              (4, 'Why are answers slow on this PC?'),
+              (0, 'Help my agent search my notes'),
+              (2, smartPromptExamples[2].$4),
+            ])
+              if (_promptItems(smartPromptExamples[i].$1).contains(i))
+                ActionChip(
+                  key: ValueKey('smart-example-$i'),
+                  label: Text(tr(question)),
+                  onPressed: () => _pickPrompt(tr(question)),
+                ),
+          ],
+        ),
+        const SizedBox(height: AppSpace.sm),
+        Wrap(
+          children: [
+            TextButton.icon(
+              onPressed: () =>
+                  setState(() => _showSuggestions = !_showSuggestions),
+              key: const ValueKey('smart-all-suggestions'),
+              icon: const Icon(Icons.bookmarks_outlined),
+              label: Text(tr('My suggestions')),
+            ),
+            TextButton.icon(
+              key: const ValueKey('smart-save-prompt'),
+              onPressed: _suggestionsReady && !_savingSuggestions
+                  ? _saveAsPrompt
+                  : null,
+              icon: const Icon(Icons.bookmark_add_outlined),
+              label: Text(tr('Save as suggestion')),
+            ),
+          ],
+        ),
+        if (_showSuggestions)
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: [
+              for (final group in groups) ...[
+                for (final (i, item) in _promptItems(group).indexed)
+                  SizedBox(
+                    width: 286,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: _buildPromptChip(group, i, item),
+                      ),
+                    ),
+                  ),
+                if (_askPrompts.containsKey(group) && group != 'general')
+                  TextButton(
+                    onPressed: _savingSuggestions
+                        ? null
+                        : () => _storePrompts(group, null),
+                    child: Text(
+                      '${tr('Back to the built-in suggestions')} · ${tr(mapSmartColumns.firstWhere((e) => e.$1 == group).$2)}',
+                    ),
+                  ),
+              ],
+            ],
+          ),
+        if (_promptNote.isNotEmpty) Text(_promptNote),
+      ],
+    );
+  }
+
+  bool _canSendFollow(String text, bool clarification) =>
+      _activeHelper != null &&
+      !_previewBusy &&
+      _partial.isEmpty &&
+      text.trim().isNotEmpty &&
+      text.trim().length <= (clarification ? 200 : 2000) &&
+      (clarification ||
+          smartPromptRequest(text, 'auto', widget.tr).request.isNotEmpty);
+
+  Widget _responseField({bool clarification = false}) {
+    void submit() {
+      final text = _follow.text.trim();
+      if (!_canSendFollow(text, clarification)) return;
+      if (_previewBusy || _activeHelper == null) return;
+      if (clarification) {
+        _ask(answer: text);
+      } else {
+        final helper = _activeHelper;
+        if (helper == null) return;
+        final evidence = [
+          _prompt.text,
+          if (_lastClarification != null) _lastClarification,
+          _reply['summary'] ?? _reply['instead']?['hint'] ?? '',
+          for (final c in _reply['candidates'] as List? ?? const [])
+            '${c['title']} ${c['reason'] ?? ''}',
+        ].join('\n');
+        _previousContext =
+            _reply['helper'] == helper['command'] || _sharePrevious
+            ? evidence.substring(0, evidence.length.clamp(0, 3000))
+            : null;
+        _previousHelper = helper['command'] as String;
+        _prompt.text = text;
+        _ask();
+      }
+      _follow.clear();
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpace.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (!clarification && _reply['helper'] != _activeHelper?['command'])
+            CheckboxListTile(
+              value: _sharePrevious,
+              onChanged: (value) =>
+                  setState(() => _sharePrevious = value == true),
+              title: Text(
+                widget
+                    .tr('Share the previous exchange with {0}')
+                    .replaceAll('{0}', "${_activeHelper?['name']}"),
+              ),
+              controlAffinity: ListTileControlAffinity.leading,
+            ),
+          TextField(
+            key: const ValueKey('smart-follow-up'),
+            controller: _follow,
+            focusNode: _followFocus,
+            maxLength: clarification ? 200 : 2000,
+            decoration: InputDecoration(
+              border: controlBorder(context),
+              counterText: '',
+              helperText: _partial.isEmpty ? null : _partial,
+              hintText: widget.tr(
+                clarification ? 'Your answer' : 'Ask a follow-up…',
+              ),
+              suffixIcon: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (_voiceStatus.usable)
+                    MicButton(
+                      appId: 'com.maprisma.Maprisma',
+                      tr: widget.tr,
+                      controller: _follow,
+                      focusNode: _followFocus,
+                      onPartial: (text) {
+                        if (mounted) setState(() => _partial = text);
+                      },
+                    ),
+                  ValueListenableBuilder<TextEditingValue>(
+                    valueListenable: _follow,
+                    builder: (context, value, _) => IconButton(
+                      tooltip: widget.tr('Ask'),
+                      onPressed: _canSendFollow(value.text, clarification)
+                          ? submit
+                          : null,
+                      icon: const Icon(Icons.send),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            textInputAction: TextInputAction.send,
+            onSubmitted: (_) => submit(),
+          ),
+          _voiceNotice(),
+        ],
+      ),
+    );
+  }
+
   Widget _buildAsk(ColorScheme colors) {
+    if (!widget.showBar) return _unifiedComposer(colors);
     if (widget.helpers.isEmpty) {
       return Column(
         mainAxisSize: MainAxisSize.min,
@@ -2415,6 +2989,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
                   style: _statusButtonStyle,
                   onPressed: () {
                     setState(() {
+                      _clearExchange();
                       _prompt.text = text.isEmpty ? title : '$title — $text';
                       _step = _SmartStep.idle;
                     });
@@ -2671,10 +3246,15 @@ class _MapSmartCardState extends State<MapSmartCard> {
         const LinearProgressIndicator(),
         const SizedBox(height: 8),
         Text(
-          widget
-              .tr('{0} is checking {1}…')
-              .replaceAll('{0}', helperName)
-              .replaceAll('{1}', widget.tr(_columnTitle)),
+          _askStage.isNotEmpty && _askStage != 'Ask AI'
+              ? widget.tr(_askStage)
+              : widget
+                    .tr('{0} is checking {1}…')
+                    .replaceAll('{0}', helperName)
+                    .replaceAll(
+                      '{1}',
+                      widget.tr(widget.showBar ? _columnTitle : 'AI Map'),
+                    ),
           style: const TextStyle(fontSize: 12),
         ),
       ],
@@ -2706,6 +3286,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
               ),
           ],
         ),
+        if (!widget.showBar) _responseField(clarification: true),
       ],
     );
   }
@@ -2713,7 +3294,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
   Widget _buildRedirect() {
     final instead =
         (_reply['instead'] as Map?)?.cast<String, dynamic>() ?? const {};
-    final hint = '${instead['hint'] ?? ''}';
+    final hint = '${_reply['summary'] ?? instead['hint'] ?? ''}';
     final targetCol = instead['column'] as String?;
     final targetTitle = mapSmartColumns
         .where((c) => c.$1 == targetCol)
@@ -2724,7 +3305,29 @@ class _MapSmartCardState extends State<MapSmartCard> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SelectableText(hint, style: const TextStyle(fontSize: 12)),
+        if (!widget.showBar) ...[
+          Text(_prompt.text, style: Theme.of(context).textTheme.titleSmall),
+          const SizedBox(height: AppSpace.sm),
+        ],
+        SelectableText(hint),
+        for (final source in _reply['sources'] as List? ?? const [])
+          if (source is String && smartSource(source))
+            TextButton(
+              onPressed: () {
+                if (!openWebPage(
+                  source,
+                  Platform.environment['PATH'],
+                  Directory.current.path,
+                )) {
+                  ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+                    SnackBar(
+                      content: Text(widget.tr('Could not open the link.')),
+                    ),
+                  );
+                }
+              },
+              child: Text(source),
+            ),
         for (final c in (_reply['candidates'] as List? ?? const []).cast<Map>())
           if (c['kind'] == 'agent_task' && _reply['proposal'] is String) ...[
             const SizedBox(height: 8),
@@ -2741,7 +3344,8 @@ class _MapSmartCardState extends State<MapSmartCard> {
               ),
             ),
           ],
-        if (targetCol != null &&
+        if (widget.showBar &&
+            targetCol != null &&
             targetTitle != null &&
             targetCol != _column) ...[
           const SizedBox(height: 8),
@@ -2919,7 +3523,24 @@ class _MapSmartCardState extends State<MapSmartCard> {
                               _openReview(proposal, c);
                             }
                           },
-                          child: Text(widget.tr('Review')),
+                          child: Text(
+                            widget.tr(
+                              widget.showBar
+                                  ? 'Review'
+                                  : c['kind'] == null
+                                  ? 'Review download'
+                                  : c['step'] == 'performance'
+                                  ? 'Open Performance'
+                                  : const {
+                                      'map_edit',
+                                      'mcp_add',
+                                      'mcp_connect',
+                                      'skill_connect',
+                                    }.contains(c['kind'])
+                                  ? 'Review connection'
+                                  : 'Review',
+                            ),
+                          ),
                         ),
                       ),
                     ],
@@ -3175,9 +3796,11 @@ class _MapSmartCardState extends State<MapSmartCard> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             WindowHeader(
-              title: widget
-                  .tr('Ask AI · {0}')
-                  .replaceAll('{0}', widget.tr(_columnTitle)),
+              title: !widget.showBar && _step != _SmartStep.status
+                  ? widget.tr('Ask AI')
+                  : widget
+                        .tr('Ask AI · {0}')
+                        .replaceAll('{0}', widget.tr(_columnTitle)),
               tr: widget.tr,
               backKey: const ValueKey('smart-back'),
               onBack: _back,
@@ -3262,39 +3885,43 @@ class _MapSmartCardState extends State<MapSmartCard> {
                 child: ConnectionReview(
                   plan: _connectPlan,
                   tr: widget.tr,
+                  busy: _applyingConnect,
                   onConfirm: _applyConnect,
-                  onCancel: () {
-                    // An apply under way finishes: it has no way back.
-                    if (_applyingConnect) return;
-                    setState(
-                      () => _step = _activeCandidate?['kind'] == null
-                          ? _SmartStep.done
-                          : _SmartStep.proposal,
-                    );
-                  },
+                  onCancel: () => setState(() => _step = _previewOrigin),
                 ),
               )
             else
               Expanded(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.all(AppSpace.lg),
-                  child: switch (_step) {
-                    _SmartStep.status => _buildStatus(),
-                    _SmartStep.idle => _buildIdle(colors),
-                    _SmartStep.working => _buildWorking(),
-                    _SmartStep.clarify => _buildClarify(colors),
-                    _SmartStep.redirect => _buildRedirect(),
-                    _SmartStep.proposal => _buildProposal(colors),
-                    _SmartStep.mcpForm => _buildMcpForm(colors),
-                    _SmartStep.running => _buildRunning(),
-                    _SmartStep.done => _buildDone(),
-                    _SmartStep.error => _buildError(colors),
-                    _SmartStep.review ||
-                    _SmartStep.performance ||
-                    _SmartStep.connectReview => const SizedBox.shrink(),
-                  },
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      switch (_step) {
+                        _SmartStep.status => _buildStatus(),
+                        _SmartStep.idle => _buildIdle(colors),
+                        _SmartStep.working => _buildWorking(),
+                        _SmartStep.clarify => _buildClarify(colors),
+                        _SmartStep.redirect => _buildRedirect(),
+                        _SmartStep.proposal => _buildProposal(colors),
+                        _SmartStep.mcpForm => _buildMcpForm(colors),
+                        _SmartStep.running => _buildRunning(),
+                        _SmartStep.done => _buildDone(),
+                        _SmartStep.error => _buildError(colors),
+                        _SmartStep.review ||
+                        _SmartStep.performance ||
+                        _SmartStep.connectReview => const SizedBox.shrink(),
+                      },
+                      if (!widget.showBar &&
+                          (_step == _SmartStep.redirect ||
+                              _step == _SmartStep.proposal) &&
+                          _activeHelper != null)
+                        _responseField(),
+                    ],
+                  ),
                 ),
               ),
+            if (_previewBusy) const LinearProgressIndicator(),
             if (actions.isNotEmpty) WindowFooter(children: actions),
           ],
         ),

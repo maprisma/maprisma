@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -6,6 +7,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:maprisma/backend.dart';
 import 'package:maprisma/map_smart_card.dart';
 import 'package:maprisma/overlay_window.dart';
+import 'package:maprisma/voice_input.dart';
+import 'package:maprisma/mic_button.dart';
 
 void main() {
   const helpers = [
@@ -126,187 +129,387 @@ void main() {
       },
     );
 
-    testWidgets('own suggestions: save, edit, Esc, remove, built-in again', (
+    testWidgets('a late client preserves saved suggestions across edits', (
       tester,
     ) async {
-      final saved = <Object?>[];
-      Object? stored = {
+      var stored = <String, dynamic>{
         'agents': [2, 'Old own one'],
+        'models': ['Other model'],
       };
       final client = CoreClient.fromCall((method, params) async {
-        if (method == 'settings.get') return {'ask_prompts': stored};
         if (method == 'settings.update') {
-          stored = (params['values'] as Map)['ask_prompts'];
-          saved.add(stored);
-          return {'ask_prompts': stored};
+          stored = Map.from((params['values'] as Map)['ask_prompts'] as Map);
         }
+        return {'ask_prompts': stored};
+      });
+      await tester.pumpWidget(central(null, []));
+      await tester.pumpWidget(central(client, []));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), 'My new question');
+      await tester.tap(find.byKey(const ValueKey('smart-save-prompt')));
+      await tester.pumpAndSettle();
+      expect(stored, {
+        'agents': [2, 'Old own one'],
+        'models': ['Other model'],
+        'general': ['My new question'],
+      });
+      await tester.tap(find.byKey(const ValueKey('smart-all-suggestions')));
+      await tester.pumpAndSettle();
+      final own = find.byKey(const ValueKey('smart-own-agents-1'));
+      await tester.ensureVisible(own);
+      await tester.tap(own);
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        'Old own one',
+      );
+      final edit = find.byKey(const ValueKey('smart-prompt-edit-agents-1'));
+      await tester.ensureVisible(edit);
+      await tester.tap(edit);
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('smart-prompt-edit-field')),
+        'Edited',
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      expect(stored['agents'], [2, 'Edited']);
+      final remove = find.descendant(
+        of: own,
+        matching: find.byIcon(Icons.close),
+      );
+      await tester.ensureVisible(remove);
+      await tester.tap(remove);
+      await tester.pumpAndSettle();
+      expect(stored['agents'], [2]);
+      expect(stored['models'], ['Other model']);
+    });
+
+    testWidgets('Cancel before start acknowledgment cancels that job only', (
+      tester,
+    ) async {
+      final pending = Completer<Map<String, dynamic>>();
+      final cancelled = <Object?>[];
+      final client = CoreClient.fromCall((method, params) async {
+        if (method == 'map.smart_ask') return pending.future;
+        if (method == 'tasks.cancel') cancelled.add(params['task']);
         return {};
       });
       await tester.pumpWidget(central(client, []));
       await tester.pumpAndSettle();
-      // Loaded: one built-in kept, one own; the others of the category gone.
-      expect(find.byKey(const ValueKey('smart-example-2')), findsOneWidget);
-      expect(find.byKey(const ValueKey('smart-example-3')), findsNothing);
-      expect(find.byKey(const ValueKey('smart-own-1')), findsOneWidget);
-      expect(find.byKey(const ValueKey('smart-prompts-reset')), findsOneWidget);
-      // Save what is typed, its category prefix left out, spaces collapsed.
       await tester.enterText(
         find.byType(TextField),
-        'Agents:   Which   agents run now?',
+        'Which model fits my agent?',
       );
-      await tester.tap(find.byKey(const ValueKey('smart-save-prompt')));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('smart-send')));
+      await tester.pump();
+      await tester.tap(find.text('Cancel'));
+      pending.complete({'task': 'old-job'});
       await tester.pumpAndSettle();
-      expect(saved.last, {
-        'agents': [2, 'Old own one', 'Which agents run now?'],
-      });
-      await tester.tap(find.byKey(const ValueKey('smart-save-prompt')));
-      await tester.pumpAndSettle();
-      expect(find.text('That is already a suggestion.'), findsOneWidget);
-      expect(saved, hasLength(1));
-      // Edit the built-in one: Esc ends the edit only, Enter keeps it.
-      await tester.tap(find.byKey(const ValueKey('smart-prompt-edit-0')));
-      await tester.pumpAndSettle();
-      final field = find.byKey(const ValueKey('smart-prompt-edit-field'));
-      await tester.enterText(field, 'Changed');
-      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
-      await tester.pumpAndSettle();
-      expect(find.byType(OverlayWindow), findsOneWidget);
-      expect(field, findsNothing);
-      expect(saved, hasLength(1));
-      await tester.tap(find.byKey(const ValueKey('smart-prompt-edit-0')));
-      await tester.pumpAndSettle();
-      await tester.enterText(field, '  Which agents  need sign-in now? ');
-      await tester.testTextInput.receiveAction(TextInputAction.done);
-      await tester.pumpAndSettle();
-      expect(saved.last, {
-        'agents': [
-          'Which agents need sign-in now?',
-          'Old own one',
-          'Which agents run now?',
-        ],
-      });
-      // An own one fills the question with the category in front.
-      await tester.ensureVisible(find.byKey(const ValueKey('smart-own-1')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('smart-own-1')));
-      await tester.pumpAndSettle();
+      expect(cancelled, ['old-job']);
       expect(
-        tester.widget<TextField>(find.byType(TextField)).controller?.text,
-        'Agents: Old own one',
+        tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        'Which model fits my agent?',
       );
-      // × removes; ↺ brings back the built-in ones (the column is dropped).
-      final remove = find.descendant(
-        of: find.byKey(const ValueKey('smart-own-1')),
-        matching: find.byIcon(Icons.close),
-      );
-      await tester.ensureVisible(remove);
-      await tester.pumpAndSettle();
-      await tester.tap(remove);
-      await tester.pumpAndSettle();
-      expect(saved.last, {
-        'agents': ['Which agents need sign-in now?', 'Which agents run now?'],
-      });
-      await tester.ensureVisible(
-        find.byKey(const ValueKey('smart-prompts-reset')),
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('smart-prompts-reset')));
-      await tester.pumpAndSettle();
-      expect(saved.last, <String, Object>{});
-      for (final index in smartBuiltinPrompts('agents')) {
-        expect(find.byKey(ValueKey('smart-example-$index')), findsOneWidget);
-      }
-      expect(find.byKey(const ValueKey('smart-prompts-reset')), findsNothing);
-    });
-
-    testWidgets('an example fills the prompt and keeps the same window', (
-      tester,
-    ) async {
-      final changes = <String>[];
-      await tester.pumpWidget(central(null, changes));
-      await tester.pumpAndSettle();
-      final window = tester.state(find.byType(OverlayWindow));
-      expect(
-        find.byKey(const ValueKey('smart-prompt-examples')),
-        findsOneWidget,
-      );
-      // The category row first, then the chosen category's prompt helps.
-      expect(
-        find.byKey(const ValueKey('smart-category-models')),
-        findsOneWidget,
-      );
-      await tester.tap(find.byKey(const ValueKey('smart-category-mcp')));
-      await tester.pumpAndSettle();
-      expect(
-        find.byKey(const ValueKey('smart-category-card-mcp')),
-        findsOneWidget,
-      );
-      expect(find.byKey(const ValueKey('smart-example-2')), findsNothing);
-      await tester.ensureVisible(find.byKey(const ValueKey('smart-example-0')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('smart-example-0')));
-      await tester.pumpAndSettle();
-      expect(find.text('Ask AI · MCP servers and skills'), findsOneWidget);
-      expect(
-        tester.widget<TextField>(find.byType(TextField)).controller?.text,
-        'MCP servers and skills: Find an MCP server for my notes',
-      );
-      expect(tester.state(find.byType(OverlayWindow)), same(window));
-      expect(find.byKey(const ValueKey('smart-card')), findsOneWidget);
-      expect(changes, ['mcp']);
     });
 
     testWidgets(
-      'a category shows its presets; a started one waits for the name',
+      'Esc cancels a late job without interrupting a subsequent question',
       (tester) async {
-        await tester.pumpWidget(central(null, []));
-        await tester.pumpAndSettle();
-        await tester.tap(find.byKey(const ValueKey('smart-category-agents')));
-        await tester.pumpAndSettle();
-        expect(find.text('Update an agent…'), findsOneWidget);
-        expect(find.text('Download a model…'), findsNothing);
-        // The presets line scrolls sideways when it is too long.
-        await tester.ensureVisible(find.text('Update an agent…'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('Update an agent…'));
-        await tester.pumpAndSettle();
-        expect(
-          tester.widget<TextField>(find.byType(TextField)).controller?.text,
-          'Agents: Update the agent ',
+        final old = Completer<Map<String, dynamic>>();
+        final cancelled = <Object?>[];
+        var requests = 0;
+        final client = CoreClient.fromCall((method, params) async {
+          if (method == 'map.smart_ask') {
+            return ++requests == 1 ? old.future : {'task': 'second'};
+          }
+          if (method == 'tasks.cancel') cancelled.add(params['task']);
+          return {
+            'state': 'done',
+            'result': {
+              'status': 'answer',
+              'summary': 'Second answer',
+              'helper': 'a',
+            },
+          };
+        });
+        final visible = ValueNotifier(true);
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: ValueListenableBuilder<bool>(
+                valueListenable: visible,
+                builder: (_, open, _) => MapSmartCard(
+                  showBar: false,
+                  column: 'agents',
+                  title: 'Agents',
+                  open: open,
+                  onToggle: () => visible.value = !visible.value,
+                  tr: (s) => s,
+                  helpers: helpers,
+                  client: client,
+                ),
+              ),
+            ),
+          ),
         );
-        await tester.tap(find.byKey(const ValueKey('smart-category-models')));
         await tester.pumpAndSettle();
-        expect(find.text('Download a model…'), findsOneWidget);
-        expect(find.text('Update an agent…'), findsNothing);
+        await tester.enterText(find.byType(TextField), 'First');
+        await tester.testTextInput.receiveAction(TextInputAction.send);
+        await tester.pump();
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        await tester.pump();
+        expect(visible.value, isFalse);
+        visible.value = true;
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byType(TextField), 'Second');
+        await tester.testTextInput.receiveAction(TextInputAction.send);
+        await tester.pumpAndSettle();
+        old.complete({'task': 'first'});
+        await tester.pumpAndSettle();
+        expect(cancelled, ['first']);
+        expect(find.text('Second answer'), findsOneWidget);
       },
     );
 
-    testWidgets('a presets line too long for the window gets arrows', (
+    testWidgets(
+      'MCP review returns to the filled form and Apply submits once',
+      (tester) async {
+        final applied = Completer<Map<String, dynamic>>();
+        var asks = 0, applies = 0;
+        final plans = <Map<String, dynamic>>[];
+        final client = CoreClient.fromCall((method, params) async {
+          if (method == 'map.smart_ask') {
+            asks++;
+            return {'task': 'ask'};
+          }
+          if (method == 'map.smart_plan') {
+            plans.add(params);
+            return {
+              'plan': 'checked',
+              'files': [],
+              'links_add': [],
+              'links_remove': [],
+            };
+          }
+          if (method == 'connections.apply') {
+            applies++;
+            return applied.future;
+          }
+          if (method == 'tasks.status') {
+            return {
+              'state': 'done',
+              'result': {
+                'helper': 'a',
+                'status': 'proposal',
+                'proposal': 'p',
+                'agents': [
+                  {'command': 'a', 'name': 'Agent A', 'mcp': true},
+                ],
+                'candidates': [
+                  {
+                    'kind': 'mcp_add',
+                    'id': 'c1',
+                    'title': 'Notes',
+                    'agents': ['a'],
+                    'needs': [
+                      {'name': 'token', 'secret': true},
+                    ],
+                  },
+                ],
+              },
+            };
+          }
+          return {};
+        });
+        String? initialPrompt;
+        var notifications = 0;
+        final open = ValueNotifier(true);
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: ValueListenableBuilder<bool>(
+                valueListenable: open,
+                builder: (_, visible, _) => MapSmartCard(
+                  showBar: false,
+                  initialPrompt: initialPrompt,
+                  onApplied: (_) => notifications++,
+                  column: 'agents',
+                  title: 'Agents',
+                  open: visible,
+                  onToggle: () => open.value = !visible,
+                  tr: (s) => s,
+                  helpers: helpers,
+                  client: client,
+                ),
+              ),
+            ),
+          ),
+        );
+
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byType(TextField), 'Connect notes');
+        await tester.testTextInput.receiveAction(TextInputAction.send);
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('smart-review-c1')));
+        await tester.pumpAndSettle();
+        await tester.enterText(
+          find.byKey(const ValueKey('smart-mcp-need-token')),
+          'fixture value',
+        );
+        await tester.pump();
+        final review = find.byKey(const ValueKey('smart-mcp-review'));
+        await tester.tap(review);
+        await tester.pumpAndSettle();
+        expect(find.text('Configuration values stay private.'), findsOneWidget);
+        open.value = false;
+        await tester.pumpAndSettle();
+        open.value = true;
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('smart-review-c1')));
+        await tester.pumpAndSettle();
+        final secret = find.byKey(const ValueKey('smart-mcp-need-token'));
+        expect(tester.widget<TextField>(secret).controller!.text, isEmpty);
+        expect(tester.widget<FilledButton>(review).onPressed, isNull);
+        await tester.enterText(secret, 'fixture value');
+        await tester.pump();
+        await tester.tap(review);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Cancel'));
+        await tester.pumpAndSettle();
+        expect(
+          tester
+              .widget<TextField>(
+                find.byKey(const ValueKey('smart-mcp-need-token')),
+              )
+              .controller
+              ?.text,
+          'fixture value',
+        );
+        await tester.tap(review);
+        await tester.pumpAndSettle();
+        final apply = find.widgetWithText(FilledButton, 'Apply');
+        await tester.tap(apply);
+        await tester.pump();
+        expect(tester.widget<FilledButton>(apply).onPressed, isNull);
+        await tester.tap(apply);
+        open.value = false;
+        await tester.pump();
+        initialPrompt = 'Tell me about another model';
+        open.value = true;
+        await tester.pump();
+        expect(tester.widget<FilledButton>(apply).onPressed, isNull);
+        expect(find.byType(TextField), findsNothing);
+        applied.complete({'ok': true});
+        await tester.pumpAndSettle();
+        expect(asks, 1);
+        expect(applies, 1);
+        expect(notifications, 1);
+        expect(plans.length, 3);
+        expect(plans.last['values'], {'token': 'fixture value'});
+      },
+    );
+
+    testWidgets('online voice readiness and cost appear before recording', (
       tester,
     ) async {
-      tester.view.physicalSize = const Size(700, 700);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
+      final home = Directory.systemTemp.createTempSync('ask-voice');
+      final calls = File('${home.path}/calls');
+      final voice = File('${home.path}/maprisma-voice')
+        ..writeAsStringSync(
+          '#!/bin/sh\necho "\$1" >> "${calls.path}"\necho \'{"enabled":true,"ready":true,"engine":"online"}\'\n',
+        );
+      Process.runSync('chmod', ['+x', voice.path]);
+      VoiceInput.environment = {'HOME': home.path, 'PATH': home.path};
+      VoiceInput.forget();
+      addTearDown(() {
+        VoiceInput.environment = null;
+        VoiceInput.forget();
+        home.deleteSync(recursive: true);
+      });
       await tester.pumpWidget(central(null, []));
-      await tester.pumpAndSettle();
-      final left = find.byKey(const ValueKey('smart-presets-left'));
-      final right = find.byKey(const ValueKey('smart-presets-right'));
-      expect(left, findsNothing);
-      expect(right, findsOneWidget);
-      await tester.ensureVisible(right);
-      await tester.pumpAndSettle();
-      await tester.tap(right);
-      await tester.pumpAndSettle();
-      expect(left, findsOneWidget);
-      // Back to the start: the left arrow goes; the right one is there again.
-      for (var i = 0; i < 5 && left.evaluate().isNotEmpty; i++) {
-        await tester.tap(left);
-        await tester.pumpAndSettle();
+      for (
+        var i = 0;
+        i < 60 && find.byType(MicButton).evaluate().isEmpty;
+        i++
+      ) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 25)),
+        );
+        await tester.pump(const Duration(milliseconds: 25));
       }
-      expect(left, findsNothing);
-      expect(right, findsOneWidget);
-      expect(tester.takeException(), isNull);
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining('Online dictation may use API credit.'),
+        findsOneWidget,
+      );
+      expect(find.byType(MicButton), findsOneWidget);
+      expect(calls.readAsLinesSync(), everyElement('status'));
+    });
+
+    testWidgets(
+      'a missing saved helper keeps the draft until a replacement is chosen',
+      (tester) async {
+        smartHelperChosen.value = 'unavailable-local';
+        addTearDown(() => smartHelperChosen.value = null);
+        final requests = <Map<String, dynamic>>[];
+        final client = CoreClient.fromCall((method, params) async {
+          if (method == 'map.smart_ask') {
+            requests.add(params);
+            return {'task': 'ask'};
+          }
+          return {
+            'state': 'done',
+            'result': {'status': 'answer', 'summary': 'Ready', 'helper': 'b'},
+          };
+        });
+        await tester.pumpWidget(central(client, []));
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byType(TextField), 'Keep my question');
+        await tester.testTextInput.receiveAction(TextInputAction.send);
+        await tester.pumpAndSettle();
+        expect(requests, isEmpty);
+        expect(
+          tester
+              .widget<IconButton>(find.byKey(const ValueKey('smart-send')))
+              .onPressed,
+          isNull,
+        );
+        await tester.tap(find.byKey(const ValueKey('smart-helper-select')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Agent B').last);
+        await tester.pumpAndSettle();
+        expect(find.text('Online · uses plan/tokens'), findsOneWidget);
+        expect(requests, isEmpty);
+        await tester.tap(find.byKey(const ValueKey('smart-send')));
+        await tester.pumpAndSettle();
+        expect(requests.single['command'], 'b');
+        expect(requests.single['request'], 'Keep my question');
+      },
+    );
+
+    testWidgets('empty and overlong drafts cannot be submitted', (
+      tester,
+    ) async {
+      final requests = <Object?>[];
+      final client = CoreClient.fromCall((method, params) async {
+        if (method == 'map.smart_ask') requests.add(params);
+        return {};
+      });
+      await tester.pumpWidget(central(client, []));
+      await tester.pumpAndSettle();
+      IconButton send() =>
+          tester.widget(find.byKey(const ValueKey('smart-send')));
+      expect(send().onPressed, isNull);
+      await tester.enterText(find.byType(TextField), 'a' * 2000);
+      await tester.pump();
+      expect(send().onPressed, isNotNull);
+      await tester.enterText(find.byType(TextField), 'a' * 2001);
+      await tester.pump();
+      expect(send().onPressed, isNull);
+      await tester.testTextInput.receiveAction(TextInputAction.send);
+      expect(requests, isEmpty);
     });
 
     testWidgets('Back on a result goes to the main page, then to the map', (
@@ -555,61 +758,168 @@ void main() {
       );
       await tester.pumpWidget(central(client, []));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('smart-category-mcp')));
-      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('smart-categories')), findsNothing);
       await tester.ensureVisible(find.byKey(const ValueKey('smart-example-0')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('smart-example-0')));
       await tester.pumpAndSettle();
       expect(sent, isEmpty);
+      await tester.pump();
       await tester.tap(find.byKey(const ValueKey('smart-send')));
       await tester.pumpAndSettle();
-      expect(sent.single['column'], 'mcp');
-      expect(sent.single['request'], 'Find an MCP server for my notes');
+      expect(sent.single['column'], 'auto');
+      expect(sent.single['request'], 'Help my agent search my notes');
     });
 
-    testWidgets(
-      'Move to switches the category in place and keeps the question',
-      (tester) async {
-        final calls = <String>[];
-        final client = CoreClient(
-          _FakeTransport((method, params) async {
-            calls.add(method);
-            if (method == 'map.smart_ask') return {'task': 'ask'};
+    for (final share in [false, true]) {
+      testWidgets('switching a follow-up to online, share context = $share', (
+        tester,
+      ) async {
+        smartHelperChosen.value = 'a';
+        addTearDown(() => smartHelperChosen.value = null);
+        final requests = <Map<String, dynamic>>[];
+        final client = CoreClient.fromCall((method, params) async {
+          if (method == 'map.smart_ask') {
+            requests.add(params);
+            return {'task': 'ask'};
+          }
+          if (method == 'tasks.status') {
             return {
               'state': 'done',
               'result': {
-                'helper': 'Agent B',
-                'local': false,
-                'status': 'redirect',
-                'instead': {
-                  'hint': 'Models are managed in the Models column.',
-                  'column': 'models',
-                  'request': '',
+                'helper': requests.last['command'],
+                'status': 'answer',
+                'summary': 'Local answer',
+              },
+            };
+          }
+          return {};
+        });
+        await tester.pumpWidget(central(client, []));
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byType(TextField), 'Local question');
+        await tester.testTextInput.receiveAction(TextInputAction.send);
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('smart-helper-select')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Agent B').last);
+        await tester.pumpAndSettle();
+        final choice = find.widgetWithText(
+          CheckboxListTile,
+          'Share the previous exchange with Agent B',
+        );
+        expect(tester.widget<CheckboxListTile>(choice).value, false);
+        if (share) {
+          await tester.ensureVisible(choice);
+          await tester.tap(choice);
+          await tester.pumpAndSettle();
+        }
+        final field = find.byKey(const ValueKey('smart-follow-up'));
+        await tester.ensureVisible(field);
+        await tester.enterText(field, 'New question for B');
+        await tester.testTextInput.receiveAction(TextInputAction.send);
+        await tester.pumpAndSettle();
+        expect(requests.length, 2);
+        expect(requests.last['command'], 'b');
+        expect(
+          requests.last['context'],
+          share ? contains('Local answer') : isNull,
+        );
+      });
+    }
+
+    testWidgets(
+      'Back starts a fresh question and explicit prefixes reach auto intact',
+      (tester) async {
+        final requests = <Map<String, dynamic>>[];
+        final client = CoreClient.fromCall((method, params) async {
+          if (method == 'map.smart_ask') {
+            requests.add(params);
+            return {'task': 'ask'};
+          }
+          return {
+            'state': 'done',
+            'result': {
+              'status': 'answer',
+              'summary': 'Previous answer',
+              'helper': 'a',
+            },
+          };
+        });
+        await tester.pumpWidget(central(client, []));
+        await tester.pumpAndSettle();
+        Future<void> send(String text) async {
+          await tester.enterText(find.byType(TextField), text);
+          await tester.testTextInput.receiveAction(TextInputAction.send);
+          await tester.pumpAndSettle();
+        }
+
+        await send('First question');
+        await send('Tell me more');
+        expect(requests.last['context'], contains('First question'));
+        await tester.tap(find.text('Back').first);
+        await tester.pumpAndSettle();
+        await send('MCP: find notes');
+        expect(requests.last['column'], 'auto');
+        expect(requests.last['request'], 'MCP: find notes');
+        expect(requests.last.containsKey('context'), isFalse);
+      },
+    );
+
+    testWidgets(
+      'a clarification and follow-up retain the question and checked answer',
+      (tester) async {
+        final requests = <Map<String, dynamic>>[];
+        final client = CoreClient.fromCall((method, params) async {
+          if (method == 'map.smart_ask') {
+            requests.add(params);
+            return {'task': 'ask'};
+          }
+          if (method == 'tasks.status') {
+            return {
+              'state': 'done',
+              'result': {
+                'helper': 'a',
+                if (requests.length == 1) ...{
+                  'status': 'clarify',
+                  'question': 'Which agent?',
+                  'choices': [],
+                } else ...{
+                  'status': 'answer',
+                  'summary': 'The installed model fits.',
                 },
               },
             };
-          }),
+          }
+          return {};
+        });
+        await tester.pumpWidget(central(client, []));
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byType(TextField), 'What fits?');
+        await tester.testTextInput.receiveAction(TextInputAction.send);
+        await tester.pumpAndSettle();
+        await tester.enterText(
+          find.byKey(const ValueKey('smart-follow-up')),
+          'My local agent',
         );
-        final changes = <String>[];
-        await tester.pumpWidget(central(client, changes));
+        await tester.testTextInput.receiveAction(TextInputAction.send);
         await tester.pumpAndSettle();
-        final window = tester.state(find.byType(OverlayWindow));
-        await tester.enterText(find.byType(TextField), 'install qwencoder');
-        await tester.tap(find.byKey(const ValueKey('smart-send')));
+        expect(requests.last['answer'], 'My local agent');
+        expect(requests.last['context'], contains('Which agent?'));
+        await tester.enterText(
+          find.byKey(const ValueKey('smart-follow-up')),
+          'Why that one?',
+        );
+        await tester.testTextInput.receiveAction(TextInputAction.send);
         await tester.pumpAndSettle();
-        expect(find.text('Move to Models'), findsOneWidget);
-        calls.clear();
-        await tester.tap(find.text('Move to Models'));
+        expect(requests.last['request'], 'Why that one?');
+        expect(requests.last['context'], contains('The installed model fits.'));
+        await tester.tap(find.text('New question'));
         await tester.pumpAndSettle();
-        expect(find.text('Ask AI · Models'), findsOneWidget);
         expect(
-          tester.widget<TextField>(find.byType(TextField)).controller?.text,
-          'Models: install qwencoder',
+          tester.widget<TextField>(find.byType(TextField)).controller!.text,
+          isEmpty,
         );
-        expect(changes.last, 'models');
-        expect(calls, isEmpty); // nothing is asked again by itself
-        expect(tester.state(find.byType(OverlayWindow)), same(window));
       },
     );
   });

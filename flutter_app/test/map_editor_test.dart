@@ -1687,7 +1687,9 @@ void main() {
         _FakeSmartTransport((method, params) async {
           // Each card reads its saved suggestions (ask_prompts) once: a
           // read, not a request; the checks below are about Ask and tasks.
-          if (method == 'settings.get') return <String, dynamic>{};
+          if (method == 'settings.get' || method == 'dictation.snapshot') {
+            return <String, dynamic>{};
+          }
           calls.add((method, Map<String, dynamic>.from(params)));
           switch (method) {
             case 'map.smart_ask':

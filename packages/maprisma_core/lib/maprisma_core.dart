@@ -17,3 +17,4 @@ export 'src/core_tasks.dart'
         coreProviderRun;
 export 'src/clipboard.dart' show boundedClipboardText, maxTerminalPaste;
 export 'src/report_format.dart' show formatTopicReport;
+export 'src/smart_card.dart' show smartSource;

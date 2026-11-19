@@ -15,7 +15,10 @@ Map<String, dynamic> single(Map<String, dynamic> result) =>
 
 /// Pi on Ollama with two models, its default the second; this PC's own
 /// processes and system folders are left out of the scan.
-({Directory home, CoreService core}) localSetup({List? rules}) {
+({Directory home, CoreService core}) localSetup({
+  List? rules,
+  Map<String, String> environment = const {},
+}) {
   final home = Directory.systemTemp.createTempSync('ask-menus');
   addTearDown(() => home.deleteSync(recursive: true));
   final bin = Directory('${home.path}/bin')..createSync();
@@ -58,6 +61,7 @@ Map<String, dynamic> single(Map<String, dynamic> result) =>
       'MAPRISMA_DESKTOP': 'generic',
       'MAPRISMA_SCAN_PROC': '${home.path}/proc',
       'MAPRISMA_SCAN_SYSTEM_ROOT': home.path,
+      ...environment,
     },
   );
   return (home: home, core: core);
@@ -89,6 +93,133 @@ Map<String, dynamic> deny(
 };
 
 void main() {
+  test(
+    'the sign-in diagnostic distinguishes two installed agents with login actions',
+    () {
+      final (:core, home: _) = localSetup(
+        environment: {'OPENAI_API_KEY': 'test-fixture'},
+      );
+      final result = core.smartRoute('map.smart_ask', {
+        'column': 'auto',
+        'command': 'unused',
+        'request': 'Which agents need sign-in?',
+      });
+      final summary =
+          core.tasks.status(result['task'])['result']['summary'] as String;
+      expect(summary, contains('Claude Code'));
+      expect(summary, isNot(contains('Pi')));
+    },
+  );
+
+  test('denying the optional task keeps a sourced answer readable', () async {
+    final (:core, home: _) = localSetup(
+      rules: allowAll([deny('start', 'agents')]),
+    );
+    final web = await smartFinish(
+      {'status': 'lookup', 'question': 'Documentation?'},
+      reply(
+        '{"answer":"Read the manual.","sources":["https://example.test/manual","file:///tmp/no"]}',
+      ),
+      task: 'pi',
+      directAnswer: true,
+    );
+    final result = core.finalizeSmartAsk({
+      ...web,
+      'helper': 'pi',
+      'local': false,
+    });
+    expect(result['status'], 'answer');
+    expect(result['summary'], 'Read the manual.');
+    expect(result['sources'], ['https://example.test/manual']);
+    expect(result['candidates'], isEmpty);
+    expect(result.containsKey('proposal'), isFalse);
+  });
+
+  test(
+    'update diagnostics respect the original agent and MCP cache timestamps',
+    () async {
+      final (:core, home: _) = localSetup();
+      final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+      final agentCache = File('${core.identity.cacheDir}/updates.json')
+        ..createSync(recursive: true);
+      final mcpCache = File(core.mcpUpdatesCache)..createSync(recursive: true);
+      core.mcpCheckForced = true;
+      core.tasks.workerCommand
+        ..clear()
+        ..addAll([
+          '/bin/sh',
+          '-c',
+          '''read -r request
+echo '{"type":"result","result":{"updates":[{"kind":"agent","key":"pi","name":"Pi","current":"1","available":"2"}]}}' ''',
+        ]);
+      String ask(String text) {
+        final job = core.smartRoute('map.smart_ask', {
+          'column': 'auto',
+          'command': 'unused',
+          'request': text,
+        });
+        return core.tasks.status(job['task'])['result']['summary'] as String;
+      }
+
+      for (final fresh in [true, false]) {
+        final checked = fresh ? now : now - const Duration(days: 3).inSeconds;
+        agentCache.writeAsStringSync(
+          jsonEncode({'checked': checked, 'updates': []}),
+        );
+        mcpCache.writeAsStringSync(
+          jsonEncode({'checked': checked, 'ok': true, 'found': []}),
+        );
+        final update = core.updatesRoute('updates.check', {});
+        for (
+          var i = 0;
+          i < 100 && core.tasks.status(update['task'])['state'] == 'running';
+          i++
+        ) {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+        expect(core.tasks.status(update['task'])['state'], 'done');
+        expect(
+          ask('Which agents have updates?'),
+          fresh
+              ? contains('Pi · 1 → 2')
+              : 'No recent update check is available.',
+        );
+        expect(
+          ask('Which MCP servers have updates?'),
+          fresh ? 'None' : 'No recent update check is available.',
+        );
+      }
+    },
+  );
+
+  test(
+    'preset diagnostics use current local facts with the normal task contract',
+    () {
+      final (:core, home: _) = localSetup();
+      for (final q in [
+        'Which agents have updates?',
+        'Which MCP servers have updates?',
+        'Which agents need sign-in?',
+      ]) {
+        final result = core.smartRoute('map.smart_ask', {
+          'column': 'auto',
+          'command': 'unused',
+          'request': q,
+        });
+        final status = core.tasks.status(result['task']);
+        expect(status['state'], 'done');
+        expect(status['result']['status'], 'answer');
+        expect(status['result']['summary'], isNotEmpty);
+        if (q.contains('updates')) {
+          expect(
+            status['result']['summary'],
+            'No recent update check is available.',
+          );
+        }
+      }
+    },
+  );
+
   group('F12/F13: connecting a model after its download', () {
     test('the download names the agents the manual Connect offers', () async {
       final facts = {
@@ -492,6 +623,22 @@ void main() {
         ('menu_action', 'mcp', 'unpack'),
       );
       expect(smartCandidateChecks(c), isEmpty);
+    });
+
+    test('a denied proposal still identifies the helper that answered', () {
+      final (:core, home: _) = localSetup(
+        rules: allowAll([deny('start', 'agents')]),
+      );
+      final result = core.finalizeSmartAsk({
+        'status': 'proposal',
+        'helper': 'pi',
+        'local': false,
+        'candidates': [smartMenuCandidate(1, 'agents', 'start', 'pi', 'Pi')],
+      });
+      expect(result['helper'], 'pi');
+      expect(result['local'], false);
+      expect(result['instead']['hint'], smartNotAllowed);
+      expect(result.containsKey('proposal'), isFalse);
     });
 
     test('a refused menu action never reaches the card', () {

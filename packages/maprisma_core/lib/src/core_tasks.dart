@@ -99,6 +99,18 @@ final class CoreTasks {
     Map<String, dynamic> Function(Map<String, dynamic>) finalize,
   ) => startPrivate('connections.apply', body, finalize);
 
+  /// Immediately available map facts use the same task/status contract as a helper.
+  Map<String, dynamic> completed(
+    String operation,
+    Map<String, dynamic> result,
+  ) {
+    final id = _slot(operation, null);
+    items[id]!
+      ..state = 'done'
+      ..result = result;
+    return {'task': id};
+  }
+
   /// A private operation: its body on the worker's stdin, never in argv
   /// (flutter_tasks._private).
   Map<String, dynamic> startPrivate(

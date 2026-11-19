@@ -2992,10 +2992,15 @@ final class CoreService {
 
   /// The updates the last check found (updates.check), for updates.run.
   List<Map<String, dynamic>> lastUpdates = [];
+  DateTime? _updatesCheckedAt;
+  bool get _updatesFresh =>
+      _updatesCheckedAt != null &&
+      DateTime.now().difference(_updatesCheckedAt!) < const Duration(hours: 6);
 
   /// agent_updates.forget: ask again on the next check (after an update,
   /// or one handed to a helper: a cancelled one is simply found again).
   void _forgetUpdates() {
+    _updatesCheckedAt = null;
     try {
       final cache = File(p.join(identity.cacheDir, 'updates.json'));
       if (cache.existsSync()) cache.deleteSync();
@@ -3032,6 +3037,15 @@ final class CoreService {
         'updates.check',
         {'settings_path': identity.settingsPath},
         (result) {
+          final checked = reads.files.json(
+            p.join(identity.cacheDir, 'updates.json'),
+          )['checked'];
+          _updatesCheckedAt =
+              checked is num &&
+                  checked > 0 &&
+                  checked <= DateTime.now().millisecondsSinceEpoch / 1000
+              ? DateTime.fromMillisecondsSinceEpoch((checked * 1000).floor())
+              : null;
           lastUpdates = [
             for (final u in result['updates'] as List)
               {
@@ -3196,6 +3210,72 @@ final class CoreService {
     ];
   }
 
+  bool? _signInObserved(AgentRecord agent) {
+    final access = agent.adapter.table('access');
+    if ((access['env'] as List? ?? const []).isEmpty &&
+        (access['files'] as List? ?? const []).isEmpty) {
+      return null;
+    }
+    return reads.graph.signedIn(agent);
+  }
+
+  bool get _mcpUpdatesFresh =>
+      (settings.load()['ai_checks'] == true || mcpCheckForced) &&
+      mcp_updates.readCache(mcpUpdatesCache)['ok'] == true &&
+      !mcp_updates.due(
+        DateTime.now().millisecondsSinceEpoch / 1000,
+        mcpUpdatesCache,
+      );
+
+  List<mcp_updates.McpFound> _openMcpUpdates() => mcp_updates.stillOpen(
+    mcp_updates.cached(mcpUpdatesCache),
+    mcp_updates.installedServers(mcp.library(), identity.home),
+  );
+
+  String? _diagnosticAnswer(String request) {
+    bool asks(String prompt) => [
+      prompt,
+      i18n.text(prompt),
+    ].any((text) => text.toLowerCase() == request.trim().toLowerCase());
+    final lines = <String>[];
+    if (asks('Which agents need sign-in?')) {
+      for (final agent in reads.catalog.scan().where(
+        (a) =>
+            a.installed &&
+            (_signInObserved(a) != null ||
+                reads.details.actions(a)['login'] == true),
+      )) {
+        final signed = _signInObserved(agent);
+        if (signed != true) {
+          lines.add(
+            signed == false
+                ? agent.name
+                : '${agent.name} · ${i18n.text('Unknown')}',
+          );
+        }
+      }
+    } else if (asks('Which agents have updates?')) {
+      if (!_updatesFresh) {
+        return i18n.text('No recent update check is available.');
+      }
+      lines.addAll(
+        lastUpdates
+            .where((u) => u['kind'] == 'agent')
+            .map((u) => "${u['name']} · ${u['current']} → ${u['available']}"),
+      );
+    } else if (asks('Which MCP servers have updates?')) {
+      if (!_mcpUpdatesFresh) {
+        return i18n.text('No recent update check is available.');
+      }
+      lines.addAll(
+        _openMcpUpdates().map((u) => '${u.name} · ${u.current} → ${u.latest}'),
+      );
+    } else {
+      return null;
+    }
+    return lines.isEmpty ? i18n.text('None') : lines.join('\n');
+  }
+
   Map<String, dynamic> smartRoute(String method, Map<String, dynamic> params) {
     if (method == 'map.smart_helpers') {
       if (params.isNotEmpty) throw const FormatException('Invalid request');
@@ -3204,17 +3284,37 @@ final class CoreService {
     if (method == 'map.smart_ask') {
       final column = params['column'], command = params['command'];
       final request = params['request'], answer = params['answer'];
+      final context = params['context'];
+      final auto = column == 'auto';
       if (params.keys.any(
-            (k) =>
-                !const {'column', 'command', 'request', 'answer'}.contains(k),
+            (k) => !const {
+              'column',
+              'command',
+              'request',
+              'answer',
+              'context',
+            }.contains(k),
           ) ||
-          !smartColumns.contains(column) ||
+          (!auto && !smartColumns.contains(column)) ||
+          context != null &&
+              (!auto || context is! String || context.length > 3000) ||
           command is! String ||
           request is! String ||
           request.trim().isEmpty ||
           request.length > 2000 ||
           answer != null && (answer is! String || answer.length > 200)) {
         throw const FormatException('Invalid request');
+      }
+      if (auto && context == null && answer == null) {
+        final diagnostic = _diagnosticAnswer(request);
+        if (diagnostic != null) {
+          return tasks.completed(method, {
+            'status': 'answer',
+            'summary': diagnostic,
+            'helper': command,
+            'local': true,
+          });
+        }
       }
       if (!smartHelpers().any((h) => h['command'] == command)) {
         throw const FormatException('This helper is not ready');
@@ -3226,6 +3326,9 @@ final class CoreService {
         'agents',
         'inventory',
       }, true);
+      final inventory = reads.mapInventory;
+      late final providers = (reads.providersSnapshot()['local'] as List)
+          .cast<Map>();
       final engines = providerFacts['engines'] as Map;
       final running = {
         for (final n in (mapGraph['nodes'] as List).cast<Map>())
@@ -3239,6 +3342,7 @@ final class CoreService {
           'shown': command,
           'request': request.trim(),
           'answer': ?answer,
+          'context': ?context,
           'language': i18n.language,
           'action_rules': _rulesForHelper(column),
           'rule_hints': settings.value(settings.load(), 'action_rule_hints'),
@@ -3267,12 +3371,13 @@ final class CoreService {
                           .isNotEmpty,
                 },
           },
-          if (column == 'agents' || column == 'providers')
+          if (auto)
+            'addons': [..._smartAddonFacts(true), ..._smartAddonFacts(false)]
+          else if (column == 'agents' || column == 'providers')
             'addons': _smartAddonFacts(column == 'agents'),
-          if (column == 'models') ...{
+          if (auto || column == 'models') ...{
             'runtime_actions': [
-              for (final rt
-                  in (reads.providersSnapshot()['local'] as List).cast<Map>())
+              for (final rt in providers)
                 if (rt['installed'] == true &&
                     (rt['can_import'] == true || rt['can_load'] == true))
                   {
@@ -3293,10 +3398,9 @@ final class CoreService {
                   {'command': a.command, 'name': a.name},
             ],
           },
-          if (column == 'providers')
+          if (auto || column == 'providers')
             'providers': [
-              for (final rt
-                  in (reads.providersSnapshot()['local'] as List).cast<Map>())
+              for (final rt in providers)
                 {
                   'key': rt['key'],
                   'name': rt['name'],
@@ -3309,7 +3413,7 @@ final class CoreService {
                   'performance': rt['installed'] == true,
                 },
             ],
-          if (column == 'agents')
+          if (auto || column == 'agents')
             'agents': [
               for (final a in agents)
                 () {
@@ -3319,6 +3423,15 @@ final class CoreService {
                     'name': a.name,
                     'installed': a.installed,
                     'version': a.version,
+                    if (auto && a.installed) ...{
+                      'signed_in': _signInObserved(a),
+                      'update_available': _updatesFresh
+                          ? lastUpdates.any(
+                              (u) =>
+                                  u['kind'] == 'agent' && u['key'] == a.command,
+                            )
+                          : null,
+                    },
                     'install': !a.installed && can['install'] == true,
                     'update': can['update'] == true,
                     'remove': can['uninstall'] == true,
@@ -3338,10 +3451,16 @@ final class CoreService {
                   };
                 }(),
             ],
-          if (column == 'models') ..._moveFacts(),
-          if (column == 'mcp') ...smartMcpFacts(agents),
+          if (auto || column == 'models') ..._moveFacts(),
+          if (column == 'mcp') ...smartMcpFacts(agents, inventory),
+          if (auto) 'mcp_facts': smartMcpFacts(agents, inventory),
+          if (auto && _mcpUpdatesFresh)
+            'mcp_updates': [
+              for (final u in _openMcpUpdates())
+                {'name': u.name, 'current': u.current, 'latest': u.latest},
+            ],
           'runtimes': [
-            for (final rt in reads.inventory.collect(agents).runtimes)
+            for (final rt in inventory.runtimes)
               if (rt.installed && _takesDownloads(rt, engines))
                 {
                   'key': rt.key,
@@ -3352,9 +3471,8 @@ final class CoreService {
                 },
           ],
           'model_users': () {
-            reads.buildMap(); // Once, for all of them: a request sees today.
             return [
-              for (final rt in reads.inventory.collect(agents).runtimes)
+              for (final rt in inventory.runtimes)
                 if (rt.installed && rt.models.isNotEmpty)
                   {
                     'key': rt.key,
@@ -3375,12 +3493,7 @@ final class CoreService {
       if (body.length > 256 * 1024) {
         throw const FormatException('Request too large');
       }
-      return tasks.startPrivate(
-        'map.smart_ask',
-        body,
-        (result) =>
-            smartProposals.keep(smartWorded(_dropRefused(result), i18n.text)),
-      );
+      return tasks.startPrivate('map.smart_ask', body, finalizeSmartAsk);
     }
     if (method == 'map.smart_plan') return _smartPlan(params);
     final fields = {
@@ -3587,7 +3700,7 @@ final class CoreService {
     String label(Map n) {
       final path = '${n['path']}';
       if (n['kind'] != 'disk') return p.basename(path);
-      return path == identity.home ? '~' : path;
+      return path == identity.home ? '~' : p.basename(path);
     }
 
     List<Map> short(String prefix, bool Function(Map) wanted) => [
@@ -3609,8 +3722,11 @@ final class CoreService {
   /// Ask AI's facts of the MCP column: the agents, each MCP server by the
   /// map's id (another of one name is name~2) with the agents that use that
   /// very server, and the skill folders by short ids.
-  Map<String, dynamic> smartMcpFacts(List<AgentRecord> agents) {
-    final inventory = reads.inventory.collect(agents);
+  Map<String, dynamic> smartMcpFacts(
+    List<AgentRecord> agents, [
+    InventorySnapshot? snapshot,
+  ]) {
+    final inventory = snapshot ?? reads.inventory.collect(agents);
     final installed = agents.where((a) => a.installed).toList();
     return {
       'agents': [
@@ -4439,6 +4555,7 @@ final class CoreService {
   /// short id the helper knows it by, never by its path.
   List<Map<String, dynamic>> _rulesForHelper(Object? column) {
     final mine = switch (column) {
+      'auto' => const ['mcp', 'skills', 'agents', 'providers', 'models'],
       'mcp' => const ['mcp', 'skills'],
       'agents' => const ['agents'],
       'providers' => const ['providers'],
@@ -4465,6 +4582,10 @@ final class CoreService {
           },
     ];
   }
+
+  /// Check action rules at delivery and keep executable actions behind local handles.
+  Map<String, dynamic> finalizeSmartAsk(Map<String, dynamic> result) =>
+      smartProposals.keep(smartWorded(_dropRefused(result), i18n.text));
 
   /// Refused candidates do not reach the card: a disconnect keeps what may
   /// go, a web answer stays without its button.
@@ -4517,12 +4638,16 @@ final class CoreService {
         kept.add(c);
       }
     }
-    if (kept.isNotEmpty || result['instead'] != null) {
+    if (kept.isNotEmpty ||
+        result['instead'] != null ||
+        result['status'] == 'answer') {
       return {...result, 'candidates': kept};
     }
     return list.isEmpty
         ? result
         : {
+            if (result['helper'] != null) 'helper': result['helper'],
+            if (result['local'] != null) 'local': result['local'],
             'status': 'redirect',
             'instead': {
               'hint': smartNotAllowed,
@@ -5461,6 +5586,16 @@ final class CoreService {
     throw ServiceError('unported_route');
   }
 
+  Map<String, String> _invalidRequest(FormatException error) => {
+    'code': 'invalid_request',
+    if (const {
+      'This proposal has expired',
+      'This model is not on this PC yet',
+      'This helper is not ready',
+    }.contains(error.message))
+      'message': i18n.text(error.message),
+  };
+
   String handle(String frame) {
     int? id;
     Map<String, dynamic> response;
@@ -5487,11 +5622,8 @@ final class CoreService {
         'id': id,
         'error': {'code': 'action_refused', 'message': e.message},
       };
-    } on FormatException {
-      response = {
-        'id': id,
-        'error': {'code': 'invalid_request'},
-      };
+    } on FormatException catch (error) {
+      response = {'id': id, 'error': _invalidRequest(error)};
     } on TypeError {
       response = {
         'id': id,
@@ -5621,11 +5753,8 @@ final class CoreService {
         'id': id,
         'error': {'code': 'action_refused', 'message': e.message},
       };
-    } on FormatException {
-      response = {
-        'id': id,
-        'error': {'code': 'invalid_request'},
-      };
+    } on FormatException catch (error) {
+      response = {'id': id, 'error': _invalidRequest(error)};
     } on TypeError {
       response = {
         'id': id,

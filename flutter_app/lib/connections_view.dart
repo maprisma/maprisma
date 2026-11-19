@@ -511,10 +511,12 @@ class ConnectionReview extends StatelessWidget {
   const ConnectionReview({
     super.key,
     required this.plan,
+    this.busy = false,
     required this.tr,
     required this.onConfirm,
     required this.onCancel,
   });
+  final bool busy;
   final Map<String, dynamic> plan;
   final String Function(String) tr;
   final VoidCallback onConfirm;
@@ -596,9 +598,14 @@ class ConnectionReview extends StatelessWidget {
       ),
     ),
     actions: [
-      TextButton(onPressed: onCancel, child: Text(tr('Cancel'))),
+      if (busy)
+        const SizedBox.square(
+          dimension: 18,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      TextButton(onPressed: busy ? null : onCancel, child: Text(tr('Cancel'))),
       FilledButton(
-        onPressed: plan['empty'] == true ? null : onConfirm,
+        onPressed: busy || plan['empty'] == true ? null : onConfirm,
         child: Text(tr('Apply')),
       ),
     ],

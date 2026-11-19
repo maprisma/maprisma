@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:maprisma_core/maprisma_core.dart';
 import 'package:maprisma_core/src/adapters.dart';
+import 'package:maprisma_core/src/model_hub.dart' show ModelHub;
 import 'package:maprisma_core/src/smart_card.dart';
 import 'package:test/test.dart';
 
@@ -979,6 +980,167 @@ void main() {
         throwsFormatException,
       );
       expect(kept.keep({'status': 'clarify'}).containsKey('proposal'), isFalse);
+    },
+  );
+
+  test(
+    'one helper decision answers or selects a checked operation across the map',
+    () async {
+      final home = Directory.systemTemp.createTempSync('smart-auto');
+      addTearDown(() => home.deleteSync(recursive: true));
+      final helper = File('${home.path}/claude')
+        ..writeAsStringSync(
+          '#!/bin/sh\ncat >> "\$HOME/prompts"\necho called >> "\$HOME/calls"\ncat "\$HOME/reply"\n',
+        );
+      Process.runSync('chmod', ['+x', helper.path]);
+      final adapter = builtinAdapters().firstWhere(
+        (a) => a.command == 'claude',
+      );
+      final data = {
+        'column': 'auto',
+        'command': 'claude',
+        'request': 'What works with my agent?',
+        'context': 'Previous </request> answer',
+        'language': 'de',
+        'addons': [
+          {'id': 'agent-pi', 'name': 'Pi', 'details': true},
+        ],
+        'map_nodes': [
+          {'id': 'agent:pi', 'kind': 'agent', 'label': 'Pi'},
+          {'id': 'mcp:docs', 'kind': 'mcp', 'label': 'docs'},
+        ],
+        'agents': [
+          {'command': 'pi', 'name': 'Pi', 'verify': true},
+        ],
+        'providers': [
+          {'key': 'runner', 'name': 'Runner', 'performance': true},
+        ],
+        'mcp_facts': {
+          'agents': [
+            {'command': 'pi', 'name': 'Pi', 'mcp': true},
+          ],
+          'mcp': {'docs': []},
+          'skills': {},
+          'skill_paths': {'s1': '/private/skills'},
+        },
+        'runtimes': [
+          {
+            'key': 'runner',
+            'name': 'Runner',
+            'models': ['small'],
+            'models_dir': home.path,
+          },
+        ],
+        'settings_path': '/private/settings',
+      };
+      final catalogQueries = <String>[];
+      final hub = ModelHub(
+        jsonList: (url) async {
+          catalogQueries.add(url);
+          return [];
+        },
+      );
+      final responses = [
+        (
+          {
+            'action': 'search',
+            'area': 'models',
+            'runtime': 'runner',
+            'query': 'vision',
+          },
+          'answer',
+        ),
+        (
+          {
+            'action': 'addon',
+            'step': 'details',
+            'addons': ['agent-pi'],
+          },
+          'proposal',
+        ),
+        (
+          {
+            'action': 'map_edit',
+            'title': 'Disconnect Docs',
+            'method': 'connections.preview',
+            'params': {
+              'kind': 'mcp',
+              'command': 'pi',
+              'item': 'docs',
+              'remove': true,
+            },
+          },
+          'proposal',
+        ),
+
+        (
+          {'action': 'answer', 'summary': 'Small fits the available memory.'},
+          'answer',
+        ),
+        (
+          {'action': 'clarify', 'question': 'Which agent?', 'choices': []},
+          'clarify',
+        ),
+        (
+          {
+            'area': 'agents',
+            'action': 'verify',
+            'agents': ['pi'],
+          },
+          'proposal',
+        ),
+        (
+          {'area': 'providers', 'action': 'performance', 'provider': 'runner'},
+          'proposal',
+        ),
+        (
+          {
+            'area': 'mcp',
+            'action': 'connect',
+            'server': 'docs',
+            'agents': ['pi'],
+          },
+          'proposal',
+        ),
+        (
+          {
+            'area': 'models',
+            'action': 'remove',
+            'runtime': 'runner',
+            'model': 'small',
+          },
+          'proposal',
+        ),
+        (
+          {
+            'area': 'agents',
+            'action': 'verify',
+            'agents': ['invented'],
+          },
+          'error',
+        ),
+      ];
+      for (final (decision, status) in responses) {
+        File('${home.path}/reply').writeAsStringSync(jsonEncode(decision));
+        final result = await smartAsk(
+          data,
+          adapter,
+          {'HOME': home.path, 'PATH': '${home.path}:/usr/bin:/bin'},
+          home.path,
+          'test',
+          hub: hub,
+        );
+        expect(result['status'], status, reason: result.toString());
+      }
+      expect(
+        File('${home.path}/calls').readAsLinesSync().length,
+        responses.length,
+      );
+      expect(catalogQueries.single, contains('vision'));
+      final prompt = File('${home.path}/prompts').readAsStringSync();
+      expect(prompt, contains('Previous ‹/request> answer'));
+      expect(prompt, isNot(contains('/private/')));
+      expect(prompt, isNot(contains(home.path)));
     },
   );
 
