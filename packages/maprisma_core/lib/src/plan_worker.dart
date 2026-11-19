@@ -1,3 +1,6 @@
+import 'reports_generate.dart';
+import 'core.dart' show CoreService;
+import 'protocol.dart' show ServiceError;
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -1006,6 +1009,7 @@ Future<int> runWorker(List<String> args) async {
           'mcp.tools_test',
           'models.tuning_ask',
           'map.smart_ask',
+          'reports.generate',
         }.contains(operation) ||
         (request['params'] as Map).isNotEmpty) {
       throw const FormatException('Invalid private operation');
@@ -1235,6 +1239,67 @@ Future<int> runWorker(List<String> args) async {
           identity.shortName,
         ),
       });
+      return 0;
+    }
+    if (operation == 'reports.generate') {
+      if (body.length > 16 * 1024) {
+        throw const FormatException('Request too large');
+      }
+      final service = CoreService(migrate: false);
+      final identity = service.identity;
+      final data = jsonDecode(utf8.decode(body)) as Map<String, dynamic>;
+      final filters = reportParameters(data['filters'] as Map);
+      final command = filters['helper'];
+      final local = command == 'local-helper';
+      Map<String, dynamic> result;
+      try {
+        if (!service.smartHelpers().any((h) => h['command'] == command)) {
+          throw ServiceError('no_helper');
+        }
+        final selected = local ? service.localHelpers().$3 : null;
+        if (local && selected == null) throw ServiceError('no_helper');
+        final agent = selected?.agent ?? command;
+        final adapter = service.reportAdapter(agent as String);
+        if (adapter == null || !local && !reportRewriteWithoutTools(adapter)) {
+          throw ServiceError('no_helper');
+        }
+        void gate() {
+          if (!local && !reportRules(identity).allowed) {
+            throw ServiceError('online_blocked');
+          }
+        }
+
+        final helper = smartAgent(
+          {
+            'command': agent,
+            if (selected != null)
+              'helper': {
+                'provider': selected.provider,
+                'runtime': selected.runtime,
+                'model': selected.model,
+              },
+          },
+          adapter,
+          identity.environment,
+          identity.home,
+          identity.shortName,
+          beforeRun: gate,
+        );
+        result = await generateTopicReport(
+          service.reads.activityLog,
+          filters,
+          helper,
+          beforeRun: gate,
+          language: data['language'] as String,
+        );
+      } on ServiceError catch (e) {
+        result = {'error': e.code, 'code': e.code};
+      } on Exception {
+        result = {'error': 'helper_failed', 'code': 'helper_failed'};
+      } finally {
+        service.dispose();
+      }
+      send({'type': 'result', 'result': result});
       return 0;
     }
     if (operation == 'map.smart_ask') {

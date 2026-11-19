@@ -153,7 +153,7 @@ SCHEMA: dict[str, Setting] = {
                                 "Background scan groups; startup/manual Refresh always refresh everything"),
     "map_animations": Setting("all", _one_of(*MAP_ANIMATIONS), "Settings › Map animations"),
     "ai_activity_log": Setting(False, _bool, "Collect local activity observations"),
-    "ai_activity_log_days": Setting(2, lambda v: isinstance(v, int) and not isinstance(v, bool) and 1 <= v <= 365,
+    "ai_activity_log_days": Setting(7, lambda v: isinstance(v, int) and not isinstance(v, bool) and 1 <= v <= 365,
                                     "Days of local activity history to keep"),
     "ai_activity_local_topics": Setting(False, _bool, "Use a detected local model for activity topics"),
     "usage_box": Setting(True, _bool, "Settings › Usage statistics box: shown on a working agent's line"),

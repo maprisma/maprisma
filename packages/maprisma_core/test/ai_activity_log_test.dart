@@ -36,13 +36,30 @@ void main() {
       expect(report['by_day'].single['duration_ms'], 3600000);
       expect(report['by_week'].single['count'], 1);
 
-      log.observe({}, observedAt: DateTime(2026, 11, 20));
+      expect(settings.value(settings.load(), 'ai_activity_log_days'), 7);
+      log.observe({}, observedAt: DateTime(2026, 11, 24));
+      expect(
+        File('${identity.dataDir}/ai-log/2026-11-18.jsonl').existsSync(),
+        isTrue,
+      );
+      log.observe({}, observedAt: DateTime(2026, 11, 25));
       expect(
         File('${identity.dataDir}/ai-log/2026-11-18.jsonl').existsSync(),
         isFalse,
       );
     },
   );
+  test('an explicitly stored two-day setting survives the default change', () {
+    final home = Directory.systemTemp.createTempSync('maprisma-log-retention-');
+    addTearDown(() => home.deleteSync(recursive: true));
+    final identity = AppIdentity(environment: {'HOME': home.path});
+    final settings = SettingsStore(identity)
+      ..update({
+        'values': {'ai_activity_log_days': 2},
+      });
+    expect(SettingsStore(identity).load()['ai_activity_log_days'], 2);
+    expect(settings.load()['ai_activity_log_days'], 2);
+  });
   test('token totals use deltas from the same session', () {
     final home = Directory.systemTemp.createTempSync('maprisma-usage-log-');
     addTearDown(() => home.deleteSync(recursive: true));

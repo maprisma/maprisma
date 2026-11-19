@@ -20,6 +20,10 @@ Future<void> main(List<String> args) async {
     exitCode = await runProviderWatch(args.sublist(1));
     return;
   }
+  if (args.firstOrNull == 'reports') {
+    _reports(args.sublist(1));
+    return;
+  }
   if (args.firstOrNull == 'activity-log') {
     try {
       final options = <String, String>{};
@@ -84,6 +88,9 @@ Future<void> main(List<String> args) async {
             jsonDecode(utf8.decode(frame)),
             AgentProgress(ProviderScans(service.reads.files)),
             service.reads.catalog.adapters.map((a) => a.command).toSet(),
+            savedReports: args.single == 'activity-log-mcp'
+                ? (method, params) => service.dispatch(method, params)
+                : null,
             logReport: args.single == 'activity-log-mcp'
                 ? (params) =>
                       service.dispatchAsync('activitylog.report', params)
@@ -122,4 +129,42 @@ Future<void> main(List<String> args) async {
   }
   if (oversized || frame.isNotEmpty) await reply();
   service.dispose();
+}
+
+void _reports(List<String> args) {
+  final service = CoreService(migrate: false);
+  try {
+    if (args.length == 1 && args.first == 'list') {
+      int? cursor;
+      do {
+        final page = service.dispatch('reports.list', {'cursor': ?cursor});
+        for (final row in page['reports'] as List) {
+          stdout.writeln("${row['id']}\t${row['saved_at']}\t${row['title']}");
+        }
+        cursor = page['next_cursor'] as int?;
+      } while (cursor != null);
+      return;
+    }
+    final format = switch (args) {
+      ['show', _] => 'text',
+      ['export', _, '--format', 'text' || 'markdown' || 'json'] => args.last,
+      _ => throw const FormatException(),
+    };
+    final id = int.parse(args[1]);
+    if (id < 1) throw const FormatException();
+    final result = service.dispatch('reports.get', {'id': id});
+    stdout.writeln(
+      formatTopicReport(result['report'] as Map<String, dynamic>, format),
+    );
+  } on FormatException {
+    stderr.writeln(
+      'Usage: maprisma-core reports list | show ID | export ID --format text|markdown|json',
+    );
+    exitCode = 64;
+  } on ServiceError catch (error) {
+    stderr.writeln(error.code);
+    exitCode = 1;
+  } finally {
+    service.dispose();
+  }
 }

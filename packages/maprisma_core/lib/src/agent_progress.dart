@@ -1,3 +1,4 @@
+import 'protocol.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -168,11 +169,39 @@ const _tool = {
   },
 };
 
+const _reportTools = [
+  {
+    'name': 'reports_list',
+    'description': 'List saved Maprisma reports, optionally searching by text.',
+    'inputSchema': {
+      'type': 'object',
+      'properties': {
+        'query': {'type': 'string'},
+        'cursor': {'type': 'integer'},
+      },
+      'additionalProperties': false,
+    },
+  },
+  {
+    'name': 'reports_get',
+    'description': 'Read a saved Maprisma report.',
+    'inputSchema': {
+      'type': 'object',
+      'properties': {
+        'id': {'type': 'integer'},
+      },
+      'required': ['id'],
+      'additionalProperties': false,
+    },
+  },
+];
+
 Future<Map<String, Object?>?> activityMcpReply(
   dynamic frame,
   AgentProgress progress,
   Set<String> commands, {
   FutureOr<Map<String, dynamic>> Function(Map<String, dynamic>)? logReport,
+  Map<String, dynamic> Function(String, Map<String, dynamic>)? savedReports,
 }) async {
   if (frame is! Map || frame['jsonrpc'] != '2.0') {
     return {
@@ -195,10 +224,38 @@ Future<Map<String, Object?>?> activityMcpReply(
       reply['result'] = {};
     case 'tools/list':
       reply['result'] = {
-        'tools': [logReport == null ? _tool : _logTool],
+        'tools': [
+          logReport == null ? _tool : _logTool,
+          if (savedReports != null) ..._reportTools,
+        ],
       };
     case 'tools/call':
-      if (logReport != null &&
+      if (savedReports != null &&
+          params is Map &&
+          {'reports_list', 'reports_get'}.contains(params['name'])) {
+        final arguments = params['arguments'] ?? <String, dynamic>{};
+        final method = params['name'] == 'reports_list'
+            ? 'reports.list'
+            : 'reports.get';
+        var error = false;
+        Map<String, dynamic> payload;
+        try {
+          if (arguments is! Map<String, dynamic>) throw const FormatException();
+          payload = savedReports(method, arguments);
+        } on FormatException {
+          error = true;
+          payload = {'code': 'invalid_request'};
+        } on ServiceError catch (e) {
+          error = true;
+          payload = {'code': e.code};
+        }
+        reply['result'] = {
+          'content': [
+            {'type': 'text', 'text': jsonEncode(payload)},
+          ],
+          'isError': error,
+        };
+      } else if (logReport != null &&
           params is Map &&
           params['name'] == 'activity_log_report') {
         try {

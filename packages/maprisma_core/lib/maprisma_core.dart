@@ -16,3 +16,4 @@ export 'src/core_tasks.dart'
         coreFirstRoutes,
         coreProviderRun;
 export 'src/clipboard.dart' show boundedClipboardText, maxTerminalPaste;
+export 'src/report_format.dart' show formatTopicReport;

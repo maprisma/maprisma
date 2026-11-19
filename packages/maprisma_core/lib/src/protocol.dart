@@ -9,7 +9,7 @@ final class ServiceError extends StateError {
     : super('Service operation failed: $code');
   final String code;
 
-  /// Only for `action_refused`: the core's own words, safe to show.
+  /// Optional details from the core. Callers can present the stable code.
   final String? reason;
 }
 

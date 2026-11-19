@@ -272,7 +272,11 @@ void main() {
       final initialized = await rpc(mcp, lines, 1, 'initialize');
       expect(initialized['capabilities'], {'tools': {}});
       final tools = await rpc(mcp, lines, 2, 'tools/list');
-      expect(tools['tools'].single['name'], 'activity_log_report');
+      expect((tools['tools'] as List).map((tool) => tool['name']), [
+        'activity_log_report',
+        'reports_list',
+        'reports_get',
+      ]);
       final report = await rpc(mcp, lines, 3, 'tools/call', {
         'name': 'activity_log_report',
         'arguments': {'from_day': day, 'through_day': day},

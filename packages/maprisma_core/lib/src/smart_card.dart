@@ -1999,8 +1999,9 @@ SmartAgent smartAgent(
   Adapter adapter,
   Map<String, String> env,
   String home,
-  String plugin,
-) {
+  String plugin, {
+  void Function()? beforeRun,
+}) {
   final command = data['command'] as String;
   final helper = data['helper'];
   final advised = helper is Map
@@ -2055,6 +2056,7 @@ SmartAgent smartAgent(
     ({int input, int cached, int output, double? cost})? usage;
     var ok = false, result = '';
     try {
+      beforeRun?.call();
       final (out, done, cancelled) = await runLookUp(
         argv,
         utf8.encode(prompt),

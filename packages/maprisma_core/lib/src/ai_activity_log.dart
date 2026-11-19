@@ -225,7 +225,13 @@ final class AiActivityLog {
     }
   }
 
-  Map<String, dynamic> report(Map<String, dynamic> params, {DateTime? now}) {
+  bool get enabled =>
+      settings.value(settings.load(), 'ai_activity_log') == true;
+
+  (DateTime, int, String, String) range(
+    Map<String, dynamic> params, {
+    DateTime? now,
+  }) {
     final today = (now ?? DateTime.now()).toLocal();
     final keep = settings.value(settings.load(), 'ai_activity_log_days') as int;
     final oldest = activityDay(_date(today, 1 - keep));
@@ -243,8 +249,34 @@ final class AiActivityLog {
 
     final from = day('from_day', oldest);
     final through = day('through_day', latest);
+    if (from.compareTo(through) > 0) {
+      throw const FormatException('Invalid activity range');
+    }
+    return (today, keep, from, through);
+  }
+
+  Iterable<(DateTime, Map<String, dynamic>)> retainedRows(
+    DateTime today,
+    int keep,
+    String from,
+    String through,
+  ) sync* {
+    for (var offset = 0; offset < keep; offset++) {
+      final local = _date(today, -offset);
+      final date = activityDay(local);
+      if (date.compareTo(from) < 0 || date.compareTo(through) > 0) continue;
+      final text =
+          files.text(p.join(_directory, '$date.jsonl'), limit: _maxFile) ?? '';
+      for (final row in _rows(text).toList().reversed) {
+        yield (local, row);
+      }
+    }
+  }
+
+  Map<String, dynamic> report(Map<String, dynamic> params, {DateTime? now}) {
+    final (today, keep, from, through) = range(params, now: now);
     final cursor = params['cursor'] ?? 0;
-    if (from.compareTo(through) > 0 || cursor is! int || cursor < 0) {
+    if (cursor is! int || cursor < 0) {
       throw const FormatException('Invalid activity range');
     }
     final page = <Map<String, dynamic>>[];
@@ -271,21 +303,15 @@ final class AiActivityLog {
     }
 
     var count = 0;
-    for (var offset = 0; offset < keep; offset++) {
-      final local = _date(today, -offset);
+    for (final (local, row) in retainedRows(today, keep, from, through)) {
       final date = activityDay(local);
-      if (date.compareTo(from) < 0 || date.compareTo(through) > 0) continue;
-      final text =
-          files.text(p.join(_directory, '$date.jsonl'), limit: _maxFile) ?? '';
-      for (final row in _rows(text).toList().reversed) {
-        add(sources, '${row['source_kind']}:${row['source']}', row);
-        final project = row['project'];
-        if (project is String) add(projects, project, row);
-        add(days, date, row);
-        add(weeks, activityDay(_date(local, 1 - local.weekday)), row);
-        if (count >= cursor && page.length < _pageSize) page.add(row);
-        count++;
-      }
+      add(sources, '${row['source_kind']}:${row['source']}', row);
+      final project = row['project'];
+      if (project is String) add(projects, project, row);
+      add(days, date, row);
+      add(weeks, activityDay(_date(local, 1 - local.weekday)), row);
+      if (count >= cursor && page.length < _pageSize) page.add(row);
+      count++;
     }
     List<Map<String, dynamic>> totals(Map<String, _Totals> values) => [
       for (final e in values.entries)
