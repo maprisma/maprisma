@@ -118,3 +118,23 @@ Next: round 2 on the revised plan.
 - `tools/test-changed --base main` ran before committing with DISPLAY unset. Formatting and analyzers passed, along with 385 core tests, 364 Flutter tests and 69 differential cases. The AOT release transport check passed.
 - Targeted Reports tests passed, 17 core and three Flutter tests. Type checking reported zero errors, warnings or information diagnostics.
 - The complete Python run executed 1,441 tests with five failures and three errors. Seven test methods match the previously reproduced baseline failures. The eighth, `test_same_model_actions_after_the_files`, observed an extra GET against the fixture model server. Rerunning the provider-operation test module passed on both the unchanged `bef1307` checkout and this branch, three tests each. The full Python suite therefore remains non-green.
+
+## Code round 2 (Antigravity, 2026-11-19, commit 61f3fe7)
+
+**CLEAN**
+
+All seven round-1 findings are fixed and covered by regression tests, and commit `61f3fe7` introduces no new blocking issues:
+
+1. **Crashed WAL probe** (`packages/maprisma_core/lib/src/reports_library.dart:166-179`): `_probe` now always probes WAL databases through the committed in-memory image (`_probeWithoutShm`), avoiding `SQLITE_READONLY_RECOVERY` when `-shm` exists after a writer crash, while read-write opens recover cleanly.
+2. **Move-aside integrity check & malformed WAL** (`packages/maprisma_core/lib/src/reports_library.dart:143-145, 343-345`): malformed WAL images throw `reports_db_corrupt` instead of falling back to `immutable: true`, and `moveAside` runs `PRAGMA integrity_check(1)` to catch corruption outside report `text`/`topics_json`.
+3. **Rollback preservation & idempotent close** (`packages/maprisma_core/lib/src/reports_sqlite.dart:60-65, 98-103`): `close()` nulls both `_db` and `_image`, and `transaction()` suppresses secondary `ROLLBACK` failures so the original error propagates.
+4. **Regenerating after a draft** (`flutter_app/lib/reports_page.dart:588-601`): an outlined `Generate` button remains beside `Save to library` and is disabled while `_running || _saving || _helper == null`.
+5. **Multiline notes & blank edit titles** (`packages/maprisma_core/lib/src/reports_library.dart:32-53`, `packages/maprisma_core/lib/src/core.dart:4768-4776`, `flutter_app/lib/reports_page.dart:802, 821-823`): `note` preserves `\n` on both save and update, and the edit dialog disables `Save` for whitespace-only titles.
+6. **Helper capability check ordering** (`packages/maprisma_core/lib/src/core.dart:4807-4814`): `reportRewriteWithoutTools` now runs before `reportRules(identity).allowed`, matching `plan_worker.dart`.
+7. **Dictation bound & partial feedback** (`flutter_app/lib/reports_page.dart:70-73, 683-699`): `onFinal` caps the focus text at 500 runes (matching `reports_generate.dart:77`), and `_partialFocus` is cleared and gated when leaving Topic reports.
+
+### Optional notes
+
+1. `packages/maprisma_core/lib/src/reports_library.dart:166`: the `shm` parameter of `_probe(int dir, bool wal, bool shm)` is now unused and can be dropped.
+2. `flutter_app/lib/reports_page.dart:685-691`: in `MicButton.onFinal`, updating `controller.value` only when `bounded != controller.text` would preserve `insertDictatedText`'s caret position when dictating into the middle of a focus string under 500 runes.
+3. `packages/maprisma_core/lib/src/reports_library.dart:41-50`: normalizing `\r\n` before replacing control characters would avoid leaving a trailing space before `\n` on pasted CRLF notes.
