@@ -95,3 +95,26 @@ Next: round 2 on the revised plan.
    survive protocol regeneration.
    - **Answer (Codex):** Extend the change-route matcher and register
      `maprisma.activity_log_online` as a non-route identifier.
+
+## Code review round 1 (Antigravity, relayed by Uwe, 2026-11-19)
+
+1. **High** `reports_library.dart:155`. A read-only WAL probe cannot recover after a crash.
+   > Answer — Probe WAL databases through the committed in-memory image, including when SHM exists. A crashed-writer regression preserves a committed title with an invalidated SHM and verifies that normal read-write recovery permits another save.
+2. **High** `reports_library.dart:325`. Move aside missed damage outside text/topics, and malformed WAL parsing silently ignored corruption.
+   > Answer — Run `PRAGMA integrity_check(1)` on the move-aside probe and classify a malformed committed image as corruption. Tests damage an unrelated table page and a WAL header and verify move-aside succeeds.
+3. **Medium** `reports_sqlite.dart:60,95`. Rollback could hide the original failure, and repeated close could free pointers twice.
+   > Answer — Preserve the original exception if rollback fails. Null both native pointers after closing. Tests force rollback failure and close both normal and deserialized connections twice.
+4. **Medium** `reports_page.dart:578`. Generate disappeared after creating a draft.
+   > Answer — Keep an outlined Generate button beside Save to library. Disable generation while running, saving or without a helper. A widget test regenerates a draft and checks the disabled state during save.
+5. **Low** `reports_library.dart:32`, `reports_page.dart:776`. Notes lost newlines and the edit dialog accepted an empty title.
+   > Answer — Add multiline sanitization for notes on save and update. Disable the dialog's Save button for blank titles. Core and widget tests cover both.
+6. **Low** `core.dart:4802`. The online gate preceded the no-tools capability check.
+   > Answer — Resolve no-tools rewrite support before checking the online opt-in, matching the worker.
+7. **Low** `mic_button.dart:252`, Topic reports. Dictation bypassed the focus field's bound and retained partial feedback after leaving.
+   > Answer — Use the microphone's existing final-result callback in the Reports field to insert and bound the complete value to 500 runes. Clear partial feedback when leaving Topic reports. The shared microphone remains reusable for fields with other bounds. A widget test checks Unicode dictation and tab changes.
+
+### Verification
+
+- `tools/test-changed --base main` ran before committing with DISPLAY unset. Formatting and analyzers passed, along with 385 core tests, 364 Flutter tests and 69 differential cases. The AOT release transport check passed.
+- Targeted Reports tests passed, 17 core and three Flutter tests. Type checking reported zero errors, warnings or information diagnostics.
+- The complete Python run executed 1,441 tests with five failures and three errors. Seven test methods match the previously reproduced baseline failures. The eighth, `test_same_model_actions_after_the_files`, observed an extra GET against the fixture model server. Rerunning the provider-operation test module passed on both the unchanged `bef1307` checkout and this branch, three tests each. The full Python suite therefore remains non-green.

@@ -9,6 +9,7 @@ import 'package:maprisma_core/src/reports_generate.dart';
 import 'package:maprisma_core/src/reports_library.dart';
 import 'package:maprisma_core/src/reports_sqlite.dart';
 import 'package:maprisma_core/src/scan_files.dart';
+import 'package:maprisma_core/src/sqlite_numbers.dart' show committedImage;
 import 'package:test/test.dart';
 
 final _draft = <String, dynamic>{
@@ -63,6 +64,98 @@ void main() {
     expect(library.delete(id), isTrue);
     expect(() => library.get(id), _code('report_not_found'));
     expect(() => library.delete(id), _code('report_not_found'));
+  });
+
+  test('a crashed WAL library with existing SHM recovers and remains writable', () {
+    final saved = library.save(_draft, 'Before crash', null);
+    final script = File('${home.path}/crash.dart')
+      ..writeAsStringSync(
+        "import 'dart:io';\n"
+        "import 'package:maprisma_core/src/reports_sqlite.dart';\n"
+        "void main(List<String> args) { final db = ReportsSqlite(args.single); "
+        "db.query('PRAGMA journal_mode=WAL'); "
+        "db.exec(\"UPDATE reports SET title='Committed before crash'\"); exit(0); }",
+      );
+    final result = Process.runSync(Platform.resolvedExecutable, [
+      '--packages=${Directory.current.path}/.dart_tool/package_config.json',
+      script.path,
+      path,
+    ]);
+    expect(result.exitCode, 0, reason: '${result.stderr}');
+    expect(File('$path-wal').existsSync(), isTrue);
+    expect(File('$path-shm').existsSync(), isTrue);
+    File('$path-shm').writeAsBytesSync(List.filled(32768, 0));
+    expect(library.get(saved['id'] as int)['title'], 'Committed before crash');
+    expect(
+      library.save(_draft, 'After recovery', null)['title'],
+      'After recovery',
+    );
+  });
+
+  test('integrity check finds corruption outside report text and topics', () {
+    library.save(_draft, 'Good report', null);
+    final db = ReportsSqlite(path);
+    db.exec('CREATE TABLE other_data (value TEXT)');
+    db.exec("INSERT INTO other_data VALUES ('damaged')");
+    final page =
+        db
+                .query(
+                  "SELECT rootpage FROM sqlite_master WHERE name='other_data'",
+                )
+                .single
+                .single
+            as int;
+    final size = db.query('PRAGMA page_size').single.single as int;
+    db.close();
+    final bytes = File(path).readAsBytesSync();
+    bytes[(page - 1) * size] = 0;
+    File(path).writeAsBytesSync(bytes);
+    expect(File(library.moveAside()).existsSync(), isTrue);
+  });
+
+  test('a malformed WAL is corrupt and can be moved aside', () {
+    library.save(_draft, 'Report', null);
+    File('$path-wal').writeAsStringSync('invalid WAL');
+    expect(() => library.list('', null), _code('reports_db_corrupt'));
+    expect(File(library.moveAside()).existsSync(), isTrue);
+  });
+
+  test(
+    'rollback failure preserves the original error and close is idempotent',
+    () {
+      final db = ReportsSqlite(':memory:');
+      final original = ServiceError('reports_db_corrupt');
+      expect(
+        () => db.transaction(() {
+          db.exec('ROLLBACK');
+          throw original;
+        }),
+        throwsA(same(original)),
+      );
+      db.close();
+      db.close();
+      library.save(_draft, 'Snapshot', null);
+      final snapshot = ReportsSqlite.snapshot(
+        committedImage(File(path).readAsBytesSync(), null),
+      );
+      snapshot.close();
+      snapshot.close();
+    },
+  );
+
+  test('notes preserve newlines while titles remain single line', () {
+    expect(
+      reportField('First\nSecond', 2000, multiline: true),
+      'First\nSecond',
+    );
+    expect(reportField('First\nSecond', 200), 'First Second');
+    final core = CoreService(environment: {'HOME': home.path}, migrate: false);
+    final saved = library.save(_draft, 'Report', null);
+    final report = core.dispatch('reports.update', {
+      'id': saved['id'],
+      'note': 'First\nSecond',
+    })['report'];
+    expect(report['note'], 'First\nSecond');
   });
 
   test('cursor remains stable when a newer report is saved', () {

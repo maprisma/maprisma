@@ -4767,7 +4767,12 @@ final class CoreService {
 
     String? optional(String field, int bound, {bool required = false}) =>
         params.containsKey(field)
-        ? reportField(params[field], bound, required: required)
+        ? reportField(
+            params[field],
+            bound,
+            required: required,
+            multiline: field == 'note',
+          )
         : null;
 
     switch (method) {
@@ -4800,11 +4805,11 @@ final class CoreService {
           throw ServiceError('no_helper');
         }
         if (command != 'local-helper') {
-          if (!reportRules(identity).allowed) {
-            throw ServiceError('online_blocked');
-          }
           if (!reportRewriteWithoutTools(reportAdapter(command as String))) {
             throw ServiceError('no_helper');
+          }
+          if (!reportRules(identity).allowed) {
+            throw ServiceError('online_blocked');
           }
         }
         final log = reads.activityLog;

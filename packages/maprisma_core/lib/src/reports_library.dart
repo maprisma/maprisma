@@ -29,11 +29,25 @@ const _columns =
     'title,note,saved_at,from_day,through_day,filters_json,helper,'
     'generated_at,entry_count,total_entries,capped,topics_json,text';
 
-String reportField(Object? value, int limit, {bool required = false}) {
+String reportField(
+  Object? value,
+  int limit, {
+  bool required = false,
+  bool multiline = false,
+}) {
   if (value is! String || value.runes.length > limit) {
     throw const FormatException('Invalid report text');
   }
-  final clean = value.replaceAll(RegExp(r'[\x00-\x1f\x7f-\x9f]'), ' ').trim();
+  final clean = value
+      .replaceAll(
+        RegExp(
+          multiline
+              ? r'[\x00-\x09\x0b-\x1f\x7f-\x9f]'
+              : r'[\x00-\x1f\x7f-\x9f]',
+        ),
+        ' ',
+      )
+      .trim();
   if (required && clean.isEmpty) throw const FormatException('Missing title');
   return clean;
 }
@@ -127,10 +141,7 @@ final class ReportsLibrary {
         ),
       );
     } on FormatException {
-      // Let SQLite classify a malformed main file or recover an incomplete WAL.
-      // The immutable connection ignores the WAL and cannot create sidecars.
-      final path = Directory('/proc/self/fd/$dir').resolveSymbolicLinksSync();
-      return ReportsSqlite(p.join(path, _files.first), immutable: true);
+      throw ServiceError('reports_db_corrupt');
     } finally {
       if (wal != null) _io.close(wal);
       _io.close(main);
@@ -164,7 +175,7 @@ final class ReportsLibrary {
       rethrow;
     }
     main.close();
-    return shm ? ReportsSqlite(path, readOnly: true) : _probeWithoutShm(dir);
+    return _probeWithoutShm(dir);
   }
 
   T _open<T>(int dir, bool write, T Function(ReportsSqlite, int) action) {
@@ -329,11 +340,9 @@ ORDER BY id DESC LIMIT 51
       final probe = _probe(dir, wal, shm);
       try {
         _schema(probe);
-        // Validate the report tree too. A damaged data page can have a healthy
-        // SQLite header and schema.
-        probe.query(
-          'SELECT count(*), sum(length(text) + length(topics_json)) FROM reports',
-        );
+        if (probe.query('PRAGMA integrity_check(1)').single.single != 'ok') {
+          throw ServiceError('reports_db_corrupt');
+        }
       } finally {
         probe.close();
       }

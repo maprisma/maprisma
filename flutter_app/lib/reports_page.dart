@@ -67,7 +67,10 @@ class ReportsPageState extends State<ReportsPage> {
   @override
   void didUpdateWidget(ReportsPage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.tab != widget.tab) _loadTab(widget.tab);
+    if (oldWidget.tab != widget.tab) {
+      if (oldWidget.tab == 1) _partialFocus = '';
+      _loadTab(widget.tab);
+    }
   }
 
   @override
@@ -581,10 +584,19 @@ class ReportsPageState extends State<ReportsPage> {
                       ? null
                       : _save,
                   child: Text(tr('Save to library')),
+                ),
+              if (_draftId != null)
+                OutlinedButton(
+                  onPressed: _running || _saving || _helper == null
+                      ? null
+                      : _generate,
+                  child: Text(tr('Generate')),
                 )
               else
                 FilledButton(
-                  onPressed: _running || _helper == null ? null : _generate,
+                  onPressed: _running || _saving || _helper == null
+                      ? null
+                      : _generate,
                   child: Text(tr('Generate')),
                 ),
             ],
@@ -668,10 +680,22 @@ class ReportsPageState extends State<ReportsPage> {
                 appId: 'com.maprisma.Maprisma',
                 tr: tr,
                 controller: controller,
+                onFinal: (text) {
+                  insertDictatedText(controller, text);
+                  final bounded = String.fromCharCodes(
+                    controller.text.runes.take(500),
+                  );
+                  controller.value = TextEditingValue(
+                    text: bounded,
+                    selection: TextSelection.collapsed(offset: bounded.length),
+                  );
+                },
                 focusNode: _focusNode,
                 enabled: enabled,
                 onPartial: (value) {
-                  if (mounted) setState(() => _partialFocus = value);
+                  if (mounted && widget.tab == 1) {
+                    setState(() => _partialFocus = value);
+                  }
                 },
               )
             : null,
@@ -775,6 +799,7 @@ class _ReportEditDialogState extends State<_ReportEditDialog> {
       children: [
         TextField(
           controller: _title,
+          onChanged: (_) => setState(() {}),
           maxLength: 200,
           decoration: InputDecoration(labelText: widget.tr('Title')),
         ),
@@ -793,7 +818,9 @@ class _ReportEditDialogState extends State<_ReportEditDialog> {
         child: Text(widget.tr('Cancel')),
       ),
       FilledButton(
-        onPressed: () => Navigator.pop(context, (_title.text, _note.text)),
+        onPressed: _title.text.trim().isEmpty
+            ? null
+            : () => Navigator.pop(context, (_title.text, _note.text)),
         child: Text(widget.tr('Save')),
       ),
     ],

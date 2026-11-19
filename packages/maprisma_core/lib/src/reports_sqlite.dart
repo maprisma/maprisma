@@ -59,7 +59,9 @@ final class ReportsSqlite {
 
   void close() {
     if (_db != nullptr) _close(_db);
+    _db = nullptr;
     if (_image != nullptr) calloc.free(_image);
+    _image = nullptr;
   }
 
   void check(int result) {
@@ -93,7 +95,11 @@ final class ReportsSqlite {
       exec('COMMIT');
       return value;
     } catch (_) {
-      exec('ROLLBACK');
+      try {
+        exec('ROLLBACK');
+      } catch (_) {
+        // Preserve the failure that ended the transaction.
+      }
       rethrow;
     }
   }
