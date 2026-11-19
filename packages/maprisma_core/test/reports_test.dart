@@ -149,6 +149,10 @@ void main() {
       'First\nSecond',
     );
     expect(reportField('First\nSecond', 200), 'First Second');
+    expect(
+      reportField('First\r\nSecond', 2000, multiline: true),
+      'First\nSecond',
+    );
     final core = CoreService(environment: {'HOME': home.path}, migrate: false);
     final saved = library.save(_draft, 'Report', null);
     final report = core.dispatch('reports.update', {

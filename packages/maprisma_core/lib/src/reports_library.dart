@@ -39,6 +39,7 @@ String reportField(
     throw const FormatException('Invalid report text');
   }
   final clean = value
+      .replaceAll('\r\n', '\n')
       .replaceAll(
         RegExp(
           multiline
@@ -163,7 +164,7 @@ final class ReportsLibrary {
   int _schema(ReportsSqlite db) =>
       db.query('PRAGMA user_version').single.single as int;
 
-  ReportsSqlite _probe(int dir, bool wal, bool shm) {
+  ReportsSqlite _probe(int dir, bool wal) {
     final path = _path(dir);
     final main = ReportsSqlite(path, immutable: true);
     try {
@@ -186,7 +187,7 @@ final class ReportsLibrary {
       if (fd != null) _io.close(fd);
     } else {
       // Inspect the schema without creating a missing WAL or SHM.
-      final probe = _probe(dir, wal, shm);
+      final probe = _probe(dir, wal);
       try {
         final version = _schema(probe);
         if (version > 1) {
@@ -337,7 +338,7 @@ ORDER BY id DESC LIMIT 51
     final (exists, wal, shm, _) = _existingFiles(dir);
     if (!exists) throw ServiceError('reports_db_unavailable');
     try {
-      final probe = _probe(dir, wal, shm);
+      final probe = _probe(dir, wal);
       try {
         _schema(probe);
         if (probe.query('PRAGMA integrity_check(1)').single.single != 'ok') {

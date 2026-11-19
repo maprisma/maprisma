@@ -2134,11 +2134,26 @@ void main() {
   testWidgets('Reports header, Esc and Settings history use the same page', (
     tester,
   ) async {
-    await mountApp(tester);
+    final directory = await mountApp(tester);
+    expect(
+      requests(directory).where((r) => r['method'] == 'activitylog.import'),
+      hasLength(1),
+    );
     await tester.tap(find.byTooltip('Reports'));
     await settleService(tester);
     expect(find.byType(ReportsPage), findsOneWidget);
     expect(find.text('Topic reports'), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.f1);
+    await settleService(tester);
+    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(find.text('How reporting works'), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.f1);
+    await settleService(tester);
+    expect(find.byType(AlertDialog), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await settleService(tester);
+    expect(find.byType(ReportsPage), findsOneWidget);
+    expect(find.byType(AlertDialog), findsNothing);
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await settleService(tester);
     expect(find.byType(ReportsPage), findsNothing);

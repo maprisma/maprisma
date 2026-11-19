@@ -81,12 +81,14 @@ import 'action_rules.dart';
 import 'smart_card.dart';
 import 'reports_generate.dart';
 import 'reports_library.dart';
+import 'history_import.dart';
 
 const portedRoutes = {
   'agents.session_activity',
   'agents.progress',
   'agents.activity_report',
   'activitylog.report',
+  'activitylog.import',
   'reports.helpers',
   'reports.generate',
   'reports.save',
@@ -4872,12 +4874,71 @@ final class CoreService {
     }
   }
 
+  HistoryImporter historyImporter() {
+    addons.reload(enabledAddons());
+    reads.catalog.adapters = addons.adapters;
+    return HistoryImporter(
+      reads.activityLog,
+      addons.adapters,
+      reads.catalog
+          .scan()
+          .where((a) => a.installed)
+          .map((a) => a.command)
+          .toSet(),
+    );
+  }
+
+  Map<String, dynamic> _importHistory(Map<String, dynamic> params) {
+    final importer = historyImporter();
+    importer.validate();
+    final keep = settings.value(settings.load(), 'ai_activity_log_days') as int;
+    final days = params['days'];
+    if (params.keys.any((k) => k != 'days' && k != 'auto') ||
+        days != null && (days is! int || days < 1 || days > keep) ||
+        params.containsKey('auto') && params['auto'] is! bool) {
+      throw ServiceError('invalid_request');
+    }
+    if (tasks.items.values.any(
+      (t) => t.operation == 'activitylog.import' && t.state == 'running',
+    )) {
+      throw ServiceError('import_running');
+    }
+    final io = reads.files.posix;
+    final path = p.join(importer.log.directory, '.import.lock');
+    if (reads.files.exists(path)) {
+      final fd = io.openAt(-100, path, Posix.noFollow | Posix.nonBlock);
+      try {
+        if (io.stat(fd).uid != io.uid || !io.tryLockExclusive(fd)) {
+          throw ServiceError('import_running');
+        }
+      } finally {
+        io.close(fd);
+      }
+    }
+    if (params['auto'] == true && importer.throttled()) {
+      return {'skipped': 'throttled'};
+    }
+    return tasks.startPrivate(
+      'activitylog.import',
+      utf8.encode(jsonEncode(params)),
+    );
+  }
+
   Map<String, dynamic> _route(String method, Map<String, dynamic> params) {
     if (method.startsWith('reports.')) {
       return _reportsRoute(method, params);
     }
+    if (method == 'activitylog.import') return _importHistory(params);
     if (method == 'activitylog.report') {
-      return reads.activityLog.report(params);
+      final importer = historyImporter();
+      return {
+        ...reads.activityLog.report(params),
+        'import_sources': historySources(
+          importer.adapters,
+          reads.files,
+          importer.installed,
+        ),
+      };
     }
     if (method == 'agents.activity_report') {
       final command = params['command'];
@@ -5466,7 +5527,9 @@ final class CoreService {
     final sample = rows
         .where(
           (row) =>
-              row['project'] is String || (row['files'] as List).isNotEmpty,
+              (row['topic'] == null ||
+                  const {'editing', 'testing'}.contains(row['topic'])) &&
+              (row['project'] is String || (row['files'] as List).isNotEmpty),
         )
         .take(8)
         .toList();

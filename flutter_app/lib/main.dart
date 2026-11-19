@@ -28,6 +28,7 @@ import 'usage_sweep.dart';
 import 'cost_card.dart';
 import 'settings_view.dart';
 import 'reports_page.dart';
+import 'history_import_controller.dart';
 import 'app_theme.dart';
 import 'map_zoom.dart';
 import 'test_shots.dart';
@@ -382,6 +383,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   bool _reconnecting = false;
   String? _view;
   final _reportsKey = GlobalKey<ReportsPageState>();
+  final _historyImport = HistoryImportController();
   int _reportsTab = 0;
   bool get _showReports => _view == 'reports';
 
@@ -5481,6 +5483,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         _failed = false;
       });
       if (firstSnapshot) {
+        unawaited(_historyImport.collect(_client, auto: true));
         unawaited(_detectSetup(enableFound: true));
         unawaited(_loadJobs());
         unawaited(_checkHealth());
@@ -5596,6 +5599,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
 
   @override
   void dispose() {
+    _historyImport.dispose();
     _endAsideWait();
     _terminalKeys.dispose();
     _limitsTimer?.cancel();
@@ -5671,7 +5675,11 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         ...WidgetsApp.defaultActions,
         _HelpIntent: CallbackAction<_HelpIntent>(
           onInvoke: (_) {
-            if (!_keysBlocked && _snapshot != null) _openHelp();
+            if (_showReports && !_keysBlocked) {
+              unawaited(_reportsKey.currentState?.showHelp());
+            } else if (!_keysBlocked && _snapshot != null) {
+              _openHelp();
+            }
             return null;
           },
         ),
@@ -5953,6 +5961,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                               child: _showReports
                                   ? ReportsPage(
                                       key: _reportsKey,
+                                      historyImport: _historyImport,
                                       client: _client,
                                       tr: tr,
                                       tab: _reportsTab,

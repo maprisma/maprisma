@@ -38,7 +38,7 @@ FILE_ENDINGS = {'json', 'toml', 'yaml', 'md', 'pdf', 'py', 'sh', 'service', 'des
                 'db', 'svg', 'png', 'zip', 'gz', 'sig', 'sha256', 'jsonl', 'dart', 'g', 'ini', 'conf', 'env',
                 'html', 'js', 'css', 'gguf', 'bin', 'exe', 'part', 'tmp', 'bak', 'xml', 'so', 'ico', 'jpg',
                 'old', 'new', 'ok', 'bat'}
-CHANGE = re.compile(r'(^|_)(apply|install|install_file|file_install|undo|continue|discard|pin|forget|update|save|delete|move_aside|'
+CHANGE = re.compile(r'(^|_)(apply|install|install_file|file_install|undo|continue|discard|pin|forget|update|save|delete|move_aside|import|'
                     r'set_enabled|run|unpack|later|choose|start|stop|write|resize|cancel|release|reload|'
                     r'refresh|forget_disk|notify|popup|open_manual|seen|settings_changed|usage_refresh)$')
 DART_TYPES = {'string': 'String', 'int': 'int', 'bool': 'bool', 'number': 'num'}

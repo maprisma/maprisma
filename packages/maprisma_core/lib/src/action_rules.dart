@@ -384,6 +384,7 @@ List<ActionCheck> actionChecks(
 /// Routes that need no rule of their own.
 const rulesExempt = {
   // Manual changes to the user's report library.
+  'activitylog.import',
   'reports.save',
   'reports.update',
   'reports.delete',

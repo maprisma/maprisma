@@ -8,6 +8,8 @@ import 'agent_activity_report.dart' show activityTimeline;
 import 'scan_files.dart';
 import 'posix_ffi.dart';
 import 'settings.dart';
+import 'history_topic.dart';
+import 'protocol.dart';
 
 String activityDay(DateTime at) =>
     '${at.year.toString().padLeft(4, '0')}-'
@@ -30,9 +32,13 @@ final class AiActivityLog {
   AiActivityLog(this.files, this.settings);
   final ScanFiles files;
   final SettingsStore settings;
+  final _pending = <Map<String, dynamic>>[];
   final _active = <String, (DateTime, String?, ActivityUsage?)>{};
   String get _directory => p.join(files.identity.dataDir, 'ai-log');
   static const _maxFile = 2 << 20;
+  String get directory => _directory;
+  bool get importTopics =>
+      settings.value(settings.load(), 'ai_activity_import_topics') == true;
   static const _pageSize = 100;
   static final _day = RegExp(r'^\d{4}-\d{2}-\d{2}$');
   static final _source = RegExp(r'^(agent|runtime):[a-z0-9][a-z0-9_.-]{0,63}$');
@@ -51,8 +57,12 @@ final class AiActivityLog {
     final keep = settings.value(options, 'ai_activity_log_days') as int;
     final cutoff = activityDay(_date(now.toLocal(), 1 - keep));
     final enabled = settings.value(options, 'ai_activity_log') == true;
-    if (!enabled) _active.clear();
-    final completed = <Map<String, dynamic>>[];
+    if (!enabled) {
+      _active.clear();
+      _pending.clear();
+    }
+    final completed = <Map<String, dynamic>>[..._pending];
+    _pending.clear();
     if (enabled) {
       for (final source in _active.keys.toList()) {
         if (active.contains(source)) continue;
@@ -64,7 +74,7 @@ final class AiActivityLog {
             lastUsage.input >= usage.input &&
             lastUsage.output >= usage.output;
         if (now.isBefore(start)) continue;
-        final project = cwd == null ? null : _label(p.basename(cwd));
+        final project = cwd == null ? null : label(p.basename(cwd));
         final timeline = cwd == null
             ? <Map<String, dynamic>>[]
             : activityTimeline(
@@ -76,7 +86,7 @@ final class AiActivityLog {
           for (final group in timeline)
             for (final file in group['files'] as List)
               if (DateTime.parse(file['at'] as String).isBefore(now))
-                ?_label(p.basename(file['path'] as String)),
+                ?label(p.basename(file['path'] as String)),
         };
         final topic = timeline.isEmpty
             ? null
@@ -85,10 +95,13 @@ final class AiActivityLog {
             : 'editing';
         completed.add({
           'version': 1,
+          'origin': 'live',
+          'session': null,
+          'superseded_by': null,
           'id': '$source:${start.microsecondsSinceEpoch}',
           'source_kind': source.split(':').first,
           'source': source.split(':').last,
-          'model': sameUsage ? _label(lastUsage.model) : null,
+          'model': sameUsage ? label(lastUsage.model) : null,
           'project': project,
           'topic': topic,
           'started_at': start.toUtc().toIso8601String(),
@@ -121,7 +134,10 @@ final class AiActivityLog {
         2 | 0x40 | Posix.noFollow | Posix.nonBlock,
         0x180,
       );
-      if (io.stat(lock).uid != io.uid || _flock(lock, 6) != 0) return;
+      if (io.stat(lock).uid != io.uid || _flock(lock, 6) != 0) {
+        _pending.addAll(completed);
+        return;
+      }
       for (final path in files.list(_directory, limit: 1024)) {
         final name = p.basename(path);
         if (!name.endsWith('.jsonl')) continue;
@@ -138,24 +154,60 @@ final class AiActivityLog {
           settings.value(settings.load(), 'ai_activity_log') != true) {
         return;
       }
-      final path = p.join(_directory, '${activityDay(now.toLocal())}.jsonl');
-      final previous = files.text(path, limit: _maxFile) ?? '';
-      final known = _rows(previous).map((e) => e['id']).toSet();
-      final lines = completed
-          .where((e) => !known.contains(e['id']))
-          .map(jsonEncode);
-      final records = [..._rows(previous).map(jsonEncode), ...lines];
-      final body = utf8.encode("${records.join('\n')}\n");
-      if (body.length <= _maxFile) io.atomicWrite(path, body);
+      final grouped = <String, List<Map<String, dynamic>>>{};
+      for (final row in completed) {
+        final day = activityDay(DateTime.parse(row['started_at']).toLocal());
+        if (day.compareTo(cutoff) >= 0) {
+          grouped.putIfAbsent(day, () => []).add(row);
+        }
+      }
+      for (final entry in grouped.entries) {
+        final path = p.join(_directory, '${entry.key}.jsonl');
+        final rows = _rows(files.text(path, limit: _maxFile) ?? '').toList();
+        var changed = false;
+        for (final row in entry.value) {
+          if (rows.any((r) => r['id'] == row['id'])) continue;
+          final priorDay = activityDay(
+            _date(DateTime.parse(row['started_at']).toLocal(), -1),
+          );
+          final history = [
+            ...rows,
+            ..._rows(
+              files.text(
+                    p.join(_directory, '$priorDay.jsonl'),
+                    limit: _maxFile,
+                  ) ??
+                  '',
+            ),
+          ];
+          for (final old in history) {
+            if (_overlaps(row, old)) {
+              row['superseded_by'] = old['id'];
+              break;
+            }
+          }
+          rows.add(row);
+          if (utf8.encode(rows.map(jsonEncode).join('\n')).length + 1 >
+              _maxFile) {
+            rows.removeLast();
+            // The daily storage cap is terminal for this entry, unlike lock
+            // contention. Retrying cannot make space before retention pruning.
+          } else {
+            changed = true;
+          }
+        }
+        if (changed) _writeRows(path, rows);
+      }
     } on FileSystemException {
-      // A missing or unavailable local log never interrupts the map.
+      _pending.addAll(completed.where((r) => !_pending.contains(r)));
+      // Retry on the next observation.
     } finally {
       if (lock != null) io.close(lock);
       if (directory != null) io.close(directory);
     }
   }
 
-  static String? _label(dynamic value) {
+  static String? label(dynamic value) {
     if (value is! String ||
         !RegExp(r'^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$').hasMatch(value) ||
         RegExp(
@@ -194,16 +246,29 @@ final class AiActivityLog {
         if (started == null || ended == null || ended.isBefore(started)) {
           continue;
         }
+        final history = row['origin'] == 'history';
+        final session = row['session'] is String
+            ? historySession(row['session'])
+            : null;
+        if (history && session == null) continue;
+        final id = history
+            ? 'history:$kind:$source:$session:${started.microsecondsSinceEpoch}'
+            : '$kind:$source:${started.microsecondsSinceEpoch}';
         yield {
           'version': 1,
-          'id': '$kind:$source:${started.microsecondsSinceEpoch}',
+          'id': id,
+          'origin': history ? 'history' : 'live',
+          'session': session,
+          'superseded_by':
+              row['superseded_by'] is String &&
+                  (row['superseded_by'] as String).startsWith('history:')
+              ? row['superseded_by']
+              : null,
           'source_kind': kind,
           'source': source,
-          'model': _label(row['model']),
-          'project': _label(row['project']),
-          'topic': {'editing', 'testing'}.contains(row['topic'])
-              ? row['topic']
-              : null,
+          'model': label(row['model']),
+          'project': label(row['project']),
+          'topic': sanitizeTopic(row['topic']),
           'started_at': started.toUtc().toIso8601String(),
           'ended_at': ended.toUtc().toIso8601String(),
           'duration_ms': ended.difference(started).inMilliseconds,
@@ -211,7 +276,7 @@ final class AiActivityLog {
             for (final value
                 in (row['files'] is List ? row['files'] as List : const [])
                     .take(30))
-              ?_label(value),
+              ?label(value),
           ],
           'helpers': <String>[],
           'tokens_in': _tokens(row['tokens_in']),
@@ -222,6 +287,198 @@ final class AiActivityLog {
       } on FormatException {
         // Ignore a partial or invalid line and continue with the next one.
       }
+    }
+  }
+
+  int? _larger(int? old, int? incoming) => old == null
+      ? incoming
+      : incoming == null || old > incoming
+      ? old
+      : incoming;
+
+  bool _overlaps(Map live, Map history) {
+    if (live['origin'] == 'history' ||
+        history['origin'] != 'history' ||
+        live['source'] != history['source'] ||
+        live['source_kind'] != history['source_kind'] ||
+        live['project'] != null &&
+            history['project'] != null &&
+            live['project'] != history['project']) {
+      return false;
+    }
+    final a = DateTime.parse(live['started_at']),
+        b = DateTime.parse(live['ended_at']);
+    final hStart = DateTime.parse(history['started_at']),
+        hEnd = DateTime.parse(history['ended_at']);
+    final left = a.isAfter(hStart) ? a : hStart,
+        right = b.isBefore(hEnd) ? b : hEnd;
+    final duration = b.difference(a).inMicroseconds;
+    return duration == 0
+        ? !a.isBefore(hStart) && !a.isAfter(hEnd)
+        : right.difference(left).inMicroseconds * 2 > duration;
+  }
+
+  void _writeRows(String path, List<Map<String, dynamic>> rows) {
+    rows.sort(
+      (a, b) =>
+          (a['started_at'] as String).compareTo(b['started_at'] as String),
+    );
+    files.posix.atomicWrite(
+      path,
+      utf8.encode('${rows.map(jsonEncode).join('\n')}\n'),
+    );
+  }
+
+  /// Merge only while holding the short day-file lock. Never hold it while
+  /// reading agent history. Return written row for cross-day superseding.
+  Future<({String status, Map<String, dynamic>? row})> mergeHistory(
+    Map<String, dynamic> row, {
+    bool leadingPartial = false,
+    DateTime? earliestStart,
+    DateTime? now,
+  }) async {
+    final normalized = _rows(jsonEncode(row)).toList();
+    if (normalized.isEmpty) return (status: 'skipped', row: null);
+    row = normalized.single;
+    var targetDay = activityDay(DateTime.parse(row['started_at']).toLocal());
+    if (leadingPartial) {
+      final (today, keep, from, through) = range({}, now: now);
+      Map<String, dynamic>? prior;
+      for (final (_, candidate) in retainedRows(today, keep, from, through)) {
+        if (candidate['origin'] == 'history' &&
+            candidate['source'] == row['source'] &&
+            candidate['source_kind'] == row['source_kind'] &&
+            candidate['session'] == row['session'] &&
+            !DateTime.parse(
+              candidate['ended_at'],
+            ).isBefore(DateTime.parse(row['started_at'])) &&
+            !DateTime.parse(
+              candidate['started_at'],
+            ).isAfter(DateTime.parse(row['ended_at']))) {
+          prior = candidate;
+          break;
+        }
+      }
+      if (prior == null ||
+          earliestStart != null &&
+              DateTime.parse(
+                prior['started_at'],
+              ).toLocal().isBefore(earliestStart)) {
+        return (status: 'skipped', row: null);
+      }
+      targetDay = activityDay(DateTime.parse(prior['started_at']).toLocal());
+    }
+    final io = files.posix;
+    final dir = io.privateDirectory(_directory);
+    int? lock;
+    try {
+      lock = io.openAt(
+        dir,
+        '.lock',
+        2 | 0x40 | Posix.noFollow | Posix.nonBlock,
+        0x180,
+      );
+      if (io.stat(lock).uid != io.uid) throw ServiceError('operation_failed');
+      final waiting = Stopwatch()..start();
+      while (!io.tryLockExclusive(lock)) {
+        if (waiting.elapsedMilliseconds > 5000) {
+          throw ServiceError('import_running');
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      }
+      if (!enabled) throw ServiceError('log_off');
+      final start = DateTime.parse(row['started_at'] as String).toLocal();
+      final end = DateTime.parse(row['ended_at'] as String).toLocal();
+      final startDay = targetDay, endDay = activityDay(end);
+      final path = p.join(_directory, '$startDay.jsonl');
+      final rows = _rows(files.text(path, limit: _maxFile) ?? '').toList();
+      final match = rows.indexWhere(
+        (r) =>
+            r['id'] == row['id'] ||
+            leadingPartial &&
+                r['origin'] == 'history' &&
+                r['source'] == row['source'] &&
+                r['session'] == row['session'] &&
+                !DateTime.parse(r['ended_at']).isBefore(start) &&
+                !DateTime.parse(r['started_at']).isAfter(end),
+      );
+      String result = 'added';
+      if (match >= 0) {
+        final old = rows[match];
+        final mergedFiles = {
+          ...old['files'] as List,
+          ...row['files'] as List,
+        }.take(30).toList();
+        final grows =
+            end.isAfter(DateTime.parse(old['ended_at'])) ||
+            !leadingPartial &&
+                (row['tokens_in'] as int? ?? 0) >
+                    (old['tokens_in'] as int? ?? 0) ||
+            !leadingPartial &&
+                (row['tokens_out'] as int? ?? 0) >
+                    (old['tokens_out'] as int? ?? 0) ||
+            mergedFiles.length > (old['files'] as List).length;
+        if (!grows) return (status: 'unchanged', row: old);
+        row = {
+          ...row,
+          'id': old['id'],
+          'started_at': old['started_at'],
+          'ended_at': DateTime.parse(old['ended_at']).isAfter(end)
+              ? old['ended_at']
+              : row['ended_at'],
+          'tokens_in': leadingPartial
+              ? old['tokens_in']
+              : _larger(old['tokens_in'] as int?, row['tokens_in'] as int?),
+          'tokens_out': leadingPartial
+              ? old['tokens_out']
+              : _larger(old['tokens_out'] as int?, row['tokens_out'] as int?),
+          for (final field in ['topic', 'model', 'project'])
+            field: leadingPartial ? old[field] : row[field] ?? old[field],
+          'files': mergedFiles,
+        };
+        row['duration_ms'] = DateTime.parse(
+          row['ended_at'],
+        ).difference(DateTime.parse(row['started_at'])).inMilliseconds;
+        rows[match] = row;
+        result = 'updated';
+      } else {
+        if (leadingPartial) return (status: 'skipped', row: null);
+        rows.add(row);
+      }
+      if (utf8.encode(rows.map(jsonEncode).join('\n')).length + 1 > _maxFile) {
+        return (status: 'skipped', row: null);
+      }
+      bool supersede(List<Map<String, dynamic>> target) {
+        var changed = false;
+        for (final live in target) {
+          if (_overlaps(live, row) && live['superseded_by'] != row['id']) {
+            live['superseded_by'] = row['id'];
+            changed = true;
+          }
+        }
+        return changed;
+      }
+
+      supersede(rows);
+      if (utf8.encode(rows.map(jsonEncode).join('\n')).length + 1 > _maxFile) {
+        return (status: 'skipped', row: null);
+      }
+      _writeRows(path, rows);
+      if (endDay != startDay) {
+        final other = p.join(_directory, '$endDay.jsonl');
+        final otherRows = _rows(
+          files.text(other, limit: _maxFile) ?? '',
+        ).toList();
+        if (supersede(otherRows) &&
+            utf8.encode(otherRows.map(jsonEncode).join('\n')).length + 1 <=
+                _maxFile) {
+          _writeRows(other, otherRows);
+        }
+      }
+      return (status: result, row: row);
+    } finally {
+      if (lock != null) io.close(lock);
+      io.close(dir);
     }
   }
 
@@ -268,7 +525,7 @@ final class AiActivityLog {
       final text =
           files.text(p.join(_directory, '$date.jsonl'), limit: _maxFile) ?? '';
       for (final row in _rows(text).toList().reversed) {
-        yield (local, row);
+        if (row['superseded_by'] == null) yield (local, row);
       }
     }
   }

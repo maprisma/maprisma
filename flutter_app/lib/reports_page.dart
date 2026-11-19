@@ -8,6 +8,8 @@ import 'app_look.dart';
 import 'core_client.g.dart';
 import 'mic_button.dart';
 import 'reports_output.dart';
+import 'history_import_controller.dart';
+import 'reports_help.dart';
 
 class ReportsPage extends StatefulWidget {
   const ReportsPage({
@@ -21,6 +23,7 @@ class ReportsPage extends StatefulWidget {
     required this.onUpdate,
     required this.localHelperReady,
     required this.active,
+    this.historyImport,
   });
 
   final CoreClient client;
@@ -32,12 +35,16 @@ class ReportsPage extends StatefulWidget {
   final Future<void> Function(Map<String, dynamic>) onUpdate;
   final bool localHelperReady;
   final bool active;
+  final HistoryImportController? historyImport;
 
   @override
   State<ReportsPage> createState() => ReportsPageState();
 }
 
 class ReportsPageState extends State<ReportsPage> {
+  late final _history = widget.historyImport ?? HistoryImportController();
+  List<Map<String, dynamic>> _importSources = [];
+  bool _helpOpen = false;
   final _focus = TextEditingController();
   final _focusNode = FocusNode();
   String _partialFocus = '';
@@ -61,6 +68,8 @@ class ReportsPageState extends State<ReportsPage> {
   @override
   void initState() {
     super.initState();
+    _history.addListener(_importChanged);
+    unawaited(_loadImportSources());
     _loadTab(widget.tab);
   }
 
@@ -75,6 +84,8 @@ class ReportsPageState extends State<ReportsPage> {
 
   @override
   void dispose() {
+    _history.removeListener(_importChanged);
+    if (widget.historyImport == null) _history.dispose();
     _searchTimer?.cancel();
     _focusNode.dispose();
     for (final c in [_focus, _project, _source, _title, _search]) {
@@ -82,6 +93,104 @@ class ReportsPageState extends State<ReportsPage> {
     }
     super.dispose();
   }
+
+  Future<void> _loadImportSources() async {
+    try {
+      final report = await client.activitylogReport();
+      if (mounted) {
+        setState(
+          () => _importSources = (report['import_sources'] as List? ?? [])
+              .cast<Map<String, dynamic>>(),
+        );
+      }
+    } catch (_) {
+      /* The Log tab exposes read failures with retry. */
+    }
+  }
+
+  void _importChanged() {
+    if (!mounted) return;
+    setState(() {});
+    if (!_history.running) {
+      unawaited(_log.currentState?.refresh());
+      unawaited(_loadImportSources());
+    }
+  }
+
+  Future<void> showHelp() async {
+    if (_helpOpen || ModalRoute.of(context)?.isCurrent != true) return;
+    _helpOpen = true;
+    try {
+      await _loadImportSources();
+      if (mounted && ModalRoute.of(context)?.isCurrent == true) {
+        await showReportingHelp(context, client, tr, _importSources);
+      }
+    } finally {
+      _helpOpen = false;
+    }
+  }
+
+  Future<void> _collectHistory() async {
+    for (final (key, title) in [
+      ('ai_activity_log', 'AI activity log'),
+      ('ai_activity_import', 'Collect activity from agent history'),
+    ]) {
+      if (!mounted) return;
+      if (widget.settings[key] == false ||
+          key == 'ai_activity_log' && widget.settings[key] != true) {
+        if (!await _confirm(title, 'Switch on') || !mounted) return;
+        try {
+          await widget.onUpdate({key: true});
+          if (!mounted) return;
+        } catch (_) {
+          if (mounted) setState(() => _history.error = 'operation_failed');
+          return;
+        }
+      }
+    }
+    if (mounted) await _history.collect(client);
+  }
+
+  Widget _historyStatus() => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Tooltip(
+        message: tr('Collect activity from outside Maprisma'),
+        child: OutlinedButton.icon(
+          onPressed: _history.running ? null : _collectHistory,
+          icon: _history.running
+              ? const SizedBox.square(
+                  dimension: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.history),
+          label: Text(tr('Collect history')),
+        ),
+      ),
+      if (_history.running && _history.progress.isNotEmpty)
+        Text(_history.progress),
+      if (_history.error != null)
+        Text(
+          tr(switch (_history.error) {
+            'log_off' => 'Turn on the activity log to collect entries.',
+            'import_off' => 'Collect activity from agent history',
+            'import_running' => 'History collection is already running.',
+            _ => 'Could not collect history.',
+          }),
+          style: TextStyle(color: Theme.of(context).colorScheme.error),
+        ),
+      for (final source in _history.result?['sources'] as List? ?? const [])
+        Text(
+          "${source['name']}: ${tr('{0} sessions, {1} new, {2} updated, {3} skipped').replaceAll('{0}', '${source['sessions']}').replaceAll('{1}', '${source['added']}').replaceAll('{2}', '${source['updated']}').replaceAll('{3}', '${source['skipped']}')} · ${tr(switch (source['status']) {
+            'unsupported' => 'Unsupported',
+            'unavailable' => 'Unavailable',
+            'corrupt' => 'Damaged history',
+            'partial' => 'Partial',
+            _ => 'Finished',
+          })}",
+        ),
+    ],
+  );
 
   void _loadTab(int tab) {
     if (tab == 1) unawaited(_loadHelpers());
@@ -363,7 +472,19 @@ class ReportsPageState extends State<ReportsPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        WindowHeader(title: tr('Reports'), tr: tr, onBack: widget.onBack),
+        WindowHeader(
+          title: tr('Reports'),
+          tr: tr,
+          onBack: widget.onBack,
+          actions: [
+            IconButton(
+              key: const ValueKey('reports-help'),
+              tooltip: tr('How reporting works (F1)'),
+              onPressed: showHelp,
+              icon: const Icon(Icons.help_outline),
+            ),
+          ],
+        ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg),
           child: Wrap(
@@ -389,6 +510,7 @@ class ReportsPageState extends State<ReportsPage> {
             children: [
               _scroll('log', [
                 _settings(),
+                _historyStatus(),
                 if (!enabled)
                   Text(tr('Turn on the activity log to collect entries.')),
                 if (enabled)
@@ -685,10 +807,14 @@ class ReportsPageState extends State<ReportsPage> {
                   final bounded = String.fromCharCodes(
                     controller.text.runes.take(500),
                   );
-                  controller.value = TextEditingValue(
-                    text: bounded,
-                    selection: TextSelection.collapsed(offset: bounded.length),
-                  );
+                  if (bounded != controller.text) {
+                    controller.value = TextEditingValue(
+                      text: bounded,
+                      selection: TextSelection.collapsed(
+                        offset: bounded.length,
+                      ),
+                    );
+                  }
                 },
                 focusNode: _focusNode,
                 enabled: enabled,
@@ -742,6 +868,22 @@ class ReportsPageState extends State<ReportsPage> {
               onChanged: (value) {
                 if (value != null) _update('ai_activity_log_days', value);
               },
+            ),
+          ),
+          SettingRow(
+            title: tr('Collect activity from agent history'),
+            control: Switch(
+              value: settings['ai_activity_import'] != false,
+              onChanged: (value) => _update('ai_activity_import', value),
+            ),
+          ),
+          SettingRow(
+            title: tr("Use the agent's request as topic"),
+            control: Switch(
+              value: settings['ai_activity_import_topics'] != false,
+              onChanged: settings['ai_activity_import'] == false
+                  ? null
+                  : (value) => _update('ai_activity_import_topics', value),
             ),
           ),
           SettingRow(

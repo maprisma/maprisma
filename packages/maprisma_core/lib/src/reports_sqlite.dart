@@ -54,14 +54,33 @@ final class ReportsSqlite {
 
   Pointer<Void> _db = nullptr;
   Pointer<Uint8> _image = nullptr;
+  NativeCallable<Int Function(Pointer<Void>)>? _readBudget;
   static final _lib = DynamicLibrary.open('libsqlite3.so.0');
   static final _transient = Pointer<Void>.fromAddress(-1);
 
   void close() {
     if (_db != nullptr) _close(_db);
     _db = nullptr;
+    _readBudget?.close();
+    _readBudget = null;
     if (_image != nullptr) calloc.free(_image);
     _image = nullptr;
+  }
+
+  /// Bound untrusted history queries and keep all temporary state in memory.
+  void restrictReads(Duration budget) {
+    exec(
+      'PRAGMA temp_store=MEMORY; PRAGMA query_only=ON; PRAGMA trusted_schema=OFF',
+    );
+    final clock = Stopwatch()..start();
+    _readBudget = NativeCallable<Int Function(Pointer<Void>)>.isolateLocal(
+      (Pointer<Void> _) => clock.elapsed >= budget ? 1 : 0,
+      exceptionalReturn: 1,
+    );
+    _progress(_db, 1000, _readBudget!.nativeFunction, nullptr);
+    _limit(_db, 0, 1024 * 1024);
+    _limit(_db, 1, 32768);
+    _limit(_db, 2, 128);
   }
 
   void check(int result) {
@@ -149,6 +168,26 @@ final class ReportsSqlite {
     }
   }
 
+  static final _progress = _lib
+      .lookupFunction<
+        Void Function(
+          Pointer<Void>,
+          Int,
+          Pointer<NativeFunction<Int Function(Pointer<Void>)>>,
+          Pointer<Void>,
+        ),
+        void Function(
+          Pointer<Void>,
+          int,
+          Pointer<NativeFunction<Int Function(Pointer<Void>)>>,
+          Pointer<Void>,
+        )
+      >('sqlite3_progress_handler');
+  static final _limit = _lib
+      .lookupFunction<
+        Int Function(Pointer<Void>, Int, Int),
+        int Function(Pointer<Void>, int, int)
+      >('sqlite3_limit');
   static final _errmsg = _lib
       .lookupFunction<
         Pointer<Utf8> Function(Pointer<Void>),

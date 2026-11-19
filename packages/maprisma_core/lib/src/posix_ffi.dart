@@ -144,6 +144,31 @@ class Posix {
     if (_ftruncate(fd, length) != 0) _fail();
   }
 
+  /// File birth time from statx when the filesystem supplies it.
+  DateTime? birthTime(String path) {
+    final buffer = calloc<Uint8>(256);
+    try {
+      var ok = false;
+      _path(path, (name) => ok = _statx(-100, name, 0x100, 0xfff, buffer) == 0);
+      if (!ok) return null;
+      final b = ByteData.sublistView(buffer.asTypedList(256));
+      if (b.getUint32(0, Endian.host) & 0x800 == 0) return null;
+      final seconds = b.getInt64(80, Endian.host),
+          nanos = b.getUint32(88, Endian.host);
+      if (seconds <= 0 || nanos >= 1000000000) return null;
+      try {
+        return DateTime.fromMicrosecondsSinceEpoch(
+          seconds * 1000000 + nanos ~/ 1000,
+          isUtc: true,
+        );
+      } on ArgumentError {
+        return null;
+      }
+    } finally {
+      calloc.free(buffer);
+    }
+  }
+
   /// fstat's type, owner, size, link count and identity (device, inode).
   ({int mode, int uid, int size, int nlink, List<int> identity}) statFull(
     int fd,

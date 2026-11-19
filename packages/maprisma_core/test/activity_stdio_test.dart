@@ -238,7 +238,10 @@ void main() {
         }),
       );
       final log = AiActivityLog(ScanFiles(identity), settings);
-      final expected = log.report({'from_day': day, 'through_day': day});
+      final expected = {
+        ...log.report({'from_day': day, 'through_day': day}),
+        'import_sources': <Object>[],
+      };
       expect(expected['entries'].single['topic'], 'editing');
       Future<String> cli(String format) async {
         final result = await Process.run(

@@ -1010,6 +1010,7 @@ Future<int> runWorker(List<String> args) async {
           'models.tuning_ask',
           'map.smart_ask',
           'reports.generate',
+          'activitylog.import',
         }.contains(operation) ||
         (request['params'] as Map).isNotEmpty) {
       throw const FormatException('Invalid private operation');
@@ -1239,6 +1240,31 @@ Future<int> runWorker(List<String> args) async {
           identity.shortName,
         ),
       });
+      return 0;
+    }
+    if (operation == 'activitylog.import') {
+      if (body.length > 1024) {
+        throw const FormatException('Import request too large');
+      }
+      Map<String, dynamic> result;
+      try {
+        final service = CoreService(migrate: false);
+        final params = jsonDecode(utf8.decode(body)) as Map<String, dynamic>;
+        if (params.keys.any((k) => k != 'days' && k != 'auto') ||
+            params['days'] != null && params['days'] is! int ||
+            params['auto'] != null && params['auto'] is! bool) {
+          throw ServiceError('invalid_request');
+        }
+        result = await service.historyImporter().run(
+          days: params['days'] as int?,
+          auto: params['auto'] == true,
+          progress: (name) =>
+              send({'type': 'progress', 'text': name, 'fraction': 0}),
+        );
+      } on ServiceError catch (e) {
+        result = {'error': e.message, 'code': e.code};
+      }
+      send({'type': 'result', 'result': result});
       return 0;
     }
     if (operation == 'reports.generate') {

@@ -32,13 +32,13 @@ Map<String, dynamic> trajectoryActivity(
     try {
       switch (type) {
         case 14:
-          final text = _text(payload, [19, 2]);
+          final text = trajectoryText(payload, [19, 2]);
           if (text.isNotEmpty) request = {'at': null, 'text': text};
         case 15:
-          final text = _text(payload, [20, 1]);
+          final text = trajectoryText(payload, [20, 1]);
           if (text.isNotEmpty) answers.add({'at': null, 'text': text});
         case 132:
-          final name = _text(payload, [5, 4, 2]);
+          final name = trajectoryText(payload, [5, 4, 2]);
           if (!RegExp(r'^[a-zA-Z0-9_.-]{1,128}$').hasMatch(name)) {
             partial = true;
             continue;
@@ -50,7 +50,7 @@ Map<String, dynamic> trajectoryActivity(
             'status': completed ? 'completed' : null,
           });
           if (completed && name == 'write_file') {
-            final path = _text(payload, [140, 1, 2]);
+            final path = trajectoryText(payload, [140, 1, 2]);
             if (path.startsWith('/')) edits.add({'at': null, 'path': path});
           }
         default:
@@ -75,7 +75,7 @@ Map<String, dynamic> trajectoryActivity(
   };
 }
 
-String _text(Uint8List bytes, List<int> path) {
+String trajectoryText(Uint8List bytes, List<int> path) {
   for (final tag in path) {
     final field = _field(bytes, tag);
     if (field == null) return '';

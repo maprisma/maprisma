@@ -105,8 +105,9 @@ Future<Map<String, dynamic>> generateTopicReport(
   SmartAgent helper, {
   required void Function() beforeRun,
   required String language,
+  DateTime? now,
 }) async {
-  final (today, keep, from, through) = log.range(params);
+  final (today, keep, from, through) = log.range(params, now: now);
   if (!log.enabled) throw ServiceError('log_off');
   final entries = <Map<String, dynamic>>[];
   var total = 0;
@@ -148,6 +149,10 @@ ${jsonEncode(focus)}
       'files': (row['files'] as List).length,
       'helpers': (row['helpers'] as List).length,
     };
+    if (!log.importTopics &&
+        !const {'editing', 'testing'}.contains(entry['topic'])) {
+      entry['topic'] = null;
+    }
     bytes += utf8.encode(jsonEncode(entry)).length + 1;
     if (entries.length == 2000 || bytes > entryBudget) {
       capped = true;
@@ -156,19 +161,29 @@ ${jsonEncode(focus)}
     entries.add(entry);
   }
   if (entries.isEmpty) throw ServiceError('no_entries');
-  final prompt =
-      '$instructions\nEntries provided: ${entries.length} of $total. '
-      'Capped: $capped.\n<untrusted-entries>\n'
-      '${jsonEncode(entries)}\n</untrusted-entries>';
+  String prompt() {
+    if (!log.importTopics) {
+      for (final entry in entries) {
+        if (!const {'editing', 'testing'}.contains(entry['topic'])) {
+          entry['topic'] = null;
+        }
+      }
+    }
+    return '$instructions\nEntries provided: ${entries.length} of $total. '
+        'Capped: $capped.\n<untrusted-entries>\n'
+        '${jsonEncode(entries)}\n</untrusted-entries>';
+  }
+
   for (var attempt = 0; attempt < 2; attempt++) {
     if (!log.enabled) throw ServiceError('log_off');
     beforeRun();
+    final request = prompt();
     String answer;
     try {
       answer = await helper(
         attempt == 0
-            ? prompt
-            : '$prompt\nThe previous answer did not match the JSON schema. Try again.',
+            ? request
+            : '$request\nThe previous answer did not match the JSON schema. Try again.',
       );
     } on Exception {
       throw ServiceError('helper_failed');

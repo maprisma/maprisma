@@ -991,6 +991,20 @@ class SettingsView extends StatelessWidget {
                   },
           ),
         ),
+        SwitchListTile(
+          title: Text(_t('Collect activity from agent history')),
+          value: settings['ai_activity_import'] != false,
+          onChanged: busy
+              ? null
+              : (value) => onUpdate({'ai_activity_import': value}),
+        ),
+        SwitchListTile(
+          title: Text(_t("Use the agent's request as topic")),
+          value: settings['ai_activity_import_topics'] != false,
+          onChanged: busy || settings['ai_activity_import'] == false
+              ? null
+              : (value) => onUpdate({'ai_activity_import_topics': value}),
+        ),
         if (helpers?['chosen'] != null)
           SwitchListTile(
             title: Text(_t('Topic summaries by local LLM')),

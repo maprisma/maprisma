@@ -155,6 +155,8 @@ SCHEMA: dict[str, Setting] = {
     "ai_activity_log": Setting(False, _bool, "Collect local activity observations"),
     "ai_activity_log_days": Setting(7, lambda v: isinstance(v, int) and not isinstance(v, bool) and 1 <= v <= 365,
                                     "Days of local activity history to keep"),
+    "ai_activity_import": Setting(True, _bool, "Collect activity from agent history"),
+    "ai_activity_import_topics": Setting(True, _bool, "Use the agent request as activity topic"),
     "ai_activity_local_topics": Setting(False, _bool, "Use a detected local model for activity topics"),
     "usage_box": Setting(True, _bool, "Settings › Usage statistics box: shown on a working agent's line"),
     "usage_box_items": Setting(list(USAGE_BOX_ITEMS), lambda v: _texts(v) and set(v) <= set(USAGE_BOX_ITEMS),

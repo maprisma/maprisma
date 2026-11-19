@@ -30,7 +30,7 @@
   "activitylog.report": {
    "area": "activitylog",
    "kind": "read",
-   "note": "Retained local activity, paginated after aggregating the requested date range. Missing usage is unknown.",
+   "note": "Retained local activity, paginated after aggregating the requested date range. Missing usage is unknown. History and live spans, excluding superseded observations. import_sources is present with logging off.",
    "optional": [
     "from_day",
     "through_day",
@@ -103,12 +103,22 @@
       "tokens_in": "int|null",
       "tokens_out": "int|null",
       "topic": "string|null",
-      "version": "int"
+      "version": "int",
+      "origin": "string",
+      "session": "string|null",
+      "superseded_by": "string|null"
      }
     ],
     "from_day": "string",
     "next_cursor": "int|null",
-    "through_day": "string"
+    "through_day": "string",
+    "import_sources": [
+     {
+      "source": "string",
+      "name": "string",
+      "supported": "bool"
+     }
+    ]
    },
    "source": "manual"
   },
@@ -2286,7 +2296,9 @@
     "warn_notify": "bool",
     "warn_red": "int",
     "warn_yellow": "int",
-    "window_mode": "string"
+    "window_mode": "string",
+    "ai_activity_import": "bool",
+    "ai_activity_import_topics": "bool"
    },
    "source": "manual"
   },
@@ -2361,7 +2373,9 @@
     "warn_notify": "bool",
     "warn_red": "int",
     "warn_yellow": "int",
-    "window_mode": "string"
+    "window_mode": "string",
+    "ai_activity_import": "bool",
+    "ai_activity_import_topics": "bool"
    },
    "source": "manual"
   },
@@ -2670,6 +2684,24 @@
    "params": {},
    "result": null,
    "source": null
+  },
+  "activitylog.import": {
+   "area": "activitylog",
+   "kind": "change",
+   "note": "Collect read-only agent history into the local activity log. Job result contains sources [{source,name,sessions,added,updated,skipped,status}], added,updated,skipped, or {error,code}. auto runs throttle across restarts for one hour. Errors log_off, import_off, import_running, invalid_request.",
+   "params": {
+    "days": "int",
+    "auto": "bool"
+   },
+   "optional": [
+    "days",
+    "auto"
+   ],
+   "result": {
+    "task": "string?",
+    "skipped": "string?"
+   },
+   "source": "manual"
   }
  }
 }

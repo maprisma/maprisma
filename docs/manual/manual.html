@@ -1364,6 +1364,12 @@
   <p>Open Reports beside Ask AI. Log shows the recorded activity and its settings, with a date filter, copy, and TXT or JSON export. Logging is off by default and retains one week including today when enabled.</p>
   <p>Topic reports sends sanitized activity summaries to the selected helper, using the chosen date range and optional project, agent or runtime, and focus. It sends counts and labels, without file contents or paths. Online helpers require explicit permission in Ask AI data rules. You can cancel generation, then copy, export or save a completed draft.</p>
   <p>The Library stores reports privately on this PC until you delete them. Search, edit a title or note, or export as TXT, Markdown or JSON. The command line provides <code>maprisma-core reports list</code>, <code>show ID</code> and <code>export ID --format text|markdown|json</code>. The history MCP server offers <code>reports_list</code> and <code>reports_get</code>.</p>
+
+  <h3>How reporting works</h3>
+  <p><b>?</b> / <b>F1</b> — How reporting works.</p>
+<p><b>Collect history</b> — Collect history reads past sessions from supported agents. Collect activity from agent history controls collection. Use the agent's request as topic controls request topics. Topics are shortened and secret-looking text is redacted.</p>
+<p>Collect first, then choose a date range, filters and a focus and select Generate. The helper receives log entries, including request topics while that option is on. Online helpers require the activity-log permission in Maprisma Settings under AI.</p>
+<p>Collect first, then generate. Use the focus for one project or question. History with incomplete timing or usage is marked partial, and missing usage stays unknown.</p>
 </section>
 
 <section class="chapter" id="privacy">

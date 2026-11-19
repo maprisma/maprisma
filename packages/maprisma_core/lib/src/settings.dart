@@ -41,6 +41,8 @@ const uiSettings = {
   'action_rule_hints',
   'ai_activity_log',
   'ai_activity_log_days',
+  'ai_activity_import',
+  'ai_activity_import_topics',
   'ai_activity_local_topics',
   'usage_box',
   'usage_box_items',

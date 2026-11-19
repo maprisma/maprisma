@@ -34,6 +34,9 @@ class CoreClient {
 
   final ServiceTransport transport;
 
+  Future<Map<String, dynamic>> activitylogImport({bool? auto, int? days}) =>
+      transport.call('activitylog.import', {'auto': ?auto, 'days': ?days});
+
   Future<Map<String, dynamic>> activitylogReport({
     int? cursor,
     String? fromDay,

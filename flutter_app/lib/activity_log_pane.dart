@@ -122,19 +122,23 @@ class ActivityLogPaneState extends State<ActivityLogPane> {
   String _duration(int ms) =>
       Duration(milliseconds: ms).toString().split('.').first;
 
+  String _rowText(Map row) => [
+    '${row['source']}',
+    if (row['project'] is String) '${row['project']}',
+    if (row['topic'] == 'testing') widget.tr('Writing or running tests'),
+    if (row['topic'] == 'editing') widget.tr('Editing'),
+    if (row['topic'] is String &&
+        !const {'editing', 'testing'}.contains(row['topic']))
+      row['topic'] as String,
+    DateTime.parse(
+      row['started_at'] as String,
+    ).toLocal().toString().split('.').first,
+    _duration(row['duration_ms'] as int),
+  ].join(' · ');
+
   String _text(Map<String, dynamic> result) => [
     '${result['from_day']} – ${result['through_day']}',
-    for (final row in result['entries'] as List)
-      [
-        '${row['source']}',
-        if (row['project'] is String) '${row['project']}',
-        if (row['topic'] == 'testing') widget.tr('Writing or running tests'),
-        if (row['topic'] == 'editing') widget.tr('Editing'),
-        DateTime.parse(
-          row['started_at'] as String,
-        ).toLocal().toString().split('.').first,
-        _duration(row['duration_ms'] as int),
-      ].join(' · '),
+    for (final row in result['entries'] as List) _rowText(row),
     for (final (key, heading) in const [
       ('by_source', 'By agent or runtime'),
       ('by_project', 'By project'),
@@ -216,11 +220,39 @@ class ActivityLogPaneState extends State<ActivityLogPane> {
         const SizedBox(height: AppSpace.md),
         if (report != null)
           SectionCard(
-            child: SelectableText(
-              onSelectionChanged: _selectionChanged,
-              (report['entries'] as List).isEmpty
-                  ? widget.tr('No details available')
-                  : _text(report),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if ((report['entries'] as List).isEmpty)
+                  Text(widget.tr('No details available')),
+                Text('${report['from_day']} – ${report['through_day']}'),
+                for (final row in report['entries'] as List)
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (row['origin'] == 'history') ...[
+                        Tooltip(
+                          message: widget.tr("From the agent's own history"),
+                          child: const Icon(Icons.history, size: 16),
+                        ),
+                        const SizedBox(width: AppSpace.sm),
+                      ],
+                      Expanded(
+                        child: SelectableText(
+                          _rowText(row),
+                          onSelectionChanged: _selectionChanged,
+                        ),
+                      ),
+                    ],
+                  ),
+                SelectableText(
+                  _text({
+                    ...report,
+                    'entries': <Object>[],
+                  }).split('\n').skip(1).join('\n'),
+                  onSelectionChanged: _selectionChanged,
+                ),
+              ],
             ),
           )
         else if (!_failed)
