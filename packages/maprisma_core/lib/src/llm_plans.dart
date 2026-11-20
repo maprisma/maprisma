@@ -98,6 +98,20 @@ String hermesLlmText(
   bool useNow,
   bool remove,
 ) {
+  if (model.isEmpty && !remove && !useNow) {
+    final own = LocalLlm.providerEntriesIn(
+      text,
+    ).where((e) => e.$3 == provider).firstOrNull;
+    if (own != null) {
+      final body = text.substring(own.$1, own.$2);
+      model =
+          RegExp(
+            r'^[ \t]+default_model:[ \t]*(\S[^\n]*?)[ \t]*$',
+            multiLine: true,
+          ).firstMatch(body)?[1] ??
+          '';
+    }
+  }
   final entry = [
     '  $provider:',
     '    name: $label',

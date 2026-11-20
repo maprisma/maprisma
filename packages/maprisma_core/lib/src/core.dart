@@ -1,3 +1,5 @@
+import 'provider_config.dart';
+import 'provider_config_files.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'desktop.dart';
@@ -82,6 +84,8 @@ import 'smart_card.dart';
 import 'reports_generate.dart';
 import 'reports_library.dart';
 import 'history_import.dart';
+
+part 'provider_config_routes.dart';
 
 const portedRoutes = {
   'agents.session_activity',
@@ -172,6 +176,12 @@ const portedRoutes = {
   'skills.web_search',
   'skills.web_fetch',
   'skills.web_preview',
+  'models.config',
+  'models.config_check',
+  'models.config_preview',
+  'models.config_ask',
+  'providers.restart',
+  'providers.reload_model',
   'models.tuning',
   'models.tuning_preview',
   'models.tuning_ask',
@@ -228,7 +238,12 @@ const portedRoutes = {
 final class CoreService {
   final _activityIdle = ActivityIdle();
 
-  CoreService({Map<String, String>? environment, bool migrate = true}) {
+  final void Function() daemonReload;
+  CoreService({
+    Map<String, String>? environment,
+    bool migrate = true,
+    void Function()? daemonReload,
+  }) : daemonReload = daemonReload ?? reloadUserUnits {
     identity = AppIdentity(environment: environment);
     // Asterism's folders, copied once at Maprisma's first start.
     if (migrate) migrationError = moveFromAsterism(identity);
@@ -259,7 +274,12 @@ final class CoreService {
   late final tasks = CoreTasks(defaultWorkerCommand(identity.environment));
   late final config = ConfigFiles(Posix(), identity.home);
   late final connections =
-      CoreConnections(config, tasks, '${identity.configDir}/connection-backups')
+      CoreConnections(
+          config,
+          tasks,
+          '${identity.configDir}/connection-backups',
+          daemonReload: daemonReload,
+        )
         ..chosenModel = ((provider) => _providerModels()[provider])
         ..chooseModel = _writeChoice;
   late final mcp = McpPlans(
@@ -1319,6 +1339,7 @@ final class CoreService {
   );
 
   /// The last facts read per local LLM (models.tuning), for the tips.
+  final configCache = ConfigCache();
   final tuningFacts = <String, (DateTime, Map<String, dynamic>)>{};
 
   late final webSkills = WebSkills(
@@ -3206,7 +3227,15 @@ final class CoreService {
         if (checkers.contains(chosen)) chosen,
         ...checkers.where((c) => c != chosen),
       ])
-        if (ready(c)) {'command': c, 'name': _nameOf(c), 'local': false},
+        if (ready(c))
+          {
+            'command': c,
+            'name': _nameOf(c),
+            'local': false,
+            'web_search': addons.adapters.any(
+              (a) => a.command == c && smartHasResearch(a),
+            ),
+          },
     ];
   }
 
@@ -3293,8 +3322,10 @@ final class CoreService {
               'request',
               'answer',
               'context',
+              'web_search',
             }.contains(k),
           ) ||
+          params['web_search'] != null && params['web_search'] is! bool ||
           (!auto && !smartColumns.contains(column)) ||
           context != null &&
               (!auto || context is! String || context.length > 3000) ||
@@ -3304,6 +3335,12 @@ final class CoreService {
           request.length > 2000 ||
           answer != null && (answer is! String || answer.length > 200)) {
         throw const FormatException('Invalid request');
+      }
+      if (params['web_search'] == true &&
+          !smartHelpers().any(
+            (h) => h['command'] == command && h['web_search'] == true,
+          )) {
+        throw const FormatException('This helper is not ready');
       }
       if (auto && context == null && answer == null) {
         final diagnostic = _diagnosticAnswer(request);
@@ -3343,6 +3380,7 @@ final class CoreService {
           'request': request.trim(),
           'answer': ?answer,
           'context': ?context,
+          'web_search': params['web_search'] == true,
           'language': i18n.language,
           'action_rules': _rulesForHelper(column),
           'rule_hints': settings.value(settings.load(), 'action_rule_hints'),
@@ -3410,7 +3448,13 @@ final class CoreService {
                   'update': lastUpdates.any((u) => u['key'] == rt['key']),
                   'start': rt['can_control'] == true && rt['running'] != true,
                   'stop': rt['can_control'] == true && rt['running'] == true,
-                  'performance': rt['installed'] == true,
+                  'configurable': rt['configurable'] == true,
+                  'models': chatModels([
+                    for (final m in rt['models'] as List? ?? const []) '$m',
+                  ]).take(40).toList(),
+                  'config_scope': configSchema(
+                    '${rt['key']}',
+                  ).firstOrNull?['scope'],
                 },
             ],
           if (auto || column == 'agents')
@@ -4584,8 +4628,23 @@ final class CoreService {
   }
 
   /// Check action rules at delivery and keep executable actions behind local handles.
-  Map<String, dynamic> finalizeSmartAsk(Map<String, dynamic> result) =>
-      smartProposals.keep(smartWorded(_dropRefused(result), i18n.text));
+  Map<String, dynamic> finalizeSmartAsk(Map<String, dynamic> result) {
+    final checked = _dropRefused(result);
+    for (final candidate
+        in (checked['candidates'] as List? ?? const []).cast<Map>()) {
+      if (candidate['kind'] != 'provider_config') continue;
+      final action = candidate['action'] as Map;
+      final facts = action.remove('facts');
+      if (facts is! Map) {
+        throw const FormatException('Invalid configuration proposal');
+      }
+      final key = '${candidate['key']}', model = '${candidate['model']}';
+      final values = Map<String, dynamic>.from(candidate['values'] as Map);
+      configCache.keep(key, Map<String, dynamic>.from(facts));
+      candidate['config_proposal'] = configCache.propose(key, model, values);
+    }
+    return smartProposals.keep(smartWorded(checked, i18n.text));
+  }
 
   /// Refused candidates do not reach the card: a disconnect keeps what may
   /// go, a web answer stays without its button.
@@ -5235,9 +5294,19 @@ final class CoreService {
       if (addonInstalling) {
         throw const FormatException('An installation is already running');
       }
+      final restored = undoChange(config, connections.backupRoot, id);
+      var reloadFailed = false;
+      if (changesUserUnits(restored)) {
+        try {
+          daemonReload();
+        } on Object {
+          reloadFailed = true;
+        }
+      }
       return {
         'ok': true,
-        'restored': undoChange(config, connections.backupRoot, id),
+        'restored': restored,
+        if (reloadFailed) 'reload_failed': true,
       };
     }
     if (method == 'helper.snapshot') {
@@ -5463,6 +5532,15 @@ final class CoreService {
       if (method == 'help.snapshot') return {'manual': manual != null};
       if (manual == null) throw const FormatException('No user manual here');
       return {'opened': openDocument(manual, identity.environment['PATH'])};
+    }
+    if (method == 'models.config' ||
+        method == 'models.config_check' ||
+        method == 'models.config_preview' ||
+        method == 'models.config_ask') {
+      return configRoute(method, params);
+    }
+    if (method == 'providers.restart' || method == 'providers.reload_model') {
+      return providerConfigControl(method, params);
     }
     if (method == 'models.tuning' ||
         method == 'models.tuning_preview' ||

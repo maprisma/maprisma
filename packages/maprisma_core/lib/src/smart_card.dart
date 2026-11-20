@@ -1,3 +1,4 @@
+import 'provider_config.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'action_rules.dart';
@@ -34,6 +35,11 @@ const smartColumns = {'mcp', 'agents', 'providers', 'models'};
 const smartTask = 'smart-card';
 const smartMaxPicks = 3;
 const smartProposalMinutes = 30;
+
+bool smartHasResearch(Adapter adapter) {
+  final argv = adapter.table('research')['argv'];
+  return argv is List && argv.isNotEmpty;
+}
 
 /// Texts of the core; the core words them when it hands a result over.
 const smartNotYet = 'This column does not take requests yet.',
@@ -167,7 +173,7 @@ List<ActionCheck> smartCandidateChecks(Map candidate) {
       'command': text('command'),
     }),
     'menu_action' => smartMenuChecks(action),
-    'provider_action' when candidate['step'] == 'performance' => const [],
+    'provider_config' => [ActionCheck('update', 'providers', text('key'))],
     'provider_action' => [
       ActionCheck(
         _providerSteps[candidate['step']] ?? '${candidate['step']}',
@@ -916,7 +922,7 @@ const smartStepNames = {
   'login': 'Sign in',
   'logout': 'Sign out',
   'verify': 'Send the test question',
-  'performance': 'Performance',
+  'provider_config': 'Configure for this PC',
 };
 
 /// The Agents column: one fixed step, nothing to search.
@@ -1064,8 +1070,9 @@ String smartProvidersPrompt(Map facts) {
       '{"action": "update", "provider": "<key>"}\n'
       '{"action": "start", "provider": "<key>"}\n'
       '{"action": "stop", "provider": "<key>"}\n'
-      '{"action": "performance", "provider": "<key>"}\n'
-      'when the user asks about speed, GPU memory, context size, Vulkan, ROCm or other local LLM performance; the Performance page checks the actual hardware and build and offers reviewed tuning actions.\n'
+      '{"action":"provider_config","provider":"<key>","model":"<optional>","profile":"<balanced|long_context|fast|several_agents, optional>","focus":"<optional>"}\n'
+      'when configurable is true and the user asks about speed, memory, context, GPU or configuration. The app checks fresh hardware before proposing settings.\n'
+      'For config_scope global omit model; use * only for scope default.\n'
       'only when that action is true for that provider above.\n'
       '{"action": "existing", "step": "<find, reconnect or folder>"}\n'
       'when AI programs or model folders already on this PC (also on another disk or installation) should be found, a found local LLM reconnected, or a found model folder reused: '
@@ -1085,6 +1092,9 @@ Future<Map<String, dynamic>> smartProviders(
   Map facts,
   SmartAgent agent, {
   Map? decision,
+  ConfigCollector? configFacts,
+  Future<String> Function(String, Map)? configResearch,
+  void Function(String)? progress,
 }) async {
   final providers = [for (final p in facts['providers'] as List) p as Map];
   final answer =
@@ -1135,16 +1145,105 @@ Future<Map<String, dynamic>> smartProviders(
       ],
     };
   }
+  if (action == 'provider_config') {
+    final provider = providers
+        .where(
+          (p) => p['key'] == answer['provider'] && p['configurable'] == true,
+        )
+        .firstOrNull;
+    final profile = answer['profile'] ?? 'balanced';
+    final model = answer['model'] == '' && provider?['config_scope'] != 'global'
+        ? null
+        : answer['model'];
+    Map<String, dynamic> error(String message, [String code = 'bad_answer']) =>
+        {'status': 'error', 'summary': message, 'code': code};
+    if (provider == null ||
+        !configProfiles.contains(profile) ||
+        configFacts == null ||
+        model != null &&
+            (model is! String ||
+                (provider['config_scope'] == 'global'
+                    ? model != ''
+                    : model == '*'
+                    ? provider['config_scope'] == 'per_model'
+                    : !(provider['models'] as List? ?? const []).contains(
+                        model,
+                      )))) {
+      return error('This provider configuration is unavailable');
+    }
+    if (!ruleAllows(
+      (facts['action_rules'] as List? ?? const []).cast<Map>(),
+      ActionCheck('update', 'providers', '${provider['key']}'),
+    )) {
+      return error(smartNotAllowed, 'not_allowed');
+    }
+    if (facts['web_search'] == true && configResearch == null) {
+      return error(smartNeedsWeb, 'no_helper');
+    }
+    progress?.call('Checking…');
+    final collected = await configFacts(
+      '${provider['key']}',
+      model as String?,
+      profile as String,
+    );
+    final selected = '${collected['model']}';
+    final prompt = configPrompt(
+      collected,
+      selected,
+      profile,
+      '${facts['request']} ${_line(answer['focus'], 500)}',
+      context: _request(facts),
+      web: facts['web_search'] == true,
+      language: '${facts['language'] ?? 'en'}',
+    );
+    final raw = facts['web_search'] == true
+        ? await configResearch!(prompt, collected)
+        : await agent(prompt);
+    final Map<String, dynamic> proposal;
+    try {
+      proposal = configAnswer(firstJson(raw, 'values'), collected, selected);
+    } on FormatException {
+      return error('Invalid configuration answer', 'bad_answer');
+    }
+    if (proposal['error'] != null) {
+      return error('${proposal['error']}', '${proposal['code']}');
+    }
+    return {
+      'status': 'proposal',
+      'summary': proposal['summary'],
+      'sources': proposal['sources'],
+      'candidates': [
+        {
+          'id': 'c1',
+          'kind': 'provider_config',
+          'title': _line(provider['name']),
+          'subtitle': 'Configure for this PC',
+          'reason': proposal['summary'],
+          'summary': proposal['summary'],
+          'sources': proposal['sources'],
+          'fit': 'ok',
+          'size': 0,
+          'key': provider['key'],
+          'model': selected,
+          'profile': profile,
+          'values': proposal['values'],
+          'reasons': proposal['reasons'],
+          'writable': collected['writable'],
+          'action': {
+            'kind': 'provider_config',
+            'key': provider['key'],
+            'model': selected,
+            'values': proposal['values'],
+            'facts': collected,
+          },
+        },
+      ],
+    };
+  }
   final found = providers
       .where((p) => p['key'] == answer['provider'] && p[action] == true)
       .firstOrNull;
-  if (!const {
-        'install',
-        'update',
-        'start',
-        'stop',
-        'performance',
-      }.contains(action) ||
+  if (!const {'install', 'update', 'start', 'stop'}.contains(action) ||
       found == null) {
     throw const FormatException('not possible for this provider');
   }
@@ -1947,8 +2046,10 @@ SmartAgent? smartLookup(
   Adapter adapter,
   Map<String, String> env,
   String home,
-  String plugin,
-) {
+  String plugin, {
+  Map? responseSchema,
+  String Function(String)? makePrompt,
+}) {
   final command = data['command'] as String;
   final research = [
     for (final x in (adapter.table('research')['argv'] as List? ?? const []))
@@ -1959,14 +2060,18 @@ SmartAgent? smartLookup(
     final work = '$home/.cache/maprisma/research';
     Directory(work).createSync(recursive: true);
     Posix().chmodPath(work, 0x1c0);
-    final schema = '$work/schema-$smartTask.json';
-    Posix().atomicWrite(schema, utf8.encode(jsonEncode(_lookupSchema)));
+    final schema = '$work/schema-$smartTask-$pid.json';
+    Posix().atomicWrite(
+      schema,
+      utf8.encode(jsonEncode(responseSchema ?? _lookupSchema)),
+    );
     final prompt =
+        makePrompt?.call(question) ??
         '$_lookupRules ${_language(data)}\n\n'
-        '<request>${_data(question)}</request>\n'
-        'Search the web. In at most eight short lines say what is true and how '
-        'the user can do it. Answer with one JSON object and nothing else:\n'
-        '{"answer": "<the text>", "sources": ["<https addresses you used>"]}';
+            '<request>${_data(question)}</request>\n'
+            'Search the web. In at most eight short lines say what is true and how '
+            'the user can do it. Answer with one JSON object and nothing else:\n'
+            '{"answer": "<the text>", "sources": ["<https addresses you used>"]}';
     final stdin = research.contains('{prompt}') ? null : utf8.encode(prompt);
     final binary = whichIn(command, env['PATH'] ?? '') ?? command;
     final fill = {'{prompt}': prompt, '{schema}': schema};
@@ -1999,6 +2104,11 @@ SmartAgent? smartLookup(
       if (result.length > 120) result = result.substring(0, 120);
       rethrow;
     } finally {
+      try {
+        File(schema).deleteSync();
+      } on FileSystemException {
+        // The private cache can also be cleared while a helper is running.
+      }
       recordRun(
         runLogPath(env, home),
         plugin,
@@ -2141,8 +2251,9 @@ String smartAutoPrompt(Map facts) {
       'For an operation include "area" (agents, models, providers, mcp) and "action". '
       'For mixed requests select the first useful reviewed step. Add a short summary explaining the recommendation. '
       'Agents: ${jsonEncode(facts['agents'])}. Use agents:[commands] with install, update, remove, login, logout, verify, key, security, start, halt, configure, details. '
-      'Providers: ${jsonEncode(facts['providers'])}. Use provider:key with install, update, start, stop, performance. '
-      'Performance checks slow local models and tuning. Use existing with step find, reconnect or folder. '
+      'Providers: ${jsonEncode(facts['providers'])}. Use provider:key with install, update, start, stop; or area:providers, action:provider_config, provider:key and optional model/profile/focus when configurable is true. Profiles: balanced, long_context, fast, several_agents. '
+      'For config_scope global omit model; use * only for scope default. '
+      'Provider configuration checks slow local models and tuning. Use existing with step find, reconnect or folder. '
       'Models: ${jsonEncode(_runners(facts))}, PC bytes: ${jsonEncode(facts['limits'])}, model users: ${jsonEncode(facts['model_users'])}. '
       'Use search with runtime and a short model-family query, remove with runtime/model or disconnect with runtime/models. '
       '${_modelActionsChoice(facts)}${_moveChoice(facts)}'
@@ -2162,6 +2273,8 @@ Future<Map<String, dynamic>> smartAsk(
   ModelHub? hub,
   void Function(String)? progress,
   Future<List<Map<String, dynamic>>> Function(String)? mcpSearch,
+  ConfigCollector? configFacts,
+  Future<Map<String, dynamic>> Function(List<String>, String)? pcFacts,
 }) async {
   final local = data['helper'] != null;
   final answer = <String, dynamic>{
@@ -2216,7 +2329,7 @@ Future<Map<String, dynamic>> smartAsk(
         for (final r in runtimes)
           if ('${r['models_dir'] ?? ''}'.isNotEmpty) '${r['models_dir']}',
       }.toList();
-      final pc = await pcInfo(dirs, home);
+      final pc = await (pcFacts ?? pcInfo)(dirs, home);
       final free = pc['free'] as Map;
       for (final r in runtimes) {
         r['free_disk'] = free[r['models_dir']] ?? free['~'];
@@ -2244,6 +2357,7 @@ Future<Map<String, dynamic>> smartAsk(
       area = decision['area'];
     }
     final action = decision?['action'];
+    if (action == 'provider_config') area = 'providers';
     final Map<String, dynamic> result;
     if (action == 'answer') {
       final raw = decision!['summary'];
@@ -2267,7 +2381,28 @@ Future<Map<String, dynamic>> smartAsk(
     } else {
       result = switch (area) {
         'agents' => await smartAgents(facts, agent, decision: decision),
-        'providers' => await smartProviders(facts, agent, decision: decision),
+        'providers' => await smartProviders(
+          facts,
+          agent,
+          decision: decision,
+          configFacts: configFacts,
+          progress: progress,
+          configResearch:
+              data['web_search'] == true && !local && smartHasResearch(adapter)
+              ? (prompt, collected) async {
+                  progress?.call('Searching…');
+                  return (smartLookup(
+                    data,
+                    adapter,
+                    env,
+                    home,
+                    plugin,
+                    responseSchema: configProposalSchema(collected),
+                    makePrompt: (p) => p,
+                  ))!(prompt);
+                }
+              : null,
+        ),
         'mcp' => await smartMcp(
           {...facts, if (column == 'auto') ...facts['mcp_facts'] as Map},
           agent,

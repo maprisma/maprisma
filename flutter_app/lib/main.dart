@@ -52,7 +52,6 @@ import 'item_details_view.dart';
 import 'map_layout.dart' show withAgentLinks;
 import 'map_editor.dart' show mapColumnLayers;
 import 'action_rules_window.dart';
-import 'app_look.dart' show AppSpace;
 import 'map_smart_card.dart'
     show
         MapSmartCard,
@@ -1566,6 +1565,11 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     // The sheet follows the terminals: when the last agent ends, it unlocks
     // while it is open.
     final terminals = Listenable.merge(_terminals);
+    final provides = (item['provides'] as List? ?? const []);
+    final configurableRuntime = (_providers['local'] as List? ?? const [])
+        .cast<Map>()
+        .where((r) => provides.contains(r['key']) && r['configurable'] == true)
+        .firstOrNull;
     final choice = await _review(
       () => showModalBottomSheet<String>(
         context: context,
@@ -1588,6 +1592,14 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                     style: Theme.of(sheet).textTheme.titleLarge,
                   ),
                   AddonDetails(item: item, tr: tr),
+                  if (configurableRuntime != null)
+                    TextButton.icon(
+                      icon: const Icon(Icons.speed),
+                      onPressed: blocked
+                          ? null
+                          : () => Navigator.pop(sheet, 'configuration'),
+                      label: Text(tr('Configure for this PC')),
+                    ),
                   if (activityCommand != null)
                     TextButton(
                       onPressed: () => Navigator.pop(sheet, 'activity'),
@@ -1687,6 +1699,10 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         ),
       ),
     );
+    if (choice == 'configuration' && configurableRuntime != null) {
+      await _performance(Map<String, dynamic>.from(configurableRuntime));
+      return;
+    }
     if (choice == 'activity' && activityCommand != null) {
       await _openAgentActivity(activityCommand, instance: activityInstance);
       return;
@@ -1829,9 +1845,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     }
   }
 
-  /// The last tips per local LLM (llm_help_page.llm_tuning_answers).
-  final _tuningAnswers = <String, Map<String, dynamic>>{};
-
   /// models.tuning of a local LLM, one read at a time: a second caller (the
   /// background tuning, Performance) waits for the read under way instead of
   /// starting another one that slows both down.
@@ -1843,17 +1856,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       .whenComplete(() {
         _tuningReads.remove(key);
       });
-
-  /// The AI's look at a local LLM's settings (tokens: only on the user's
-  /// click), kept for the next time Performance opens.
-  Future<Map<String, dynamic>> _tuningAsk(String key, String command) async {
-    final answer = await _quietTask('models.tuning_ask', {
-      'key': key,
-      'command': command,
-    });
-    _tuningAnswers[key] = answer;
-    return answer;
-  }
 
   /// What is on screen apart from cards and Ask AI: a review from Ask AI
   /// returns to it only while this stays the same.
@@ -1875,7 +1877,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       final wait = _asideWait = Completer<void>();
       await wait.future;
     }
-    return mounted && _screen == screen;
+    return mounted && (_backend?.isConnected ?? false) && _screen == screen;
   }
 
   Completer<void>? _asideWait;
@@ -1890,108 +1892,258 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     if (wait != null && !wait.isCompleted) wait.complete();
   }
 
-  /// Performance as a page of the Ask AI window: the same view and the same
-  /// reviews as its own card. A change or a measurement runs aside: its
-  /// review takes the window's place, then Ask AI is back on this page.
+  final _configurationDrafts = <String, Map<String, dynamic>>{};
+  Map<String, dynamic> _configurationDraft(
+    String key,
+    Map<String, dynamic>? prefill,
+  ) {
+    final draft = _configurationDrafts.putIfAbsent(
+      key,
+      () => <String, dynamic>{},
+    );
+    if (prefill != null &&
+        draft['_source_proposal'] != prefill['config_proposal']) {
+      draft.clear();
+      for (final field in [
+        'model',
+        'profile',
+        'values',
+        'reasons',
+        'summary',
+        'sources',
+        'config_proposal',
+      ]) {
+        if (prefill.containsKey(field)) draft[field] = prefill[field];
+      }
+      draft['_source_proposal'] = prefill['config_proposal'];
+    }
+    return draft;
+  }
+
+  Future<Map<String, dynamic>> _readConfiguration(String key, Map draft) async {
+    Future<Map<String, dynamic>> read() => _quietTask('models.config', {
+      'key': key,
+      if (draft['model'] != null) 'model': draft['model'],
+      if (draft['profile'] != null) 'profile': draft['profile'],
+    });
+    void dropModel() {
+      for (final field in const [
+        'model',
+        'values',
+        'reasons',
+        'summary',
+        'sources',
+        'config_proposal',
+      ]) {
+        draft.remove(field);
+      }
+    }
+
+    Map<String, dynamic>? facts;
+    try {
+      facts = await read();
+    } on BackendError {
+      rethrow;
+    } catch (error) {
+      if (error is! StateError ||
+          error.message != 'models.config failed' ||
+          draft['model'] == null ||
+          !mounted ||
+          !(_backend?.isConnected ?? false)) {
+        rethrow;
+      }
+      dropModel();
+    }
+    if (facts != null && draft['model'] != null) {
+      final schema = facts['schema'] as List? ?? const [];
+      final scope = schema.firstOrNull is Map
+          ? (schema.first as Map)['scope']
+          : null;
+      final models = facts['scope_models'];
+      if (scope != 'global' &&
+          models is List &&
+          !models.contains(draft['model'])) {
+        dropModel();
+        facts = null;
+      }
+    }
+    // A saved model can disappear while this page is closed. Retry only once,
+    // without that draft, so the core can select the provider's current default.
+    facts ??= await read();
+    draft['_facts'] = facts;
+    return facts;
+  }
+
+  void _configurationApplied(Map<String, dynamic> draft, {String? undo}) {
+    final model = draft['model'],
+        profile = draft['profile'],
+        source = draft['_source_proposal'];
+    draft.clear();
+    if (model != null) draft['model'] = model;
+    if (profile != null) draft['profile'] = profile;
+    if (source != null) draft['_source_proposal'] = source;
+    draft['_reload'] = true;
+    if (undo != null) draft['_undo'] = undo;
+  }
+
   Future<Widget> _performancePage(
     String key, {
+    Map<String, dynamic>? prefill,
     required void Function(Future<bool> Function() review) aside,
     required VoidCallback back,
   }) async {
     final runtime = await _localRuntime(key);
-    if (runtime == null || runtime['tunable'] != true) {
-      throw StateError('not tunable');
+    if (runtime == null || runtime['configurable'] != true) {
+      throw StateError('Configuration unavailable');
     }
-    final facts = await _readTuning(key);
+    final draft = _configurationDraft(key, prefill),
+        facts = await _readConfiguration(key, draft);
     return PerformanceView(
       facts: facts,
       tr: tr,
-      answer: _tuningAnswers[key],
-      onAsk: (command) => _tuningAsk(key, command),
-      onChange: (section, setting, value) => aside(
-        () => _reviewAside(
-          () => _connectionPreview({
-            'key': key,
-            'section': section,
-            'setting': setting,
-            'value': value,
-          }, method: 'models.tuning_preview'),
-        ),
-      ),
-      onTune: key == 'llamacpp'
-          ? (models) =>
-                aside(() => _reviewAside(() => _measureAndTune(key, models)))
-          : null,
+      client: _client,
+      draft: draft,
       onClose: back,
+      onChange: (s, k, v) {},
+      onApply: (preview, options) async {
+        aside(
+          () => _reviewAside(() async {
+            String? applyUndo;
+            if (await _connectionPreview(
+              const {},
+              method: 'models.config_preview',
+              ready: preview,
+              configuration: options,
+              onApplied: (undo) => applyUndo = undo,
+            )) {
+              _configurationApplied(draft, undo: applyUndo);
+            }
+            return null;
+          }),
+        );
+        return false;
+      },
+      onUndo: (token) async {
+        aside(
+          () => _reviewAside(() async {
+            if (await _undoConnection(token: token)) {
+              _configurationApplied(draft);
+            }
+            return null;
+          }),
+        );
+        return false;
+      },
+      onTune: key == 'llamacpp'
+          ? (models) => aside(
+              () => _reviewAside(() async {
+                if (await _measureAndTune(key, models)) {
+                  _configurationApplied(draft);
+                } else {
+                  draft['_reload'] = 'facts';
+                }
+                return null;
+              }),
+            )
+          : null,
     );
   }
 
-  /// A local LLM's performance (models.tuning); a setting or a model's
-  /// context changed through the connection preview (backup, Undo).
-  Future<void> _performance(Map<String, dynamic> runtime) async {
+  Future<void> _performance(
+    Map<String, dynamic> runtime, {
+    Map<String, dynamic>? prefill,
+  }) async {
     if (_busy) return;
-    final key = runtime['key'] as String;
+    final key = '${runtime['key']}',
+        draft = _configurationDraft('${runtime['key']}', prefill);
     Map<String, dynamic> facts;
-    // Reading a local LLM's settings can take ten seconds and more: its card
-    // is there at once, so a click is never answered by nothing.
     setState(() {
       _busy = true;
       _card = TaskCardSpec(
-        title: '${tr('Performance')} · ${runtime['name']}',
+        title: '${tr('Configuration')} · ${runtime['name']}',
         closable: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const CircularProgressIndicator(),
-            const SizedBox(height: AppSpace.md),
-            Text(tr('Checking…')),
-          ],
-        ),
+        child: const Center(child: CircularProgressIndicator()),
       );
     });
     try {
-      facts = await _readTuning(key);
-    } catch (_) {
-      if (mounted) setState(() => _card = null);
-      _actionFailed();
+      facts = await _readConfiguration(key, draft);
+    } catch (error) {
+      if (mounted) {
+        setState(() => _card = null);
+        _actionFailed(error);
+      }
       return;
     } finally {
       if (mounted) setState(() => _busy = false);
     }
-    if (!mounted) return;
-    (String, String, String)? change;
-    List<String>? tune;
-    var tuneAsked = false;
-    await _cardReview(
-      '${tr('Performance')} · ${runtime['name']}',
-      (yes, no) => PerformanceView(
-        facts: facts,
-        tr: tr,
-        answer: _tuningAnswers[key],
-        onAsk: (command) => _tuningAsk(key, command),
-        onChange: (section, setting, value) {
-          change = (section, setting, value);
-          no();
-        },
-        onTune: key == 'llamacpp'
-            ? (models) {
-                tune = models;
-                tuneAsked = true;
-                no();
-              }
-            : null,
-        onClose: no,
-      ),
-    );
-    if (tuneAsked && mounted) return _measureAndTune(key, tune);
-    final chosen = change;
-    if (!mounted || chosen == null) return;
-    await _connectionPreview({
-      'key': key,
-      'section': chosen.$1,
-      'setting': chosen.$2,
-      'value': chosen.$3,
-    }, method: 'models.tuning_preview');
+    while (mounted) {
+      Map<String, dynamic>? preview, options;
+      String? undo;
+      List<String>? tune;
+      var tuneAsked = false;
+      draft.remove('_reload');
+      await _cardReview(
+        '${tr('Configuration')} · ${runtime['name']}',
+        (yes, no) => PerformanceView(
+          facts: facts,
+          tr: tr,
+          client: _client,
+          draft: draft,
+          onClose: no,
+          onChange: (s, k, v) {},
+          onApply: (p, o) async {
+            preview = p;
+            options = o;
+            no();
+            return false;
+          },
+          onUndo: (token) async {
+            undo = token;
+            no();
+            return false;
+          },
+          onTune: key == 'llamacpp'
+              ? (models) {
+                  tune = models;
+                  tuneAsked = true;
+                  no();
+                }
+              : null,
+        ),
+      );
+      if (!mounted) return;
+      var refresh = false, preserveDraft = false;
+      String? applyUndo;
+      if (preview != null) {
+        refresh = await _connectionPreview(
+          const {},
+          method: 'models.config_preview',
+          ready: preview,
+          configuration: options,
+          onApplied: (undo) => applyUndo = undo,
+        );
+      } else if (undo != null) {
+        refresh = await _undoConnection(token: undo);
+      } else if (tuneAsked) {
+        await _reviewAside(() async {
+          preserveDraft = !await _measureAndTune(key, tune);
+          return null;
+        });
+        refresh = true;
+      } else {
+        return;
+      }
+      if (!mounted || !(_backend?.isConnected ?? false)) return;
+      if (refresh) {
+        if (!preserveDraft) _configurationApplied(draft, undo: applyUndo);
+        try {
+          facts = await _readConfiguration(key, draft);
+        } catch (error) {
+          if (mounted && (_backend?.isConnected ?? false)) _actionFailed(error);
+          return;
+        }
+      }
+    }
   }
 
   /// The health report (health.report): the header's "!" while something
@@ -2384,7 +2536,12 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   }
 
   /// A provider step from Ask AI: the app's own page, with its own review.
-  void _smartProvider(String step, String key, String name) {
+  void _smartProvider(
+    String step,
+    String key,
+    String name, {
+    Map<String, dynamic>? prefill,
+  }) {
     final found = _updates.where((u) => u['key'] == key).firstOrNull;
     switch (step) {
       case 'install':
@@ -2399,11 +2556,14 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
             'status': step == 'stop' ? 'running' : 'stopped',
           }),
         );
-      case 'performance':
+      case 'provider_config':
         unawaited(() async {
           final runtime = await _localRuntime(key);
           if (runtime != null) {
-            await _performance(Map<String, dynamic>.from(runtime));
+            await _performance(
+              Map<String, dynamic>.from(runtime),
+              prefill: prefill,
+            );
           } else {
             _actionFailed();
           }
@@ -2523,7 +2683,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     }
     final key = '${node['id']}'.replaceFirst('runtime:', '');
     return local.cast<Map>().any(
-      (r) => r['key'] == key && r['tunable'] == true,
+      (r) => r['key'] == key && r['configurable'] == true,
     );
   }
 
@@ -4179,14 +4339,14 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
 
   /// Measure and tune, asked for in the Performance view: the measurement
   /// runs with its progress shown, then the preview to apply (backup, Undo).
-  Future<void> _measureAndTune(String key, List<String>? models) async {
-    if (_busy) return;
+  Future<bool> _measureAndTune(String key, List<String>? models) async {
+    if (_busy) return false;
     final title = tr('Measure and tune');
     Map<String, dynamic>? plan;
     setState(() => _busy = true);
     try {
       final started = await _client.modelsTune(key: key, models: models);
-      if (!mounted) return;
+      if (!mounted) return false;
       plan = await _runTask(
         operation: 'models.tune',
         existingTask: started['task'] as String,
@@ -4194,11 +4354,11 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       );
     } catch (_) {
       if (mounted) _actionFailed();
-      return;
+      return false;
     } finally {
       if (mounted) setState(() => _busy = false);
     }
-    if (!mounted || plan == null) return;
+    if (!mounted || plan == null) return false;
     if (plan['refused'] is String) {
       // The card is in use, no llama-bench, …: why, and nothing changed.
       ScaffoldMessenger.of(_navigator.currentContext!).showSnackBar(
@@ -4207,10 +4367,10 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
           content: Text(tr(plan['refused'] as String)),
         ),
       );
-      return;
+      return false;
     }
-    if (plan['plan'] is! String) return;
-    await _connectionPreview(
+    if (plan['plan'] is! String) return false;
+    return _connectionPreview(
       const {},
       ready: {
         ...plan,
@@ -4326,7 +4486,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
               padding: EdgeInsets.zero,
               visualDensity: VisualDensity.compact,
               constraints: compact,
-              tooltip: tr('Performance'),
+              tooltip: tr('Configure for this PC'),
               onPressed: () => _mapPerformance(node),
               icon: const Icon(Icons.speed, size: 16),
             ),
@@ -4755,9 +4915,11 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     bool mapDraw = false,
     String? mapLine,
     Map<String, dynamic>? ready,
+    Map<String, dynamic>? configuration,
+    void Function(String? undo)? onApplied,
   }) async {
     setState(() => _busy = true);
-    var applied = false;
+    var applied = false, restartNow = false;
     String? warning, undoToken;
     try {
       final Map<String, dynamic> plan;
@@ -4821,6 +4983,17 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                 tr: tr,
                 onConfirm: yes,
                 onCancel: no,
+                restartLabel:
+                    configuration?['running'] == true &&
+                        configuration?['restart'] == 'service' &&
+                        configuration?['can_control'] == true
+                    ? 'Restart now'
+                    : configuration?['running'] == true &&
+                          configuration?['restart'] == 'model_reload' &&
+                          configuration?['can_reload'] == true
+                    ? 'Reload the model'
+                    : null,
+                onRestartChanged: (v) => restartNow = v,
               ),
             );
       if (apply) {
@@ -4866,6 +5039,27 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         } else {
           applied = true;
         }
+        if (restartNow &&
+            applied &&
+            result['reload_failed'] != true &&
+            configuration != null &&
+            mounted) {
+          await _runTask(
+            operation: configuration['restart'] == 'service'
+                ? 'providers.restart'
+                : 'providers.reload_model',
+            params: {
+              'key': configuration['key'],
+              if (configuration['restart'] == 'model_reload')
+                'model': configuration['model'],
+            },
+            title: tr(
+              configuration['restart'] == 'service'
+                  ? 'Restart now'
+                  : 'Reload the model',
+            ),
+          );
+        }
         if ((result['context_failures'] as num? ?? 0) > 0 && mounted) {
           ScaffoldMessenger.of(_navigator.currentContext!).showSnackBar(
             SnackBar(
@@ -4904,6 +5098,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       // said again, with this apply's Undo.
       if (warning != null && mounted) _appliedMessage(undoToken, warning, true);
     }
+    if (applied) onApplied?.call(undoToken);
     return applied;
   }
 
@@ -5190,7 +5385,11 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   /// moves could not follow (changed meanwhile, or not saved): connections
   /// apply's choice_failures. Its Undo is there all the same.
   String? _choiceWarning(Map<String, dynamic>? result) =>
-      (result?['choice_failures'] as num? ?? 0) > 0
+      result?['reload_failed'] == true
+      ? tr(
+          'Files saved, but service definitions could not be reloaded. Undo is available.',
+        )
+      : (result?['choice_failures'] as num? ?? 0) > 0
       ? tr(
           "Applied, but the local LLM's own model stayed as it was: it changed meanwhile or could not be saved.",
         )
@@ -5215,6 +5414,10 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
             content: Text(
               [
                 '${tr('Restored files')}: ${(result['restored'] as List).length}',
+                if (result['reload_failed'] == true)
+                  tr(
+                    'Files restored, but service definitions could not be reloaded.',
+                  ),
                 // The local LLM's own model stays with an agent file that
                 // could not be put back (connections.undo choice_failures).
                 if ((result['choice_failures'] as num? ?? 0) > 0)
@@ -6327,6 +6530,12 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                             initialPrompt: _askInitialPrompt,
                             client: _maybeClient,
                             onProvider: _smartProvider,
+                            onConfiguration: (candidate) => _smartProvider(
+                              'provider_config',
+                              '${candidate['key']}',
+                              '${candidate['title']}',
+                              prefill: candidate,
+                            ),
                             onMenu: _smartMenu,
                             performancePage: _performancePage,
                             onTask: _smartTask,

@@ -358,6 +358,8 @@ final class ReadService {
         'download': rt.installed ? download : '',
         'can_import':
             rt.installed && (download == 'file' || download == 'pull'),
+        'configurable':
+            rt.installed && ((engine['config'] as List?)?.isNotEmpty ?? false),
         'tunable':
             rt.installed && ((engine['tuning'] as Map?)?.isNotEmpty ?? false),
         'focus': taskFocus(map, {'key': rt.key}),

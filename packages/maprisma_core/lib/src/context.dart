@@ -15,6 +15,7 @@ const reserve = gib * 3 ~/ 2, step = 4096, minContext = 4096, ubatch = 1024;
 const cacheBytes = {
   'f16': 2.0,
   'bf16': 2.0,
+  'fp8': 1.0,
   'f32': 4.0,
   'q8_0': 34 / 32,
   'q4_0': 18 / 32,
@@ -153,7 +154,8 @@ Map<String, dynamic> readGguf(String path) {
         continue;
       }
       final keep =
-          _wanted.any(key.endsWith) && (sizes.containsKey(kind) || kind == 9);
+          (key == 'general.file_type' || _wanted.any(key.endsWith)) &&
+          (sizes.containsKey(kind) || kind == 9);
       final result = value(kind, keep: keep);
       if (keep) {
         if (meta.length >= _maxKept) {
@@ -175,7 +177,12 @@ int _int(dynamic v) => v is bool
     : 0;
 
 /// context_ctl.kv_layout: (bytes per token of context, fixed sliding-window bytes).
-(int, int) kvLayout(Map<String, dynamic> meta, String cache) {
+(int, int) kvLayout(
+  Map<String, dynamic> meta,
+  String cache, {
+  String? cacheV,
+  int firstLayer = 0,
+}) {
   final arch = meta['general.architecture'] ?? '';
   dynamic get(String key) => meta['$arch.$key'];
   final layersRaw = pyTruthy(get('block_count')) ? get('block_count') : 0;
@@ -221,13 +228,19 @@ int _int(dynamic v) => v is bool
   } else {
     swa = List.filled(layers, false);
   }
-  final element = cacheBytes[cache] ?? 2.0;
+  final kElement = cacheBytes[cache] ?? 2.0;
+  final vElement = cacheBytes[cacheV ?? cache] ?? 2.0;
   var perToken = 0.0, fixed = 0.0;
-  for (var i = 0; i < perLayer.length && i < swa.length; i++) {
+  for (
+    var i = firstLayer.clamp(0, layers);
+    i < perLayer.length && i < swa.length;
+    i++
+  ) {
     if (swa[i] && window != 0) {
-      fixed += perLayer[i] * (kSwa + vSwa) * element * (window + ubatch);
+      fixed +=
+          perLayer[i] * (kSwa * kElement + vSwa * vElement) * (window + ubatch);
     } else {
-      perToken += perLayer[i] * (kDim + vDim) * element;
+      perToken += perLayer[i] * (kDim * kElement + vDim * vElement);
     }
   }
   return (perToken.ceil(), fixed.ceil());
@@ -407,28 +420,28 @@ final class ContextReader {
     return text;
   }
 
-  static String iniText(String old, String section, String key, String value) {
+  /// Set one key, or remove a per-model override, preserving comments/order.
+  static String iniText(String old, String section, String key, String? value) {
     if (!RegExp(r'^[^\[\]\x00-\x1f\x7f]{1,200}$').hasMatch(section) ||
         !RegExp(r'^[a-z0-9][a-z0-9-]{0,40}$').hasMatch(key) ||
-        !RegExp(r'^[A-Za-z0-9_.:+-]{1,40}$').hasMatch(value)) {
+        value != null && !RegExp(r'^[A-Za-z0-9_.:+-]{1,40}$').hasMatch(value)) {
       throw const FormatException('bad section, key or value');
     }
-    if (old.isEmpty) old = 'version = 1\n';
-    final lines = <String>[];
-    var startAt = 0;
-    for (var i = 0; i < old.length; i++) {
-      if (old[i] == '\n') {
-        lines.add(old.substring(startAt, i + 1));
-        startAt = i + 1;
-      }
+    if (old.isEmpty) {
+      if (value == null) return '';
+      old = 'version = 1\n';
     }
-    if (startAt < old.length) lines.add(old.substring(startAt));
-    final header = RegExp('^\\s*\\[${RegExp.escape(section)}\\]\\s*\$');
-    final start = lines.indexWhere(
-      (l) => header.hasMatch(l.replaceFirst(RegExp(r'\n$'), '')),
+    final lines = RegExp(
+      r'[^\n]*\n|[^\n]+$',
+    ).allMatches(old).map((m) => m[0]!).toList();
+    final header = RegExp(
+      '^\\s*\\[${RegExp.escape(section)}\\]\\s*(?:[;#].*)?\$',
     );
+    final start = lines.indexWhere((l) => header.hasMatch(l.trimRight()));
     if (start < 0) {
-      return '${old.replaceFirst(RegExp(r'\n+$'), '')}\n\n[$section]\n$key = $value\n';
+      return value == null
+          ? old
+          : '${old.replaceFirst(RegExp(r'\n+$'), '')}\n\n[$section]\n$key = $value\n';
     }
     var end = lines.length;
     for (var i = start + 1; i < lines.length; i++) {
@@ -438,14 +451,24 @@ final class ContextReader {
       }
     }
     var replaced = false;
-    for (var i = start + 1; i < end; i++) {
-      if (RegExp('^\\s*${RegExp.escape(key)}\\s*=').hasMatch(lines[i])) {
-        lines[i] = '$key = $value\n';
+    for (var i = end - 1; i > start; i--) {
+      if (!RegExp('^\\s*${RegExp.escape(key)}\\s*=').hasMatch(lines[i])) {
+        continue;
+      }
+      final comment = RegExp(r'\s+[;#][^\n]*').firstMatch(lines[i])?[0] ?? '';
+      if (value != null && !replaced) {
+        lines[i] = '$key = $value$comment\n';
         replaced = true;
-        break;
+      } else if (comment.isNotEmpty) {
+        lines[i] = '${comment.trimLeft()}\n';
+      } else {
+        lines.removeAt(i);
       }
     }
-    if (!replaced) lines.insert(start + 1, '$key = $value\n');
+    if (value != null && !replaced) {
+      if (!lines[start].endsWith('\n')) lines[start] = '${lines[start]}\n';
+      lines.insert(start + 1, '$key = $value\n');
+    }
     return lines.join();
   }
 

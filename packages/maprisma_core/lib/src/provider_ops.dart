@@ -354,6 +354,19 @@ final class ProviderOps {
           : (false, 'it did not unload the model');
     }
     if (rt.key == 'lmstudio') return _lmsRun(['unload', '--', model]);
+    if (rt.key == 'koboldcpp') {
+      final reply = await httpJson(
+        port,
+        '/api/admin/reload_config',
+        uid,
+        method: 'POST',
+        body: {'filename': 'unload_model'},
+        timeout: const Duration(seconds: 30),
+      );
+      return reply is Map && reply['success'] == true
+          ? (true, '')
+          : (false, 'KoboldCpp did not unload');
+    }
     // Engines that cannot unload one model stop the server (unload_all).
     return canControl(rt) ? stop(rt) : (false, 'no way to stop it');
   }

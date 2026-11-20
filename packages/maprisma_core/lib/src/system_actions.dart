@@ -188,7 +188,19 @@ String envWith(String text, String name, String value) {
     '^\\s*(?:export\\s+)?${RegExp.escape(name)}=.*\$',
     multiLine: true,
   );
-  if (re.hasMatch(text)) return text.replaceFirst(re, line);
+  if (re.hasMatch(text)) {
+    var replaced = false;
+    return text
+        .split('\n')
+        .where((l) {
+          if (!re.hasMatch(l)) return true;
+          if (replaced) return false;
+          replaced = true;
+          return true;
+        })
+        .map((l) => re.hasMatch(l) ? line : l)
+        .join('\n');
+  }
   return '$text${text.endsWith('\n') || text.isEmpty ? '' : '\n'}$line\n';
 }
 

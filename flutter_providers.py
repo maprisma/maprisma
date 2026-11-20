@@ -41,6 +41,7 @@ def snapshot(settings_path: Path | None = None) -> dict:
                       'removable': engine.removable if rt.installed and engine.removable in ('file', 'api') else '',
                       'download': engine.download if rt.installed else '',
                       'can_import': bool(rt.installed and engine.download in ('file', 'pull')),
+                      'configurable': bool(rt.installed and engine.config),
                       'tunable': bool(rt.installed and engine.tuning)})
     import ai_core
     folders = ai_core.load_settings(settings_path).get('model_folders', [])

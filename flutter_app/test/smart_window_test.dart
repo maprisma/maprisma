@@ -615,15 +615,20 @@ void main() {
               'candidates': [
                 {
                   'id': 'c1',
-                  'kind': 'provider_action',
+                  'kind': 'provider_config',
                   'title': 'llama.cpp',
-                  'subtitle': 'Performance',
+                  'subtitle': 'Configure for this PC',
                   'reason': '',
                   'fit': 'ok',
                   'size': 0,
                   'key': 'llamacpp',
-                  'step': 'performance',
-                  'action': {'kind': 'provider_action'},
+                  'profile': 'balanced',
+                  'model': '*',
+                  'values': {'ctx-size': 16384},
+                  'reasons': {},
+                  'writable': true,
+                  'config_proposal': 'cfg-1',
+                  'action': {'kind': 'provider_config'},
                 },
               ],
             },
@@ -634,12 +639,15 @@ void main() {
       Future<void> toProposal(
         WidgetTester tester, {
         required ValueNotifier<bool> open,
-        required Future<Widget> Function(
+        Future<Widget> Function(
           String, {
+          Map<String, dynamic>? prefill,
           required void Function(Future<bool> Function()) aside,
           required VoidCallback back,
-        })
+        })?
         page,
+        ValueChanged<Map<String, dynamic>>? onConfiguration,
+        String Function(String)? translate,
       }) async {
         final client = performanceClient();
         await tester.pumpWidget(
@@ -653,10 +661,11 @@ void main() {
                   title: 'Providers',
                   open: isOpen,
                   onToggle: () => open.value = !open.value,
-                  tr: (s) => s,
+                  tr: translate ?? (s) => s,
                   helpers: helpers,
                   client: client,
                   performancePage: page,
+                  onConfiguration: onConfiguration,
                 ),
               ),
             ),
@@ -669,6 +678,28 @@ void main() {
         expect(find.byKey(const ValueKey('smart-review-c1')), findsOneWidget);
       }
 
+      testWidgets('standalone configuration receives the exact prefill', (
+        tester,
+      ) async {
+        final open = ValueNotifier(true);
+        Map<String, dynamic>? prefill;
+        await toProposal(
+          tester,
+          open: open,
+          onConfiguration: (value) => prefill = value,
+          translate: (s) =>
+              s == 'Configure for this PC' ? 'PC-Konfiguration' : s,
+        );
+        expect(find.text('PC-Konfiguration'), findsOneWidget);
+        expect(find.text('Configure for this PC'), findsNothing);
+        await tester.tap(find.byKey(const ValueKey('smart-review-c1')));
+        await tester.pumpAndSettle();
+        expect(open.value, false);
+        expect(prefill?['config_proposal'], 'cfg-1');
+        expect(prefill?['values'], {'ctx-size': 16384});
+        expect(prefill?['model'], '*');
+      });
+
       testWidgets(
         'Esc while it loads: the page never lands in the closed window',
         (tester) async {
@@ -677,7 +708,13 @@ void main() {
           await toProposal(
             tester,
             open: open,
-            page: (key, {required aside, required back}) => loading.future,
+            page:
+                (
+                  key, {
+                  Map<String, dynamic>? prefill,
+                  required aside,
+                  required back,
+                }) => loading.future,
           );
           await tester.tap(find.byKey(const ValueKey('smart-review-c1')));
           await tester.pump();
@@ -703,10 +740,16 @@ void main() {
         await toProposal(
           tester,
           open: open,
-          page: (key, {required aside, required back}) async {
-            runAside = aside;
-            return const Text('Performance page');
-          },
+          page:
+              (
+                key, {
+                Map<String, dynamic>? prefill,
+                required aside,
+                required back,
+              }) async {
+                runAside = aside;
+                return const Text('Performance page');
+              },
         );
         await tester.tap(find.byKey(const ValueKey('smart-review-c1')));
         await tester.pumpAndSettle();

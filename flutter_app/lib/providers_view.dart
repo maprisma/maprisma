@@ -166,7 +166,7 @@ class ProvidersView extends StatelessWidget {
                               tr(rt['running'] == true ? 'Stop' : 'Start'),
                             ),
                           ),
-                        if (rt['tunable'] == true && onPerformance != null)
+                        if (rt['configurable'] == true && onPerformance != null)
                           OutlinedButton.icon(
                             key: ValueKey('performance-${rt['key']}'),
                             onPressed: busy
@@ -175,7 +175,7 @@ class ProvidersView extends StatelessWidget {
                                     rt as Map<String, dynamic>,
                                   ),
                             icon: const Icon(Icons.speed),
-                            label: Text(tr('Performance')),
+                            label: Text(tr('Configure for this PC')),
                           ),
                         if (rt['can_import'] == true)
                           OutlinedButton.icon(

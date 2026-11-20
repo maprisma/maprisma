@@ -101,9 +101,9 @@ read -r line
 printf '{"id":1,"result":{}}\\n'
 read -r line
 read -r line
+echo $$ > "$HOME/app-server.pid"
 case "$line" in *account/rateLimits/read*) ;; *) exit 7;; esac
 printf '{"method":"note"}\\n{"id":2,"result":{"rateLimits":{"planType":"plus","primary":{"usedPercent":25,"windowDurationMins":300,"resetsAt":4102444800},"secondary":{"usedPercent":60,"windowDurationMins":10080,"resetsAt":4102531200}}}}\\n'
-echo $$ > "$HOME/app-server.pid"
 sleep 60
 """)
         fake.chmod(0o755)

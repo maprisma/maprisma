@@ -1420,6 +1420,19 @@
 </section>
 
 <!-- ============================== Appendix ============================== -->
+<section class="chapter" id="provider-configuration">
+<h1>Configure a local provider</h1>
+<p>On a local provider’s map box, its menu or the Providers page, choose <b>Configure for this PC</b>. Ask AI proposals open the same Configuration page. Reading this page does not start or reconfigure a provider.</p>
+<p>Choose <b>Balanced</b>, <b>Long context</b>, <b>Fast</b> or <b>Several agents</b>. Select a model where settings are per model; only llama.cpp has “All models (default)”. Ollama settings apply globally. The hardware strip and memory estimate show the basis for the recommendation, including model weights, KV cache and one reserve. Valid llama.cpp measurements take precedence; “Measure and tune” remains available.</p>
+<p>Compare Current, Recommended and Your value. Use recommended copies the recommendation; Reset returns to the current settings. Advanced contains threads and batches. Use the default removes a llama.cpp model override. Unverified keys are disabled. Errors block Apply; warnings must be acknowledged in the review.</p>
+<p>Unset values are shown as engine defaults. When changing context in llama.cpp or Jan with an automatic or unknown parallel count, choose a positive parallel count too; Use recommended supplies one.</p>
+<p>Partial GPU offload can be slower. A known GPU allocation above the card’s capacity is an error even with partial offload; when cache placement is unknown, the displayed KV estimate is labelled as an upper bound. vLLM stays on the GPU and uses its configured memory budget; a model that cannot fit is marked too large for this GPU. Restart and reload are refused while a connected agent is running, even when it uses only the CPU or the GPU is idle.</p>
+<p>The known memory needed by CPU layers must also fit in system RAM. Above total RAM is an error; above currently available RAM is a warning.</p>
+<h2 id="provider-configuration-ai">Ask AI and web guidance</h2>
+<p>Choose a helper, optionally dictate what matters most, and press Ask AI. Search the web for guidance uses a helper with web research, shows its source links and may use more tokens. Local helpers work without web access. The helper sees bounded hardware/model facts and verified settings, never credential files or Strata presets. Web pages and answers are treated as untrusted advice; the same validator checks every proposal. There is no automatic retry and at most two helper calls from central Ask AI.</p>
+<p>An AI proposal fills Your value. Any edit makes it a manual proposal. Cancelling the review preserves your draft. Apply reviews the files, makes a backup and offers Undo. Restart now or Reload the model is a separate, guarded choice; otherwise the settings take effect at the next start/load. System Ollama, vLLM and Strata offer copyable guidance instead of writing their configuration.</p>
+</section>
+
 <section class="chapter appendix" id="reference">
   <h1>Reference</h1>
 

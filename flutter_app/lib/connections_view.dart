@@ -507,11 +507,13 @@ class _ConnectionsViewState extends State<ConnectionsView> {
   );
 }
 
-class ConnectionReview extends StatelessWidget {
+class ConnectionReview extends StatefulWidget {
   const ConnectionReview({
     super.key,
     required this.plan,
     this.busy = false,
+    this.restartLabel,
+    this.onRestartChanged,
     required this.tr,
     required this.onConfirm,
     required this.onCancel,
@@ -521,6 +523,22 @@ class ConnectionReview extends StatelessWidget {
   final String Function(String) tr;
   final VoidCallback onConfirm;
   final VoidCallback onCancel;
+  final String? restartLabel;
+  final ValueChanged<bool>? onRestartChanged;
+  @override
+  State<ConnectionReview> createState() => _ConnectionReviewState();
+}
+
+class _ConnectionReviewState extends State<ConnectionReview> {
+  bool _ack = false, _restart = false;
+  Map<String, dynamic> get plan => widget.plan;
+  bool get busy => widget.busy;
+  List get warnings => plan['restart'] != null
+      ? plan['warnings'] as List? ?? const []
+      : const [];
+  String tr(String text) => widget.tr(text);
+  VoidCallback get onConfirm => widget.onConfirm;
+  VoidCallback get onCancel => widget.onCancel;
   @override
   Widget build(BuildContext context) => TaskReview(
     title: Text(tr('Preview')),
@@ -567,6 +585,34 @@ class ConnectionReview extends StatelessWidget {
                 padding: const EdgeInsets.only(top: 12),
                 child: Text(tr('No changes to apply')),
               ),
+            if (warnings.isNotEmpty) ...[
+              for (final warning in warnings)
+                Text(tr(warning is Map ? '${warning['text']}' : '$warning')),
+              CheckboxListTile(
+                key: const ValueKey('configuration-warning-ack'),
+                contentPadding: EdgeInsets.zero,
+                title: Text(tr('I have reviewed these warnings')),
+                value: _ack,
+                onChanged: busy
+                    ? null
+                    : (v) => setState(() => _ack = v == true),
+              ),
+            ],
+            if (widget.restartLabel != null)
+              CheckboxListTile(
+                key: const ValueKey('configuration-restart'),
+                contentPadding: EdgeInsets.zero,
+                title: Text(tr(widget.restartLabel!)),
+                value: _restart,
+                onChanged: busy
+                    ? null
+                    : (v) {
+                        setState(() => _restart = v == true);
+                        widget.onRestartChanged?.call(_restart);
+                      },
+              ),
+            if (plan['restart'] != null && widget.restartLabel == null)
+              Text(tr('Takes effect on the next start')),
             for (final file in plan['new_files'] as List? ?? [])
               ListTile(
                 leading: const Icon(Icons.note_add_outlined),
@@ -605,7 +651,9 @@ class ConnectionReview extends StatelessWidget {
         ),
       TextButton(onPressed: busy ? null : onCancel, child: Text(tr('Cancel'))),
       FilledButton(
-        onPressed: busy || plan['empty'] == true ? null : onConfirm,
+        onPressed: busy || plan['empty'] == true || warnings.isNotEmpty && !_ack
+            ? null
+            : onConfirm,
         child: Text(tr('Apply')),
       ),
     ],

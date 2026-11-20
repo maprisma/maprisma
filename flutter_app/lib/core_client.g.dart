@@ -415,12 +415,14 @@ class CoreClient {
     required String command,
     String? context,
     required String request,
+    bool? webSearch,
   }) => transport.call('map.smart_ask', {
     'answer': ?answer,
     'column': column,
     'command': command,
     'context': ?context,
     'request': request,
+    'web_search': ?webSearch,
   });
 
   Future<Map<String, dynamic>> mapSmartConnect({
@@ -517,6 +519,54 @@ class CoreClient {
   Future<Map<String, dynamic>> modelsChooseUndo({required String undo}) =>
       transport.call('models.choose_undo', {'undo': undo});
 
+  Future<Map<String, dynamic>> modelsConfig({
+    required String key,
+    String? model,
+    String? profile,
+  }) => transport.call('models.config', {
+    'key': key,
+    'model': ?model,
+    'profile': ?profile,
+  });
+
+  Future<Map<String, dynamic>> modelsConfigAsk({
+    required String command,
+    String? focus,
+    required String key,
+    String? model,
+    String? profile,
+    bool? webSearch,
+  }) => transport.call('models.config_ask', {
+    'command': command,
+    'focus': ?focus,
+    'key': key,
+    'model': ?model,
+    'profile': ?profile,
+    'web_search': ?webSearch,
+  });
+
+  Future<Map<String, dynamic>> modelsConfigCheck({
+    required String key,
+    String? model,
+    required Object? values,
+  }) => transport.call('models.config_check', {
+    'key': key,
+    'model': ?model,
+    'values': values,
+  });
+
+  Future<Map<String, dynamic>> modelsConfigPreview({
+    String? configProposal,
+    required String key,
+    String? model,
+    required Object? values,
+  }) => transport.call('models.config_preview', {
+    'config_proposal': ?configProposal,
+    'key': key,
+    'model': ?model,
+    'values': values,
+  });
+
   Future<Map<String, dynamic>> modelsRemoveApply({required Object? removal}) =>
       transport.call('models.remove_apply', {'removal': removal});
 
@@ -573,6 +623,14 @@ class CoreClient {
   Future<Map<String, dynamic>> providersHealth([
     Map<String, dynamic> params = const {},
   ]) => transport.call('providers.health', params);
+
+  Future<Map<String, dynamic>> providersReloadModel({
+    required String key,
+    required String model,
+  }) => transport.call('providers.reload_model', {'key': key, 'model': model});
+
+  Future<Map<String, dynamic>> providersRestart({required String key}) =>
+      transport.call('providers.restart', {'key': key});
 
   Future<Map<String, dynamic>> providersRun({
     required Object? operation,

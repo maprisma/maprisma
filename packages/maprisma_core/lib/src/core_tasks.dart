@@ -58,6 +58,8 @@ final class CoreTasks {
   static const maxFrame = 1024 * 1024,
       commits = {
         'connections.apply',
+        'providers.restart',
+        'providers.reload_model',
         'models.remove',
         'addons.install',
         'installers.install',
@@ -235,7 +237,13 @@ final class CoreTasks {
 /// Python flutter_connections.Connections: reviewed plans behind opaque,
 /// expiring handles, applied by the worker, undone by token.
 final class CoreConnections {
-  CoreConnections(this.files, this.tasks, this.backupRoot);
+  CoreConnections(
+    this.files,
+    this.tasks,
+    this.backupRoot, {
+    void Function()? daemonReload,
+  }) : daemonReload = daemonReload ?? reloadUserUnits;
+  final void Function() daemonReload;
   final ConfigFiles files;
   final CoreTasks tasks;
   final String backupRoot;
@@ -358,10 +366,12 @@ final class CoreConnections {
     List<(String, String?, String?)> choices = const [],
   ]) {
     final keys = result.keys.toSet();
-    if (!(keys.length == 1 && keys.contains('backup') ||
-            keys.length == 2 &&
-                keys.containsAll(['backup', 'context_failures'])) ||
-        result['backup'] is! String) {
+    if (!keys.contains('backup') ||
+        !keys.every(
+          const {'backup', 'context_failures', 'reload_failed'}.contains,
+        ) ||
+        result['backup'] is! String ||
+        result['reload_failed'] != null && result['reload_failed'] is! bool) {
       throw const FormatException('Invalid private result');
     }
     final failures = result['context_failures'] ?? 0;
@@ -394,6 +404,7 @@ final class CoreConnections {
       'undo': token,
       'context_failures': failures,
       'choice_failures': choices.length - made.length,
+      if (result['reload_failed'] == true) 'reload_failed': true,
     };
   }
 
@@ -415,6 +426,14 @@ final class CoreConnections {
     if (folder == null) throw const FormatException('Unknown Undo handle');
     final skipped = <String>[];
     final restored = files.undo(folder, skipped: skipped);
+    var reloadFailed = false;
+    if (changesUserUnits(restored)) {
+      try {
+        daemonReload();
+      } on Object {
+        reloadFailed = true;
+      }
+    }
     // With its files, the local LLM's own model it moved, if still so; only
     // when all of them came back: an agent file changed since stays on the
     // new model, so its provider does too (choice_failures says so).
@@ -434,6 +453,7 @@ final class CoreConnections {
       'ok': true,
       'restored': [for (final path in restored) files.tilde(path)],
       'choice_failures': kept,
+      if (reloadFailed) 'reload_failed': true,
     };
   }
 }

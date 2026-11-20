@@ -536,6 +536,7 @@ class MapSmartCard extends StatefulWidget {
     this.takesRequests = true,
     this.showBar = true,
     this.onProvider,
+    this.onConfiguration,
     this.onMenu,
     this.performancePage,
     this.onTask,
@@ -569,6 +570,7 @@ class MapSmartCard extends StatefulWidget {
 
   /// A provider step the user chose: (install, update, start or stop, key).
   final void Function(String step, String key, String name)? onProvider;
+  final ValueChanged<Map<String, dynamic>>? onConfiguration;
 
   /// A menu action Ask AI proposed (kind menu_action: area, step, key,
   /// model): the app opens that menu itself, with its own preview, review
@@ -581,6 +583,7 @@ class MapSmartCard extends StatefulWidget {
   /// back returns to the proposal. Null: Performance opens as its own card.
   final Future<Widget> Function(
     String key, {
+    Map<String, dynamic>? prefill,
     required void Function(Future<bool> Function() review) aside,
     required VoidCallback back,
   })?
@@ -636,6 +639,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
   bool _sharePrevious = false;
   String _partial = '';
   String _askStage = '';
+  bool _configurationWeb = false;
   VoiceStatus _voiceStatus = VoiceStatus.missing;
 
   Future<void> _refreshVoice() async {
@@ -746,6 +750,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
     if (mounted) {
       setState(() {
         _sharePrevious = false;
+        if (_activeHelper?['web_search'] != true) _configurationWeb = false;
         if (_previousHelper != smartHelperChosen.value) _previousContext = null;
       });
     }
@@ -945,7 +950,10 @@ class _MapSmartCardState extends State<MapSmartCard> {
 
   /// Performance inside the window: a spinner while its settings are read
   /// (that can take ten seconds and more), then the page.
-  Future<void> _openPerformance(String key) async {
+  Future<void> _openPerformance(
+    String key, {
+    Map<String, dynamic>? prefill,
+  }) async {
     final token = ++_performanceToken;
     setState(() {
       _step = _SmartStep.performance;
@@ -954,6 +962,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
     try {
       final page = await widget.performancePage!(
         key,
+        prefill: prefill,
         aside: (review) => unawaited(_aside(key, review)),
         back: _leavePerformance,
       );
@@ -983,6 +992,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
   /// The review says whether to come back (false: the user moved on to
   /// something else meanwhile, or another card took its place).
   Future<void> _aside(String key, Future<bool> Function() review) async {
+    final page = _performancePage;
     _performanceToken++;
     _close(refocus: false);
     var back = false;
@@ -990,8 +1000,11 @@ class _MapSmartCardState extends State<MapSmartCard> {
       back = await review();
     } finally {
       if (mounted && back && !widget.open) {
+        setState(() {
+          _step = _SmartStep.performance;
+          _performancePage = page;
+        });
         widget.onToggle();
-        unawaited(_openPerformance(key));
       }
     }
   }
@@ -1180,6 +1193,9 @@ class _MapSmartCardState extends State<MapSmartCard> {
         command: '${helper['command']}',
         request: request,
         answer: answer,
+        webSearch: _configurationWeb && helper['web_search'] == true
+            ? true
+            : null,
       );
       final taskId = started['task'] as String?;
       if (!mounted || token != _runToken) {
@@ -2285,6 +2301,16 @@ class _MapSmartCardState extends State<MapSmartCard> {
       _prompt.selection = TextSelection.collapsed(offset: prompt.length);
     });
     _fieldFocus.requestFocus();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final field = _fieldFocus.context;
+      if (mounted && field != null) {
+        Scrollable.ensureVisible(
+          field,
+          duration: const Duration(milliseconds: 150),
+          alignment: 0,
+        );
+      }
+    });
   }
 
   Widget _buildPromptChip(String group, int position, Object item) {
@@ -2654,6 +2680,24 @@ class _MapSmartCardState extends State<MapSmartCard> {
               ],
             ],
           ),
+        CheckboxListTile(
+          key: const ValueKey('provider-guidance-web'),
+          contentPadding: EdgeInsets.zero,
+          title: Text(tr('Search the web for provider guidance')),
+          value: _configurationWeb,
+          subtitle: Text(
+            tr(
+              _activeHelper?['web_search'] == true
+                  ? 'Uses the selected helper’s web search and may use more tokens.'
+                  : 'Choose a helper with web research to use this.',
+            ),
+          ),
+          onChanged:
+              _step == _SmartStep.working ||
+                  _activeHelper?['web_search'] != true
+              ? null
+              : (v) => setState(() => _configurationWeb = v == true),
+        ),
         if (_promptNote.isNotEmpty) Text(_promptNote),
       ],
     );
@@ -2683,7 +2727,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
           if (_lastClarification != null) _lastClarification,
           _reply['summary'] ?? _reply['instead']?['hint'] ?? '',
           for (final c in _reply['candidates'] as List? ?? const [])
-            '${c['title']} ${c['reason'] ?? ''}',
+            '${c['title']} ${c['reason'] ?? ''}${c['kind'] == 'provider_config' ? ' · ${c['key']} · ${c['model'] ?? ''} · ${c['profile']} · ${c['values']}' : ''}',
         ].join('\n');
         _previousContext =
             _reply['helper'] == helper['command'] || _sharePrevious
@@ -3459,6 +3503,7 @@ class _MapSmartCardState extends State<MapSmartCard> {
                       Text(
                         c['kind'] == 'agent_action' ||
                                 c['kind'] == 'provider_action' ||
+                                c['kind'] == 'provider_config' ||
                                 c['kind'] == 'menu_action'
                             ? widget.tr('${c['subtitle']}')
                             : '${c['subtitle']}',
@@ -3493,11 +3538,26 @@ class _MapSmartCardState extends State<MapSmartCard> {
                         child: FilledButton.tonal(
                           key: ValueKey('smart-review-${c['id']}'),
                           onPressed: () {
-                            if (c['kind'] == 'provider_action' &&
-                                c['step'] == 'performance' &&
+                            if (c['kind'] == 'provider_config' &&
                                 widget.performancePage != null) {
                               // Shown here: the window stays open.
-                              _openPerformance('${c['key']}');
+                              _openPerformance(
+                                '${c['key']}',
+                                prefill: Map<String, dynamic>.from(c as Map),
+                              );
+                            } else if (c['kind'] == 'provider_config') {
+                              _close(refocus: false);
+                              if (widget.onConfiguration != null) {
+                                widget.onConfiguration!(
+                                  Map<String, dynamic>.from(c as Map),
+                                );
+                              } else {
+                                widget.onProvider?.call(
+                                  'provider_config',
+                                  '${c['key']}',
+                                  '${c['title']}',
+                                );
+                              }
                             } else if (c['kind'] == 'menu_action') {
                               // The app's own menu, with its own review.
                               _close(refocus: false);
@@ -3529,8 +3589,10 @@ class _MapSmartCardState extends State<MapSmartCard> {
                                   ? 'Review'
                                   : c['kind'] == null
                                   ? 'Review download'
-                                  : c['step'] == 'performance'
-                                  ? 'Open Performance'
+                                  : c['kind'] == 'provider_config'
+                                  ? c['writable'] == true
+                                        ? 'Review configuration'
+                                        : 'Open Configuration'
                                   : const {
                                       'map_edit',
                                       'mcp_add',

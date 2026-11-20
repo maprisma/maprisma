@@ -42,13 +42,16 @@ if Path('window_popup').exists():settings['window_mode']='popup'
 addon={'id':'fixture-addon','name':'Fixture adapter','version':'1.0','summary':'Summary',
  'kind':'agent','state':'verified','enabled':False,'supported':True,'verified':True,'provides':['test']}
 new_addon={**addon,'id':'catalog-addon','name':'Catalog adapter','version':'2.0','provides':['new']}
-runtime={'key':'fixture','name':'Fixture provider','installed':True,'running':True,'tunable':True,
+runtime={'key':'fixture','name':'Fixture provider','installed':True,'running':True,'tunable':True,'configurable':True,
  'address':'','models_dir':'','models':['example-model'],'can_load':True,
  'can_control':False,'can_import':False,'download':'file','focus':['runtime:fixture']}
 nodes=[{'id':ident,'kind':kind,'column':column,'label':label,'detail':''}
  for ident,kind,column,label in [('agent:test','agent',1,'Test agent'),
  ('runtime:fixture','runtime',2,'Fixture provider'),('model:runtime:fixture:example-model','model',3,'example-model'),
  ('mcp:known-server','mcp',0,'Known server')]]
+def configuration(key,model='*',profile='balanced'):
+ schema=[{'id':'mode','label':'A mode','role':'mode','type':'enum','values':['a','b'],'default':'a','wire':'mode','scope':'default' if Path('config_default').exists() else 'global','importance':'main','writer':'fixture','restart':'service','verified':True}]
+ return {'key':key,'runtime':'Fixture provider' if key=='fixture' else 'llama.cpp','schema':schema,'model':model,'profile':profile,'current':{'mode':'a'},'recommended':[{'id':'mode','current':'a','recommended':'b','reason':'Faster.','source':'calculated'}],'fit':{'weights':1<<30,'kv':1<<30,'reserve':1<<30,'total':3<<30,'available':8<<30,'basis':'vram'},'hardware':{'gpu':'Fixture GPU','vram_total':8<<30,'ram_available':16<<30,'physical_cores':8},'scope_models':['*','gone-model'] if Path('config_default').exists() and not Path('model_gone').exists() and not Path('model_unlisted').exists() else ['*'],'models':[],'helpers':[{'command':'test','name':'Test agent','web_search':True}],'build':'vulkan','untuned':[],'writable':True,'can_control':False,'running':True,'can_reload':False,'restart':'service','notes':['Freshly measured configuration'] if Path('tune_applied').exists() else []}
 tasks={};slow_polls=[]
 for line in sys.stdin:
  q=json.loads(line);m=q['method'];p=q.get('params',{})
@@ -98,7 +101,7 @@ for line in sys.stdin:
   'command':'test','item':'known-server','remove':False,'focus':['agent:test','mcp:known-server']}
  elif m=='connections.move_preview':r={'plan':'opaque-remove','empty':False,'files':[],'links_add':[],'links_remove':[],'focus':['agent:test','mcp:known-server']}
  elif m=='connections.undo':connected=False;r={'restored':['fixture'],'choice_failures':1 if Path('choice_fails').exists() else 0}
- elif m=='connections.apply' and p['plan']=='opaque-measure':Path('tuned').touch();tasks['connect']={'ok':True,'undo':'undo-tuned'};r={'task':'connect'}
+ elif m=='connections.apply' and p['plan']=='opaque-measure':Path('tuned').touch();Path('tune_applied').touch();tasks['connect']={'ok':True,'undo':'undo-tuned'};r={'task':'connect'}
  elif m=='connections.apply':connected=p['plan']!='opaque-remove';tasks['connect']={'ok':True,'undo':'undo-token','choice_failures':1 if Path('choice_fails').exists() else 0};r={'task':'connect'}
  elif m=='providers.run':
   op=p['operation'];tasks[op]=({'repos':[{'id':'owner/repo'}]} if op=='models.search' else
@@ -138,6 +141,12 @@ for line in sys.stdin:
     'publisher':{'kind':'','who':''},'options':[{'option':'opt-time','kind':'pypi','label':'pypi · mcp-server-time 1.0','runnable':True,'command':'uvx',
      'args':['mcp-server-time==1.0'],'env':[],'url':'','headers':[],'needs':[],'on_command_line':[]}]}}]}
   r={'task':'mcpcat'}
+ elif m=='models.config' and Path('config_busy').exists():print(json.dumps({'id':q['id'],'error':{'code':'busy'}}),flush=True);continue
+ elif m=='models.config' and Path('model_gone').exists() and p.get('model')=='gone-model':r={'task':'config_gone'}
+ elif m=='models.config':tasks['config']=configuration(p['key'],p.get('model','*'),p.get('profile','balanced'));tasks['tune_slow']=tasks['config'];r={'task':'tune_slow' if Path('slow_tuning').exists() and p.get('key')=='fixture' else 'config'}
+ elif m=='models.config_check':r={'errors':[],'warnings':[],'fit':configuration(p['key'])['fit']}
+ elif m=='models.config_ask':tasks['config-ask']={'summary':'One thing.','values':{'mode':'b'},'reasons':{'mode':'Faster.'},'config_proposal':'config-ask'};r={'task':'config-ask'}
+ elif m=='models.config_preview':r={'ok':True,'plan':'opaque-tune','empty':False,'files':[{'path':'~/.config/x.ini','added':1,'removed':0}],'links_add':[],'links_remove':[],'item':'Fixture provider','notes':[],'warnings':[],'restart':'service','focus':['runtime:fixture']}
  elif m=='models.tuning' and Path('slots_full').exists():Path('slots_full').unlink();print(json.dumps({'id':q['id'],'error':{'code':'operation_failed'}}),flush=True);continue
  elif m=='models.tuning' and p.get('key')=='llamacpp' and Path('llama').exists():tasks['tune']={'runtime':'llama.cpp','key':'llamacpp','gpu':'GPU','vram':24<<30,'stacks':['Vulkan'],'build':'vulkan','builds':[],'devices':'','settings':{'*':{}},'tuning':{},'per_model':True,'models':[],'loaded':[],'vram_used':0,'helpers':[],'build_path':'/x/llama-server','untuned':[] if Path('tuned').exists() else ['Big']};r={'task':'tune'}
  elif m=='models.tune' and Path('card_busy').exists():tasks['measure']={'refused':'The card is in use: a model is loaded in llama.cpp. Measure again when it is idle.','item':'llama.cpp','models':[],'skipped':[],'notes':[]};r={'task':'measure'}
@@ -188,9 +197,9 @@ for line in sys.stdin:
  elif m=='map.smart_ask' and Path('smart_download').exists():tasks['sa']={'status':'proposal','summary':'','proposal':'p1','candidates':[{'id':'c1','title':'qwen','subtitle':'a/qwen','reason':'','fit':'ok','size':1,'connect':[{'command':'pi','name':'Pi'}]}]};r={'task':'sa'}
  elif m=='map.smart_review':r={'title':'qwen','subtitle':'a/qwen','size':1,'fit':'ok','runtime':'Fixture provider'}
  elif m=='map.smart_run':tasks['dl']={'ok':True};r={'task':'dl'}
- elif m=='map.smart_ask':tasks['sa']={'status':'proposal','summary':'','proposal':'p1','candidates':[{'id':'c1','kind':'provider_action','title':'Fixture provider','subtitle':'Performance','reason':'','fit':'ok','size':0,'key':'fixture','step':'performance','action':{'kind':'provider_action'}}]};r={'task':'sa'}
+ elif m=='map.smart_ask':tasks['sa']={'status':'proposal','summary':'','proposal':'p1','candidates':[{'id':'c1','kind':'provider_config','title':'Fixture provider','subtitle':'Configure for this PC','reason':'','fit':'ok','size':0,'key':'llamacpp' if Path('smart_llama').exists() else 'fixture','profile':'balanced','model':'*','values':{'mode':'b'},'reasons':{},'writable':True,'config_proposal':'cfg-1','action':{'kind':'provider_config'}}]};r={'task':'sa'}
  elif m=='map.smart_helpers':r={'helpers':[{'command':'local-helper','name':'Local helper','local':True}] if Path('smart_helpers').exists() else []}
- elif m=='tasks.status':r=({'state':'failed'} if p['task']=='install' and install_fails else {'state':'running'} if p['task']=='tune_slow' and slow_polls.append(1) is None and len(slow_polls) <= 15 else {'state':'done','result':tasks[p['task']]})
+ elif m=='tasks.status':r=({'state':'failed'} if p['task']=='config_gone' or p['task']=='measure' and Path('tune_failed').exists() or p['task']=='install' and install_fails else {'state':'running'} if p['task']=='tune_slow' and slow_polls.append(1) is None and len(slow_polls) <= 15 else {'state':'done','result':tasks[p['task']]})
  else:r={}
  with out:print(json.dumps({'id':q['id'],'result':r}),flush=True)
 ''';
@@ -272,6 +281,20 @@ Future<void> openFromHelp(WidgetTester tester, String tab) async {
   await tester.tap(find.byKey(const ValueKey('help-open')));
   await settleService(tester);
   await tester.tap(find.byKey(ValueKey('help-tab-$tab')));
+  await settleService(tester);
+}
+
+Future<void> askAi(WidgetTester tester, String request) async {
+  await tester.tap(find.byKey(const ValueKey('ask-ai-open')));
+  await settleService(tester);
+  await tester.enterText(
+    find.descendant(
+      of: find.byKey(const ValueKey('smart-card')),
+      matching: find.byType(TextField),
+    ),
+    request,
+  );
+  await tester.testTextInput.receiveAction(TextInputAction.send);
   await settleService(tester);
 }
 
@@ -1574,15 +1597,21 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('performance-fixture')));
     await settleService(tester);
     expect(find.text('A mode'), findsOneWidget);
-    await tester.tap(find.text('—'));
+    await tester.tap(find.byKey(const ValueKey('config-mode')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('b').last);
+    await settleService(tester);
+    await tester.tap(find.byKey(const ValueKey('config-apply')));
     await settleService(tester);
     expect(
       requests(
         dir,
-      ).lastWhere((q) => q['method'] == 'models.tuning_preview')['params'],
-      {'key': 'fixture', 'section': '*', 'setting': 'mode', 'value': 'b'},
+      ).lastWhere((q) => q['method'] == 'models.config_preview')['params'],
+      {
+        'key': 'fixture',
+        'model': '*',
+        'values': {'mode': 'b'},
+      },
     );
     await tester.tap(find.widgetWithText(FilledButton, 'Apply'));
     await settleService(tester);
@@ -1629,6 +1658,243 @@ void main() {
     await unmountApp(tester);
   });
 
+  for (final deleted in [true, false]) {
+    testWidgets(
+      'Configuration discards a ${deleted ? 'deleted' : 'unlisted'} model draft and reopens once',
+      (tester) async {
+        final dir = await mountApp(
+          tester,
+          beforeStart: (dir) {
+            File('${dir.path}/config_default').writeAsStringSync('');
+          },
+        );
+        await openFromHelp(tester, 'Providers and models');
+        await tester.tap(find.byKey(const ValueKey('performance-fixture')));
+        await settleService(tester);
+        await tester.tap(find.byKey(const ValueKey('config-model-*')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('gone-model').last);
+        await settleService(tester);
+        await tester.tap(find.byKey(const ValueKey('config-mode')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('b').last);
+        await settleService(tester);
+        final ask = find.byKey(const ValueKey('config-ask'));
+        await tester.ensureVisible(ask);
+        await tester.pumpAndSettle();
+        await tester.tap(ask);
+        await settleService(tester);
+        expect(find.text('One thing.'), findsOneWidget);
+        tester.widget<PerformanceView>(find.byType(PerformanceView)).onClose();
+        await settleService(tester);
+        File(
+          '${dir.path}/${deleted ? 'model_gone' : 'model_unlisted'}',
+        ).writeAsStringSync('');
+        await tester.tap(find.byKey(const ValueKey('performance-fixture')));
+        await settleService(tester);
+        final reads = requests(
+          dir,
+        ).where((q) => q['method'] == 'models.config').toList();
+        expect(reads[reads.length - 2]['params']['model'], 'gone-model');
+        expect((reads.last['params'] as Map).containsKey('model'), false);
+        expect(find.text('A mode'), findsOneWidget);
+        expect(find.text('One thing.'), findsNothing);
+        expect(find.text('From Ask AI'), findsNothing);
+        expect(
+          tester
+              .widget<FilledButton>(find.byKey(const ValueKey('config-apply')))
+              .onPressed,
+          isNull,
+        );
+        tester.widget<PerformanceView>(find.byType(PerformanceView)).onClose();
+        await settleService(tester);
+        await tester.tap(find.byKey(const ValueKey('performance-fixture')));
+        await settleService(tester);
+        expect(
+          requests(
+            dir,
+          ).lastWhere((q) => q['method'] == 'models.config')['params']['model'],
+          isNot('gone-model'),
+        );
+        expect(tester.takeException(), isNull);
+        await unmountApp(tester);
+      },
+    );
+  }
+
+  testWidgets('Configuration keeps only its own apply undo token', (
+    tester,
+  ) async {
+    final dir = await mountApp(tester);
+    await openFromHelp(tester, 'Providers and models');
+    await tester.tap(find.byKey(const ValueKey('performance-fixture')));
+    await settleService(tester);
+    await tester.tap(find.byKey(const ValueKey('config-mode')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('b').last);
+    await settleService(tester);
+    await tester.tap(find.byKey(const ValueKey('config-apply')));
+    await settleService(tester);
+    await tester.tap(find.widgetWithText(FilledButton, 'Apply'));
+    await settleService(tester);
+    expect(
+      tester
+          .widget<TextButton>(find.byKey(const ValueKey('config-undo')))
+          .onPressed,
+      isNotNull,
+    );
+    await tester.tap(find.byKey(const ValueKey('config-undo')));
+    await settleService(tester);
+    expect(
+      requests(
+        dir,
+      ).lastWhere((q) => q['method'] == 'connections.undo')['params'],
+      {'undo': 'undo-token'},
+    );
+    expect(
+      tester
+          .widget<TextButton>(find.byKey(const ValueKey('config-undo')))
+          .onPressed,
+      isNull,
+    );
+    expect(tester.takeException(), isNull);
+    await unmountApp(tester);
+  });
+  testWidgets('a refused Configuration start preserves the saved draft', (
+    tester,
+  ) async {
+    final dir = await mountApp(tester);
+    await openFromHelp(tester, 'Providers and models');
+    await tester.tap(find.byKey(const ValueKey('performance-fixture')));
+    await settleService(tester);
+    final page = tester.widget<PerformanceView>(find.byType(PerformanceView));
+    page.draft!.addAll({
+      'model': '*',
+      'values': <String, dynamic>{'mode': 'b'},
+      'config_proposal': 'saved-handle',
+      'summary': 'Saved proposal',
+      'reasons': {'mode': 'Keep this'},
+      'sources': ['https://example.com/saved'],
+    });
+    page.onClose();
+    await settleService(tester);
+    File('${dir.path}/config_busy').writeAsStringSync('');
+    final before = requests(
+      dir,
+    ).where((q) => q['method'] == 'models.config').length;
+    await tester.tap(find.byKey(const ValueKey('performance-fixture')));
+    await settleService(tester);
+    expect(
+      requests(dir).where((q) => q['method'] == 'models.config').length,
+      before + 1,
+    );
+    File('${dir.path}/config_busy').deleteSync();
+    await tester.tap(find.byKey(const ValueKey('performance-fixture')));
+    await settleService(tester);
+    final draft = tester
+        .widget<PerformanceView>(find.byType(PerformanceView))
+        .draft!;
+    expect(draft['values'], {'mode': 'b'});
+    expect(draft['config_proposal'], 'saved-handle');
+    expect(find.text('Saved proposal'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await unmountApp(tester);
+  });
+  for (final embedded in [false, true]) {
+    for (final outcome in ['cancelled', 'refused', 'failed']) {
+      testWidgets(
+        '${embedded ? 'embedded' : 'standalone'} unapplied $outcome tune preserves the whole draft',
+        (tester) async {
+          final dir = await mountApp(
+            tester,
+            beforeStart: (dir) {
+              for (final flag in [
+                'llama',
+                'tuned',
+                if (embedded) ...['smart_helpers', 'smart_llama'],
+                if (outcome == 'refused') 'card_busy',
+                if (outcome == 'failed') 'tune_failed',
+              ]) {
+                File('${dir.path}/$flag').writeAsStringSync('');
+              }
+            },
+          );
+          if (embedded) {
+            await askAi(tester, 'Configure llama.cpp');
+            await tester.tap(find.byKey(const ValueKey('smart-review-c1')));
+            await settleService(tester);
+          } else {
+            await openFromHelp(tester, 'Providers and models');
+            await tester.tap(
+              find.byKey(const ValueKey('performance-llamacpp')),
+            );
+            await settleService(tester);
+          }
+          final page = tester.widget<PerformanceView>(
+            find.byType(PerformanceView),
+          );
+          page.draft!.addAll({
+            'values': <String, dynamic>{'mode': 'b'},
+            'config_proposal': 'unsaved-handle',
+            'reasons': {'mode': 'Keep my choice'},
+            'summary': 'Unsaved proposal',
+            'sources': ['https://example.com/unsaved'],
+            '_undo': 'own-config-undo',
+          });
+          final expected = {
+            for (final key in [
+              'values',
+              'config_proposal',
+              'reasons',
+              'summary',
+              'sources',
+              '_undo',
+              '_source_proposal',
+            ])
+              key: page.draft![key],
+          };
+          await tester.ensureVisible(find.byKey(const ValueKey('tune-all')));
+          await tester.tap(find.byKey(const ValueKey('tune-all')));
+          await settleService(tester);
+          if (outcome == 'cancelled') {
+            expect(find.byType(ConnectionReview), findsOneWidget);
+            await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+          } else {
+            await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+          }
+          for (
+            var i = 0;
+            i < 5 && find.byType(PerformanceView).evaluate().isEmpty;
+            i++
+          ) {
+            await settleService(tester);
+          }
+          await settleService(tester);
+          final restored = tester
+              .widget<PerformanceView>(find.byType(PerformanceView))
+              .draft!;
+          for (final key in expected.keys) {
+            expect(restored[key], expected[key], reason: key);
+          }
+          expect(find.text('Unsaved proposal'), findsOneWidget);
+          expect(find.text('From Ask AI'), findsOneWidget);
+          expect(
+            tester
+                .widget<TextButton>(find.byKey(const ValueKey('config-undo')))
+                .onPressed,
+            isNotNull,
+          );
+          expect(
+            requests(dir).where((q) => q['method'] == 'connections.apply'),
+            isEmpty,
+          );
+          expect(tester.takeException(), isNull);
+          await unmountApp(tester);
+        },
+      );
+    }
+  }
+
   testWidgets('Measure and tune shows the measurement, then the preview', (
     tester,
   ) async {
@@ -1662,43 +1928,139 @@ void main() {
       ).lastWhere((q) => q['method'] == 'connections.apply')['params'],
       {'plan': 'opaque-measure'},
     );
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await settleService(tester);
+    expect(
+      tester
+          .widget<TextButton>(find.byKey(const ValueKey('config-undo')))
+          .onPressed,
+      isNull,
+    );
     expect(tester.takeException(), isNull);
     await unmountApp(tester);
   });
 
-  testWidgets('tips from an agent are asked and one is applied', (
-    tester,
-  ) async {
-    final dir = await mountApp(tester);
-    await openFromHelp(tester, 'Providers and models');
-    await tester.tap(find.byKey(const ValueKey('performance-fixture')));
-    await settleService(tester);
-    final ask = find.byKey(const ValueKey('tuning-ask'));
-    await tester.ensureVisible(ask);
-    await tester.pumpAndSettle();
-    await tester.tap(ask);
-    await settleService(tester);
-    expect(
-      requests(
+  testWidgets(
+    'reopening an applied embedded tune keeps the old proposal consumed',
+    (tester) async {
+      final dir = await mountApp(
+        tester,
+        beforeStart: (dir) {
+          for (final flag in [
+            'llama',
+            'tuned',
+            'smart_helpers',
+            'smart_llama',
+          ]) {
+            File('${dir.path}/$flag').writeAsStringSync('');
+          }
+        },
+      );
+      await askAi(tester, 'Configure llama.cpp');
+      await tester.tap(find.byKey(const ValueKey('smart-review-c1')));
+      await settleService(tester);
+      final initial = tester
+          .widget<PerformanceView>(find.byType(PerformanceView))
+          .draft!;
+      expect(initial['config_proposal'], 'cfg-1');
+      expect(find.text('From Ask AI'), findsOneWidget);
+      await tester.ensureVisible(find.byKey(const ValueKey('tune-all')));
+      await tester.tap(find.byKey(const ValueKey('tune-all')));
+      await settleService(tester);
+      await tester.tap(find.widgetWithText(FilledButton, 'Apply'));
+      await settleService(tester);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await settleService(tester);
+      expect(find.text('Freshly measured configuration'), findsOneWidget);
+      expect(
+        tester
+            .widget<TextButton>(find.byKey(const ValueKey('config-undo')))
+            .onPressed,
+        isNull,
+      );
+      await tester.tap(find.byKey(const ValueKey('smart-back')));
+      await settleService(tester);
+      expect(find.byKey(const ValueKey('smart-review-c1')), findsOneWidget);
+      final readsBefore = requests(
         dir,
-      ).lastWhere((q) => q['method'] == 'models.tuning_ask')['params'],
-      {'key': 'fixture', 'command': 'test'},
-    );
-    expect(find.text('One thing.'), findsOneWidget);
-    final apply = find.widgetWithText(TextButton, 'Apply');
-    await tester.ensureVisible(apply);
-    await tester.pumpAndSettle();
-    await tester.tap(apply);
-    await settleService(tester);
-    expect(
-      requests(
-        dir,
-      ).lastWhere((q) => q['method'] == 'models.tuning_preview')['params'],
-      {'key': 'fixture', 'section': '*', 'setting': 'mode', 'value': 'b'},
-    );
-    expect(tester.takeException(), isNull);
-    await unmountApp(tester);
-  });
+      ).where((q) => q['method'] == 'models.config').length;
+      await tester.tap(find.byKey(const ValueKey('smart-review-c1')));
+      await settleService(tester);
+      final restored = tester
+          .widget<PerformanceView>(find.byType(PerformanceView))
+          .draft!;
+      expect(restored['values'], isEmpty);
+      expect(restored.containsKey('config_proposal'), false);
+      expect(restored['_source_proposal'], 'cfg-1');
+      expect(find.text('From Ask AI'), findsNothing);
+      expect(find.text('Freshly measured configuration'), findsOneWidget);
+      expect(
+        requests(dir).where((q) => q['method'] == 'models.config').length,
+        greaterThan(readsBefore),
+      );
+      expect(
+        tester
+            .widget<TextButton>(find.byKey(const ValueKey('config-undo')))
+            .onPressed,
+        isNull,
+      );
+      expect(
+        requests(
+          dir,
+        ).lastWhere((q) => q['method'] == 'connections.apply')['params'],
+        {'plan': 'opaque-measure'},
+      );
+      expect(tester.takeException(), isNull);
+      await unmountApp(tester);
+    },
+  );
+
+  testWidgets(
+    'tips from an agent are asked and one is applied',
+    (tester) async {
+      final dir = await mountApp(tester);
+      await openFromHelp(tester, 'Providers and models');
+      await tester.tap(find.byKey(const ValueKey('performance-fixture')));
+      await settleService(tester);
+      final ask = find.byKey(const ValueKey('config-ask'));
+      await tester.ensureVisible(ask);
+      await tester.pumpAndSettle();
+      await tester.tap(ask);
+      await settleService(tester);
+      expect(
+        requests(
+          dir,
+        ).lastWhere((q) => q['method'] == 'models.config_ask')['params'],
+        {
+          'key': 'fixture',
+          'model': '*',
+          'profile': 'balanced',
+          'command': 'test',
+          'focus': '',
+          'web_search': false,
+        },
+      );
+      expect(find.text('One thing.'), findsOneWidget);
+      final apply = find.byKey(const ValueKey('config-apply'));
+      await tester.ensureVisible(apply);
+      await tester.pumpAndSettle();
+      await tester.tap(apply);
+      await settleService(tester);
+      expect(
+        requests(
+          dir,
+        ).lastWhere((q) => q['method'] == 'models.config_preview')['params'],
+        {
+          'key': 'fixture',
+          'model': '*',
+          'values': {'mode': 'b'},
+          'config_proposal': 'config-ask',
+        },
+      );
+      expect(tester.takeException(), isNull);
+      await unmountApp(tester);
+    },
+  );
 
   testWidgets('the header shows open problems; one opens the agent', (
     tester,
@@ -2952,7 +3314,7 @@ void main() {
       await settleService(tester);
       await tester.tap(find.byKey(const ValueKey('smart-review-c1')));
       List<Map> tuning() => calls(
-        'models.tuning',
+        'models.config',
       ).where((q) => q['params']['key'] == 'fixture').toList();
       for (var i = 0; i < 10 && tuning().isEmpty; i++) {
         await settleService(tester);
@@ -2989,20 +3351,6 @@ void main() {
       await unmountApp(tester);
     },
   );
-
-  Future<void> askAi(WidgetTester tester, String request) async {
-    await tester.tap(find.byKey(const ValueKey('ask-ai-open')));
-    await settleService(tester);
-    await tester.enterText(
-      find.descendant(
-        of: find.byKey(const ValueKey('smart-card')),
-        matching: find.byType(TextField),
-      ),
-      request,
-    );
-    await tester.testTextInput.receiveAction(TextInputAction.send);
-    await settleService(tester);
-  }
 
   testWidgets(
     'an Ask AI menu action opens the manual step: a local LLM\'s model',
@@ -3127,7 +3475,7 @@ void main() {
       expect(
         requests(dir).where(
           (q) =>
-              q['method'] == 'models.tuning' && q['params']['key'] == 'fixture',
+              q['method'] == 'models.config' && q['params']['key'] == 'fixture',
         ),
         hasLength(1),
       );
@@ -3166,21 +3514,18 @@ void main() {
       ) {
         await settleService(tester);
       }
-      final reads = calls('models.tuning').length;
+      final reads = calls('models.config').length;
       // A setting: its review takes the window's place.
-      final mode = find
-          .ancestor(
-            of: find.text('—'),
-            matching: find.byWidgetPredicate((w) => w is DropdownButton),
-          )
-          .first;
+      final mode = find.byKey(const ValueKey('config-mode'));
       await tester.ensureVisible(mode);
       await tester.pumpAndSettle();
       await tester.tap(mode);
       await tester.pumpAndSettle();
       await tester.tap(find.text('b').last);
       await settleService(tester);
-      expect(calls('models.tuning_preview'), hasLength(1));
+      await tester.tap(find.byKey(const ValueKey('config-apply')));
+      await settleService(tester);
+      expect(calls('models.config_preview'), hasLength(1));
       expect(find.byKey(const ValueKey('smart-card')), findsNothing);
       await tester.tap(find.widgetWithText(FilledButton, 'Apply'));
       await settleService(tester);
@@ -3219,7 +3564,7 @@ void main() {
         ),
         findsOneWidget,
       );
-      expect(calls('models.tuning').length, greaterThan(reads));
+      expect(calls('models.config').length, greaterThan(reads));
       // Back, step by step: the proposal, the main page, the map.
       await tester.tap(find.byKey(const ValueKey('smart-back')));
       await settleService(tester);

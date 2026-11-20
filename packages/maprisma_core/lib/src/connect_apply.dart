@@ -403,3 +403,15 @@ final class ConfigFiles {
     return restored;
   }
 }
+
+bool changesUserUnits(Iterable<String> paths) => paths.any(
+  (path) =>
+      path.endsWith('.service') ||
+      RegExp(r'\.service\.d/[^/]+\.conf$').hasMatch(path),
+);
+void reloadUserUnits() {
+  final result = Process.runSync('systemctl', ['--user', 'daemon-reload']);
+  if (result.exitCode != 0) {
+    throw StateError('Could not reload the user service configuration');
+  }
+}

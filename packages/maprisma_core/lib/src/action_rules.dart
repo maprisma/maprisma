@@ -280,6 +280,17 @@ List<ActionCheck> actionChecks(
       return _line(facts.providerModel?.call(text('provider')), p['model'], '');
     case 'models.remove_preview':
       return [ActionCheck('remove', 'models', text('model'))];
+    case 'providers.restart':
+      return [
+        ActionCheck('stop', 'providers', text('key')),
+        ActionCheck('start', 'providers', text('key')),
+      ];
+    case 'providers.reload_model':
+      return [
+        ActionCheck('stop', 'models', text('model')),
+        ActionCheck('start', 'models', text('model')),
+      ];
+    case 'models.config_preview':
     case 'models.tuning_preview':
     case 'models.tune':
       return [ActionCheck('update', 'providers', text('key'))];

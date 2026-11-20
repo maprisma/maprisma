@@ -1047,7 +1047,7 @@ Type=exec
 EnvironmentFile=$envFile
 # Every GGUF in the model folder; how many are loaded at once is LLAMA_ARG_MODELS_MAX in the
 # env file (the app raises it when agents use different models); per-model settings in models.ini.
-ExecStart=${unitPath('${host.binDir}/$command')} --models-preset ${unitPath(preset)} --gpu-layers all --flash-attn on
+ExecStart=${unitPath('${host.binDir}/$command')} --models-preset ${unitPath(preset)}
 Restart=on-failure
 RestartSec=3
 KillMode=control-group
@@ -1061,7 +1061,7 @@ WantedBy=default.target
     if (!_exists(preset)) {
       host.write(
         preset,
-        'version = 1\n\n; Settings for every model; a [model name] section overrides them.\n[*]\nctx-size = 8192\n',
+        'version = 1\n\n; Settings for every model; a [model name] section overrides them.\n[*]\nctx-size = 8192\ngpu-layers = all\nflash-attn = on\n',
       );
     }
   }

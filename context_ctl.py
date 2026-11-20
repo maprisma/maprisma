@@ -298,22 +298,32 @@ INI_KEY = re.compile(r"[a-z0-9][a-z0-9-]{0,40}")
 INI_VALUE = re.compile(r"[A-Za-z0-9_.:+-]{1,40}")
 
 
-def ini_text(old: str, section: str, key: str, value: str) -> str:
-    """models.ini with `key = value` in `section` ("*": every model; made if missing); the rest stays."""
+def ini_text(old: str, section: str, key: str, value: str | None) -> str:
+    """Set a key or remove an override, preserving unrelated text and comments (Dart reference)."""
     if not re.fullmatch(r"[^\[\]\x00-\x1f\x7f]{1,200}", section) or not INI_KEY.fullmatch(key) \
-            or not INI_VALUE.fullmatch(value):
+            or value is not None and not INI_VALUE.fullmatch(value):
         raise ValueError("bad section, key or value")
     old = old or "version = 1\n"
     lines = old.splitlines(keepends=True)
-    start = next((i for i, l in enumerate(lines) if re.match(rf"^\s*\[{re.escape(section)}\]\s*$", l)), None)
+    start = next((i for i, line in enumerate(lines)
+                  if re.fullmatch(rf"\s*\[{re.escape(section)}\]\s*(?:[;#].*)?", line.rstrip())), None)
     if start is None:
-        return old.rstrip("\n") + f"\n\n[{section}]\n{key} = {value}\n"
+        return old if value is None else old.rstrip("\n") + f"\n\n[{section}]\n{key} = {value}\n"
     end = next((i for i in range(start + 1, len(lines)) if re.match(r"^\s*\[", lines[i])), len(lines))
-    for i in range(start + 1, end):
-        if re.match(rf"^\s*{re.escape(key)}\s*=", lines[i]):
-            lines[i] = f"{key} = {value}\n"
-            break
-    else:
+    replaced = False
+    for i in reversed(range(start + 1, end)):
+        if not re.match(rf"^\s*{re.escape(key)}\s*=", lines[i]):
+            continue
+        match = re.search(r"\s+[;#][^\n]*", lines[i])
+        comment = match[0] if match else ""
+        if value is not None and not replaced:
+            lines[i] = f"{key} = {value}{comment}\n"
+            replaced = True
+        elif comment:
+            lines[i] = comment.lstrip() + "\n"
+        else:
+            lines.pop(i)
+    if value is not None and not replaced:
         lines.insert(start + 1, f"{key} = {value}\n")
     return "".join(lines)
 

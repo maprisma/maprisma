@@ -1,3 +1,5 @@
+import 'core_client.g.dart';
+import 'provider_config_view.dart';
 import 'package:flutter/material.dart';
 import 'task_card.dart';
 
@@ -37,7 +39,16 @@ class PerformanceView extends StatefulWidget {
     this.onAsk,
     this.answer,
     this.onTune,
+    this.client,
+    this.draft,
+    this.onApply,
+    this.onUndo,
   });
+  final CoreClient? client;
+  final Map<String, dynamic>? draft;
+  final Future<bool> Function(Map<String, dynamic>, Map<String, dynamic>)?
+  onApply;
+  final Future<bool> Function(String)? onUndo;
   final Map<String, dynamic> facts;
   final String Function(String) tr;
   final void Function(String section, String setting, String value) onChange;
@@ -199,6 +210,18 @@ class _PerformanceViewState extends State<PerformanceView> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.client != null && facts['schema'] is List) {
+      return ProviderConfigurationView(
+        facts: facts,
+        client: widget.client!,
+        draft: widget.draft!,
+        tr: tr,
+        onClose: widget.onClose,
+        onApply: widget.onApply!,
+        onUndo: widget.onUndo,
+        onTune: widget.onTune,
+      );
+    }
     final text = Theme.of(context).textTheme;
     final build = '${facts['build'] ?? ''}';
     final tuning = (facts['tuning'] as Map? ?? const {}).cast<String, List>();

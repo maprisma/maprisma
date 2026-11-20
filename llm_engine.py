@@ -79,7 +79,16 @@ def env_with(text: str, name: str, value: str) -> str:
     import re
     line = f"{name}={value}"
     if re.search(rf"^\s*(?:export\s+)?{re.escape(name)}=.*$", text, re.MULTILINE):
-        return re.sub(rf"^\s*(?:export\s+)?{re.escape(name)}=.*$", lambda _m: line, text, count=1, flags=re.MULTILINE)
+        pattern = re.compile(rf"^\s*(?:export\s+)?{re.escape(name)}=.*$", re.MULTILINE)
+        replaced = False
+        lines = []
+        for item in text.split("\n"):
+            if pattern.search(item):
+                if replaced:
+                    continue
+                item, replaced = line, True
+            lines.append(item)
+        return "\n".join(lines)
     return text + ("" if text.endswith("\n") or not text else "\n") + line + "\n"
 
 
@@ -296,6 +305,7 @@ class Engine:
     # Performance settings the local LLM help may suggest (llm_tuning): {key: (allowed values as a
     # regex, what it does)}; {} = none (no Performance card). Builds: (key, label) of the programs it
     # can be installed as (ROCm, Vulkan, …), the one installed now from build_now().
+    config: tuple = ()          # facts-only configuration schema, exported to the Dart core
     tuning: dict = {}
     _newer_from: "Engine | None" = None       # the app's engine whose newer facts it was given (_with_newer_facts)
     tuning_per_model = True     # False: its settings count for every model ("*" only: an env file)

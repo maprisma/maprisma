@@ -1080,7 +1080,7 @@ Type=exec
 EnvironmentFile={self.env_file}
 # Every GGUF in the model folder; how many are loaded at once is LLAMA_ARG_MODELS_MAX in the
 # env file (the app raises it when agents use different models); per-model settings in models.ini.
-ExecStart={unit_path(BIN_DIR / self.command)} --models-preset {unit_path(preset)} --gpu-layers all --flash-attn on
+ExecStart={unit_path(BIN_DIR / self.command)} --models-preset {unit_path(preset)}
 Restart=on-failure
 RestartSec=3
 KillMode=control-group
@@ -1093,7 +1093,7 @@ WantedBy=default.target
         preset = HOME / ".config/llama.cpp/models.ini"
         if not preset.exists():
             _write(preset, "version = 1\n\n; Settings for every model; a [model name] section overrides them.\n"
-                           "[*]\nctx-size = 8192\n", 0o644)
+                           "[*]\nctx-size = 8192\ngpu-layers = all\nflash-attn = on\n", 0o644)
 
 
 class LmStudio(Installer):

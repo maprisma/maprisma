@@ -1,5 +1,7 @@
+import 'provider_config.dart';
+import 'provider_config_files.dart';
 import 'reports_generate.dart';
-import 'core.dart' show CoreService;
+import 'core.dart' show CoreService, ProviderConfigurationRoutes;
 import 'protocol.dart' show ServiceError;
 import 'dart:async';
 import 'dart:convert';
@@ -18,7 +20,7 @@ import 'existing_ai.dart' as existing_ai;
 import 'system_map.dart' show SystemMapReader;
 import 'system_actions.dart' show checkTool;
 import 'smart_card.dart';
-import 'system_help.dart' show analyzeMap;
+import 'system_help.dart' show analyzeMap, firstJson;
 import 'mcp_updates.dart' as mcp_updates;
 import 'agent_details.dart' show refreshUsage;
 import 'adapters.dart' show Adapter;
@@ -239,6 +241,7 @@ Future<Map<String, dynamic>> applyPlan(
   String home, {
   ProviderOps? ops,
   String? stagingRoot,
+  void Function()? daemonReload,
 }) async {
   final (plan, root) = decodePlan(body);
   ops ??= () {
@@ -259,6 +262,14 @@ Future<Map<String, dynamic>> applyPlan(
   final contexts = [...plan.contexts];
   plan.contexts.clear();
   final backup = ConfigFiles(posix, home).apply(plan, root);
+  var reloadFailed = false;
+  if (changesUserUnits(plan.changes.map((c) => c.path))) {
+    try {
+      (daemonReload ?? reloadUserUnits)();
+    } on Object {
+      reloadFailed = true;
+    }
+  }
   for (final folder in {
     for (final (_, file, _, _) in plan.filesStaged) p.dirname(file),
   }) {
@@ -285,7 +296,11 @@ Future<Map<String, dynamic>> applyPlan(
       failures++;
     }
   }
-  return {'backup': backup, 'context_failures': failures};
+  return {
+    'backup': backup,
+    'context_failures': failures,
+    if (reloadFailed) 'reload_failed': true,
+  };
 }
 
 /// The worker process: one request line, the plan from an inherited private
@@ -597,6 +612,60 @@ Future<int> runWorker(List<String> args) async {
     }
     // llm_tuning.collect: a local LLM's performance facts (its devices are
     // asked of llama-server, bounded; GGUF headers read).
+    if (args.isEmpty && request['operation'] == 'models.config') {
+      final params = request['params'] as Map;
+      if (params['key'] is! String ||
+          params.keys.any(
+            (k) => !const {'key', 'model', 'profile'}.contains(k),
+          )) {
+        throw const FormatException('Invalid configuration request');
+      }
+      final files = ScanFiles(AppIdentity());
+      final scans = ProviderScans(files);
+      final rt = scans
+          .scan()
+          .where((r) => r.key == params['key'] && r.installed)
+          .firstOrNull;
+      if (rt == null) throw const FormatException('Unknown local provider');
+      final store = ProviderConfigFiles(
+        files,
+        ConfigFiles(Posix(), files.identity.home),
+      );
+      final facts = await store.collect(rt);
+      store.select(facts, params['model'] as String?);
+      send({'type': 'result', 'result': facts});
+      return 0;
+    }
+    if (args.isEmpty &&
+        const {
+          'providers.restart',
+          'providers.reload_model',
+        }.contains(request['operation'])) {
+      final service = CoreService(migrate: false);
+      try {
+        final files = service.reads.files;
+        final ops = ProviderOps(files, ProviderScans(files));
+        final params = request['params'] as Map;
+        final runtime = service.reads.inventory
+            .collect(service.reads.catalog.scan(), remember: false)
+            .runtimes
+            .where((r) => r.key == params['key'])
+            .firstOrNull;
+        send({
+          'type': 'result',
+          'result': await configControl(
+            ops,
+            request['operation'] as String,
+            params,
+            agents: [...?runtime?.agents, ...?runtime?.activeAgents],
+            adapters: service.addons.adapters,
+          ),
+        });
+      } finally {
+        service.dispose();
+      }
+      return 0;
+    }
     if (args.isEmpty && request['operation'] == 'models.tuning') {
       final params = request['params'] as Map;
       if (params.length != 1 || params['key'] is! String) {
@@ -1008,6 +1077,7 @@ Future<int> runWorker(List<String> args) async {
           'mcp.tools',
           'mcp.tools_test',
           'models.tuning_ask',
+          'models.config_ask',
           'map.smart_ask',
           'reports.generate',
           'activitylog.import',
@@ -1201,6 +1271,86 @@ Future<int> runWorker(List<String> args) async {
       });
       return 0;
     }
+    if (operation == 'models.config_ask') {
+      if (body.length > 256 * 1024) {
+        throw const FormatException('Request too large');
+      }
+      final data = jsonDecode(utf8.decode(body)) as Map<String, dynamic>;
+      final service = CoreService(migrate: false);
+      try {
+        final command = data['command'],
+            adapter = service.reportAdapter('$command');
+        if (adapter == null ||
+            data['facts'] is! Map ||
+            data['model'] is! String ||
+            !configProfiles.contains(data['profile'])) {
+          throw const FormatException('This helper is not ready');
+        }
+        final shown = data['helper'] != null ? 'local-helper' : command;
+        if (!service.configHelpers().any(
+          (h) =>
+              h['command'] == shown &&
+              (data['web_search'] != true || h['web_search'] == true),
+        )) {
+          throw const FormatException('This helper is not ready');
+        }
+        final facts = data['facts'] as Map;
+        final run = data['web_search'] == true
+            ? smartLookup(
+                data,
+                adapter,
+                service.identity.environment,
+                service.identity.home,
+                service.identity.shortName,
+                responseSchema: configProposalSchema(facts),
+                makePrompt: (p) => p,
+              )
+            : smartAgent(
+                data,
+                adapter,
+                service.identity.environment,
+                service.identity.home,
+                service.identity.shortName,
+              );
+        if (run == null) {
+          throw const FormatException('This helper is not ready');
+        }
+        Map<String, dynamic> result;
+        try {
+          final raw = await run(
+            configPrompt(
+              facts,
+              data['model'] as String,
+              data['profile'] as String,
+              '${data['focus'] ?? ''}',
+              web: data['web_search'] == true,
+              language: '${data['language'] ?? 'en'}',
+            ),
+          );
+          try {
+            result = configAnswer(
+              firstJson(raw, 'values'),
+              facts,
+              data['model'] as String,
+            );
+          } on FormatException {
+            result = {
+              'error': 'Invalid configuration answer',
+              'code': 'bad_answer',
+            };
+          }
+        } on Object {
+          result = {
+            'error': 'The helper did not return a valid configuration',
+            'code': 'helper_failed',
+          };
+        }
+        send({'type': 'result', 'result': result});
+      } finally {
+        service.dispose();
+      }
+      return 0;
+    }
     if (operation == 'models.tuning_ask') {
       if (body.length > 256 * 1024) {
         throw const FormatException('Performance facts too large');
@@ -1364,6 +1514,29 @@ Future<int> runWorker(List<String> args) async {
               ? null
               : (stage) =>
                     send({'type': 'progress', 'fraction': 0, 'text': stage}),
+          configFacts: (key, model, profile) async {
+            final files = ScanFiles(identity);
+            final scans = ProviderScans(files);
+            final rt = scans
+                .scan()
+                .where((r) => r.key == key && r.installed)
+                .firstOrNull;
+            if (rt == null) {
+              throw const FormatException('Unknown local provider');
+            }
+            final store = ProviderConfigFiles(
+              files,
+              ConfigFiles(Posix(), identity.home),
+            );
+            final collected = await store.collect(rt);
+            final selected = store.select(collected, model);
+            return {
+              ...collected,
+              'model': selected,
+              'profile': profile,
+              'writable': store.canWrite(collected, selected),
+            };
+          },
           mcpSearch: (query) async {
             final found = await searchPage(
               query,

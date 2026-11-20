@@ -1013,7 +1013,7 @@ void main() {
           {'command': 'pi', 'name': 'Pi', 'verify': true},
         ],
         'providers': [
-          {'key': 'runner', 'name': 'Runner', 'performance': true},
+          {'key': 'runner', 'name': 'Runner', 'configurable': true},
         ],
         'mcp_facts': {
           'agents': [
@@ -1090,8 +1090,12 @@ void main() {
           'proposal',
         ),
         (
-          {'area': 'providers', 'action': 'performance', 'provider': 'runner'},
-          'proposal',
+          {
+            'area': 'providers',
+            'action': 'provider_config',
+            'provider': 'runner',
+          },
+          'error',
         ),
         (
           {

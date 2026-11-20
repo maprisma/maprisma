@@ -167,6 +167,14 @@ void main() {
       'models',
       'm',
     ),
+    'models.config_preview': ({'key': 'o'}, 'update', 'providers', 'o'),
+    'providers.restart': ({'key': 'o'}, 'stop', 'providers', 'o'),
+    'providers.reload_model': (
+      {'key': 'o', 'model': 'm'},
+      'stop',
+      'models',
+      'm',
+    ),
     'models.tuning_preview': ({'key': 'o'}, 'update', 'providers', 'o'),
     'models.tune': ({'key': 'o'}, 'update', 'providers', 'o'),
     'models.slots_preview': (const {}, 'update', 'providers', ''),
@@ -229,6 +237,16 @@ void main() {
       'a',
     ),
   };
+
+  test('configuration controls check stop AND start', () {
+    for (final method in ['providers.restart', 'providers.reload_model']) {
+      final checks = actionChecks(method, {'key': 'o', 'model': 'm'});
+      expect(checks.map((c) => c.action), ['stop', 'start']);
+      expect(checks.map((c) => c.category).toSet(), {
+        method.endsWith('restart') ? 'providers' : 'models',
+      });
+    }
+  });
 
   test('every route gives what its handler does, or is exempt', () {
     final routes =

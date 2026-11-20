@@ -375,7 +375,7 @@ final class LlamaTuner {
     final meta = readGguf(file);
     final arch = meta['general.architecture'] ?? '';
     final trained = meta['$arch.context_length'];
-    final (perToken, _) = kvLayout(meta, cacheK);
+    final (perToken, fixed) = kvLayout(meta, cacheK, cacheV: cacheV);
     if (perToken <= 0) {
       return {'name': name, 'reason': 'its memory per token is not known'};
     }
@@ -475,6 +475,11 @@ final class LlamaTuner {
       'pp': rate(winner, prompt: true).round(),
       'tg': rate(winner, prompt: false).round(),
       'used': used,
+      'reserve':
+          (used - sizeOf(file) - fixed - tokens * perToken).clamp(0, used) +
+          tuneMargin,
+      'cache_k': cacheK,
+      'cache_v': cacheV,
       'cache': cacheK,
       'flash': flash,
     };
@@ -539,7 +544,17 @@ Map<String, dynamic> withMeasurement(
   for (final m in (measured['models'] as List? ?? const []).cast<Map>()) {
     models['${m['name']}'] = {
       ...common,
-      for (final k in const ['ctx', 'ubatch', 'pp', 'tg']) k: m[k],
+      for (final k in const [
+        'ctx',
+        'ubatch',
+        'pp',
+        'tg',
+        'used',
+        'reserve',
+        'cache_k',
+        'cache_v',
+      ])
+        k: m[k],
     };
   }
   for (final m in (measured['skipped'] as List? ?? const []).cast<Map>()) {

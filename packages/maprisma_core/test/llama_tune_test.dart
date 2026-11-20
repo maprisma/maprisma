@@ -225,6 +225,19 @@ void main() {
       );
       final room = 24 * gib - 1 * gib - tuneMargin - 6 * gib;
       expect(m['ctx'], (room ~/ perToken + 2064) ~/ 4096 * 4096);
+      final weights = sizeOf('${root.path}/models/Big.gguf');
+      final (_, fixed) = kvLayout(
+        readGguf('${root.path}/models/Big.gguf'),
+        'q8_0',
+      );
+      expect(
+        m['reserve'],
+        (6 * gib - weights - fixed - (tunePrompt + tuneMemGen) * perToken)
+                .clamp(0, 6 * gib) +
+            tuneMargin,
+      );
+      expect(m['cache_k'], 'q8_0');
+      expect(m['cache_v'], 'q8_0');
       // The bench ran the service's build with its environment, q8_0 and
       // flash attention (nothing set in models.ini).
       final bench = runs.firstWhere((r) => r.$1.first.endsWith('llama-bench'));
