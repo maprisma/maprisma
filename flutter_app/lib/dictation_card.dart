@@ -6,6 +6,7 @@ import 'app_theme.dart' show controlBorder, corners;
 import 'backend.dart' show failureText;
 import 'core_client.g.dart';
 import 'map_smart_card.dart' show SmartStatusIcon;
+import 'settings_view.dart' show SettingsView;
 
 /// Notifies open Ask AI cards and Settings when dictation settings or setup change.
 final dictationChanged = ValueNotifier<int>(0);
@@ -159,8 +160,9 @@ class DictationControls extends StatelessWidget {
       children: [
         DropdownButtonFormField<String>(
           key: ValueKey('dictation-engine-$engine'),
-          // Compact (the Map card's popup) stays dense; elsewhere a long engine name may wrap.
-          isDense: compact,
+          // Dense in the Map card's popup and, as every Settings field, in the wide
+          // layout at normal text; otherwise a long engine name may wrap.
+          isDense: compact || SettingsView.denseFields(context),
           itemHeight: null,
           initialValue:
               const {
@@ -174,7 +176,7 @@ class DictationControls extends StatelessWidget {
               : 'auto',
           isExpanded: true,
           decoration: InputDecoration(
-            isDense: compact,
+            isDense: compact || SettingsView.denseFields(context),
             labelText: tr('Dictation engine'),
           ),
           items: [

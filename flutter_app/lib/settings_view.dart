@@ -1499,10 +1499,13 @@ class _SettingsPagesState extends State<_SettingsPages> {
               _selectorOpen ||
               _selectorFocus.hasFocus ||
               focusedSection != null;
+          final layoutChanged = _compact != compact;
           _compact = compact;
           _layoutSize = box.biggest;
           if (!compact) _selectorOpen = false;
-          if (navigationFocused) {
+          // A resize within the compact layout leaves an open section menu
+          // its focus (keys and Esc keep going to the menu).
+          if (navigationFocused && (layoutChanged || !_selectorOpen)) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (!mounted || _compact != compact) return;
               final target = compact

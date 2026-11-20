@@ -15,6 +15,7 @@ void main() {
     double scale = 1,
     Brightness brightness = Brightness.light,
     bool busy = false,
+    bool dictation = false,
     Future<void> Function(Map<String, dynamic>)? onUpdate,
   }) => MaterialApp(
     theme: ThemeData(brightness: brightness),
@@ -27,11 +28,12 @@ void main() {
     home: Scaffold(
       body: SettingsView(
         section: section,
-        settings: const {
+        settings: {
           'language': 'auto',
           'look': 'adwaita',
-          'map_layers': ['agents'],
-          'flutter_map_layout': <String, dynamic>{},
+          'map_layers': const ['agents'],
+          'flutter_map_layout': const <String, dynamic>{},
+          if (dictation) 'dictation': true,
         },
         busy: busy,
         tr: (key) => translations[key] as String? ?? key,
@@ -344,6 +346,41 @@ void main() {
     );
   }
 
+  testWidgets(
+    'a compact resize with the section menu open keeps the menu working',
+    (tester) async {
+      tester.view.physicalSize = const Size(540, 400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(view(section: 'appearance'));
+      final selector = find.byKey(const ValueKey('settings-section-selector'));
+      final focus = tester.widget<DropdownButton<String>>(selector).focusNode!;
+      focus.requestFocus();
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.space);
+      await tester.pumpAndSettle();
+      final option = find.byKey(
+        const ValueKey('settings-section-option-general'),
+      );
+      expect(option, findsOneWidget);
+      tester.view.physicalSize = const Size(600, 400);
+      await tester.pumpAndSettle();
+      expect(option, findsOneWidget);
+      expect(focus.hasFocus, isFalse); // the menu keeps the focus
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+      expect(option, findsNothing); // Esc closed only the menu
+      expect(focus.hasFocus, isTrue);
+      expect(
+        tester.widget<DropdownButton<String>>(selector).value,
+        'appearance',
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('retention shows persisted value when an update is not saved', (
     tester,
   ) async {
@@ -395,9 +432,31 @@ void main() {
       (const Size(1800, 900), 1.5, false),
     ]) {
       tester.view.physicalSize = size;
+      await tester.pumpWidget(
+        const SizedBox(),
+      ); // a new view opens at its section
       await tester.pumpWidget(view(section: 'general', scale: scale));
       await tester.pumpAndSettle();
       expect(languageDense(), dense, reason: '$size at $scale');
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(
+        const SizedBox(),
+      ); // a new view opens at its section
+      await tester.pumpWidget(
+        view(section: 'dictation', scale: scale, dictation: true),
+      );
+      await tester.pumpAndSettle();
+      final engine = find.descendant(
+        of: find.byWidgetPredicate(
+          (w) => '${w.key}'.contains('dictation-engine-'),
+        ),
+        matching: find.byType(DropdownButton<String>),
+      );
+      expect(
+        tester.widget<DropdownButton<String>>(engine.first).isDense,
+        dense,
+        reason: 'dictation engine, $size at $scale',
+      );
       expect(tester.takeException(), isNull);
     }
   });

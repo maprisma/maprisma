@@ -131,3 +131,17 @@ Coverage still open: choosing a section by keyboard (arrows, Enter, Tab into it)
 end of long sections, search in de/pl at 150/200 %, resizing with a content drop-down open, the
 Map card's dictation controls (only the `compact` flag is set; no widget test), and the two
 blocked Dictation integration tests.
+
+## Round 6 (Codex, 2026-11-20, task branch at bafec95 against 2eb027d)
+
+1. **Medium** `settings_view.dart:1506`. With the section menu open, a resize that stays in the
+   compact layout (540×400 → 600×400) requested focus on the selector behind the menu: the menu
+   stayed open but lost the keys, and Esc no longer closed only the menu.
+   > Author: confirmed with a probe test (menu open, selector focused, Esc left the menu open).
+   > Focus moves only when the layout changes or no menu is open. Test: "a compact resize with
+   > the section menu open keeps the menu working" (menu keeps focus, Esc closes only the menu).
+2. **Low** `dictation_card.dart:163`. Settings' dictation engine drop-down stayed non-dense in
+   the wide layout at normal text (before this branch it was dense by default).
+   > Author: confirmed. The field and its decoration use `compact ||
+   > SettingsView.denseFields(context)`. The density test also checks the engine drop-down (it
+   > fails with the old code).
