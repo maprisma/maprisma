@@ -40,6 +40,7 @@ import 'map_groups.dart';
 import 'map_welcome.dart';
 import 'map_addons_focus.dart';
 import 'first_agent_view.dart';
+import 'first_agent_controller.dart';
 import 'installer_review.dart';
 import 'agent_security_view.dart';
 import 'api_key_review.dart';
@@ -335,7 +336,14 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   bool _welcome = false;
   bool _skipWelcomeSearch = false;
   bool _detectionComplete = false;
-  Map<String, dynamic> _guide = {};
+  late final _guide = FirstAgentController(
+    read: _readGuide,
+    abandonRead: _abandonGuideRead,
+    saveChoice: (route) async {
+      final result = await _client.guideChoose(route: route);
+      if (result['ok'] != true) throw StateError('Guide choice not saved');
+    },
+  );
   bool _setupDetecting = false;
   bool _setupDetectionFailed = false;
   int _setupRevision = 0;
@@ -1503,7 +1511,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       onDetect: _detectSetup,
       onApply: _finishSetup,
       onLater: () => _finishSetup(null),
-      onBack: () => setState(() => _focusCategory = null),
+      onBack: _closeGroupFocus,
       onToggle: _toggleAddon,
       onFile: _installAddonFile,
       onCatalog: _loadAddonCatalog,
@@ -3029,7 +3037,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       _card == null &&
       _browser == null &&
       _visibleTerminal == null &&
-      (_pageOpen || !_showMap);
+      (_pageOpen || _focusCategory != null || !_showMap);
 
   bool get _pageOpen =>
       _showReports ||
@@ -3061,6 +3069,65 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     unawaited(_popup ? windowManager.hide() : windowManager.close());
   }
 
+  /// Whatever hides the guide (Esc, the menu, a step's page) stops its
+  /// running check: its answer is not wanted, and opening the guide again
+  /// checks anew.
+  ///
+  /// A pending return to the guide belongs to the screen the guide opened (and
+  /// agent details opened from its group page): on any other screen it ends.
+  /// Checked a frame later, so a page's Back that passes the map on its way to
+  /// the guide still returns.
+  @override
+  void setState(VoidCallback fn) {
+    final guideShown = _showGuide;
+    super.setState(fn);
+    if (guideShown && !_showGuide && _guide.loading) _guide.cancelPending();
+    if (!_guideReturn) {
+      _guideFrom = null;
+      return;
+    }
+    final screen = _guideScreenNow;
+    if (screen == 'guide') return;
+    _guideFrom ??= screen;
+    if (!_guideScreen(screen)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _guideReturn && !_guideScreen(_guideScreenNow)) {
+          _guideReturn = false;
+          _guideFrom = null;
+        }
+      });
+    }
+  }
+
+  /// An action the user chose from a use case or a problem, not a guide step:
+  /// the page it opens (even the one the guide opened) no longer returns to the
+  /// guide.
+  void _chosenAction(List<String> action) {
+    _guideReturn = false;
+    _guideFrom = null;
+    _healthAction(action);
+  }
+
+  /// The screen a guide step opened, which returns to the guide when left.
+  String? _guideFrom;
+
+  bool _guideScreen(String screen) =>
+      screen == 'guide' ||
+      screen == _guideFrom ||
+      screen == 'details' && (_guideFrom?.startsWith('group:') ?? false);
+
+  String get _guideScreenNow {
+    if (_showGuide) return 'guide';
+    if (_showReports) return 'reports';
+    if (_showSettings) return 'settings';
+    if (_showProviders) return 'providers';
+    if (_showConnections) return 'connections';
+    if (_visibleTerminal != null) return 'terminal';
+    if (!_showMap) return _selected != null ? 'details' : 'agents';
+    if (_focusCategory != null) return 'group:$_focusCategory';
+    return 'map';
+  }
+
   /// A page back to what lay under it; an agent's details or the list back
   /// to the map, the main page.
   void _goBack() {
@@ -3068,7 +3135,18 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       unawaited(_leaveReports());
       return;
     }
-    if (_showGuide) _guideReturn = false;
+    // Only a group page on screen; agent details opened from one go back to it.
+    if (!_pageOpen && _showMap && _focusCategory != null) {
+      _closeGroupFocus();
+      return;
+    }
+    if (_showGuide) {
+      _guide.cancelPending();
+      _guideReturn = false;
+    }
+    // Agent details over a group page: back to that page (and from there to
+    // the guide, if the guide opened it).
+    final toGroup = !_pageOpen && !_showMap && _focusCategory != null;
     setState(() {
       if (!_pageOpen) {
         _selected = null;
@@ -3079,7 +3157,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       _showConnections = false;
       _showGuide = false;
     });
-    _backToGuideIfFromIt();
+    if (!toGroup) _backToGuideIfFromIt();
   }
 
   /// Ctrl+Plus / Ctrl+Minus / Ctrl+0: the map in view zoomed in, out, or fit
@@ -3129,7 +3207,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     addonHints: [..._foundHints, ..._addonHints],
     mcpUpdates: _mcpUpdates,
     mcpTaskAgent: _mcpChecks?['task_agent'] as String?,
-    onAction: _healthAction,
+    onAction: _chosenAction,
     onUpdate: _runUpdate,
     onAddonHint: (line, action) {
       switch (action) {
@@ -3174,6 +3252,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     final targetCol = column ?? _smartStatusData.firstConcernedColumn;
     final updatedLayers = _neededLayersForColumn(targetCol);
     setState(() {
+      _guideReturn = false; // a page of its own, not a guide step
       _card = null;
       _browser = null;
       _focusCategory = null;
@@ -3234,6 +3313,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     }
     final targetCol = column ?? _askColumn;
     setState(() {
+      _guideReturn = false; // a page of its own, not a guide step
       _card = null;
       _browser = null;
       _focusCategory = null;
@@ -3332,7 +3412,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                     _showGuide = false;
                     _visibleTerminal = null;
                   });
-                  _healthAction(action);
+                  _chosenAction(action);
                 },
               ),
             ),
@@ -3382,6 +3462,9 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
               () => setState(() {
                 _guideReturn = false;
                 _showMap = false;
+                // The agent list replaces an add-on group page: no hidden group
+                // focus left for the first Esc to clear without visible effect.
+                _focusCategory = null;
                 _showConnections = false;
                 _showSettings = false;
                 _showGuide = false;
@@ -3529,6 +3612,53 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
 
   /// A service task started and waited for without a task card (the view
   /// that asked shows its own progress).
+  // The guide check's core task: one that timed out or was left is cancelled,
+  // so a hung check does not keep polling or hold one of the core's task slots.
+  int _guideReadRun = 0;
+  String? _guideTask;
+
+  Future<Map<String, dynamic>> _readGuide() async {
+    final run = ++_guideReadRun;
+    final started = await _client.guideSnapshot();
+    final task = started['task'];
+    if (task is String && run != _guideReadRun) {
+      unawaited(_cancelTask(task));
+      throw StateError('guide.snapshot left');
+    }
+    if (task is String) _guideTask = task;
+    try {
+      return await _awaitTask(
+        'guide.snapshot',
+        started,
+        stopped: () => run != _guideReadRun,
+      );
+    } catch (_) {
+      // A failed or timed-out status call ends the poll, not the core task.
+      // (A task abandoned already was cancelled then.)
+      if (task is String && _guideTask == task) unawaited(_cancelTask(task));
+      rethrow;
+    } finally {
+      if (_guideTask == task) _guideTask = null;
+    }
+  }
+
+  void _abandonGuideRead() {
+    _guideReadRun++;
+    final task = _guideTask;
+    _guideTask = null;
+    if (task != null) unawaited(_cancelTask(task));
+  }
+
+  Future<void> _cancelTask(String task) =>
+      _client.tasksCancel(task: task).then((_) {}, onError: (_) {});
+
+  /// The guide's own Refresh: a new check that keeps a failed choice and its
+  /// Retry (opening the guide again starts over).
+  Future<void> _refreshGuide() async {
+    if (!mounted || _busy || _guide.loading) return;
+    await _guide.refresh();
+  }
+
   Future<Map<String, dynamic>> _quietTask(
     String method,
     Map<String, dynamic> params,
@@ -3536,8 +3666,9 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
 
   Future<Map<String, dynamic>> _awaitTask(
     String method,
-    Map<String, dynamic> started,
-  ) async {
+    Map<String, dynamic> started, {
+    bool Function()? stopped,
+  }) async {
     if (started['task'] is! String) throw StateError('$method started no task');
     while (true) {
       final status = await _client.tasksStatus(task: started['task'] as String);
@@ -3548,6 +3679,8 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         throw StateError('$method failed');
       }
       await Future<void>.delayed(const Duration(milliseconds: 200));
+      // Left or replaced: stop polling even if the cancel did not get through.
+      if (stopped?.call() ?? false) throw StateError('$method left');
     }
   }
 
@@ -3877,30 +4010,39 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   }
 
   Future<void> _openGuide() async {
-    final result = await _addonOperation('guide.snapshot', const {});
-    if (!mounted || result == null) return;
+    if (!mounted || _busy || _showGuide && _guide.loading) return;
     _guideReturn = false;
     setState(() {
-      _guide = result;
       _showGuide = true;
+      _focusCategory = null;
+      _browser = null;
       _showProviders = false;
       _showConnections = false;
       _showSettings = false;
       _visibleTerminal = null;
     });
+    await _guide.refresh(replace: true);
   }
 
   Future<void> _chooseGuide(String route) async {
-    if (_busy) return;
+    if (_busy || _guide.loading) return;
     setState(() => _busy = true);
     try {
-      await _client.guideChoose(route: route);
-    } catch (_) {
-      _actionFailed();
+      await _guide.choose(route);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
-    if (mounted) await _openGuide();
+  }
+
+  Future<void> _retryGuide() async {
+    if (_busy || _guide.loading) return;
+    final saving = _guide.choiceFailed;
+    if (saving) setState(() => _busy = true);
+    try {
+      await _guide.retry();
+    } finally {
+      if (mounted && saving) setState(() => _busy = false);
+    }
   }
 
   /// A step that ended on the guide has nothing to return from.
@@ -3909,10 +4051,53 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     if (_showGuide) _guideReturn = false;
   }
 
-  void _leaveGuide() => setState(() {
-    _showGuide = false;
-    _guideReturn = false;
-  });
+  void _leaveGuide() {
+    _guide.cancelPending();
+    setState(() {
+      _showGuide = false;
+      _guideReturn = false;
+    });
+  }
+
+  void _finishGuide() {
+    _leaveGuide();
+    setState(() => _showMap = true);
+  }
+
+  void _closeGroupFocus() {
+    setState(() => _focusCategory = null);
+    _backToGuideIfFromIt();
+  }
+
+  Future<void> _openGuideAddons() async {
+    if (_busy) return;
+    int? category;
+    final fromGuide = _showGuide;
+    final chosen = await _cardReview(
+      tr('Add-ons'),
+      (yes, no) => TaskReview(
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(tr('Choose the add-ons to check.')),
+            for (final entry in const [(1, 'Agents'), (2, 'Providers')])
+              ListTile(
+                title: Text(tr(entry.$2)),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  category = entry.$1;
+                  yes();
+                },
+              ),
+          ],
+        ),
+        actions: [TextButton(onPressed: no, child: Text(tr('Cancel')))],
+      ),
+    );
+    if (!mounted || !chosen || category == null) return;
+    setState(() => _card = null);
+    await _openGroups(category: category!, fromGuide: fromGuide);
+  }
 
   /// A map add card, or the same action on a column's own page: the MCP
   /// catalog, the skills search, or the model download of the local LLM
@@ -3958,9 +4143,11 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
 
   void _guideAction(String command, String action) {
     _connectionCommand = command.isEmpty ? null : command;
-    _guideReturn = _showGuide && action != 'addons' && action != 'existing';
+    final fromGuide = _showGuide || _guideReturn && _focusCategory != null;
+    _guideReturn = fromGuide && action != 'addons' && action != 'existing';
+    _guideFrom = null; // the page this step opens returns to the guide
     if (action == 'addons') {
-      _openGroups();
+      unawaited(_openGuideAddons());
       return;
     }
     if (action == 'existing') {
@@ -5476,8 +5663,10 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     }
   }
 
-  Future<void> _openGroups({int category = 1}) async {
+  Future<void> _openGroups({int category = 1, bool fromGuide = false}) async {
     if (_busy) return;
+    _guideReturn = fromGuide;
+    _guideFrom = null; // the group page opened here returns to the guide
     setState(() {
       _focusCategory = category;
       _showMap = true;
@@ -5826,6 +6015,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
 
   @override
   void dispose() {
+    _guide.dispose();
     _historyImport.dispose();
     _endAsideWait();
     _terminalKeys.dispose();
@@ -5987,6 +6177,8 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                         ? null
                         : () async {
                             if (_showReports && !await _leaveReports()) return;
+                            // Chosen here: no later page returns to the guide.
+                            _guideReturn = false;
                             setState(() {
                               _card = null;
                               _browser = null;
@@ -6130,7 +6322,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                     onSkip: () => setState(() => _skipWelcomeSearch = true),
                     onAgents: () => _openGroups(),
                     uses: _uses,
-                    onAction: _healthAction,
+                    onAction: _chosenAction,
                   ),
                 if (!_showReports &&
                     _terminals.isNotEmpty &&
@@ -6208,16 +6400,23 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                                   : _showGuide
                                   ? _viewHost(
                                       'Your first agent',
-                                      FirstAgentView(
-                                        hosted: true,
-                                        data: _guide,
-                                        busy: _busy,
-                                        tr: tr,
-                                        onChoose: _chooseGuide,
-                                        onAction: _guideAction,
-                                        onStarter: _downloadStarter,
-                                        onBack: _leaveGuide,
-                                        onRefresh: _openGuide,
+                                      AnimatedBuilder(
+                                        animation: _guide,
+                                        builder: (context, _) => FirstAgentView(
+                                          hosted: true,
+                                          data: _guide.data,
+                                          busy: _busy,
+                                          loading: _guide.loading,
+                                          errorKey: _guide.errorKey,
+                                          onRetry: _retryGuide,
+                                          onFinish: _finishGuide,
+                                          tr: tr,
+                                          onChoose: _chooseGuide,
+                                          onAction: _guideAction,
+                                          onStarter: _downloadStarter,
+                                          onBack: _leaveGuide,
+                                          onRefresh: _refreshGuide,
+                                        ),
                                       ),
                                       _leaveGuide,
                                     )
@@ -6462,9 +6661,13 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                                                 found: _groupFound,
                                                 available: _groupAvailable,
                                               ),
-                                              onExpandGroup: (col) => setState(
-                                                () => _focusCategory = col,
-                                              ),
+                                              onExpandGroup: (col) =>
+                                                  setState(() {
+                                                    // Opened from the map, not
+                                                    // by the guide.
+                                                    _guideReturn = false;
+                                                    _focusCategory = col;
+                                                  }),
                                               onMissing: _missingAction,
                                               onAdd: (kind, target) =>
                                                   _openAdd(kind, target),
@@ -6478,9 +6681,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                                                 'Models',
                                               ][_focusCategory!],
                                               _groupFocus(),
-                                              () => setState(
-                                                () => _focusCategory = null,
-                                              ),
+                                              _closeGroupFocus,
                                             ),
                                     )
                                   : LayoutBuilder(

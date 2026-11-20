@@ -12,6 +12,10 @@ class FirstAgentView extends StatelessWidget {
     this.onStarter,
     required this.onBack,
     required this.onRefresh,
+    this.loading = false,
+    this.errorKey,
+    this.onRetry,
+    this.onFinish,
   });
   final bool hosted;
   final Map<String, dynamic> data;
@@ -24,6 +28,10 @@ class FirstAgentView extends StatelessWidget {
   final void Function(String, Map<String, dynamic>)? onStarter;
   final VoidCallback onBack;
   final VoidCallback onRefresh;
+  final bool loading;
+  final String? errorKey;
+  final VoidCallback? onRetry;
+  final VoidCallback? onFinish;
 
   @override
   Widget build(BuildContext context) {
@@ -31,6 +39,12 @@ class FirstAgentView extends StatelessWidget {
     final selected = routes
         .where((route) => route['id'] == data['selected'])
         .firstOrNull;
+    final steps = (selected?['steps'] as List? ?? const [])
+        .cast<Map<String, dynamic>>();
+    final next = steps.where((step) => step['done'] != true).firstOrNull;
+    final ready =
+        selected?['verified'] == true && steps.isNotEmpty && next == null;
+    final disabled = busy || loading;
     const labels = {
       'addons': 'Add-ons',
       'install': 'Install',
@@ -52,7 +66,13 @@ class FirstAgentView extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.all(24),
           children: [
-            Row(
+            OverflowBar(
+              alignment: hosted
+                  ? MainAxisAlignment.end
+                  : MainAxisAlignment.spaceBetween,
+              overflowAlignment: OverflowBarAlignment.end,
+              spacing: 8,
+              overflowSpacing: 8,
               children: [
                 if (!hosted)
                   TextButton.icon(
@@ -60,9 +80,8 @@ class FirstAgentView extends StatelessWidget {
                     icon: const Icon(Icons.arrow_back),
                     label: Text(tr('Back')),
                   ),
-                const Spacer(),
                 TextButton.icon(
-                  onPressed: busy ? null : onRefresh,
+                  onPressed: disabled ? null : onRefresh,
                   icon: const Icon(Icons.refresh),
                   label: Text(tr('Refresh')),
                 ),
@@ -73,39 +92,85 @@ class FirstAgentView extends StatelessWidget {
                 tr('Your first agent'),
                 style: Theme.of(context).textTheme.headlineMedium,
               ),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: OutlinedButton.icon(
-                onPressed: busy ? null : () => onAction('', 'existing'),
-                icon: const Icon(Icons.manage_search),
-                label: Text(tr('Find existing AI')),
-              ),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: disabled ? null : () => onAction('', 'existing'),
+                  icon: const Icon(Icons.manage_search),
+                  label: Text(tr('Find existing AI')),
+                ),
+                OutlinedButton.icon(
+                  onPressed: disabled ? null : () => onAction('', 'addons'),
+                  icon: const Icon(Icons.extension_outlined),
+                  label: Text(tr('Add-ons')),
+                ),
+              ],
             ),
             const SizedBox(height: 16),
+            if (loading) ...[
+              Semantics(
+                liveRegion: true,
+                child: Text(tr('Checking your setup…')),
+              ),
+              const SizedBox(height: 8),
+              const LinearProgressIndicator(),
+              const SizedBox(height: 16),
+            ],
+            if (errorKey != null) ...[
+              Semantics(liveRegion: true, child: Text(tr(errorKey!))),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: disabled ? null : onRetry ?? onRefresh,
+                  icon: const Icon(Icons.refresh),
+                  label: Text(tr('Try again')),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
             if (selected == null) ...[
-              Text(tr('Get one agent working')),
-              for (final kind in ['online', 'local']) ...[
-                const SizedBox(height: 20),
+              if (!loading && errorKey == null && routes.isEmpty)
                 Text(
                   tr(
-                    kind == 'online' ? 'With an online account' : 'On this PC',
+                    'No setup options are available. Check your add-ons or find existing AI on this PC.',
                   ),
-                  style: Theme.of(context).textTheme.titleLarge,
                 ),
-                for (final route in routes.where(
-                  (route) => route['kind'] == kind,
-                ))
-                  Card(
-                    child: ListTile(
-                      title: Text(route['title'] as String),
-                      subtitle: Text(route['access'] as String),
-                      onTap: busy
-                          ? null
-                          : () => onChoose(route['id'] as String),
-                      trailing: const Icon(Icons.chevron_right),
-                    ),
+              if (routes.isNotEmpty &&
+                  data['selected'] != null &&
+                  data['selected'] != '')
+                Text(
+                  tr(
+                    'Your previous setup choice is no longer available. Choose another route or check its add-on.',
                   ),
-              ],
+                ),
+              if (routes.isNotEmpty) Text(tr('Get one agent working')),
+              for (final kind in ['online', 'local'])
+                if (routes.any((route) => route['kind'] == kind)) ...[
+                  const SizedBox(height: 20),
+                  Text(
+                    tr(
+                      kind == 'online'
+                          ? 'With an online account'
+                          : 'On this PC',
+                    ),
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  for (final route in routes.where(
+                    (route) => route['kind'] == kind,
+                  ))
+                    Card(
+                      child: ListTile(
+                        title: Text(route['title'] as String),
+                        subtitle: Text(route['access'] as String),
+                        onTap: disabled
+                            ? null
+                            : () => onChoose(route['id'] as String),
+                        trailing: const Icon(Icons.chevron_right),
+                      ),
+                    ),
+                ],
             ] else ...[
               Text(
                 selected['title'] as String,
@@ -113,9 +178,25 @@ class FirstAgentView extends StatelessWidget {
               ),
               Text(selected['access'] as String),
               const SizedBox(height: 16),
-              if (selected['verified'] == true) Text(tr('Your agent is ready')),
-              for (final step
-                  in (selected['steps'] as List).cast<Map<String, dynamic>>())
+              if (ready) ...[
+                Text(tr('Your agent is ready')),
+                if (onFinish != null)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: FilledButton(
+                      onPressed: disabled ? null : onFinish,
+                      child: Text(tr('Open AI map')),
+                    ),
+                  ),
+              ] else if (next != null)
+                Text(
+                  tr(
+                    'Next step: {0}',
+                  ).replaceAll('{0}', next['title'] as String),
+                  key: const ValueKey('guide-next-step'),
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              for (final step in steps)
                 Card(
                   child: Padding(
                     padding: const EdgeInsets.all(12),
@@ -143,12 +224,22 @@ class FirstAgentView extends StatelessWidget {
                             padding: const EdgeInsets.symmetric(vertical: 8),
                             child: Text(step['detail'] as String),
                           ),
+                        // Only the next step can need manual work now; later steps
+                        // without an action are waiting for it (an agent not yet
+                        // installed can't be signed in or asked a test question).
+                        if (identical(step, next) &&
+                            !labels.containsKey(step['action']))
+                          Text(
+                            tr(
+                              'This step needs manual setup. Follow its details, then refresh or check its add-on.',
+                            ),
+                          ),
                         if (labels.containsKey(step['action']))
                           Align(
                             alignment: Alignment.centerRight,
                             child: TextButton(
                               // A tool or a local LLM is named by its step's target.
-                              onPressed: busy
+                              onPressed: disabled
                                   ? null
                                   : step['action'] == 'download-starter' &&
                                         onStarter != null
@@ -183,7 +274,7 @@ class FirstAgentView extends StatelessWidget {
                 (route) => route['id'] != selected['id'],
               ))
                 TextButton(
-                  onPressed: busy
+                  onPressed: disabled
                       ? null
                       : () => onChoose(route['id'] as String),
                   child: Text(route['title'] as String),

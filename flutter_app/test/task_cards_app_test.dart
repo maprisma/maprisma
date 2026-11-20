@@ -10,6 +10,7 @@ import 'package:maprisma/agent_map.dart';
 import 'package:maprisma/settings_view.dart';
 import 'package:maprisma/reports_page.dart';
 import 'package:maprisma/main.dart';
+import 'package:maprisma/map_welcome.dart' show UseCaseCards;
 import 'package:maprisma/connections_view.dart';
 import 'package:maprisma/test_shots.dart';
 import 'package:maprisma/map_addons_focus.dart';
@@ -36,6 +37,7 @@ interrupted=False
 installed=False
 installed_runtime=False
 catalog_loads=0
+guide_selected='local'
 settings={'map_scan_interval':6,'map_light_fps':20,'flutter_theme_mode':'system','map_layers':['agents','online','local','models','mcp','skills'],'system_map_columns':['pc','disks','programs','tools','folders'],'language':'en'}
 if Path('start-settings.json').exists():settings.update(json.loads(Path('start-settings.json').read_text()))
 if Path('window_popup').exists():settings['window_mode']='popup'
@@ -52,7 +54,7 @@ nodes=[{'id':ident,'kind':kind,'column':column,'label':label,'detail':''}
 def configuration(key,model='*',profile='balanced'):
  schema=[{'id':'mode','label':'A mode','role':'mode','type':'enum','values':['a','b'],'default':'a','wire':'mode','scope':'default' if Path('config_default').exists() else 'global','importance':'main','writer':'fixture','restart':'service','verified':True}]
  return {'key':key,'runtime':'Fixture provider' if key=='fixture' else 'llama.cpp','schema':schema,'model':model,'profile':profile,'current':{'mode':'a'},'recommended':[{'id':'mode','current':'a','recommended':'b','reason':'Faster.','source':'calculated'}],'fit':{'weights':1<<30,'kv':1<<30,'reserve':1<<30,'total':3<<30,'available':8<<30,'basis':'vram'},'hardware':{'gpu':'Fixture GPU','vram_total':8<<30,'ram_available':16<<30,'physical_cores':8},'scope_models':['*','gone-model'] if Path('config_default').exists() and not Path('model_gone').exists() and not Path('model_unlisted').exists() else ['*'],'models':[],'helpers':[{'command':'test','name':'Test agent','web_search':True}],'build':'vulkan','untuned':[],'writable':True,'can_control':False,'running':True,'can_reload':False,'restart':'service','notes':['Freshly measured configuration'] if Path('tune_applied').exists() else []}
-tasks={};slow_polls=[]
+tasks={};slow_polls=[];cancelled=set()
 for line in sys.stdin:
  q=json.loads(line);m=q['method'];p=q.get('params',{})
  with open('requests.jsonl','a') as log:log.write(json.dumps(q)+'\n')
@@ -116,11 +118,23 @@ for line in sys.stdin:
  elif m=='addons.install':
   installed=not install_fails
   tasks['install']={'ok':True};r={'task':'install'}
+ elif m=='guide.choose':
+  if Path('guide_choice_fail').exists():print(json.dumps({'id':q['id'],'error':{'code':'operation_failed'}}),flush=True);continue
+  guide_selected=p['route'];r={'ok':True}
+ elif m=='tasks.cancel':
+  if not Path('cancel_ignored').exists():cancelled.add(p['task'])
+  r={'ok':True}
+ elif m=='tasks.status' and p['task'] in cancelled:r={'state':'cancelled'}
+ elif m=='tasks.status' and p['task']=='guide' and Path('guide_status_fail').exists():print(json.dumps({'id':q['id'],'error':{'code':'operation_failed'}}),flush=True);continue
  elif m=='guide.snapshot':
+  cancelled.discard('guide')
+  if Path('guide_fail').exists():print(json.dumps({'id':q['id'],'error':{'code':'operation_failed'}}),flush=True);continue
   guides=sum(1 for l in open('requests.jsonl') if '"guide.snapshot"' in l)
   steps=[{'title':'llama.cpp','done':installed_runtime,'detail':'','action':'providers' if installed_runtime else 'install-runtime','target':'llamacpp'},
          {'title':'Connections','done':False,'detail':'','action':'providers'}]
-  tasks['guide']={'routes':[{'id':'local','kind':'local','title':'Local route','access':'On this PC','command':'test','name':'Test agent','verified':False,'steps':steps}],'selected':'local','loads':guides}
+  routes=[{'id':'local','kind':'local','title':'Local route','access':'On this PC','command':'test','name':'Test agent','verified':False,'steps':steps}]
+  if Path('guide_choices').exists():routes.append({**routes[0],'id':'online','kind':'online','title':'Online route'})
+  tasks['guide']={'routes':[] if Path('guide_empty').exists() else routes,'selected':guide_selected,'loads':guides}
   r={'task':'guide'}
  elif m=='installers.preview':
   tasks['ipreview']={'installer':'inst-1','kind':p['kind'],'key':p['key'],'name':'llama.cpp','version':'b9000-'+p.get('build','vulkan'),'size':10,
@@ -199,7 +213,7 @@ for line in sys.stdin:
  elif m=='map.smart_run':tasks['dl']={'ok':True};r={'task':'dl'}
  elif m=='map.smart_ask':tasks['sa']={'status':'proposal','summary':'','proposal':'p1','candidates':[{'id':'c1','kind':'provider_config','title':'Fixture provider','subtitle':'Configure for this PC','reason':'','fit':'ok','size':0,'key':'llamacpp' if Path('smart_llama').exists() else 'fixture','profile':'balanced','model':'*','values':{'mode':'b'},'reasons':{},'writable':True,'config_proposal':'cfg-1','action':{'kind':'provider_config'}}]};r={'task':'sa'}
  elif m=='map.smart_helpers':r={'helpers':[{'command':'local-helper','name':'Local helper','local':True}] if Path('smart_helpers').exists() else []}
- elif m=='tasks.status':r=({'state':'failed'} if p['task']=='config_gone' or p['task']=='measure' and Path('tune_failed').exists() or p['task']=='install' and install_fails else {'state':'running'} if p['task']=='tune_slow' and slow_polls.append(1) is None and len(slow_polls) <= 15 else {'state':'done','result':tasks[p['task']]})
+ elif m=='tasks.status':r=({'state':'failed'} if p['task']=='config_gone' or p['task']=='measure' and Path('tune_failed').exists() or p['task']=='install' and install_fails else {'state':'running'} if p['task']=='guide' and Path('guide_wait').exists() or p['task']=='tune_slow' and slow_polls.append(1) is None and len(slow_polls) <= 15 else {'state':'done','result':tasks[p['task']]})
  else:r={}
  with out:print(json.dumps({'id':q['id'],'result':r}),flush=True)
 ''';
@@ -276,6 +290,31 @@ int forcedScans(Directory dir) => requests(dir)
     .length;
 int snapshots(Directory dir) =>
     requests(dir).where((q) => q['method'] == 'app.snapshot').length;
+
+/// The guide check's task was cancelled once and polled no more after it.
+void expectGuideStopped(Directory dir) {
+  final all = requests(dir);
+  final cancel = all.indexWhere(
+    (q) => q['method'] == 'tasks.cancel' && q['params']['task'] == 'guide',
+  );
+  expect(cancel, isNot(-1), reason: 'guide task cancelled');
+  expect(
+    all.where(
+      (q) => q['method'] == 'tasks.cancel' && q['params']['task'] == 'guide',
+    ),
+    hasLength(1),
+  );
+  expect(
+    all
+        .skip(cancel + 1)
+        .where(
+          (q) =>
+              q['method'] == 'tasks.status' && q['params']['task'] == 'guide',
+        )
+        .length,
+    lessThanOrEqualTo(1), // at most the poll already on its way
+  );
+}
 
 Future<void> openFromHelp(WidgetTester tester, String tab) async {
   await tester.tap(find.byKey(const ValueKey('help-open')));
@@ -2403,6 +2442,515 @@ void main() {
     expect(tester.takeException(), isNull);
     await unmountApp(tester);
   });
+
+  testWidgets(
+    'guide read failure has in-page retry and retains its choice on refresh failure',
+    (tester) async {
+      final dir = await mountApp(
+        tester,
+        beforeStart: (dir) => File('${dir.path}/guide_fail').createSync(),
+      );
+      await openFromHelp(tester, 'Your first agent');
+      expect(find.byType(FirstAgentView), findsOneWidget);
+      expect(
+        find.text(
+          'Your setup could not be checked. Your last choices are kept.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.textContaining('No setup options'), findsNothing);
+      File('${dir.path}/guide_fail').deleteSync();
+      await tester.tap(find.text('Try again'));
+      await settleService(tester);
+      expect(find.text('Local route'), findsOneWidget);
+      File('${dir.path}/guide_fail').createSync();
+      await tester.tap(find.widgetWithText(TextButton, 'Refresh'));
+      await settleService(tester);
+      expect(find.text('Local route'), findsOneWidget);
+      expect(
+        find.text(
+          'Your setup could not be checked. Your last choices are kept.',
+        ),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+      await unmountApp(tester);
+    },
+  );
+
+  testWidgets(
+    'leaving a pending guide check does not reopen it after completion',
+    (tester) async {
+      final dir = await mountApp(
+        tester,
+        beforeStart: (dir) => File('${dir.path}/guide_wait').createSync(),
+      );
+      await openFromHelp(tester, 'Your first agent');
+      expect(find.text('Checking your setup…'), findsOneWidget);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await settleService(tester);
+      expect(find.byType(FirstAgentView), findsNothing);
+      File('${dir.path}/guide_wait').deleteSync();
+      await settleService(tester);
+      expect(find.byType(FirstAgentView), findsNothing);
+      expect(tester.takeException(), isNull);
+      await unmountApp(tester);
+    },
+  );
+
+  testWidgets(
+    'guide choice failure retains selection and retries the requested choice',
+    (tester) async {
+      final dir = await mountApp(
+        tester,
+        beforeStart: (dir) {
+          File('${dir.path}/guide_choices').createSync();
+          File('${dir.path}/guide_choice_fail').createSync();
+        },
+      );
+      await openFromHelp(tester, 'Your first agent');
+      await tester.ensureVisible(find.text('Online route'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Online route'));
+      await settleService(tester);
+      expect(
+        tester
+            .widget<FirstAgentView>(find.byType(FirstAgentView))
+            .data['selected'],
+        'local',
+      );
+      expect(
+        find.text('Your setup choice could not be saved. Try again.'),
+        findsOneWidget,
+      );
+      File('${dir.path}/guide_choice_fail').deleteSync();
+      await tester.ensureVisible(find.text('Try again'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Try again'));
+      await settleService(tester);
+      expect(
+        tester
+            .widget<FirstAgentView>(find.byType(FirstAgentView))
+            .data['selected'],
+        'online',
+      );
+      expect(
+        requests(dir)
+            .where((q) => q['method'] == 'guide.choose')
+            .map((q) => q['params']['route']),
+        ['online', 'online'],
+      );
+      expect(tester.takeException(), isNull);
+      await unmountApp(tester);
+    },
+  );
+
+  testWidgets(
+    'guide add-on recovery can open Providers and return with its route',
+    (tester) async {
+      final dir = await mountApp(tester);
+      await openFromHelp(tester, 'Your first agent');
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Add-ons'));
+      await settleService(tester);
+      expect(find.text('Choose the add-ons to check.'), findsOneWidget);
+      await tester.tap(find.widgetWithText(ListTile, 'Providers'));
+      await settleService(tester);
+      expect(
+        tester.widget<MapAddonsFocus>(find.byType(MapAddonsFocus)).category,
+        2,
+      );
+      await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
+      await settleService(tester);
+      expect(
+        tester
+            .widget<FirstAgentView>(find.byType(FirstAgentView))
+            .data['selected'],
+        'local',
+      );
+      expect(
+        requests(dir).where((q) => q['method'] == 'guide.snapshot'),
+        hasLength(2),
+      );
+      // Keep the guide return when its add-on page opens another setup page.
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Add-ons'));
+      await settleService(tester);
+      await tester.tap(find.widgetWithText(ListTile, 'Providers'));
+      await settleService(tester);
+      await tester.tap(find.text('Providers and models').last);
+      await settleService(tester);
+      await tester.tap(find.text('Back').last);
+      await settleService(tester);
+      expect(
+        tester
+            .widget<FirstAgentView>(find.byType(FirstAgentView))
+            .data['selected'],
+        'local',
+      );
+      expect(
+        requests(dir).where((q) => q['method'] == 'guide.snapshot'),
+        hasLength(3),
+      );
+      expect(tester.takeException(), isNull);
+      await unmountApp(tester);
+    },
+  );
+
+  testWidgets(
+    'guide add-on recovery can open Agents and Esc returns to the guide',
+    (tester) async {
+      final dir = await mountApp(tester);
+      await openFromHelp(tester, 'Your first agent');
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Add-ons'));
+      await settleService(tester);
+      await tester.tap(find.widgetWithText(ListTile, 'Agents'));
+      await settleService(tester);
+      expect(
+        tester.widget<MapAddonsFocus>(find.byType(MapAddonsFocus)).category,
+        1,
+      );
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await settleService(tester);
+      expect(
+        tester
+            .widget<FirstAgentView>(find.byType(FirstAgentView))
+            .data['selected'],
+        'local',
+      );
+      expect(
+        requests(dir).where((q) => q['method'] == 'guide.snapshot'),
+        hasLength(2),
+      );
+      expect(tester.takeException(), isNull);
+      await unmountApp(tester);
+    },
+  );
+
+  testWidgets(
+    'Help → Agents from an add-on group page: the first Esc shows the map',
+    (tester) async {
+      await mountApp(tester);
+      await openFromHelp(tester, 'Your first agent');
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Add-ons'));
+      await settleService(tester);
+      await tester.tap(find.widgetWithText(ListTile, 'Agents'));
+      await settleService(tester);
+      expect(find.byType(MapAddonsFocus), findsOneWidget);
+      await openFromHelp(tester, 'Agents');
+      expect(find.byType(MapAddonsFocus), findsNothing);
+      expect(find.byType(MapGroupCard), findsNothing);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await settleService(tester);
+      expect(find.byType(MapAddonsFocus), findsNothing);
+      expect(find.byType(MapGroupCard), findsWidgets);
+      expect(tester.takeException(), isNull);
+      await unmountApp(tester);
+    },
+  );
+
+  testWidgets(
+    'the guide Refresh keeps a failed choice and its Retry saves it',
+    (tester) async {
+      final dir = await mountApp(
+        tester,
+        beforeStart: (dir) {
+          File('${dir.path}/guide_choices').createSync();
+          File('${dir.path}/guide_choice_fail').createSync();
+        },
+      );
+      await openFromHelp(tester, 'Your first agent');
+      await tester.ensureVisible(find.text('Online route'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Online route'));
+      await settleService(tester);
+      File('${dir.path}/guide_choice_fail').deleteSync();
+      await tester.tap(find.widgetWithText(TextButton, 'Refresh'));
+      await settleService(tester);
+      expect(
+        find.text('Your setup choice could not be saved. Try again.'),
+        findsOneWidget,
+      );
+      await tester.ensureVisible(find.text('Try again'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Try again'));
+      await settleService(tester);
+      expect(
+        tester
+            .widget<FirstAgentView>(find.byType(FirstAgentView))
+            .data['selected'],
+        'online',
+      );
+      expect(
+        requests(dir)
+            .where((q) => q['method'] == 'guide.choose')
+            .map((q) => q['params']['route']),
+        ['online', 'online'],
+      );
+      expect(tester.takeException(), isNull);
+      await unmountApp(tester);
+    },
+  );
+
+  testWidgets('leaving a running guide check cancels its core task', (
+    tester,
+  ) async {
+    final dir = await mountApp(
+      tester,
+      beforeStart: (dir) => File('${dir.path}/guide_wait').createSync(),
+    );
+    await openFromHelp(tester, 'Your first agent');
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await settleService(tester);
+    expect(find.byType(FirstAgentView), findsNothing);
+    expectGuideStopped(dir);
+    await settleService(tester);
+    expectGuideStopped(dir); // no poll after the cancel
+    File('${dir.path}/guide_wait').deleteSync();
+    expect(tester.takeException(), isNull);
+    await unmountApp(tester);
+  });
+
+  testWidgets('a guide check whose cancel is ignored stops polling anyway', (
+    tester,
+  ) async {
+    final dir = await mountApp(
+      tester,
+      beforeStart: (dir) {
+        File('${dir.path}/guide_wait').createSync();
+        File('${dir.path}/cancel_ignored').createSync();
+      },
+    );
+    await openFromHelp(tester, 'Your first agent');
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    for (var i = 0; i < 5; i++) {
+      await settleService(tester); // several poll intervals
+    }
+    expectGuideStopped(dir);
+    File('${dir.path}/guide_wait').deleteSync();
+    expect(tester.takeException(), isNull);
+    await unmountApp(tester);
+  });
+
+  testWidgets('closing Help on a guide step keeps its return to the guide', (
+    tester,
+  ) async {
+    await mountApp(tester);
+    await openFromHelp(tester, 'Your first agent');
+    await tester.tap(find.text('Providers and models').first);
+    await settleService(tester);
+    expect(find.byType(FirstAgentView), findsNothing);
+    await openFromHelp(tester, 'What you can do with it');
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await settleService(tester);
+    expect(find.byType(FirstAgentView), findsNothing);
+    await tester.tap(find.text('Back').first);
+    await settleService(tester);
+    expect(find.byType(FirstAgentView), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await unmountApp(tester);
+  });
+
+  testWidgets('the menu hiding a running guide check stops it too', (
+    tester,
+  ) async {
+    final dir = await mountApp(
+      tester,
+      beforeStart: (dir) => File('${dir.path}/guide_wait').createSync(),
+    );
+    await openFromHelp(tester, 'Your first agent');
+    expect(find.text('Checking your setup…'), findsOneWidget);
+    await openFromHelp(tester, 'Agents');
+    expect(find.byType(FirstAgentView), findsNothing);
+    expectGuideStopped(dir);
+    await settleService(tester);
+    expectGuideStopped(dir);
+    File('${dir.path}/guide_wait').deleteSync();
+    expect(tester.takeException(), isNull);
+    await unmountApp(tester);
+  });
+
+  testWidgets('a failing status poll cancels the guide check\'s task', (
+    tester,
+  ) async {
+    final dir = await mountApp(
+      tester,
+      beforeStart: (dir) => File('${dir.path}/guide_status_fail').createSync(),
+    );
+    await openFromHelp(tester, 'Your first agent');
+    expect(
+      find.text('Your setup could not be checked. Your last choices are kept.'),
+      findsOneWidget,
+    );
+    expectGuideStopped(dir);
+    File('${dir.path}/guide_status_fail').deleteSync();
+    expect(tester.takeException(), isNull);
+    await unmountApp(tester);
+  });
+
+  testWidgets(
+    'a guide step left by the AI Map button no longer returns to it',
+    (tester) async {
+      await mountApp(tester);
+      await openFromHelp(tester, 'Your first agent');
+      await tester.tap(find.text('Providers and models').first);
+      await settleService(tester);
+      expect(find.byType(FirstAgentView), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('ai-map-open')));
+      await settleService(tester);
+      // Agent details from the map, then Esc: the map, not the guide.
+      tester.widget<AgentMap>(find.byType(AgentMap)).onAgent('test');
+      await settleService(tester);
+      expect(find.byType(MapGroupCard), findsNothing);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await settleService(tester);
+      expect(find.byType(FirstAgentView), findsNothing);
+      expect(find.byType(MapGroupCard), findsWidgets);
+      // A group page opened from the map, then Esc: the map again.
+      tester.widget<MapGroupCard>(find.byType(MapGroupCard).first).onExpand();
+      await settleService(tester);
+      expect(find.byType(MapAddonsFocus), findsOneWidget);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await settleService(tester);
+      expect(find.byType(MapAddonsFocus), findsNothing);
+      expect(find.byType(FirstAgentView), findsNothing);
+      expect(find.byType(MapGroupCard), findsWidgets);
+      expect(tester.takeException(), isNull);
+      await unmountApp(tester);
+    },
+  );
+
+  testWidgets('finishing setup from the guide\'s add-on page ends its return', (
+    tester,
+  ) async {
+    await mountApp(tester, welcome: true);
+    await openFromHelp(tester, 'Your first agent');
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Add-ons'));
+    await settleService(tester);
+    await tester.tap(find.widgetWithText(ListTile, 'Agents'));
+    await settleService(tester);
+    tester.widget<MapAddonsFocus>(find.byType(MapAddonsFocus)).onLater!();
+    await settleService(tester);
+    expect(find.byType(MapAddonsFocus), findsNothing);
+    tester.widget<AgentMap>(find.byType(AgentMap)).onAgent('test');
+    await settleService(tester);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await settleService(tester);
+    expect(find.byType(FirstAgentView), findsNothing);
+    expect(find.byType(MapGroupCard), findsWidgets);
+    expect(tester.takeException(), isNull);
+    await unmountApp(tester);
+  });
+
+  testWidgets('a use case chosen in Help on a guide step ends its return', (
+    tester,
+  ) async {
+    await mountApp(tester);
+    await openFromHelp(tester, 'Your first agent');
+    await tester.tap(find.text('Providers and models').first);
+    await settleService(tester);
+    await openFromHelp(tester, 'What you can do with it');
+    tester.widget<UseCaseCards>(find.byType(UseCaseCards)).onAction!(const [
+      'addskills',
+    ]);
+    await settleService(tester);
+    expect(find.byType(FirstAgentView), findsNothing);
+    await tester.tap(find.text('Back').first);
+    await settleService(tester);
+    expect(find.byType(FirstAgentView), findsNothing);
+    expect(tester.takeException(), isNull);
+    await unmountApp(tester);
+  });
+
+  testWidgets('a use case opening the guide step\'s own page ends its return', (
+    tester,
+  ) async {
+    await mountApp(tester);
+    await openFromHelp(tester, 'Your first agent');
+    await tester.tap(find.text('Providers and models').first);
+    await settleService(tester);
+    await openFromHelp(tester, 'What you can do with it');
+    tester.widget<UseCaseCards>(find.byType(UseCaseCards)).onAction!(const [
+      'models',
+    ]);
+    await settleService(tester);
+    expect(find.byType(FirstAgentView), findsNothing);
+    await tester.tap(find.text('Back').first);
+    await settleService(tester);
+    expect(find.byType(FirstAgentView), findsNothing);
+    expect(tester.takeException(), isNull);
+    await unmountApp(tester);
+  });
+
+  testWidgets(
+    'details from the guide\'s group page go back to it, then to the guide',
+    (tester) async {
+      await mountApp(tester);
+      await openFromHelp(tester, 'Your first agent');
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Add-ons'));
+      await settleService(tester);
+      await tester.tap(find.widgetWithText(ListTile, 'Agents'));
+      await settleService(tester);
+      tester.widget<MapAddonsFocus>(find.byType(MapAddonsFocus)).onNode({
+        'id': 'agent:test',
+        'kind': 'agent',
+      });
+      await settleService(tester);
+      expect(find.byType(MapAddonsFocus), findsNothing);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await settleService(tester);
+      expect(find.byType(MapAddonsFocus), findsOneWidget);
+      expect(find.byType(FirstAgentView), findsNothing);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await settleService(tester);
+      expect(find.byType(FirstAgentView), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await unmountApp(tester);
+    },
+  );
+
+  testWidgets('Esc on agent details opened from a group page returns to it', (
+    tester,
+  ) async {
+    await mountApp(tester);
+    await settleService(tester);
+    tester.widget<MapGroupCard>(find.byType(MapGroupCard).first).onExpand();
+    await settleService(tester);
+    tester.widget<MapAddonsFocus>(find.byType(MapAddonsFocus)).onNode({
+      'id': 'agent:test',
+      'kind': 'agent',
+    });
+    await settleService(tester);
+    expect(find.byType(MapAddonsFocus), findsNothing);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await settleService(tester);
+    expect(find.byType(MapAddonsFocus), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await unmountApp(tester);
+  });
+
+  testWidgets(
+    'cancelling a guided install retains the selected route and explicit next step',
+    (tester) async {
+      final dir = await mountApp(tester);
+      await openFromHelp(tester, 'Your first agent');
+      await tester.tap(find.text('Install llama.cpp…'));
+      await settleService(tester);
+      await tester.tap(find.widgetWithText(TextButton, 'Cancel').last);
+      await settleService(tester);
+      expect(
+        tester
+            .widget<FirstAgentView>(find.byType(FirstAgentView))
+            .data['selected'],
+        'local',
+      );
+      expect(find.text('Next step: llama.cpp'), findsOneWidget);
+      expect(
+        requests(dir).where((q) => q['method'] == 'installers.install'),
+        isEmpty,
+      );
+      expect(tester.takeException(), isNull);
+      await unmountApp(tester);
+    },
+  );
 
   testWidgets('add-on suggestions and updates in Open problems', (
     tester,

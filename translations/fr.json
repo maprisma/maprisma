@@ -3672,5 +3672,14 @@
   "This provider has global settings": "Ce fournisseur utilise des paramètres globaux",
   "Model too large for this GPU": "Le modèle est trop volumineux pour ce GPU",
   "Configuration exceeds this provider’s GPU memory budget": "La configuration dépasse le budget de mémoire GPU de ce fournisseur",
-  "GPU cache placement is not verified; displayed KV is an upper bound.": "L’emplacement du cache GPU n’est pas vérifié ; la valeur KV affichée est une limite supérieure."
+  "GPU cache placement is not verified; displayed KV is an upper bound.": "L’emplacement du cache GPU n’est pas vérifié ; la valeur KV affichée est une limite supérieure.",
+  "Checking your setup…": "Vérification de votre configuration…",
+  "Your setup could not be checked. Your last choices are kept.": "Votre configuration n’a pas pu être vérifiée. Vos derniers choix sont conservés.",
+  "Your setup choice could not be saved. Try again.": "Votre choix de configuration n’a pas pu être enregistré. Réessayez.",
+  "No setup options are available. Check your add-ons or find existing AI on this PC.": "Aucune option de configuration n’est disponible. Vérifiez vos extensions ou recherchez l’IA existante sur ce PC.",
+  "Your previous setup choice is no longer available. Choose another route or check its add-on.": "Votre choix de configuration précédent n’est plus disponible. Choisissez une autre option ou vérifiez son extension.",
+  "Next step: {0}": "Étape suivante : {0}",
+  "This step needs manual setup. Follow its details, then refresh or check its add-on.": "Cette étape nécessite une configuration manuelle. Suivez ses indications, puis actualisez ou vérifiez son extension.",
+  "Open AI map": "Ouvrir la carte de l’IA",
+  "Choose the add-ons to check.": "Choisissez les extensions à vérifier."
 }
