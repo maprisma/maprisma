@@ -161,3 +161,7 @@ Codex: CLEAN (both round 6 fixes correct; their tests fail without them). Antigr
    > `activity-log-days` too.
 
 Both test additions were checked to fail without their fix.
+
+## Round 8 (Codex and Antigravity, 2026-11-20, task branch at 45fba03 against 2eb027d)
+
+**CLEAN** (both). Both round 7 fixes are correct, and their tests fail without them. No new finding.
