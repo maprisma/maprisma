@@ -14,7 +14,7 @@ import 'sshsig.dart';
 /// is built into this core, which uses its own; any other code: refused,
 /// until the catalog has a data version.
 
-/// Uwe Bruckhaus's add-on signing key (SHA256:e5cC634Ke3Our5LAeSc88qs22NKZEHTncBW5Ig3amWQ).
+/// Uwe Bruckhaus's add-on signing key (SHA256:ZctGoCVIRCeALeRbJwAYXRFP1KhYtbQrtOT1H9kXIss).
 const signingKey =
     'AAAAC3NzaC1lZDI1NTE5AAAAIFfDZiRAvEhdsjhLIlYc6SfP80I533WGiSw6/tzqQtYA';
 const signingNamespace = 'maprisma-addon';

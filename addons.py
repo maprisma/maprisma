@@ -36,13 +36,14 @@ import ai_core
 import harnesses
 import providers
 
-# Uwe Bruckhaus's add-on signing key (fingerprint SHA256:e5cC634Ke3Our5LAeSc88qs22NKZEHTncBW5Ig3amWQ).
+# Uwe Bruckhaus's add-on signing key (fingerprint SHA256:ZctGoCVIRCeALeRbJwAYXRFP1KhYtbQrtOT1H9kXIss).
 ALLOWED_SIGNERS = ('addons@maprisma namespaces="maprisma-addon" '
                    'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFfDZiRAvEhdsjhLIlYc6SfP80I533WGiSw6/tzqQtYA')
 PRINCIPAL = "addons@maprisma"
 NAMESPACE = "maprisma-addon"
 # Add-ons signed for Asterism (this app's old name) with its old key: never loaded, but recognised, so the card
 # can say what they are instead of "not signed" (they were copied into the user folder at the rename).
+# The old key's fingerprint is SHA256:e5cC634Ke3Our5LAeSc88qs22NKZEHTncBW5Ig3amWQ.
 LEGACY_NAMESPACE = "asterism-addon"
 LEGACY_SIGNERS = (f'{PRINCIPAL} namespaces="{LEGACY_NAMESPACE}" '
                   'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEIPZnfPIkyy+IX1J0jfB5g/U8U5jjJTapOogzlKrxlo')

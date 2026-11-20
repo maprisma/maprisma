@@ -145,7 +145,7 @@ incrementally. No message text, title or prompt is read.
 Agents and LLM providers beyond the built-in ones come as add-ons, from the author only. An add-on is a
 folder in `~/.local/share/maprisma/addons/` (or `/usr/lib/maprisma/addons/`), loads only when it is
 switched on, and only when it is **signed with the author's key** (the SSHSIG signature, checked by the
-Dart core; fingerprint `SHA256:e5cC634Ke3Our5LAeSc88qs22NKZEHTncBW5Ig3amWQ`). Every file must match the
+Dart core; fingerprint `SHA256:ZctGoCVIRCeALeRbJwAYXRFP1KhYtbQrtOT1H9kXIss`). Every file must match the
 signed list and nothing may be added. Add-ons are **data only**: an agent is described in `agent.toml`
 (format in [docs/adapter-format.md](docs/adapter-format.md)), a provider in `provider.toml`, read by
 built-in named readers; nothing of an add-on runs. Each one states in plain words what it reads and
