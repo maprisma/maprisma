@@ -1,11 +1,28 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:maprisma/settings_view.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Settings (task 057): sections on the left, the chosen one's groups on the
 /// right, and Find in Settings over all of them.
 void main() {
-  Widget view({String? section}) => MaterialApp(
+  Widget view({
+    String? section,
+    Map<String, dynamic> translations = const {},
+    double scale = 1,
+    Brightness brightness = Brightness.light,
+    Future<void> Function(Map<String, dynamic>)? onUpdate,
+  }) => MaterialApp(
+    theme: ThemeData(brightness: brightness),
+    builder: (context, child) => MediaQuery(
+      data: MediaQuery.of(
+        context,
+      ).copyWith(textScaler: TextScaler.linear(scale)),
+      child: child!,
+    ),
     home: Scaffold(
       body: SettingsView(
         section: section,
@@ -16,9 +33,10 @@ void main() {
           'flutter_map_layout': <String, dynamic>{},
         },
         busy: false,
-        tr: (key) => key,
+        tr: (key) => translations[key] as String? ?? key,
+        changes: const [],
         onBack: () {},
-        onUpdate: (values) async {},
+        onUpdate: onUpdate ?? (values) async {},
       ),
     ),
   );
@@ -113,5 +131,246 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Language'), findsWidgets);
     expect(find.text('Notify when red'), findsNothing);
+  });
+
+  for (final language in ['de', 'pl']) {
+    final translations =
+        jsonDecode(File('../translations/$language.json').readAsStringSync())
+            as Map<String, dynamic>;
+    for (final size in [const Size(540, 400), const Size(960, 640)]) {
+      for (final scale in [1.0, 1.5, 2.0]) {
+        testWidgets('$language $size at $scale keeps every section reachable', (
+          tester,
+        ) async {
+          tester.view.physicalSize = size;
+          tester.view.devicePixelRatio = 1;
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          await tester.pumpWidget(
+            view(section: 'general', translations: translations, scale: scale),
+          );
+          for (final section in [
+            'general',
+            'appearance',
+            'map',
+            'agents',
+            'llms',
+            'dictation',
+            'changes',
+          ]) {
+            final selector = find.byKey(
+              const ValueKey('settings-section-selector'),
+            );
+            if (selector.evaluate().isNotEmpty) {
+              await tester.tap(selector);
+              await tester.pumpAndSettle();
+              final menu = find.byType(Scrollable).last;
+              final option = find.descendant(
+                of: menu,
+                matching: find.byKey(
+                  ValueKey('settings-section-option-$section'),
+                ),
+              );
+              await tester.scrollUntilVisible(option, 80, scrollable: menu);
+              await tester.pumpAndSettle();
+              expect(option.hitTestable(), findsOneWidget);
+              await tester.tap(option);
+            } else {
+              final tile = find.byKey(ValueKey('settings-section-$section'));
+              await tester.ensureVisible(tile);
+              await tester.tap(tile);
+            }
+            await tester.pumpAndSettle();
+            if (selector.evaluate().isNotEmpty) {
+              expect(
+                tester.widget<DropdownButton<String>>(selector).value,
+                section,
+              );
+            } else {
+              expect(
+                tester
+                    .widget<ListTile>(
+                      find.byKey(ValueKey('settings-section-$section')),
+                    )
+                    .selected,
+                isTrue,
+              );
+            }
+            expect(
+              tester.takeException()?.toString(),
+              isNull,
+              reason: '$section at $size / $scale',
+            );
+            final page = find.descendant(
+              of: find.byKey(const ValueKey('settings-content')),
+              matching: find.byType(ListView),
+            );
+            await tester.drag(page, const Offset(0, -600));
+            await tester.pumpAndSettle();
+            expect(tester.takeException(), isNull, reason: 'scroll $section');
+          }
+        });
+      }
+    }
+  }
+
+  testWidgets('resizing preserves global search, focus and selected section', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(view(section: 'appearance'));
+    final search = find.byKey(const ValueKey('settings-find'));
+    await tester.enterText(search, 'notify');
+    final editable = find.descendant(
+      of: search,
+      matching: find.byType(EditableText),
+    );
+    final focus = tester.widget<EditableText>(editable).focusNode;
+    expect(focus.hasFocus, isTrue);
+    for (final size in [const Size(540, 400), const Size(1400, 900)]) {
+      tester.view.physicalSize = size;
+      await tester.pumpAndSettle();
+      expect(tester.widget<TextField>(search).controller!.text, 'notify');
+      expect(focus.hasFocus, isTrue);
+      expect(find.text('Agents › Costs'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    }
+    await tester.tap(find.byTooltip('Clear'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('theme-dark')), findsOneWidget);
+  });
+
+  testWidgets('keyboard sections stay visible in a short wide window', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(view(section: 'general'));
+    final last = find.byKey(const ValueKey('settings-section-changes'));
+    final node = tester.widget<ListTile>(last).focusNode!;
+    node.requestFocus();
+    await tester.pumpAndSettle();
+    tester.view.physicalSize = const Size(1400, 400);
+    await tester.pumpAndSettle();
+    expect(node.hasFocus, isTrue);
+    expect(tester.getRect(last).bottom, lessThanOrEqualTo(400));
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(find.text('No changes yet.'), findsOneWidget);
+    tester.view.physicalSize = const Size(540, 400);
+    await tester.pumpAndSettle();
+    final selector = find.byKey(const ValueKey('settings-section-selector'));
+    expect(
+      tester.widget<DropdownButton<String>>(selector).focusNode!.hasFocus,
+      isTrue,
+    );
+    expect(tester.widget<DropdownButton<String>>(selector).value, 'changes');
+    tester.view.physicalSize = const Size(1400, 400);
+    await tester.pumpAndSettle();
+    expect(node.hasFocus, isTrue);
+    expect(tester.getRect(last).bottom, lessThanOrEqualTo(400));
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final pointer in [false, true]) {
+    testWidgets(
+      'an open compact menu returns focus on wide resize ($pointer)',
+      (tester) async {
+        tester.view.physicalSize = const Size(540, 400);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        await tester.pumpWidget(
+          view(section: 'appearance', brightness: Brightness.dark),
+        );
+        final selector = find.byKey(
+          const ValueKey('settings-section-selector'),
+        );
+        if (pointer) {
+          await tester.enterText(
+            find.byKey(const ValueKey('settings-find')),
+            'dark',
+          );
+          await tester.tap(selector);
+        } else {
+          tester
+              .widget<DropdownButton<String>>(selector)
+              .focusNode!
+              .requestFocus();
+          await tester.pump();
+          await tester.sendKeyEvent(LogicalKeyboardKey.space);
+        }
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const ValueKey('settings-section-option-general')),
+          findsOneWidget,
+        );
+        tester.view.physicalSize = const Size(1400, 640);
+        await tester.pumpAndSettle();
+        final tile = tester.widget<ListTile>(
+          find.byKey(const ValueKey('settings-section-appearance')),
+        );
+        expect(tile.focusNode!.hasFocus, isTrue);
+        expect(
+          find.byKey(const ValueKey('settings-section-option-general')),
+          findsNothing,
+        );
+        expect(tester.takeException(), isNull);
+        // Cancelling a later menu must not steal focus back from the search.
+        tester.view.physicalSize = const Size(540, 400);
+        await tester.pumpAndSettle();
+        await tester.tap(selector);
+        await tester.pumpAndSettle();
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        await tester.pumpAndSettle();
+        final search = find.byKey(const ValueKey('settings-find'));
+        await tester.enterText(search, 'notify');
+        final editable = find.descendant(
+          of: search,
+          matching: find.byType(EditableText),
+        );
+        final searchFocus = tester.widget<EditableText>(editable).focusNode;
+        tester.view.physicalSize = const Size(1400, 640);
+        await tester.pumpAndSettle();
+        expect(searchFocus.hasFocus, isTrue);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
+  testWidgets('retention shows persisted value when an update is not saved', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(960, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    Map<String, dynamic>? attempted;
+    await tester.pumpWidget(
+      view(
+        section: 'map',
+        onUpdate: (values) async {
+          attempted = values;
+        },
+      ),
+    );
+    final field = find.descendant(
+      of: find.byKey(const ValueKey('activity-log-days')),
+      matching: find.byType(DropdownButton<int>),
+    );
+    await tester.ensureVisible(field);
+    await tester.pumpAndSettle();
+    await tester.tap(field);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('30').last);
+    await tester.pumpAndSettle();
+    expect(attempted, {'ai_activity_log_days': 30});
+    expect(tester.widget<DropdownButton<int>>(field).value, 7);
+    expect(tester.takeException(), isNull);
   });
 }

@@ -159,6 +159,8 @@ class DictationControls extends StatelessWidget {
       children: [
         DropdownButtonFormField<String>(
           key: ValueKey('dictation-engine-$engine'),
+          isDense: false,
+          itemHeight: null,
           initialValue:
               const {
                 'auto',
@@ -650,7 +652,12 @@ class _DictationSectionState extends State<DictationSection> {
         children: [
           const SmartStatusIcon(level: 'hint', size: 15),
           const SizedBox(width: AppSpace.xs),
-          Text(tr('On · not set up yet'), style: const TextStyle(fontSize: 12)),
+          Flexible(
+            child: Text(
+              tr('On · not set up yet'),
+              style: const TextStyle(fontSize: 12),
+            ),
+          ),
         ],
       );
     } else if (active == 'online') {
@@ -660,9 +667,11 @@ class _DictationSectionState extends State<DictationSection> {
         children: [
           const SmartStatusIcon(level: 'hint', size: 15),
           const SizedBox(width: AppSpace.xs),
-          Text(
-            tr('Ready · {0}').replaceAll('{0}', activeLabel),
-            style: const TextStyle(fontSize: 12),
+          Flexible(
+            child: Text(
+              tr('Ready · {0}').replaceAll('{0}', activeLabel),
+              style: const TextStyle(fontSize: 12),
+            ),
           ),
         ],
       );
@@ -673,9 +682,11 @@ class _DictationSectionState extends State<DictationSection> {
         children: [
           const SmartStatusIcon(level: 'ok', size: 15),
           const SizedBox(width: AppSpace.xs),
-          Text(
-            tr('Ready · {0}').replaceAll('{0}', activeLabel),
-            style: const TextStyle(fontSize: 12),
+          Flexible(
+            child: Text(
+              tr('Ready · {0}').replaceAll('{0}', activeLabel),
+              style: const TextStyle(fontSize: 12),
+            ),
           ),
         ],
       );
@@ -690,7 +701,7 @@ class _DictationSectionState extends State<DictationSection> {
     return SectionCard(
       key: const ValueKey('settings-dictation-card'),
       title: tr('Dictation'),
-      trailing: badge,
+      trailing: Flexible(child: badge),
       child: ListTileTheme(
         contentPadding: EdgeInsets.zero,
         child: Column(
@@ -742,13 +753,15 @@ class _DictationSectionState extends State<DictationSection> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Row(
+                      OverflowBar(
+                        alignment: MainAxisAlignment.spaceBetween,
+                        overflowAlignment: OverflowBarAlignment.start,
+                        spacing: AppSpace.sm,
+                        overflowSpacing: AppSpace.sm,
                         children: [
-                          Expanded(
-                            child: Text(
-                              tr('Test dictation'),
-                              style: Theme.of(context).textTheme.titleSmall,
-                            ),
+                          Text(
+                            tr('Test dictation'),
+                            style: Theme.of(context).textTheme.titleSmall,
                           ),
                           FilledButton.tonalIcon(
                             key: const ValueKey('dictation-test-button'),

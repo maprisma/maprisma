@@ -394,6 +394,9 @@ class SettingsView extends StatelessWidget {
         padding: const EdgeInsets.only(bottom: 12),
         child: DropdownButtonFormField<int>(
           key: ValueKey('usage-box-size-${settings['usage_box_size']}'),
+          isDense: false,
+          isExpanded: true,
+          itemHeight: null,
           initialValue: _boxSizes.contains(settings['usage_box_size'])
               ? settings['usage_box_size'] as int
               : 7,
@@ -533,6 +536,9 @@ class SettingsView extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 12),
       child: DropdownButtonFormField<T>(
         key: ValueKey('$key-$value'),
+        isDense: false,
+        isExpanded: true,
+        itemHeight: null,
         initialValue: value,
         decoration: InputDecoration(
           labelText: _t(label),
@@ -626,6 +632,9 @@ class SettingsView extends StatelessWidget {
         _Heading('general', _t('Language')),
         DropdownButtonFormField<String>(
           key: ValueKey('language-${settings['language']}'),
+          isDense: false,
+          isExpanded: true,
+          itemHeight: null,
           initialValue: languages.containsKey(settings['language'])
               ? settings['language'] as String
               : 'auto',
@@ -663,6 +672,8 @@ class SettingsView extends StatelessWidget {
         _Heading('appearance', _t('Window')),
         DropdownButtonFormField<String>(
           key: ValueKey('window-mode-${settings['window_mode'] ?? 'auto'}'),
+          isDense: false,
+          itemHeight: null,
           initialValue: settings['window_mode'] as String? ?? 'auto',
           isExpanded: true,
           decoration: InputDecoration(labelText: _t('Window')),
@@ -698,6 +709,8 @@ class SettingsView extends StatelessWidget {
         const SizedBox(height: AppSpace.md),
         DropdownButtonFormField<String>(
           key: ValueKey('corners-${settings['corners'] ?? 'windows'}'),
+          isDense: false,
+          itemHeight: null,
           initialValue:
               const [
                 'windows',
@@ -751,6 +764,9 @@ class SettingsView extends StatelessWidget {
         const SizedBox(height: AppSpace.md),
         DropdownButtonFormField<int>(
           key: ValueKey('map-light-fps-${settings['map_light_fps'] ?? 20}'),
+          isDense: false,
+          isExpanded: true,
+          itemHeight: null,
           initialValue: settings['map_light_fps'] as int? ?? 20,
           decoration: InputDecoration(labelText: _t('Map light frame rate')),
           items: [
@@ -825,6 +841,9 @@ class SettingsView extends StatelessWidget {
         const SizedBox(height: 16),
         DropdownButtonFormField<int>(
           key: ValueKey('subagents-minutes-${settings['subagents_minutes']}'),
+          isDense: false,
+          isExpanded: true,
+          itemHeight: null,
           initialValue: settings['subagents_minutes'] as int? ?? 30,
           decoration: InputDecoration(labelText: _t('Finished ones stay')),
           items: [
@@ -855,6 +874,9 @@ class SettingsView extends StatelessWidget {
         const SizedBox(height: 16),
         DropdownButtonFormField<int>(
           key: ValueKey('subagents-kept-${settings['subagents_kept']}'),
+          isDense: false,
+          isExpanded: true,
+          itemHeight: null,
           initialValue: settings['subagents_kept'] as int? ?? 10,
           decoration: InputDecoration(labelText: _t('At most')),
           items: [
@@ -965,30 +987,37 @@ class SettingsView extends StatelessWidget {
           value: settings['ai_activity_log'] == true,
           onChanged: busy ? null : (v) => onUpdate({'ai_activity_log': v}),
         ),
-        ListTile(
-          title: Text(_t('Keep log for (days)')),
-          trailing: DropdownButton<int>(
-            value: settings['ai_activity_log_days'] as int? ?? 7,
-            items: [
-              for (final days in <int>{
-                1,
-                2,
-                7,
-                30,
-                90,
-                365,
-                settings['ai_activity_log_days'] as int? ?? 7,
-              }.toList()..sort())
-                DropdownMenuItem(
-                  value: days,
-                  child: Text(days == 7 ? '$days · ${_t('Default')}' : '$days'),
-                ),
-            ],
-            onChanged: busy
-                ? null
-                : (v) {
-                    if (v != null) onUpdate({'ai_activity_log_days': v});
-                  },
+        InputDecorator(
+          key: const ValueKey('activity-log-days'),
+          decoration: InputDecoration(labelText: _t('Keep log for (days)')),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<int>(
+              isExpanded: true,
+              itemHeight: null,
+              value: settings['ai_activity_log_days'] as int? ?? 7,
+              items: [
+                for (final days in <int>{
+                  1,
+                  2,
+                  7,
+                  30,
+                  90,
+                  365,
+                  settings['ai_activity_log_days'] as int? ?? 7,
+                }.toList()..sort())
+                  DropdownMenuItem(
+                    value: days,
+                    child: Text(
+                      days == 7 ? '$days · ${_t('Default')}' : '$days',
+                    ),
+                  ),
+              ],
+              onChanged: busy
+                  ? null
+                  : (v) {
+                      if (v != null) onUpdate({'ai_activity_log_days': v});
+                    },
+            ),
           ),
         ),
         SwitchListTile(
@@ -1044,6 +1073,9 @@ class SettingsView extends StatelessWidget {
         else
           DropdownButtonFormField<String>(
             key: ValueKey('checks-agent-${settings['ai_checks_agent']}'),
+            isDense: false,
+            isExpanded: true,
+            itemHeight: null,
             initialValue:
                 checkers.any((c) => c['command'] == settings['ai_checks_agent'])
                 ? settings['ai_checks_agent'] as String
@@ -1117,6 +1149,9 @@ class SettingsView extends StatelessWidget {
         const SizedBox(height: 16),
         DropdownButtonFormField<int>(
           key: ValueKey('map-scan-${settings['map_scan_interval']}'),
+          isDense: false,
+          isExpanded: true,
+          itemHeight: null,
           initialValue: settings['map_scan_interval'] as int? ?? 6,
           decoration: InputDecoration(labelText: _t('Automatic map scans')),
           items: [
@@ -1211,6 +1246,9 @@ class SettingsView extends StatelessWidget {
         const SizedBox(height: AppSpace.sm),
         DropdownButtonFormField<String>(
           key: const ValueKey('map-lights'),
+          isDense: false,
+          isExpanded: true,
+          itemHeight: null,
           initialValue: settings['map_animations'] as String? ?? 'all',
           decoration: InputDecoration(labelText: _t('Map lights')),
           items: [
@@ -1361,11 +1399,40 @@ class _SettingsPagesState extends State<_SettingsPages> {
   late String _section = widget.section ?? _remembered;
   final _search = TextEditingController();
   final _scroll = ScrollController();
+  final _navigationScroll = ScrollController();
+  final _selectorFocus = FocusNode();
+  final _sectionFocus = {
+    for (final section in _settingsSections) section.$1: FocusNode(),
+  };
+  bool? _compact;
+  Size? _layoutSize;
+  bool _selectorOpen = false;
+  bool _selectorLostFocus = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectorFocus.addListener(() {
+      if (!_selectorOpen) return;
+      if (!_selectorFocus.hasFocus) {
+        _selectorLostFocus = true;
+      } else if (_selectorLostFocus) {
+        // Ignore the initial focus request when opening by pointer. Only
+        // returning from the popup means it was dismissed.
+        _selectorOpen = false;
+      }
+    });
+  }
 
   @override
   void dispose() {
     _search.dispose();
     _scroll.dispose();
+    _navigationScroll.dispose();
+    _selectorFocus.dispose();
+    for (final node in _sectionFocus.values) {
+      node.dispose();
+    }
     super.dispose();
   }
 
@@ -1407,136 +1474,265 @@ class _SettingsPagesState extends State<_SettingsPages> {
     String nameOf(String key) => tr(
       sections.firstWhere((s) => s.$1 == key, orElse: () => sections.first).$2,
     );
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        SizedBox(
-          width: 260,
-          // A Material, so the chosen section's highlight shows on it.
-          child: Material(
-            color: colors.surfaceContainerLow,
-            // Seven sections fit: no second scrolling list beside the page.
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(8, 56, 8, 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  for (final s in sections)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 4),
-                      child: ListTile(
-                        key: ValueKey('settings-section-${s.$1}'),
-                        leading: Icon(s.$3),
-                        title: Text(tr(s.$2)),
-                        selected: query.isEmpty && s.$1 == current,
-                        selectedTileColor: colors.secondaryContainer,
-                        selectedColor: colors.onSecondaryContainer,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(corners(context)),
-                        ),
-                        onTap: () => _choose(s.$1),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-        ),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(28, 16, 28, 8),
-                child: Align(
-                  alignment: Alignment.center,
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 320),
-                    child: TextField(
-                      key: const ValueKey('settings-find'),
-                      controller: _search,
-                      onChanged: (_) => setState(() {}),
-                      decoration: InputDecoration(
-                        isDense: true,
-                        prefixIcon: const Icon(Icons.search, size: 18),
-                        hintText: tr('Find in Settings'),
-                        suffixIcon: query.isEmpty
-                            ? null
-                            : IconButton(
-                                tooltip: tr('Clear'),
-                                icon: const Icon(Icons.close, size: 18),
-                                onPressed: () =>
-                                    setState(() => _search.clear()),
-                              ),
-                        border: controlBorder(context),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              Expanded(
-                child: KeyedSubtree(
-                  key: const ValueKey('settings-content'),
-                  child: ListView(
-                    key: ValueKey('settings-page-$current-$query'),
-                    controller: _scroll,
-                    padding: const EdgeInsets.fromLTRB(28, 8, 28, 32),
-                    children: [
-                      Align(
-                        alignment: Alignment.topLeft,
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 800),
+    return LayoutBuilder(
+      builder: (context, box) {
+        // Reserve enough room for the controls as well as the navigation.
+        // Larger desktop text needs the compact layout sooner.
+        final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
+        final compact = box.maxWidth < 840 * scale.clamp(1, 2);
+        if (_compact != compact || _layoutSize != box.biggest) {
+          final focusedSection = _sectionFocus.entries
+              .where((entry) => entry.value.hasFocus)
+              .firstOrNull
+              ?.key;
+          final navigationFocused =
+              _selectorOpen ||
+              _selectorFocus.hasFocus ||
+              focusedSection != null;
+          _compact = compact;
+          _layoutSize = box.biggest;
+          if (!compact) _selectorOpen = false;
+          if (navigationFocused) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!mounted || _compact != compact) return;
+              final target = compact
+                  ? _selectorFocus
+                  : _sectionFocus[focusedSection ?? current];
+              target?.requestFocus();
+              if (target?.context case final context?) {
+                Scrollable.ensureVisible(context);
+              }
+            });
+          }
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(
+              width: compact ? 0 : 260,
+              // A Material, so the chosen section's highlight shows on it.
+              child: compact
+                  ? null
+                  : Material(
+                      color: colors.surfaceContainerLow,
+                      child: Scrollbar(
+                        controller: _navigationScroll,
+                        child: SingleChildScrollView(
+                          controller: _navigationScroll,
+                          primary: false,
+                          padding: const EdgeInsets.fromLTRB(8, 56, 8, 8),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              Text(
-                                all
-                                    ? tr('Settings')
-                                    : query.isEmpty
-                                    ? nameOf(current)
-                                    : tr('Find in Settings'),
-                                style: theme.textTheme.headlineSmall,
-                              ),
-                              const SizedBox(height: AppSpace.md),
-                              if (shown.isEmpty)
-                                Text(
-                                  tr(
-                                    'No setting matches “{0}”',
-                                  ).replaceAll('{0}', _search.text.trim()),
-                                ),
-                              for (final c in shown) ...[
-                                if (c.title != null || query.isNotEmpty || all)
-                                  Padding(
-                                    padding: const EdgeInsets.only(bottom: 8),
-                                    child: Text(
-                                      [
-                                        if (query.isNotEmpty || all)
-                                          nameOf(c.section),
-                                        ?c.title,
-                                      ].join(' › '),
-                                      style: theme.textTheme.titleMedium
-                                          ?.copyWith(
-                                            fontWeight: FontWeight.w600,
-                                          ),
+                              for (final s in sections)
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 4),
+                                  child: Builder(
+                                    builder: (context) => ListTile(
+                                      key: ValueKey('settings-section-${s.$1}'),
+                                      focusNode: _sectionFocus[s.$1],
+                                      onFocusChange: (focused) {
+                                        if (focused) {
+                                          Scrollable.ensureVisible(context);
+                                        }
+                                      },
+                                      leading: Icon(s.$3),
+                                      title: Text(tr(s.$2)),
+                                      selected:
+                                          query.isEmpty && s.$1 == current,
+                                      selectedTileColor:
+                                          colors.secondaryContainer,
+                                      selectedColor:
+                                          colors.onSecondaryContainer,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(
+                                          corners(context),
+                                        ),
+                                      ),
+                                      onTap: () => _choose(s.$1),
                                     ),
                                   ),
-                                c.child,
-                                const SizedBox(
-                                  height: 36,
-                                ), // room before the next group
-                              ],
+                                ),
                             ],
                           ),
                         ),
                       ),
-                    ],
+                    ),
+            ),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Keep the search and content in the same slots on resize so
+                  // their controllers, focus and scroll position survive.
+                  if (compact)
+                    Padding(
+                      key: const ValueKey('settings-compact-navigation'),
+                      padding: const EdgeInsets.fromLTRB(28, 8, 28, 0),
+                      child: Semantics(
+                        label: tr('Settings'),
+                        child: DropdownButton<String>(
+                          key: const ValueKey('settings-section-selector'),
+                          focusNode: _selectorFocus,
+                          onTap: () {
+                            _selectorOpen = true;
+                            _selectorLostFocus = false;
+                          },
+                          value: current == 'all' ? null : current,
+                          hint: Text(tr('Settings')),
+                          isExpanded: true,
+                          itemHeight: null,
+                          selectedItemBuilder: (context) => [
+                            for (final s in sections)
+                              Tooltip(
+                                message: tr(s.$2),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 8,
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(s.$3),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Text(
+                                          tr(s.$2),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                          ],
+                          items: [
+                            for (final s in sections)
+                              DropdownMenuItem(
+                                key: ValueKey(
+                                  'settings-section-option-${s.$1}',
+                                ),
+                                value: s.$1,
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 8,
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(s.$3),
+                                      const SizedBox(width: 12),
+                                      Expanded(child: Text(tr(s.$2))),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                          ],
+                          onChanged: (section) {
+                            _selectorOpen = false;
+                            if (section != null) _choose(section);
+                          },
+                        ),
+                      ),
+                    )
+                  else
+                    const SizedBox.shrink(),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(28, 16, 28, 8),
+                    child: Align(
+                      alignment: Alignment.center,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 320),
+                        child: TextField(
+                          key: const ValueKey('settings-find'),
+                          controller: _search,
+                          onChanged: (_) => setState(() {}),
+                          decoration: InputDecoration(
+                            isDense: true,
+                            prefixIcon: const Icon(Icons.search, size: 18),
+                            hintText: tr('Find in Settings'),
+                            suffixIcon: query.isEmpty
+                                ? null
+                                : IconButton(
+                                    tooltip: tr('Clear'),
+                                    icon: const Icon(Icons.close, size: 18),
+                                    onPressed: () =>
+                                        setState(() => _search.clear()),
+                                  ),
+                            border: controlBorder(context),
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
-                ),
+                  Expanded(
+                    child: KeyedSubtree(
+                      key: const ValueKey('settings-content'),
+                      child: ListView(
+                        key: ValueKey('settings-page-$current-$query'),
+                        controller: _scroll,
+                        padding: const EdgeInsets.fromLTRB(28, 8, 28, 32),
+                        children: [
+                          Align(
+                            alignment: Alignment.topLeft,
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 800),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Text(
+                                    all
+                                        ? tr('Settings')
+                                        : query.isEmpty
+                                        ? nameOf(current)
+                                        : tr('Find in Settings'),
+                                    style: theme.textTheme.headlineSmall,
+                                  ),
+                                  const SizedBox(height: AppSpace.md),
+                                  if (shown.isEmpty)
+                                    Text(
+                                      tr(
+                                        'No setting matches “{0}”',
+                                      ).replaceAll('{0}', _search.text.trim()),
+                                    ),
+                                  for (final c in shown) ...[
+                                    if (c.title != null ||
+                                        query.isNotEmpty ||
+                                        all)
+                                      Padding(
+                                        padding: const EdgeInsets.only(
+                                          bottom: 8,
+                                        ),
+                                        child: Text(
+                                          [
+                                            if (query.isNotEmpty || all)
+                                              nameOf(c.section),
+                                            ?c.title,
+                                          ].join(' › '),
+                                          style: theme.textTheme.titleMedium
+                                              ?.copyWith(
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                        ),
+                                      ),
+                                    c.child,
+                                    const SizedBox(
+                                      height: 36,
+                                    ), // room before the next group
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
-        ),
-      ],
+            ),
+          ],
+        );
+      },
     );
   }
 }
