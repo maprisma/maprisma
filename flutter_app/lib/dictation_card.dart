@@ -176,7 +176,7 @@ class DictationControls extends StatelessWidget {
               : 'auto',
           isExpanded: true,
           decoration: InputDecoration(
-            isDense: compact || SettingsView.denseFields(context),
+            isDense: compact,
             labelText: tr('Dictation engine'),
           ),
           items: [

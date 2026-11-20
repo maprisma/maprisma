@@ -457,6 +457,33 @@ void main() {
         dense,
         reason: 'dictation engine, $size at $scale',
       );
+      // Its decoration keeps the Settings field padding (dense only in the Map card).
+      expect(
+        tester
+            .widget<InputDecorator>(
+              find
+                  .descendant(
+                    of: engine.first,
+                    matching: find.byType(InputDecorator),
+                  )
+                  .first,
+            )
+            .decoration
+            .isDense,
+        isFalse,
+      );
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpWidget(view(section: 'map', scale: scale));
+      await tester.pumpAndSettle();
+      final retention = find.descendant(
+        of: find.byKey(const ValueKey('activity-log-days')),
+        matching: find.byType(DropdownButton<int>),
+      );
+      expect(
+        tester.widget<DropdownButton<int>>(retention).isDense,
+        dense,
+        reason: 'retention, $size at $scale',
+      );
       expect(tester.takeException(), isNull);
     }
   });

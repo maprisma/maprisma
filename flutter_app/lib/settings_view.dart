@@ -1002,6 +1002,7 @@ class SettingsView extends StatelessWidget {
           enabled: !busy,
           child: DropdownButtonHideUnderline(
             child: DropdownButton<int>(
+              isDense: dense,
               isExpanded: true,
               itemHeight: null,
               value: settings['ai_activity_log_days'] as int? ?? 7,

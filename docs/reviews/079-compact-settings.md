@@ -145,3 +145,19 @@ blocked Dictation integration tests.
    > Author: confirmed. The field and its decoration use `compact ||
    > SettingsView.denseFields(context)`. The density test also checks the engine drop-down (it
    > fails with the old code).
+
+## Round 7 (Codex and Antigravity, 2026-11-20, task branch at 32390a0 against 2eb027d)
+
+Codex: CLEAN (both round 6 fixes correct; their tests fail without them). Antigravity:
+
+1. **Low** `dictation_card.dart:179`. Round 6 also made the engine field's `InputDecoration`
+   dense in Settings; before this branch only the drop-down was dense there, the decoration only
+   in the Map card.
+   > Author: confirmed (the base had `InputDecoration(isDense: compact)`); restored. The density
+   > test checks the decoration too.
+2. **Low** `settings_view.dart:1004`. The new labelled retention field's `DropdownButton<int>`
+   (non-dense by default) was taller than the fields around it in the wide layout at normal text.
+   > Author: confirmed. `isDense: dense`, as the other Settings fields; the density test checks
+   > `activity-log-days` too.
+
+Both test additions were checked to fail without their fix.
