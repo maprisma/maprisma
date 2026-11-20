@@ -14,6 +14,7 @@ void main() {
     Map<String, dynamic> translations = const {},
     double scale = 1,
     Brightness brightness = Brightness.light,
+    bool busy = false,
     Future<void> Function(Map<String, dynamic>)? onUpdate,
   }) => MaterialApp(
     theme: ThemeData(brightness: brightness),
@@ -32,7 +33,7 @@ void main() {
           'map_layers': ['agents'],
           'flutter_map_layout': <String, dynamic>{},
         },
-        busy: false,
+        busy: busy,
         tr: (key) => translations[key] as String? ?? key,
         changes: const [],
         onBack: () {},
@@ -372,5 +373,90 @@ void main() {
     expect(attempted, {'ai_activity_log_days': 30});
     expect(tester.widget<DropdownButton<int>>(field).value, 7);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('drop-downs stay dense in the wide layout at normal text', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    bool languageDense() => tester
+        .widget<DropdownButton<String>>(
+          find.descendant(
+            of: find.byKey(const ValueKey('language-auto')),
+            matching: find.byType(DropdownButton<String>),
+          ),
+        )
+        .isDense;
+    for (final (size, scale, dense) in [
+      (const Size(1400, 900), 1.0, true),
+      (const Size(560, 900), 1.0, false),
+      (const Size(1800, 900), 1.5, false),
+    ]) {
+      tester.view.physicalSize = size;
+      await tester.pumpWidget(view(section: 'general', scale: scale));
+      await tester.pumpAndSettle();
+      expect(languageDense(), dense, reason: '$size at $scale');
+      expect(tester.takeException(), isNull);
+    }
+  });
+
+  testWidgets('a search marks no section in the compact selector', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(560, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(view(section: 'appearance'));
+    DropdownButton<String> selector() => tester.widget<DropdownButton<String>>(
+      find.byKey(const ValueKey('settings-section-selector')),
+    );
+    expect(selector().value, 'appearance');
+    await tester.enterText(
+      find.byKey(const ValueKey('settings-find')),
+      'notify',
+    );
+    await tester.pumpAndSettle();
+    expect(selector().value, isNull);
+    await tester.tap(find.byTooltip('Clear'));
+    await tester.pumpAndSettle();
+    expect(selector().value, 'appearance');
+  });
+
+  testWidgets('the retention field shows focus and its busy state', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final field = find.byKey(const ValueKey('activity-log-days'));
+    InputDecorator decorator() => tester.widget<InputDecorator>(
+      find.descendant(of: field, matching: find.byType(InputDecorator)),
+    );
+    await tester.pumpWidget(view(section: 'map'));
+    await tester.ensureVisible(field);
+    await tester.pumpAndSettle();
+    expect(decorator().isFocused, isFalse);
+    expect(decorator().decoration.enabled, isTrue);
+    final dropdown = find.descendant(
+      of: field,
+      matching: find.byType(DropdownButton<int>),
+    );
+    // The drop-down's own focus node (keyboard focus, as Tab gives it).
+    tester
+        .widgetList<Focus>(
+          find.descendant(of: dropdown, matching: find.byType(Focus)),
+        )
+        .map((f) => f.focusNode)
+        .firstWhere((node) => node != null && node.canRequestFocus)!
+        .requestFocus();
+    await tester.pumpAndSettle();
+    expect(decorator().isFocused, isTrue);
+    await tester.pumpWidget(view(section: 'map', busy: true));
+    await tester.pumpAndSettle();
+    expect(decorator().decoration.enabled, isFalse);
   });
 }

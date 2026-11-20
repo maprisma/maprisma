@@ -91,3 +91,43 @@ them:
 Only related checks were run, following Uwe's 2026-11-20 instruction. No full
 suites were run; full suites are reserved for before a push. No push is part
 of this task.
+
+## Round 5 (Claude, 2026-11-20, task branch at 44820c4 against 2eb027d)
+
+Reviewed read-only first (implementation and tests before the earlier rounds); Uwe then asked the
+same session to fix the findings, so the answers below are the author's in that session and the
+fixes still need an independent round.
+
+1. **Medium** `flutter_app/lib/settings_view.dart` (all changed `DropdownButtonFormField`s) and
+   `flutter_app/lib/dictation_card.dart:162`. `isDense: false` everywhere made every drop-down
+   80 px tall at normal text in the wide layout (56 px before, as tall as the text fields next
+   to them; measured), and the Map card's compact dictation controls lost their compact height.
+   > Author: `SettingsView.denseFields` keeps drop-downs dense in the wide layout at normal text
+   > (the base look) and lets them wrap only in the compact layout (narrower than 840 px times
+   > the text scale, the rule `_SettingsPages` uses) or with larger text. `DictationControls`
+   > uses `isDense: compact`. Test: "drop-downs stay dense in the wide layout at normal text".
+2. **Low** `settings_view.dart:1581`. During a search the compact selector still showed the last
+   section, while the wide list marks none.
+   > Author: the selector's value is null while a search runs (its hint shows). Test: "a search
+   > marks no section in the compact selector".
+3. **Low** `settings_view.dart:1500`. With `section: 'all'` there is no section focus node, so
+   going from compact to wide with the selector focused lost the focus.
+   > Author: falls back to the first section's node.
+4. **Low** `settings_view.dart:991`. The retention field's `InputDecorator` showed neither
+   keyboard focus nor the busy state.
+   > Author: `_DecoratedField` follows its drop-down's focus and greys out while busy; it still
+   > shows the saved value after a failed update. Test: "the retention field shows focus and its
+   > busy state".
+5. **Low (concern)** `settings_view.dart:1573`. The selector's semantics label equals the window
+   title.
+   > Author: kept; the drop-down reports the chosen section as its value after the label. Not
+   > verified with a semantics test.
+6. **Low** `docs/manual/manual.html:908` (all 8 manuals). The compact paragraph came before the
+   one introducing the sections.
+   > Author: swapped in all 8 manuals; `translations.py stamp <lang> settings-list` for the 7
+   > translations.
+
+Coverage still open: choosing a section by keyboard (arrows, Enter, Tab into it), reaching the
+end of long sections, search in de/pl at 150/200 %, resizing with a content drop-down open, the
+Map card's dictation controls (only the `compact` flag is set; no widget test), and the two
+blocked Dictation integration tests.

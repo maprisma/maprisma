@@ -355,7 +355,7 @@ class SettingsView extends StatelessWidget {
     ];
   }
 
-  List<Widget> _usageBoxRows() {
+  List<Widget> _usageBoxRows(bool dense) {
     final on = settings['usage_box'] as bool? ?? true;
     final items = [
       for (final i
@@ -394,7 +394,7 @@ class SettingsView extends StatelessWidget {
         padding: const EdgeInsets.only(bottom: 12),
         child: DropdownButtonFormField<int>(
           key: ValueKey('usage-box-size-${settings['usage_box_size']}'),
-          isDense: false,
+          isDense: dense,
           isExpanded: true,
           itemHeight: null,
           initialValue: _boxSizes.contains(settings['usage_box_size'])
@@ -519,7 +519,7 @@ class SettingsView extends StatelessWidget {
   /// Settings › Costs: the currency, a day's limit for an agent paid per
   /// token, and the yellow and red levels (red always above yellow: the
   /// other one moves along, as the reference does).
-  List<Widget> _costRows() {
+  List<Widget> _costRows(bool dense) {
     final yellow = settings['warn_yellow'] as int? ?? 75;
     final red = settings['warn_red'] as int? ?? 90;
     String used(int n, int standard) => _t(
@@ -536,7 +536,7 @@ class SettingsView extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 12),
       child: DropdownButtonFormField<T>(
         key: ValueKey('$key-$value'),
-        isDense: false,
+        isDense: dense,
         isExpanded: true,
         itemHeight: null,
         initialValue: value,
@@ -602,8 +602,17 @@ class SettingsView extends StatelessWidget {
     ];
   }
 
+  /// Drop-downs stay dense (as tall as a text field) in the wide layout at normal text; the
+  /// compact layout (as _SettingsPages decides it: narrower than 840 px times the text scale)
+  /// or larger text lets a long value wrap onto more lines.
+  static bool denseFields(BuildContext context) {
+    final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
+    return scale <= 1 && MediaQuery.sizeOf(context).width >= 840;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final dense = denseFields(context);
     const languages = {
       'auto': 'System',
       'en': 'English',
@@ -632,7 +641,7 @@ class SettingsView extends StatelessWidget {
         _Heading('general', _t('Language')),
         DropdownButtonFormField<String>(
           key: ValueKey('language-${settings['language']}'),
-          isDense: false,
+          isDense: dense,
           isExpanded: true,
           itemHeight: null,
           initialValue: languages.containsKey(settings['language'])
@@ -672,7 +681,7 @@ class SettingsView extends StatelessWidget {
         _Heading('appearance', _t('Window')),
         DropdownButtonFormField<String>(
           key: ValueKey('window-mode-${settings['window_mode'] ?? 'auto'}'),
-          isDense: false,
+          isDense: dense,
           itemHeight: null,
           initialValue: settings['window_mode'] as String? ?? 'auto',
           isExpanded: true,
@@ -709,7 +718,7 @@ class SettingsView extends StatelessWidget {
         const SizedBox(height: AppSpace.md),
         DropdownButtonFormField<String>(
           key: ValueKey('corners-${settings['corners'] ?? 'windows'}'),
-          isDense: false,
+          isDense: dense,
           itemHeight: null,
           initialValue:
               const [
@@ -764,7 +773,7 @@ class SettingsView extends StatelessWidget {
         const SizedBox(height: AppSpace.md),
         DropdownButtonFormField<int>(
           key: ValueKey('map-light-fps-${settings['map_light_fps'] ?? 20}'),
-          isDense: false,
+          isDense: dense,
           isExpanded: true,
           itemHeight: null,
           initialValue: settings['map_light_fps'] as int? ?? 20,
@@ -841,7 +850,7 @@ class SettingsView extends StatelessWidget {
         const SizedBox(height: 16),
         DropdownButtonFormField<int>(
           key: ValueKey('subagents-minutes-${settings['subagents_minutes']}'),
-          isDense: false,
+          isDense: dense,
           isExpanded: true,
           itemHeight: null,
           initialValue: settings['subagents_minutes'] as int? ?? 30,
@@ -874,7 +883,7 @@ class SettingsView extends StatelessWidget {
         const SizedBox(height: 16),
         DropdownButtonFormField<int>(
           key: ValueKey('subagents-kept-${settings['subagents_kept']}'),
-          isDense: false,
+          isDense: dense,
           isExpanded: true,
           itemHeight: null,
           initialValue: settings['subagents_kept'] as int? ?? 10,
@@ -981,15 +990,16 @@ class SettingsView extends StatelessWidget {
         const SizedBox(height: AppSpace.md),
         _Heading('map', _t('Usage statistics box')),
         const SizedBox(height: 8),
-        ..._usageBoxRows(),
+        ..._usageBoxRows(dense),
         SwitchListTile(
           title: Text(_t('AI activity log')),
           value: settings['ai_activity_log'] == true,
           onChanged: busy ? null : (v) => onUpdate({'ai_activity_log': v}),
         ),
-        InputDecorator(
+        _DecoratedField(
           key: const ValueKey('activity-log-days'),
-          decoration: InputDecoration(labelText: _t('Keep log for (days)')),
+          label: _t('Keep log for (days)'),
+          enabled: !busy,
           child: DropdownButtonHideUnderline(
             child: DropdownButton<int>(
               isExpanded: true,
@@ -1050,7 +1060,7 @@ class SettingsView extends StatelessWidget {
         const SizedBox(height: AppSpace.md),
         _Heading('agents', _t('Costs')),
         const SizedBox(height: 16),
-        ..._costRows(),
+        ..._costRows(dense),
         SwitchListTile(
           key: const ValueKey('warn-notify'),
           title: Text(_t('Notify when red')),
@@ -1073,7 +1083,7 @@ class SettingsView extends StatelessWidget {
         else
           DropdownButtonFormField<String>(
             key: ValueKey('checks-agent-${settings['ai_checks_agent']}'),
-            isDense: false,
+            isDense: dense,
             isExpanded: true,
             itemHeight: null,
             initialValue:
@@ -1149,7 +1159,7 @@ class SettingsView extends StatelessWidget {
         const SizedBox(height: 16),
         DropdownButtonFormField<int>(
           key: ValueKey('map-scan-${settings['map_scan_interval']}'),
-          isDense: false,
+          isDense: dense,
           isExpanded: true,
           itemHeight: null,
           initialValue: settings['map_scan_interval'] as int? ?? 6,
@@ -1246,7 +1256,7 @@ class SettingsView extends StatelessWidget {
         const SizedBox(height: AppSpace.sm),
         DropdownButtonFormField<String>(
           key: const ValueKey('map-lights'),
-          isDense: false,
+          isDense: dense,
           isExpanded: true,
           itemHeight: null,
           initialValue: settings['map_animations'] as String? ?? 'all',
@@ -1497,7 +1507,8 @@ class _SettingsPagesState extends State<_SettingsPages> {
               if (!mounted || _compact != compact) return;
               final target = compact
                   ? _selectorFocus
-                  : _sectionFocus[focusedSection ?? current];
+                  : _sectionFocus[focusedSection ?? current] ??
+                        _sectionFocus.values.firstOrNull;
               target?.requestFocus();
               if (target?.context case final context?) {
                 Scrollable.ensureVisible(context);
@@ -1578,7 +1589,11 @@ class _SettingsPagesState extends State<_SettingsPages> {
                             _selectorOpen = true;
                             _selectorLostFocus = false;
                           },
-                          value: current == 'all' ? null : current,
+                          // As the wide list: no section is marked while a search shows
+                          // results from all of them.
+                          value: query.isEmpty && current != 'all'
+                              ? current
+                              : null,
                           hint: Text(tr('Settings')),
                           isExpanded: true,
                           itemHeight: null,
@@ -1873,3 +1888,41 @@ const _borderColors = [
   '#42a5f5',
   '#ab47bc',
 ];
+
+/// A field frame around a control that keeps no value of its own (the retention drop-down
+/// shows the saved value even when an update fails): focused while its control has the
+/// keyboard focus, greyed out while it is disabled, like the form fields next to it.
+class _DecoratedField extends StatefulWidget {
+  const _DecoratedField({
+    super.key,
+    required this.label,
+    required this.enabled,
+    required this.child,
+  });
+
+  final String label;
+  final bool enabled;
+  final Widget child;
+
+  @override
+  State<_DecoratedField> createState() => _DecoratedFieldState();
+}
+
+class _DecoratedFieldState extends State<_DecoratedField> {
+  bool _focused = false;
+
+  @override
+  Widget build(BuildContext context) => Focus(
+    canRequestFocus: false,
+    skipTraversal: true,
+    onFocusChange: (focused) => setState(() => _focused = focused),
+    child: InputDecorator(
+      isFocused: _focused,
+      decoration: InputDecoration(
+        labelText: widget.label,
+        enabled: widget.enabled,
+      ),
+      child: widget.child,
+    ),
+  );
+}

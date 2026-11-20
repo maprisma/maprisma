@@ -159,7 +159,8 @@ class DictationControls extends StatelessWidget {
       children: [
         DropdownButtonFormField<String>(
           key: ValueKey('dictation-engine-$engine'),
-          isDense: false,
+          // Compact (the Map card's popup) stays dense; elsewhere a long engine name may wrap.
+          isDense: compact,
           itemHeight: null,
           initialValue:
               const {
