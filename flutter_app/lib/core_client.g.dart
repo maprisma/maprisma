@@ -329,10 +329,12 @@ class CoreClient {
     required String operation,
     required Object? params,
     required String plugin,
+    bool? refresh,
   }) => transport.call('features.call', {
     'operation': operation,
     'params': params,
     'plugin': plugin,
+    'refresh': ?refresh,
   });
 
   Future<Map<String, dynamic>> featuresList([
