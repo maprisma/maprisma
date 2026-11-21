@@ -33,6 +33,17 @@ void _serveIsolate((SendPort, Map<String, String>?) args) {
   });
 }
 
+/// Longer than the core's worst case for `features.shutdown`: the AI Project
+/// Center first (start 10 s, @shutdown 30 s, exit 10 s), then the other
+/// features together (the same again), plus the embedded center's cleanup.
+/// A shorter wait would abort the close while the core still finishes it.
+const featuresShutdownTimeout = Duration(seconds: 180);
+
+/// How long a call may take before the GUI gives up on its answer.
+Duration callTimeout(String method) => method == 'features.shutdown'
+    ? featuresShutdownTimeout
+    : const Duration(seconds: 60);
+
 final class IsolateTransport implements ServiceTransport {
   IsolateTransport._();
   final _inbox = ReceivePort(), _errors = ReceivePort(), _exit = ReceivePort();
@@ -140,7 +151,7 @@ final class IsolateTransport implements ServiceTransport {
     _pending[id] = pending;
     _send!.send(frame);
     try {
-      return await pending.future.timeout(const Duration(seconds: 60));
+      return await pending.future.timeout(callTimeout(method));
     } finally {
       _pending.remove(id);
     }
@@ -196,10 +207,11 @@ final class IsolateTransport implements ServiceTransport {
     if (_closed || _send == null) return dispose();
     try {
       _send!.send('@close');
+      // The core retries feature cleanup before it confirms.
       await Future.any([
         _closedAck.future,
         _exited.future,
-      ]).timeout(const Duration(seconds: 60));
+      ]).timeout(featuresShutdownTimeout);
     } on Object {
       // Ended or timed out; the supervisors keep any unconfirmed work.
     }

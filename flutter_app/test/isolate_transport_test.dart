@@ -170,4 +170,14 @@ void main() {
       }
     },
   );
+
+  test('feature shutdown may take longer than the core\'s worst case', () {
+    // Project Center first (start 10 s + @shutdown 30 s + exit 10 s), then
+    // the other features together (the same again).
+    expect(
+      callTimeout('features.shutdown'),
+      greaterThan(const Duration(seconds: 100)),
+    );
+    expect(callTimeout('features.summary'), const Duration(seconds: 60));
+  });
 }

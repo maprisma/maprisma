@@ -411,8 +411,12 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         setState(() => _projectSummary = summary);
       }
     } catch (_) {
+      // Keep the last counts: closing still asks before stopping agents
+      // that were running when the summary was last read.
       if (mounted && _projectSummary['connected'] != false) {
-        setState(() => _projectSummary = {'connected': false});
+        setState(
+          () => _projectSummary = {..._projectSummary, 'connected': false},
+        );
       }
     } finally {
       _projectSummaryPending = false;
