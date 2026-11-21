@@ -407,7 +407,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     _projectSummaryPending = true;
     try {
       final summary = await _client.featuresSummary();
-      if (mounted && !mapEquals(summary, _projectSummary)) {
+      if (mounted && !sameMapJson(summary, _projectSummary)) {
         setState(() => _projectSummary = summary);
       }
     } catch (_) {
