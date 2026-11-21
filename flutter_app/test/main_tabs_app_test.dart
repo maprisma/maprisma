@@ -783,4 +783,98 @@ void main() {
     expect(find.text('Website relaunch, changed'), findsOneWidget);
     await unmountApp(tester);
   });
+
+  testWidgets('the board: Esc and the Projects tab go back from a project', (
+    tester,
+  ) async {
+    await mountApp(
+      tester,
+      beforeStart: (dir) {
+        projects(dir);
+        File('${dir.path}/board').writeAsStringSync('');
+      },
+    );
+    expect(find.byKey(const ValueKey('project-card-p1')), findsOneWidget);
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(const ValueKey('project-card-p1')),
+        matching: find.byKey(const ValueKey('card-open')),
+      ),
+    );
+    await settleService(tester);
+    expect(find.byKey(const ValueKey('breadcrumb-projects')), findsOneWidget);
+    // Esc: back to the board (the window stays).
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await settleService(tester);
+    expect(find.byKey(const ValueKey('project-card-p1')), findsOneWidget);
+    // Open again, then the Projects tab: the board.
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(const ValueKey('project-card-p1')),
+        matching: find.byKey(const ValueKey('card-open')),
+      ),
+    );
+    await settleService(tester);
+    await tester.tap(find.byKey(const ValueKey('tab-projects')));
+    await settleService(tester);
+    expect(find.byKey(const ValueKey('breadcrumb-projects')), findsNothing);
+    expect(find.byKey(const ValueKey('project-card-p1')), findsOneWidget);
+    await unmountApp(tester);
+  });
+
+  testWidgets('Esc in a field of an open project leaves the field first', (
+    tester,
+  ) async {
+    await mountApp(
+      tester,
+      beforeStart: (dir) {
+        projects(dir);
+        File('${dir.path}/board').writeAsStringSync('');
+      },
+    );
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(const ValueKey('project-card-p1')),
+        matching: find.byKey(const ValueKey('card-open')),
+      ),
+    );
+    await settleService(tester);
+    await tester.tap(find.widgetWithText(TextField, 'Project title'));
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await settleService(tester);
+    expect(find.byKey(const ValueKey('breadcrumb-projects')), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await settleService(tester);
+    expect(find.byKey(const ValueKey('breadcrumb-projects')), findsNothing);
+    await unmountApp(tester);
+  });
+
+  testWidgets('while closing, Esc keeps the open project', (tester) async {
+    mockWindow(tester, []);
+    final dir = await mountApp(
+      tester,
+      beforeStart: (dir) {
+        projects(dir);
+        File('${dir.path}/board').writeAsStringSync('');
+      },
+    );
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(const ValueKey('project-card-p1')),
+        matching: find.byKey(const ValueKey('card-open')),
+      ),
+    );
+    await settleService(tester);
+    File('${dir.path}/slow_features.summary').writeAsStringSync('');
+    final dynamic app = tester.state(find.byType(MaprismaApp));
+    app.onWindowClose();
+    await settleService(tester);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await settleService(tester);
+    expect(find.byKey(const ValueKey('breadcrumb-projects')), findsOneWidget);
+    File('${dir.path}/release_features.summary').writeAsStringSync('');
+    await settleService(tester);
+    await unmountApp(tester);
+  });
 }

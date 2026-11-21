@@ -445,6 +445,25 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     return true;
   }
 
+  /// From an open project back to its board (Esc, the breadcrumb, the
+  /// Projects tab), with the same guards as every departure: not while
+  /// closing or another departure, a step or a page question is under way;
+  /// a cancelled one gives the keyboard back.
+  Future<bool> _backToBoard() async {
+    final page = _projectCenterKey.currentState;
+    if (page == null || !page.projectOpen) return true;
+    if (_closing || _pageOccupied()) return false;
+    final keyboard = _projectKeyboard();
+    _departing = true;
+    try {
+      final back = await page.backToBoard();
+      if (!back && mounted) _giveBackFocus(keyboard);
+      return back;
+    } finally {
+      _departing = false;
+    }
+  }
+
   /// The node in the Projects page that has (or last had) the keyboard.
   FocusNode? _projectKeyboard() {
     final focus = FocusManager.instance.primaryFocus;
@@ -547,6 +566,14 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     }
     if (tab == MainTab.map && _mainTab == MainTab.projects) {
       if (!await _leaveProjects()) return;
+    }
+    // Projects again while a project is open: back to its board.
+    final page = _projectCenterKey.currentState;
+    if (tab == MainTab.projects &&
+        _showProjectCenter &&
+        (page?.projectOpen ?? false)) {
+      if (await _backToBoard()) _saveTab(tab);
+      return;
     }
     if (!await _leaveReports() || !mounted) return;
     // Chosen here: no later page returns to the guide.
@@ -3371,11 +3398,17 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   /// the map. Text fields, dialogs, cards and terminals keep these keys:
   /// they handle them before they reach the app.
   bool get _canGoBack =>
+      // The open project goes back to the board (task 088).
+      (_showProjectCenter &&
+          !_navigationBlocked &&
+          _card == null &&
+          _visibleTerminal == null &&
+          (_projectCenterKey.currentState?.projectOpen ?? false)) ||
       !_navigationBlocked &&
-      _card == null &&
-      _browser == null &&
-      _visibleTerminal == null &&
-      (_pageOpen || _focusCategory != null || !_showMap);
+          _card == null &&
+          _browser == null &&
+          _visibleTerminal == null &&
+          (_pageOpen || _focusCategory != null || !_showMap);
 
   bool get _pageOpen =>
       _showReports ||
@@ -3395,12 +3428,18 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       _visibleTerminal == null;
 
   void _backOrClose() {
-    if (_canGoBack) return _goBack();
-    // Esc in a text field leaves the field first; the next Esc closes.
     final focused = FocusManager.instance.primaryFocus?.context;
-    if (focused != null &&
+    final inField =
+        focused != null &&
         (focused.widget is EditableText ||
-            focused.findAncestorWidgetOfExactType<EditableText>() != null)) {
+            focused.findAncestorWidgetOfExactType<EditableText>() != null);
+    // An open project: Esc leaves a text field first, then the project.
+    final projectOpen =
+        _showProjectCenter &&
+        (_projectCenterKey.currentState?.projectOpen ?? false);
+    if (_canGoBack && !(projectOpen && inField)) return _goBack();
+    // Esc in a text field leaves the field first; the next Esc closes.
+    if (inField) {
       // Back to the window's own node, where the next Esc arrives.
       _pageFocus.requestFocus();
       return;
@@ -3474,6 +3513,11 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   /// A page back to what lay under it; an agent's details or the list back
   /// to the map, the main page.
   void _goBack() {
+    final page = _projectCenterKey.currentState;
+    if (_showProjectCenter && (page?.projectOpen ?? false)) {
+      unawaited(_backToBoard());
+      return;
+    }
     if (_showReports) {
       unawaited(_leaveReports());
       return;
@@ -6843,6 +6887,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                                     );
                                   },
                                   tr: tr,
+                                  onBoard: _backToBoard,
                                   active:
                                       _showProjectCenter &&
                                       _visibleTerminal == null &&

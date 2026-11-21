@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:math' show min;
 
 import 'package:flutter/material.dart';
 import 'package:file_selector/file_selector.dart' show getDirectoryPath;
 import 'package:maprisma_core/maprisma_core.dart' show ServiceError;
 
 import 'app_look.dart';
+import 'project_board.dart';
 import 'window_popup.dart';
 
 typedef ProjectCenterCall =
@@ -19,6 +21,7 @@ class AiProjectCenterPage extends StatefulWidget {
     required this.onCall,
     required this.tr,
     this.onBack,
+    this.onBoard,
     this.active = true,
     this.chooseFolder,
   });
@@ -28,6 +31,10 @@ class AiProjectCenterPage extends StatefulWidget {
 
   /// Null inside the Projects tab: the tab replaces Back (task 086).
   final VoidCallback? onBack;
+
+  /// Back from a project to the board through the shell's guards (task 088);
+  /// without it the page goes back by itself.
+  final Future<bool> Function()? onBoard;
   final bool active;
 
   /// The native picker by default; tests can supply a controlled dialog.
@@ -61,12 +68,176 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
   bool _confirming = false;
   String? _error;
   int _tab = 0;
+
+  /// The backend draws the board (its `list` lists the capability `board`;
+  /// task 088). Without it the tab keeps the page with its list.
+  bool _board = false;
+
+  /// A project (or a new one) is open over the board.
+  bool _projectOpen = false;
+  BoardFilter? _filter;
+  final _cardFocus = <String, FocusNode>{};
+  String? _openedId;
+
+  /// Projects with a quick action on its way.
+  final _quick = <String>{};
+
+  /// The card the board brings into view (back from its project).
+  String? _reveal;
+  final _boardScroll = ScrollController();
+  final _newFocus = FocusNode(debugLabel: 'new project');
+
+  void _revealed() {
+    final id = _reveal;
+    if (!mounted || id == null) return;
+    setState(() => _reveal = null);
+    final node = _cardFocus[id];
+    // A deleted card's node keeps its old context: it must still be there.
+    if (node?.context?.mounted ?? false) {
+      node!.requestFocus();
+    } else {
+      _newFocus.requestFocus();
+    }
+  }
+
+  /// Cards a pointer is pressing now.
+  final _pressed = <String>{};
+
+  /// A board message that the next read keeps (a failed quick action).
+  bool _keepError = false;
+
+  /// Two-second ticks since the last read (the board's quiet rhythm).
+  int _ticks = 0;
+
+  /// The list could not be read (the backend is unreachable): status
+  /// unavailable, never zero.
+  bool _unavailable = false;
+
+  /// The project store's fault from the list's summary (a banner, not a
+  /// project).
+  String? _storeError;
+
+  /// The project page is open (Esc and the Projects tab lead back to the
+  /// board).
+  bool get projectOpen => _board && _projectOpen;
+
+  /// Back from the project page to the board: unsaved changes ask first; the
+  /// keyboard goes to the card that was opened.
+  Future<bool> backToBoard() async {
+    if (!projectOpen) return true;
+    if (!await beforeLeave() || !mounted) return false;
+    final id = _openedId;
+    setState(() {
+      _projectOpen = false;
+      // The project page's message stays with the page.
+      if (!_keepError) _error = null;
+      // The opened card is shown again even when it left the filter.
+      final card = _projects.where((p) => p['id'] == id).firstOrNull;
+      if (card != null && _filter != null && card['bucket'] != _filter!.code) {
+        _filter = null;
+      }
+    });
+    // The board scrolls the card into view, then it gets the keyboard; for a
+    // card deleted meanwhile the first one the filter shows takes its place,
+    // and with none left, New project.
+    final shown = [
+      for (final p in _projects)
+        if (_filter == null || p['bucket'] == _filter!.code) '${p['id']}',
+    ];
+    setState(() => _reveal = shown.contains(id) ? id : shown.firstOrNull ?? '');
+    return true;
+  }
+
+  Future<void> _openFromBoard(
+    Map<String, dynamic>? project, {
+    int tab = 0,
+  }) async {
+    // Opened only once it was read (a deleted project stays on the board,
+    // with the reason).
+    if (!await _choose(project) || !mounted) return;
+    setState(() {
+      _openedId = project?['id'] as String?;
+      _projectOpen = true;
+      _tab = tab;
+    });
+  }
+
+  /// The board could not be read: status unavailable, with Retry.
+  Widget _unavailableNote({bool center = false}) {
+    final note = Padding(
+      key: const ValueKey('board-unavailable'),
+      padding: const EdgeInsets.all(AppSpace.sm),
+      child: Wrap(
+        alignment: center ? WrapAlignment.center : WrapAlignment.start,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: AppSpace.sm,
+        children: [
+          const Icon(Icons.cloud_off_outlined),
+          Text(tr('Project status unavailable')),
+          TextButton(
+            key: const ValueKey('board-retry'),
+            onPressed: () => unawaited(_refresh(profiles: true)),
+            child: Text(tr('Retry')),
+          ),
+        ],
+      ),
+    );
+    return center ? Center(child: note) : note;
+  }
+
+  /// While a card has the keyboard, a refresh keeps the cards where they are
+  /// (new ones at the end, gone ones removed); the core's order returns with
+  /// the next read after.
+  List<Map<String, dynamic>> _holdOrder(List<Map<String, dynamic>> fresh) {
+    final focused = _cardFocus.values.any((node) => node.hasFocus);
+    // Also while a card is pressed, and while a project is open (its card
+    // stays where the board was left, to give the keyboard back to).
+    if (!_board || !(focused || _pressed.isNotEmpty || _projectOpen)) {
+      return fresh;
+    }
+    final byId = {for (final p in fresh) '${p['id']}': p};
+    final kept = [for (final old in _projects) ?byId.remove('${old['id']}')];
+    return [...kept, ...byId.values];
+  }
+
+  /// Pause or Retry pause from a card, for the run the card shows.
+  Future<void> _pauseFromBoard(Map<String, dynamic> project) async {
+    final id = '${project['id']}';
+    if (_quick.contains(id)) return;
+    setState(() => _quick.add(id));
+    try {
+      await widget.onCall('pause', {
+        'id': id,
+        if (project['run_id'] != null) 'run_id': project['run_id'],
+      });
+    } catch (error) {
+      // A newer run than the card showed: the board is read again; the
+      // reason stays readable through that read.
+      if (mounted) {
+        setState(() {
+          _error = _failure(error);
+          _keepError = true;
+        });
+      }
+    } finally {
+      // The card's Pause stays off until the board shows the new state; the
+      // reason stays through that read (also when a poll was on its way).
+      if (mounted) await _refresh();
+      _keepError = false;
+      if (mounted) setState(() => _quick.remove(id));
+    }
+  }
+
   int _selection = 0;
   Timer? _timer;
   String tr(String key) => widget.tr(key);
   static const _active = {'planning', 'running', 'reviewing', 'pausing'};
+
+  /// A project of the list is active, or the open one is (a project kept
+  /// behind the board does not count: its status is no longer read).
   bool get hasActive =>
-      _running || _projects.any((p) => _active.contains(p['status']));
+      (_running && (!_board || _projectOpen)) ||
+      _projects.any((p) => _active.contains(p['status']));
   bool get _running => _active.contains(_project?['status']);
 
   @override
@@ -77,7 +248,15 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
     }
     unawaited(_refresh());
     _timer = Timer.periodic(const Duration(seconds: 2), (_) {
-      if (widget.active && hasActive && !_busy) unawaited(_refresh());
+      if (!widget.active || _busy) return;
+      _ticks++;
+      final stopping = _projects.any((p) => p['processes_stopping'] == true);
+      // Every 2 s while something runs or stops, else about every 15 s (also
+      // to retry after the backend could not be reached).
+      final quiet = _ticks >= 8;
+      if (hasActive || stopping || ((_board || _unavailable) && quiet)) {
+        unawaited(_refresh());
+      }
     });
   }
 
@@ -90,6 +269,11 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
   @override
   void dispose() {
     _timer?.cancel();
+    for (final node in _cardFocus.values) {
+      node.dispose();
+    }
+    _boardScroll.dispose();
+    _newFocus.dispose();
     // A refresh someone waits on ends with the page.
     _readDone?.complete();
     _readDone = null;
@@ -254,18 +438,46 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
     }
     _reading = true;
     final selection = _selection;
-    final id = _project?['id'];
+    // Full details only for the open project (the board needs none).
+    final id = _board && !_projectOpen ? null : _project?['id'];
     try {
-      final results = await Future.wait([
-        widget.onCall('list', {}),
-        if (!_loaded || profiles) widget.onCall('profiles', {}),
-      ]);
-      final selected = id == null
-          ? null
-          : (await widget.onCall('get', {'id': id}))['project'];
+      // The list decides whether the board is there; the profiles (for the
+      // editor) are read on their own, so their failure is only a message.
+      final listed = await widget.onCall('list', {});
+      Map<String, dynamic>? profileAnswer;
+      Object? profileError;
+      if (!_loaded || profiles) {
+        try {
+          profileAnswer = await widget.onCall('profiles', {});
+        } catch (error) {
+          profileError = error;
+        }
+      }
+      final results = [listed, ?profileAnswer];
+      // The open project's details: a failure there is the project's, not the
+      // board's (the list was read).
+      Object? selected;
+      Object? detailError;
+      if (id != null) {
+        try {
+          selected = (await widget.onCall('get', {'id': id}))['project'];
+        } catch (error) {
+          detailError = error;
+        }
+      }
       if (!mounted) return;
       setState(() {
-        _projects = _rows(results[0]['projects']);
+        _projects = _holdOrder(_rows(results[0]['projects']));
+        final caps = results[0]['capabilities'];
+        _board = caps is List && caps.contains('board');
+        _ticks = 0;
+        _unavailable = false;
+        final summary = results[0]['summary'];
+        final fault = summary is Map ? summary['error'] : null;
+        _storeError = fault is String && fault.isNotEmpty ? fault : null;
+        // An earlier board message ends with a read (a failed quick action's
+        // survives the read it asked for).
+        if (_board && !_projectOpen && !_keepError) _error = null;
         if (results.length > 1) {
           _profiles = _rows(results[1]['profiles']);
           _runtimes = _rows(results[1]['runtimes']);
@@ -281,9 +493,23 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
           }
         }
         _loaded = true;
+        // A late answer about a project that was closed meanwhile is not shown.
+        if (detailError != null &&
+            selection == _selection &&
+            (!_board || _projectOpen)) {
+          _error = _failure(detailError);
+        } else if (profileError != null && !_board) {
+          _error = _failure(profileError);
+        }
       });
     } catch (error) {
-      if (mounted) setState(() => _error = _failure(error));
+      if (mounted) {
+        setState(() {
+          _error = _failure(error);
+          _unavailable = true;
+          _ticks = 0;
+        });
+      }
     } finally {
       _reading = false;
     }
@@ -420,8 +646,9 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
     return saved ? () {} : null;
   }
 
-  Future<void> _choose(Map<String, dynamic>? project) async {
-    if (!await beforeLeave() || !mounted) return;
+  /// Shows [project] (null: a new one); false when it could not be read.
+  Future<bool> _choose(Map<String, dynamic>? project) async {
+    if (!await beforeLeave() || !mounted) return false;
     setState(() {
       _selection++;
       _busy = project != null;
@@ -437,14 +664,15 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
               (await widget.onCall('get', {'id': project['id']}))['project']
                   as Map,
             );
-      if (mounted) {
-        setState(() {
-          _adopt(result);
-          _tab = 0;
-        });
-      }
+      if (!mounted) return false;
+      setState(() {
+        _adopt(result);
+        _tab = 0;
+      });
+      return true;
     } catch (error) {
       if (mounted) setState(() => _error = _failure(error));
+      return false;
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -1258,163 +1486,276 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
   );
 
   Widget _editor() {
-    final status = _project?['status'];
     final approved =
         _plan.text.trim().isNotEmpty &&
         (_project?['approval_valid'] as bool? ??
             (_project?['approved_version'] != null &&
                 _project?['approved_version'] == _project?['plan_version'])) &&
         !_dirty;
+    // A narrow window (task 088): the breadcrumb names the project, the tabs
+    // become one selector, so the body keeps its height.
+    return LayoutBuilder(
+      builder: (context, box) {
+        // Compact when narrow, and also when low for the text size (a wide
+        // but short window would leave the body no height).
+        final scale = MediaQuery.textScalerOf(context).scale(1);
+        final compact = box.maxWidth < 600 || box.maxHeight < 460 * scale;
+        return _editorFor(compact, approved);
+      },
+    );
+  }
+
+  /// The open tab's content (goal, plan, team, activity or setup).
+  Widget _tabBody(bool approved) => switch (_tab) {
+    0 => Column(
+      children: [
+        _field(_title, 'Project title'),
+        _field(_brief, 'Project goal', lines: 5),
+        _field(_path, 'Working folder'),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton.icon(
+            onPressed: _busy || _running
+                ? null
+                : () async {
+                    final folder = await PopupGuard.around(
+                      widget.chooseFolder ?? getDirectoryPath,
+                    );
+                    if (folder != null && mounted) {
+                      _path.text = folder;
+                    }
+                  },
+            icon: const Icon(Icons.folder_open),
+            label: Text(tr('Choose folder')),
+          ),
+        ),
+      ],
+    ),
+    1 => Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _field(_plan, 'Project plan', lines: 10),
+        Text(
+          approved
+              ? tr('This plan version is approved.')
+              : tr('Review this plan and the team before execution.'),
+        ),
+      ],
+    ),
+    2 => _teamPane(),
+    4 => _setupPane(),
+    _ => _activityPane(),
+  };
+
+  Widget _editorFor(bool narrow, bool approved) {
+    final status = _project?['status'];
     Widget button(String label, String operation, {bool enabled = true}) =>
         FilledButton.tonal(
           onPressed: _busy || !enabled ? null : () => _perform(operation),
           child: Text(tr(label)),
         );
+    final onBoard = _board && _projectOpen;
+    const tabs = ['Goal', 'Plan', 'Team', 'Activity', 'Setup'];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Padding(
-          padding: const EdgeInsets.all(AppSpace.md),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  _project == null
-                      ? tr('New project')
-                      : '${_project!['title']}',
-                  style: Theme.of(context).textTheme.titleMedium,
+        // On the board's project page the breadcrumb row carries title,
+        // status and "Unsaved changes".
+        if (!onBoard)
+          Padding(
+            padding: narrow
+                ? const EdgeInsets.symmetric(
+                    horizontal: AppSpace.md,
+                    vertical: AppSpace.xs,
+                  )
+                : const EdgeInsets.all(AppSpace.md),
+            child: Row(
+              children: [
+                Expanded(
+                  child: onBoard
+                      ? const SizedBox.shrink()
+                      : Text(
+                          _project == null
+                              ? tr('New project')
+                              : '${_project!['title']}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
                 ),
-              ),
-              Text(_status(status)),
-              if (_dirty)
-                Padding(
-                  padding: const EdgeInsets.only(left: AppSpace.sm),
-                  child: Text(tr('Unsaved changes')),
+                // Long translations shorten instead of overflowing.
+                Flexible(
+                  child: Text(
+                    _status(status),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-            ],
+                if (_dirty)
+                  Flexible(
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: AppSpace.sm),
+                      child: Text(
+                        tr('Unsaved changes'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
-        ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: AppSpace.md),
-          child: Wrap(
-            spacing: AppSpace.sm,
-            children: [
-              for (final (i, label) in [
-                'Goal',
-                'Plan',
-                'Team',
-                'Activity',
-                'Setup',
-              ].indexed)
-                ChoiceChip(
-                  label: Text(tr(label)),
-                  selected: _tab == i,
-                  onSelected: (_) => setState(() => _tab = i),
+          child: narrow
+              ? DropdownButton<int>(
+                  key: const ValueKey('project-tab-select'),
+                  isDense: true,
+                  value: _tab,
+                  isExpanded: true,
+                  onChanged: (i) => setState(() => _tab = i ?? _tab),
+                  items: [
+                    for (final (i, label) in tabs.indexed)
+                      DropdownMenuItem(value: i, child: Text(tr(label))),
+                  ],
+                )
+              : Wrap(
+                  spacing: AppSpace.sm,
+                  children: [
+                    for (final (i, label) in tabs.indexed)
+                      ChoiceChip(
+                        label: Text(tr(label)),
+                        selected: _tab == i,
+                        onSelected: (_) => setState(() => _tab = i),
+                      ),
+                  ],
                 ),
-            ],
-          ),
         ),
-        const Divider(),
-        if (_project?['processes_stopping'] == true)
-          Padding(
-            padding: const EdgeInsets.all(AppSpace.md),
-            child: Text(
-              tr('Some agent processes are still stopping. Try again shortly.'),
-            ),
-          ),
-        if (_error != null)
-          Padding(
-            padding: const EdgeInsets.all(AppSpace.md),
-            child: Text(
-              _error!,
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
-            ),
-          ),
+        Divider(height: narrow ? 1 : 16),
         Expanded(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(AppSpace.lg),
-            child: switch (_tab) {
-              0 => Column(
-                children: [
-                  _field(_title, 'Project title'),
-                  _field(_brief, 'Project goal', lines: 5),
-                  _field(_path, 'Working folder'),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton.icon(
-                      onPressed: _busy || _running
-                          ? null
-                          : () async {
-                              final folder = await PopupGuard.around(
-                                widget.chooseFolder ?? getDirectoryPath,
-                              );
-                              if (folder != null && mounted) {
-                                _path.text = folder;
-                              }
-                            },
-                      icon: const Icon(Icons.folder_open),
-                      label: Text(tr('Choose folder')),
+            // Warnings scroll with the body (a small window keeps the footer).
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (_project?['processes_stopping'] == true)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: AppSpace.md),
+                    child: Text(
+                      tr(
+                        'Some agent processes are still stopping. Try again shortly.',
+                      ),
                     ),
                   ),
-                ],
-              ),
-              1 => Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _field(_plan, 'Project plan', lines: 10),
-                  Text(
-                    approved
-                        ? tr('This plan version is approved.')
-                        : tr('Review this plan and the team before execution.'),
+                if (_error != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: AppSpace.md),
+                    child: Text(
+                      _error!,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
                   ),
-                ],
-              ),
-              2 => _teamPane(),
-              4 => _setupPane(),
-              _ => _activityPane(),
-            },
+                _tabBody(approved),
+              ],
+            ),
           ),
         ),
         const Divider(height: 1),
         Padding(
-          padding: const EdgeInsets.all(AppSpace.md),
-          child: Wrap(
-            spacing: AppSpace.sm,
-            runSpacing: AppSpace.sm,
-            children: [
-              button(
-                'Save project',
-                'save',
-                enabled: !_running && (_dirty || _project == null),
-              ),
-              button(
-                'Draft plan with AI',
-                'plan',
-                enabled: !_running && (_planTeam ?? _runTeam).isNotEmpty,
-              ),
-              button(
-                'Approve plan',
-                'review',
-                enabled:
-                    !_running &&
-                    _plan.text.trim().isNotEmpty &&
-                    (!approved || status == 'completed'),
-              ),
-              button(
-                'Run project',
-                'run',
-                enabled: !_running && approved && status == 'ready',
-              ),
-              if (_running)
-                button(
-                  status == 'pausing' ? 'Retry pause' : 'Pause project',
-                  'pause',
+          padding: EdgeInsets.all(narrow ? AppSpace.sm : AppSpace.md),
+          child: LayoutBuilder(
+            builder: (context, box) {
+              // Each action with whether it can run now, in order.
+              final actions = <(String, String, bool)>[
+                (
+                  'Save project',
+                  'save',
+                  !_running && (_dirty || _project == null),
                 ),
-              if ({'paused', 'interrupted', 'failed'}.contains(status))
-                button('Continue project', 'continue', enabled: !_dirty),
-              if (_project != null)
-                button('Delete project', 'delete', enabled: !_running),
-            ],
+                (
+                  'Draft plan with AI',
+                  'plan',
+                  !_running && (_planTeam ?? _runTeam).isNotEmpty,
+                ),
+                (
+                  'Approve plan',
+                  'review',
+                  !_running &&
+                      _plan.text.trim().isNotEmpty &&
+                      (!approved || status == 'completed'),
+                ),
+                (
+                  'Run project',
+                  'run',
+                  !_running && approved && status == 'ready',
+                ),
+                if (_running)
+                  (
+                    status == 'pausing' ? 'Retry pause' : 'Pause project',
+                    'pause',
+                    true,
+                  ),
+                if ({'paused', 'interrupted', 'failed'}.contains(status))
+                  ('Continue project', 'continue', !_dirty),
+                if (_project != null) ('Delete project', 'delete', !_running),
+              ];
+              if (!narrow && box.maxWidth >= 600) {
+                return Wrap(
+                  spacing: AppSpace.sm,
+                  runSpacing: AppSpace.sm,
+                  children: [
+                    for (final (label, op, enabled) in actions)
+                      button(label, op, enabled: enabled),
+                  ],
+                );
+              }
+              // Narrow: the one primary action for this state, the others
+              // in a menu, so the body keeps its height.
+              // Edited: saving comes first (an edit voids the approval).
+              final preferred = [
+                if (_dirty) 'save',
+                'pause',
+                'continue',
+                'run',
+                'review',
+                'save',
+                'plan',
+              ];
+              final primary = preferred
+                  .map(
+                    (op) =>
+                        actions.where((a) => a.$2 == op && a.$3).firstOrNull,
+                  )
+                  .nonNulls
+                  .firstOrNull;
+              return Row(
+                children: [
+                  if (primary != null)
+                    Expanded(child: button(primary.$1, primary.$2))
+                  else
+                    const Spacer(),
+                  const SizedBox(width: AppSpace.sm),
+                  PopupMenuButton<String>(
+                    key: const ValueKey('project-more'),
+                    tooltip: tr('More'),
+                    enabled: !_busy,
+                    onSelected: _perform,
+                    itemBuilder: (context) => [
+                      for (final (label, op, enabled) in actions)
+                        if (op != primary?.$2)
+                          PopupMenuItem(
+                            value: op,
+                            enabled: enabled,
+                            child: Text(tr(label)),
+                          ),
+                    ],
+                  ),
+                ],
+              );
+            },
           ),
         ),
       ],
@@ -1441,28 +1782,194 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
           ],
         ),
       if (_busy && !_confirming) const LinearProgressIndicator(),
-      Expanded(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            if (constraints.maxWidth >= 850) {
-              return Row(
+      if (widget.onBack == null && !_loaded)
+        // Until the first list answer: loading, or unavailable with Retry
+        // (never the old page and never zero counts).
+        Expanded(
+          child: _unavailable
+              ? _unavailableNote(center: true)
+              : const Center(
+                  key: ValueKey('board-loading'),
+                  child: CircularProgressIndicator(),
+                ),
+        )
+      else if (_board)
+        Expanded(
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              // The board stays while a project is open: its scroll position
+              // and the opened card are there to return to.
+              Offstage(
+                offstage: _projectOpen,
+                child: ExcludeFocus(
+                  excluding: _projectOpen,
+                  child: TickerMode(
+                    enabled: !_projectOpen,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (_storeError != null)
+                          Container(
+                            key: const ValueKey('board-store-fault'),
+                            color: Theme.of(context).colorScheme.errorContainer,
+                            padding: const EdgeInsets.all(AppSpace.sm),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.warning_amber),
+                                const SizedBox(width: AppSpace.sm),
+                                Expanded(
+                                  child: Text(
+                                    tr('The project list has a problem'),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        if (_unavailable) _unavailableNote(),
+                        if (_error != null && !_unavailable)
+                          Padding(
+                            padding: const EdgeInsets.all(AppSpace.sm),
+                            child: Text(
+                              _error!,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.error,
+                              ),
+                            ),
+                          ),
+                        Expanded(
+                          child: ProjectBoard(
+                            projects: _projects,
+                            tr: tr,
+                            unavailable: _unavailable,
+                            filter: _filter,
+                            onFilter: (f) => setState(() => _filter = f),
+                            onOpen: (p) => _openFromBoard(p),
+                            onNew: _busy || _unavailable
+                                ? null
+                                : () => _openFromBoard(null),
+                            onReview: (p) => _openFromBoard(p, tab: 1),
+                            onPause: _pauseFromBoard,
+                            busyIds: _quick,
+                            eventText: _eventText,
+                            controller: _boardScroll,
+                            newFocus: _newFocus,
+                            reveal: _reveal,
+                            onRevealed: _revealed,
+                            onPress: (id, down) =>
+                                down ? _pressed.add(id) : _pressed.remove(id),
+                            cardFocus: (id) => _cardFocus[id] ??= FocusNode(
+                              debugLabel: 'card $id',
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              if (_projectOpen)
+                Material(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(
+                          AppSpace.sm,
+                          AppSpace.xs,
+                          AppSpace.sm,
+                          0,
+                        ),
+                        child: Row(
+                          children: [
+                            TextButton(
+                              key: const ValueKey('breadcrumb-projects'),
+                              // Through the shell's guard when there is one.
+                              onPressed: () => unawaited(
+                                widget.onBoard?.call() ?? backToBoard(),
+                              ),
+                              child: Text(tr('Projects')),
+                            ),
+                            const Icon(Icons.chevron_right, size: 18),
+                            Expanded(
+                              child: Text(
+                                _project == null
+                                    ? tr('New project')
+                                    : '${_project!['title']}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            Flexible(
+                              child: Text(
+                                [
+                                  _status(_project?['status']),
+                                  if (_dirty) tr('Unsaved changes'),
+                                ].join(' · '),
+                                key: const ValueKey('project-status-line'),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                textAlign: TextAlign.end,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Expanded(child: _editor()),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        )
+      else ...[
+        if (_loaded && widget.onBack == null)
+          Padding(
+            key: const ValueKey('board-needs-update'),
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpace.md,
+              vertical: AppSpace.xs,
+            ),
+            child: Text(
+              tr(
+                'The AI Project Center backend needs an update for the board.',
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
+        Expanded(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              if (constraints.maxWidth >= 850) {
+                return Row(
+                  children: [
+                    SizedBox(width: 250, child: _projectList()),
+                    const VerticalDivider(width: 1),
+                    Expanded(child: _editor()),
+                  ],
+                );
+              }
+              return Column(
                 children: [
-                  SizedBox(width: 250, child: _projectList()),
-                  const VerticalDivider(width: 1),
+                  SizedBox(
+                    // A small window keeps room for the editor.
+                    height: min(150, constraints.maxHeight * 0.3),
+                    child: _projectList(),
+                  ),
+                  const Divider(height: 1),
                   Expanded(child: _editor()),
                 ],
               );
-            }
-            return Column(
-              children: [
-                SizedBox(height: 150, child: _projectList()),
-                const Divider(height: 1),
-                Expanded(child: _editor()),
-              ],
-            );
-          },
+            },
+          ),
         ),
-      ),
+      ],
     ],
   );
 }

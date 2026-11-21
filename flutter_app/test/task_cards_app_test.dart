@@ -65,6 +65,7 @@ for line in sys.stdin:
  elif m=='features.summary' and Path('summary.json').exists():r=json.loads(Path('summary.json').read_text())
  elif m=='features.call' and Path('projects.json').exists():
   ps=json.loads(Path('projects.json').read_text());r={'projects':ps,'profiles':[],'runtimes':[],'project':ps[0] if ps else None}
+  if Path('board').exists():r['capabilities']=['summary2','board']
  elif m=='models.choose_preview':
   old=settings.get('provider_models',{}).get(p['provider']);r={'preview':'choose-'+json.dumps([p['provider'],old,p['model']]),'empty':old==p['model'],'old':old,'new':p['model'],'line':'Fixture provider → example-model','focus':[]}
  elif m in ('models.choose_apply','models.choose_undo'):
