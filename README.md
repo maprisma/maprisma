@@ -50,6 +50,19 @@ rounded (6 px)**, **Rounded (12 px)** or **Square**; every control follows in th
 dialogs and menus the full radius, buttons, drop-downs, fields and chips at most 8 px, check boxes
 and progress bars at most 4 px).
 
+## AI Project Center
+
+Plan and run a project with a team of agents: give it a goal and a folder, let an agent draft the
+plan (or write your own), choose a lead, implementers and a read-only reviewer, review and approve
+the plan, then run it. Every run is supervised: Maprisma stops what an agent started when you pause
+or close it, a project that was interrupted is marked for review instead of being run again, and
+the header shows how many projects run, wait for review or need attention.
+
+![AI Project Center: a project's goal, its plan and its team of agents with their roles and access](docs/manual/images/project-center.jpg)
+
+Reports, Ask AI and AI Project Center run as their own feature backends next to the app, so one
+that fails is restarted on its own and the rest keeps working.
+
 ## Install
 
 Maprisma runs on x86_64 Linux with glibc 2.34 and GLib 2.68 or newer (Arch, Fedora, Debian 12+,
