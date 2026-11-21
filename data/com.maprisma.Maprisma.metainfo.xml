@@ -25,6 +25,18 @@
   <url type="bugtracker">https://github.com/uBruckhaus/Asterism/issues</url>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.15.0" date="2026-11-21">
+      <description>
+        <p>AI Project Center: plan and run a project with a team of agents. Give it a goal and a folder, let
+          an agent draft the plan, choose a lead, implementers and a read-only reviewer, approve the plan
+          and run it; every run is supervised, and an interrupted project is marked for review instead
+          of being run again.</p>
+        <p>Reports, Ask AI and AI Project Center run as their own feature backends: one that fails is
+          started again on its own, updates are checked before they run, and Ask AI sees the same facts
+          as inside the app.</p>
+        <p>Undo and other follow-ups stay valid as long as Maprisma keeps them, however long the session.</p>
+      </description>
+    </release>
     <release version="0.14.10" date="2026-11-20">
       <description>
         <p>Configure for this PC: each local LLM provider gets settings worked out for this PC's graphics
