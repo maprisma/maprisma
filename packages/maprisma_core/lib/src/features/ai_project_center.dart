@@ -330,6 +330,8 @@ final class AiProjectCenterPlugin {
             item['next_member'] > 8 ||
             !{'planning', 'running', 'setup'}.contains(item['phase']) ||
             item['needs_reconciliation'] is! bool ||
+            (item['assignment_started'] != null &&
+                item['assignment_started'] is! bool) ||
             item['events'] is! List ||
             (item['events'] as List).length > 50) {
           throw const FormatException();
@@ -607,9 +609,31 @@ final class AiProjectCenterPlugin {
       if (profile == null || !_validArgv(profile[key])) {
         throw ServiceError('project_agent_unavailable');
       }
+      if (!_validTemplate(profile, key)) {
+        throw ServiceError('project_profile_invalid');
+      }
       _memberOptions(member, profile);
     }
     return ordered;
+  }
+
+  /// The command template a dispatch accepts (the same check for approval,
+  /// launch, the board and the dispatch itself): a valid argv with `{prompt}`
+  /// as a word of its own unless the prompt goes to stdin, and nothing that
+  /// would turn the options after it into prompt words or name a session.
+  static bool _validTemplate(Map<String, dynamic> profile, String key) {
+    final value = profile[key];
+    if (!_validArgv(value)) return false;
+    final template = (value as List).cast<String>();
+    if (profile['stdin'] != true && !template.contains('{prompt}')) {
+      return false;
+    }
+    return !template.any(
+      (arg) =>
+          arg.contains('{prompt}') && arg != '{prompt}' ||
+          arg.contains('{session}') ||
+          arg == '--',
+    );
   }
 
   static bool _validArgv(Object? value) =>
@@ -808,6 +832,7 @@ final class AiProjectCenterPlugin {
             'status': 'draft',
             'phase': 'planning',
             'next_member': 0,
+            'assignment_started': false,
             'output': '',
             'handoff': '',
             'needs_reconciliation': false,
@@ -878,6 +903,7 @@ final class AiProjectCenterPlugin {
       item['approved_digest'] = null;
       item['status'] = plan.isEmpty ? 'draft' : 'awaiting_review';
       item['next_member'] = 0;
+      item['assignment_started'] = false;
       item.remove('setup_proposal');
       item.remove('setup_context');
     }
@@ -948,6 +974,7 @@ final class AiProjectCenterPlugin {
     'next_member',
     'checkpoint_kind',
     'run_id',
+    'assignment_started',
   ];
 
   /// Setup only drafts a proposal; it returns the project to the state it was
@@ -964,6 +991,7 @@ final class AiProjectCenterPlugin {
           ? 'draft'
           : 'awaiting_review';
       item['next_member'] = 0;
+      item['assignment_started'] = false;
       item['checkpoint_kind'] = 'none';
     }
   }
@@ -1217,6 +1245,7 @@ final class AiProjectCenterPlugin {
         : 'awaiting_review';
     item['phase'] = 'planning';
     item['next_member'] = 0;
+    item['assignment_started'] = false;
     _event(
       item,
       'setup_applied',
@@ -1346,6 +1375,9 @@ final class AiProjectCenterPlugin {
     }
     if (!continuing) {
       item['next_member'] = 0;
+      // A fresh attempt: its first member has not started (Continue keeps
+      // the checkpoint's value).
+      item['assignment_started'] = false;
       if (item['needs_reconciliation'] != true) {
         item['output'] = '';
         item['handoff'] = '';
@@ -1458,17 +1490,9 @@ final class AiProjectCenterPlugin {
             : _prompt(item, member, phase);
         final stdin = profile['stdin'] == true;
         final template = (profile[key] as List).cast<String>();
-        if (!stdin && !template.contains('{prompt}')) {
-          throw ServiceError('project_profile_invalid');
-        }
         // Model, provider and subagent options follow the template; a "--"
         // would turn them into prompt words.
-        if (template.any(
-          (arg) =>
-              arg.contains('{prompt}') && arg != '{prompt}' ||
-              arg.contains('{session}') ||
-              arg == '--',
-        )) {
+        if (!_validTemplate(profile, key)) {
           throw ServiceError('project_profile_invalid');
         }
         final argv = [
@@ -1485,6 +1509,9 @@ final class AiProjectCenterPlugin {
           'assignment',
           '${profile['name'] ?? member['agent']}: ${member['role']}',
         );
+        // The board's evidence: the member at next_member was dispatched
+        // (a team setup keeps and restores the team's own value).
+        if (phase != 'setup') item['assignment_started'] = true;
         _put(item);
         // Re-check host policy at dispatch time, including later teammates;
         // a rule may have changed while the previous assignment was running.
@@ -1610,6 +1637,7 @@ final class AiProjectCenterPlugin {
         }
         item['next_member'] = (item['next_member'] as int) + 1;
         item['checkpoint_kind'] = 'assignment';
+        if (phase != 'setup') item['assignment_started'] = false;
         _event(
           item,
           'assignment_done',
@@ -1797,6 +1825,7 @@ final class AiProjectCenterPlugin {
     _display = null;
     _displayFailed = null;
     _approvalMemo.clear();
+    _readinessMemo.clear();
   }
 
   /// A launch's fresh snapshot becomes the display snapshot.
@@ -1813,6 +1842,7 @@ final class AiProjectCenterPlugin {
     _displayFailed = null;
     _displayVersion++;
     _approvalMemo.clear();
+    _readinessMemo.clear();
   }
 
   /// Whether [item]'s approval is valid, for display, from the cached
@@ -1822,6 +1852,39 @@ final class AiProjectCenterPlugin {
         item['approved_version'] != item['plan_version']) {
       return false;
     }
+    if (!_ensureDisplay()) return false;
+    final id = item['id'] as String;
+    final revision = item['revision'] as int;
+    final memo = _approvalMemo[id];
+    if (memo != null && memo.$1 == revision && memo.$2 == _displayVersion) {
+      return memo.$3;
+    }
+    bool valid;
+    try {
+      valid =
+          item['approved_digest'] ==
+          _approval(item, _display!.profiles, _display!.runtimes);
+    } on Object {
+      valid = false;
+    }
+    _approvalMemo[id] = (revision, _displayVersion, valid);
+    return valid;
+  }
+
+  /// The display snapshot, rebuilt when it is missing, of another discovery
+  /// generation or 60 seconds old; false while it cannot be read.
+  bool _ensureDisplay() {
+    // One answer (a list, a summary) looks at the snapshot once, at its
+    // first need, and keeps that result to its end.
+    if (_pinned > 0 && _pinResult != null) return _pinResult!;
+    final ok = _checkDisplay();
+    if (_pinned > 0) _pinResult = ok;
+    return ok;
+  }
+
+  bool? _pinResult;
+
+  bool _checkDisplay() {
     final now = _clock();
     final display = _display;
     if (display == null ||
@@ -1853,30 +1916,30 @@ final class AiProjectCenterPlugin {
       _displayFailed = null;
       _displayVersion++;
       _approvalMemo.clear();
+      _readinessMemo.clear();
     }
-    final id = item['id'] as String;
-    final revision = item['revision'] as int;
-    final memo = _approvalMemo[id];
-    if (memo != null && memo.$1 == revision && memo.$2 == _displayVersion) {
-      return memo.$3;
-    }
-    bool valid;
-    try {
-      valid =
-          item['approved_digest'] ==
-          _approval(item, _display!.profiles, _display!.runtimes);
-    } on Object {
-      valid = false;
-    }
-    _approvalMemo[id] = (revision, _displayVersion, valid);
-    return valid;
+    return true;
   }
+
+  static final _bucketOrder = [
+    for (final bucket in ProjectBucket.values) bucket.code,
+  ];
 
   /// Statuses whose stage or bucket depends on the approval.
   static const _approvalMatters = {'ready', 'paused', 'interrupted', 'failed'};
 
   /// The derived state of [item] (docs/plan-main-layout.md).
-  ProjectState stateOf(Map<String, dynamic> item) {
+  ProjectState stateOf(Map<String, dynamic> item) => _derive(item).state;
+
+  /// Everything derived from [item] at once (one lock read, one readiness
+  /// lookup), so a card, its summary and its fields agree.
+  ({
+    ProjectState state,
+    bool stopping,
+    bool approvalValid,
+    List<Map<String, String>> launchIssues,
+  })
+  _derive(Map<String, dynamic> item) {
     final id = item['id'] as String;
     final stopping = !_active.containsKey(id) && _runHeld(id);
     final needsApproval =
@@ -1884,21 +1947,384 @@ final class AiProjectCenterPlugin {
         (item['phase'] == 'setup' &&
             item['setup_return'] is Map &&
             _approvalMatters.contains((item['setup_return'] as Map)['status']));
-    return projectState(
+    final approvalValid = needsApproval && _displayApprovalValid(item);
+    // Only an approved ready project needs its launch checked (a draft never
+    // makes the summary read profiles).
+    final launch = approvalValid && item['status'] == 'ready'
+        ? _readiness(item).launch
+        : const <Map<String, String>>[];
+    final state = projectState(
       item,
       ProjectFacts(
-        approvalValid: needsApproval && _displayApprovalValid(item),
+        approvalValid: approvalValid,
         processesStopping: stopping,
+        launchBlocked: launch.isNotEmpty,
       ),
+    );
+    return (
+      state: state,
+      stopping: stopping,
+      approvalValid: approvalValid,
+      launchIssues: launch,
     );
   }
 
-  Map<String, dynamic> summary() {
+  /// The project's issues and what would stop its run now, memoized by its
+  /// revision and the display snapshot's version: the summary's 2-second
+  /// poll reads memory; a folder is looked at again when the snapshot is
+  /// rebuilt (a new discovery generation, a refresh, after 60 seconds).
+  ({List<Map<String, String>> project, List<Map<String, String>> launch})
+  _readiness(Map<String, dynamic> item) {
+    final id = item['id'] as String;
+    final revision = item['revision'] as int;
+    final display = _ensureDisplay() ? _display : null;
+    final memo = _readinessMemo[id];
+    if (display != null &&
+        memo != null &&
+        memo.revision == revision &&
+        memo.version == _displayVersion) {
+      return (project: memo.project, launch: memo.launch);
+    }
+    final project = _projectIssues(item);
+    final launch = display == null
+        ? const <Map<String, String>>[]
+        : _unique([
+            ...project,
+            for (final member in _assignmentOrder(item, 'execution'))
+              ..._memberIssues(
+                member,
+                'execution',
+                display.profiles,
+                display.runtimes,
+              ),
+          ]);
+    if (display != null) {
+      _readinessMemo[id] = (
+        revision: revision,
+        version: _displayVersion,
+        project: project,
+        launch: launch,
+      );
+    }
+    return (project: project, launch: launch);
+  }
+
+  /// Inside a list or a summary: the snapshot is not rebuilt meanwhile.
+  int _pinned = 0;
+
+  T _withPinnedDisplay<T>(T Function() answer) {
+    if (_pinned == 0) _pinResult = null;
+    _pinned++;
+    try {
+      return answer();
+    } finally {
+      _pinned--;
+      if (_pinned == 0) _pinResult = null;
+    }
+  }
+
+  /// How often a project's folder was looked at (tests: the summary's poll
+  /// must not stat folders).
+  int folderChecks = 0;
+
+  final _readinessMemo =
+      <
+        String,
+        ({
+          int revision,
+          int version,
+          List<Map<String, String>> project,
+          List<Map<String, String>> launch,
+        })
+      >{};
+
+  static List<Map<String, String>> _unique(List<Map<String, String>> issues) {
+    final seen = <String>{};
+    return [
+      for (final issue in issues)
+        if (seen.add(issue['code']!)) issue,
+    ];
+  }
+
+  /// Project-level problems, for every status: the folder gone or no longer
+  /// the saved one, no lead, no goal (task 087).
+  List<Map<String, String>> _projectIssues(Map<String, dynamic> item) {
+    folderChecks++;
+    final issues = <Map<String, String>>[];
+    try {
+      if (_folder(item['path']) != item['path']) {
+        issues.add({'code': 'folder_changed'});
+      }
+    } on Object {
+      issues.add({'code': 'folder_missing'});
+    }
+    final team = item['team'];
+    if (team is! List ||
+        team.whereType<Map>().where((m) => m['role'] == 'lead').length != 1) {
+      issues.add({'code': 'no_lead'});
+    }
+    if ('${item['brief'] ?? ''}'.trim().isEmpty) {
+      issues.add({'code': 'empty_goal'});
+    }
+    return issues;
+  }
+
+  /// The members of [phase] (`planning` or `execution`) in launch order, as
+  /// `_members` orders them, but tolerant: an incomplete team still lists.
+  List<Map> _assignmentOrder(Map<String, dynamic> item, String phase) {
+    final own = item['plan_team'] is List;
+    final team =
+        ((phase == 'planning' && own ? item['plan_team'] : item['team'])
+                    as List? ??
+                const [])
+            .whereType<Map>()
+            .toList();
+    return [
+      ...team.where((m) => m['role'] == 'lead'),
+      if (phase == 'execution' || own)
+        ...team.where((m) => m['role'] == 'implementer'),
+      ...team.where((m) => m['role'] == 'reviewer'),
+    ];
+  }
+
+  /// The effective assignments of [phase] with their identity, the agent's
+  /// display name and their own issues (from the display snapshot; none
+  /// while it cannot be read).
+  List<Map<String, dynamic>> _assignments(
+    Map<String, dynamic> item,
+    String phase,
+  ) {
+    final own = item['plan_team'] is List;
+    final display = _ensureDisplay() ? _display : null;
+    return [
+      for (final (position, member) in _assignmentOrder(item, phase).indexed)
+        {
+          'phase': phase,
+          'position': position,
+          'agent': member['agent'],
+          'name':
+              display?.profiles[member['agent']]?['name'] ??
+              '${member['agent']}',
+          'role': phase == 'planning' && own && member['role'] == 'implementer'
+              ? 'contributor'
+              : member['role'],
+          for (final key in ['model', 'provider', 'runtime'])
+            if (member[key] is String && (member[key] as String).isNotEmpty)
+              key: member[key],
+          'issues': display == null
+              ? const <Map<String, String>>[]
+              : _memberIssues(
+                  member,
+                  phase,
+                  display.profiles,
+                  display.runtimes,
+                ),
+        },
+    ];
+  }
+
+  /// What the launch itself would refuse for [member] (the same checks as
+  /// `_members` and `_memberOptions`, against the display snapshot).
+  List<Map<String, String>> _memberIssues(
+    Map member,
+    String phase,
+    Map<String, Map<String, dynamic>> profiles,
+    Map<String, Map<String, dynamic>> runtimes,
+  ) {
+    final profile = profiles[member['agent']];
+    final key =
+        phase == 'planning' ||
+            member['role'] == 'reviewer' ||
+            member['access'] == 'read-only'
+        ? 'plan_argv'
+        : 'run_argv';
+    if (profile == null || !_validArgv(profile[key])) {
+      return [
+        {'code': 'agent_unavailable'},
+      ];
+    }
+    if (!_validTemplate(profile, key)) {
+      return [
+        {'code': 'profile_invalid'},
+      ];
+    }
+    try {
+      _memberOptions(Map<String, dynamic>.from(member), profile, runtimes);
+      return const [];
+    } on ServiceError catch (error) {
+      return [
+        {
+          'code': switch (error.code) {
+            'project_runtime_unavailable' => 'runtime_stopped',
+            'project_runtime_model_unavailable' => 'model_unavailable',
+            'project_provider_unsupported' => 'provider_unavailable',
+            'project_runtime_required' => 'runtime_required',
+            'project_access_unsupported' => 'access_unsupported',
+            'project_model_unsupported' => 'model_unsupported',
+            'project_subagents_unsupported' => 'subagents_unsupported',
+            _ => 'launch_unavailable',
+          },
+        },
+      ];
+    } on Object {
+      return [
+        {'code': 'launch_unavailable'},
+      ];
+    }
+  }
+
+  /// The assignment the board marks: active, stopping, stopped or next; null
+  /// when no assignment of a team phase is concerned or the position names
+  /// none (team setup shows its helper instead).
+  Map<String, dynamic>? _activeAssignment(
+    Map<String, dynamic> item,
+    bool stopping,
+    int planningCount,
+    int executionCount,
+  ) {
+    final status = item['status'];
+    if (status == 'ready') {
+      // The run starts here; while an old supervisor still stops (a team
+      // setup interrupted by a restart) nothing of the team is concerned.
+      return stopping || executionCount == 0
+          ? null
+          : {'phase': 'execution', 'position': 0, 'state': 'next'};
+    }
+    final phase = switch (item['phase']) {
+      'planning' => 'planning',
+      'running' => 'execution',
+      _ => null,
+    };
+    const teamStatuses = {
+      'planning',
+      'running',
+      'reviewing',
+      'pausing',
+      'paused',
+      'interrupted',
+      'failed',
+    };
+    if (phase == null || !teamStatuses.contains(status)) return null;
+    final position = item['next_member'];
+    final count = phase == 'planning' ? planningCount : executionCount;
+    if (position is! int || position < 0 || position >= count) return null;
+    // A team setup's own events: its lock is the helper's, not a member's.
+    final events = item['events'] as List? ?? const [];
+    final lastType = events.isEmpty ? null : (events.last as Map)['type'];
+    final setupLast = lastType is String && lastType.startsWith('setup');
+    final String state;
+    if (stopping && setupLast) {
+      // The lock belongs to the team setup's helper, not to a member.
+      return null;
+    } else if (stopping || status == 'pausing') {
+      state = 'stopping';
+    } else if (const {'planning', 'running', 'reviewing'}.contains(status)) {
+      state = _active.containsKey(item['id']) ? 'active' : 'stopped';
+    } else {
+      // Stopped right after an assignment ended (nothing dispatched since):
+      // the next one never started; otherwise, and for a store from before
+      // this field, this one stopped while it ran.
+      state = item['assignment_started'] == false ? 'next' : 'stopped';
+    }
+    return {'phase': phase, 'position': position, 'state': state};
+  }
+
+  /// One project on the board (task 087): the list's old keys plus
+  /// everything a card shows.
+  Map<String, dynamic> _boardItem(
+    Map<String, dynamic> item,
+    ({
+      ProjectState state,
+      bool stopping,
+      bool approvalValid,
+      List<Map<String, String>> launchIssues,
+    })
+    derived,
+  ) {
+    final state = derived.state;
+    final events = item['events'] as List? ?? const [];
+    final setupAgent = item['setup_agent'];
+    final planning = _assignments(item, 'planning');
+    final execution = _assignments(item, 'execution');
+    return {
+      for (final key in ['id', 'title', 'path', 'status', 'revision'])
+        key: item[key],
+      'updated_at': item['updated_at'],
+      'phase': item['phase'],
+      'run_id': item['run_id'],
+      ...state.toJson(),
+      // As `get` reports it (the same snapshot).
+      'approval_valid': _displayApprovalValid(item),
+      'needs_reconciliation': item['needs_reconciliation'] == true,
+      'processes_stopping': derived.stopping,
+      'issues': state.activity == 'approved_blocked'
+          ? derived.launchIssues
+          : _readiness(item).project,
+      'planning': planning,
+      'execution': execution,
+      'active': _activeAssignment(
+        item,
+        derived.stopping,
+        planning.length,
+        execution.length,
+      ),
+      'setup_agent': setupAgent is String
+          ? {
+              'agent': setupAgent,
+              'name':
+                  (_ensureDisplay() ? _display : null)
+                      ?.profiles[setupAgent]?['name'] ??
+                  setupAgent,
+            }
+          : null,
+      'setup_error': item['setup_error'],
+      'last_event': events.isEmpty
+          ? null
+          : Map<String, dynamic>.from(events.last as Map),
+    };
+  }
+
+  /// The board (task 087): most urgent first, then the latest change;
+  /// every card and the summary from the same derived facts.
+  Map<String, dynamic> _list() {
+    // Most urgent first, then the latest change (task 087); every card
+    // and the summary from the same derived facts.
+    final derived = {
+      for (final item in _projects.values) item['id'] as String: _derive(item),
+    };
+    final board =
+        [
+          for (final item in _projects.values)
+            _boardItem(item, derived[item['id']]!),
+        ]..sort((a, b) {
+          final order = _bucketOrder
+              .indexOf(a['bucket'] as String)
+              .compareTo(_bucketOrder.indexOf(b['bucket'] as String));
+          if (order != 0) return order;
+          final time = (b['updated_at'] as String).compareTo(
+            a['updated_at'] as String,
+          );
+          return time != 0
+              ? time
+              : (a['id'] as String).compareTo(b['id'] as String);
+        });
+    return {
+      'projects': board,
+      'summary': summary({
+        for (final entry in derived.entries) entry.key: entry.value.state,
+      }),
+    };
+  }
+
+  Map<String, dynamic> summary([Map<String, ProjectState>? states]) =>
+      _withPinnedDisplay(() => _summary(states));
+
+  Map<String, dynamic> _summary(Map<String, ProjectState>? states) {
     final counts = {for (final bucket in ProjectBucket.values) bucket: 0};
     var running = 0, pausing = 0, waiting = 0;
     final byAgent = <String, int>{};
     for (final item in _projects.values) {
-      final state = stateOf(item);
+      final state = states?[item['id']] ?? stateOf(item);
       counts[state.bucket] = counts[state.bucket]! + 1;
       final status = item['status'];
       if (state.activity == 'stopping') {
@@ -1969,29 +2395,7 @@ final class AiProjectCenterPlugin {
       case 'summary':
         return summary();
       case 'list':
-        final sorted = _projects.values.toList()
-          ..sort(
-            (a, b) => (b['updated_at'] as String).compareTo(
-              a['updated_at'] as String,
-            ),
-          );
-        return {
-          'projects': [
-            for (final item in sorted)
-              {
-                for (final key in [
-                  'id',
-                  'title',
-                  'path',
-                  'status',
-                  'revision',
-                  'updated_at',
-                ])
-                  key: item[key],
-              },
-          ],
-          'summary': summary(),
-        };
+        return _withPinnedDisplay(_list);
       case 'get':
         return {'project': _view(_project(params))};
       case 'save':

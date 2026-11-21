@@ -2068,11 +2068,10 @@ void main() {
         {'agent': 'fixture', 'role': 'lead', 'model': 'm'},
       ],
     );
-    await plugin.call('plan', {'id': item['id'], 'revision': item['revision']});
-    await waitUntil(() => plugin.summary()['running'] == 0);
-    expect(
-      (await project(plugin, item['id'] as String))['events'].last['text'],
-      'project_profile_invalid',
+    // Refused before anything starts (the same check as the dispatch's).
+    await expectLater(
+      plugin.call('plan', {'id': item['id'], 'revision': item['revision']}),
+      throwsA(errorCode('project_profile_invalid')),
     );
     expect(commands, isEmpty);
   });
@@ -2560,6 +2559,732 @@ void main() {
       counting.summary();
       counting.summary();
       expect(reads, before);
+    });
+  });
+
+  group('board projection (task 087)', () {
+    Future<void> edit(String id, void Function(Map item) change) async {
+      await plugin.shutdown();
+      final state = File('${plugin.directory}/projects.json');
+      final body = jsonDecode(state.readAsStringSync()) as Map;
+      for (final item in (body['projects'] as List).cast<Map>()) {
+        if (item['id'] == id) change(item);
+      }
+      state.writeAsStringSync(jsonEncode(body));
+      plugin = AiProjectCenterPlugin(
+        temporary.path,
+        agentProfiles: () {
+          final fail = profilesFail;
+          if (fail != null) return fail();
+          return profiles;
+        },
+        runtimeProfiles: () => runtimes,
+        filesystem: TestPosix(),
+        runner: (argv, cwd, environment, input, _, _) async {
+          commands.add(argv);
+          directories.add(cwd);
+          final process = FakeProjectProcess();
+          processes.add(process);
+          return process;
+        },
+      );
+    }
+
+    Future<List<Map<String, dynamic>>> board() async =>
+        ((await plugin.call('list', {}))['projects'] as List)
+            .cast<Map<String, dynamic>>();
+
+    Future<Map<String, dynamic>> card(String id) async =>
+        (await board()).singleWhere((p) => p['id'] == id);
+
+    test('a card carries the state, the teams and the last event', () async {
+      addPartner();
+      final item = await save(
+        plan: 'A saved plan.',
+        team: [
+          {'agent': 'fixture', 'role': 'lead'},
+          {'agent': 'partner', 'role': 'implementer', 'model': 'known-model'},
+          {'agent': 'fixture', 'role': 'reviewer'},
+        ],
+      );
+      final c = await card(item['id'] as String);
+      for (final key in [
+        'id',
+        'title',
+        'path',
+        'status',
+        'revision',
+        'updated_at',
+        'phase',
+        'run_id',
+        'stage',
+        'activity',
+        'second',
+        'bucket',
+        'approval_valid',
+        'needs_reconciliation',
+        'processes_stopping',
+        'issues',
+        'planning',
+        'execution',
+        'active',
+        'setup_agent',
+        'setup_error',
+        'last_event',
+      ]) {
+        expect(c.containsKey(key), isTrue, reason: key);
+      }
+      expect(c['stage'], 'approval');
+      expect(c['activity'], 'needs_review');
+      expect(c['bucket'], 'needs_you');
+      expect(c['issues'], isEmpty);
+      // Execution: lead, implementers, reviewer; names from the profiles.
+      expect(
+        [for (final a in c['execution'] as List) a['role']],
+        ['lead', 'implementer', 'reviewer'],
+      );
+      expect((c['execution'] as List)[1]['name'], 'Partner agent');
+      expect((c['execution'] as List)[1]['model'], 'known-model');
+      expect((c['execution'] as List)[1]['position'], 1);
+      // Planning without its own team: the lead and the reviewer.
+      expect(
+        [for (final a in c['planning'] as List) a['role']],
+        ['lead', 'reviewer'],
+      );
+      expect(c['last_event'], isA<Map>());
+    });
+
+    test(
+      'a planning team of its own: an implementer reads contributor',
+      () async {
+        addPartner();
+        final item = await save(plan: 'A saved plan.');
+        await edit(item['id'] as String, (p) {
+          p['plan_team'] = [
+            {'agent': 'fixture', 'role': 'lead', 'access': 'read-only'},
+            {'agent': 'partner', 'role': 'implementer', 'access': 'read-only'},
+          ];
+        });
+        final c = await card(item['id'] as String);
+        expect(
+          [for (final a in c['planning'] as List) a['role']],
+          ['lead', 'contributor'],
+        );
+      },
+    );
+
+    test('a broken draft still lists, with its issues', () async {
+      final item = await save(plan: '');
+      await edit(item['id'] as String, (p) {
+        p['team'] = [
+          {'agent': 'gone', 'role': 'implementer'},
+        ];
+        p['brief'] = ' ';
+        p['path'] = '${temporary.path}/no-such-folder';
+      });
+      final c = await card(item['id'] as String);
+      expect(
+        [for (final i in c['issues'] as List) i['code']],
+        ['folder_missing', 'no_lead', 'empty_goal'],
+      );
+      final member = (c['execution'] as List).single as Map;
+      expect(member['name'], 'gone');
+      expect(
+        [for (final i in member['issues'] as List) i['code']],
+        ['agent_unavailable'],
+      );
+    });
+
+    test('the active assignment: next, active, stopped, stopping', () async {
+      final ready = await approve(await save(plan: 'A saved plan.'));
+      expect((await card(ready['id'] as String))['active'], {
+        'phase': 'execution',
+        'position': 0,
+        'state': 'next',
+      });
+      await plugin.call('run', {
+        'id': ready['id'],
+        'revision': ready['revision'],
+      });
+      await waitUntil(() => processes.isNotEmpty);
+      expect((await card(ready['id'] as String))['active'], {
+        'phase': 'execution',
+        'position': 0,
+        'state': 'active',
+      });
+      await processes.last.finish('Done.', 1);
+      await waitUntil(() => plugin.summary()['running'] == 0);
+      final failed = await card(ready['id'] as String);
+      expect(failed['status'], 'failed');
+      expect((failed['active'] as Map)['state'], 'stopped');
+      // A supervisor of an earlier controller still holds the run lock.
+      final runs = Directory('${plugin.directory}/runs')
+        ..createSync(recursive: true);
+      final io = Posix();
+      final fd = io.openAt(
+        -100,
+        '${runs.path}/${ready['id']}.lock',
+        Posix.noFollow | 0x40 | 0x2,
+        0x180,
+      );
+      addTearDown(() => io.close(fd));
+      expect(io.tryFlock(fd, shared: true), isTrue);
+      final stopping = await card(ready['id'] as String);
+      expect(stopping['processes_stopping'], isTrue);
+      expect((stopping['active'] as Map)['state'], 'stopping');
+    });
+
+    test('Approved · blocked: a stopped runtime, then Ready without a new '
+        'approval', () async {
+      addRuntime();
+      final item = await approve(
+        await save(
+          plan: 'A saved plan.',
+          team: [
+            {
+              'agent': 'fixture',
+              'role': 'lead',
+              'runtime': 'runtime',
+              'provider': 'local-provider',
+              'model': 'tiny-model',
+            },
+          ],
+        ),
+      );
+      final id = item['id'] as String;
+      expect((await card(id))['activity'], 'ready_to_run');
+      runtimes.single['running'] = false;
+      plugin.discoveryGeneration++;
+      var c = await card(id);
+      expect(c['activity'], 'approved_blocked');
+      expect(c['bucket'], 'needs_you');
+      expect(c['approval_valid'], isTrue);
+      expect(
+        [for (final i in c['issues'] as List) i['code']],
+        ['runtime_stopped'],
+      );
+      expect(plugin.summary()['needs_you'], 1);
+      expect(plugin.summary()['ready'], 0);
+      // The model gone instead: blocked too.
+      runtimes.single['running'] = true;
+      runtimes.single['models'] = ['other-model'];
+      plugin.discoveryGeneration++;
+      c = await card(id);
+      expect(c['activity'], 'approved_blocked');
+      expect(
+        [for (final i in c['issues'] as List) i['code']],
+        ['model_unavailable'],
+      );
+      // Fixed: Ready again, the same approval.
+      runtimes.single['models'] = ['tiny-model'];
+      plugin.discoveryGeneration++;
+      c = await card(id);
+      expect(c['activity'], 'ready_to_run');
+      expect(c['bucket'], 'ready');
+      expect(c['revision'], item['revision']);
+    });
+
+    test('Approved · blocked: the folder gone', () async {
+      final folder = Directory('${temporary.path}/folder')..createSync();
+      final item = await approve(
+        await save(plan: 'A saved plan.', path: folder.path),
+      );
+      folder.deleteSync();
+      final c = await card(item['id'] as String);
+      expect(c['activity'], 'approved_blocked');
+      expect(
+        [for (final i in c['issues'] as List) i['code']],
+        ['folder_missing'],
+      );
+      folder.createSync();
+      // Seen again with the next snapshot (a refresh, a new generation).
+      plugin.discoveryGeneration++;
+      expect((await card(item['id'] as String))['activity'], 'ready_to_run');
+    });
+
+    test('most urgent first, then the latest change', () async {
+      final draft = await save(title: 'Draft');
+      final review = await save(title: 'Review', plan: 'A saved plan.');
+      final broken = await save(title: 'Broken', plan: 'A saved plan.');
+      await edit(broken['id'] as String, (p) {
+        p['status'] = 'failed';
+        p['phase'] = 'running';
+      });
+      expect(
+        [for (final p in await board()) p['title']],
+        ['Broken', 'Review', 'Draft'],
+      );
+      expect(draft['id'], isNot(review['id']));
+    });
+
+    test('one profile read for the whole board', () async {
+      var reads = 0;
+      profilesFail = () {
+        reads++;
+        return profiles;
+      };
+      for (final title in ['A', 'B', 'C', 'D']) {
+        await approve(await save(title: title, plan: 'A saved plan.'));
+      }
+      plugin.discoveryGeneration++;
+      reads = 0;
+      await board();
+      expect(reads, 1);
+      profilesFail = null;
+    });
+
+    test('the team in launch order whatever order it was saved in', () async {
+      addPartner();
+      final item = await save(
+        plan: 'A saved plan.',
+        team: [
+          {'agent': 'fixture', 'role': 'reviewer'},
+          {'agent': 'partner', 'role': 'implementer'},
+          {'agent': 'fixture', 'role': 'lead'},
+        ],
+      );
+      final c = await card(item['id'] as String);
+      expect(
+        [for (final a in c['execution'] as List) a['role']],
+        ['lead', 'implementer', 'reviewer'],
+      );
+      expect([for (final a in c['planning'] as List) a['position']], [0, 1]);
+      expect(
+        [for (final a in c['planning'] as List) a['role']],
+        ['lead', 'reviewer'],
+      );
+    });
+
+    test('blocked exactly when the launch refuses: a local provider without '
+        'its runtime', () async {
+      profiles.first['model_option'] = '--model';
+      final item = await approve(
+        await save(
+          plan: 'A saved plan.',
+          team: [
+            {'agent': 'fixture', 'role': 'lead', 'model': 'local/tiny'},
+          ],
+        ),
+      );
+      final id = item['id'] as String;
+      expect((await card(id))['activity'], 'ready_to_run');
+      // The agent now names `local` a local provider: the run would need its
+      // runtime, so the launch refuses.
+      profiles.first['local_providers'] = ['local'];
+      plugin.discoveryGeneration++;
+      final c = await card(id);
+      expect(c['activity'], 'approved_blocked');
+      expect(
+        [for (final i in c['issues'] as List) i['code']],
+        ['runtime_required'],
+      );
+      await expectLater(
+        plugin.call('run', {'id': id, 'revision': item['revision']}),
+        throwsA(errorCode('project_runtime_required')),
+      );
+      profiles.first.remove('local_providers');
+      plugin.discoveryGeneration++;
+      expect((await card(id))['activity'], 'ready_to_run');
+    });
+
+    test('each launch issue once, also for several members', () async {
+      addRuntime();
+      final bound = {
+        'agent': 'fixture',
+        'runtime': 'runtime',
+        'provider': 'local-provider',
+        'model': 'tiny-model',
+      };
+      final item = await approve(
+        await save(
+          plan: 'A saved plan.',
+          team: [
+            {...bound, 'role': 'lead'},
+            {...bound, 'role': 'reviewer'},
+          ],
+        ),
+      );
+      runtimes.single['running'] = false;
+      plugin.discoveryGeneration++;
+      final c = await card(item['id'] as String);
+      expect(c['issues'], [
+        {'code': 'runtime_stopped'},
+      ]);
+      expect(plugin.summary()['needs_you'], 1);
+    });
+
+    test(
+      'the summary poll reads no folder; a new snapshot looks again',
+      () async {
+        for (final title in ['A', 'B', 'C']) {
+          await approve(await save(title: title, plan: 'A saved plan.'));
+        }
+        plugin.summary();
+        await board();
+        final checks = plugin.folderChecks;
+        for (var i = 0; i < 5; i++) {
+          plugin.summary();
+        }
+        await board();
+        expect(plugin.folderChecks, checks);
+        plugin.discoveryGeneration++;
+        plugin.summary();
+        expect(plugin.folderChecks, checks + 3);
+      },
+    );
+
+    test('a list and its summary agree', () async {
+      addRuntime();
+      await approve(
+        await save(
+          plan: 'A saved plan.',
+          team: [
+            {
+              'agent': 'fixture',
+              'role': 'lead',
+              'runtime': 'runtime',
+              'provider': 'local-provider',
+              'model': 'tiny-model',
+            },
+          ],
+        ),
+      );
+      await save(title: 'Draft');
+      runtimes.single['running'] = false;
+      plugin.discoveryGeneration++;
+      final listed = await plugin.call('list', {});
+      final cards = (listed['projects'] as List).cast<Map>();
+      final summary = listed['summary'] as Map;
+      for (final bucket in ['needs_you', 'ready', 'drafts']) {
+        expect(
+          summary[bucket],
+          cards.where((c) => c['bucket'] == bucket).length,
+          reason: bucket,
+        );
+      }
+    });
+
+    test('no assignment named after a restart without a team step', () async {
+      final ready = await approve(await save(plan: 'A saved plan.'));
+      final id = ready['id'] as String;
+      // An old supervisor (a team setup interrupted by a restart) still
+      // holds the lock of a ready project.
+      final runs = Directory('${plugin.directory}/runs')
+        ..createSync(recursive: true);
+      final io = Posix();
+      final fd = io.openAt(
+        -100,
+        '${runs.path}/$id.lock',
+        Posix.noFollow | 0x40 | 0x2,
+        0x180,
+      );
+      addTearDown(() => io.close(fd));
+      expect(io.tryFlock(fd, shared: true), isTrue);
+      final c = await card(id);
+      expect(c['activity'], 'stopping');
+      expect(c['active'], isNull);
+    });
+
+    test(
+      'a member that already ran is stopped, not next (a real run)',
+      () async {
+        var item = await approve(
+          await save(
+            plan: 'The plan.',
+            team: [
+              {'agent': 'fixture', 'role': 'lead'},
+              {'agent': 'fixture', 'role': 'implementer'},
+            ],
+          ),
+        );
+        final id = item['id'] as String;
+        await plugin.call('run', {'id': id, 'revision': item['revision']});
+        await waitUntil(() => processes.length == 1);
+        await processes.single.finish('Lead done.');
+        // The second member is dispatched and running.
+        await waitUntil(() => processes.length == 2);
+        expect((await card(id))['active'], {
+          'phase': 'execution',
+          'position': 1,
+          'state': 'active',
+        });
+        item =
+            (await plugin.call('pause', {'id': id}))['project']
+                as Map<String, dynamic>;
+        expect(item['status'], 'paused');
+        expect(((await card(id))['active'] as Map)['state'], 'stopped');
+      },
+    );
+
+    test('stopped right after an assignment ended: the next one; never past '
+        'the team', () async {
+      final item = await approve(await save(plan: 'A saved plan.'));
+      final id = item['id'] as String;
+      await edit(id, (p) {
+        p['status'] = 'interrupted';
+        p['phase'] = 'running';
+        p['next_member'] = 0;
+        p['assignment_started'] = false;
+      });
+      expect((await card(id))['active'], {
+        'phase': 'execution',
+        'position': 0,
+        'state': 'next',
+      });
+      await edit(id, (p) {
+        p['assignment_started'] = true;
+      });
+      expect(((await card(id))['active'] as Map)['state'], 'stopped');
+      // A store from before this field: stopped.
+      await edit(id, (p) {
+        p.remove('assignment_started');
+      });
+      expect(((await card(id))['active'] as Map)['state'], 'stopped');
+      // After the last assignment: nothing left to point at.
+      await edit(id, (p) {
+        p['next_member'] = 1;
+      });
+      expect((await card(id))['active'], isNull);
+    });
+
+    test(
+      'a team setup in between keeps a stopped member stopped (a real run)',
+      () async {
+        var item = await save(
+          plan: '',
+          team: [
+            {'agent': 'fixture', 'role': 'lead'},
+            {'agent': 'fixture', 'role': 'reviewer'},
+          ],
+        );
+        final id = item['id'] as String;
+        await plugin.call('plan', {'id': id, 'revision': item['revision']});
+        await waitUntil(() => processes.length == 1);
+        await processes.single.finish('1. Plan it.');
+        await waitUntil(() => processes.length == 2);
+        await plugin.call('pause', {'id': id});
+        var c = await card(id);
+        expect(c['status'], 'paused');
+        expect(c['active'], {
+          'phase': 'planning',
+          'position': 1,
+          'state': 'stopped',
+        });
+        // A team setup runs and ends with a proposal (not applied): the
+        // checkpoint comes back as it was.
+        item = await project(plugin, id);
+        await setupResult(
+          item,
+          request: 'Use fixture.',
+          proposal: {
+            'team': [
+              {'agent': 'fixture', 'role': 'lead'},
+            ],
+            'rationale': 'Fine.',
+            'warnings': [],
+          },
+        );
+        c = await card(id);
+        expect(c['status'], 'paused');
+        expect(c['active'], {
+          'phase': 'planning',
+          'position': 1,
+          'state': 'stopped',
+        });
+      },
+    );
+
+    test('an interrupted team setup still stopping names no member', () async {
+      final item = await save(plan: 'A saved plan.');
+      final id = item['id'] as String;
+      await edit(id, (p) {
+        p['status'] = 'paused';
+        p['phase'] = 'planning';
+        p['next_member'] = 0;
+        p['events'] = [
+          {
+            'at': '2026-11-21T10:00:00.000Z',
+            'type': 'setup_interrupted',
+            'text': 'x',
+          },
+        ];
+      });
+      final runs = Directory('${plugin.directory}/runs')
+        ..createSync(recursive: true);
+      final io = Posix();
+      final fd = io.openAt(
+        -100,
+        '${runs.path}/$id.lock',
+        Posix.noFollow | 0x40 | 0x2,
+        0x180,
+      );
+      addTearDown(() => io.close(fd));
+      expect(io.tryFlock(fd, shared: true), isTrue);
+      final c = await card(id);
+      expect(c['activity'], 'stopping');
+      expect(c['active'], isNull);
+    });
+
+    test('a template the dispatch would refuse shows on the board', () async {
+      final item = await approve(await save(plan: 'A saved plan.'));
+      profiles.single['run_argv'] = ['/fixture/agent', '--', '{prompt}'];
+      plugin.discoveryGeneration++;
+      final c = await card(item['id'] as String);
+      // The approval itself covers the argv: Approve again, with the reason.
+      expect(c['activity'], 'approve_again');
+      expect(((c['execution'] as List).single['issues'] as List).single, {
+        'code': 'profile_invalid',
+      });
+    });
+
+    test(
+      'one answer, one snapshot: the 60-second edge within a list',
+      () async {
+        var now = DateTime(2026);
+        plugin.displayClock = () => now;
+        final item = await approve(await save(plan: 'A saved plan.'));
+        expect((await card(item['id'] as String))['activity'], 'ready_to_run');
+        var reads = 0;
+        profilesFail = () {
+          reads++;
+          // The clock passes the 60 seconds while this list is answered.
+          now = now.add(const Duration(seconds: 61));
+          return profiles;
+        };
+        now = now.add(const Duration(seconds: 61));
+        await board();
+        expect(reads, 1);
+        profilesFail = null;
+      },
+    );
+
+    test(
+      'all buckets in order; same bucket by the latest change, then id',
+      () async {
+        final ids = <String, String>{};
+        for (final title in [
+          'Draft',
+          'Review old',
+          'Review new',
+          'Broken',
+          'Done',
+          'Ready',
+          'Running',
+        ]) {
+          ids[title] =
+              (await save(title: title, plan: 'A saved plan.'))['id'] as String;
+        }
+        await approve(await card(ids['Ready']!));
+        await edit(ids['Broken']!, (p) {
+          p['status'] = 'failed';
+          p['phase'] = 'running';
+        });
+        await edit(ids['Done']!, (p) {
+          p['status'] = 'completed';
+          p['phase'] = 'running';
+        });
+        await edit(ids['Draft']!, (p) {
+          p['status'] = 'draft';
+        });
+        await edit(ids['Review old']!, (p) {
+          p['updated_at'] = '2026-01-01T00:00:00.000Z';
+        });
+        await edit(ids['Review new']!, (p) {
+          p['updated_at'] = '2026-06-01T00:00:00.000Z';
+        });
+        // Running: a held run lock (an earlier supervisor still stopping).
+        final runs = Directory('${plugin.directory}/runs')
+          ..createSync(recursive: true);
+        final io = Posix();
+        final fd = io.openAt(
+          -100,
+          '${runs.path}/${ids['Running']}.lock',
+          Posix.noFollow | 0x40 | 0x2,
+          0x180,
+        );
+        addTearDown(() => io.close(fd));
+        expect(io.tryFlock(fd, shared: true), isTrue);
+        expect(
+          [for (final p in await board()) p['title']],
+          [
+            'Running',
+            'Broken',
+            'Review new',
+            'Review old',
+            'Ready',
+            'Draft',
+            'Done',
+          ],
+        );
+      },
+    );
+
+    test('more than 32 equal cards keep their order (by id)', () async {
+      for (var n = 0; n < 40; n++) {
+        await save(title: 'P$n');
+      }
+      final all = await board();
+      await plugin.shutdown();
+      final state = File('${plugin.directory}/projects.json');
+      final body = jsonDecode(state.readAsStringSync()) as Map;
+      for (final item in (body['projects'] as List).cast<Map>()) {
+        item['updated_at'] = '2026-01-01T00:00:00.000Z';
+      }
+      state.writeAsStringSync(jsonEncode(body));
+      plugin = AiProjectCenterPlugin(
+        temporary.path,
+        agentProfiles: () => profiles,
+        filesystem: TestPosix(),
+      );
+      final ordered = [for (final p in await board()) p['id'] as String];
+      expect(ordered, [...ordered]..sort());
+      expect(ordered.length, all.length);
+    });
+
+    test('a fresh attempt starts with no member started', () async {
+      var item = await approve(
+        await save(
+          plan: 'The plan.',
+          team: [
+            {'agent': 'fixture', 'role': 'lead'},
+            {'agent': 'fixture', 'role': 'implementer'},
+          ],
+        ),
+      );
+      final id = item['id'] as String;
+      Map stored() =>
+          ((jsonDecode(
+                        File(
+                          '${plugin.directory}/projects.json',
+                        ).readAsStringSync(),
+                      )
+                      as Map)['projects']
+                  as List)
+              .cast<Map>()
+              .singleWhere((p) => p['id'] == id);
+      expect(stored()['assignment_started'], isFalse);
+      await plugin.call('run', {'id': id, 'revision': item['revision']});
+      await waitUntil(() => processes.length == 1);
+      expect(stored()['assignment_started'], isTrue);
+      // Stopped while the lead runs: the next attempt starts fresh.
+      await plugin.call('pause', {'id': id});
+      expect(stored()['assignment_started'], isTrue);
+      item = await project(plugin, id);
+      // What the store says each time profiles are read: the dispatch reads
+      // them after the fresh attempt was saved, before its first member.
+      final seen = <(String, Object?)>[];
+      profilesFail = () {
+        final p = stored();
+        seen.add(('${p['status']}', p['assignment_started']));
+        return profiles;
+      };
+      await plugin.call('plan', {'id': id, 'revision': item['revision']});
+      await waitUntil(() => processes.length == 2);
+      profilesFail = null;
+      // Saved as planning with no member started (a restart there would show
+      // the first one as next, not stopped).
+      expect(seen, contains(('planning', false)));
+      expect(stored()['assignment_started'], isTrue);
     });
   });
 }

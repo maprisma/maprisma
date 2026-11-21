@@ -973,7 +973,7 @@ void main() {
         final host = FeaturePluginHost(identity);
         await host.call('ai-project-center', 'list', {}, () => {'local': 1});
         expect(host.negotiatedApi('ai-project-center'), 2);
-        expect(host.capabilities('ai-project-center'), ['summary2']);
+        expect(host.capabilities('ai-project-center'), ['summary2', 'board']);
         await host.shutdown();
       },
     );
@@ -1283,6 +1283,11 @@ void main() {
         );
         // The user refreshes: the worker rebuilds its snapshot.
         final listed = await call('list', {}, refresh: true);
+        // The backend offers the board (task 087), with its projection.
+        expect(listed['capabilities'], contains('board'));
+        final card = (listed['projects'] as List).single as Map;
+        expect(card['bucket'], 'needs_you');
+        expect((card['execution'] as List).single['name'], isA<String>());
         expect((listed['summary'] as Map)['ready'], 0);
         expect((listed['summary'] as Map)['needs_you'], 1);
         final viewed = await call('get', {'id': item['id']});

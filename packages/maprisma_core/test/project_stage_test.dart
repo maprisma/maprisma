@@ -164,4 +164,26 @@ void main() {
       }
     }
   });
+
+  test('Approved · blocked only for a ready project with a valid approval', () {
+    ProjectState of(
+      String status, {
+      bool valid = true,
+      String phase = 'running',
+    }) => projectState({
+      'status': status,
+      'phase': phase,
+      'plan': 'A plan.',
+    }, ProjectFacts(approvalValid: valid, launchBlocked: true));
+    final blocked = of('ready');
+    expect(blocked.stage, ProjectStage.ready);
+    expect(blocked.activity, 'approved_blocked');
+    expect(blocked.bucket, ProjectBucket.needsYou);
+    expect(blocked.second, isNull);
+    // An invalid approval says so first.
+    expect(of('ready', valid: false).activity, 'approve_again');
+    // Other statuses are not blocked.
+    expect(of('paused').activity, 'paused');
+    expect(of('completed').bucket, ProjectBucket.finished);
+  });
 }

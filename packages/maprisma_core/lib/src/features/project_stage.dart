@@ -26,6 +26,7 @@ final class ProjectFacts {
   const ProjectFacts({
     this.approvalValid = false,
     this.processesStopping = false,
+    this.launchBlocked = false,
   });
 
   /// The approval matches the plan, the teams and the launch facts now.
@@ -34,6 +35,11 @@ final class ProjectFacts {
   /// A supervisor still owns processes of this project (also after a
   /// restart that restored another status).
   final bool processesStopping;
+
+  /// A valid approval whose launch would fail now (a stopped runtime, a
+  /// model it no longer serves, a missing folder; the launch's own checks):
+  /// fixing it needs no new approval.
+  final bool launchBlocked;
 }
 
 /// The derived view of one project; all values are stable machine codes.
@@ -106,6 +112,8 @@ ProjectState projectState(Map record, ProjectFacts facts) {
       const {'paused', 'interrupted', 'failed'}.contains(status);
   final approveAgain =
       !facts.approvalValid && (status == 'ready' || stoppedRun);
+  final blocked =
+      status == 'ready' && facts.approvalValid && facts.launchBlocked;
 
   final activity = stopping
       ? 'stopping'
@@ -119,7 +127,12 @@ ProjectState projectState(Map record, ProjectFacts facts) {
           'interrupted' => 'interrupted',
           'failed' => 'failed',
           'awaiting_review' => 'needs_review',
-          'ready' => facts.approvalValid ? 'ready_to_run' : 'approve_again',
+          'ready' =>
+            !facts.approvalValid
+                ? 'approve_again'
+                : blocked
+                ? 'approved_blocked'
+                : 'ready_to_run',
           'completed' => 'agents_finished',
           _ => 'draft',
         };
@@ -141,7 +154,8 @@ ProjectState projectState(Map record, ProjectFacts facts) {
   } else if (status == 'awaiting_review' ||
       status == 'paused' ||
       (reconcile && (status == 'ready' || status == 'completed')) ||
-      approveAgain) {
+      approveAgain ||
+      blocked) {
     bucket = ProjectBucket.needsYou;
   } else if (status == 'ready') {
     bucket = ProjectBucket.ready;
