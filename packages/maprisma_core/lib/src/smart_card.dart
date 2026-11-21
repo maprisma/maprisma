@@ -23,6 +23,7 @@ import 'system_help.dart'
         recordRun,
         runLogPath,
         runLookUp;
+import 'core_tasks.dart' show HandleMap;
 
 /// The smart cards (task 004): one request, one proposal, one decision. The
 /// agent has no tools: the core hands it the facts and the real search
@@ -2500,7 +2501,7 @@ Map<String, dynamic> smartWorded(
 final class SmartProposals {
   SmartProposals(this.newHandle);
   final String Function() newHandle;
-  final _items = <String, (DateTime, List<Map<String, dynamic>>)>{};
+  final _items = HandleMap<(DateTime, List<Map<String, dynamic>>)>();
 
   /// The result as the GUI gets it, the actions kept here.
   Map<String, dynamic> keep(Map<String, dynamic> result) {

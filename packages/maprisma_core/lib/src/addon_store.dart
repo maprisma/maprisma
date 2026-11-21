@@ -9,6 +9,7 @@ import 'model_hub.dart' show netFetch, FetchError;
 import 'posix_ffi.dart';
 import 'py_values.dart';
 import 'sshsig.dart';
+import 'core_tasks.dart' show HandleMap;
 
 /// addon_store: the signed catalog, installing and updating add-ons from it,
 /// and their reviewed removal (flutter_addon_catalog, flutter_addon_actions).
@@ -827,7 +828,7 @@ final class AddonActions {
 final class AddonFileImports {
   AddonFileImports(this.newToken);
   final String Function() newToken;
-  final _previews = <String, (DateTime, String, String, String)>{};
+  final _previews = HandleMap<(DateTime, String, String, String)>();
 
   Map<String, dynamic> preview(
     String path,

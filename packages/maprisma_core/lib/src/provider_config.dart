@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:math' as math;
 import 'context.dart' as ctx;
-import 'core_tasks.dart' show newHandle;
+import 'core_tasks.dart' show newHandle, HandleMap;
 import 'llm_tuning.dart' show engineFacts;
 
 const configProfiles = ['balanced', 'long_context', 'fast', 'several_agents'];
@@ -680,7 +680,7 @@ final class ConfigCache {
   final DateTime Function() now;
   final facts = <String, (DateTime, Map<String, dynamic>)>{};
   final proposals =
-      <String, (DateTime, String, String, Map<String, dynamic>)>{};
+      HandleMap<(DateTime, String, String, Map<String, dynamic>)>();
   void keep(String key, Map<String, dynamic> value) {
     while (facts.length >= 16 && !facts.containsKey(key)) {
       facts.remove(facts.keys.first);

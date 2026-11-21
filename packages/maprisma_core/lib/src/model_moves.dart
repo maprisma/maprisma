@@ -12,6 +12,7 @@ import 'provider_scans.dart';
 import 'py_values.dart' show pyJsonDumps;
 import 'system_actions.dart' show modelFolderChanges;
 import 'system_map_cache.dart';
+import 'core_tasks.dart' show HandleMap;
 
 /// system_moves + model_folders + model_move: moving a model folder's own
 /// GGUF files to another disk from the System Map. On one disk a file is
@@ -986,7 +987,7 @@ final class ScanFilesLike {
 final class MovePreviews {
   MovePreviews(this.newToken);
   final String Function() newToken;
-  final plans = <String, (DateTime, Map<String, dynamic>)>{};
+  final plans = HandleMap<(DateTime, Map<String, dynamic>)>();
 
   Map<String, dynamic> register(Map<String, dynamic> record) {
     final now = DateTime.now();

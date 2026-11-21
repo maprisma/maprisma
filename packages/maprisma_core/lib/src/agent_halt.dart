@@ -145,7 +145,7 @@ final class AgentHalt {
   final ProviderScans scans;
   final PtySessions sessions;
   final CoreTasks tasks;
-  final _plans = <String, (DateTime, String, int, double)>{};
+  final _plans = HandleMap<(DateTime, String, int, double)>();
   Posix get posix => scans.files.posix;
 
   Map<String, dynamic> preview(Map<String, dynamic> params) {

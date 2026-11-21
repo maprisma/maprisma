@@ -3,6 +3,7 @@ import 'dart:io';
 import 'desktop.dart' show whichIn;
 import 'model_hub.dart' show netFetch, FetchError;
 import 'py_values.dart';
+import 'core_tasks.dart' show HandleMap;
 
 /// mcp_catalog and mcp_registry: MCP servers to start with and the official
 /// MCP registry's servers, each turned into ways to run it (an entry in the
@@ -1218,7 +1219,7 @@ String _same(String text) => text;
 final class McpOptions {
   McpOptions(this.newToken);
   final String Function() newToken;
-  final items = <String, (DateTime, Map<String, dynamic>)>{};
+  final items = HandleMap<(DateTime, Map<String, dynamic>)>();
   static const keep = Duration(minutes: 30);
   static const most = 400;
 

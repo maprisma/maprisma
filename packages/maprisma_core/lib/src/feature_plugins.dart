@@ -6,12 +6,17 @@ import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 
 import 'addons.dart' show signingKey;
-import 'core_tasks.dart' show maxIssuedHandles;
+import 'core_tasks.dart' show coreHandle, maxIssuedHandles;
 import 'identity.dart';
 import 'protocol.dart';
 import 'posix_ffi.dart';
 import 'pty_sessions.dart' show processIdentity;
 import 'sshsig.dart';
+
+/// The host's bound on routed handles per feature (a memory bound only;
+/// backends report the handles their stores released). Twice a backend's own
+/// bound leaves room for releases still on their way.
+const maxOwnedHandles = 2 * maxIssuedHandles;
 
 const featureApi = 1;
 const featureIds = {'reports', 'ask-ai', 'ai-project-center'};
@@ -31,7 +36,11 @@ final class FeaturePluginHost {
     this.shutdownTimeout = const Duration(seconds: 30),
     this.restartDelay = const Duration(seconds: 1),
     DateTime Function()? clock,
+    this.ownedLimit = maxOwnedHandles,
   }) : clock = clock ?? DateTime.now;
+
+  /// [maxOwnedHandles], smaller in tests.
+  final int ownedLimit;
   final AppIdentity identity;
 
   /// The time for restart pauses (a test sets it).
@@ -45,6 +54,27 @@ final class FeaturePluginHost {
   final _processes = <String, _FeatureProcess>{};
   final _embedded = <String>{};
   final _owners = <String, String>{};
+
+  /// The same handles per feature, oldest first.
+  final _owned = <String, Set<String>>{};
+
+  void _own(String handle, String id) {
+    _disown(handle);
+    _owners[handle] = id;
+    (_owned[id] ??= <String>{}).add(handle);
+  }
+
+  void _disown(String handle) {
+    final id = _owners.remove(handle);
+    if (id != null) _owned[id]?.remove(handle);
+  }
+
+  void _disownAll(String id) {
+    for (final handle in _owned.remove(id) ?? const <String>{}) {
+      _owners.remove(handle);
+    }
+  }
+
   final _failures = <String, int>{};
 
   /// Features that ran as a process: a restart never turns them embedded.
@@ -224,7 +254,7 @@ final class FeaturePluginHost {
         if (process == null || process.retired) {
           // Its process stopped, failed or exited: its handles died with it,
           // also before that was otherwise noticed.
-          _owners.removeWhere((_, owner) => owner == id);
+          _disownAll(id);
           return;
         }
         owners.add(id);
@@ -267,12 +297,29 @@ final class FeaturePluginHost {
                 RegExp(r'^(core-)?[a-f0-9]{32}$').hasMatch(value),
           );
     for (final handle in handles) {
-      if (_owners.length >= maxIssuedHandles && !_owners.containsKey(handle)) {
-        // Oldest first: a handle store keeps far fewer handles alive.
-        _owners.remove(_owners.keys.first);
+      final own = _owned[id];
+      if (own != null && own.length >= ownedLimit && _owners[handle] != id) {
+        // Only a memory bound, per feature: a backend reports the handles
+        // its stores released, so routing follows the stores. A feature over
+        // its bound (one that does not report) loses its own oldest handle,
+        // never another feature's.
+        _disown(own.first);
       }
-      _owners.remove(handle);
-      _owners[handle] = id;
+      _own(handle, id);
+    }
+  }
+
+  /// The handles a backend's stores released (expired, evicted or used):
+  /// they route no more.
+  void _forget(String id, List<String> released) {
+    for (final token in released) {
+      final bare = token.startsWith(coreHandle)
+          ? token.substring(coreHandle.length)
+          : token;
+      // Only its own: a backend cannot release another feature's handle.
+      for (final handle in [bare, '$coreHandle$bare']) {
+        if (_owners[handle] == id) _disown(handle);
+      }
     }
   }
 
@@ -319,7 +366,7 @@ final class FeaturePluginHost {
       final command = _command(id);
       if (command == null) throw ServiceError('feature_disconnected');
       _processes.remove(id);
-      _owners.removeWhere((_, owner) => owner == id);
+      _disownAll(id);
       if (previous.failedAt != null && !previous.cleanlyStopped) {
         _failures[id] = failures + 1;
       }
@@ -341,16 +388,9 @@ final class FeaturePluginHost {
     try {
       // Host state a process backend cannot see itself, sent beside the
       // params on this private pipe only (never taken from a client).
-      final (result, issued) = await plugin.call(
-        operation,
-        params,
-        context?.call(),
-      );
-      // A late answer from a process that failed meanwhile issues nothing.
-      if (_processes[id] == plugin && plugin.failedAt == null) {
-        _remember(id, result, issued);
-      }
-      return result;
+      // Releases and new handles are taken from each answer in the order the
+      // answers arrive (onReleased, onIssued), not after the await.
+      return await plugin.call(operation, params, context?.call());
     } finally {
       // It answered (a result or its own error): it works again.
       if (plugin.answered && plugin.failedAt == null) _failures.remove(id);
@@ -370,7 +410,18 @@ final class FeaturePluginHost {
       // handles are its replacement's.
       onFailed: () {
         if (_processes[id] == process) {
-          _owners.removeWhere((_, owner) => owner == id);
+          _disownAll(id);
+        }
+      },
+      // With every answer, in arrival order: first what it let go, then what
+      // it issued. A process that failed or was replaced issues nothing.
+      onReleased: (released) {
+        if (_processes[id] == process) _forget(id, released);
+      },
+      onIssued: (result, issued) {
+        // Not from one that stopped, failed or exited meanwhile.
+        if (_processes[id] == process && !process.retired) {
+          _remember(id, result, issued);
         }
       },
     );
@@ -411,7 +462,7 @@ final class FeaturePluginHost {
   Future<void> _stop(String id, _FeatureProcess process) async {
     await process.shutdown();
     if (_processes[id] == process) _processes.remove(id);
-    _owners.removeWhere((_, owner) => owner == id);
+    _disownAll(id);
   }
 
   void dispose() {
@@ -430,9 +481,17 @@ final class _FeatureProcess {
     this.shutdownTimeout,
     this.clock, {
     this.onFailed,
+    this.onReleased,
+    this.onIssued,
   });
+  final void Function(Map<String, dynamic> result, List<String>? issued)?
+  onIssued;
+
+  /// The method of each pending request (control requests issue nothing).
+  final _methods = <int, String>{};
   final DateTime Function() clock;
   final void Function()? onFailed;
+  final void Function(List<String> released)? onReleased;
 
   /// The process answered a request (not only @hello).
   bool answered = false;
@@ -520,8 +579,31 @@ final class _FeatureProcess {
               if (data is! Map || data['id'] is! int) {
                 throw const FormatException();
               }
+              // Checked while the caller still waits: a bad frame fails the
+              // backend, and with it every waiting caller.
+              final released = data['released'];
+              if (released != null &&
+                  (released is! List ||
+                      released.any((value) => value is! String))) {
+                throw const FormatException();
+              }
               final waiter = _pending.remove(data['id']);
+              final method = _methods.remove(data['id']);
               if (waiter == null) throw const FormatException();
+              if (released is List && released.isNotEmpty) {
+                onReleased?.call(released.cast<String>());
+              }
+              final issued = data['handles'];
+              if (method != null &&
+                  !method.startsWith('@') &&
+                  data['result'] is Map<String, dynamic> &&
+                  (issued == null ||
+                      issued is List && issued.every((v) => v is String))) {
+                onIssued?.call(
+                  data['result'] as Map<String, dynamic>,
+                  (issued as List?)?.cast<String>(),
+                );
+              }
               if (data['result'] is Map<String, dynamic> &&
                   (data['handles'] == null ||
                       data['handles'] is List &&
@@ -590,11 +672,12 @@ final class _FeatureProcess {
     }
     final waiter = Completer<Map<String, dynamic>>();
     _pending[serial] = waiter;
+    _methods[serial] = method;
     _process!.stdin.writeln(frame);
     return waiter.future;
   }
 
-  Future<(Map<String, dynamic>, List<String>?)> call(
+  Future<Map<String, dynamic>> call(
     String method,
     Map<String, dynamic> params, [
     Map<String, dynamic>? context,
@@ -633,10 +716,7 @@ final class _FeatureProcess {
         rethrow;
       }
       answered = true;
-      return (
-        frame['result'] as Map<String, dynamic>,
-        (frame['handles'] as List?)?.cast<String>(),
-      );
+      return frame['result'] as Map<String, dynamic>;
     } on TimeoutException {
       _fail();
       throw ServiceError('feature_timeout');
@@ -656,6 +736,7 @@ final class _FeatureProcess {
       }
     }
     _pending.clear();
+    _methods.clear();
   }
 
   /// The feature's own cleanup deadline is about ten seconds; 30 seconds

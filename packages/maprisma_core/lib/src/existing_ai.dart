@@ -8,6 +8,7 @@ import 'desktop.dart' show shellJoin, shellQuote;
 import 'posix_ffi.dart';
 import 'py_values.dart' show pyJsonDumps, pyTruthy;
 import 'system_reads.dart' show localMounts;
+import 'core_tasks.dart' show HandleMap;
 
 /// existing_ai: bounded, user-requested discovery of AI programs and models on
 /// mounted local data disks (another distro's Ollama or llama.cpp). Nothing
@@ -773,11 +774,11 @@ Map<String, dynamic> planSignature(Plan plan) => {
 final class ExistingRecords {
   ExistingRecords(this.newToken);
   final String Function() newToken;
-  var records = <String, (DateTime, Map<String, dynamic>)>{};
-  final plans = <String, (DateTime, Map<String, dynamic>)>{};
+  final records = HandleMap<(DateTime, Map<String, dynamic>)>();
+  final plans = HandleMap<(DateTime, Map<String, dynamic>)>();
 
   Map<String, dynamic> register(Map<String, dynamic> result) {
-    records = {}; // a new scan replaces old selections, not reviewed plans
+    records.clear(); // a new scan replaces old selections, not reviewed plans
     final public = <Map<String, dynamic>>[];
     for (final record
         in (result['records'] as List)

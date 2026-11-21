@@ -32,6 +32,9 @@ Future<void> main(List<String> args) async {
     ProcessSignal.sigterm.watch().listen((_) => leave());
   }
   var refused = false;
+  // `pair-issue` is answered only together with the next `pair-release`,
+  // both answers in one write (as a pipe may deliver them).
+  Object? pairId;
   await for (final line
       in stdin.transform(utf8.decoder).transform(const LineSplitter())) {
     final request = jsonDecode(line) as Map;
@@ -54,7 +57,51 @@ Future<void> main(List<String> args) async {
       );
       continue;
     }
-    final result = method == '@hello'
+    if (method == 'pair-issue') {
+      pairId = request['id'];
+      continue;
+    }
+    if (method == 'pair-release') {
+      stdout.write(
+        '${jsonEncode({
+          'id': pairId,
+          'result': {'task': 'core-${'a' * 32}'},
+          'handles': ['core-${'a' * 32}'],
+        })}\n${jsonEncode({
+          'id': request['id'],
+          'result': {'ok': true},
+          'released': ['a' * 32],
+        })}\n',
+      );
+      await stdout.flush();
+      continue;
+    }
+    if (method == 'release-error' || method == 'bad-release') {
+      stdout.writeln(
+        jsonEncode({
+          'id': request['id'],
+          'error': {'code': 'proposal_expired'},
+          'released': method == 'bad-release' ? 5 : ['a' * 32],
+        }),
+      );
+      continue;
+    }
+    if (method == 'fresh') {
+      // A new handle on every call.
+      final handle =
+          'core-${(DateTime.now().microsecondsSinceEpoch + request['id'] as int).toRadixString(16).padLeft(32, '0')}';
+      stdout.writeln(
+        jsonEncode({
+          'id': request['id'],
+          'result': {'handle': handle},
+          'handles': [handle],
+        }),
+      );
+      continue;
+    }
+    final result = method == 'release'
+        ? {'released': true}
+        : method == '@hello'
         ? {'id': args.firstOrNull ?? 'reports', 'api': 1}
         : method == '@shutdown'
         ? {'ok': true}
@@ -72,7 +119,12 @@ Future<void> main(List<String> args) async {
     final response = jsonEncode({
       'id': request['id'],
       'result': result,
-      if (mode != 'legacy' && method != '@hello' && method != '@shutdown')
+      // `release`: its stores let go of the nested task handle.
+      if (method == 'release') 'released': ['a' * 32],
+      if (mode != 'legacy' &&
+          method != '@hello' &&
+          method != '@shutdown' &&
+          method != 'release')
         'handles': ['core-${'b' * 32}', 'core-${'a' * 32}', 'c' * 32],
     });
     // Deliberately split UTF-8 and JSON frames across pipe writes.

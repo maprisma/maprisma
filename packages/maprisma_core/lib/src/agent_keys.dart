@@ -6,6 +6,7 @@ import 'adapters.dart';
 import 'agent_details.dart' show keyStepOf;
 import 'agent_start.dart' show isAgentSessionVar;
 import 'posix_ffi.dart';
+import 'core_tasks.dart' show HandleMap;
 
 /// An API key put where the agent itself reads it (signin.save_key): handed
 /// to the agent's own command on stdin (it stores it itself), or written into
@@ -24,7 +25,7 @@ bool validKey(String key) => _keyRe.hasMatch(key);
 final class AgentKeys {
   AgentKeys(this.newToken);
   final String Function() newToken;
-  final _previews = <String, (DateTime, String, String)>{};
+  final _previews = HandleMap<(DateTime, String, String)>();
 
   /// What the preview shows: the variable, where it goes, where to get one.
   static Map<String, dynamic>? describe(Adapter adapter) {

@@ -10,6 +10,7 @@ import 'model_hub.dart' show ModelHub, boundedOutput;
 import 'provider_ops.dart';
 import 'provider_scans.dart';
 import 'scan_files.dart';
+import 'core_tasks.dart' show HandleMap;
 
 const maxRemovalBytes = 1024 * 1024;
 final _split = RegExp(r'^(.*)-(\d{5})-of-(\d{5})\.gguf$');
@@ -340,7 +341,7 @@ final class ModelRemovals {
 final class RemovalPreviews {
   RemovalPreviews(this.newToken);
   final String Function() newToken;
-  final items = <String, (DateTime, Map<String, dynamic>)>{};
+  final items = HandleMap<(DateTime, Map<String, dynamic>)>();
 
   Map<String, dynamic> preview(
     Map<String, dynamic> params,

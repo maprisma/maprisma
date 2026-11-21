@@ -10,6 +10,7 @@ import 'installers.dart' show InstallHost, LlamaCppInstaller, OllamaInstaller;
 import 'posix_ffi.dart';
 import 'provider_scans.dart' show RuntimeRecord;
 import 'system_map.dart' show detectTools, gpuStack, hardware;
+import 'core_tasks.dart' show HandleMap;
 
 /// The System Map's actions on supporting tools, the GPU stack and model
 /// folders (system_tools.check_record / check, StackActions, the local LLMs'
@@ -118,7 +119,7 @@ final class StackActions {
   final Desktop desktop;
   final String Function() newToken;
   final String Function(String) translate;
-  final previews = <String, (DateTime, String, String)>{};
+  final previews = HandleMap<(DateTime, String, String)>();
 
   Step resolve(dynamic part) {
     final gpus = (hardware()['gpus'] as List).cast<Map>();

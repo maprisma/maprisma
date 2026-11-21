@@ -4,7 +4,7 @@ part of 'core.dart';
 final class _ReportsFeatureState {
   _ReportsFeatureState(String directory) : library = ReportsLibrary(directory);
   final ReportsLibrary library;
-  final drafts = <String, ReportData>{};
+  final drafts = HandleMap<ReportData>();
 }
 
 /// Reports feature entry points. Shared kernel routes stay in CoreService.

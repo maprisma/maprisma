@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'agent_catalog.dart';
 import 'agent_start.dart' show isAgentSessionVar;
-import 'core_tasks.dart' show newHandle, coreHandle;
+import 'core_tasks.dart' show newHandle, coreHandle, HandleMap;
 import 'desktop.dart';
 import 'identity.dart';
 import 'pty_sessions.dart';
@@ -273,7 +273,7 @@ final class AgentActions {
 
   /// After an update started in its terminal: the check asks again.
   void Function(String command)? onUpdated;
-  final _previews = <String, (DateTime, Map<String, dynamic>, ActionPlan)>{};
+  final _previews = HandleMap<(DateTime, Map<String, dynamic>, ActionPlan)>();
   final _verifications = <String, (String, Directory, String)>{};
 
   /// The environment with the user's program folders (add_user_program_dirs).

@@ -4,7 +4,7 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'package:ffi/ffi.dart';
-import 'core_tasks.dart' show newHandle;
+import 'core_tasks.dart' show newHandle, HandleMap;
 
 /// terminal_sessions: owned PTY sessions (Linux). Only the service supplies
 /// argv from a registered adapter; no shell, no transcript, bounded reads.
@@ -267,7 +267,7 @@ final class PtySession {
 }
 
 final class PtySessions {
-  final items = <String, PtySession>{};
+  final items = HandleMap<PtySession>();
 
   /// Start argv in a new PTY (24 rows, 80 columns); its handle.
   String start(

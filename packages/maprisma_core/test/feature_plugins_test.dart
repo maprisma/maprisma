@@ -837,4 +837,82 @@ void main() {
       );
     },
   );
+
+  test('a handle its backend released routes no more', () async {
+    final host = FeaturePluginHost(identity, commands: {'reports': fixture()});
+    addTearDown(host.dispose);
+    await host.call('reports', 'list', {}, () => {});
+    expect(host.owner({'task': 'core-${'a' * 32}'}), 'reports');
+    expect(host.owner({'undo': 'core-${'b' * 32}'}), 'reports');
+    await host.call('reports', 'release', {}, () => {});
+    expect(host.owner({'task': 'core-${'a' * 32}'}), isNull);
+    // What it still keeps routes on.
+    expect(host.owner({'undo': 'core-${'b' * 32}'}), 'reports');
+    await host.shutdown();
+  });
+
+  test(
+    'releases in an error answer route no more; malformed ones fail it',
+    () async {
+      final host = FeaturePluginHost(
+        identity,
+        commands: {'reports': fixture()},
+      );
+      addTearDown(host.dispose);
+      await host.call('reports', 'list', {}, () => {});
+      await expectLater(
+        host.call('reports', 'release-error', {}, () => {}),
+        code('proposal_expired'),
+      );
+      expect(host.owner({'task': 'core-${'a' * 32}'}), isNull);
+      expect(host.owner({'undo': 'core-${'b' * 32}'}), 'reports');
+      await expectLater(
+        host.call('reports', 'bad-release', {}, () => {}),
+        code('feature_disconnected'),
+      );
+    },
+  );
+
+  test('a backend cannot release another feature\'s handle', () async {
+    final host = FeaturePluginHost(
+      identity,
+      commands: {'reports': fixture(), 'ask-ai': fixture('ask-ai')},
+    );
+    addTearDown(host.dispose);
+    await host.call('reports', 'list', {}, () => {});
+    await host.call('ask-ai', 'release', {}, () => {});
+    expect(host.owner({'task': 'core-${'a' * 32}'}), 'reports');
+    await host.shutdown();
+  });
+
+  test('answers arriving together apply issue and release in order', () async {
+    final host = FeaturePluginHost(identity, commands: {'reports': fixture()});
+    addTearDown(host.dispose);
+    final issued = host.call('reports', 'pair-issue', {}, () => {});
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+    final released = host.call('reports', 'pair-release', {}, () => {});
+    expect((await issued)['task'], 'core-${'a' * 32}');
+    await released;
+    expect(host.owner({'task': 'core-${'a' * 32}'}), isNull);
+    await host.shutdown();
+  });
+
+  test('a feature over its bound loses only its own oldest handles', () async {
+    final host = FeaturePluginHost(
+      identity,
+      commands: {'reports': fixture(), 'ask-ai': fixture('ask-ai')},
+      ownedLimit: 3,
+    );
+    addTearDown(host.dispose);
+    // Reports keeps three handles, at its bound.
+    await host.call('reports', 'list', {}, () => {});
+    final first = await host.call('ask-ai', 'fresh', {}, () => {});
+    for (var i = 0; i < 10; i++) {
+      await host.call('ask-ai', 'fresh', {}, () => {});
+    }
+    expect(host.owner({'task': 'core-${'a' * 32}'}), 'reports');
+    expect(host.owner({'undo': 'core-${'b' * 32}'}), 'reports');
+    expect(host.owner({'h': first['handle']}), isNull);
+    await host.shutdown();
+  });
 }

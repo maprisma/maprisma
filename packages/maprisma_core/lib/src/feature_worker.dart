@@ -23,6 +23,7 @@ Future<void> serveFeaturePlugin(String id) async {
   if (Platform.resolvedExecutable.split('/').last != 'dart') {
     environment['MAPRISMA_CORE_WORKER'] = Platform.resolvedExecutable;
   }
+  recordReleasedHandles = true;
   final service = CoreService(
     environment: environment,
     migrate: false,
@@ -110,6 +111,20 @@ Future<void> serveFeaturePlugin(String id) async {
       unawaited(stopForSignal());
     }
   });
+
+  /// Every answer (also an error) carries what its stores let go since the
+  /// last one, so the host stops routing it; as many as fit in the frame,
+  /// the rest with the next answers.
+  void answer(Map<String, dynamic> frame) {
+    final base = utf8.encode(jsonEncode(frame)).length;
+    // A bare token costs 35 bytes in the list ("…",).
+    final room = (maxResponse - base - 64) ~/ 35;
+    final released = takeReleasedHandles(room.clamp(0, 4096));
+    stdout.writeln(
+      jsonEncode({...frame, if (released.isNotEmpty) 'released': released}),
+    );
+  }
+
   Future<void> reply(String line) async {
     int? requestId;
     try {
@@ -160,37 +175,29 @@ Future<void> serveFeaturePlugin(String id) async {
         }
         result = await service.dispatchAsync(method, params);
       }
-      stdout.writeln(
-        jsonEncode({
-          'id': requestId,
-          'result': result,
-          'handles': issuedHandlesIn(result).toList(),
-        }),
-      );
+      answer({
+        'id': requestId,
+        'result': result,
+        'handles': issuedHandlesIn(result).toList(),
+      });
     } on ServiceError catch (error) {
-      stdout.writeln(
-        jsonEncode({
-          'id': requestId,
-          'error': {
-            'code': error.code,
-            if (error.reason != null) 'message': error.reason,
-          },
-        }),
-      );
+      answer({
+        'id': requestId,
+        'error': {
+          'code': error.code,
+          if (error.reason != null) 'message': error.reason,
+        },
+      });
     } on RuleRefused catch (error) {
-      stdout.writeln(
-        jsonEncode({
-          'id': requestId,
-          'error': {'code': 'action_refused', 'message': error.message},
-        }),
-      );
+      answer({
+        'id': requestId,
+        'error': {'code': 'action_refused', 'message': error.message},
+      });
     } on Object {
-      stdout.writeln(
-        jsonEncode({
-          'id': requestId,
-          'error': {'code': 'invalid_request'},
-        }),
-      );
+      answer({
+        'id': requestId,
+        'error': {'code': 'invalid_request'},
+      });
     }
   }
 

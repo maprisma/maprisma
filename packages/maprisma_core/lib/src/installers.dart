@@ -13,6 +13,7 @@ import 'provider_scans.dart' show ProviderScans;
 import 'py_values.dart' show pyJsonDumps;
 import 'scan_files.dart' show ScanFiles;
 import 'tar_check.dart';
+import 'core_tasks.dart' show HandleMap;
 
 /// install_ctl: first installs of local LLMs and tools into a folder of their
 /// own, from registered releases whose checksums the release lists. Layout:
@@ -2017,7 +2018,7 @@ final class Installers {
 final class InstallerPlans {
   InstallerPlans(this.newToken);
   final String Function() newToken;
-  final items = <String, (DateTime, Map<String, dynamic>)>{};
+  final items = HandleMap<(DateTime, Map<String, dynamic>)>();
 
   Map<String, dynamic> register(Map<String, dynamic> record) {
     if (record['version'] != 1 ||

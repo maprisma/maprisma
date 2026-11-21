@@ -11,6 +11,7 @@ import 'desktop.dart' show whichIn;
 import 'posix_ffi.dart';
 import 'py_values.dart' show pyJsonDumps;
 import 'system_map_cache.dart';
+import 'core_tasks.dart' show HandleMap;
 
 /// The System Map's AI help: an installed agent explains or simplifies this
 /// PC's AI setup in a terminal tab, closed in so it asks before each change
@@ -580,7 +581,7 @@ String mapFacts(Map<String, dynamic> map) => pyJsonDumps({
 final class HelpPreviews {
   HelpPreviews(this.newToken);
   final String Function() newToken;
-  final items = <String, (DateTime, String, String, List<String>, String)>{};
+  final items = HandleMap<(DateTime, String, String, List<String>, String)>();
 
   Map<String, dynamic> keep(
     String command,

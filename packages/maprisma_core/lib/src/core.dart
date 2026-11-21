@@ -1342,7 +1342,7 @@ final class CoreService {
   /// The last catalog read (addons.catalog), for addons.hints.
   List<Map<String, dynamic>> catalogRows = const [];
 
-  final _catalogPreviews = <String, (DateTime, Map<String, dynamic>)>{};
+  final _catalogPreviews = HandleMap<(DateTime, Map<String, dynamic>)>();
 
   /// installation_running (the reference's addon_installing too).
   bool get addonInstalling => tasks.items.values.any(
@@ -3999,7 +3999,7 @@ final class CoreService {
 
   /// models.choose_*: the previews and Undos of a local LLM's own model.
   final _choices =
-      <String, (DateTime, String, String?, String?, bool, String)>{};
+      HandleMap<(DateTime, String, String?, String?, bool, String)>();
 
   /// flutter: a provider → model line on the map is the local LLM's own
   /// choice (an agent connected to it later gets that model). The rules were

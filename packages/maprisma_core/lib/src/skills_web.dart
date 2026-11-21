@@ -8,6 +8,7 @@ import 'model_hub.dart' show netFetch, FetchError;
 import 'posix_ffi.dart';
 import 'line_diff.dart' show pySplitlines;
 import 'py_values.dart';
+import 'core_tasks.dart' show HandleMap;
 
 /// skills_web: find skills on the web (the skills.sh directory) and fetch
 /// one, without running anything. The search names the skill, its GitHub
@@ -340,7 +341,7 @@ List<(String, List<int>, bool)> readStaged(
 final class WebSkills {
   WebSkills(this.newToken);
   final String Function() newToken;
-  final items = <String, (DateTime, Map<String, dynamic>)>{};
+  final items = HandleMap<(DateTime, Map<String, dynamic>)>();
   static const keep = Duration(minutes: 30);
 
   Map<String, dynamic> register(Map<String, dynamic> fetched, String name) {

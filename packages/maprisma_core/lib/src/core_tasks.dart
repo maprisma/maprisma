@@ -1,9 +1,11 @@
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 import 'package:path/path.dart' as p;
 import 'connect_apply.dart';
 import 'line_diff.dart';
+import 'protocol.dart' show ServiceError;
 
 /// Handles this core made start with this prefix, so a Devel router can send
 /// apply, Undo and task requests to the side that knows them.
@@ -14,21 +16,168 @@ String newHandle() {
     16,
     (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0'),
   ).join();
-  _issued.remove(token);
-  _issued.add(token);
-  while (_issued.length > maxIssuedHandles) {
-    _issued.remove(_issued.first);
+  // The oldest handle no store keeps makes room. One a store keeps routes
+  // however old it is; when every handle is kept, refuse rather than break a
+  // live one.
+  if (!_issued.contains(token) && !_makeRoom()) {
+    throw ServiceError('too_many_handles');
   }
+  _issued.add(token);
+  _unheld
+    ..remove(token)
+    ..add(token);
   return coreHandle + token;
 }
 
-/// Tokens this process issued, newest last. Some routes return the bare
-/// 32-hex token without the prefix; provenance, not the shape, decides that a
-/// string is a handle. Eviction is by issuance count (about 2 MB at most), not
-/// by each store's own lifetime: a handle older than this many later handles
-/// stops routing across processes. Stores keep far fewer handles alive.
+/// Forgets the oldest unkept handles until one more fits; false when every
+/// handle is kept.
+bool _makeRoom() {
+  while (_issued.length >= maxIssuedHandles) {
+    if (_unheld.isEmpty) return false;
+    final oldest = _unheld.first;
+    _unheld.remove(oldest);
+    _issued.remove(oldest);
+    _noteReleased([oldest]);
+  }
+  return true;
+}
+
+/// Tokens this process issued and that still count: kept by a store, or not
+/// yet forgotten. Some routes return the bare 32-hex token without the
+/// prefix; provenance, not the shape, decides that a string is a handle. A
+/// handle its last store lets go of stops counting at once (a cached result
+/// that still names it does not revive it); one no store took is forgotten,
+/// oldest first, past [maxIssuedHandles].
 const maxIssuedHandles = 65536;
 final _issued = <String>{};
+
+/// Issued tokens no store keeps, oldest first (the ones to forget first).
+final _unheld = <String>{};
+
+/// Bare tokens the stores keep, with how many stores keep each.
+final _held = <String, int>{};
+
+/// Recently released tokens: a store that moves a handle to another store
+/// (releasing it before it holds it again) keeps its provenance.
+final _retired = <String>{};
+
+String? _bareToken(String key) {
+  final token = key.startsWith(coreHandle)
+      ? key.substring(coreHandle.length)
+      : key;
+  return token.length == 32 ? token : null;
+}
+
+/// Whether a store still keeps [value] (with or without the prefix).
+bool heldHandle(String value) => _held.containsKey(_bareToken(value));
+
+/// How many handles count now (tests only).
+int get issuedHandleCountForTest => _issued.length;
+
+/// Forgets every handle (tests only: the registry is per process).
+void resetHandlesForTest() {
+  _issued.clear();
+  _unheld.clear();
+  _held.clear();
+  _retired.clear();
+  _released.clear();
+}
+
+/// A feature backend reports the handles it released, so its host stops
+/// routing them (set by the feature worker).
+bool recordReleasedHandles = false;
+
+/// Released, not yet reported; in order, each once. A handle held again
+/// before it is reported is taken off (it was moved, not let go).
+final _released = <String>{};
+
+void _noteReleased(Iterable<String> tokens) {
+  if (!recordReleasedHandles) return;
+  _released.addAll(tokens);
+  // Bounded: beyond this the host falls back to its own memory bound.
+  while (_released.length > 2 * maxIssuedHandles) {
+    _released.remove(_released.first);
+  }
+}
+
+/// Up to [max] released tokens, oldest first, taken off the list.
+List<String> takeReleasedHandles([int max = 4096]) {
+  final taken = _released.take(max).toList();
+  _released.removeAll(taken);
+  return taken;
+}
+
+/// A store's map of handles. While a key is in it, the handle stays known
+/// (it is never forgotten for age); removing it, by expiry, a bound or use,
+/// releases it.
+final class HandleMap<V> extends MapBase<String, V> {
+  final _map = <String, V>{};
+
+  @override
+  V? operator [](Object? key) => _map[key];
+
+  @override
+  void operator []=(String key, V value) {
+    if (!_map.containsKey(key)) _hold(key);
+    _map[key] = value;
+  }
+
+  @override
+  V? remove(Object? key) {
+    if (!_map.containsKey(key)) return null;
+    final value = _map.remove(key);
+    _release(key as String);
+    return value;
+  }
+
+  @override
+  void clear() {
+    for (final key in _map.keys.toList()) {
+      remove(key);
+    }
+  }
+
+  @override
+  Iterable<String> get keys => _map.keys;
+
+  @override
+  bool containsKey(Object? key) => _map.containsKey(key);
+
+  @override
+  int get length => _map.length;
+
+  static void _hold(String key) {
+    final token = _bareToken(key);
+    if (token == null) return;
+    // Moved to another store: it counts again, within the bound. All or
+    // nothing: without room the store does not take it.
+    if (_retired.contains(token) && !_issued.contains(token)) {
+      if (!_makeRoom()) throw ServiceError('too_many_handles');
+      _retired.remove(token);
+      _issued.add(token);
+    }
+    _held[token] = (_held[token] ?? 0) + 1;
+    _unheld.remove(token);
+    // Only a handle that counts again was not let go after all.
+    if (_issued.contains(token)) _released.remove(token);
+  }
+
+  static void _release(String key) {
+    final token = _bareToken(key);
+    if (token == null) return;
+    final count = (_held[token] ?? 1) - 1;
+    if (count > 0) {
+      _held[token] = count;
+      return;
+    }
+    _held.remove(token);
+    if (_issued.remove(token)) {
+      _retired.add(token);
+      if (_retired.length > 4096) _retired.remove(_retired.first);
+      _noteReleased([token]);
+    }
+  }
+}
 
 /// Whether [value] (with or without the `core-` prefix) was issued here.
 bool issuedHandle(String value) {
@@ -93,7 +242,7 @@ final class CoreTask {
 final class CoreTasks {
   CoreTasks(this.workerCommand);
   final List<String> workerCommand;
-  final items = <String, CoreTask>{};
+  final items = HandleMap<CoreTask>();
   static const maxFrame = 1024 * 1024,
       commits = {
         'connections.apply',
@@ -287,8 +436,8 @@ final class CoreConnections {
   final ConfigFiles files;
   final CoreTasks tasks;
   final String backupRoot;
-  final _plans = <String, (DateTime, Plan)>{};
-  final _undos = <String, String>{};
+  final _plans = HandleMap<(DateTime, Plan)>();
+  final _undos = HandleMap<String>();
   final _undoChoices = <String, List<(String, String?, String?)>>{};
   static const lifetime = Duration(minutes: 10);
 
