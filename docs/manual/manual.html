@@ -1435,6 +1435,25 @@
 <p>An AI proposal fills Your value. Any edit makes it a manual proposal. Cancelling the review preserves your draft. Apply reviews the files, makes a backup and offers Undo. Restart now or Reload the model is a separate, guarded choice; otherwise the settings take effect at the next start/load. System Ollama, vLLM and Strata offer copyable guidance instead of writing their configuration.</p>
 </section>
 
+
+<section class="chapter" id="ai-project-center">
+  <h1>AI Project Center</h1>
+  <h2 id="project-center-workflow">Planning and running a project</h2>
+  <p>Open AI Project Center using the project symbol on the main map. Create a project with a title, a goal and an existing folder, then save it. Choose one lead agent and optional implementers and reviewers. Inspect each profile’s planning command, execution command and effective permissions before starting. If the profile supports it, choose a model or the declared read-only native subagent presets; unsupported options are shown as unavailable. Choose read-only access or permission to edit project files for execution; reviewers always remain read-only.</p>
+  <p>Generate a plan with the configured agent or enter your own. Review and approve the current plan before running it. Changing the goal, plan, folder, team or effective profile requires another review. Team assignments run sequentially and pass their results to the next assignment.</p>
+  <p>The main map indicator distinguishes running projects, pausing work and projects awaiting review or attention. Return to the center to inspect output and the saved handoff. Pause stops new assignments and waits for owned agents to stop. Continue starts a new agent session with the saved context; it does not promise to reopen the original agent conversation. After interrupted or partially completed work, inspect the actual files and acknowledge the unfinished changes before continuing.</p>
+  <p>Projects are saved locally. Removing a saved project does not delete its working folder. Closing Maprisma stops its managed project agents; a later start shows unfinished work as interrupted instead of silently running it again.</p>
+  <p>If stopping cannot be confirmed, check the output and use <strong>Retry pause</strong>. The folder chooser keeps popup mode open while you select a directory.</p>
+  <h2 id="project-center-setup">Configure a team in plain language</h2>
+  <p>Open Setup in AI Project Center and describe the team you want, for example: “Use Claude with agy and Pi using llama.cpp and choose a suitable model for this project.” Choose a helper to draft a proposal. It uses your project goal, installed agent profiles, existing connections on the map and available local models. Review the proposed roles, model bindings and effective permissions, together with the explanation of why the choices suit this project. This is a recommendation for the available setup, not a universal best-model ranking.</p>
+  <p>Choose <b>Use proposed team</b> to apply the reviewed proposal and configure the project team. Applying does not launch agents or runtimes, download a model or change global agent settings. A local runtime must already be running and its agent connected on the map; set that up first, then refresh the available choices. Project model and launch flags apply to this project only.</p>
+  <p>Pi’s managed profile can read and search, but cannot run shell commands or edit files because it has no OS sandbox. After applying a team proposal, draft or revise the project plan, approve the current plan and team, then run the project separately.</p>
+  <p>Use the Planning and Execution selectors in Setup and Team to configure each phase separately. Planning can use different agents, roles, models and local runtimes from execution. A helper proposal applies only to its selected phase. Existing projects use the execution team for planning until you choose a separate planning team. Plan approval covers both configurations; changing either requires a new review.</p>
+  <p>Proposing a team does not change the project: its state and plan approval stay as they were, and a failed or stopped proposal leaves a note in Setup. When an approval no longer matches the saved team or agent profiles, or after a project has completed, choose <b>Approve plan</b> again. Agent processes stay owned until they have really stopped, including programs they started in the background. If Maprisma reports that agent processes are still stopping, wait and try again; the project and its folder stay busy until then.</p>
+  <h2 id="feature-plugin-updates">Feature plugins and updates</h2>
+  <p>Reports, Ask AI and AI Project Center have their own feature backends. A compatible backend can be updated independently of the application. New native interface behavior can still require a Maprisma update. Executable feature updates are checked separately from the existing agent and provider add-ons; incompatible or unavailable features report their status instead of pretending that no work is running.</p>
+</section>
+
 <section class="chapter appendix" id="reference">
   <h1>Reference</h1>
 

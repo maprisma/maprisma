@@ -28,6 +28,9 @@ import 'usage_sweep.dart';
 import 'cost_card.dart';
 import 'settings_view.dart';
 import 'reports_page.dart';
+import 'ai_project_center.dart';
+import 'project_center_indicator.dart';
+import 'features.dart';
 import 'history_import_controller.dart';
 import 'app_theme.dart';
 import 'map_zoom.dart';
@@ -390,11 +393,53 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   bool _reconnecting = false;
   String? _view;
   final _reportsKey = GlobalKey<ReportsPageState>();
+  final _projectCenterKey = GlobalKey<AiProjectCenterPageState>();
+  Map<String, dynamic> _projectSummary = {'connected': false};
+  bool _projectSummaryPending = false;
+  bool get _showProjectCenter => _view == 'ai-project-center';
+
+  Future<void> _refreshProjectSummary() async {
+    if (_projectSummaryPending ||
+        _closing ||
+        !(_backend?.isConnected ?? false)) {
+      return;
+    }
+    _projectSummaryPending = true;
+    try {
+      final summary = await _client.featuresSummary();
+      if (mounted && !mapEquals(summary, _projectSummary)) {
+        setState(() => _projectSummary = summary);
+      }
+    } catch (_) {
+      if (mounted && _projectSummary['connected'] != false) {
+        setState(() => _projectSummary = {'connected': false});
+      }
+    } finally {
+      _projectSummaryPending = false;
+    }
+  }
+
+  Future<void> _openProjectCenter() async {
+    if (_showProjectCenter || !await _leaveReports() || !mounted) return;
+    setState(() {
+      _card = null;
+      _browser = null;
+      _showSettings = false;
+      _showMap = true;
+      _showGuide = false;
+      _focusCategory = null;
+      _visibleTerminal = null;
+      _askOpen = false;
+      _view = MaprismaFeatures.projectCenter.id;
+    });
+  }
+
   final _historyImport = HistoryImportController();
   int _reportsTab = 0;
   bool get _showReports => _view == 'reports';
 
-  void _openReports({bool log = false}) {
+  void _openReports({bool log = false}) async {
+    if (_showProjectCenter && !await _leaveReports()) return;
     if (_showReports && !log) return;
     setState(() {
       _card = null;
@@ -413,6 +458,13 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   }
 
   Future<bool> _leaveReports() async {
+    if (_showProjectCenter) {
+      final state = _projectCenterKey.currentState;
+      if (state != null && !await state.beforeLeave()) return false;
+      if (!mounted) return false;
+      setState(() => _view = null);
+      return true;
+    }
     if (!_showReports) return true;
     final state = _reportsKey.currentState;
     if (state != null && !await state.allowExit()) return false;
@@ -518,6 +570,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
 
   bool get _hasTaskView =>
       _showReports ||
+      _showProjectCenter ||
       _showGuide ||
       _showConnections ||
       _showProviders ||
@@ -793,6 +846,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     _liveTimer = Timer.periodic(const Duration(seconds: 2), (_) {
       _refreshTheme();
       _refreshLive();
+      unawaited(_refreshProjectSummary());
     });
     if (widget.followWindowStyle) _windowStyle = WindowStyleWatcher();
     _connect();
@@ -820,6 +874,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       _backend?.dispose();
       _backend = backend;
       await _refresh();
+      unawaited(_refreshProjectSummary());
       unawaited(_loadDesktop());
       if (mounted) unawaited(_loadSystem());
     } catch (_) {
@@ -836,11 +891,22 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   void onWindowClose() async {
     if (_closing) return;
     _closing = true;
+    final pageHadActiveProject =
+        _projectCenterKey.currentState?.hasActive ?? false;
+    try {
+      _projectSummary = await _client.featuresSummary();
+    } catch (_) {
+      // A disconnected supervisor retains the last known active count.
+    }
     if (!await _leaveReports()) {
       _closing = false;
       return;
     }
-    if (_terminals.any((terminal) => !terminal.ended) ||
+    if (pageHadActiveProject ||
+        _terminals.any((terminal) => !terminal.ended) ||
+        ((_projectSummary['running'] as num? ?? 0) +
+                (_projectSummary['pausing'] as num? ?? 0) >
+            0) ||
         _taskActive ||
         _reviewDepth > 0 ||
         _card?.closable == false) {
@@ -887,6 +953,20 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         );
       } catch (_) {
         /* Keep normal close available if the service has disconnected. */
+      }
+    }
+    if (_backend?.isConnected ?? false) {
+      try {
+        await _client.featuresShutdown();
+      } catch (_) {
+        if (_backend?.isConnected ?? false) {
+          _closing = false;
+          if (mounted) setState(() => _busy = false);
+          _actionFailed();
+          return;
+        }
+        // A lost controller cannot confirm shutdown. Closing this process
+        // triggers the feature workers' parent watchdog and recovery handoff.
       }
     }
     await _backend?.shutdown();
@@ -3013,7 +3093,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   }
 
   Future<void> _toggleSettings() async {
-    if (_showReports && !await _leaveReports()) return;
+    if ((_showReports || _showProjectCenter) && !await _leaveReports()) return;
     setState(() {
       _card = null;
       _browser = null;
@@ -3041,6 +3121,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
 
   bool get _pageOpen =>
       _showReports ||
+      _showProjectCenter ||
       _showSettings ||
       _showProviders ||
       _showConnections ||
@@ -3118,6 +3199,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
 
   String get _guideScreenNow {
     if (_showGuide) return 'guide';
+    if (_showProjectCenter) return 'ai-project-center';
     if (_showReports) return 'reports';
     if (_showSettings) return 'settings';
     if (_showProviders) return 'providers';
@@ -3131,7 +3213,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   /// A page back to what lay under it; an agent's details or the list back
   /// to the map, the main page.
   void _goBack() {
-    if (_showReports) {
+    if (_showReports || _showProjectCenter) {
       unawaited(_leaveReports());
       return;
     }
@@ -3248,7 +3330,10 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   }
 
   Future<void> _openProblems([String? column]) async {
-    if (_busy || _showReports && !await _leaveReports()) return;
+    if (_busy ||
+        (_showReports || _showProjectCenter) && !await _leaveReports()) {
+      return;
+    }
     final targetCol = column ?? _smartStatusData.firstConcernedColumn;
     final updatedLayers = _neededLayersForColumn(targetCol);
     setState(() {
@@ -3303,7 +3388,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
 
   void _openAskAi([String? column, String? initialPrompt]) {
     if (_busy) return;
-    if (_showReports) {
+    if (_showReports || _showProjectCenter) {
       unawaited(
         _leaveReports().then((left) {
           if (left && mounted) _openAskAi(column, initialPrompt);
@@ -3428,7 +3513,10 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
 
   /// Help (F1): the user manual and where to start.
   Future<void> _openHelp() async {
-    if (_busy || _showReports && !await _leaveReports()) return;
+    if (_busy ||
+        (_showReports || _showProjectCenter) && !await _leaveReports()) {
+      return;
+    }
     var manual = false;
     try {
       manual = (await _client.helpSnapshot())['manual'] == true;
@@ -6176,7 +6264,10 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                     onPressed: _keysBlocked
                         ? null
                         : () async {
-                            if (_showReports && !await _leaveReports()) return;
+                            if ((_showReports || _showProjectCenter) &&
+                                !await _leaveReports()) {
+                              return;
+                            }
                             // Chosen here: no later page returns to the guide.
                             _guideReturn = false;
                             setState(() {
@@ -6241,10 +6332,17 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                           );
                   },
                 ),
+                ProjectCenterIndicator(
+                  summary: _projectSummary,
+                  tr: tr,
+                  onOpen: _keysBlocked || _snapshot == null
+                      ? null
+                      : _openProjectCenter,
+                ),
                 IconButton(
                   key: const ValueKey('reports-open'),
-                  tooltip: tr('Reports'),
-                  icon: const Icon(Icons.assessment_outlined),
+                  tooltip: tr(MaprismaFeatures.reports.title),
+                  icon: Icon(MaprismaFeatures.reports.icon),
                   isSelected: _showReports,
                   selectedIcon: const Icon(Icons.assessment),
                   onPressed: _keysBlocked || _snapshot == null
@@ -6312,7 +6410,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                       ),
                     ],
                   ),
-                if (_welcome && !_showReports)
+                if (_welcome && !_showReports && !_showProjectCenter)
                   MapWelcome(
                     tr: tr,
                     busy: _keysBlocked,
@@ -6325,6 +6423,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                     onAction: _chosenAction,
                   ),
                 if (!_showReports &&
+                    !_showProjectCenter &&
                     _terminals.isNotEmpty &&
                     (_snapshot?['settings'] as Map?)?['terminal_tabs'] != false)
                   TerminalTabs(
@@ -6378,7 +6477,22 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                               visible: _browser == null,
                               focusable:
                                   _card == null && _visibleTerminal == null,
-                              child: _showReports
+                              child: _showProjectCenter
+                                  ? AiProjectCenterPage(
+                                      key: _projectCenterKey,
+                                      onCall: (operation, params) =>
+                                          _client.featuresCall(
+                                            plugin: MaprismaFeatures
+                                                .projectCenter
+                                                .id,
+                                            operation: operation,
+                                            params: params,
+                                          ),
+                                      tr: tr,
+                                      onBack: _goBack,
+                                      active: _windowFocused && !_keysBlocked,
+                                    )
+                                  : _showReports
                                   ? ReportsPage(
                                       key: _reportsKey,
                                       historyImport: _historyImport,

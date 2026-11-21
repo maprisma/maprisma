@@ -10,8 +10,21 @@ void _serveIsolate((SendPort, Map<String, String>?) args) {
   args.$1.send(inbox.sendPort);
   inbox.listen((message) {
     if (message == null) {
+      // Synchronous release: the Project Center's store lock is a raw
+      // descriptor that would outlive a killed isolate, and its supervisors
+      // need EOF on their control pipes.
       service.dispose();
+      args.$1.send('@disposed');
       inbox.close();
+      return;
+    }
+    if (message == '@close') {
+      // Await feature cleanup, then acknowledge so the host can end this
+      // isolate without abandoning owned work.
+      service.close().whenComplete(() {
+        args.$1.send('@closed');
+        inbox.close();
+      });
       return;
     }
     if (message is String) {
@@ -24,6 +37,9 @@ final class IsolateTransport implements ServiceTransport {
   IsolateTransport._();
   final _inbox = ReceivePort(), _errors = ReceivePort(), _exit = ReceivePort();
   final _ready = Completer<SendPort>();
+  final _closedAck = Completer<void>(),
+      _disposedAck = Completer<void>(),
+      _exited = Completer<void>();
   final _pending = <int, Completer<Map<String, dynamic>>>{};
   Isolate? _isolate;
   SendPort? _send;
@@ -39,14 +55,19 @@ final class IsolateTransport implements ServiceTransport {
     t._ready.future.ignore();
     t._inbox.listen(t._receive);
     t._errors.listen((_) => t._fail(StateError('Core isolate failed')));
-    t._exit.listen((_) => t._fail(StateError('Core isolate exited')));
+    t._exit.listen((_) {
+      if (!t._exited.isCompleted) t._exited.complete();
+      t._fail(StateError('Core isolate exited'));
+    });
     try {
       t._isolate = await Isolate.spawn(
         _serveIsolate,
         (t._inbox.sendPort, environment),
         onError: t._errors.sendPort,
         onExit: t._exit.sendPort,
-        errorsAreFatal: true,
+        // An uncaught error is reported (and fails this transport) but does
+        // not end the isolate, so it still releases its store lock below.
+        errorsAreFatal: false,
       );
       t._send = await t._ready.future.timeout(const Duration(seconds: 10));
       return t;
@@ -59,6 +80,14 @@ final class IsolateTransport implements ServiceTransport {
   void _receive(dynamic message) {
     if (message is SendPort) {
       if (!_ready.isCompleted) _ready.complete(message);
+      return;
+    }
+    if (message == '@closed') {
+      if (!_closedAck.isCompleted) _closedAck.complete();
+      return;
+    }
+    if (message == '@disposed') {
+      if (!_disposedAck.isCompleted) _disposedAck.complete();
       return;
     }
     try {
@@ -125,17 +154,55 @@ final class IsolateTransport implements ServiceTransport {
       p.completeError(error);
     }
     _pending.clear();
-    try {
-      _send?.send(null);
-    } catch (_) {}
-    _isolate?.kill(priority: Isolate.immediate);
-    _inbox.close();
-    _errors.close();
-    _exit.close();
+    var released = _closedAck.isCompleted || _exited.isCompleted;
+    if (!released) {
+      try {
+        _send?.send(null);
+      } catch (_) {
+        released = true;
+      }
+    }
+    void end() {
+      _isolate?.kill(priority: Isolate.immediate);
+      _inbox.close();
+      _errors.close();
+      _exit.close();
+    }
+
+    if (released || _send == null || _isolate == null) {
+      end();
+      return;
+    }
+    // Ended only after the isolate released: its raw store descriptor would
+    // otherwise outlive it. An isolate busy with synchronous work answers once
+    // it reaches the message; one that never can is still alive and still
+    // owns the store, which a replacement then reports honestly as busy.
+    unawaited(
+      Future.any([
+        _disposedAck.future,
+        _closedAck.future,
+        _exited.future,
+      ]).whenComplete(end),
+    );
   }
 
   @override
   void dispose() => _fail(StateError('Service closed'));
+
+  /// An acknowledged close: the core finishes feature cleanup (bounded by its
+  /// own deadlines) before the isolate is ended.
   @override
-  Future<void> shutdown() async => dispose();
+  Future<void> shutdown() async {
+    if (_closed || _send == null) return dispose();
+    try {
+      _send!.send('@close');
+      await Future.any([
+        _closedAck.future,
+        _exited.future,
+      ]).timeout(const Duration(seconds: 60));
+    } on Object {
+      // Ended or timed out; the supervisors keep any unconfirmed work.
+    }
+    dispose();
+  }
 }

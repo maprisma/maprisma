@@ -36,6 +36,9 @@ def main():
     subprocess.run([resolve_dart(), 'pub', 'get', '--offline'], cwd=core, check=True)
     subprocess.run([resolve_dart(), 'compile', 'exe', 'bin/maprisma-core.dart', '-o',
                     str(stage / 'build/linux/x64/release/bundle/lib/maprisma-core')], cwd=core, check=True)
+    import runpy
+    build_features = runpy.run_path(str(root / 'tools/build-feature-plugins.py'))['build_features']
+    build_features(core, stage / 'build/linux/x64/release/bundle/features')
     # The user manuals beside the app (Help opens the one in the interface language).
     data = stage / 'build/linux/x64/release/bundle/data'
     data.mkdir(exist_ok=True)

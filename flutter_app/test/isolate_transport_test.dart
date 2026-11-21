@@ -132,4 +132,42 @@ void main() {
       }
     },
   );
+
+  test(
+    'disposing an embedded core releases the AI Project Center store lock',
+    () async {
+      final home = Directory.systemTemp.createTempSync('maprisma-isolate-');
+      final environment = {'HOME': home.path, 'MAPRISMA_DESKTOP': 'generic'};
+      Future<Map<String, dynamic>> list(IsolateTransport transport) =>
+          transport.call('features.call', {
+            'plugin': 'ai-project-center',
+            'operation': 'list',
+            'params': <String, dynamic>{},
+          });
+      try {
+        final first = await IsolateTransport.start(environment: environment);
+        expect((await list(first))['projects'], isEmpty);
+        first.dispose();
+        IsolateTransport? second;
+        Object? failure;
+        for (var attempt = 0; attempt < 20; attempt++) {
+          second = await IsolateTransport.start(environment: environment);
+          try {
+            await list(second);
+            failure = null;
+            break;
+          } on BackendError catch (error) {
+            failure = error.code;
+            second.dispose();
+            second = null;
+            await Future<void>.delayed(const Duration(milliseconds: 100));
+          }
+        }
+        expect(failure, isNull);
+        await second?.shutdown();
+      } finally {
+        home.deleteSync(recursive: true);
+      }
+    },
+  );
 }
