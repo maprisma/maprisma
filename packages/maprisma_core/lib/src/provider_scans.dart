@@ -43,6 +43,11 @@ final class RuntimeRecord {
   /// model, vLLM's served file): a reused folder compares them by file
   /// identity. Not in [toJson].
   List<String> modelFiles = [];
+
+  /// Each agent's local provider pointing here, as `agent=provider id`, one
+  /// per provider (two aliases of the same runtime are two entries). Not
+  /// sent: it tells a changed or ambiguous binding apart after a scan.
+  List<String> bindings = [];
   Map<String, dynamic> toJson() => {
     'key': key,
     'name': name,

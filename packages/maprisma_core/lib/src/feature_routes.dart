@@ -87,12 +87,15 @@ extension FeatureRoutes on CoreService {
   }
 
   Future<Map<String, dynamic>> featureCall(Map<String, dynamic> params) async {
-    if (params.length != 3 ||
+    final refresh = params['refresh'];
+    if (params.length != (params.containsKey('refresh') ? 4 : 3) ||
         params['plugin'] is! String ||
         params['operation'] is! String ||
-        params['params'] is! Map<String, dynamic>) {
+        params['params'] is! Map<String, dynamic> ||
+        (params.containsKey('refresh') && refresh is! bool)) {
       throw const FormatException('Invalid feature request');
     }
+
     final id = params['plugin'] as String;
     final operation = params['operation'] as String;
     final arguments = params['params'] as Map<String, dynamic>;
@@ -139,23 +142,59 @@ extension FeatureRoutes on CoreService {
         operation,
       _ => throw ServiceError('feature_operation_unknown'),
     };
-    return featurePlugins.call(id, method, arguments, () {
-      if (id == 'ai-project-center') {
-        return projectCenterCall(method, arguments);
-      }
-      return dispatch(method, arguments);
-    }, context: id == 'ask-ai' ? askAiHostContext : null);
+    // Consumed here, never forwarded (and only for a valid call): the user
+    // asked for fresh data, so the call carries the grown generation.
+    if (refresh == true) growDiscovery();
+    final result = await featurePlugins.call(
+      id,
+      method,
+      arguments,
+      () {
+        if (id == 'ai-project-center') {
+          return projectCenterCall(method, arguments);
+        }
+        return dispatch(method, arguments);
+      },
+      context: id == 'ask-ai'
+          ? askAiHostContext
+          : id == 'ai-project-center'
+          ? projectCenterHostContext
+          : null,
+    );
+    // An Ask AI action that changes the map's facts (run directly).
+    if (id == 'ask-ai' && CoreService.discoveryRoutes.contains(method)) {
+      growDiscovery();
+    }
+    // The first answer the Projects tab reads says which backend it is.
+    return id == 'ai-project-center' && method == 'list'
+        ? {...result, ..._projectCenterMeta()}
+        : result;
   }
 
   Future<Map<String, dynamic>> projectCenterCall(
     String operation,
     Map<String, dynamic> params,
-  ) => projectCenter.call(operation, params);
+  ) {
+    projectCenter.discoveryGeneration = discoveryGeneration;
+    return projectCenter.call(operation, params);
+  }
+
+  /// What the Project Center backend needs from the host with each request.
+  Map<String, dynamic> projectCenterHostContext() => {
+    'generation': discoveryGeneration,
+  };
+
+  /// The negotiated API and capabilities of the Project Center backend,
+  /// added by the host (an api-1 backend sends neither).
+  Map<String, dynamic> _projectCenterMeta() => {
+    'api': featurePlugins.negotiatedApi('ai-project-center'),
+    'capabilities': featurePlugins.capabilities('ai-project-center'),
+  };
 
   /// The indicator's counts. While the AI Project Center has stored nothing
   /// yet and is not running, there is nothing to count: its backend is not
   /// started just for the 2-second poll.
-  Future<Map<String, dynamic>> featureSummary() {
+  Future<Map<String, dynamic>> featureSummary() async {
     if (_projectCenter == null &&
         !featurePlugins.closing &&
         !featurePlugins.tracked('ai-project-center') &&
@@ -169,17 +208,34 @@ extension FeatureRoutes on CoreService {
         'pausing': 0,
         'waiting': 0,
         'attention': 0,
+        'attention_projects': 0,
+        'needs_you': 0,
+        'ready': 0,
+        'drafts': 0,
+        'finished': 0,
         'total': 0,
+        'by_agent': <String, int>{},
         'connected': true,
+        'api': null,
+        'capabilities': null,
       });
     }
-    return featurePlugins.call(
+    final summary = await featurePlugins.call(
       'ai-project-center',
       '@summary',
       {},
-      () => {...projectCenter.summary(), 'connected': true},
+      () {
+        projectCenter.discoveryGeneration = discoveryGeneration;
+        return {...projectCenter.summary(), 'connected': true};
+      },
+      context: projectCenterHostContext,
     );
+    return {...summary, ..._projectCenterMeta()};
   }
+
+  /// Grows the discovery generation: features rebuild their cached profile
+  /// and runtime snapshots on their next request.
+  void growDiscovery() => discoveryGeneration++;
 
   Future<void> shutdownFeatures() async {
     final center = _projectCenter;

@@ -99,10 +99,35 @@ Future<void> main(List<String> args) async {
       );
       continue;
     }
+    if (method == 'tasks.status') {
+      stdout.writeln(
+        jsonEncode({
+          'id': request['id'],
+          'result': {'state': 'done', 'operation': 'providers.run'},
+        }),
+      );
+      continue;
+    }
     final result = method == 'release'
         ? {'released': true}
         : method == '@hello'
-        ? {'id': args.firstOrNull ?? 'reports', 'api': 1}
+        ? {
+            'id': args.firstOrNull ?? 'reports',
+            // `api2`: the newer API with a capability; `api3`: one no host
+            // accepts; `badcaps`: a capability list of the wrong shape.
+            'api': modes.contains('api2')
+                ? 2
+                : modes.contains('api3')
+                ? 3
+                : 1,
+            if (modes.contains('api2') &&
+                !modes.contains('nullcaps') &&
+                !modes.contains('emptycap'))
+              'capabilities': ['summary2'],
+            if (modes.contains('badcaps')) 'capabilities': 5,
+            if (modes.contains('nullcaps')) 'capabilities': null,
+            if (modes.contains('emptycap')) 'capabilities': [''],
+          }
         : method == '@shutdown'
         ? {'ok': true}
         : {

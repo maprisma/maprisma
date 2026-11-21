@@ -141,6 +141,14 @@ Future<void> serveFeaturePlugin(String id) async {
       requestId = request['id'] as int;
       final method = request['method'] as String;
       final params = request['params'] as Map<String, dynamic>;
+      // The host's discovery generation: the Project Center rebuilds its
+      // display snapshot when it grew.
+      final generation = request['context'] is Map
+          ? (request['context'] as Map)['generation']
+          : null;
+      if (id == 'ai-project-center' && generation is int) {
+        service.discoveryGeneration = generation;
+      }
       if (id == 'ask-ai' && request['context'] is Map<String, dynamic>) {
         service.applyAskAiHostContext(
           request['context'] as Map<String, dynamic>,
@@ -148,7 +156,11 @@ Future<void> serveFeaturePlugin(String id) async {
       }
       Map<String, dynamic> result;
       if (method == '@hello') {
-        result = {'id': id, 'api': featureApi};
+        result = {
+          'id': id,
+          'api': featureApiOwn[id],
+          'capabilities': featureCapabilitiesOwn[id],
+        };
       } else if (method == '@shutdown') {
         stopping = true;
         try {
@@ -163,9 +175,13 @@ Future<void> serveFeaturePlugin(String id) async {
       } else if (stopping) {
         throw ServiceError('feature_closing');
       } else if (id == 'ai-project-center') {
-        result = method == '@summary'
-            ? {...service.projectCenter.summary(), 'connected': true}
-            : await service.projectCenterCall(method, params);
+        if (method == '@summary') {
+          service.projectCenter.discoveryGeneration =
+              service.discoveryGeneration;
+          result = {...service.projectCenter.summary(), 'connected': true};
+        } else {
+          result = await service.projectCenterCall(method, params);
+        }
       } else {
         final allowed = id == 'reports'
             ? method.startsWith('reports.')

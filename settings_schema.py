@@ -114,6 +114,8 @@ SCHEMA: dict[str, Setting] = {
     # Look and language
     "language": Setting("auto", _text, "Settings › Language: \"auto\" (the system's) or a language code"),
     "flutter_theme_mode": Setting("system", _one_of("system", "light", "dark"), "Flutter Settings › Theme"),
+    "main_tab": Setting(None, lambda v: v is None or v in ("projects", "map"),
+                        "the main tab last used: projects or map; null until the user picked one"),
     "window_mode": Setting("auto", _one_of("auto", "popup", "window"),
                            "Flutter Settings › Window: auto = a popup under the bar on Omarchy, else a window"),
     "map_light_fps": Setting(20, lambda v: type(v) is int and v in (20, 30, 60), "Flutter map-light frame rate: 20, 30 or 60 fps"),

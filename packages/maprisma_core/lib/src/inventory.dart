@@ -289,6 +289,7 @@ final class InventoryReader {
         final rt = localRuntime(provider, inv.runtimes);
         if (rt == null) continue;
         if (!rt.agents.contains(command)) rt.agents.add(command);
+        rt.bindings.add('$command=${provider['id'] ?? provider['name']}');
         if (provider['active'] == true && !rt.activeAgents.contains(command)) {
           rt.activeAgents.add(command);
         }

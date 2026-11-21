@@ -242,6 +242,10 @@ final class CoreTask {
 final class CoreTasks {
   CoreTasks(this.workerCommand);
   final List<String> workerCommand;
+
+  /// Called when a worker task ended (done or failed): what it changed is on
+  /// disk now (the host grows its discovery generation).
+  void Function()? onEnded;
   final items = HandleMap<CoreTask>();
   static const maxFrame = 1024 * 1024,
       commits = {
@@ -363,6 +367,9 @@ final class CoreTasks {
       if (task.state == 'running') task.state = 'failed';
     }
     if (task.state == 'running') task.state = 'failed';
+    // Every way a worker task ends (done, failed, oversized, crashed,
+    // stopped): whatever it changed is on disk now.
+    onEnded?.call();
   }
 
   void _message(CoreTask task, String line) {

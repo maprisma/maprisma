@@ -76,6 +76,8 @@ void main() {
   late List<Map<String, dynamic>> profiles;
   late List<Map<String, dynamic>> runtimes;
   late AiProjectCenterPlugin plugin;
+  // When set, reading the agent profiles fails through it (task 085).
+  List<Map<String, dynamic>> Function()? profilesFail;
   late List<FakeProjectProcess> processes;
   late List<List<String>> commands;
   late List<String> directories;
@@ -161,6 +163,7 @@ void main() {
   }
 
   setUp(() {
+    profilesFail = null;
     // The private-store policy requires ancestors owned by root or this user;
     // some sandbox runners expose /tmp as a third-party-owned mount.
     temporary = Directory.current.createTempSync('.project-center-test-');
@@ -181,7 +184,11 @@ void main() {
     directories = [];
     plugin = AiProjectCenterPlugin(
       temporary.path,
-      agentProfiles: () => profiles,
+      agentProfiles: () {
+        final fail = profilesFail;
+        if (fail != null) return fail();
+        return profiles;
+      },
       runtimeProfiles: () => runtimes,
       filesystem: TestPosix(),
       runner: (argv, cwd, environment, input, _, _) async {
@@ -1739,6 +1746,9 @@ void main() {
       item = await project(plugin, item['id'] as String);
       expect(item['status'], 'completed');
       profiles.single['permissions'] = 'Changed scope.';
+      // The view follows the shared display snapshot: the host's refresh
+      // (F5, or a change made through Maprisma) grows the generation.
+      plugin.discoveryGeneration++;
       item = await project(plugin, item['id'] as String);
       expect(item['approval_valid'], isFalse);
       item = await approve(item);
@@ -1779,6 +1789,8 @@ void main() {
         'tiny-model',
         'other-model',
       ];
+      // A fresh snapshot is read (not the cached one), and still valid.
+      plugin.discoveryGeneration++;
       item = await project(plugin, item['id'] as String);
       expect(item['approval_valid'], isTrue);
       await plugin.call('run', {
@@ -1794,6 +1806,7 @@ void main() {
       // The binding's provider is launch-affecting.
       ((runtimes.single['bindings'] as Map)['fixture'] as Map)['provider'] =
           'another-provider';
+      plugin.discoveryGeneration++;
       item = await project(plugin, item['id'] as String);
       expect(item['approval_valid'], isFalse);
     },
@@ -2089,6 +2102,9 @@ void main() {
       expect(item['status'], 'paused');
       expect(item['next_member'], 1);
       profiles.single['permissions'] = 'Changed scope.';
+      // The view follows the shared display snapshot: the host's refresh
+      // (F5, or a change made through Maprisma) grows the generation.
+      plugin.discoveryGeneration++;
       item = await project(plugin, item['id'] as String);
       expect(item['approval_valid'], isFalse);
       item = await approve(item);
@@ -2279,5 +2295,271 @@ void main() {
     final paused = (await pausing)['project'] as Map<String, dynamic>;
     expect(paused['status'], 'paused');
     expect(commands, isEmpty);
+  });
+
+  group('summary for the Projects tab (task 085)', () {
+    Future<void> setStatus(String id, String status, {String? phase}) async {
+      await plugin.shutdown();
+      final state = File('${plugin.directory}/projects.json');
+      final body = jsonDecode(state.readAsStringSync()) as Map;
+      for (final item in (body['projects'] as List).cast<Map>()) {
+        if (item['id'] == id) {
+          item['status'] = status;
+          if (phase != null) item['phase'] = phase;
+        }
+      }
+      state.writeAsStringSync(jsonEncode(body));
+      plugin = AiProjectCenterPlugin(
+        temporary.path,
+        agentProfiles: () => profiles,
+        runtimeProfiles: () => runtimes,
+        filesystem: TestPosix(),
+      );
+    }
+
+    test('counts each project once, by its bucket', () async {
+      await save(title: 'Draft');
+      final review = await save(title: 'Review', plan: 'A saved plan.');
+      final broken = await save(title: 'Broken', plan: 'A saved plan.');
+      await setStatus(review['id'] as String, 'awaiting_review');
+      await setStatus(broken['id'] as String, 'failed', phase: 'running');
+      final summary = plugin.summary();
+      expect(summary['total'], 3);
+      expect(summary['drafts'], 1);
+      expect(summary['needs_you'], 1);
+      expect(summary['waiting'], 1);
+      expect(summary['attention_projects'], 1);
+      expect(summary['attention'], 1);
+      expect(summary['by_agent'], {'fixture': 3});
+      final buckets = [
+        'attention_projects',
+        'needs_you',
+        'ready',
+        'drafts',
+        'finished',
+      ];
+      final sum =
+          buckets.fold<int>(0, (n, k) => n + (summary[k] as int)) +
+          (summary['running'] as int) +
+          (summary['pausing'] as int);
+      expect(sum, 3);
+    });
+
+    test(
+      'a ready project is Ready while its approval holds, then needs you',
+      () async {
+        final item = await approve(await save(plan: 'A saved plan.'));
+        expect(item['status'], 'ready');
+        expect(plugin.summary()['ready'], 1);
+        // A launch-affecting profile fact changes outside Maprisma.
+        profiles.first['run_argv'] = ['/fixture/agent', 'changed', '{prompt}'];
+        // Within the same generation and 60 seconds the display cache holds.
+        expect(plugin.summary()['ready'], 1);
+        plugin.discoveryGeneration++;
+        final summary = plugin.summary();
+        expect(summary['ready'], 0);
+        expect(summary['needs_you'], 1);
+      },
+    );
+
+    test('the display snapshot is at most 60 seconds old', () async {
+      var now = DateTime(2026);
+      plugin.displayClock = () => now;
+      await approve(await save(plan: 'A saved plan.'));
+      expect(plugin.summary()['ready'], 1);
+      profiles.first['run_argv'] = ['/fixture/agent', 'changed', '{prompt}'];
+      now = now.add(const Duration(seconds: 59));
+      expect(plugin.summary()['ready'], 1);
+      now = now.add(const Duration(seconds: 2));
+      expect(plugin.summary()['ready'], 0);
+    });
+
+    test('a launch refreshes every project\'s derived approval', () async {
+      final first = await approve(
+        await save(title: 'A', plan: 'A saved plan.'),
+      );
+      await approve(await save(title: 'B', plan: 'A saved plan.'));
+      expect(plugin.summary()['ready'], 2);
+      profiles.first['run_argv'] = ['/fixture/agent', 'changed', '{prompt}'];
+      // Running A takes a fresh snapshot (and is refused: its approval no
+      // longer matches); B's cached approval goes with it.
+      await expectLater(
+        plugin.call('run', {'id': first['id'], 'revision': first['revision']}),
+        throwsA(anything),
+      );
+      expect(plugin.summary()['ready'], 0);
+    });
+
+    test('by_agent counts a project once even in both teams', () async {
+      final saved =
+          (await plugin.call('save', {
+                'title': 'Both teams',
+                'brief': 'Build the requested change and verify it.',
+                'path': workspace,
+                'team': [
+                  {'agent': 'fixture', 'role': 'lead'},
+                ],
+                'plan_team': [
+                  {'agent': 'fixture', 'role': 'lead'},
+                ],
+                'plan': '',
+              }))['project']
+              as Map<String, dynamic>;
+      expect(saved['plan_team'], isNotNull);
+      expect(plugin.summary()['by_agent'], {'fixture': 1});
+    });
+
+    test(
+      'a project whose processes are stopping counts only as pausing',
+      () async {
+        final item = await save(plan: 'A saved plan.');
+        await setStatus(item['id'] as String, 'awaiting_review');
+        // A supervisor of an earlier controller still holds the run lock.
+        final runs = Directory('${plugin.directory}/runs')
+          ..createSync(recursive: true);
+        final io = Posix();
+        final fd = io.openAt(
+          -100,
+          '${runs.path}/${item['id']}.lock',
+          Posix.noFollow | 0x40 | 0x2,
+          0x180,
+        );
+        addTearDown(() => io.close(fd));
+        expect(io.tryFlock(fd, shared: true), isTrue);
+        final summary = plugin.summary();
+        expect(summary['pausing'], 1);
+        expect(summary['waiting'], 0);
+        expect(summary['needs_you'], 0);
+        expect(summary['attention'], 0);
+      },
+    );
+
+    test('a store fault is in error, not in the project counts', () async {
+      await save(title: 'Saved first');
+      // The store's folder becomes unwritable: the next write fails.
+      final folder = Directory(plugin.directory);
+      Process.runSync('chmod', ['0500', folder.path]);
+      addTearDown(() => Process.runSync('chmod', ['0700', folder.path]));
+      await expectLater(save(title: 'Not written'), throwsA(anything));
+      Process.runSync('chmod', ['0700', folder.path]);
+      final small = plugin;
+      final summary = small.summary();
+      expect(summary['error'], isA<String>());
+      expect(summary['attention_projects'], 0);
+      expect(summary['attention'], 1);
+    });
+
+    test(
+      'a later assignment start refreshes another project\'s approval',
+      () async {
+        final team = [
+          {'agent': 'fixture', 'role': 'lead'},
+          {'agent': 'fixture', 'role': 'reviewer'},
+        ];
+        var first = await approve(
+          await save(title: 'A', plan: 'The plan.', team: team),
+        );
+        await approve(await save(title: 'B', plan: 'The plan.'));
+        expect(plugin.summary()['ready'], 2);
+        await plugin.call('run', {
+          'id': first['id'],
+          'revision': first['revision'],
+        });
+        await waitUntil(() => processes.length == 1);
+        expect(plugin.summary()['ready'], 1);
+        // Changed while the lead runs; the reviewer's start reads it fresh
+        // (and is refused), and B's cached approval goes with it.
+        profiles.first['run_argv'] = ['/fixture/agent', 'changed', '{prompt}'];
+        await processes.single.finish('Lead done.');
+        await waitUntil(() => plugin.summary()['running'] == 0);
+        first = await project(plugin, first['id'] as String);
+        expect(plugin.summary()['ready'], 0);
+      },
+    );
+
+    test(
+      'a failing scan is read once, not for every project and poll',
+      () async {
+        var now = DateTime(2026);
+        plugin.displayClock = () => now;
+        for (final title in ['A', 'B', 'C']) {
+          await approve(await save(title: title, plan: 'A saved plan.'));
+        }
+        expect(plugin.summary()['ready'], 3);
+        var reads = 0;
+        final healthy = List.of(profiles);
+        profilesFail = () {
+          reads++;
+          throw StateError('scan failed');
+        };
+        plugin.discoveryGeneration++;
+        final summary = plugin.summary();
+        expect(summary['ready'], 0);
+        expect(summary['needs_you'], 3);
+        expect(reads, 1);
+        now = now.add(const Duration(seconds: 5));
+        plugin.summary();
+        expect(reads, 1);
+        now = now.add(const Duration(seconds: 6));
+        plugin.summary();
+        expect(reads, 2);
+        profilesFail = null;
+        profiles = healthy;
+      },
+    );
+
+    test('an approval right after a failed scan shows as valid', () async {
+      var now = DateTime(2026);
+      plugin.displayClock = () => now;
+      await approve(await save(title: 'A', plan: 'A saved plan.'));
+      final healthy = List.of(profiles);
+      profilesFail = () => throw StateError('scan failed');
+      plugin.discoveryGeneration++;
+      expect(plugin.summary()['ready'], 0);
+      // The scanner recovers; the user approves another project at once.
+      profilesFail = null;
+      profiles = healthy;
+      now = now.add(const Duration(seconds: 2));
+      final b = await approve(await save(title: 'B', plan: 'A saved plan.'));
+      expect(b['approval_valid'], isTrue);
+      expect(plugin.summary()['ready'], 2);
+    });
+
+    test('a clock set back rebuilds the snapshot', () async {
+      var now = DateTime(2026, 6);
+      plugin.displayClock = () => now;
+      await approve(await save(plan: 'A saved plan.'));
+      expect(plugin.summary()['ready'], 1);
+      profiles.first['run_argv'] = ['/fixture/agent', 'changed', '{prompt}'];
+      now = now.subtract(const Duration(hours: 1));
+      expect(plugin.summary()['ready'], 0);
+    });
+
+    test('a draft never makes the summary read profiles', () async {
+      await save();
+      var reads = 0;
+      final counting = AiProjectCenterPlugin(
+        '${temporary.path}/other',
+        agentProfiles: () {
+          reads++;
+          return profiles;
+        },
+        filesystem: TestPosix(),
+      );
+      addTearDown(counting.shutdown);
+      await counting.call('save', {
+        'title': 'Draft',
+        'brief': 'Build it.',
+        'path': workspace,
+        'team': [
+          {'agent': 'fixture', 'role': 'lead'},
+        ],
+        'plan': '',
+      });
+      final before = reads;
+      counting.summary();
+      counting.summary();
+      expect(reads, before);
+    });
   });
 }

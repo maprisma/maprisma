@@ -276,10 +276,40 @@ final class CoreService {
     // Inventory scans remember the MCP servers in use, as the reference does.
     reads.inventory.knownServers = mcp.knownServers;
     // After each scan the provider watcher's config, and its service on or off.
-    reads.onInventory = watch.sync;
+    reads.onInventory = (inventory, agents) {
+      watch.sync(inventory, agents);
+      // After a finished agents or inventory scan: the facts the Project
+      // Center's approval depends on changed only if this differs.
+      // Everything the approval and the runtime facts read (not what changes
+      // while agents merely work, such as the active agents).
+      final facts = jsonEncode([
+        for (final a in agents) [a.command, a.installed, a.version, a.source],
+        for (final r in inventory.runtimes)
+          [
+            r.key,
+            r.installed,
+            r.running,
+            r.serverOff,
+            r.address,
+            r.service,
+            r.models,
+            r.agents,
+            r.bindings,
+          ],
+      ]);
+      if (facts != _scannedFacts) {
+        _scannedFacts = facts;
+        growDiscovery();
+      }
+    };
   }
   final bool featureWorker;
   FeaturePluginHost? _providedFeatureHost;
+
+  /// Grows whenever the map's data may have changed or the user asked to
+  /// refresh; feature backends rebuild cached snapshots when it grew.
+  int discoveryGeneration = 0;
+
   late final featurePlugins =
       _providedFeatureHost ?? FeaturePluginHost(identity);
   AiProjectCenterPlugin? _projectCenter;
@@ -302,7 +332,8 @@ final class CoreService {
     reads,
   );
   String? migrationError;
-  late final tasks = CoreTasks(defaultWorkerCommand(identity.environment));
+  late final tasks = CoreTasks(defaultWorkerCommand(identity.environment))
+    ..onEnded = growDiscovery;
   late final config = ConfigFiles(Posix(), identity.home);
   late final connections =
       CoreConnections(
@@ -4932,6 +4963,78 @@ final class CoreService {
       await shutdownFeatures();
       return {'ok': true};
     }
+    final result = await _dispatchRouted(method, params);
+    // Grown after success, so a summary in between cannot cache old facts
+    // under the new number; worker tasks grow it when they end, also those
+    // a feature backend (Ask AI) runs: their end is seen once here.
+    if (discoveryRoutes.contains(method) ||
+        _featureTaskEnded(method, params, result)) {
+      growDiscovery();
+    }
+    return result;
+  }
+
+  /// The agents' and runtimes' facts of the last finished map scan.
+  String? _scannedFacts;
+
+  /// Feature-owned task handles whose end was already counted.
+  final _endedFeatureTasks = <String>{};
+
+  /// A `tasks.status` answer from a feature backend that reports an end for
+  /// the first time.
+  bool _featureTaskEnded(
+    String method,
+    Map<String, dynamic> params,
+    Map<String, dynamic> result,
+  ) {
+    if (featureWorker || method != 'tasks.status') return false;
+    final handle = params['task'];
+    if (handle is! String || tasks.items.containsKey(handle)) return false;
+    if (result['state'] == 'running' || result['state'] == null) return false;
+    if (!_endedFeatureTasks.add(handle)) return false;
+    if (_endedFeatureTasks.length > 256) {
+      _endedFeatureTasks.remove(_endedFeatureTasks.first);
+    }
+    return true;
+  }
+
+  /// Routes after which the agents', providers' or add-ons' facts may differ
+  /// (the changing routes of routes.json that touch them, Undo included).
+  static const discoveryRoutes = {
+    'app.snapshot',
+    'settings.update',
+    'addons.enable_found',
+    'addons.file_install',
+    'addons.install',
+    'addons.remove_apply',
+    'addons.remove_undo',
+    'addons.set_enabled',
+    'agents.action_apply',
+    'agents.key_apply',
+    'changes.undo',
+    'connections.apply',
+    'connections.undo',
+    'existing.apply',
+    'installers.install',
+    'map.smart_run',
+    'models.choose_apply',
+    'models.choose_undo',
+    'models.remove_apply',
+    'models.slots_reload',
+    'providers.reload_model',
+    'providers.restart',
+    'providers.run',
+    'setup.apply',
+    'system.move_apply',
+    'system.move_undo',
+    'system.stack_apply',
+    'updates.run',
+  };
+
+  Future<Map<String, dynamic>> _dispatchRouted(
+    String method,
+    Map<String, dynamic> params,
+  ) async {
     if (!featureWorker) {
       final owner = method.startsWith('reports.')
           ? 'reports'

@@ -9,6 +9,7 @@ import 'package:path/path.dart' as p;
 import '../agent_start.dart' show isAgentSessionVar;
 import '../posix_ffi.dart';
 import '../protocol.dart';
+import 'project_stage.dart';
 import 'project_supervisor.dart';
 
 /// The process boundary deliberately has no agent-specific command knowledge.
@@ -495,16 +496,9 @@ final class AiProjectCenterPlugin {
   /// A project as the client sees it, with derived facts.
   Map<String, dynamic> _view(Map<String, dynamic> item) {
     final view = _copy(item);
-    bool valid;
-    try {
-      valid =
-          item['approved_version'] != null &&
-          item['approved_version'] == item['plan_version'] &&
-          item['approved_digest'] == _approval(item);
-    } on Object {
-      valid = false;
-    }
-    view['approval_valid'] = valid;
+    // For display, from the shared snapshot (the header, the board and the
+    // project page agree); launches check against a fresh one.
+    view['approval_valid'] = _displayApprovalValid(item);
     view['processes_stopping'] =
         !_active.containsKey(item['id']) && _runHeld(item['id'] as String);
     return view;
@@ -1434,9 +1428,12 @@ final class AiProjectCenterPlugin {
         if (active.cancelled) break;
         var item = _copy(_projects[id]!);
         final member = members[item['next_member'] as int];
-        // One snapshot is checked against the approval and then launched.
+        // One snapshot is checked against the approval and then launched;
+        // it also replaces the display snapshot (every project's derived
+        // approval), also when this assignment is refused.
         final profiles = _profiles();
         final runtimes = _runtimes();
+        _installDisplay(profiles, runtimes);
         final profile = profiles[member['agent']];
         if (profile == null) throw ServiceError('project_agent_unavailable');
         if (phase == 'running' &&
@@ -1773,27 +1770,170 @@ final class AiProjectCenterPlugin {
     return {'project': _view(_projects[id]!)};
   }
 
+  /// The clock for the display snapshot's age (a test sets it).
+  DateTime Function() _clock = DateTime.now;
+  set displayClock(DateTime Function() clock) => _clock = clock;
+
+  /// The host's discovery generation, sent with every request: it grows
+  /// whenever the map's data changed or the user asked to refresh.
+  int discoveryGeneration = 0;
+
+  /// The profiles and runtimes used for **display** (summary, board): rebuilt
+  /// when the generation grew, after 60 seconds, and after a launch. Launches
+  /// themselves always take a fresh snapshot.
+  ({
+    int generation,
+    DateTime at,
+    Map<String, Map<String, dynamic>> profiles,
+    Map<String, Map<String, dynamic>> runtimes,
+  })?
+  _display;
+  int _displayVersion = 0;
+  ({int generation, DateTime at})? _displayFailed;
+  final _approvalMemo = <String, (int, int, bool)>{};
+
+  /// Forget the display snapshot (a launch takes a fresh one).
+  void _dropDisplay() {
+    _display = null;
+    _displayFailed = null;
+    _approvalMemo.clear();
+  }
+
+  /// A launch's fresh snapshot becomes the display snapshot.
+  void _installDisplay(
+    Map<String, Map<String, dynamic>> profiles,
+    Map<String, Map<String, dynamic>> runtimes,
+  ) {
+    _display = (
+      generation: discoveryGeneration,
+      at: _clock(),
+      profiles: profiles,
+      runtimes: runtimes,
+    );
+    _displayFailed = null;
+    _displayVersion++;
+    _approvalMemo.clear();
+  }
+
+  /// Whether [item]'s approval is valid, for display, from the cached
+  /// snapshot; memoized by the project's revision and the snapshot version.
+  bool _displayApprovalValid(Map<String, dynamic> item) {
+    if (item['approved_version'] == null ||
+        item['approved_version'] != item['plan_version']) {
+      return false;
+    }
+    final now = _clock();
+    final display = _display;
+    if (display == null ||
+        display.generation != discoveryGeneration ||
+        now.isBefore(display.at) ||
+        now.difference(display.at) >= const Duration(seconds: 60)) {
+      // A failing scan degrades to "not valid" (and keeps the old
+      // snapshot); it never fails the summary or the view, and it is not
+      // retried for every project and poll: once per generation, then at
+      // most every 10 seconds.
+      final failed = _displayFailed;
+      if (failed != null &&
+          failed.generation == discoveryGeneration &&
+          !now.isBefore(failed.at) &&
+          now.difference(failed.at) < const Duration(seconds: 10)) {
+        return false;
+      }
+      try {
+        _display = (
+          generation: discoveryGeneration,
+          at: now,
+          profiles: _profiles(),
+          runtimes: _runtimes(),
+        );
+      } on Object {
+        _displayFailed = (generation: discoveryGeneration, at: now);
+        return false;
+      }
+      _displayFailed = null;
+      _displayVersion++;
+      _approvalMemo.clear();
+    }
+    final id = item['id'] as String;
+    final revision = item['revision'] as int;
+    final memo = _approvalMemo[id];
+    if (memo != null && memo.$1 == revision && memo.$2 == _displayVersion) {
+      return memo.$3;
+    }
+    bool valid;
+    try {
+      valid =
+          item['approved_digest'] ==
+          _approval(item, _display!.profiles, _display!.runtimes);
+    } on Object {
+      valid = false;
+    }
+    _approvalMemo[id] = (revision, _displayVersion, valid);
+    return valid;
+  }
+
+  /// Statuses whose stage or bucket depends on the approval.
+  static const _approvalMatters = {'ready', 'paused', 'interrupted', 'failed'};
+
+  /// The derived state of [item] (docs/plan-main-layout.md).
+  ProjectState stateOf(Map<String, dynamic> item) {
+    final id = item['id'] as String;
+    final stopping = !_active.containsKey(id) && _runHeld(id);
+    final needsApproval =
+        _approvalMatters.contains(item['status']) ||
+        (item['phase'] == 'setup' &&
+            item['setup_return'] is Map &&
+            _approvalMatters.contains((item['setup_return'] as Map)['status']));
+    return projectState(
+      item,
+      ProjectFacts(
+        approvalValid: needsApproval && _displayApprovalValid(item),
+        processesStopping: stopping,
+      ),
+    );
+  }
+
   Map<String, dynamic> summary() {
-    final values = _projects.values;
+    final counts = {for (final bucket in ProjectBucket.values) bucket: 0};
+    var running = 0, pausing = 0, waiting = 0;
+    final byAgent = <String, int>{};
+    for (final item in _projects.values) {
+      final state = stateOf(item);
+      counts[state.bucket] = counts[state.bucket]! + 1;
+      final status = item['status'];
+      if (state.activity == 'stopping') {
+        pausing++;
+      } else if (const {'planning', 'running', 'reviewing'}.contains(status)) {
+        running++;
+      }
+      if (state.activity != 'stopping' && status == 'awaiting_review') {
+        waiting++;
+      }
+      final agents = <String>{
+        for (final team in [item['team'], item['plan_team']])
+          if (team is List)
+            for (final member in team)
+              if (member is Map && member['agent'] is String)
+                member['agent'] as String,
+      };
+      for (final agent in agents) {
+        byAgent[agent] = (byAgent[agent] ?? 0) + 1;
+      }
+    }
     return {
-      'running': values
-          .where(
-            (item) =>
-                {'planning', 'running', 'reviewing'}.contains(item['status']),
-          )
-          .length,
-      'pausing': values.where((item) => item['status'] == 'pausing').length,
-      'waiting': values
-          .where((item) => item['status'] == 'awaiting_review')
-          .length,
+      'running': running,
+      'pausing': pausing,
+      'waiting': waiting,
+      // Unchanged meaning: a store fault adds one.
       'attention':
-          values
-              .where(
-                (item) => {'interrupted', 'failed'}.contains(item['status']),
-              )
-              .length +
-          (_storageFault == null ? 0 : 1),
-      'total': values.length,
+          counts[ProjectBucket.attention]! + (_storageFault == null ? 0 : 1),
+      'attention_projects': counts[ProjectBucket.attention],
+      'needs_you': counts[ProjectBucket.needsYou],
+      'ready': counts[ProjectBucket.ready],
+      'drafts': counts[ProjectBucket.drafts],
+      'finished': counts[ProjectBucket.finished],
+      'total': _projects.length,
+      'by_agent': byAgent,
       if (_storageFault != null) 'error': _storageFault,
     };
   }
@@ -1807,6 +1947,18 @@ final class AiProjectCenterPlugin {
         !{'list', 'get', 'summary', 'profiles', 'pause'}.contains(operation) &&
         !(_storageFault == 'project_store_full' && operation == 'delete')) {
       throw ServiceError(_storageFault!);
+    }
+    // A launch reads profiles and runtimes fresh; the display snapshot is
+    // replaced with it (every project's derived approval, not only this one).
+    if (const {
+      'plan',
+      'review',
+      'run',
+      'continue',
+      'setup',
+      'setup_apply',
+    }.contains(operation)) {
+      _dropDisplay();
     }
     switch (operation) {
       case 'profiles':

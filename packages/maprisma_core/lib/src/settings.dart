@@ -50,6 +50,7 @@ const uiSettings = {
   'ai_local_helper',
   'ai_checks',
   'window_mode',
+  'main_tab',
   'corners',
   'ask_prompts',
 };
@@ -265,6 +266,8 @@ final class SettingsStore {
         return validActionRules(v);
       case 'look':
         return ['omarchy', 'adwaita'].contains(v);
+      case 'main_tab':
+        return v == null || v == 'projects' || v == 'map';
       case 'window_mode':
         return ['auto', 'popup', 'window'].contains(v);
       case 'dictation_engine':

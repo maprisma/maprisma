@@ -1,3 +1,4 @@
+import 'package:crypto/crypto.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -914,5 +915,412 @@ void main() {
     expect(host.owner({'undo': 'core-${'b' * 32}'}), 'reports');
     expect(host.owner({'h': first['handle']}), isNull);
     await host.shutdown();
+  });
+
+  group('API ranges and capabilities (task 085)', () {
+    test('an api-1 backend has no capabilities; the host says so', () async {
+      final host = FeaturePluginHost(
+        identity,
+        commands: {'ai-project-center': fixture('ai-project-center')},
+      );
+      addTearDown(host.dispose);
+      expect(host.negotiatedApi('ai-project-center'), isNull);
+      await host.call('ai-project-center', 'list', {}, () => {});
+      expect(host.negotiatedApi('ai-project-center'), 1);
+      expect(host.capabilities('ai-project-center'), isEmpty);
+      final listed = host.descriptors().firstWhere(
+        (f) => f['id'] == 'ai-project-center',
+      );
+      expect(listed['api_range'], [1, 2]);
+      expect(listed['negotiated_api'], 1);
+      await host.shutdown();
+    });
+
+    test('an api-2 backend names its capabilities', () async {
+      final host = FeaturePluginHost(
+        identity,
+        commands: {'ai-project-center': fixture('ai-project-center', 'api2')},
+      );
+      addTearDown(host.dispose);
+      await host.call('ai-project-center', 'list', {}, () => {});
+      expect(host.negotiatedApi('ai-project-center'), 2);
+      expect(host.capabilities('ai-project-center'), ['summary2']);
+      await host.shutdown();
+    });
+
+    test('Reports accepts only api 1; nobody accepts api 3', () async {
+      for (final (id, mode) in [
+        ('reports', 'api2'),
+        ('ai-project-center', 'api3'),
+        ('ai-project-center', 'badcaps'),
+      ]) {
+        final host = FeaturePluginHost(
+          identity,
+          commands: {id: fixture(id, mode)},
+        );
+        addTearDown(host.dispose);
+        await expectLater(
+          host.call(id, 'list', {}, () => {}),
+          code('feature_incompatible'),
+          reason: '$id $mode',
+        );
+      }
+    });
+
+    test(
+      'embedded mode reports this build\'s own API and capabilities',
+      () async {
+        final host = FeaturePluginHost(identity);
+        await host.call('ai-project-center', 'list', {}, () => {'local': 1});
+        expect(host.negotiatedApi('ai-project-center'), 2);
+        expect(host.capabilities('ai-project-center'), ['summary2']);
+        await host.shutdown();
+      },
+    );
+
+    test(
+      'refresh grows the discovery generation and is not forwarded',
+      () async {
+        final host = FeaturePluginHost(
+          identity,
+          commands: {'reports': fixture()},
+        );
+        final service = CoreService(
+          environment: identity.environment,
+          migrate: false,
+          featureHost: host,
+        );
+        addTearDown(service.dispose);
+        final before = service.discoveryGeneration;
+        final answer = await service.dispatchAsync('features.call', {
+          'plugin': 'reports',
+          'operation': 'list',
+          'params': <String, dynamic>{},
+          'refresh': true,
+        });
+        expect(service.discoveryGeneration, before + 1);
+        expect(answer['echo'], isEmpty);
+        await expectLater(
+          service.dispatchAsync('features.call', {
+            'plugin': 'reports',
+            'operation': 'list',
+            'params': <String, dynamic>{},
+            'refresh': 'yes',
+          }),
+          throwsA(isA<FormatException>()),
+        );
+        // An explicit null is not a boolean either.
+        await expectLater(
+          service.dispatchAsync('features.call', {
+            'plugin': 'reports',
+            'operation': 'list',
+            'params': <String, dynamic>{},
+            'refresh': null,
+          }),
+          throwsA(isA<FormatException>()),
+        );
+        await service.shutdownFeatures();
+      },
+    );
+
+    test('the no-project summary has every field and no backend', () async {
+      final service = CoreService(
+        environment: identity.environment,
+        migrate: false,
+      );
+      addTearDown(service.dispose);
+      final summary = await service.dispatchAsync('features.summary', {});
+      for (final key in [
+        'running',
+        'pausing',
+        'waiting',
+        'attention',
+        'attention_projects',
+        'needs_you',
+        'ready',
+        'drafts',
+        'finished',
+        'total',
+      ]) {
+        expect(summary[key], 0, reason: key);
+      }
+      expect(summary['by_agent'], isEmpty);
+      expect(summary['api'], isNull);
+      expect(summary['capabilities'], isNull);
+    });
+  });
+
+  group('signed updates and backend meta (task 085 round 1)', () {
+    late String key;
+    setUp(() {
+      final dir = Directory('${temporary.path}/key')..createSync();
+      Process.runSync('ssh-keygen', [
+        '-q',
+        '-t',
+        'ed25519',
+        '-N',
+        '',
+        '-C',
+        'test',
+        '-f',
+        '${dir.path}/k',
+      ]);
+      key = File('${dir.path}/k.pub').readAsStringSync().split(' ')[1];
+    });
+
+    /// A signed update of the AI Project Center whose manifest names
+    /// [manifestApi] and whose plugin answers as the fixture in [mode].
+    void installUpdate(int manifestApi, [String mode = '']) {
+      final dir = Directory(
+        '${identity.dataDir}/feature-plugins/ai-project-center',
+      )..createSync(recursive: true);
+      final command = fixture(
+        'ai-project-center',
+        mode,
+      ).map((w) => "'$w'").join(' ');
+      final plugin = File('${dir.path}/plugin')
+        ..writeAsStringSync('#!/bin/sh\nexec $command\n');
+      final manifest = File('${dir.path}/feature.json')
+        ..writeAsStringSync(
+          jsonEncode({
+            'id': 'ai-project-center',
+            'api': manifestApi,
+            'sha256': sha256.convert(plugin.readAsBytesSync()).toString(),
+          }),
+        );
+      final signed = Process.runSync('ssh-keygen', [
+        '-Y',
+        'sign',
+        '-f',
+        '${temporary.path}/key/k',
+        '-n',
+        'maprisma-feature',
+        manifest.path,
+      ]);
+      expect(signed.exitCode, 0, reason: '${signed.stderr}');
+      File('${manifest.path}.sig').renameSync('${dir.path}/SIGNATURE');
+    }
+
+    test('a signed api-1 update runs and reports no capabilities', () async {
+      installUpdate(1);
+      final host = FeaturePluginHost(identity, trustedKey: key);
+      addTearDown(host.dispose);
+      await host.call('ai-project-center', 'list', {}, () => {});
+      expect(host.negotiatedApi('ai-project-center'), 1);
+      expect(host.capabilities('ai-project-center'), isEmpty);
+      await host.shutdown();
+    });
+
+    test(
+      'an update whose @hello API differs from its manifest is refused',
+      () async {
+        installUpdate(2);
+        final host = FeaturePluginHost(identity, trustedKey: key);
+        addTearDown(host.dispose);
+        await expectLater(
+          host.call('ai-project-center', 'list', {}, () => {}),
+          code('feature_incompatible'),
+        );
+      },
+    );
+
+    test('a signed api-2 update with capabilities', () async {
+      installUpdate(2, 'api2');
+      final host = FeaturePluginHost(identity, trustedKey: key);
+      addTearDown(host.dispose);
+      await host.call('ai-project-center', 'list', {}, () => {});
+      expect(host.capabilities('ai-project-center'), ['summary2']);
+      await host.shutdown();
+    });
+
+    test('explicit null or empty capability names are refused', () async {
+      for (final mode in ['nullcaps', 'emptycap']) {
+        final host = FeaturePluginHost(
+          identity,
+          commands: {
+            'ai-project-center': fixture('ai-project-center', 'api2+$mode'),
+          },
+        );
+        addTearDown(host.dispose);
+        await expectLater(
+          host.call('ai-project-center', 'list', {}, () => {}),
+          code('feature_incompatible'),
+          reason: mode,
+        );
+      }
+    });
+
+    test(
+      'api-1 backend through features.summary and list carry its meta',
+      () async {
+        Directory(
+          '${identity.dataDir}/ai-project-center',
+        ).createSync(recursive: true);
+        File(
+          '${identity.dataDir}/ai-project-center/projects.json',
+        ).writeAsStringSync('{}');
+        final host = FeaturePluginHost(
+          identity,
+          commands: {'ai-project-center': fixture('ai-project-center')},
+        );
+        final service = CoreService(
+          environment: identity.environment,
+          migrate: false,
+          featureHost: host,
+        );
+        addTearDown(service.dispose);
+        final listed = await service.dispatchAsync('features.call', {
+          'plugin': 'ai-project-center',
+          'operation': 'list',
+          'params': <String, dynamic>{},
+        });
+        expect(listed['api'], 1);
+        expect(listed['capabilities'], isEmpty);
+        final summary = await service.dispatchAsync('features.summary', {});
+        expect(summary['api'], 1);
+        await service.shutdownFeatures();
+      },
+    );
+
+    test('refresh reaches the Project Center as a grown generation', () async {
+      final host = FeaturePluginHost(
+        identity,
+        commands: {'ai-project-center': fixture('ai-project-center', 'api2')},
+      );
+      final service = CoreService(
+        environment: identity.environment,
+        migrate: false,
+        featureHost: host,
+      );
+      addTearDown(service.dispose);
+      Future<Map> list({bool refresh = false}) =>
+          service.dispatchAsync('features.call', {
+            'plugin': 'ai-project-center',
+            'operation': 'list',
+            'params': <String, dynamic>{},
+            if (refresh) 'refresh': true,
+          });
+      final first = await list();
+      final second = await list(refresh: true);
+      expect(
+        (second['context'] as Map)['generation'],
+        ((first['context'] as Map)['generation'] as int) + 1,
+      );
+      expect(second['api'], 2);
+      await service.shutdownFeatures();
+    });
+  });
+
+  group('discovery generation end to end (task 085 round 2)', () {
+    test(
+      'through the real worker: the cache holds, refresh shows the change',
+      () async {
+        // A stand-in for an installed agent, so the worker has a profile.
+        final bin = Directory('${temporary.path}/bin')..createSync();
+        final claude = File('${bin.path}/claude')
+          ..writeAsStringSync('#!/bin/sh\necho "2.1.0 (Claude Code)"\n');
+        Process.runSync('chmod', ['755', claude.path]);
+        final folder = Directory('${temporary.path}/work')..createSync();
+        final environment = {
+          ...identity.environment,
+          // Only the stand-in: a real agent on this machine must not count.
+          'PATH': bin.path,
+        };
+        final host = FeaturePluginHost(
+          AppIdentity(environment: environment),
+          commands: {
+            'ai-project-center': [
+              Platform.resolvedExecutable,
+              '-DMAPRISMA_FEATURE_ID=ai-project-center',
+              File('bin/maprisma-feature.dart').absolute.path,
+            ],
+          },
+        );
+        final service = CoreService(
+          environment: environment,
+          migrate: false,
+          featureHost: host,
+        );
+        addTearDown(service.dispose);
+        Future<Map<String, dynamic>> call(
+          String operation,
+          Map<String, dynamic> params, {
+          bool refresh = false,
+        }) => service.dispatchAsync('features.call', {
+          'plugin': 'ai-project-center',
+          'operation': operation,
+          'params': params,
+          if (refresh) 'refresh': true,
+        });
+        var item =
+            (await call('save', {
+                  'title': 'Real worker',
+                  'brief': 'Build the requested change and verify it.',
+                  'path': folder.path,
+                  'team': [
+                    {'agent': 'claude', 'role': 'lead'},
+                  ],
+                  'plan': 'The plan.',
+                }))['project']
+                as Map<String, dynamic>;
+        item =
+            (await call('review', {
+                  'id': item['id'],
+                  'revision': item['revision'],
+                  'approved': true,
+                }))['project']
+                as Map<String, dynamic>;
+        expect(item['status'], 'ready');
+        expect(
+          (await service.dispatchAsync('features.summary', {}))['ready'],
+          1,
+        );
+        // The agent disappears outside Maprisma: the display cache still holds.
+        claude.deleteSync();
+        expect(
+          (await service.dispatchAsync('features.summary', {}))['ready'],
+          1,
+        );
+        // The user refreshes: the worker rebuilds its snapshot.
+        final listed = await call('list', {}, refresh: true);
+        expect((listed['summary'] as Map)['ready'], 0);
+        expect((listed['summary'] as Map)['needs_you'], 1);
+        final viewed = await call('get', {'id': item['id']});
+        expect((viewed['project'] as Map)['approval_valid'], isFalse);
+        await service.shutdownFeatures();
+      },
+      timeout: const Timeout(Duration(minutes: 2)),
+    );
+
+    test('an Ask AI task that ended grows the host generation once', () async {
+      final host = FeaturePluginHost(
+        identity,
+        commands: {'ask-ai': fixture('ask-ai')},
+      );
+      final service = CoreService(
+        environment: identity.environment,
+        migrate: false,
+        featureHost: host,
+      );
+      addTearDown(service.dispose);
+      final issued = await service.dispatchAsync('map.smart_helpers', {});
+      final handle = (issued['nested'] as Map)['task'] as String;
+      final before = service.discoveryGeneration;
+      await service.dispatchAsync('tasks.status', {'task': handle});
+      expect(service.discoveryGeneration, before + 1);
+      await service.dispatchAsync('tasks.status', {'task': handle});
+      expect(service.discoveryGeneration, before + 1);
+      await service.shutdownFeatures();
+    });
+
+    test('a worker task that crashes still signals its end', () async {
+      final tasks = CoreTasks(['/bin/sh', '-c', 'exit 3']);
+      var ended = 0;
+      tasks.onEnded = () => ended++;
+      final id = tasks.start('providers.run', {})['task'] as String;
+      await tasks.items[id]!.completion;
+      expect(tasks.items[id]!.state, 'failed');
+      expect(ended, 1);
+    });
   });
 }

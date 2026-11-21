@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import json
+import re
 import subprocess
 from pathlib import Path
 
@@ -20,9 +21,22 @@ def build_features(core: Path, destination: Path, features=FEATURES):
             resolve_dart(), 'compile', 'exe', f'-DMAPRISMA_FEATURE_ID={feature}',
             'bin/maprisma-feature.dart', '-o', str(executable),
         ], cwd=core, check=True)
-        metadata = {'id': feature, 'api': 1,
+        metadata = {'id': feature, 'api': feature_api(core, feature),
                     'sha256': hashlib.sha256(executable.read_bytes()).hexdigest()}
         (target / 'feature.json').write_text(json.dumps(metadata, indent=2) + '\n')
+
+
+def feature_api(core: Path, feature: str) -> int:
+    """The API this build's backend of [feature] speaks: featureApiOwn in the core, so the
+    manifest always names what the worker's @hello answers."""
+    source = (core / 'lib/src/feature_plugins.dart').read_text()
+    table = re.search(r'const featureApiOwn = \{(.*?)\};', source, re.S)
+    if not table:
+        raise SystemExit('featureApiOwn not found in feature_plugins.dart')
+    found = re.search(r"'" + re.escape(feature) + r"':\s*(\d+)", table.group(1))
+    if not found:
+        raise SystemExit(f'no API for {feature} in featureApiOwn')
+    return int(found.group(1))
 
 
 def main():

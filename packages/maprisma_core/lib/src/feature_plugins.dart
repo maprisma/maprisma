@@ -18,7 +18,32 @@ import 'sshsig.dart';
 /// bound leaves room for releases still on their way.
 const maxOwnedHandles = 2 * maxIssuedHandles;
 
+/// The API a feature backend speaks when it gives none (the first version).
 const featureApi = 1;
+
+/// The API versions the host accepts, per feature.
+const featureApiRanges = {
+  'reports': (1, 1),
+  'ask-ai': (1, 1),
+  'ai-project-center': (1, 2),
+};
+
+/// What this build's own backends speak, per feature (also embedded mode).
+const featureApiOwn = {'reports': 1, 'ask-ai': 1, 'ai-project-center': 2};
+
+/// Named capabilities of this build's own backends (`@hello` lists them).
+const featureCapabilitiesOwn = {
+  'reports': <String>[],
+  'ask-ai': <String>[],
+  'ai-project-center': ['summary2'],
+};
+
+/// Whether [api] is accepted for [id].
+bool featureApiAccepted(String id, Object? api) {
+  final range = featureApiRanges[id];
+  return range != null && api is int && api >= range.$1 && api <= range.$2;
+}
+
 const featureIds = {'reports', 'ask-ai', 'ai-project-center'};
 const featureTitles = {
   'reports': 'Reports',
@@ -37,7 +62,11 @@ final class FeaturePluginHost {
     this.restartDelay = const Duration(seconds: 1),
     DateTime Function()? clock,
     this.ownedLimit = maxOwnedHandles,
+    this.trustedKey = signingKey,
   }) : clock = clock ?? DateTime.now;
+
+  /// The key that signs user updates (another one only in tests).
+  final String trustedKey;
 
   /// [maxOwnedHandles], smaller in tests.
   final int ownedLimit;
@@ -97,7 +126,10 @@ final class FeaturePluginHost {
       {
         'id': id,
         'title': featureTitles[id],
-        'api': featureApi,
+        'api': featureApiOwn[id],
+        'api_range': [featureApiRanges[id]!.$1, featureApiRanges[id]!.$2],
+        'negotiated_api': negotiatedApi(id),
+        'capabilities': capabilities(id),
         'backend': _embedded.contains(id)
             ? 'embedded'
             : _processes.containsKey(id) ||
@@ -124,8 +156,32 @@ final class FeaturePluginHost {
       p.join(identity.dataDir, 'feature-plugins', id);
   String _bundled(String id) => p.join(appFolder(), 'features', id, 'plugin');
 
+  /// The API the running backend of [id] answered (embedded: this build's),
+  /// or null before a backend answered `@hello`.
+  int? negotiatedApi(String id) {
+    if (_embedded.contains(id)) return featureApiOwn[id];
+    final process = _processes[id];
+    return process == null || process.retired || !process.greeted
+        ? null
+        : process.api;
+  }
+
+  /// The capabilities the running backend named (embedded: this build's),
+  /// or null before a backend answered `@hello`.
+  List<String>? capabilities(String id) {
+    if (_embedded.contains(id)) return featureCapabilitiesOwn[id];
+    final process = _processes[id];
+    return process == null || process.retired || !process.greeted
+        ? null
+        : process.capabilities;
+  }
+
+  /// The API a signed user update's manifest names, by feature.
+  final _manifestApi = <String, int>{};
+
   List<String>? _command(String id) {
     if (!featureIds.contains(id)) throw ServiceError('feature_unknown');
+    _manifestApi.remove(id);
     final explicit = commands?[id];
     if (explicit != null) return explicit;
     if (Directory(_updateDirectory(id)).existsSync()) {
@@ -152,14 +208,14 @@ final class FeaturePluginHost {
         manifest,
         signature,
         'maprisma-feature',
-        signingKey,
+        trustedKey,
       )) {
         throw ServiceError('feature_signature_invalid');
       }
       final data = jsonDecode(utf8.decode(manifest));
       if (data is! Map ||
           data['id'] != id ||
-          data['api'] != featureApi ||
+          !featureApiAccepted(id, data['api']) ||
           data['sha256'] is! String ||
           !RegExp(r'^[a-f0-9]{64}$').hasMatch(data['sha256'] as String)) {
         throw ServiceError('feature_incompatible');
@@ -194,6 +250,7 @@ final class FeaturePluginHost {
       } finally {
         io.close(fd);
       }
+      _manifestApi[id] = data['api'] as int;
       return [target];
     } finally {
       io.close(dir);
@@ -406,6 +463,7 @@ final class FeaturePluginHost {
       identity.environment,
       shutdownTimeout,
       clock,
+      manifestApi: _manifestApi[id],
       // Its handles die with it, unless it was already replaced: then the
       // handles are its replacement's.
       onFailed: () {
@@ -480,6 +538,7 @@ final class _FeatureProcess {
     this.environment,
     this.shutdownTimeout,
     this.clock, {
+    this.manifestApi,
     this.onFailed,
     this.onReleased,
     this.onIssued,
@@ -490,6 +549,16 @@ final class _FeatureProcess {
   /// The method of each pending request (control requests issue nothing).
   final _methods = <int, String>{};
   final DateTime Function() clock;
+
+  /// The API a signed update's manifest names; `@hello` must say the same.
+  final int? manifestApi;
+
+  /// What `@hello` answered (until then the first API, no capabilities).
+  int api = featureApi;
+  List<String> capabilities = const [];
+
+  /// `@hello` was answered and accepted.
+  bool greeted = false;
   final void Function()? onFailed;
   final void Function(List<String> released)? onReleased;
 
@@ -648,10 +717,20 @@ final class _FeatureProcess {
               {},
             ).timeout(const Duration(seconds: 10)))['result']
             as Map;
-    if (hello['id'] != id || hello['api'] != featureApi) {
+    final caps = hello['capabilities'];
+    if (hello['id'] != id ||
+        !featureApiAccepted(id, hello['api']) ||
+        (manifestApi != null && hello['api'] != manifestApi) ||
+        (hello.containsKey('capabilities') &&
+            (caps is! List ||
+                caps.length > 32 ||
+                caps.any((c) => c is! String || c.isEmpty || c.length > 64)))) {
       _fail();
       throw ServiceError('feature_incompatible');
     }
+    api = hello['api'] as int;
+    capabilities = caps == null ? const [] : List<String>.unmodifiable(caps);
+    greeted = true;
   }
 
   Future<Map<String, dynamic>> _request(

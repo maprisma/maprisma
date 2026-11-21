@@ -50,7 +50,7 @@ UI_SETTINGS = frozenset(("action_rules", "action_rule_hints", "flutter_theme_mod
                          "cost_currency", "cost_limit", "warn_yellow", "warn_red", "terminal_tabs", "screenshot_key", "screenshot_folder", "smart_helper", "dictation", "dictation_engine", "dictation_whisper_model",
                          "usage_box", "usage_box_items", "usage_box_size",
                          "ai_activity_log", "ai_activity_log_days", "ai_activity_import", "ai_activity_import_topics", "ai_activity_local_topics",
-                         "ai_local_helper", "ai_checks", "window_mode", "corners", "ask_prompts"))
+                         "ai_local_helper", "ai_checks", "window_mode", "main_tab", "corners", "ask_prompts"))
 
 
 class Service:
