@@ -248,3 +248,26 @@ and sign once (Uwe).
 
 Local LLM adapters (`provider_*.py`) can follow the same way afterwards; they hold more code
 (starting, stopping, model lists), so they come second.
+
+## AI Project Center profiles
+
+The optional `[project]` table declares `plan`, `run` and optional `setup` argv,
+`permissions`, `model_option`, optional `provider_option`, `access_modes`, and
+optional `native_subagents`, `subagent_option`, `subagent_definitions`. Every argv
+starts with this adapter's own command and contains exactly one `{prompt}`
+argument. These are reviewed session profiles, never arbitrary user shell text.
+`setup` must disable tools and project customization: it receives only the brief,
+request and sanitized inventory in a private neutral working directory.
+
+Planning and execution can select independent teams and models. Provider and
+model flags affect that process only. Local selections require an existing map
+connection to a running runtime and an exact model ID in both the agent's model
+catalog and the runtime's served catalog. Conflicting provider aliases require
+review. The proposal cannot invent a download, endpoint or agent installation.
+
+`access_modes` defaults to `read-only` and `project-edit`; restricted adapters
+declare a smaller set. Pi declares only `read-only`, because its tools do not
+provide a filesystem sandbox. Its managed argv disables edits, shell commands,
+MCP and extensions. `--offline` suppresses startup network checks, while inference
+still uses the selected provider. CLI facts were checked against installed help
+and [Pi's CLI documentation](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/cli.md).

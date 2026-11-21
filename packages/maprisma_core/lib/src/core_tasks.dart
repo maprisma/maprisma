@@ -10,11 +10,49 @@ import 'line_diff.dart';
 const coreHandle = 'core-';
 String newHandle() {
   final random = Random.secure();
-  return coreHandle +
-      List.generate(
-        16,
-        (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0'),
-      ).join();
+  final token = List.generate(
+    16,
+    (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0'),
+  ).join();
+  _issued.remove(token);
+  _issued.add(token);
+  while (_issued.length > maxIssuedHandles) {
+    _issued.remove(_issued.first);
+  }
+  return coreHandle + token;
+}
+
+/// Tokens this process issued, newest last. Some routes return the bare
+/// 32-hex token without the prefix; provenance, not the shape, decides that a
+/// string is a handle. Eviction is by issuance count (about 2 MB at most), not
+/// by each store's own lifetime: a handle older than this many later handles
+/// stops routing across processes. Stores keep far fewer handles alive.
+const maxIssuedHandles = 65536;
+final _issued = <String>{};
+
+/// Whether [value] (with or without the `core-` prefix) was issued here.
+bool issuedHandle(String value) {
+  final token = value.startsWith(coreHandle)
+      ? value.substring(coreHandle.length)
+      : value;
+  return token.length == 32 && _issued.contains(token);
+}
+
+/// The strings in [value] that this process issued as handles.
+Set<String> issuedHandlesIn(Object? value) {
+  final found = <String>{};
+  void visit(Object? item) {
+    if (item is String) {
+      if (issuedHandle(item)) found.add(item);
+    } else if (item is Map) {
+      item.values.forEach(visit);
+    } else if (item is List) {
+      item.forEach(visit);
+    }
+  }
+
+  visit(value);
+  return found;
 }
 
 /// The worker this core starts: the AOT executable itself, the Dart VM
@@ -47,6 +85,7 @@ final class CoreTask {
   double fraction = 0;
   Map<String, dynamic> result = {};
   Process? process;
+  Future<void>? completion;
 }
 
 /// Python flutter_tasks.Tasks for the operations this core runs: a worker
@@ -72,7 +111,7 @@ final class CoreTasks {
     Map<String, dynamic> Function(Map<String, dynamic>)? finalize,
   ]) {
     final ident = _slot(operation, finalize);
-    _run(
+    items[ident]!.completion = _run(
       items[ident]!,
       null,
       request: {'operation': operation, 'params': params},
@@ -121,7 +160,7 @@ final class CoreTasks {
     Map<String, dynamic> Function(Map<String, dynamic>)? finalize,
   ]) {
     final ident = _slot(operation, finalize);
-    _run(items[ident]!, body);
+    items[ident]!.completion = _run(items[ident]!, body);
     return {'task': ident};
   }
 
@@ -138,6 +177,7 @@ final class CoreTasks {
       task.process = process;
       if (task.state == 'stopped') {
         _stop(process); // cancelled while starting
+        await process.exitCode;
         return;
       }
       process.stderr.drain<void>();

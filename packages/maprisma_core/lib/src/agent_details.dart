@@ -274,6 +274,9 @@ final class DetailReaders {
     final port = local && uri.hasPort ? uri.port : null;
     final runtime = local ? names[name] ?? ports[port] ?? '' : '';
     return {
+      // CLI identity is distinct from the short display label. Pi custom
+      // provider IDs can be longer than the map's 40-character name field.
+      'id': boundedText(name, 100),
       'name': boundedText(name, 40),
       'local': local,
       'runtime': runtime,

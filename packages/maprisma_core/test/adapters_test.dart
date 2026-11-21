@@ -6,6 +6,49 @@ import 'package:maprisma_core/src/identity.dart';
 import 'package:maprisma_core/src/scan_files.dart';
 
 void main() {
+  test(
+    'project setup cannot launch a different command or omit its prompt',
+    () {
+      const base = {'command': 'worker', 'name': 'Worker'};
+      for (final setup in [
+        ['sh', '{prompt}'],
+        ['worker'],
+        ['worker', '--prompt={prompt}'],
+        ['worker', '{prompt}', '{prompt}'],
+      ]) {
+        expect(
+          () => Adapter({
+            ...base,
+            'project': {
+              'plan': ['worker', '{prompt}'],
+              'run': ['worker', '{prompt}'],
+              'setup': setup,
+              'permissions': 'Read only',
+            },
+          }),
+          throwsA(isA<AdapterError>()),
+        );
+      }
+    },
+  );
+
+  test('Pi managed project profile grants only read and search tools', () {
+    final profile = builtinAdapters()
+        .firstWhere((adapter) => adapter.command == 'pi')
+        .table('project');
+    expect(profile['access_modes'], ['read-only']);
+    for (final key in ['plan', 'run']) {
+      final argv = (profile[key] as List).cast<String>();
+      expect(argv[argv.indexOf('--tools') + 1], 'read,grep,find,ls');
+      expect(
+        argv,
+        containsAll(['--no-mcp', '--no-extensions', '--no-approve']),
+      );
+    }
+    expect(profile['setup'], contains('--no-tools'));
+    expect(profile['setup'], contains('--no-context-files'));
+  });
+
   test('all shipped adapters parse and their keys remain strictly typed', () {
     final adapters = builtinAdapters();
     expect(adapters.length, builtinAdapterSources.length);

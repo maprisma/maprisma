@@ -497,6 +497,9 @@ Map<String, dynamic> withNewerFacts(
 ) {
   if (own == null) return facts;
   final merged = Map<String, dynamic>.from(facts);
+  if (_emptyFact(merged['project']) && !_emptyFact(own['project'])) {
+    merged['project'] = own['project'];
+  }
   for (final key in _newerKeys) {
     if (_emptyFact(merged[key]) && !_emptyFact(own[key])) {
       merged[key] = own[key];

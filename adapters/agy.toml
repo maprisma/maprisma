@@ -139,3 +139,10 @@ verified = false                       # documentation only, not yet tried with 
 # Source: https://antigravity.google/docs/cli/reference.md
 argv = ["agy", "-i", "{prompt}"]
 verified = false
+
+# AI Project Center: session-only permission scope; never changes global settings.
+[project]
+plan = ["agy", "--mode", "plan", "--sandbox", "--settings", "{\"toolPermission\":\"request-review\",\"allowNonWorkspaceAccess\":false}", "-p", "{prompt}"]
+run = ["agy", "--mode", "accept-edits", "--sandbox", "--settings", "{\"toolPermission\":\"request-review\",\"allowNonWorkspaceAccess\":false}", "-p", "{prompt}"]
+permissions = "Planning and review use plan mode. Execution may edit project files in the sandbox; tool requests needing approval are denied in this managed session."
+model_option = "--model"

@@ -77,6 +77,9 @@ def main():
         subprocess.run([resolve_dart(), 'pub', 'get', '--offline'], cwd=core, check=True)
         subprocess.run([resolve_dart(), 'compile', 'exe', 'bin/maprisma-core.dart', '-o',
                         str(bundle / 'lib/maprisma-core')], cwd=core, check=True)
+        import runpy
+        build_features = runpy.run_path(str(ROOT / 'tools/build-feature-plugins.py'))['build_features']
+        build_features(core, bundle / 'features')
         (bundle / 'data').mkdir(exist_ok=True)
         for manual in sorted((ROOT / 'data').glob('user-manual*.pdf')):
             shutil.copy2(manual, bundle / 'data' / manual.name)

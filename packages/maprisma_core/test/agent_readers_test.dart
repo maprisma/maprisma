@@ -30,6 +30,14 @@ void main() {
   Adapter adapter(String command) =>
       builtinAdapters().firstWhere((a) => a.command == command);
 
+  test('provider command identity survives the shorter map label', () {
+    final id = 'local-${'provider'.padRight(50, 'x')}';
+    final provider = readers().provider(id, 'http://127.0.0.1:9090/v1');
+    expect(provider['id'], id);
+    expect((provider['name'] as String).length, 40);
+    expect(provider['local'], true);
+  });
+
   setUp(() {
     home = Directory.systemTemp.createTempSync('agent-readers');
     env = {

@@ -147,6 +147,24 @@ final class Adapter {
       _check(way as Map, 'WAY', _required('way'));
     }
     check('update', 'UPDATE');
+    if (data.containsKey('project')) {
+      check('project', 'PROJECT', ['plan', 'run', 'permissions']);
+      for (final operation in [
+        'plan',
+        'run',
+        if (t('project').containsKey('setup')) 'setup',
+      ]) {
+        final argv = t('project')[operation] as List;
+        if (argv.isEmpty ||
+            argv.first != command ||
+            argv.where((v) => v == '{prompt}').length != 1 ||
+            argv.any(
+              (v) => (v as String).contains('{prompt}') && v != '{prompt}',
+            )) {
+          throw const AdapterError('Invalid project argv');
+        }
+      }
+    }
     if (data.containsKey('ask')) {
       check('ask', 'ASK', _required('ask'));
       final argv = t('ask')['argv'] as List;

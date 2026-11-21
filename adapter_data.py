@@ -47,7 +47,7 @@ TOP = {"command": STR, "name": STR, "label": STR, "full_name": STR, "icon": STR,
        "access": TABLE, "security": TABLE, "login_status": TABLE, "installer": STR, "usage": STR,
        "local_llm": TABLE, "ask": TABLE, "configure": TABLES, "home": STR, "activity": STRS, "details": TABLE,
        "program_dir": STR, "start": STRS, "web_search": BOOL, "chat_app": BOOL, "herdr": STR, "research": TABLE, "rewrite": TABLE, "task": TABLE, "closed": TABLE, "advise": TABLE,
-       "models": TABLE, "tools": TABLE, "replies": TABLE, "subagents": TABLE, "plan_limits": TABLE}
+       "models": TABLE, "tools": TABLE, "replies": TABLE, "subagents": TABLE, "plan_limits": TABLE, "project": TABLE}
 WAY = {"kind": STR, "spec": STR, "tool": STR, "argv": STRS, "sudo": BOOL, "url": STR, "note": STR,
        "update": STRS, "packages": "a list of [manager, name]"}
 UPDATE = {"self": STRS, "latest": STR}
@@ -74,6 +74,7 @@ TOOLS = {"file": STR, "key": STR}                       # the tools it is given 
 RESEARCH, REWRITE, TASK = {"argv": STRS, "output": STR}, {"argv": STRS}, {"argv": STRS, "verified": BOOL}
 # What closes it in when the map starts it (agent_guard): options right after the program for its
 # look-ups and rewrites, for its task tabs, and per MCP server in its [mcp] file ("{name}").
+PROJECT = {"plan": STRS, "run": STRS, "setup": STRS, "permissions": STR, "access_modes": STRS, "model_option": STR, "provider_option": STR, "native_subagents": BOOL, "subagent_option": STR, "subagent_definitions": TABLE}
 CLOSED = {"background": STRS, "task": STRS, "mcp_off": STRS, "home_env": STR}
 # One question answered by a model it is given (a local LLM's), offline and without tools: the prompt
 # on stdin; "model": the options that pick it ("{model}" once, "{provider}" at most once).
@@ -181,6 +182,12 @@ def check(data: dict, name: str) -> None:
     for i, way in enumerate(data.get("install", [])):
         _check(way, WAY, f"{name}: install[{i}]", REQUIRED["way"])
     _check(data.get("update", {}), UPDATE, f"{name}: update")
+    if "project" in data:
+        _check(data["project"], PROJECT, f"{name}: project", ("plan", "run", "permissions"))
+        for operation in ("plan", "run", *(["setup"] if "setup" in data["project"] else [])):
+            argv = data["project"][operation]
+            if not argv or argv[0] != data["command"] or argv.count("{prompt}") != 1 or any("{prompt}" in a and a != "{prompt}" for a in argv):
+                raise AdapterError(f"{name}: invalid project argv")
     if "ask" in data:
         _check(data["ask"], ASK, f"{name}: ask", REQUIRED["ask"])
         argv = data["ask"]["argv"]

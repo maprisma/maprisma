@@ -34,6 +34,13 @@ final class AppIdentity {
 /// the add-ons and manuals that come with the package (`bundle/addons`,
 /// `bundle/data`).
 String appFolder([String? executable]) {
+  final featureRoot = Platform.environment['MAPRISMA_FEATURE_BUNDLE_ROOT'];
+  if (executable == null &&
+      Platform.environment['MAPRISMA_FEATURE_PROCESS'] != null &&
+      featureRoot != null &&
+      p.isAbsolute(featureRoot)) {
+    return featureRoot;
+  }
   final exe = executable ?? Platform.resolvedExecutable;
   final dir = p.dirname(exe);
   return p.basename(exe) == 'maprisma-core' && p.basename(dir) == 'lib'

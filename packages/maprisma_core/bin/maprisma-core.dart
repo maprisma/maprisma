@@ -128,7 +128,8 @@ Future<void> main(List<String> args) async {
     }
   }
   if (oversized || frame.isNotEmpty) await reply();
-  service.dispose();
+  // EOF: the controller is gone; feature cleanup is awaited before release.
+  await service.close();
 }
 
 void _reports(List<String> args) {

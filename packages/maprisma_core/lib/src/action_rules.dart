@@ -394,6 +394,8 @@ List<ActionCheck> actionChecks(
 
 /// Routes that need no rule of their own.
 const rulesExempt = {
+  // Feature operations delegate setup changes/start permissions to their handlers.
+  'features.call', 'features.shutdown',
   // Manual changes to the user's report library.
   'activitylog.import',
   'reports.save',

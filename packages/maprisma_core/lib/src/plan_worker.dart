@@ -1,7 +1,12 @@
 import 'provider_config.dart';
 import 'provider_config_files.dart';
 import 'reports_generate.dart';
-import 'core.dart' show CoreService, ProviderConfigurationRoutes;
+import 'core.dart'
+    show
+        CoreService,
+        ProviderConfigurationRoutes,
+        ReportsFeatureRoutes,
+        AskAiFeatureRoutes;
 import 'protocol.dart' show ServiceError;
 import 'dart:async';
 import 'dart:convert';
@@ -307,6 +312,8 @@ Future<Map<String, dynamic>> applyPlan(
 /// file (--plan-fd N, as the Python backend passes it) or length-prefixed on
 /// stdin (--plan-stdin, as the Dart core passes it). One result line.
 Future<int> runWorker(List<String> args) async {
+  // A commit finishes even when its reader is gone (EPIPE on progress).
+  unawaited(stdout.done.then<void>((_) {}, onError: (Object _) {}));
   void send(Map<String, dynamic> message) =>
       stdout.writeln(pyJsonDumps(message));
   // The map editor's model guard (maprisma-core worker --guard JSON), asked
