@@ -3814,5 +3814,12 @@
   "Choose a supported access mode before saving.": "Kies een ondersteunde toegangsmodus voordat je opslaat.",
   "Some agent processes are still stopping. Try again shortly.": "Sommige agentprocessen worden nog gestopt. Probeer het zo opnieuw.",
   "Team setup was stopped. The project is unchanged.": "Het instellen van het team is gestopt. Het project is ongewijzigd.",
-  "Team setup ended without a proposal. The project is unchanged.": "Het instellen van het team is beëindigd zonder voorstel. Het project is ongewijzigd."
+  "Team setup ended without a proposal. The project is unchanged.": "Het instellen van het team is beëindigd zonder voorstel. Het project is ongewijzigd.",
+  "Projects": "Projecten",
+  "Projects · status unavailable": "Projecten · status niet beschikbaar",
+  "{0} need you": "{0} hebben je nodig",
+  "{0} need attention": "{0} vragen aandacht",
+  "The project list has a problem": "De projectlijst heeft een probleem",
+  "Wait for the current step": "Wacht tot de huidige stap klaar is",
+  "More": "Meer"
 }

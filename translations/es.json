@@ -3814,5 +3814,12 @@
   "Choose a supported access mode before saving.": "Elige un modo de acceso compatible antes de guardar.",
   "Some agent processes are still stopping. Try again shortly.": "Algunos procesos de agentes aún se están deteniendo. Vuelve a intentarlo en un momento.",
   "Team setup was stopped. The project is unchanged.": "La configuración del equipo se detuvo. El proyecto no ha cambiado.",
-  "Team setup ended without a proposal. The project is unchanged.": "La configuración del equipo terminó sin propuesta. El proyecto no ha cambiado."
+  "Team setup ended without a proposal. The project is unchanged.": "La configuración del equipo terminó sin propuesta. El proyecto no ha cambiado.",
+  "Projects": "Proyectos",
+  "Projects · status unavailable": "Proyectos · estado no disponible",
+  "{0} need you": "{0} te necesitan",
+  "{0} need attention": "{0} requieren atención",
+  "The project list has a problem": "La lista de proyectos tiene un problema",
+  "Wait for the current step": "Espera a que termine el paso actual",
+  "More": "Más"
 }
