@@ -55,8 +55,13 @@ and progress bars at most 4 px).
 Plan and run a project with a team of agents: give it a goal and a folder, let an agent draft the
 plan (or write your own), choose a lead, implementers and a read-only reviewer, review and approve
 the plan, then run it. Every run is supervised: Maprisma stops what an agent started when you pause
-or close it, a project that was interrupted is marked for review instead of being run again, and
-the header shows how many projects run, wait for review or need attention.
+or close it, and a project that was interrupted is marked for review instead of being run again.
+
+The AI Project Center is the **Projects** tab, next to the **AI Map** (Ctrl+1 / Ctrl+2). The tab
+shows, from either side, how many projects run, need you or need attention. Maprisma starts on the
+tab you used last, and leaving a project with unsaved changes always asks first.
+
+![The Projects tab: the projects with their state, and in the tab how many need you or need attention](docs/manual/images/projects-tab.jpg)
 
 ![AI Project Center: a project's goal, its plan and its team of agents with their roles and access](docs/manual/images/project-center.jpg)
 
