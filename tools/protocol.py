@@ -372,7 +372,7 @@ def check() -> list[str]:
     gone = routes - dispatch_names()
     if gone:
         problems.append(f'routes no longer in the core: {sorted(gone)}')
-    called = {n for n in gui_names() if n.split('.')[0] in areas} - routes - GUI_NON_ROUTES
+    called = {n for n in gui_names() if n.split('.')[0] in areas and n.split('.')[1] not in FILE_ENDINGS} - routes - GUI_NON_ROUTES
     if called:
         problems.append(f'the GUI calls routes the contract does not have: {sorted(called)}')
     calls = gui_calls()

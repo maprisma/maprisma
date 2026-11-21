@@ -325,6 +325,28 @@ class CoreClient {
     Map<String, dynamic> params = const {},
   ]) => transport.call('existing.scan', params);
 
+  Future<Map<String, dynamic>> featuresCall({
+    required String operation,
+    required Object? params,
+    required String plugin,
+  }) => transport.call('features.call', {
+    'operation': operation,
+    'params': params,
+    'plugin': plugin,
+  });
+
+  Future<Map<String, dynamic>> featuresList([
+    Map<String, dynamic> params = const {},
+  ]) => transport.call('features.list', params);
+
+  Future<Map<String, dynamic>> featuresShutdown([
+    Map<String, dynamic> params = const {},
+  ]) => transport.call('features.shutdown', params);
+
+  Future<Map<String, dynamic>> featuresSummary([
+    Map<String, dynamic> params = const {},
+  ]) => transport.call('features.summary', params);
+
   Future<Map<String, dynamic>> foundHints([
     Map<String, dynamic> params = const {},
   ]) => transport.call('found.hints', params);

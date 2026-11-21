@@ -3,6 +3,7 @@
 - **Flutter target (user decision, 2026-10-27):** `docs/plan-flutter.md` is the active
   UI migration plan. The final app must be Flutter, its service the Dart core (Python only as the
   reference, see below). The one-app/thin-launcher plan below still governs identity and delivery.
+- **Feature architecture (Uwe, 2026-11-20):** Reports, Ask AI and AI Project Center are separate feature plugins. Follow `docs/plan-feature-plugins.md` and `docs/plan-ai-project-center.md`: stable, language-neutral stdio backends; native Flutter presentation stays compiled. Keep feature behavior in its module and preserve opaque-handle ownership across processes.
 - **Current plan:** `docs/plan-one-app.md`: Maprisma (called Asterism until 2026-10-30) as the one app for every distribution, the Omarchy plugin
   as a thin launcher. It has Uwe's decisions, the facts with file paths, the next steps and the state of the repos.
 - **GTK app frozen (Uwe, 2026-10-28):** Flutter replaces it on Linux too. The GTK repo gets fixes only, no
@@ -23,6 +24,7 @@
   `plan-flutter.md`, `plan-one-app.md`, `plan-flutter-dart-core.md`, `plan-macos.md` (later).
 - **Flutter checks:** `tools/flutter-dev check` (format, analyzer, tests), `tools/flutter-dev build` (isolated
   Devel build in `.flutter-previews/`, not launched). Naming: `docs/plan-naming.md`.
+- **Headless widget fallback:** if the normal test runner cannot open its VM-service/reporting socket, `tools/test-widgets-headless.py <flutter_app/test/file_test.dart>` uses the cached engine with VM service disabled. It runs the original tests in separate processes; `--all` is for final validation. Its internal test API bindings must be rechecked after SDK/test_api updates.
 - **A clean cut (Uwe, 2026-10-30):** Maprisma knows nothing of the GTK app AI Agents Map: no shared code,
   names, folders, settings import, remote or sync. The plugin repo `/mnt/Data/Projects/omarchy-ai-agents-map`
   is its own GTK source. Maprisma only still recognises what the GTK app left on a user's PC (its install
@@ -30,8 +32,8 @@
   Asterism folders once (`legacy_move.dart`).
 - **During work and before a commit:** run only checks and tests related to the
   changes. Inspect `tools/test-changed --list` and narrow its selection when
-  needed. **Full suites only before a push** (Uwe, 2026-11-20); do not run them
-  routinely before commits, reviews or local builds.
+  needed. **Run the whole suites once at the end of the task, and before a push**
+  (Uwe, 2026-11-20). Do not repeat them routinely during edits, commits, reviews or local builds.
 - The core names no agent and no local LLM: their facts live in `adapters/` and `provider_*.py`.
 - New UI texts in all 8 languages (`translations/*.json`); feature changes also in the manual (`docs/manual/`).
   Preserve source translation order and whitespace; append new keys instead of reserializing the file.
@@ -67,6 +69,6 @@ Two agents work on this repo, each a whole task at a time, each reviewing the ot
 - **Before asking for review (author):** inspect the whole branch's changes against `main`,
   then run only their related checks/tests (`tools/test-changed --base main --list`
   shows the automatic selection). Report the checks actually run.
-- **Suites (complete, only before a push):** `MAPRISMA_PUB_OFFLINE=1 tools/flutter-dev check`,
+- **Suites (complete, at final task validation and before a push):** `MAPRISMA_PUB_OFFLINE=1 tools/flutter-dev check`,
   `python3 -m unittest discover -s tests -q`, `UV_OFFLINE=1 tools/typecheck.sh`.
 - Neither agent pushes, publishes or signs. Signing add-ons is Uwe's.

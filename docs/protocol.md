@@ -133,6 +133,15 @@ A parameter written `name?` may be left out.
 | `existing.preview` | preview | `found`: ?, `models`: ? | ? |
 | `existing.scan` | read | — | ? |
 
+## features
+
+| Route | Kind | Params | Result |
+|---|---|---|---|
+| `features.call` | change | `operation`: string, `params`: object, `plugin`: string | {} Call an operation owned by a feature plugin. AI Project Center supports profiles (profiles and detected runtimes with agent provider/model bindings), setup {id,revision,request,agent?,target?} (asynchronous no-tools team proposal; target plan or run, default run), and setup_apply {id,revision} (reviewed proposal to its saved team, no execution), alongside project lifecycle operations. Save accepts team for execution and optional plan_team for planning; absent or null plan_team uses team (saving null clears a planning override). Save also accepts setup_requests {plan?,run?} to retain prompt drafts without launching a helper. Each team can select different agents, provider/runtime/model, roles and permissions. Approval binds both setups and the launch-affecting profile facts (argv, options, permissions, runtime provider binding), not refreshing model catalogs. Project views (get and every mutation result) add derived approval_valid and processes_stopping (a supervisor of an earlier controller still owns processes of this project; the project and its folder stay busy). Generating a setup proposal leaves the project state and approval unchanged; a failed, stopped or interrupted setup records setup_error instead. setup_apply refuses a paused, interrupted or failed execution checkpoint. Pause remains available after a storage fault, which stops all active work. Model selections are session-only. Setup uses detected choices and explains recommendations; unavailable requirements fail without silently substituting agents. Plugins validate their operation and permissions; this route grants no arbitrary core method access. |
+| `features.list` | read | — | `features` First-party feature plugin descriptors and independent backend API version. |
+| `features.shutdown` | change | — | `ok` Stop dispatch, checkpoint active projects, and close owned feature processes before app shutdown. |
+| `features.summary` | read | — | `attention`, `connected`, `pausing`, `running`, `waiting` AI Project Center execution summary, counted by projects rather than agent processes. |
+
 ## found
 
 | Route | Kind | Params | Result |

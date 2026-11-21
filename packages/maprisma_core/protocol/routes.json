@@ -1001,7 +1001,7 @@
    "area": "connections",
    "handle": "undo",
    "kind": "handle",
-   "note": "restored: the files put back (one changed again since is skipped). choice_failures: the local LLMs' own models (Settings \u203a provider_models) the apply moved that were not put back: an agent file was skipped, or the choice changed since. Restored unit/drop-in files reload user service definitions; reload_failed true reports a reload failure while preserving the restored-files result.",
+   "note": "restored: the files put back (one changed again since is skipped). choice_failures: the local LLMs' own models (Settings › provider_models) the apply moved that were not put back: an agent file was skipped, or the choice changed since. Restored unit/drop-in files reload user service definitions; reload_failed true reports a reload failure while preserving the restored-files result.",
    "params": {
     "undo": "string"
    },
@@ -1204,6 +1204,56 @@
    "params": {},
    "result": null,
    "source": null
+  },
+  "features.call": {
+   "area": "features",
+   "kind": "change",
+   "params": {
+    "plugin": "string",
+    "operation": "string",
+    "params": "object"
+   },
+   "optional": [],
+   "result": {},
+   "source": "manual",
+   "note": "Call an operation owned by a feature plugin. AI Project Center supports profiles (profiles and detected runtimes with agent provider/model bindings), setup {id,revision,request,agent?,target?} (asynchronous no-tools team proposal; target plan or run, default run), and setup_apply {id,revision} (reviewed proposal to its saved team, no execution), alongside project lifecycle operations. Save accepts team for execution and optional plan_team for planning; absent or null plan_team uses team (saving null clears a planning override). Save also accepts setup_requests {plan?,run?} to retain prompt drafts without launching a helper. Each team can select different agents, provider/runtime/model, roles and permissions. Approval binds both setups and the launch-affecting profile facts (argv, options, permissions, runtime provider binding), not refreshing model catalogs. Project views (get and every mutation result) add derived approval_valid and processes_stopping (a supervisor of an earlier controller still owns processes of this project; the project and its folder stay busy). Generating a setup proposal leaves the project state and approval unchanged; a failed, stopped or interrupted setup records setup_error instead. setup_apply refuses a paused, interrupted or failed execution checkpoint. Pause remains available after a storage fault, which stops all active work. Model selections are session-only. Setup uses detected choices and explains recommendations; unavailable requirements fail without silently substituting agents. Plugins validate their operation and permissions; this route grants no arbitrary core method access."
+  },
+  "features.list": {
+   "area": "features",
+   "kind": "read",
+   "params": {},
+   "optional": [],
+   "result": {
+    "features": "list"
+   },
+   "source": "manual",
+   "note": "First-party feature plugin descriptors and independent backend API version."
+  },
+  "features.shutdown": {
+   "area": "features",
+   "kind": "change",
+   "params": {},
+   "optional": [],
+   "result": {
+    "ok": "bool"
+   },
+   "source": "manual",
+   "note": "Stop dispatch, checkpoint active projects, and close owned feature processes before app shutdown."
+  },
+  "features.summary": {
+   "area": "features",
+   "kind": "read",
+   "params": {},
+   "optional": [],
+   "result": {
+    "running": "int",
+    "waiting": "int",
+    "pausing": "int",
+    "attention": "int",
+    "connected": "bool"
+   },
+   "source": "manual",
+   "note": "AI Project Center execution summary, counted by projects rather than agent processes."
   },
   "found.hints": {
    "area": "found",
@@ -1540,7 +1590,7 @@
   "map.snapshot": {
    "area": "map",
    "kind": "read",
-   "note": "nodes: dim marks a known server without agents; an agent's own_provider is the id of its own online provider (\"\" for none); own_login: the app can start its sign-in there (a drop onto that provider signs it in only then); a model with status missing is one an agent is set to that its local LLM no longer has; a model:folder:<path>:<name> model is in a reused model folder no local LLM lists. mcp:<name>~2 is another server of that name. edges: fixed says why a line cannot be taken away here; a failed agent \u2192 runtime line with no recorded failure is a local provider whose LLM moved (dangling: the model the agent is set to there, \"\" for an inactive one), repaired by connections.repair_preview unless fixed says where to change it instead; available from an agent to its own online provider: not signed in. Agent nodes may include activity_instances with an opaque id, PID and optional progress report per live instance. activity_progress is the most recent report and includes its instance ID. Both activity_progress and each instance\u2019s progress may be unavailable.",
+   "note": "nodes: dim marks a known server without agents; an agent's own_provider is the id of its own online provider (\"\" for none); own_login: the app can start its sign-in there (a drop onto that provider signs it in only then); a model with status missing is one an agent is set to that its local LLM no longer has; a model:folder:<path>:<name> model is in a reused model folder no local LLM lists. mcp:<name>~2 is another server of that name. edges: fixed says why a line cannot be taken away here; a failed agent → runtime line with no recorded failure is a local provider whose LLM moved (dangling: the model the agent is set to there, \"\" for an inactive one), repaired by connections.repair_preview unless fixed says where to change it instead; available from an agent to its own online provider: not signed in. Agent nodes may include activity_instances with an opaque id, PID and optional progress report per live instance. activity_progress is the most recent report and includes its instance ID. Both activity_progress and each instance’s progress may be unavailable.",
    "optional": [
     "force",
     "poll"
@@ -1751,7 +1801,7 @@
   "models.config": {
    "area": "models",
    "kind": "read",
-   "note": "Read-only job. Result: schema[], scope_models[], current{}, recommended[{id,current,recommended,reason,source}], fit{weights,kv,reserve,total,available,basis}, hardware{}, models[] (at most 40), helpers[], can_control, running, untuned[], focus, writable, read_only_reason?, snippet?, restart, notes[]. Fills the configuration facts cache for 10 minutes; profiles balanced, long_context, fast, several_agents. model * is only a shared-default scope. Unset current values are null (engine defaults, not invented live values); overrides lists only the selected model\u2019s explicit keys. No-model per-model providers return an empty selection with a clear read-only reason.",
+   "note": "Read-only job. Result: schema[], scope_models[], current{}, recommended[{id,current,recommended,reason,source}], fit{weights,kv,reserve,total,available,basis}, hardware{}, models[] (at most 40), helpers[], can_control, running, untuned[], focus, writable, read_only_reason?, snippet?, restart, notes[]. Fills the configuration facts cache for 10 minutes; profiles balanced, long_context, fast, several_agents. model * is only a shared-default scope. Unset current values are null (engine defaults, not invented live values); overrides lists only the selected model’s explicit keys. No-model per-model providers return an empty selection with a clear read-only reason.",
    "optional": [
     "model",
     "profile"
@@ -2783,7 +2833,7 @@
    "area": "tasks",
    "handle": "task",
    "kind": "handle",
-   "note": "result: the operation's own result. For connections.apply: undo, context_failures, and choice_failures, the local LLMs' own models (Settings \u203a provider_models) the plan moves that were not changed after its files (changed meanwhile, or the settings could not be saved); the Undo of the files is there all the same.",
+   "note": "result: the operation's own result. For connections.apply: undo, context_failures, and choice_failures, the local LLMs' own models (Settings › provider_models) the plan moves that were not changed after its files (changed meanwhile, or the settings could not be saved); the Undo of the files is there all the same.",
    "params": {
     "task": "string"
    },
@@ -2829,7 +2879,7 @@
   "updates.task": {
    "area": "updates",
    "kind": "preview",
-   "note": "An update the last updates.check found, as a task for the Ask AI helper (else the one Do it with \u2026 uses; not the agent being updated while another can). Applied with system.help_apply.",
+   "note": "An update the last updates.check found, as a task for the Ask AI helper (else the one Do it with … uses; not the agent being updated while another can). Applied with system.help_apply.",
    "params": {
     "key": "string"
    },
