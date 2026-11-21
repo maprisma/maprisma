@@ -61,6 +61,10 @@ for line in sys.stdin:
  if m=='app.snapshot':r={'agents':[{'command':'test','name':'Test agent','version':'1.0','installed':True}]+([{'command':'codex','name':'Codex','version':'','installed':False}] if Path('missing_program').exists() else []),
   'projects':{'test':{'history':[],'default':'/home/u','pinned':''}},'settings':settings,'language':'en','setup_needed':welcome,'theme':{}}
  elif m=='settings.update':settings.update(p['values']);r=settings
+ elif m=='features.summary' and Path('slow_summary').exists():Path('slow_summary').unlink();time.sleep(4);r=json.loads(Path('summary.json').read_text())
+ elif m=='features.summary' and Path('summary.json').exists():r=json.loads(Path('summary.json').read_text())
+ elif m=='features.call' and Path('projects.json').exists():
+  ps=json.loads(Path('projects.json').read_text());r={'projects':ps,'profiles':[],'runtimes':[],'project':ps[0] if ps else None}
  elif m=='models.choose_preview':
   old=settings.get('provider_models',{}).get(p['provider']);r={'preview':'choose-'+json.dumps([p['provider'],old,p['model']]),'empty':old==p['model'],'old':old,'new':p['model'],'line':'Fixture provider → example-model','focus':[]}
  elif m in ('models.choose_apply','models.choose_undo'):
@@ -215,6 +219,16 @@ for line in sys.stdin:
  elif m=='map.smart_helpers':r={'helpers':[{'command':'local-helper','name':'Local helper','local':True}] if Path('smart_helpers').exists() else []}
  elif m=='tasks.status':r=({'state':'failed'} if p['task']=='config_gone' or p['task']=='measure' and Path('tune_failed').exists() or p['task']=='install' and install_fails else {'state':'running'} if p['task']=='guide' and Path('guide_wait').exists() or p['task']=='tune_slow' and slow_polls.append(1) is None and len(slow_polls) <= 15 else {'state':'done','result':tasks[p['task']]})
  else:r={}
+ if Path('slow_'+m).exists():
+  # One answer held back until release_<method> exists (task 086).
+  Path('slow_'+m).unlink()
+  def held(i=q['id'],r=r,m=m):
+   while not Path('release_'+m).exists():time.sleep(0.05)
+   if Path('error_'+m).exists():
+    with out:print(json.dumps({'id':i,'error':{'code':'operation_failed'}}),flush=True)
+    return
+   with out:print(json.dumps({'id':i,'result':r}),flush=True)
+  threading.Thread(target=held,daemon=True).start();continue
  with out:print(json.dumps({'id':q['id'],'result':r}),flush=True)
 ''';
 

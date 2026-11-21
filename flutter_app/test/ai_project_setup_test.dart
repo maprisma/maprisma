@@ -24,6 +24,46 @@ const profiles = [
 ];
 
 void main() {
+  // Edits outside the title, goal, folder and plan fields count as changes
+  // too: Save becomes available and leaving asks (task 086 review round 4).
+  for (final (tab, label) in [
+    ('Team', 'Model (optional)'),
+    ('Team', 'Role instructions'),
+    ('Setup', 'AI setup request'),
+  ]) {
+    testWidgets('editing $label on a saved project is a change', (
+      tester,
+    ) async {
+      final saved = project();
+      await mount(tester, (operation, params) async {
+        if (operation == 'profiles') return {'profiles': profiles};
+        if (operation == 'list') {
+          return {
+            'projects': [saved],
+          };
+        }
+        return {'project': saved};
+      });
+      await tester.tap(find.text('Saved project'));
+      await tester.pumpAndSettle();
+      Finder save() => find.widgetWithText(FilledButton, 'Save project');
+      expect(tester.widget<FilledButton>(save()).onPressed, isNull);
+      await tester.tap(find.widgetWithText(ChoiceChip, tab));
+      await tester.pumpAndSettle();
+      final field = find.ancestor(
+        of: find.text(label),
+        matching: find.byWidgetPredicate(
+          (w) => w is TextField || w is TextFormField,
+        ),
+      );
+      await tester.ensureVisible(field.first);
+      await tester.enterText(field.first, 'changed');
+      await tester.pump();
+      expect(tester.widget<FilledButton>(save()).onPressed, isNotNull);
+      await tester.pumpWidget(const SizedBox());
+    });
+  }
+
   testWidgets('fresh execution requires a ready project after review', (
     tester,
   ) async {

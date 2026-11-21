@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:maprisma/ai_project_center.dart';
-import 'package:maprisma/project_center_indicator.dart';
+import 'package:maprisma/main_tabs.dart';
 import 'package:maprisma/window_popup.dart';
 
 Map<String, dynamic> project({String status = 'draft'}) => {
@@ -27,6 +27,7 @@ Future<void> mount(
   ProjectCenterCall call, {
   GlobalKey<AiProjectCenterPageState>? key,
   VoidCallback? onBack,
+  bool embedded = false,
 }) async {
   await tester.binding.setSurfaceSize(const Size(1100, 850));
   addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -37,7 +38,7 @@ Future<void> mount(
           key: key,
           onCall: call,
           tr: (s) => s,
-          onBack: onBack ?? () {},
+          onBack: embedded ? null : onBack ?? () {},
         ),
       ),
     ),
@@ -114,46 +115,266 @@ void main() {
     },
   );
 
-  testWidgets('indicator exposes real run counts and disconnected status', (
+  testWidgets('the Projects tab shows the counts and the store fault', (
     tester,
   ) async {
-    var opened = false;
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: ProjectCenterIndicator(
-            summary: const {'running': 2, 'pausing': 1, 'waiting': 1},
-            tr: (s) => s,
-            onOpen: () => opened = true,
+    MainTab? chosen;
+    Future<void> show(Map<String, dynamic> summary, {bool compact = false}) =>
+        tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: MainTabs(
+                selected: MainTab.map,
+                summary: summary,
+                tr: (s) => s,
+                compact: compact,
+                onSelect: (tab) => chosen = tab,
+              ),
+            ),
           ),
-        ),
-      ),
-    );
-    expect(find.text('3'), findsOneWidget);
+        );
+    await show(const {
+      'running': 2,
+      'pausing': 1,
+      'needs_you': 1,
+      'attention': 4,
+      'attention_projects': 3,
+      'error': 'store unreadable',
+    });
     expect(
       find.byTooltip(
-        'AI Project Center · 2 projects running · 1 projects pausing · 1 projects need attention',
+        'Projects · 3 running · 1 need you · 3 need attention · '
+        'The project list has a problem',
       ),
       findsOneWidget,
     );
-    await tester.tap(find.byType(IconButton));
-    expect(opened, true);
+    expect(find.byKey(const ValueKey('tab-projects-fault')), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('tab-projects-attention')),
+        matching: find.text('3'),
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const ValueKey('tab-projects')));
+    expect(chosen, MainTab.projects);
+    await tester.tap(find.byKey(const ValueKey('ai-map-open')));
+    expect(chosen, MainTab.map);
+    // An older backend: waiting stands for needs you, attention as it is.
+    await show(const {'running': 0, 'waiting': 2, 'attention': 1});
+    expect(
+      find.byTooltip('Projects · 2 need you · 1 need attention'),
+      findsOneWidget,
+    );
+    // Narrow: one dot.
+    await show(const {'running': 1}, compact: true);
+    expect(find.byKey(const ValueKey('tab-projects-dot')), findsOneWidget);
+    expect(find.byKey(const ValueKey('tab-projects-running')), findsNothing);
+    // Disconnected: status unavailable, never zero or old counts.
+    await show(const {'running': 2, 'connected': false});
+    expect(find.byTooltip('Projects · status unavailable'), findsOneWidget);
+    expect(find.text('2'), findsNothing);
+  });
+
+  test('the start tab is decided by setup, the saved tab, then projects', () {
+    const some = {'total': 2, 'connected': true};
+    expect(
+      startTab(setupNeeded: true, saved: 'projects', summary: some),
+      MainTab.map,
+    );
+    expect(
+      startTab(setupNeeded: false, saved: 'map', summary: some),
+      MainTab.map,
+    );
+    expect(
+      startTab(setupNeeded: false, saved: 'projects', summary: null),
+      MainTab.projects,
+    );
+    expect(
+      startTab(setupNeeded: false, saved: null, summary: some),
+      MainTab.projects,
+    );
+    expect(
+      startTab(setupNeeded: false, saved: null, summary: const {'total': 0}),
+      MainTab.map,
+    );
+    // Not read in time: the AI Map.
+    expect(
+      startTab(setupNeeded: false, saved: null, summary: null),
+      MainTab.map,
+    );
+    expect(
+      startTab(
+        setupNeeded: false,
+        saved: null,
+        summary: const {'total': 3, 'connected': false},
+      ),
+      MainTab.map,
+    );
+  });
+
+  testWidgets('a discard waits until the departure commits', (tester) async {
+    final key = GlobalKey<AiProjectCenterPageState>();
+    await mount(
+      tester,
+      (op, args) async => {'projects': [], 'profiles': []},
+      key: key,
+      embedded: true,
+    );
+    expect(find.widgetWithText(TextButton, 'Back'), findsNothing);
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Project title'),
+      'A new goal',
+    );
+    final leaving = key.currentState!.prepareLeave();
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(TextButton, 'Discard'));
+    await tester.pumpAndSettle();
+    final commit = await leaving;
+    expect(commit, isNotNull);
+    // Not yet taken: a later question (stop running agents?) may cancel.
+    expect(find.text('A new goal'), findsOneWidget);
+    commit!();
+    await tester.pumpAndSettle();
+    expect(find.text('A new goal'), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('a click into a field is not a change', (tester) async {
+    final key = GlobalKey<AiProjectCenterPageState>();
+    await mount(
+      tester,
+      (op, args) async => {'projects': [], 'profiles': []},
+      key: key,
+      embedded: true,
+    );
+    await tester.tap(find.widgetWithText(TextField, 'Project title'));
+    await tester.pump();
+    final leaving = key.currentState!.prepareLeave();
+    await tester.pump();
+    expect(find.text('Save project changes?'), findsNothing);
+    expect(await leaving, isNotNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('a save while leaving locks the page until it ends', (
+    tester,
+  ) async {
+    final key = GlobalKey<AiProjectCenterPageState>();
+    final saving = Completer<Map<String, dynamic>>();
+    await mount(
+      tester,
+      (op, args) async {
+        if (op == 'save') return saving.future;
+        return {'projects': [], 'profiles': []};
+      },
+      key: key,
+      embedded: true,
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Project title'),
+      'A new goal',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Project goal'),
+      'Build it.',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Working folder'),
+      '/tmp',
+    );
+    final leaving = key.currentState!.prepareLeave();
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await tester.pump();
+    // Saving: locked, and a second departure asks nothing.
+    expect(key.currentState!.busy, isTrue);
+    expect(
+      tester
+          .widget<TextField>(find.widgetWithText(TextField, 'Project title'))
+          .enabled,
+      isFalse,
+    );
+    expect(await key.currentState!.prepareLeave(), isNull);
+    saving.complete({
+      'project': {...project(), 'title': 'A new goal'},
+    });
+    await tester.pumpAndSettle();
+    expect(await leaving, isNotNull);
+    expect(key.currentState!.busy, isFalse);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('a refresh asked for while reading follows the read', (
+    tester,
+  ) async {
+    final key = GlobalKey<AiProjectCenterPageState>();
+    Completer<Map<String, dynamic>>? hold;
+    var lists = 0;
+    await mount(
+      tester,
+      (op, args) async {
+        if (op == 'list') {
+          lists++;
+          final wait = hold;
+          if (wait != null) return wait.future;
+        }
+        return {'projects': [], 'profiles': []};
+      },
+      key: key,
+      embedded: true,
+    );
+    final before = lists;
+    hold = Completer();
+    unawaited(key.currentState!.refresh());
+    await tester.pump();
+    final blocked = hold;
+    hold = null;
+    // F5 while that read runs: one more read afterwards, not dropped, and
+    // its future ends only after that read (the counts follow it).
+    var done = false;
+    unawaited(key.currentState!.refresh().then((_) => done = true));
+    await tester.pump();
+    expect(lists, before + 1);
+    expect(done, isFalse);
+    blocked.complete({'projects': [], 'profiles': []});
+    await tester.pumpAndSettle();
+    expect(lists, before + 2);
+    expect(done, isTrue);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('a tab button can be used by assistive technology', (
+    tester,
+  ) async {
+    final handle = tester.ensureSemantics();
+    MainTab? chosen;
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: ProjectCenterIndicator(
-            summary: const {'running': 2, 'connected': false},
+          body: MainTabs(
+            selected: MainTab.projects,
+            summary: const {'running': 1},
             tr: (s) => s,
-            onOpen: () {},
+            onSelect: (tab) => chosen = tab,
           ),
         ),
       ),
     );
     expect(
-      find.byTooltip('AI Project Center · status unavailable'),
-      findsOneWidget,
+      tester.getSemantics(find.bySemanticsLabel('Projects · 1 running')),
+      isSemantics(
+        label: 'Projects · 1 running',
+        isButton: true,
+        isSelected: true,
+        hasTapAction: true,
+        isEnabled: true,
+      ),
     );
-    expect(find.text('2'), findsNothing);
+    tester.semantics.tap(find.semantics.byLabel('AI Map'));
+    await tester.pump();
+    expect(chosen, MainTab.map);
+    handle.dispose();
   });
 
   testWidgets('unsaved goal survives cancelled navigation', (tester) async {

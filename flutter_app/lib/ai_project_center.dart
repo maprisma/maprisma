@@ -18,14 +18,16 @@ class AiProjectCenterPage extends StatefulWidget {
     super.key,
     required this.onCall,
     required this.tr,
-    required this.onBack,
+    this.onBack,
     this.active = true,
     this.chooseFolder,
   });
 
   final ProjectCenterCall onCall;
   final String Function(String) tr;
-  final VoidCallback onBack;
+
+  /// Null inside the Projects tab: the tab replaces Back (task 086).
+  final VoidCallback? onBack;
   final bool active;
 
   /// The native picker by default; tests can supply a controlled dialog.
@@ -88,6 +90,9 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
   @override
   void dispose() {
     _timer?.cancel();
+    // A refresh someone waits on ends with the page.
+    _readDone?.complete();
+    _readDone = null;
     _setupRequest.dispose();
     for (final c in [_title, _brief, _path, _plan]) {
       c.dispose();
@@ -95,8 +100,26 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
     super.dispose();
   }
 
-  void _edited() {
+  /// The four fields as the project was adopted: a click or a cursor move
+  /// in a field (the controllers report those too) is not a change.
+  List<String> _adoptedTexts = const ['', '', '', ''];
+  List<String> get _texts => [_title.text, _brief.text, _path.text, _plan.text];
+
+  /// An edit outside the four fields (a member's instructions): always a change.
+  void _changed() {
     if (!_dirty && mounted) setState(() => _dirty = true);
+  }
+
+  /// The four fields' controllers: only a text that differs counts.
+  void _edited() {
+    if (_dirty || !mounted) return;
+    final now = _texts;
+    for (var i = 0; i < now.length; i++) {
+      if (now[i] != _adoptedTexts[i]) {
+        setState(() => _dirty = true);
+        return;
+      }
+    }
   }
 
   List<Map<String, dynamic>> _rows(Object? value) => value is List
@@ -112,6 +135,7 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
     _brief.text = '${project?['brief'] ?? ''}';
     _path.text = '${project?['path'] ?? ''}';
     _plan.text = '${project?['plan'] ?? ''}';
+    _adoptedTexts = _texts;
     _runTeam = _rows(project?['team']);
     _planTeam = project?['plan_team'] is List
         ? _rows(project?['plan_team'])
@@ -215,8 +239,19 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
     return tr('The project operation failed.');
   }
 
+  /// A refresh asked for while one reads (F5, the focus back): one more
+  /// afterwards, so it is never lost.
+  bool _readAgain = false, _readAgainProfiles = false;
+
+  /// Completes when the read running now, and the one queued after it, ended.
+  Completer<void>? _readDone;
+
   Future<void> _refresh({bool profiles = false}) async {
-    if (_reading) return;
+    if (_reading) {
+      _readAgain = true;
+      _readAgainProfiles |= profiles;
+      return (_readDone ??= Completer<void>()).future;
+    }
     _reading = true;
     final selection = _selection;
     final id = _project?['id'];
@@ -251,6 +286,18 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
       if (mounted) setState(() => _error = _failure(error));
     } finally {
       _reading = false;
+    }
+    if (_readAgain && mounted) {
+      final again = _readAgainProfiles;
+      _readAgain = _readAgainProfiles = false;
+      final done = _readDone;
+      _readDone = null;
+      await _refresh(profiles: again);
+      done?.complete();
+    } else {
+      final done = _readDone;
+      _readDone = null;
+      done?.complete();
     }
   }
 
@@ -293,10 +340,44 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
     }
   }
 
+  /// Saving, starting or pausing: leaving now must wait.
+  bool get busy => _busy;
+
+  /// Refresh and F5 in the shell (the refresh flag travels with the call).
+  Future<void> refresh() => _refresh(profiles: true);
+
   /// The shell calls this before switching pages or closing the window.
   Future<bool> beforeLeave() async {
-    if (_busy) return false;
-    if (!_dirty) return true;
+    final commit = await prepareLeave();
+    commit?.call();
+    return commit != null;
+  }
+
+  /// Asks Save / Discard / Cancel without taking a discard yet: the shell
+  /// calls the returned function only once the whole departure succeeded
+  /// (closing the window asks more first); null keeps the page as it is.
+  Future<VoidCallback?> prepareLeave() async {
+    // One question at a time (the project list, a header action and closing
+    // the window can all ask).
+    if (_busy || _leaving) return null;
+    if (!_dirty) return () {};
+    _leaving = true;
+    try {
+      return await _askLeave();
+    } finally {
+      _leaving = false;
+    }
+  }
+
+  bool _leaving = false;
+
+  /// Its save question is open or its save runs.
+  bool get leaving => _leaving;
+
+  /// One of its own questions is open (delete, approve, continue).
+  bool get confirming => _confirming;
+
+  Future<VoidCallback?> _askLeave() async {
     final choice = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
@@ -318,16 +399,25 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
       ),
     );
     if (choice == 'discard') {
-      if (mounted) {
+      return () {
+        if (!mounted) return;
         setState(() {
           final prefix = '${_project?['id'] ?? 'new'}:';
           _setupDrafts.removeWhere((key, _) => key.startsWith(prefix));
           _adopt(_project);
         });
-      }
-      return true;
+      };
     }
-    return choice == 'save' && await _save();
+    if (choice != 'save' || !mounted) return null;
+    // Saving locks the page, so nothing typed meanwhile is overwritten.
+    setState(() => _busy = true);
+    var saved = false;
+    try {
+      saved = await _save();
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+    return saved ? () {} : null;
   }
 
   Future<void> _choose(Map<String, dynamic>? project) async {
@@ -585,7 +675,7 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
           ),
           onChanged: (value) {
             _setupDrafts['${_project?['id'] ?? 'new'}:$_phase'] = value;
-            _edited();
+            _changed();
           },
         ),
         const SizedBox(height: AppSpace.md),
@@ -994,7 +1084,7 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
               decoration: InputDecoration(labelText: tr('Role instructions')),
               onChanged: (value) {
                 member['instructions'] = value;
-                _edited();
+                _changed();
               },
             ),
             if (profile != null) ...[
@@ -1013,7 +1103,7 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
                     } else {
                       member['model'] = value.trim();
                     }
-                    _edited();
+                    _changed();
                   },
                 ),
               if (profile['native_subagents'] == true &&
@@ -1335,20 +1425,21 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      WindowHeader(
-        title: tr('AI Project Center'),
-        tr: tr,
-        onBack: () async {
-          if (await beforeLeave()) widget.onBack();
-        },
-        actions: [
-          IconButton(
-            tooltip: tr('Refresh'),
-            onPressed: _busy ? null : () => _refresh(profiles: true),
-            icon: const Icon(Icons.refresh),
-          ),
-        ],
-      ),
+      if (widget.onBack case final onBack?)
+        WindowHeader(
+          title: tr('AI Project Center'),
+          tr: tr,
+          onBack: () async {
+            if (await beforeLeave()) onBack();
+          },
+          actions: [
+            IconButton(
+              tooltip: tr('Refresh'),
+              onPressed: _busy ? null : () => _refresh(profiles: true),
+              icon: const Icon(Icons.refresh),
+            ),
+          ],
+        ),
       if (_busy && !_confirming) const LinearProgressIndicator(),
       Expanded(
         child: LayoutBuilder(

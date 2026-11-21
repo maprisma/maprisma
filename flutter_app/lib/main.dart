@@ -29,7 +29,7 @@ import 'cost_card.dart';
 import 'settings_view.dart';
 import 'reports_page.dart';
 import 'ai_project_center.dart';
-import 'project_center_indicator.dart';
+import 'main_tabs.dart';
 import 'features.dart';
 import 'history_import_controller.dart';
 import 'app_theme.dart';
@@ -310,6 +310,9 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   AgentTerminal? _visibleTerminal;
   final _terminalKeys = FocusNode();
   bool _closing = false;
+
+  /// The window page's own focus (its keys: Esc, Ctrl+1 / Ctrl+2).
+  final _pageFocus = FocusNode(debugLabel: 'window page', skipTraversal: true);
   int _reviewDepth = 0;
   Backend? _backend;
   CoreClient get _client => CoreClient(_backend!);
@@ -396,7 +399,117 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   final _projectCenterKey = GlobalKey<AiProjectCenterPageState>();
   Map<String, dynamic> _projectSummary = {'connected': false};
   bool _projectSummaryPending = false;
-  bool get _showProjectCenter => _view == 'ai-project-center';
+
+  /// The main tab (task 086): decided once at the start, then the user's.
+  MainTab _mainTab = MainTab.map;
+  bool _tabDecided = false;
+
+  /// One departure at a time: a second Esc, Ctrl+2 or click while the save
+  /// question is open does nothing.
+  bool _departing = false;
+
+  /// The next Project Center `list` asks the host to grow its discovery
+  /// generation (Refresh, F5, the window focused again).
+  bool _projectRefresh = false;
+
+  /// The Projects tab with nothing over it.
+  bool get _showProjectCenter =>
+      _mainTab == MainTab.projects &&
+      _view == null &&
+      !_showSettings &&
+      _browser == null &&
+      _showMap &&
+      _focusCategory == null;
+
+  bool _helpOpening = false;
+
+  /// The Projects page's focus scope, and the node that had the keyboard when
+  /// a page covered it: given back when the page shows again.
+  final _projectsScope = FocusScopeNode(debugLabel: 'projects page');
+  FocusNode? _projectFocus;
+  bool _projectsWereShown = false;
+
+  /// The page on screen and able to take the keyboard (no card such as Help,
+  /// no terminal over it).
+  bool get _projectsFocusable =>
+      _showProjectCenter && _card == null && _visibleTerminal == null;
+
+  /// The shell or the Projects page in the middle of something (a departure,
+  /// a step, one of the page's questions): says to wait during a step, and
+  /// nothing under a question.
+  bool _pageOccupied() {
+    final page = _projectCenterKey.currentState;
+    final busy = page?.busy ?? false;
+    if (!_departing && !busy && !(page?.leaving ?? false)) return false;
+    if (busy && !(page?.confirming ?? false)) _waitForStep();
+    return true;
+  }
+
+  /// The node in the Projects page that has (or last had) the keyboard.
+  FocusNode? _projectKeyboard() {
+    final focus = FocusManager.instance.primaryFocus;
+    return focus != null && focus.ancestors.contains(_projectsScope)
+        ? focus
+        : _projectsScope.focusedChild;
+  }
+
+  /// A departure that did not happen: the field gets the keyboard back.
+  void _giveBackFocus(FocusNode? node) {
+    if (node == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted &&
+          _projectsFocusable &&
+          node.context != null &&
+          node.ancestors.contains(_projectsScope)) {
+        node.requestFocus();
+      }
+    });
+  }
+
+  void _restoreProjectFocus() {
+    if (_mainTab != MainTab.projects) _projectFocus = null;
+    final shown = _projectsFocusable;
+    if (shown && !_projectsWereShown) {
+      final node = _projectFocus;
+      _projectFocus = null;
+      if (node != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted &&
+              _projectsFocusable &&
+              node.context != null &&
+              node.ancestors.contains(_projectsScope)) {
+            node.requestFocus();
+          }
+        });
+      }
+    }
+    _projectsWereShown = shown;
+  }
+
+  /// The tab chosen last, as saved in `main_tab` (null: never chosen).
+  MainTab? _savedTab;
+
+  void _saveTab(MainTab tab) {
+    if (_savedTab == tab) return;
+    _savedTab = tab;
+    unawaited(
+      _client
+          .settingsUpdate(values: {'main_tab': tab.code})
+          .then((_) {}, onError: (_) {}),
+    );
+  }
+
+  /// A page over the Projects tab that leads to the map's own content (Help's
+  /// Agents, a group page from the guide): the AI Map tab follows, and the
+  /// map is scanned if the start on Projects deferred it.
+  void _followMapDestination() {
+    if (_mainTab != MainTab.projects || !_tabDecided) return;
+    if (_showMap && _focusCategory == null) return;
+    _mainTab = MainTab.map;
+    // The map's first scan, deferred by a start on Projects, runs as soon as
+    // the map is on screen (also with scans set to manual).
+    if (_graph == null) _mapStale = true;
+  }
 
   Future<void> _refreshProjectSummary() async {
     if (_projectSummaryPending ||
@@ -423,19 +536,104 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     }
   }
 
-  Future<void> _openProjectCenter() async {
-    if (_showProjectCenter || !await _leaveReports() || !mounted) return;
+  /// A tab chosen by the user (click, Ctrl+1 / Ctrl+2): every page over the
+  /// tabs closes, an open project with unsaved changes asks first, and the
+  /// choice is remembered for the next start.
+  Future<void> _selectTab(MainTab tab) async {
+    if (_keysBlocked || _snapshot == null) return;
+    if (_departing || _closing) {
+      if (_projectCenterKey.currentState?.busy ?? false) _waitForStep();
+      return;
+    }
+    if (tab == MainTab.map && _mainTab == MainTab.projects) {
+      if (!await _leaveProjects()) return;
+    }
+    if (!await _leaveReports() || !mounted) return;
+    // Chosen here: no later page returns to the guide.
+    _guideReturn = false;
     setState(() {
       _card = null;
       _browser = null;
       _showSettings = false;
       _showMap = true;
       _showGuide = false;
+      _showProviders = false;
+      _showConnections = false;
       _focusCategory = null;
       _visibleTerminal = null;
       _askOpen = false;
-      _view = MaprismaFeatures.projectCenter.id;
+      _mainTab = tab;
     });
+    // Every explicit choice counts, also of the tab already shown.
+    _saveTab(tab);
+    if (tab == MainTab.map) unawaited(_refresh());
+  }
+
+  /// Leaving the open project for another page, the AI Map or Ask AI: its
+  /// unsaved changes ask Save / Discard / Cancel; while it saves, starts or
+  /// pauses, leaving waits. The page itself stays (its return point).
+  Future<bool> _leaveProjects() async {
+    // Closing asks its own questions; nothing else leaves meanwhile.
+    if (_departing || _closing) {
+      if (_projectCenterKey.currentState?.busy ?? false) _waitForStep();
+      return false;
+    }
+    if (!_showProjectCenter) return true;
+    final page = _projectCenterKey.currentState;
+    if (page == null) return true;
+    if (page.busy || page.leaving) {
+      // Under one of its own questions (also its save question) the
+      // question speaks for itself and keeps the keyboard.
+      if (page.busy && !page.confirming) _waitForStep();
+      return false;
+    }
+    // Where the keyboard was, for the way back: read before the save
+    // question (it and a save move the focus away).
+    final keyboard = _projectKeyboard();
+    _departing = true;
+    try {
+      final commit = await page.prepareLeave();
+      if (!mounted) return false;
+      if (commit == null) {
+        // Cancelled or a failed save: the page stays, with its keyboard.
+        _giveBackFocus(keyboard);
+        return false;
+      }
+      commit();
+      _projectFocus = keyboard;
+      return true;
+    } finally {
+      _departing = false;
+    }
+  }
+
+  void _waitForStep() {
+    final context = _navigator.currentContext;
+    if (context == null) return;
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(SnackBar(content: Text(tr('Wait for the current step'))));
+  }
+
+  /// The open project, then Reports: what any header action leaves first.
+  Future<bool> _leavePages() async =>
+      await _leaveProjects() && await _leaveReports();
+
+  /// Ask AI and the problems list work on the map: from Projects they
+  /// switch to the AI Map first (through the guard).
+  /// Every check first (the open project, then Reports); the tab changes
+  /// only once both agreed, so a cancelled departure keeps the return point.
+  Future<bool> _toMapFirst() async {
+    if (!await _leavePages() || !mounted) return false;
+    if (_mainTab == MainTab.map) return true;
+    setState(() => _mainTab = MainTab.map);
+    _saveTab(MainTab.map);
+    return true;
+  }
+
+  /// After a switch to the map: its first scan if the start deferred it.
+  void _scanIfDeferred() {
+    if (_graph == null && mounted) _mapStale = true;
   }
 
   final _historyImport = HistoryImportController();
@@ -443,7 +641,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   bool get _showReports => _view == 'reports';
 
   void _openReports({bool log = false}) async {
-    if (_showProjectCenter && !await _leaveReports()) return;
+    if (!await _leaveProjects()) return;
     if (_showReports && !log) return;
     setState(() {
       _card = null;
@@ -462,13 +660,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   }
 
   Future<bool> _leaveReports() async {
-    if (_showProjectCenter) {
-      final state = _projectCenterKey.currentState;
-      if (state != null && !await state.beforeLeave()) return false;
-      if (!mounted) return false;
-      setState(() => _view = null);
-      return true;
-    }
     if (!_showReports) return true;
     final state = _reportsKey.currentState;
     if (state != null && !await state.allowExit()) return false;
@@ -574,7 +765,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
 
   bool get _hasTaskView =>
       _showReports ||
-      _showProjectCenter ||
       _showGuide ||
       _showConnections ||
       _showProviders ||
@@ -585,7 +775,11 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
 
   /// The map is what lies under any window, so a change shows at once.
   bool get _mapOnScreen =>
-      _showMap && !_showSettings && !_hasTaskView && _visibleTerminal == null;
+      _mainTab == MainTab.map &&
+      _showMap &&
+      !_showSettings &&
+      !_hasTaskView &&
+      _visibleTerminal == null;
 
   static const _dataTasks = {
     'models.search',
@@ -893,14 +1087,52 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
 
   @override
   void onWindowClose() async {
-    if (_closing) return;
+    if (_closing) {
+      if (_projectCenterKey.currentState?.busy ?? false) _waitForStep();
+      return;
+    }
     _closing = true;
+    // A departure, a step or one of the page's own questions under way: the
+    // close does not queue behind it (checked before the summary's wait,
+    // and again after it).
+    if (_pageOccupied()) {
+      _closing = false;
+      return;
+    }
     final pageHadActiveProject =
         _projectCenterKey.currentState?.hasActive ?? false;
     try {
       _projectSummary = await _client.featuresSummary();
     } catch (_) {
       // A disconnected supervisor retains the last known active count.
+    }
+    if (!mounted) return;
+    // Read after the wait: the page may have gone meanwhile.
+    final page = _projectCenterKey.currentState;
+    // The open project keeps its page, selection, focus and unsaved draft
+    // until the whole close sequence succeeded: "Discard" takes effect only
+    // then (task 086).
+    VoidCallback? commitProject;
+    FocusNode? closeKeyboard;
+    if (page != null) {
+      if (_pageOccupied()) {
+        _closing = false;
+        return;
+      }
+      closeKeyboard = _projectKeyboard();
+      _departing = true;
+      try {
+        commitProject = await page.prepareLeave();
+      } finally {
+        _departing = false;
+      }
+      if (commitProject == null) {
+        _closing = false;
+        _giveBackFocus(closeKeyboard);
+        return;
+      }
+      // _closing stays set until the sequence ends: no other departure, tab
+      // change or refresh starts under the remaining questions.
     }
     if (!await _leaveReports()) {
       _closing = false;
@@ -938,6 +1170,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       );
       if (close != true) {
         _closing = false;
+        _giveBackFocus(closeKeyboard);
         return;
       }
     }
@@ -964,15 +1197,19 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
         await _client.featuresShutdown();
       } catch (_) {
         if (_backend?.isConnected ?? false) {
+          // The window stays: so do the project's draft and its keyboard.
           _closing = false;
           if (mounted) setState(() => _busy = false);
           _actionFailed();
+          _giveBackFocus(closeKeyboard);
           return;
         }
         // A lost controller cannot confirm shutdown. Closing this process
         // triggers the feature workers' parent watchdog and recovery handoff.
       }
     }
+    // Only now is the close certain: a "Discard" takes effect.
+    commitProject?.call();
     await _backend?.shutdown();
     await windowManager.destroy();
   }
@@ -1048,7 +1285,17 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   }
 
   Future<void> _retry() {
+    if (_closing || _departing) return Future.value();
     if (!(_backend?.isConnected ?? false)) return _connect();
+    final page = _projectCenterKey.currentState;
+    if (_showProjectCenter && _card == null && page != null) {
+      // The open project or list, keeping unsaved edits, and the host's
+      // discovery generation grows with it; the counts after that.
+      _projectRefresh = true;
+      return page.refresh().whenComplete(
+        () => unawaited(_refreshProjectSummary()),
+      );
+    }
     if (_card != null) {
       return _refresh(refreshMap: _mapOnScreen);
     }
@@ -1088,6 +1335,8 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   @override
   void onWindowFocus() {
     _blurHide?.cancel();
+    // The first Project Center list after the focus came back reads fresh.
+    if (!_windowFocused) _projectRefresh = true;
     setState(() => _windowFocused = true);
   }
 
@@ -1220,7 +1469,9 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     if (_busy || _livePending || !(_backend?.isConnected ?? false)) return;
     _livePending = true;
     try {
-      if (_showReports ||
+      if (!_tabDecided ||
+          _mainTab == MainTab.projects ||
+          _showReports ||
           _taskActive ||
           _reviewDepth > 0 ||
           _card?.closable == false) {
@@ -2286,7 +2537,9 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
 
   Future<void> _loadTraffic() async {
     if (_backend?.isConnected != true || _trafficAsking) return;
-    if (!_showMap ||
+    if (!_tabDecided ||
+        _mainTab == MainTab.projects ||
+        !_showMap ||
         _showSettings ||
         _showGuide ||
         _showProviders ||
@@ -2359,6 +2612,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
 
   Future<void> _loadUsageBoxes() async {
     if (_backend?.isConnected != true || _usageAsking) return;
+    if (!_tabDecided || _mainTab == MainTab.projects) return;
     final activity = _graph?['activity'] as Map? ?? const {};
     final working = [
       for (final e in activity.entries)
@@ -3097,7 +3351,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   }
 
   Future<void> _toggleSettings() async {
-    if ((_showReports || _showProjectCenter) && !await _leaveReports()) return;
+    if (!await _leavePages()) return;
     setState(() {
       _card = null;
       _browser = null;
@@ -3125,7 +3379,6 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
 
   bool get _pageOpen =>
       _showReports ||
-      _showProjectCenter ||
       _showSettings ||
       _showProviders ||
       _showConnections ||
@@ -3148,7 +3401,8 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     if (focused != null &&
         (focused.widget is EditableText ||
             focused.findAncestorWidgetOfExactType<EditableText>() != null)) {
-      FocusManager.instance.primaryFocus?.unfocus();
+      // Back to the window's own node, where the next Esc arrives.
+      _pageFocus.requestFocus();
       return;
     }
     unawaited(_popup ? windowManager.hide() : windowManager.close());
@@ -3165,7 +3419,10 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   @override
   void setState(VoidCallback fn) {
     final guideShown = _showGuide;
-    super.setState(fn);
+    super.setState(() {
+      fn();
+      _followMapDestination();
+    });
     if (guideShown && !_showGuide && _guide.loading) _guide.cancelPending();
     if (!_guideReturn) {
       _guideFrom = null;
@@ -3217,7 +3474,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   /// A page back to what lay under it; an agent's details or the list back
   /// to the map, the main page.
   void _goBack() {
-    if (_showReports || _showProjectCenter) {
+    if (_showReports) {
       unawaited(_leaveReports());
       return;
     }
@@ -3334,10 +3591,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   }
 
   Future<void> _openProblems([String? column]) async {
-    if (_busy ||
-        (_showReports || _showProjectCenter) && !await _leaveReports()) {
-      return;
-    }
+    if (_busy || !await _toMapFirst() || !mounted) return;
     final targetCol = column ?? _smartStatusData.firstConcernedColumn;
     final updatedLayers = _neededLayersForColumn(targetCol);
     setState(() {
@@ -3361,6 +3615,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     if (updatedLayers != null) {
       unawaited(_updateSettings({'map_layers': updatedLayers}));
     }
+    _scanIfDeferred();
   }
 
   int _helperCheck = 0;
@@ -3392,10 +3647,13 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
 
   void _openAskAi([String? column, String? initialPrompt]) {
     if (_busy) return;
-    if (_showReports || _showProjectCenter) {
+    if (_showReports || _mainTab == MainTab.projects) {
       unawaited(
-        _leaveReports().then((left) {
-          if (left && mounted) _openAskAi(column, initialPrompt);
+        _toMapFirst().then((left) {
+          if (left && mounted && !_showReports) {
+            _openAskAi(column, initialPrompt);
+            _scanIfDeferred();
+          }
         }),
       );
       return;
@@ -3517,17 +3775,36 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
 
   /// Help (F1): the user manual and where to start.
   Future<void> _openHelp() async {
-    if (_busy ||
-        (_showReports || _showProjectCenter) && !await _leaveReports()) {
+    if (_busy || _keysBlocked || _closing || _helpOpening) return;
+    // A departure under way (its question or its save, also one the page
+    // started itself, such as choosing another project), or the page busy
+    // with a step or one of its own questions: Help waits for it.
+    final page = _projectCenterKey.currentState;
+    if (_departing ||
+        (page?.leaving ?? false) ||
+        (_showProjectCenter && (page?.busy ?? false))) {
+      if ((page?.busy ?? false) && !(page?.confirming ?? false)) {
+        _waitForStep();
+      }
       return;
     }
+    _helpOpening = true;
     var manual = false;
     try {
-      manual = (await _client.helpSnapshot())['manual'] == true;
-    } catch (_) {
-      // Shown without the manual.
+      try {
+        manual = (await _client.helpSnapshot())['manual'] == true;
+      } catch (_) {
+        // Shown without the manual.
+      }
+      // The guard right before Help shows: edits made during the lookup
+      // are asked about too.
+      // Something else may own the window by now (a task, Ask AI, a
+      // terminal, closing): then Help does not open over it.
+      bool taken() => !mounted || _busy || _keysBlocked || _closing;
+      if (taken() || !await _leavePages() || taken()) return;
+    } finally {
+      _helpOpening = false;
     }
-    if (!mounted) return;
     VoidCallback after(void Function() open) => () {
       _cancelReview?.call();
       open();
@@ -5922,7 +6199,32 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       } catch (_) {
         // Smart cards stay hidden when no helper route is available.
       }
+      // The start tab, once, before the first map scan: a start on Projects
+      // defers it, and the window never flashes the map first.
+      var tab = _mainTab;
+      final decide = !_tabDecided;
+      if (decide) {
+        final setupNeeded = snapshot['setup_needed'] == true;
+        final saved = (snapshot['settings'] as Map?)?['main_tab'];
+        Map<String, dynamic>? summary;
+        if (!setupNeeded && MainTab.fromCode(saved) == null) {
+          try {
+            summary = await _client.featuresSummary().timeout(
+              const Duration(seconds: 3),
+            );
+          } catch (_) {
+            // Not in time: the AI Map; a late answer switches nothing.
+          }
+        }
+        tab = startTab(
+          setupNeeded: setupNeeded,
+          saved: saved,
+          summary: summary,
+        );
+        if (summary != null) _projectSummary = summary;
+      }
       final mapVisible =
+          tab == MainTab.map &&
           _showMap &&
           !_showSettings &&
           !_showGuide &&
@@ -5964,6 +6266,13 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       if (!mounted || settingsRevision != _settingsRevision) return;
       setState(() {
         _snapshot = snapshot;
+        if (decide) {
+          _mainTab = tab;
+          _savedTab = MainTab.fromCode(
+            (snapshot['settings'] as Map?)?['main_tab'],
+          );
+          _tabDecided = true;
+        }
         if (!_helperLoaded) {
           smartHelperChosen.value =
               (snapshot['settings'] as Map?)?['smart_helper'] as String?;
@@ -6111,6 +6420,8 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     _historyImport.dispose();
     _endAsideWait();
     _terminalKeys.dispose();
+    _pageFocus.dispose();
+    _projectsScope.dispose();
     _limitsTimer?.cancel();
     _usageTimer?.cancel();
     _mcpTimer?.cancel();
@@ -6137,6 +6448,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   Widget build(BuildContext context) {
     // A review from Ask AI ends with its last card: checked in every build.
     if (_asideWait != null && _cardsClear) _endAsideWait();
+    _restoreProjectFocus();
     // One scan when the map is back and nothing else is running.
     if (_mapStale && _mapOnScreen && _browser == null && !_keysBlocked) {
       _mapStale = false;
@@ -6150,6 +6462,127 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       valueListenable: style,
       builder: (context, alpha, _) => _app(alpha),
     );
+  }
+
+  /// The header's actions (task 086): Legend and the map's Undo only on the
+  /// AI Map; a narrow window moves Reports, Help, Settings and Refresh into
+  /// a menu, so the tabs never wrap.
+  List<Widget> _headerActions(bool narrow) {
+    final onMap = _mainTab == MainTab.map;
+    final pagesOff = _keysBlocked || _snapshot == null;
+    return [
+      if (_moveUndo != null && onMap)
+        IconButton(
+          key: const ValueKey('move-undo'),
+          tooltip: tr('Undo'),
+          icon: const Icon(Icons.undo),
+          onPressed: _keysBlocked ? null : _undoMove,
+        ),
+      if (_healthReport != null || _healthCount > 0)
+        IconButton(
+          key: const ValueKey('problems-open'),
+          tooltip: switch ('${_healthReport?['summary'] ?? ''}'.trim()) {
+            '' => tr('Everything set up and working'),
+            final s => s,
+          },
+          icon: SmartStatusIcon(level: _smartStatusData.overallLevel, size: 18),
+          onPressed: _keysBlocked ? null : _openProblems,
+        ),
+      Builder(
+        builder: (context) {
+          final open = _keysBlocked || _busy || _snapshot == null
+              ? null
+              : () => _openAskAi();
+          final icon = Icon(
+            _smartHelpers.isEmpty
+                ? Icons.auto_awesome_outlined
+                : Icons.auto_awesome,
+            size: 18,
+          );
+          return MediaQuery.sizeOf(context).width >= 900
+              ? TextButton.icon(
+                  key: const ValueKey('ask-ai-open'),
+                  onPressed: open,
+                  icon: icon,
+                  label: Text(tr('Ask AI')),
+                )
+              : IconButton(
+                  key: const ValueKey('ask-ai-open'),
+                  onPressed: open,
+                  icon: icon,
+                  tooltip: tr('Ask AI'),
+                );
+        },
+      ),
+      if (onMap)
+        MapLegendButton(
+          tr: tr,
+          enabled: !_keysBlocked,
+          levels: warnPercents(_snapshot?['settings'] as Map? ?? const {}),
+        ),
+      if (narrow)
+        PopupMenuButton<String>(
+          key: const ValueKey('header-more'),
+          tooltip: tr('More'),
+          enabled: !_keysBlocked,
+          onSelected: (choice) {
+            switch (choice) {
+              case 'reports':
+                _openReports();
+              case 'help':
+                _openHelp();
+              case 'settings':
+                _toggleSettings();
+              case 'refresh':
+                _retry();
+            }
+          },
+          itemBuilder: (context) => [
+            PopupMenuItem(
+              value: 'reports',
+              enabled: !pagesOff,
+              child: Text(tr(MaprismaFeatures.reports.title)),
+            ),
+            PopupMenuItem(
+              value: 'help',
+              enabled: !pagesOff,
+              child: Text(tr('Help (F1)')),
+            ),
+            PopupMenuItem(
+              value: 'settings',
+              enabled: !pagesOff,
+              child: Text(tr('Settings')),
+            ),
+            PopupMenuItem(value: 'refresh', child: Text(tr('Refresh'))),
+          ],
+        )
+      else ...[
+        IconButton(
+          key: const ValueKey('reports-open'),
+          tooltip: tr(MaprismaFeatures.reports.title),
+          icon: Icon(MaprismaFeatures.reports.icon),
+          isSelected: _showReports,
+          selectedIcon: const Icon(Icons.assessment),
+          onPressed: _keysBlocked || _snapshot == null ? null : _openReports,
+        ),
+        IconButton(
+          key: const ValueKey('help-open'),
+          tooltip: tr('Help (F1)'),
+          icon: const Icon(Icons.help_outline),
+          onPressed: _keysBlocked || _snapshot == null ? null : _openHelp,
+        ),
+        IconButton(
+          tooltip: tr('Settings'),
+          icon: const Icon(Icons.settings_outlined),
+          onPressed: _keysBlocked || _snapshot == null ? null : _toggleSettings,
+        ),
+        IconButton(
+          tooltip: tr('Refresh'),
+          onPressed: _keysBlocked ? null : _retry,
+          icon: const Icon(Icons.refresh),
+        ),
+      ],
+    ];
   }
 
   Widget _app(double alpha) {
@@ -6223,6 +6656,12 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
           () => (_card?.closable ?? false) ? _closeCard() : _backOrClose(),
         ),
         _BackIntent: _BackAction<_BackIntent>(() => _canGoBack, _goBack),
+        _TabIntent: CallbackAction<_TabIntent>(
+          onInvoke: (intent) {
+            if (!_keysBlocked) unawaited(_selectTab(intent.tab));
+            return null;
+          },
+        ),
       },
       debugShowCheckedModeBanner: false,
       locale: _locale,
@@ -6250,137 +6689,42 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       home: Shortcuts(
         shortcuts: const {
           SingleActivator(LogicalKeyboardKey.escape): _EscIntent(),
+          SingleActivator(LogicalKeyboardKey.digit1, control: true): _TabIntent(
+            MainTab.projects,
+          ),
+          SingleActivator(LogicalKeyboardKey.numpad1, control: true):
+              _TabIntent(MainTab.projects),
+          SingleActivator(LogicalKeyboardKey.digit2, control: true): _TabIntent(
+            MainTab.map,
+          ),
+          SingleActivator(LogicalKeyboardKey.numpad2, control: true):
+              _TabIntent(MainTab.map),
         },
         // The page holds the focus when nothing in it does, so its keys
         // pass through here (not part of Tab's order).
         child: Focus(
+          focusNode: _pageFocus,
           autofocus: true,
           skipTraversal: true,
           child: Scaffold(
             appBar: AppBar(
-              title: const Text('Maprisma'),
-              actions: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: TextButton(
-                    key: const ValueKey('ai-map-open'),
-                    // From a page or the agent list, back to the map.
-                    onPressed: _keysBlocked
+              titleSpacing: 8,
+              title: Align(
+                alignment: Alignment.centerLeft,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: MainTabs(
+                    selected: _mainTab,
+                    summary: _projectSummary,
+                    tr: tr,
+                    compact: MediaQuery.sizeOf(context).width < 760,
+                    onSelect: _keysBlocked || _snapshot == null
                         ? null
-                        : () async {
-                            if ((_showReports || _showProjectCenter) &&
-                                !await _leaveReports()) {
-                              return;
-                            }
-                            // Chosen here: no later page returns to the guide.
-                            _guideReturn = false;
-                            setState(() {
-                              _card = null;
-                              _browser = null;
-                              _showMap = true;
-                              _showGuide = false;
-                              _showSettings = false;
-                              _showProviders = false;
-                              _showConnections = false;
-                              _visibleTerminal = null;
-                            });
-                            _refresh();
-                          },
-                    child: Text(tr('AI Map')),
+                        : (tab) => unawaited(_selectTab(tab)),
                   ),
                 ),
-                if (_moveUndo != null)
-                  IconButton(
-                    key: const ValueKey('move-undo'),
-                    tooltip: tr('Undo'),
-                    icon: const Icon(Icons.undo),
-                    onPressed: _keysBlocked ? null : _undoMove,
-                  ),
-                if (_healthReport != null || _healthCount > 0)
-                  IconButton(
-                    key: const ValueKey('problems-open'),
-                    tooltip: switch ('${_healthReport?['summary'] ?? ''}'
-                        .trim()) {
-                      '' => tr('Everything set up and working'),
-                      final s => s,
-                    },
-                    icon: SmartStatusIcon(
-                      level: _smartStatusData.overallLevel,
-                      size: 18,
-                    ),
-                    onPressed: _keysBlocked ? null : _openProblems,
-                  ),
-                Builder(
-                  builder: (context) {
-                    final open = _keysBlocked || _busy || _snapshot == null
-                        ? null
-                        : () => _openAskAi();
-                    final icon = Icon(
-                      _smartHelpers.isEmpty
-                          ? Icons.auto_awesome_outlined
-                          : Icons.auto_awesome,
-                      size: 18,
-                    );
-                    return MediaQuery.sizeOf(context).width >= 900
-                        ? TextButton.icon(
-                            key: const ValueKey('ask-ai-open'),
-                            onPressed: open,
-                            icon: icon,
-                            label: Text(tr('Ask AI')),
-                          )
-                        : IconButton(
-                            key: const ValueKey('ask-ai-open'),
-                            onPressed: open,
-                            icon: icon,
-                            tooltip: tr('Ask AI'),
-                          );
-                  },
-                ),
-                ProjectCenterIndicator(
-                  summary: _projectSummary,
-                  tr: tr,
-                  onOpen: _keysBlocked || _snapshot == null
-                      ? null
-                      : _openProjectCenter,
-                ),
-                IconButton(
-                  key: const ValueKey('reports-open'),
-                  tooltip: tr(MaprismaFeatures.reports.title),
-                  icon: Icon(MaprismaFeatures.reports.icon),
-                  isSelected: _showReports,
-                  selectedIcon: const Icon(Icons.assessment),
-                  onPressed: _keysBlocked || _snapshot == null
-                      ? null
-                      : _openReports,
-                ),
-                MapLegendButton(
-                  tr: tr,
-                  enabled: !_keysBlocked,
-                  levels: warnPercents(
-                    _snapshot?['settings'] as Map? ?? const {},
-                  ),
-                ),
-                IconButton(
-                  key: const ValueKey('help-open'),
-                  tooltip: tr('Help (F1)'),
-                  icon: const Icon(Icons.help_outline),
-                  onPressed: _keysBlocked || _snapshot == null
-                      ? null
-                      : _openHelp,
-                ),
-                IconButton(
-                  tooltip: tr('Settings'),
-                  icon: const Icon(Icons.settings_outlined),
-                  onPressed: _keysBlocked || _snapshot == null
-                      ? null
-                      : _toggleSettings,
-                ),
-                IconButton(
-                  tooltip: tr('Refresh'),
-                  onPressed: _keysBlocked ? null : _retry,
-                  icon: const Icon(Icons.refresh),
-                ),
-              ],
+              ),
+              actions: _headerActions(MediaQuery.sizeOf(context).width < 760),
             ),
             body: Column(
               children: [
@@ -6414,7 +6758,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                       ),
                     ],
                   ),
-                if (_welcome && !_showReports && !_showProjectCenter)
+                if (_welcome && !_showReports && _mainTab == MainTab.map)
                   MapWelcome(
                     tr: tr,
                     busy: _keysBlocked,
@@ -6427,7 +6771,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                     onAction: _chosenAction,
                   ),
                 if (!_showReports &&
-                    !_showProjectCenter &&
+                    _mainTab == MainTab.map &&
                     _terminals.isNotEmpty &&
                     (_snapshot?['settings'] as Map?)?['terminal_tabs'] != false)
                   TerminalTabs(
@@ -6475,28 +6819,51 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                                 () => setState(() => _browser = null),
                               ),
                             ),
-                          if (_hasTaskView || _browser == null)
+                          // The Projects tab keeps its page while Settings,
+                          // Reports or Help lie over it (its return point).
+                          if (_mainTab == MainTab.projects)
                             RetainedTaskView(
-                              key: const ValueKey('view-slot'),
-                              visible: _browser == null,
+                              key: const ValueKey('projects-slot'),
+                              visible: _showProjectCenter,
                               focusable:
                                   _card == null && _visibleTerminal == null,
-                              child: _showProjectCenter
-                                  ? AiProjectCenterPage(
-                                      key: _projectCenterKey,
-                                      onCall: (operation, params) =>
-                                          _client.featuresCall(
-                                            plugin: MaprismaFeatures
-                                                .projectCenter
-                                                .id,
-                                            operation: operation,
-                                            params: params,
-                                          ),
-                                      tr: tr,
-                                      onBack: _goBack,
-                                      active: _windowFocused && !_keysBlocked,
-                                    )
-                                  : _showReports
+                              child: FocusScope(
+                                node: _projectsScope,
+                                child: AiProjectCenterPage(
+                                  key: _projectCenterKey,
+                                  onCall: (operation, params) {
+                                    final refresh =
+                                        operation == 'list' && _projectRefresh;
+                                    if (refresh) _projectRefresh = false;
+                                    return _client.featuresCall(
+                                      plugin: MaprismaFeatures.projectCenter.id,
+                                      operation: operation,
+                                      params: params,
+                                      refresh: refresh ? true : null,
+                                    );
+                                  },
+                                  tr: tr,
+                                  active:
+                                      _showProjectCenter &&
+                                      _visibleTerminal == null &&
+                                      _windowFocused &&
+                                      !_keysBlocked,
+                                ),
+                              ),
+                            ),
+                          if (!_tabDecided && _snapshot == null && !_failed)
+                            const Center(
+                              key: ValueKey('start-loading'),
+                              child: CircularProgressIndicator(),
+                            ),
+                          if ((_hasTaskView || _browser == null) &&
+                              (_tabDecided || _failed))
+                            RetainedTaskView(
+                              key: const ValueKey('view-slot'),
+                              visible: _browser == null && !_showProjectCenter,
+                              focusable:
+                                  _card == null && _visibleTerminal == null,
+                              child: _showReports
                                   ? ReportsPage(
                                       key: _reportsKey,
                                       historyImport: _historyImport,
@@ -6802,6 +7169,13 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                                               _closeGroupFocus,
                                             ),
                                     )
+                                  // The map's first scan, deferred by a
+                                  // start on Projects: no agent list flash.
+                                  : _showMap && !_failed && _tabDecided
+                                  ? const Center(
+                                      key: ValueKey('map-loading'),
+                                      child: CircularProgressIndicator(),
+                                    )
                                   : LayoutBuilder(
                                       builder: (context, constraints) {
                                         if (constraints.maxWidth < 800) {
@@ -6965,6 +7339,11 @@ class _BackIntent extends Intent {
 
 /// Esc on the window's page: back from a page; on the main page in popup
 /// mode it closes the popup.
+class _TabIntent extends Intent {
+  const _TabIntent(this.tab);
+  final MainTab tab;
+}
+
 class _EscIntent extends Intent {
   const _EscIntent();
 }
