@@ -25,6 +25,16 @@
   <url type="bugtracker">https://github.com/uBruckhaus/Asterism/issues</url>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="2.0.0" date="2026-11-21">
+      <description>
+        <p>Projects and AI Map tabs: the AI Project Center is the Projects tab next to the AI Map
+          (Ctrl+1 / Ctrl+2). The tab shows how many projects run, need you or need attention, and
+          Maprisma starts on the tab you used last.</p>
+        <p>Leaving a project with unsaved changes always asks first, also when closing the window;
+          Settings, Reports and Help return to the same project. The Project Center page is now
+          translated into all 8 languages.</p>
+      </description>
+    </release>
     <release version="0.15.0" date="2026-11-21">
       <description>
         <p>AI Project Center: plan and run a project with a team of agents. Give it a goal and a folder, let
