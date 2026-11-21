@@ -144,7 +144,7 @@ extension FeatureRoutes on CoreService {
         return projectCenterCall(method, arguments);
       }
       return dispatch(method, arguments);
-    });
+    }, context: id == 'ask-ai' ? askAiHostContext : null);
   }
 
   Future<Map<String, dynamic>> projectCenterCall(
@@ -152,12 +152,34 @@ extension FeatureRoutes on CoreService {
     Map<String, dynamic> params,
   ) => projectCenter.call(operation, params);
 
-  Future<Map<String, dynamic>> featureSummary() => featurePlugins.call(
-    'ai-project-center',
-    '@summary',
-    {},
-    () => {...projectCenter.summary(), 'connected': true},
-  );
+  /// The indicator's counts. While the AI Project Center has stored nothing
+  /// yet and is not running, there is nothing to count: its backend is not
+  /// started just for the 2-second poll.
+  Future<Map<String, dynamic>> featureSummary() {
+    if (_projectCenter == null &&
+        !featurePlugins.closing &&
+        !featurePlugins.tracked('ai-project-center') &&
+        FileSystemEntity.typeSync(
+              p.join(identity.dataDir, 'ai-project-center', 'projects.json'),
+              followLinks: false,
+            ) ==
+            FileSystemEntityType.notFound) {
+      return Future.value({
+        'running': 0,
+        'pausing': 0,
+        'waiting': 0,
+        'attention': 0,
+        'total': 0,
+        'connected': true,
+      });
+    }
+    return featurePlugins.call(
+      'ai-project-center',
+      '@summary',
+      {},
+      () => {...projectCenter.summary(), 'connected': true},
+    );
+  }
 
   Future<void> shutdownFeatures() async {
     final center = _projectCenter;

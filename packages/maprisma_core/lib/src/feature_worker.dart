@@ -126,6 +126,11 @@ Future<void> serveFeaturePlugin(String id) async {
       requestId = request['id'] as int;
       final method = request['method'] as String;
       final params = request['params'] as Map<String, dynamic>;
+      if (id == 'ask-ai' && request['context'] is Map<String, dynamic>) {
+        service.applyAskAiHostContext(
+          request['context'] as Map<String, dynamic>,
+        );
+      }
       Map<String, dynamic> result;
       if (method == '@hello') {
         result = {'id': id, 'api': featureApi};

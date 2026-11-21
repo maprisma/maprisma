@@ -38,6 +38,16 @@ Future<List<int>> pids(File file, {bool single = false}) async {
   fail('The fixture did not report its process ids');
 }
 
+/// Ends a supervisor of a test: EOF (it stops its tree), then a kill.
+Future<void> stopSupervisor(Process process) async {
+  await process.stdin.close().catchError((Object _) {});
+  try {
+    await process.exitCode.timeout(const Duration(seconds: 20));
+  } on TimeoutException {
+    process.kill(ProcessSignal.sigkill);
+  }
+}
+
 void main() {
   late Directory temporary;
   late String lock;
@@ -307,5 +317,67 @@ void main() {
       expect(free, isTrue);
       expect(marker.existsSync(), isFalse);
     },
+  );
+
+  test('a malformed start line ends with invalid_start and stopped', () async {
+    final process = await Process.start(
+      supervisor!.first,
+      supervisor.skip(1).toList(),
+    );
+    addTearDown(() => stopSupervisor(process));
+    process.stderr.drain<void>().ignore();
+    final lines = process.stdout
+        .transform(const SystemEncoding().decoder)
+        .join();
+    process.stdin.writeln('{not json');
+    expect(await process.exitCode.timeout(const Duration(seconds: 20)), 2);
+    await process.stdin.close().catchError((Object _) {});
+    final output = await lines;
+    expect(output, contains('invalid_start'));
+    expect(output, contains('"stopped":true'));
+  });
+
+  test(
+    'invalid UTF-8 on the control pipe stops the tree instead of crashing',
+    () async {
+      final file = File('${temporary.path}/pids');
+      final process = await Process.start(
+        supervisor!.first,
+        supervisor.skip(1).toList(),
+      );
+      int? child;
+      addTearDown(() async {
+        // EOF first: the supervisor itself stops its tree, also when the
+        // child's pid was never read.
+        await stopSupervisor(process);
+        if (child != null && alive(child)) {
+          Process.killPid(child, ProcessSignal.sigkill);
+        }
+      });
+      process.stderr.drain<void>().ignore();
+      final lines = process.stdout
+          .transform(const SystemEncoding().decoder)
+          .join();
+      process.stdin.writeln(
+        '{"argv":["/bin/sh","-c","sleep 300 & echo \$! > ${file.path}; wait"],'
+        '"cwd":"${temporary.path}","input":null,"lock":"$lock",'
+        '"controller":{"pid":$pid,"start":"${processIdentity(pid)!.$3}"}}',
+      );
+      process.stdin.writeln('{"launch":true}');
+      child = (await pids(File(file.path).absolute, single: true)).single;
+      expect(alive(child), isTrue);
+      process.stdin.add([0xff, 0xfe, 10]);
+      await process.stdin.flush();
+      final end = DateTime.now().add(const Duration(seconds: 20));
+      while (alive(child) && DateTime.now().isBefore(end)) {
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      }
+      final survived = alive(child);
+      expect(survived, isFalse, reason: 'the agent outlived its supervisor');
+      await process.stdin.close().catchError((Object _) {});
+      await process.exitCode.timeout(const Duration(seconds: 20));
+      expect(await lines, contains('"stopped":true'));
+    },
+    timeout: const Timeout(Duration(seconds: 60)),
   );
 }

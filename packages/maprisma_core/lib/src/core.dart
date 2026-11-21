@@ -4944,6 +4944,10 @@ final class CoreService {
           method,
           params,
           () => dispatch(method, params),
+          // Only Ask AI's own questions read it; a task poll does not.
+          context: owner == 'ask-ai' && method.startsWith('map.smart_')
+              ? askAiHostContext
+              : null,
         );
       }
     }

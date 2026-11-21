@@ -1,5 +1,8 @@
 part of 'core.dart';
 
+/// The largest host context sent to the Ask AI backend with a request.
+const maxAskAiContext = 16 * 1024;
+
 /// Ask AI owns its proposals independently of the other feature modules.
 final class _AskAiFeatureState {
   final proposals = SmartProposals(newHandle);
@@ -537,6 +540,91 @@ extension AskAiFeatureRoutes on CoreService {
   /// What the Models helper may move: only model folders, to known disks,
   /// the saved System Map when this run has none yet. The agent sees short
   /// names and neutral ids, never a path; `node` stays in the core.
+  /// What only the host process knows and Ask AI reads, for its backend
+  /// process: the add-on catalog's offers (without their preview tokens, which
+  /// stay with the host and its install flow), the last program-update check
+  /// and a manual MCP check.
+  ///
+  /// Only the fields Ask AI reads, and bounded: the private frame has the
+  /// request limit, and the context must leave room for the params.
+  Map<String, dynamic> askAiHostContext() {
+    String? text(Object? value) =>
+        value is String && value.length <= 200 ? value : null;
+    final context = <String, dynamic>{
+      'catalog': [
+        for (final row in catalogRows)
+          if (row['preview'] != null)
+            {
+              for (final key in const ['id', 'name', 'kind', 'action'])
+                key: text(row[key]),
+              'offered': true,
+            },
+      ],
+      'updates': [
+        for (final update in lastUpdates)
+          {
+            for (final key in const [
+              'kind',
+              'key',
+              'name',
+              'current',
+              'available',
+            ])
+              key: text(update[key]),
+            // The updater the check found; the backend checks it again
+            // (allowedUpdate) before it runs it.
+            if (update['command'] is List &&
+                (update['command'] as List).length <= 16 &&
+                (update['command'] as List).every((w) => text(w) != null))
+              'command': update['command'],
+          },
+      ],
+      'updates_checked_at': _updatesCheckedAt?.toUtc().toIso8601String(),
+      'mcp_check_forced': mcpCheckForced,
+    };
+    for (final key in const ['catalog', 'updates']) {
+      if (utf8.encode(jsonEncode(context)).length <= maxAskAiContext) break;
+      context[key] = const <Object>[];
+    }
+    return context;
+  }
+
+  /// In the Ask AI backend process: take the host's context, and reread what
+  /// the host may have changed on disk since the last request.
+  void applyAskAiHostContext(Map<String, dynamic> context) {
+    final catalog = context['catalog'];
+    if (catalog is List) {
+      catalogRows = [
+        for (final row in catalog)
+          if (row is Map)
+            {
+              for (final key in const ['id', 'name', 'kind', 'action'])
+                key: row[key] is String ? row[key] : null,
+              // Only "offered" matters here; the real token is the host's.
+              'preview': row['offered'] == true ? 'host' : null,
+            },
+      ];
+    }
+    final updates = context['updates'];
+    if (updates is List) {
+      lastUpdates = [
+        for (final update in updates)
+          if (update is Map<String, dynamic>) update,
+      ];
+    }
+    final checked = context['updates_checked_at'];
+    _updatesCheckedAt = checked is String ? DateTime.tryParse(checked) : null;
+    if (context['mcp_check_forced'] is bool) {
+      mcpCheckForced = context['mcp_check_forced'] as bool;
+    }
+    // The host saves each refreshed System Map; the last one read here may
+    // be older.
+    final saved = loadMapCache(systemMapPath, Posix());
+    if (saved.isNotEmpty) systemMapLast = saved;
+    addons.reload(enabledAddons());
+    reads.catalog.adapters = addons.adapters;
+  }
+
   Map<String, dynamic> _moveFacts() {
     if (systemMapLast == null) {
       final saved = loadMapCache(systemMapPath, Posix());

@@ -53,11 +53,21 @@ Future<int> runProjectSupervisor() async {
       ..writeln(jsonEncode({'stopped': true}));
     return 2;
   }
+  // Malformed UTF-8 on the control pipe must not throw out of the control
+  // loop: an uncaught error would end this subreaper with its tree running.
   final control = StreamIterator(
-    stdin.transform(utf8.decoder).transform(const LineSplitter()),
+    stdin
+        .transform(const Utf8Decoder(allowMalformed: true))
+        .transform(const LineSplitter()),
   );
-  if (!await control.moveNext()) return 0;
-  final start = jsonDecode(control.current);
+  Object? start;
+  try {
+    if (!await control.moveNext()) return 0;
+    start = jsonDecode(control.current);
+  } on Object {
+    // Not a start line (bad JSON or a failing pipe): nothing was started.
+    start = null;
+  }
   if (start is! Map ||
       start['argv'] is! List ||
       (start['argv'] as List).isEmpty ||
@@ -130,13 +140,13 @@ Future<int> runProjectSupervisor() async {
   // EOF or a stop instead ends this supervisor without launching.
   stdout.writeln(jsonEncode({'locked': true}));
   var authorized = false;
-  if (await control.moveNext()) {
-    try {
+  try {
+    if (await control.moveNext()) {
       final message = jsonDecode(control.current);
       authorized = message is Map && message['launch'] == true;
-    } on FormatException {
-      authorized = false;
     }
+  } on Object {
+    authorized = false;
   }
   if (!authorized) {
     if (lockFd != null) io.close(lockFd);
@@ -184,8 +194,12 @@ Future<int> runProjectSupervisor() async {
   ];
   var stopRequested = Completer<void>();
   unawaited(() async {
-    while (await control.moveNext()) {
-      if (!stopRequested.isCompleted) stopRequested.complete();
+    try {
+      while (await control.moveNext()) {
+        if (!stopRequested.isCompleted) stopRequested.complete();
+      }
+    } on Object {
+      // A failing control pipe counts as a lost controller.
     }
     // EOF: the controller is gone; the owned tree must not outlive it.
     if (!stopRequested.isCompleted) stopRequested.complete();

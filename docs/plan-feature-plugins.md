@@ -68,6 +68,13 @@ bounds; timeouts, invalid replies and process exit disconnect the feature. The
 host does not replay a failed mutation automatically. Existing opaque handles
 from a lost process are not valid in a newly started process.
 
+A failed backend (crash, timeout, invalid reply, failed start) is started again on
+a later call, after a pause of 1 s that doubles with each failure in a row (at most
+one minute); calls inside the pause fail with `feature_disconnected`. The host sends
+Ask AI, beside each request's params, a `context` object with state only the host
+holds (the catalog's install/update offers without preview tokens, the last update
+check, a manual MCP check). It is never accepted from a client.
+
 Handle ownership follows provenance, not shape. Every token a process issues
 (`newHandle`, also when a route returns the bare 32-hex form without `core-`)
 enters that process's bounded issued-handle registry. A result frame carries

@@ -29,15 +29,39 @@ final class FeaturePluginHost {
     this.identity, {
     this.commands,
     this.shutdownTimeout = const Duration(seconds: 30),
-  });
+    this.restartDelay = const Duration(seconds: 1),
+    DateTime Function()? clock,
+  }) : clock = clock ?? DateTime.now;
   final AppIdentity identity;
+
+  /// The time for restart pauses (a test sets it).
+  final DateTime Function() clock;
   final Duration shutdownTimeout;
+
+  /// The first wait before a failed backend is started again; it doubles
+  /// with each failure in a row, up to a minute.
+  final Duration restartDelay;
   final Map<String, List<String>>? commands;
   final _processes = <String, _FeatureProcess>{};
   final _embedded = <String>{};
   final _owners = <String, String>{};
+  final _failures = <String, int>{};
+
+  /// Features that ran as a process: a restart never turns them embedded.
+  final _processBacked = <String>{};
   bool _closing = false;
 
+  /// Whether the host closed its features (a confirmed shutdown).
+  bool get closing => _closing;
+
+  /// Whether the feature runs as a process, or did: also a failed one, one
+  /// that has not exited yet, or one whose replacement could not start.
+  bool tracked(String id) =>
+      _processes.containsKey(id) || _processBacked.contains(id);
+
+  /// What backend a feature would use, without verifying or staging a user
+  /// update: listing the features must stay cheap and never fail because of
+  /// one broken update.
   List<Map<String, dynamic>> descriptors() => [
     for (final id in featureIds)
       {
@@ -46,24 +70,54 @@ final class FeaturePluginHost {
         'api': featureApi,
         'backend': _embedded.contains(id)
             ? 'embedded'
-            : _processes.containsKey(id) || _command(id) != null
+            : _processes.containsKey(id) ||
+                  _processBacked.contains(id) ||
+                  commands?[id] != null ||
+                  Directory(_updateDirectory(id)).existsSync() ||
+                  File(_bundled(id)).existsSync()
             ? 'process'
             : 'embedded',
         'presentation': 'native',
       },
   ];
 
+  /// Whether the feature's backend process is up (started and not failed or
+  /// stopped).
+  bool running(String id) {
+    final process = _processes[id];
+    return process != null &&
+        !process.cleanlyStopped &&
+        process.failedAt == null;
+  }
+
+  String _updateDirectory(String id) =>
+      p.join(identity.dataDir, 'feature-plugins', id);
+  String _bundled(String id) => p.join(appFolder(), 'features', id, 'plugin');
+
   List<String>? _command(String id) {
     if (!featureIds.contains(id)) throw ServiceError('feature_unknown');
     final explicit = commands?[id];
     if (explicit != null) return explicit;
+    if (Directory(_updateDirectory(id)).existsSync()) {
+      // A rejected installed candidate surfaces its error; it never runs,
+      // and the bundled backend does not silently stand in for it.
+      try {
+        return _userUpdate(id);
+      } on FormatException {
+        throw ServiceError('feature_incompatible');
+      }
+    }
+    final bundled = _bundled(id);
+    return File(bundled).existsSync() ? [bundled] : null;
+  }
+
+  List<String> _userUpdate(String id) {
     // User updates are executable features, distinct from data-only agent
     // add-ons. Only the author's signature can authorize them. No hooks run
     // while discovering one; a failed candidate never executes.
-    final directory = p.join(identity.dataDir, 'feature-plugins', id);
-    if (Directory(directory).existsSync()) {
-      final manifest = _checkedFile(directory, 'feature.json', 32768);
-      final signature = _checkedFile(directory, 'SIGNATURE', 8192);
+    final io = Posix();
+    // The signed manifest is checked before the (large) executable is read.
+    Map checked(List<int> manifest, List<int> signature) {
       if (!sshSignatureOk(
         manifest,
         signature,
@@ -73,58 +127,107 @@ final class FeaturePluginHost {
         throw ServiceError('feature_signature_invalid');
       }
       final data = jsonDecode(utf8.decode(manifest));
-      if (data is! Map || data['id'] != id || data['api'] != featureApi) {
+      if (data is! Map ||
+          data['id'] != id ||
+          data['api'] != featureApi ||
+          data['sha256'] is! String ||
+          !RegExp(r'^[a-f0-9]{64}$').hasMatch(data['sha256'] as String)) {
         throw ServiceError('feature_incompatible');
       }
-      final executable = _checkedFile(directory, 'plugin', 128 * 1024 * 1024);
-      if (data['sha256'] != sha256.convert(executable).toString()) {
-        throw ServiceError('feature_signature_invalid');
-      }
-      final staging = p.join(identity.cacheDir, 'feature-launches');
-      final io = Posix();
-      final dir = io.privateDirectory(staging);
-      try {
-        io.chmod(dir, 0x1c0);
-        final target = p.join(staging, '$id-${data['sha256']}');
-        io.atomicWrite(target, executable);
-        final fd = io.openAt(
-          dir,
-          p.basename(target),
-          Posix.noFollow | Posix.nonBlock,
-        );
-        try {
-          io.chmod(fd, 0x140);
-        } finally {
-          io.close(fd);
-        }
-        return [target];
-      } finally {
-        io.close(dir);
-      }
+      return data;
     }
-    final bundled = p.join(appFolder(), 'features', id, 'plugin');
-    return File(bundled).existsSync() ? [bundled] : null;
-  }
 
-  List<int> _checkedFile(String directory, String name, int limit) {
-    if (Directory(directory).resolveSymbolicLinksSync() != directory ||
-        FileSystemEntity.typeSync(
-              p.join(directory, name),
-              followLinks: false,
-            ) !=
-            FileSystemEntityType.file) {
+    final Map data;
+    final List<int> executable;
+    try {
+      (data, executable) = _readUpdate(io, id, checked);
+    } on FileSystemException {
+      // A link, a missing file or an untrusted folder.
       throw ServiceError('feature_signature_invalid');
     }
-    final file = File(p.join(directory, name));
-    if (file.lengthSync() > limit) throw ServiceError('feature_too_large');
-    return file.readAsBytesSync();
+    if (data['sha256'] != sha256.convert(executable).toString()) {
+      throw ServiceError('feature_signature_invalid');
+    }
+    final staging = p.join(identity.cacheDir, 'feature-launches');
+    final dir = io.privateDirectory(staging);
+    try {
+      io.chmod(dir, 0x1c0);
+      final target = p.join(staging, '$id-${data['sha256']}');
+      io.atomicWrite(target, executable);
+      final fd = io.openAt(
+        dir,
+        p.basename(target),
+        Posix.noFollow | Posix.nonBlock,
+      );
+      try {
+        io.chmod(fd, 0x140);
+      } finally {
+        io.close(fd);
+      }
+      return [target];
+    } finally {
+      io.close(dir);
+    }
+  }
+
+  /// The data folder is resolved once through trusted aliases (it may live
+  /// on another disk behind a symbolic link); `feature-plugins`, the update
+  /// folder and its files must be real, not links. Each file is read through
+  /// its own descriptor: type and size are checked on what is read, so a file
+  /// swapped or grown after the check cannot pass, and a FIFO cannot block.
+  (Map, List<int>) _readUpdate(
+    Posix io,
+    String id,
+    Map Function(List<int> manifest, List<int> signature) checked,
+  ) {
+    final opened = <int>[];
+    int open(int parent, String name, int flags) {
+      final fd = io.openAt(parent, name, flags | Posix.noFollow);
+      opened.add(fd);
+      return fd;
+    }
+
+    try {
+      opened.add(io.existingDirectory(identity.dataDir));
+      final plugins = open(opened.first, 'feature-plugins', Posix.directory);
+      final folder = open(plugins, id, Posix.directory);
+      List<int> read(String name, int limit) {
+        final fd = open(folder, name, Posix.nonBlock);
+        final stat = io.statFull(fd);
+        if (stat.mode & 0xf000 != 0x8000) {
+          throw ServiceError('feature_signature_invalid');
+        }
+        if (stat.size > limit) throw ServiceError('feature_too_large');
+        final bytes = io.readAt(fd, 0, limit + 1);
+        if (bytes.length > limit) throw ServiceError('feature_too_large');
+        return bytes;
+      }
+
+      final data = checked(
+        read('feature.json', 32768),
+        read('SIGNATURE', 8192),
+      );
+      return (data, read('plugin', 128 * 1024 * 1024));
+    } finally {
+      for (final fd in opened.reversed) {
+        io.close(fd);
+      }
+    }
   }
 
   String? owner(Map<String, dynamic> params) {
     final owners = <String>{};
     void visit(Object? value) {
       if (value is String && _owners.containsKey(value)) {
-        owners.add(_owners[value]!);
+        final id = _owners[value]!;
+        final process = _processes[id];
+        if (process == null || process.retired) {
+          // Its process stopped, failed or exited: its handles died with it,
+          // also before that was otherwise noticed.
+          _owners.removeWhere((_, owner) => owner == id);
+          return;
+        }
+        owners.add(id);
       } else if (value is Map) {
         value.values.forEach(visit);
       } else if (value is List) {
@@ -177,34 +280,112 @@ final class FeaturePluginHost {
     String id,
     String operation,
     Map<String, dynamic> params,
-    FutureOr<Map<String, dynamic>> Function() embedded,
-  ) async {
+    FutureOr<Map<String, dynamic>> Function() embedded, {
+    Map<String, dynamic> Function()? context,
+  }) async {
     if (_closing) throw ServiceError('feature_closing');
     if (_embedded.contains(id)) return embedded();
     final previous = _processes[id];
-    if (previous != null && previous.cleanlyStopped) {
-      // It confirmed @shutdown after an aborted close; start it again.
+    _FeatureProcess plugin;
+    if (previous != null &&
+        (previous.cleanlyStopped || previous.failedAt != null)) {
+      final failures = _failures[id] ?? 0;
+      if (previous.cleanlyStopped) {
+        // It confirmed @shutdown late, after an aborted close: it ends on
+        // EOF. It is replaced only once it has exited; one that hangs is
+        // killed like a failed one.
+        previous.endInput();
+        final since = clock().difference(
+          previous.stoppedAt ?? previous.failedAt ?? clock(),
+        );
+        if (since >= _killAfter) previous.kill();
+        if (!previous.exited) throw ServiceError('feature_closing');
+      } else {
+        // A crashed, hung or unstartable backend is started again, after a
+        // wait that doubles with each failure in a row (the summary is
+        // polled every two seconds), and only once its process has exited:
+        // until then it may still be cleaning up and holding its store. It
+        // stays tracked meanwhile, so shutdown and dispose still reach it.
+        final wait = restartDelay * (1 << failures.clamp(0, 6));
+        final waited = clock().difference(previous.failedAt!);
+        if (waited >= _killAfter) previous.kill();
+        if (!previous.exited ||
+            waited < (wait > _maxRestartDelay ? _maxRestartDelay : wait)) {
+          throw ServiceError('feature_disconnected');
+        }
+      }
+      // The replacement is found first: without one the old entry stays, and
+      // the feature stays process-backed (and disconnected), never embedded.
+      final command = _command(id);
+      if (command == null) throw ServiceError('feature_disconnected');
       _processes.remove(id);
       _owners.removeWhere((_, owner) => owner == id);
+      if (previous.failedAt != null && !previous.cleanlyStopped) {
+        _failures[id] = failures + 1;
+      }
+      plugin = _launch(id, command);
+    } else if (previous != null) {
+      plugin = previous;
+    } else {
+      final command = _command(id);
+      if (command == null) {
+        // A feature that ran as a process does not turn embedded.
+        if (_processBacked.contains(id)) {
+          throw ServiceError('feature_disconnected');
+        }
+        _embedded.add(id);
+        return embedded();
+      }
+      plugin = _launch(id, command);
     }
-    final command = _processes.containsKey(id) ? null : _command(id);
-    if (command == null && !_processes.containsKey(id)) {
-      _embedded.add(id);
-      return embedded();
+    try {
+      // Host state a process backend cannot see itself, sent beside the
+      // params on this private pipe only (never taken from a client).
+      final (result, issued) = await plugin.call(
+        operation,
+        params,
+        context?.call(),
+      );
+      // A late answer from a process that failed meanwhile issues nothing.
+      if (_processes[id] == plugin && plugin.failedAt == null) {
+        _remember(id, result, issued);
+      }
+      return result;
+    } finally {
+      // It answered (a result or its own error): it works again.
+      if (plugin.answered && plugin.failedAt == null) _failures.remove(id);
     }
-    final plugin = _processes.putIfAbsent(
-      id,
-      () =>
-          _FeatureProcess(id, command!, identity.environment, shutdownTimeout),
-    );
-    final (result, issued) = await plugin.call(operation, params);
-    _remember(id, result, issued);
-    return result;
   }
 
+  _FeatureProcess _launch(String id, List<String> command) {
+    _processBacked.add(id);
+    late final _FeatureProcess process;
+    process = _FeatureProcess(
+      id,
+      command,
+      identity.environment,
+      shutdownTimeout,
+      clock,
+      // Its handles die with it, unless it was already replaced: then the
+      // handles are its replacement's.
+      onFailed: () {
+        if (_processes[id] == process) {
+          _owners.removeWhere((_, owner) => owner == id);
+        }
+      },
+    );
+    return _processes[id] = process;
+  }
+
+  static const _maxRestartDelay = Duration(minutes: 1);
+
+  /// A failed backend that has not exited by then (its own cleanup is
+  /// bounded to about 50 seconds) is killed.
+  static const _killAfter = Duration(minutes: 1);
+
   /// The stateful AI Project Center stops first; the other features are
-  /// asked only once it confirmed. A feature that stopped is forgotten, so a
-  /// later call starts it again: an aborted close leaves every feature usable.
+  /// asked only once it confirmed. A refused or timed-out shutdown leaves
+  /// every feature usable; a confirmed one is final for this host.
   Future<void>? _shuttingDown;
 
   /// Concurrent requests share one shutdown attempt.
@@ -247,7 +428,46 @@ final class _FeatureProcess {
     this.command,
     this.environment,
     this.shutdownTimeout,
-  );
+    this.clock, {
+    this.onFailed,
+  });
+  final DateTime Function() clock;
+  final void Function()? onFailed;
+
+  /// The process answered a request (not only @hello).
+  bool answered = false;
+
+  /// No process runs (none started, or it exited).
+  bool get exited => _process == null || _exitedProcess;
+
+  /// It stopped, failed or exited: it serves nothing any more.
+  bool get retired => cleanlyStopped || failedAt != null || _exitedProcess;
+
+  /// When it confirmed @shutdown.
+  DateTime? stoppedAt;
+
+  /// It confirmed @shutdown: it gets EOF, and its handles end with it.
+  void _confirmStopped() {
+    cleanlyStopped = true;
+    stoppedAt ??= clock();
+    endInput();
+    onFailed?.call();
+  }
+
+  bool _exitedProcess = false;
+
+  /// Ends a process that did not exit on its own.
+  void kill() => _process?.kill(ProcessSignal.sigkill);
+
+  /// EOF: a feature that confirmed @shutdown exits on it.
+  void endInput() {
+    final process = _process;
+    if (process == null || _inputEnded) return;
+    _inputEnded = true;
+    process.stdin.close().ignore();
+  }
+
+  bool _inputEnded = false;
   final Duration shutdownTimeout;
   final String id;
   final List<String> command;
@@ -259,6 +479,9 @@ final class _FeatureProcess {
 
   /// The feature answered @shutdown successfully (also after a timeout).
   bool cleanlyStopped = false;
+
+  /// When the backend failed (crashed, hung, did not start); null while usable.
+  DateTime? failedAt;
   int _serial = 0;
   bool _failed = false;
   bool _stopRequested = false;
@@ -282,6 +505,7 @@ final class _FeatureProcess {
       process.kill();
       throw ServiceError('feature_closing');
     }
+    unawaited(process.exitCode.then((_) => _exitedProcess = true));
     process.stdin.done.ignore();
     process.stderr.drain<void>();
     var buffer = <int>[];
@@ -350,14 +574,16 @@ final class _FeatureProcess {
 
   Future<Map<String, dynamic>> _request(
     String method,
-    Map<String, dynamic> params,
-  ) {
+    Map<String, dynamic> params, [
+    Map<String, dynamic>? context,
+  ]) {
     if (_failed || _process == null) throw ServiceError('feature_disconnected');
     final serial = ++_serial;
     final frame = jsonEncode({
       'id': serial,
       'method': method,
       'params': params,
+      'context': ?context,
     });
     if (utf8.encode(frame).length > maxRequest) {
       throw ServiceError('request_too_large');
@@ -370,19 +596,43 @@ final class _FeatureProcess {
 
   Future<(Map<String, dynamic>, List<String>?)> call(
     String method,
-    Map<String, dynamic> params,
-  ) async {
+    Map<String, dynamic> params, [
+    Map<String, dynamic>? context,
+  ]) async {
     try {
-      await (_starting ??= _start());
+      try {
+        await (_starting ??= _start());
+      } on ProcessException {
+        _fail();
+        throw ServiceError('feature_disconnected');
+      } on Object {
+        // Also a failed @hello: the cached start never succeeds again.
+        _fail();
+        rethrow;
+      }
       // A pending @shutdown is still being answered: a request would queue
       // behind it and could be dropped when the process exits.
       if (_stopRequested || _shutdownPending || cleanlyStopped) {
         throw ServiceError('feature_closing');
       }
-      final frame = await _request(
-        method,
-        params,
-      ).timeout(const Duration(seconds: 45));
+      final Map<String, dynamic> frame;
+      try {
+        frame = await _request(
+          method,
+          params,
+          context,
+        ).timeout(const Duration(seconds: 45));
+      } on ServiceError catch (error) {
+        // Its own error frame is an answer too; a lost process, a request
+        // refused before sending and an invalid reply are not.
+        if (!_failed &&
+            error.code != 'request_too_large' &&
+            error.code != 'feature_invalid_response') {
+          answered = true;
+        }
+        rethrow;
+      }
+      answered = true;
       return (
         frame['result'] as Map<String, dynamic>,
         (frame['handles'] as List?)?.cast<String>(),
@@ -394,6 +644,10 @@ final class _FeatureProcess {
   }
 
   void _fail() {
+    if (failedAt == null) {
+      failedAt = clock();
+      onFailed?.call();
+    }
     _failed = true;
     _process?.kill();
     for (final waiter in _pending.values) {
@@ -420,6 +674,7 @@ final class _FeatureProcess {
       }
       if (_process == null) return;
       if (_failed || cleanlyStopped) {
+        if (cleanlyStopped) endInput();
         await _process!.exitCode.timeout(const Duration(seconds: 20));
         return;
       }
@@ -429,13 +684,13 @@ final class _FeatureProcess {
       try {
         await request.timeout(shutdownTimeout);
         _shutdownPending = false;
-        cleanlyStopped = true;
+        _confirmStopped();
       } on TimeoutException {
         // Keep waiting in the background so a later retry sees the answer.
         unawaited(
           request.then((_) {
             _shutdownPending = false;
-            cleanlyStopped = true;
+            _confirmStopped();
           }, onError: (Object _) => _shutdownPending = false),
         );
         throw ServiceError('project_still_pausing');
@@ -443,7 +698,6 @@ final class _FeatureProcess {
         _shutdownPending = false;
         rethrow;
       }
-      await _process!.stdin.close();
       await _process!.exitCode.timeout(const Duration(seconds: 10));
     } on ServiceError {
       if (!_failed) _stopRequested = false;
