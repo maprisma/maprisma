@@ -103,9 +103,52 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
   /// started before shows no older project.
   int _viewGeneration = 0;
 
+  /// The backend keeps the user's board order and importance marks (its
+  /// `list` lists the capability `order`; task 095): cards can be moved and
+  /// marked, and a read shows the order as it comes.
+  bool _order = false;
+
   /// A project (or a new one) is open over the board.
   bool _projectOpen = false;
   BoardFilter? _filter;
+  BoardImportance? _importance;
+
+  /// A card's move is on its way (one at a time); [_orderSeq] counts the
+  /// moves sent, so a read from before one does not undo it on the board.
+  bool _moving = false;
+  int _orderSeq = 0;
+
+  /// Importance marks on their way, by project: a read meanwhile keeps them.
+  final _marking = <String, String>{};
+
+  /// Marks sent and answered, by project (both count): a read begun before
+  /// either keeps the mark the page shows now.
+  final _markGen = <String, int>{};
+
+  /// The mark the page shows now for [id] (one on its way first).
+  String? _localMark(String id) =>
+      _marking[id] ??
+      _projects.where((p) => p['id'] == id).firstOrNull?['importance']
+          as String? ??
+      (_project?['id'] == id ? _project!['importance'] as String? : null);
+
+  /// A read's [project] keeps the shown mark when one was sent or answered
+  /// since the read began ([since]: the generations then).
+  void _keepMark(Map project, Map<String, int> since) {
+    final id = project['id'];
+    if (id is! String) return;
+    if (!_marking.containsKey(id) && (_markGen[id] ?? 0) == (since[id] ?? 0)) {
+      return;
+    }
+    if (_localMark(id) case final code?) project['importance'] = code;
+  }
+
+  /// Whether the board shows [p] (the filters and the agent [agent]).
+  bool _shows(Map<String, dynamic> p, String? agent) =>
+      (_filter == null || p['bucket'] == _filter!.code) &&
+      (_importance == null ||
+          BoardImportance.of(p['importance']) == _importance) &&
+      namesAgent(p, agent);
 
   /// Cards or Phases; kept while the app runs (task 090).
   BoardView _view = BoardView.cards;
@@ -120,9 +163,27 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
   final _boardScroll = ScrollController();
   final _newFocus = FocusNode(debugLabel: 'new project');
 
-  void _revealed() {
+  /// Counts the cards asked to be revealed: a board's callback from an
+  /// earlier ask (a move answered between the scroll and the focus) does
+  /// nothing.
+  int _revealSeq = 0;
+
+  /// Brings [id] into view and gives it the keyboard ('' : the first shown
+  /// card or New project).
+  void _revealCard(String id) {
+    _reveal = id;
+    _revealSeq++;
+  }
+
+  /// The board's callback for the reveal asked for now.
+  VoidCallback _revealedNow() {
+    final seq = _revealSeq;
+    return () => _revealed(seq);
+  }
+
+  void _revealed(int seq) {
     final id = _reveal;
-    if (!mounted || id == null) return;
+    if (!mounted || id == null || seq != _revealSeq) return;
     setState(() => _reveal = null);
     final node = _cardFocus[id];
     // A deleted card's node keeps its old context: it must still be there.
@@ -178,6 +239,11 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
       if (card != null && _filter != null && card['bucket'] != _filter!.code) {
         _filter = null;
       }
+      if (card != null &&
+          _importance != null &&
+          BoardImportance.of(card['importance']) != _importance) {
+        _importance = null;
+      }
       if (card != null && !namesAgent(card, widget.agent?.command)) {
         agentCleared = true;
       }
@@ -189,11 +255,13 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
     // and with none left, New project.
     final shown = [
       for (final p in _projects)
-        if ((_filter == null || p['bucket'] == _filter!.code) &&
-            namesAgent(p, agent))
-          '${p['id']}',
+        if (_shows(p, agent)) '${p['id']}',
     ];
-    setState(() => _reveal = shown.contains(id) ? id : shown.firstOrNull ?? '');
+    setState(
+      () => _revealCard(
+        id != null && shown.contains(id) ? id : shown.firstOrNull ?? '',
+      ),
+    );
     return true;
   }
 
@@ -250,19 +318,190 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
     return center ? Center(child: note) : note;
   }
 
-  /// While a card has the keyboard, a refresh keeps the cards where they are
-  /// (new ones at the end, gone ones removed); the core's order returns with
-  /// the next read after.
-  List<Map<String, dynamic>> _holdOrder(List<Map<String, dynamic>> fresh) {
+  /// The board's order after a read. With the user's order (task 095) the
+  /// read's order is shown, unless a move was sent after the read began or
+  /// is still on its way ([moved]): then the cards stay as moved (new ones on
+  /// top). An older backend sorts by urgency: while a card has the keyboard
+  /// or is pressed, and while a project is open, the cards stay where they
+  /// are (new ones at the end); the core's order returns with the next read
+  /// after.
+  List<Map<String, dynamic>> _holdOrder(
+    List<Map<String, dynamic>> fresh, {
+    bool moved = false,
+  }) {
+    if (!_board) return fresh;
     final focused = _cardFocus.values.any((node) => node.hasFocus);
-    // Also while a card is pressed, and while a project is open (its card
-    // stays where the board was left, to give the keyboard back to).
-    if (!_board || !(focused || _pressed.isNotEmpty || _projectOpen)) {
-      return fresh;
-    }
+    final hold = _order
+        ? moved
+        : focused || _pressed.isNotEmpty || _projectOpen;
+    if (!hold) return fresh;
     final byId = {for (final p in fresh) '${p['id']}': p};
     final kept = [for (final old in _projects) ?byId.remove('${old['id']}')];
-    return [...kept, ...byId.values];
+    return _order ? [...byId.values, ...kept] : [...kept, ...byId.values];
+  }
+
+  /// [projects] in the order of [ids] (others after them, as they were).
+  static List<Map<String, dynamic>> _ordered(
+    List<Map<String, dynamic>> projects,
+    List<String> ids,
+  ) {
+    final byId = {for (final p in projects) '${p['id']}': p};
+    return [for (final id in ids) ?byId.remove(id), ...byId.values];
+  }
+
+  /// A card moved on the board (drag, Move menu or keyboard): [target] null
+  /// is the top (or with [after] the end); after a card means before the
+  /// next card the board shows, else before the next one of the whole
+  /// order (a filter hides it), else the end.
+  void _moveFromBoard(String id, String? target, bool after) {
+    final ids = [for (final p in _projects) '${p['id']}'];
+    String? before;
+    if (target == null) {
+      before = after ? null : ids.where((i) => i != id).firstOrNull;
+      if (!after && before == null) return;
+    } else if (!after) {
+      before = target;
+    } else {
+      final agent = widget.agent?.command;
+      final shown = [
+        for (final p in _projects)
+          if (_shows(p, agent)) '${p['id']}',
+      ];
+      // A card gone meanwhile: no place to go after.
+      final whole = ids.indexOf(target);
+      if (whole < 0) return;
+      final there = shown.indexOf(target);
+      before =
+          (there < 0
+              ? null
+              : shown.skip(there + 1).where((i) => i != id).firstOrNull) ??
+          ids.skip(whole + 1).where((i) => i != id).firstOrNull;
+    }
+    unawaited(_move(id, before));
+  }
+
+  /// Sends `move`: the card moves at once, then takes the answer's order; a
+  /// refusal puts it back and keeps its reason on the board.
+  Future<void> _move(String id, String? before) async {
+    if (!_order || _moving || _quick.contains(id) || _unavailable) return;
+    final old = [for (final p in _projects) '${p['id']}'];
+    final rest = [...old]..remove(id);
+    final at = before == null ? rest.length : rest.indexOf(before);
+    if (at < 0 || !old.contains(id)) return;
+    final moved = [...rest]..insert(at, id);
+    if (moved.join('\n') == old.join('\n')) return;
+    setState(() {
+      _moving = true;
+      _orderSeq++;
+      _projects = _ordered(_projects, moved);
+      // The keyboard stays with the card, also when it left the view.
+      _revealCard(id);
+    });
+    var kept = false;
+    try {
+      final answer = await widget.onCall('move', {'id': id, 'before': before});
+      final order = answer['order'];
+      if (mounted && order is List) {
+        setState(() {
+          _projects = _ordered(_projects, [for (final i in order) '$i']);
+          // The answer may place it elsewhere: kept in view.
+          _revealCard(id);
+        });
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _projects = _ordered(_projects, old);
+          // Back where it was, in view again.
+          _revealCard(id);
+          _error = _failure(error);
+          _keepError++;
+          _quickFailures++;
+          _quickReason = _error;
+          kept = true;
+        });
+      }
+    } finally {
+      // Counted again: a read begun while it was on its way is older too.
+      if (mounted) {
+        setState(() {
+          _moving = false;
+          _orderSeq++;
+        });
+      }
+    }
+    // A refused move (an unknown card): the board is read again; the reason
+    // stays through that read.
+    if (kept) {
+      if (mounted) await _refresh();
+      _keepError--;
+    }
+  }
+
+  /// Sends `set_importance` from a card's mark or the Goal tab: the mark
+  /// changes at once (the open project's draft stays as it is); a refusal
+  /// puts it back with its reason.
+  Future<void> _setImportance(String id, BoardImportance value) async {
+    if (!_order ||
+        _marking.containsKey(id) ||
+        _quick.contains(id) ||
+        _unavailable) {
+      return;
+    }
+    String? was;
+    void mark(String? code) {
+      for (final p in [..._projects.where((p) => p['id'] == id), ?_project]) {
+        if (p['id'] != id) continue;
+        if (code == null) {
+          p.remove('importance');
+        } else {
+          p['importance'] = code;
+        }
+      }
+    }
+
+    setState(() {
+      was =
+          _projects.where((p) => p['id'] == id).firstOrNull?['importance']
+              as String? ??
+          (_project?['id'] == id ? _project!['importance'] as String? : null);
+      _marking[id] = value.code;
+      _markGen[id] = (_markGen[id] ?? 0) + 1;
+      mark(value.code);
+    });
+    var kept = false;
+    try {
+      final answer = await widget.onCall('set_importance', {
+        'id': id,
+        'importance': value.code,
+      });
+      final project = answer['project'];
+      if (mounted && project is Map && project['importance'] is String) {
+        setState(() => mark(project['importance'] as String));
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          mark(was);
+          _error = _failure(error);
+          _keepError++;
+          _quickFailures++;
+          _quickReason = _error;
+          kept = true;
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _marking.remove(id);
+          _markGen[id] = (_markGen[id] ?? 0) + 1;
+        });
+      }
+    }
+    if (kept) {
+      if (mounted) await _refresh();
+      _keepError--;
+    }
   }
 
   /// Pause or Retry pause from a card, for the run the card shows.
@@ -590,6 +829,9 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
     _reading = true;
     final selection = _selection;
     final generation = _viewGeneration;
+    final moves = _orderSeq;
+    final marks = Map.of(_markGen);
+    final failures = _quickFailures;
     // Full details only for the open project (the board needs none).
     final id = _board && !_projectOpen ? null : _project?['id'];
     try {
@@ -619,10 +861,16 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
       }
       if (!mounted) return;
       setState(() {
-        _projects = _holdOrder(_rows(results[0]['projects']));
         final caps = results[0]['capabilities'];
         _board = caps is List && caps.contains('board');
         _messagesOn = caps is List && caps.contains('messages');
+        _order = _board && caps is List && caps.contains('order');
+        final fresh = _rows(results[0]['projects']);
+        // A mark on its way stays (the read may be older than it).
+        for (final p in fresh) {
+          _keepMark(p, marks);
+        }
+        _projects = _holdOrder(fresh, moved: _moving || moves != _orderSeq);
         _ticks = 0;
         _unavailable = false;
         final summary = results[0]['summary'];
@@ -640,6 +888,7 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
             selection == _selection &&
             generation == _viewGeneration &&
             id == _project?['id']) {
+          _keepMark(selected, marks);
           if (_dirty) {
             _project = Map<String, dynamic>.from(selected);
           } else {
@@ -651,7 +900,11 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
         if (detailError != null &&
             selection == _selection &&
             (!_board || _projectOpen)) {
-          _error = _failure(detailError);
+          // A card's action that failed since the read began keeps its
+          // reason.
+          _error = _quickFailures == failures
+              ? _failure(detailError)
+              : _quickReason;
         } else if (profileError != null && !_board) {
           _error = _failure(profileError);
         }
@@ -659,7 +912,8 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
     } catch (error) {
       if (mounted) {
         setState(() {
-          _error = _failure(error);
+          // A card's action that failed meanwhile keeps its reason.
+          _error = _quickFailures == failures ? _failure(error) : _quickReason;
           _unavailable = true;
           _ticks = 0;
         });
@@ -812,6 +1066,8 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
         _setupDrafts.removeWhere((key, _) => key.startsWith('new:'));
       }
     });
+    final marks = Map.of(_markGen);
+    final failures = _quickFailures;
     try {
       final result = project == null
           ? null
@@ -821,12 +1077,20 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
             );
       if (!mounted) return false;
       setState(() {
+        if (result != null) _keepMark(result, marks);
         _adopt(result);
         _tab = 0;
       });
       return true;
     } catch (error) {
-      if (mounted) setState(() => _error = _failure(error));
+      // A card's action that failed meanwhile keeps its reason.
+      if (mounted) {
+        setState(
+          () => _error = _quickFailures == failures
+              ? _failure(error)
+              : _quickReason,
+        );
+      }
       return false;
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -971,11 +1235,9 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
             }
             final shown = [
               for (final p in _projects)
-                if ((_filter == null || p['bucket'] == _filter!.code) &&
-                    namesAgent(p, widget.agent?.command))
-                  '${p['id']}',
+                if (_shows(p, widget.agent?.command)) '${p['id']}',
             ];
-            _reveal = shown.firstOrNull ?? '';
+            _revealCard(shown.firstOrNull ?? '');
           }
         });
       }
@@ -1978,6 +2240,64 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
     );
   }
 
+  /// The Goal tab's importance (task 095): set at once, never part of the
+  /// draft; only for a saved project of a backend that keeps marks.
+  Widget? _importanceRow() {
+    final id = _project?['id'];
+    final value = BoardImportance.of(_project?['importance']);
+    if (!_order || id is! String || value == null) return null;
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpace.md),
+      child: LayoutBuilder(
+        builder: (context, box) {
+          // Without room (narrow, large text, long words): the label above,
+          // the choices across the width without symbols.
+          final scale = MediaQuery.textScalerOf(context).scale(16) / 16;
+          final compact = box.maxWidth < 520 * scale;
+          final selector = SegmentedButton<BoardImportance>(
+            key: const ValueKey('goal-importance'),
+            showSelectedIcon: false,
+            expandedInsets: compact ? EdgeInsets.zero : null,
+            segments: [
+              for (final i in BoardImportance.values)
+                ButtonSegment(
+                  value: i,
+                  icon: compact ? null : Icon(i.icon, size: 18),
+                  label: Text(tr(i.label)),
+                ),
+            ],
+            selected: {value},
+            // Not while the page saves, deletes or reads the project.
+            onSelectionChanged:
+                _busy ||
+                    _marking.containsKey(id) ||
+                    _quick.contains(id) ||
+                    _unavailable
+                ? null
+                : (chosen) => _setImportance(id, chosen.single),
+          );
+          if (compact) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(tr('Importance')),
+                const SizedBox(height: AppSpace.xs),
+                selector,
+              ],
+            );
+          }
+          return Row(
+            children: [
+              Expanded(child: Text(tr('Importance'))),
+              const SizedBox(width: AppSpace.md),
+              selector,
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   /// The open tab's content (goal, plan, team, activity or setup).
   Widget _tabBody(bool approved) => switch (_tab) {
     0 => Column(
@@ -2002,6 +2322,7 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
             label: Text(tr('Choose folder')),
           ),
         ),
+        ?_importanceRow(),
       ],
     ),
     1 => Column(
@@ -2341,6 +2662,18 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
                             unavailable: _unavailable,
                             filter: _filter,
                             onFilter: (f) => setState(() => _filter = f),
+                            importance: _importance,
+                            onImportanceFilter: (i) =>
+                                setState(() => _importance = i),
+                            onMove: _order ? _moveFromBoard : null,
+                            // Move to top / to end judge the whole board,
+                            // also under the agent chip.
+                            firstId: _projects.firstOrNull?['id'] as String?,
+                            lastId: _projects.lastOrNull?['id'] as String?,
+                            onImportance: _order
+                                ? (p, value) =>
+                                      _setImportance('${p['id']}', value)
+                                : null,
                             view: _view,
                             onView: (v) => setState(() => _view = v),
                             onOpen: (p) => _openFromBoard(p),
@@ -2349,12 +2682,12 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
                                 : () => _openFromBoard(null),
                             onReview: (p) => _openFromBoard(p, tab: 1),
                             onPause: _pauseFromBoard,
-                            busyIds: _quick,
+                            busyIds: {..._quick, ..._marking.keys},
                             eventText: _eventText,
                             controller: _boardScroll,
                             newFocus: _newFocus,
                             reveal: _reveal,
-                            onRevealed: _revealed,
+                            onRevealed: _revealedNow(),
                             onPress: (id, down) =>
                                 down ? _pressed.add(id) : _pressed.remove(id),
                             cardFocus: (id) => _cardFocus[id] ??= FocusNode(
