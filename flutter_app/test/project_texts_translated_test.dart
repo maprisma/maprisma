@@ -100,6 +100,13 @@ void main() {
       'Message queued for the next assignment.',
       'A message arrived after the last assignment had started. It waits for the next assignment.',
       'A waiting message was removed.',
+      // Board order and importance (task 095).
+      for (final i in BoardImportance.values) i.label,
+      'Move',
+      'Move up',
+      'Move down',
+      'Move to top',
+      'Move to end',
     };
     for (final code in ['de', 'es', 'fr', 'it', 'nl', 'pl', 'pt']) {
       final table =

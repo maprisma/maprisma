@@ -1,7 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+
+import 'package:flutter/semantics.dart';
+import 'package:flutter/services.dart';
 
 import 'app_look.dart';
 import 'project_messages.dart';
+import 'app_theme.dart';
 import 'project_phases.dart';
 
 /// The filters of the Projects board, in the core's bucket order (task 088).
@@ -29,6 +35,24 @@ enum BoardView {
   const BoardView(this.label, this.icon);
   final String label;
   final IconData icon;
+}
+
+/// A project's importance (task 095): a mark the user sets; it never moves
+/// a card.
+enum BoardImportance {
+  high('high', 'High', Icons.keyboard_double_arrow_up),
+  medium('medium', 'Medium', Icons.remove),
+  low('low', 'Low', Icons.keyboard_double_arrow_down);
+
+  const BoardImportance(this.code, this.label, this.icon);
+  final String code;
+  final String label;
+  final IconData icon;
+
+  /// The mark of a card or project view; null without one (an older
+  /// backend).
+  static BoardImportance? of(Object? code) =>
+      values.where((i) => i.code == code).firstOrNull;
 }
 
 /// A bucket's symbol (the filter's).
@@ -127,7 +151,30 @@ class ProjectBoard extends StatelessWidget {
     this.onFix,
     this.mapFix = false,
     this.onDelete,
+    this.onMove,
+    this.onImportance,
+    this.importance,
+    this.onImportanceFilter,
+    this.firstId,
+    this.lastId,
   });
+
+  /// The whole board's first and last card (Move to top / to end); without
+  /// them [projects]'.
+  final String? firstId, lastId;
+
+  /// Moves a card (task 095): [target] null puts it on top (or at the end
+  /// with [after]); else before (or after) the card [target]. Null: the
+  /// backend keeps no order, the cards cannot be moved.
+  final void Function(String id, String? target, bool after)? onMove;
+
+  /// Sets a card's importance from its mark; null: the mark is read only.
+  final void Function(Map<String, dynamic> project, BoardImportance value)?
+  onImportance;
+
+  /// The importance filter (beside the bucket filters).
+  final BoardImportance? importance;
+  final ValueChanged<BoardImportance?>? onImportanceFilter;
 
   /// The card's trash symbol (task 094): deletes the saved project after a
   /// question; none without it.
@@ -146,7 +193,8 @@ class ProjectBoard extends StatelessWidget {
   final BoardView view;
   final ValueChanged<BoardView>? onView;
 
-  /// The board projection, most urgent first.
+  /// The board projection, in the user's order (an older backend: most
+  /// urgent first).
   final List<Map<String, dynamic>> projects;
   final String Function(String) tr;
   final BoardFilter? filter;
@@ -187,14 +235,26 @@ class ProjectBoard extends StatelessWidget {
   int _count(BoardFilter f) =>
       projects.where((p) => p['bucket'] == f.code).length;
 
+  int _importanceCount(BoardImportance i) =>
+      projects.where((p) => BoardImportance.of(p['importance']) == i).length;
+
   @override
   Widget build(BuildContext context) {
-    final shown = filter == null
+    final shown = filter == null && importance == null
         ? projects
         : [
             for (final p in projects)
-              if (p['bucket'] == filter!.code) p,
+              if ((filter == null || p['bucket'] == filter!.code) &&
+                  (importance == null ||
+                      BoardImportance.of(p['importance']) == importance))
+                p,
           ];
+    // The importance filter once the backend marks projects.
+    final marks =
+        onImportanceFilter != null &&
+        (importance != null ||
+            projects.any((p) => BoardImportance.of(p['importance']) != null));
+    final canMove = onMove != null && !unavailable;
     return LayoutBuilder(
       builder: (context, box) {
         final narrow = box.maxWidth < 700;
@@ -263,6 +323,14 @@ class ProjectBoard extends StatelessWidget {
               total: projects.length,
               filter: filter,
               onFilter: onFilter,
+              importanceCounts: !marks
+                  ? null
+                  : {
+                      for (final i in BoardImportance.values)
+                        i: unavailable ? null : _importanceCount(i),
+                    },
+              importance: importance,
+              onImportance: onImportanceFilter,
               onNew: onNew,
               newFocus: newFocus,
               view: view,
@@ -316,12 +384,18 @@ class ProjectBoard extends StatelessWidget {
                       itemBuilder: (context, i) {
                         final project = shown[i];
                         final id = '${project['id']}';
-                        final card = ProjectCard(
+                        final busy = busyIds.contains(id);
+                        Widget build(Widget? handle) => ProjectCard(
                           key: ValueKey('project-card-$id'),
+                          handle: handle,
+                          onImportance:
+                              onImportance == null || unavailable || busy
+                              ? null
+                              : (value) => onImportance!(project, value),
                           project: project,
                           tr: tr,
                           narrow: narrow,
-                          busy: busyIds.contains(id),
+                          busy: busy,
                           focusNode: cardFocus?.call(id),
                           eventText: eventText,
                           onOpen: () => onOpen(project),
@@ -341,7 +415,30 @@ class ProjectBoard extends StatelessWidget {
                           onPointerDown: (_) => onPress?.call(id, true),
                           onPointerUp: (_) => onPress?.call(id, false),
                           onPointerCancel: (_) => onPress?.call(id, false),
-                          child: card,
+                          // Without the board's answers the handle stays,
+                          // off.
+                          child: onMove == null
+                              ? build(null)
+                              : _ReorderCell(
+                                  id: id,
+                                  title: '${project['title'] ?? ''}',
+                                  shown: [for (final p in shown) '${p['id']}'],
+                                  first:
+                                      (firstId ?? '${projects.first['id']}') ==
+                                      id,
+                                  last:
+                                      (lastId ?? '${projects.last['id']}') ==
+                                      id,
+                                  enabled: canMove && !busy,
+                                  vertical: columns == 1,
+                                  width:
+                                      (box.maxWidth -
+                                          AppSpace.md * (columns + 1)) /
+                                      columns,
+                                  tr: tr,
+                                  onMove: onMove!,
+                                  card: build,
+                                ),
                         );
                       },
                     ),
@@ -366,7 +463,16 @@ class _SummaryRow extends StatelessWidget {
     this.onView,
     this.agentName,
     this.onClearAgent,
+    this.importanceCounts,
+    this.importance,
+    this.onImportance,
   });
+
+  /// The importance filters' counts (a null count: unavailable); null: no
+  /// importance filter (an older backend).
+  final Map<BoardImportance, int?>? importanceCounts;
+  final BoardImportance? importance;
+  final ValueChanged<BoardImportance?>? onImportance;
 
   final FocusNode? newFocus;
   final String? agentName;
@@ -401,8 +507,76 @@ class _SummaryRow extends StatelessWidget {
               // Chosen again clears; All resets both filter and agent.
               : (_) {
                   onFilter!(filter == f ? null : f);
-                  if (f == null) onClearAgent?.call();
+                  if (f == null) {
+                    onImportance?.call(null);
+                    onClearAgent?.call();
+                  }
                 },
+        ),
+      );
+    }
+
+    // One chip for the importance filter: its menu lists the three with
+    // their counts; chosen again (or ×) clears it.
+    String named(BoardImportance i) {
+      final count = importanceCounts?[i];
+      return count == null ? tr(i.label) : '${tr(i.label)} $count';
+    }
+
+    // A menu route under the chip (Esc closes it, not the page).
+    Future<void> choose(BuildContext chip) async {
+      final box = chip.findRenderObject()! as RenderBox;
+      final overlay = Overlay.of(chip).context.findRenderObject()! as RenderBox;
+      final picked = await showMenu<BoardImportance>(
+        context: chip,
+        position: RelativeRect.fromRect(
+          Rect.fromPoints(
+            box.localToGlobal(
+              box.size.bottomLeft(Offset.zero),
+              ancestor: overlay,
+            ),
+            box.localToGlobal(
+              box.size.bottomRight(Offset.zero),
+              ancestor: overlay,
+            ),
+          ),
+          Offset.zero & overlay.size,
+        ),
+        items: [
+          for (final i in BoardImportance.values)
+            CheckedPopupMenuItem(
+              key: ValueKey('board-importance-${i.code}'),
+              value: i,
+              checked: importance == i,
+              child: Text(named(i)),
+            ),
+        ],
+      );
+      if (picked != null) {
+        onImportance?.call(importance == picked ? null : picked);
+      }
+    }
+
+    Widget mark() {
+      final chosen = importance;
+      return Padding(
+        padding: const EdgeInsets.only(right: AppSpace.xs),
+        child: Builder(
+          builder: (context) => FilterChip(
+            key: const ValueKey('board-importance'),
+            avatar: Icon(chosen?.icon ?? Icons.low_priority, size: 16),
+            label: Text(chosen == null ? tr('Importance') : named(chosen)),
+            tooltip: tr('Importance'),
+            selected: chosen != null,
+            showCheckmark: false,
+            onDeleted: chosen == null || onImportance == null
+                ? null
+                : () => onImportance!(null),
+            deleteButtonTooltipMessage: tr('All'),
+            onSelected: onImportance == null
+                ? null
+                : (_) => unawaited(choose(context)),
+          ),
         ),
       );
     }
@@ -415,6 +589,7 @@ class _SummaryRow extends StatelessWidget {
           context,
           box.maxWidth < 600 * scale,
           chip,
+          mark,
           named: box.maxWidth >= 1000 * scale,
         );
       },
@@ -424,7 +599,8 @@ class _SummaryRow extends StatelessWidget {
   Widget _row(
     BuildContext context,
     bool narrow,
-    Widget Function(BoardFilter?) chip, {
+    Widget Function(BoardFilter?) chip,
+    Widget Function() mark, {
     required bool named,
   }) {
     return Padding(
@@ -454,6 +630,8 @@ class _SummaryRow extends StatelessWidget {
                       ),
                     ),
                   chip(null),
+                  // Right after All, so it is in view in a normal window.
+                  if (importanceCounts != null) mark(),
                   for (final f in BoardFilter.values) chip(f),
                 ],
               ),
@@ -563,7 +741,17 @@ class ProjectCard extends StatelessWidget {
     this.mapFix = false,
     this.onDelete,
     this.unavailable = false,
+    this.handle,
+    this.onImportance,
   });
+
+  /// The drag handle with its Move menu (task 095); none when the board
+  /// keeps no order.
+  final Widget? handle;
+
+  /// Chooses the importance from the card's mark; null: read only (no
+  /// mark without one in the card).
+  final ValueChanged<BoardImportance>? onImportance;
 
   /// The trash symbol (task 094); off while the project works or stops,
   /// and while the board cannot be read.
@@ -580,6 +768,8 @@ class ProjectCard extends StatelessWidget {
   final VoidCallback onOpen, onReview, onPause;
   final bool narrow, busy;
   final FocusNode? focusNode;
+
+  BoardImportance? get importance => BoardImportance.of(project['importance']);
 
   static String shortPath(String path) {
     final parts = path.split('/').where((p) => p.isNotEmpty).toList();
@@ -632,19 +822,41 @@ class ProjectCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                '${project['title'] ?? ''}',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.titleMedium,
-              ),
-              Text(
-                shortPath('${project['path'] ?? ''}'),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: colors.onSurfaceVariant,
-                ),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${project['title'] ?? ''}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.titleMedium,
+                        ),
+                        Text(
+                          shortPath('${project['path'] ?? ''}'),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: colors.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (importance case final mark?)
+                    Padding(
+                      padding: const EdgeInsets.only(left: AppSpace.xs),
+                      child: ImportanceMark(
+                        importance: mark,
+                        tr: tr,
+                        onChanged: onImportance,
+                      ),
+                    ),
+                  ?handle,
+                ],
               ),
               const SizedBox(height: AppSpace.xs),
               Row(
@@ -801,6 +1013,292 @@ class ProjectCard extends StatelessWidget {
         ? local.formatTimeOfDay(TimeOfDay.fromDateTime(at))
         : local.formatShortMonthDay(at);
     return '$when · $text';
+  }
+}
+
+/// A card's importance (task 095): High stands out in the accent's
+/// container, Medium is outlined, Low plain; with [onChanged] a click
+/// chooses another.
+class ImportanceMark extends StatelessWidget {
+  const ImportanceMark({
+    super.key,
+    required this.importance,
+    required this.tr,
+    this.onChanged,
+  });
+
+  final BoardImportance importance;
+  final String Function(String) tr;
+  final ValueChanged<BoardImportance>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final corner = BorderRadius.circular(cornerSizes(context).control);
+    final (fill, ink, edge) = switch (importance) {
+      BoardImportance.high => (
+        colors.primaryContainer,
+        colors.onPrimaryContainer,
+        null,
+      ),
+      BoardImportance.medium => (
+        null,
+        colors.onSurfaceVariant,
+        colors.outlineVariant,
+      ),
+      BoardImportance.low => (null, colors.onSurfaceVariant, null),
+    };
+    final mark = Container(
+      key: ValueKey('card-importance-${importance.code}'),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpace.sm, vertical: 2),
+      decoration: BoxDecoration(
+        color: fill,
+        borderRadius: corner,
+        border: edge == null ? null : Border.all(color: edge),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(importance.icon, size: 14, color: ink),
+          const SizedBox(width: AppSpace.xs),
+          Text(
+            tr(importance.label),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: ink),
+          ),
+        ],
+      ),
+    );
+    final label = '${tr('Importance')}: ${tr(importance.label)}';
+    if (onChanged == null) {
+      return Tooltip(
+        message: tr('Importance'),
+        child: Semantics(label: label, excludeSemantics: true, child: mark),
+      );
+    }
+    return PopupMenuButton<BoardImportance>(
+      key: const ValueKey('card-importance-menu'),
+      tooltip: tr('Importance'),
+      onSelected: (value) {
+        if (value != importance) onChanged!(value);
+      },
+      itemBuilder: (context) => [
+        for (final i in BoardImportance.values)
+          CheckedPopupMenuItem(
+            key: ValueKey('importance-${i.code}'),
+            value: i,
+            checked: i == importance,
+            child: Text(tr(i.label)),
+          ),
+      ],
+      child: Semantics(label: label, excludeSemantics: true, child: mark),
+    );
+  }
+}
+
+/// A board card that can be moved (task 095): its handle drags it onto
+/// another card (before that card when it comes from behind, after it when
+/// it comes from before) or, clicked, opens the Move menu; Ctrl+Up / Down /
+/// Home / End move the card that has the keyboard.
+class _ReorderCell extends StatefulWidget {
+  const _ReorderCell({
+    required this.id,
+    required this.title,
+    required this.shown,
+    required this.first,
+    required this.last,
+    required this.enabled,
+    required this.vertical,
+    required this.width,
+    required this.tr,
+    required this.onMove,
+    required this.card,
+  });
+
+  final String id, title;
+
+  /// The ids the board shows now, in order.
+  final List<String> shown;
+
+  /// First or last of the whole board (Move to top / to end).
+  final bool first, last;
+  final bool enabled, vertical;
+  final double width;
+  final String Function(String) tr;
+  final void Function(String id, String? target, bool after) onMove;
+  final Widget Function(Widget? handle) card;
+
+  @override
+  State<_ReorderCell> createState() => _ReorderCellState();
+}
+
+class _ReorderCellState extends State<_ReorderCell> {
+  bool _dragging = false;
+
+  void _drag(bool on) {
+    if (mounted && _dragging != on) setState(() => _dragging = on);
+  }
+
+  /// The Move menu: label, key and action (null: not possible here).
+  List<(String, String, VoidCallback?)> get _moves {
+    final shown = widget.shown;
+    final at = shown.indexOf(widget.id);
+    final on = widget.enabled && at >= 0;
+    void move(String? target, bool after) =>
+        widget.onMove(widget.id, target, after);
+    return [
+      ('Move up', 'up', on && at > 0 ? () => move(shown[at - 1], false) : null),
+      (
+        'Move down',
+        'down',
+        on && at < shown.length - 1 ? () => move(shown[at + 1], true) : null,
+      ),
+      (
+        'Move to top',
+        'top',
+        on && !widget.first ? () => move(null, false) : null,
+      ),
+      (
+        'Move to end',
+        'end',
+        on && !widget.last ? () => move(null, true) : null,
+      ),
+    ];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tr = widget.tr;
+    final moves = _moves;
+    VoidCallback? action(String key) => moves.firstWhere((m) => m.$2 == key).$3;
+    final theme = Theme.of(context);
+    final handle = Draggable<String>(
+      data: widget.id,
+      maxSimultaneousDrags: widget.enabled ? null : 0,
+      onDragStarted: () => _drag(true),
+      onDragEnd: (_) => _drag(false),
+      feedback: Material(
+        elevation: 6,
+        color: theme.colorScheme.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(corners(context)),
+        child: SizedBox(
+          width: widget.width,
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpace.md),
+            child: Row(
+              children: [
+                const Icon(Icons.drag_indicator, size: 20),
+                const SizedBox(width: AppSpace.sm),
+                Expanded(
+                  child: Text(
+                    widget.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleMedium,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      child: MouseRegion(
+        cursor: widget.enabled ? SystemMouseCursors.grab : MouseCursor.defer,
+        child: PopupMenuButton<String>(
+          key: const ValueKey('card-move'),
+          tooltip: tr('Move'),
+          enabled: widget.enabled,
+          padding: EdgeInsets.zero,
+          iconSize: 20,
+          icon: const Icon(Icons.drag_indicator),
+          style: IconButton.styleFrom(
+            visualDensity: VisualDensity.compact,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            minimumSize: const Size(28, 28),
+          ),
+          onSelected: (key) => action(key)?.call(),
+          itemBuilder: (context) => [
+            for (final (label, key, run) in moves)
+              PopupMenuItem(
+                key: ValueKey('move-$key'),
+                value: key,
+                enabled: run != null,
+                child: Text(tr(label)),
+              ),
+          ],
+        ),
+      ),
+    );
+    int at(String id) => widget.shown.indexOf(id);
+    return DragTarget<String>(
+      onWillAcceptWithDetails: (d) => d.data != widget.id && at(d.data) >= 0,
+      // From before this card: after it; from behind: before it. A card no
+      // longer shown (a read meanwhile) has no direction: nothing moves.
+      onAcceptWithDetails: (d) {
+        final from = at(d.data);
+        if (from < 0 || at(widget.id) < 0) return;
+        widget.onMove(d.data, widget.id, from < at(widget.id));
+      },
+      builder: (context, candidates, _) {
+        final source = candidates.whereType<String>().firstOrNull;
+        Widget cell = Opacity(
+          opacity: _dragging ? 0.4 : 1,
+          child: CallbackShortcuts(
+            bindings: {
+              for (final (key, activator) in [
+                ('up', LogicalKeyboardKey.arrowUp),
+                ('down', LogicalKeyboardKey.arrowDown),
+                ('top', LogicalKeyboardKey.home),
+                ('end', LogicalKeyboardKey.end),
+              ])
+                SingleActivator(activator, control: true): () =>
+                    action(key)?.call(),
+            },
+            child: Semantics(
+              customSemanticsActions: {
+                for (final (label, _, run) in moves)
+                  CustomSemanticsAction(label: tr(label)): ?run,
+              },
+              child: widget.card(handle),
+            ),
+          ),
+        );
+        if (source == null || at(source) < 0) return cell;
+        // The drop place: a bar in the gap before or after this card.
+        final after = at(source) < at(widget.id);
+        const gap = -(AppSpace.md + 3) / 2;
+        final bar = DecoratedBox(
+          key: const ValueKey('card-drop'),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.primary,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        );
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Positioned.fill(child: cell),
+            if (widget.vertical)
+              Positioned(
+                left: 0,
+                right: 0,
+                top: after ? null : gap,
+                bottom: after ? gap : null,
+                height: 3,
+                child: bar,
+              )
+            else
+              Positioned(
+                top: 0,
+                bottom: 0,
+                left: after ? null : gap,
+                right: after ? gap : null,
+                width: 3,
+                child: bar,
+              ),
+          ],
+        );
+      },
+    );
   }
 }
 

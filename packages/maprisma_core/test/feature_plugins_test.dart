@@ -977,6 +977,7 @@ void main() {
         expect(host.capabilities('ai-project-center'), [
           'summary2',
           'board',
+          'order',
           'messages',
         ]);
         await host.shutdown();
@@ -1316,6 +1317,7 @@ void main() {
             ),
           ),
         );
+        expect(listed['capabilities'], contains('order'));
         final card = (listed['projects'] as List).single as Map;
         expect(card['bucket'], 'needs_you');
         expect(card['messages_queued'], 0);
@@ -1324,6 +1326,13 @@ void main() {
         expect((listed['summary'] as Map)['needs_you'], 1);
         final viewed = await call('get', {'id': item['id']});
         expect((viewed['project'] as Map)['approval_valid'], isFalse);
+        // Order and importance (task 095) pass the host to the worker.
+        expect((await call('move', {'id': item['id']}))['order'], [item['id']]);
+        final marked = await call('set_importance', {
+          'id': item['id'],
+          'importance': 'high',
+        });
+        expect((marked['project'] as Map)['importance'], 'high');
         await service.shutdownFeatures();
       },
       timeout: const Timeout(Duration(minutes: 2)),

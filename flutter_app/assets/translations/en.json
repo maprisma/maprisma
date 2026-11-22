@@ -1188,5 +1188,12 @@
   "Another action on this project came first.": "Another action on this project came first.",
   "This message is already in the prompt of an agent that is starting. It will be delivered there.": "This message is already in the prompt of an agent that is starting. It will be delivered there.",
   "The new session did not start: {0} The project is paused; check the changes, then continue.": "The new session did not start: {0} The project is paused; check the changes, then continue.",
-  "The new agent did not start.": "The new agent did not start."
+  "The new agent did not start.": "The new agent did not start.",
+  "High": "High",
+  "Medium": "Medium",
+  "Low": "Low",
+  "Importance": "Importance",
+  "Move to top": "Move to top",
+  "Move to end": "Move to end",
+  "Move": "Move"
 }

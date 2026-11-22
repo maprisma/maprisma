@@ -3905,5 +3905,11 @@
   "Another action on this project came first.": "Un’altra azione su questo progetto è arrivata prima.",
   "This message is already in the prompt of an agent that is starting. It will be delivered there.": "Questo messaggio è già nel prompt di un agente che si sta avviando. Verrà consegnato lì.",
   "The new session did not start: {0} The project is paused; check the changes, then continue.": "La nuova sessione non è partita: {0} Il progetto è in pausa; controlla le modifiche, poi continua.",
-  "The new agent did not start.": "Il nuovo agente non è partito."
+  "The new agent did not start.": "Il nuovo agente non è partito.",
+  "High": "Alta",
+  "Medium": "Media",
+  "Low": "Bassa",
+  "Importance": "Importanza",
+  "Move to top": "Sposta all'inizio",
+  "Move to end": "Sposta alla fine"
 }

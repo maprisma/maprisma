@@ -1188,5 +1188,12 @@
   "Another action on this project came first.": "Een andere actie op dit project was eerder.",
   "This message is already in the prompt of an agent that is starting. It will be delivered there.": "Dit bericht staat al in de prompt van een agent die nu start. Het wordt daar afgeleverd.",
   "The new session did not start: {0} The project is paused; check the changes, then continue.": "De nieuwe sessie is niet gestart: {0} Het project is gepauzeerd; controleer de wijzigingen en ga dan verder.",
-  "The new agent did not start.": "De nieuwe agent is niet gestart."
+  "The new agent did not start.": "De nieuwe agent is niet gestart.",
+  "High": "Hoog",
+  "Medium": "Gemiddeld",
+  "Low": "Laag",
+  "Importance": "Belang",
+  "Move to top": "Bovenaan zetten",
+  "Move to end": "Achteraan zetten",
+  "Move": "Verplaatsen"
 }
