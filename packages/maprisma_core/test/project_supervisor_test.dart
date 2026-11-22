@@ -380,4 +380,38 @@ void main() {
     },
     timeout: const Timeout(Duration(seconds: 60)),
   );
+
+  test('started is reported only once the agent process exists', () async {
+    // An executable whose interpreter is missing: execve fails, nothing ran.
+    final broken = File('${temporary.path}/broken')
+      ..writeAsStringSync('#!/nonexistent/interpreter\n');
+    Process.runSync('chmod', ['755', broken.path]);
+    final failed = await SupervisedProjectProcess.start(
+      supervisor!,
+      [broken.path, 'prompt'],
+      temporary.path,
+      {'PATH': Platform.environment['PATH'] ?? '/usr/bin:/bin'},
+      null,
+      lock,
+    );
+    final failedOutput = failed.output.drain<void>().then<Object?>(
+      (_) => null,
+      onError: (Object error) => error,
+    );
+    expect(await failed.started, isFalse);
+    expect(await failedOutput, errorCode('project_agent_unavailable'));
+    await failed.exitCode.catchError((Object _) => -1);
+    final good = await SupervisedProjectProcess.start(
+      supervisor,
+      ['/bin/sh', '-c', 'echo done'],
+      temporary.path,
+      {'PATH': Platform.environment['PATH'] ?? '/usr/bin:/bin'},
+      null,
+      lock,
+    );
+    final output = good.output.join();
+    expect(await good.started, isTrue);
+    expect(await good.exitCode, 0);
+    expect(await output, contains('done'));
+  }, timeout: const Timeout(Duration(seconds: 60)));
 }

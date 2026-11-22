@@ -1306,6 +1306,16 @@ void main() {
             ),
           ),
         );
+        await expectLater(
+          call('message_drop', {'id': item['id'], 'message_id': 'a' * 32}),
+          throwsA(
+            isA<ServiceError>().having(
+              (e) => e.code,
+              'code',
+              'project_message_unknown',
+            ),
+          ),
+        );
         final card = (listed['projects'] as List).single as Map;
         expect(card['bucket'], 'needs_you');
         expect(card['messages_queued'], 0);

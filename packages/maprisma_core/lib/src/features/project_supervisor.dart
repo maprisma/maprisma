@@ -178,6 +178,8 @@ Future<int> runProjectSupervisor() async {
     await written;
     return 0;
   }
+  // The agent's process exists: only now has it received its prompt.
+  emit.add(jsonEncode({'started': true}));
   final input = start['input'] as String?;
   if (input != null) leader.stdin.add(utf8.encode(input));
   unawaited(leader.stdin.close().catchError((Object _) {}));
@@ -501,6 +503,7 @@ final class SupervisedProjectProcess implements ProjectProcess {
   final _settled = Completer<void>();
   final _confirmed = Completer<bool>();
   final _locked = Completer<void>();
+  final _started = Completer<bool>();
   int stuck = 0;
   bool _inputOpen = true;
 
@@ -529,6 +532,8 @@ final class SupervisedProjectProcess implements ProjectProcess {
       if (!_output.isClosed) _output.add(data['out'] as String);
     } else if (data['locked'] == true) {
       if (!_locked.isCompleted) _locked.complete();
+    } else if (data['started'] == true) {
+      if (!_started.isCompleted) _started.complete(true);
     } else if (data['leader'] is int) {
       _leader = data['leader'] as int;
     } else if (data['stuck'] is int) {
@@ -539,10 +544,12 @@ final class SupervisedProjectProcess implements ProjectProcess {
     } else if (data['exit'] is int) {
       _exit = data['exit'] as int;
     } else if (data['error'] is String) {
+      if (!_started.isCompleted) _started.complete(false);
       if (!_output.isClosed) {
         _output.addError(ServiceError('project_agent_unavailable'));
       }
     } else if (data['stopped'] == true && !_confirmed.isCompleted) {
+      if (!_started.isCompleted) _started.complete(false);
       stuck = 0;
       _confirmed.complete(true);
       _settle();
@@ -552,6 +559,7 @@ final class SupervisedProjectProcess implements ProjectProcess {
 
   void _lost() {
     _inputOpen = false;
+    if (!_started.isCompleted) _started.complete(false);
     // A supervisor that disappears without "stopped" leaves the tree
     // unconfirmed: its descendants may have re-parented elsewhere.
     if (!_confirmed.isCompleted) _confirmed.complete(false);
@@ -561,6 +569,9 @@ final class SupervisedProjectProcess implements ProjectProcess {
 
   @override
   Stream<String> get output => _output.stream;
+
+  @override
+  Future<bool> get started => _started.future;
 
   /// The leader's exit code once the supervisor confirmed an empty tree. A
   /// result whose cleanup is unconfirmed fails instead of ending normally.
@@ -602,6 +613,7 @@ final class SupervisedProjectProcess implements ProjectProcess {
   /// Release the control pipe: the supervisor stops its tree on EOF.
   Future<void> detach() async {
     _inputOpen = false;
+    if (!_started.isCompleted) _started.complete(false);
     try {
       await _process.stdin.close();
     } on Object {

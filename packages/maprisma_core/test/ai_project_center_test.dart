@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:maprisma_core/src/features/ai_project_center.dart';
+import 'package:maprisma_core/src/features/project_supervisor.dart'
+    show projectSupervisorCommand;
 import 'package:maprisma_core/src/posix_ffi.dart';
 import 'package:maprisma_core/src/protocol.dart';
 import 'package:test/test.dart';
@@ -29,7 +31,13 @@ final class FakeProjectProcess implements ProjectProcess {
   final exit = Completer<int>();
   bool stopped = false;
   bool refuseStop = false;
+  Future<void>? stopGate;
   bool _finished = false;
+
+  /// What [started] answers: the agent's process exists (task 096).
+  Future<bool> starts = Future.value(true);
+  @override
+  Future<bool> get started => starts;
   @override
   Stream<String> get output => lines.stream;
   @override
@@ -44,6 +52,8 @@ final class FakeProjectProcess implements ProjectProcess {
 
   @override
   Future<void> stop() async {
+    // A stop that takes a while (task 096: requests arriving meanwhile).
+    await stopGate;
     if (refuseStop) throw ServiceError('project_processes_still_running');
     stopped = true;
     unawaited(finish('', -15));
@@ -78,6 +88,10 @@ void main() {
   late AiProjectCenterPlugin plugin;
   // When set, reading the agent profiles fails through it (task 085).
   List<Map<String, dynamic>> Function()? profilesFail;
+  // When set, what the next started agents answer (task 096).
+  Future<bool> Function()? startGate;
+  // When set and it returns an error, the next launch fails with it.
+  ServiceError? Function()? launchFail;
   late List<FakeProjectProcess> processes;
   late List<List<String>> commands;
   late List<String> directories;
@@ -182,6 +196,8 @@ void main() {
     processes = [];
     commands = [];
     directories = [];
+    startGate = null;
+    launchFail = null;
     plugin = AiProjectCenterPlugin(
       temporary.path,
       agentProfiles: () {
@@ -194,7 +210,11 @@ void main() {
       runner: (argv, cwd, environment, input, _, _) async {
         commands.add(argv);
         directories.add(cwd);
+        final failure = launchFail?.call();
+        if (failure != null) throw failure;
         final process = FakeProjectProcess();
+        final gate = startGate;
+        if (gate != null) process.starts = gate();
         processes.add(process);
         return process;
       },
@@ -4494,8 +4514,13 @@ void main() {
         await save(
           plan: 'p' * AiProjectCenterPlugin.maxPlan,
           team: [
-            {'agent': 'fixture', 'role': 'lead', 'instructions': 'i' * 4000},
-            {'agent': 'fixture', 'role': 'implementer'},
+            {'agent': 'fixture', 'role': 'lead'},
+            // The measured assignment carries the longest instructions.
+            {
+              'agent': 'fixture',
+              'role': 'implementer',
+              'instructions': 'i' * 4000,
+            },
           ],
         ),
       );
@@ -4526,6 +4551,381 @@ void main() {
       printOnFailure('largest prompt: $bytes bytes');
       await processes[1].finish('Done.');
       await waitUntil(() => plugin.summary()['running'] == 0);
+    });
+
+    test('a spawn that fails in the real supervisor keeps the message '
+        'queued', () async {
+      await plugin.shutdown();
+      final go = File('$workspace/go');
+      final lead = File('${temporary.path}/lead-agent')
+        ..writeAsStringSync(
+          '#!/bin/sh\nwhile [ ! -e "${go.path}" ]; do sleep 0.05; done\n'
+          'echo lead done\n',
+        );
+      // Its interpreter is missing: execve fails, the agent never ran.
+      final broken = File('${temporary.path}/broken-agent')
+        ..writeAsStringSync('#!/nonexistent/interpreter\n');
+      Process.runSync('chmod', ['755', lead.path, broken.path]);
+      profiles = [
+        {
+          'id': 'fixture',
+          'name': 'Fixture agent',
+          'installed': true,
+          'plan_argv': [lead.path, 'read-only', '{prompt}'],
+          'run_argv': [lead.path, 'workspace-write', '{prompt}'],
+        },
+        {
+          'id': 'broken',
+          'name': 'Broken agent',
+          'installed': true,
+          'plan_argv': [broken.path, 'read-only', '{prompt}'],
+          'run_argv': [broken.path, 'workspace-write', '{prompt}'],
+        },
+      ];
+      plugin = AiProjectCenterPlugin(
+        temporary.path,
+        agentProfiles: () => profiles,
+        filesystem: TestPosix(),
+        supervisor: projectSupervisorCommand(),
+      );
+      final item = await approve(
+        await save(
+          plan: 'The plan.',
+          team: [
+            {'agent': 'fixture', 'role': 'lead'},
+            {'agent': 'broken', 'role': 'implementer'},
+          ],
+        ),
+      );
+      await plugin.call('run', {
+        'id': item['id'],
+        'revision': item['revision'],
+      });
+      var current = await project(plugin, item['id'] as String);
+      await message(current, 'Mind the tests.');
+      go.writeAsStringSync('');
+      for (var i = 0; i < 100; i++) {
+        current = await project(plugin, item['id'] as String);
+        if (current['status'] == 'failed') break;
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      }
+      expect(current['status'], 'failed');
+      expect(current['handoff'], contains('lead done'));
+      expect(current['messages_queued'], 1);
+      expect(current['handoff'], isNot(contains('Mind the tests.')));
+      expect(eventTypes(current), isNot(contains('message_delivered')));
+    }, timeout: const Timeout(Duration(seconds: 60)));
+
+    test('a message in the prompt of an agent still starting cannot be '
+        'dropped', () async {
+      final item = await started([
+        {'agent': 'fixture', 'role': 'lead'},
+        {'agent': 'fixture', 'role': 'implementer'},
+      ]);
+      final sent = (await message(item, 'On its way.'))['message'] as Map;
+      final gate = Completer<bool>();
+      startGate = () => gate.future;
+      await processes[0].finish('Lead done.');
+      await waitUntil(() => processes.length == 2);
+      await expectLater(
+        plugin.call('message_drop', {
+          'id': item['id'],
+          'message_id': sent['id'],
+        }),
+        throwsA(errorCode('project_message_pending')),
+      );
+      gate.complete(true);
+      await waitUntil(
+        () => plugin.summary()['running'] == 1 && processes.length == 2,
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      final current = await project(plugin, item['id'] as String);
+      expect(current['messages_queued'], 0);
+      expect(occurrences(current['handoff'] as String, 'On its way.'), 1);
+      await expectLater(
+        plugin.call('message_drop', {
+          'id': item['id'],
+          'message_id': sent['id'],
+        }),
+        throwsA(errorCode('project_message_delivered')),
+      );
+      await processes[1].finish('Done.');
+      await waitUntil(() => plugin.summary()['running'] == 0);
+    });
+
+    test('a Pause arriving while Send now stops the agent wins', () async {
+      final item = await started([
+        {'agent': 'fixture', 'role': 'lead'},
+      ]);
+      final gate = Completer<void>();
+      processes.single.stopGate = gate.future;
+      final now = message(item, 'Now, please.', mode: 'now');
+      await Future<void>.delayed(Duration.zero);
+      final pause = plugin.call('pause', {'id': item['id']});
+      gate.complete();
+      final sent = await now;
+      await pause;
+      expect(sent['continued'], isFalse);
+      expect(sent['reason'], 'project_changed');
+      expect((sent['message'] as Map)['state'], 'queued');
+      final current = await project(plugin, item['id'] as String);
+      expect(current['status'], 'paused');
+      expect(current['messages_queued'], 1);
+      expect(processes, hasLength(1));
+    });
+
+    test('a message dropped while Send now stops the agent is not '
+        'reported as waiting', () async {
+      final item = await started([
+        {'agent': 'fixture', 'role': 'lead'},
+      ]);
+      final gate = Completer<void>();
+      processes.single.stopGate = gate.future;
+      final now = message(item, 'Now, please.', mode: 'now');
+      await Future<void>.delayed(Duration.zero);
+      final id =
+          ((await project(plugin, item['id'] as String))['messages'] as List)
+              .single['id'];
+      await plugin.call('message_drop', {'id': item['id'], 'message_id': id});
+      gate.complete();
+      final sent = await now;
+      expect(sent['continued'], isFalse);
+      expect(sent['reason'], 'project_message_unknown');
+      expect(sent['message'], isNull);
+      final current = await project(plugin, item['id'] as String);
+      expect(current['status'], 'paused');
+      expect(eventTypes(current), isNot(contains('message_waiting')));
+      expect(processes, hasLength(1));
+    });
+
+    test('Send now whose new session fails before its agent started returns '
+        'to the paused checkpoint', () async {
+      final item = await started([
+        {'agent': 'fixture', 'role': 'lead'},
+      ]);
+      launchFail = () => ServiceError('project_agent_unavailable');
+      final sent = await message(item, 'Use the new API.', mode: 'now');
+      expect(sent['continued'], isFalse);
+      expect(sent['reason'], 'project_agent_unavailable');
+      var current = sent['project'] as Map<String, dynamic>;
+      expect(current['status'], 'paused');
+      expect(current['needs_reconciliation'], isTrue);
+      expect(current['messages_queued'], 1);
+      final types = eventTypes(current);
+      expect(types.sublist(types.length - 2), [
+        'continue_failed',
+        'message_waiting',
+      ]);
+      launchFail = null;
+      await plugin.call('continue', {
+        'id': item['id'],
+        'revision': current['revision'],
+        'acknowledge_interrupted': true,
+      });
+      await waitUntil(() => processes.length == 2);
+      expect(occurrences(commands.last.last, 'Use the new API.'), 1);
+      current = await project(plugin, item['id'] as String);
+      expect(current['messages_queued'], 0);
+    });
+
+    test(
+      'Send now with an unconfirmed stop keeps the message queued',
+      () async {
+        final item = await started([
+          {'agent': 'fixture', 'role': 'lead'},
+        ]);
+        processes.single.refuseStop = true;
+        final sent = await message(item, 'Now.', mode: 'now');
+        expect(sent['continued'], isFalse);
+        expect(sent['reason'], 'project_still_pausing');
+        var current = sent['project'] as Map<String, dynamic>;
+        expect(current['status'], 'pausing');
+        expect(current['messages_queued'], 1);
+        processes.single.refuseStop = false;
+        current =
+            (await plugin.call('pause', {'id': item['id']}))['project']
+                as Map<String, dynamic>;
+        expect(current['status'], 'paused');
+        await plugin.call('continue', {
+          'id': item['id'],
+          'revision': current['revision'],
+          'acknowledge_interrupted': true,
+        });
+        await waitUntil(() => processes.length == 2);
+        expect(occurrences(commands[1].last, 'Now.'), 1);
+      },
+    );
+
+    test(
+      'the oldest delivered messages make room; waiting ones stay',
+      () async {
+        final item = await started([
+          {'agent': 'fixture', 'role': 'lead'},
+          for (var i = 0; i < 7; i++)
+            {'agent': 'fixture', 'role': 'implementer'},
+        ]);
+        var count = 0;
+        String? first;
+        for (var k = 0; k < 8; k++) {
+          for (var i = 0; i < 3; i++) {
+            final sent = await message(item, 'Message ${count++}');
+            first ??= (sent['message'] as Map)['id'] as String;
+          }
+          await processes[k].finish('Assignment $k done.');
+          if (k < 7) await waitUntil(() => processes.length == k + 2);
+        }
+        await waitUntil(() => plugin.summary()['running'] == 0);
+        final current = await project(plugin, item['id'] as String);
+        final messages = (current['messages'] as List).cast<Map>();
+        expect(messages, hasLength(AiProjectCenterPlugin.maxMessages));
+        expect(messages.map((m) => m['id']), isNot(contains(first)));
+        expect(messages.first['text'], 'Message 4');
+        expect(messages.where((m) => m['state'] == 'queued'), hasLength(3));
+        expect(messages.last['text'], 'Message 23');
+      },
+    );
+
+    test('an argv prompt over the limit is refused before launch; stdin is '
+        'not limited', () async {
+      Future<(Map<String, dynamic>, List<String?>)> attempt(bool stdin) async {
+        await plugin.shutdown();
+        temporary.deleteSync(recursive: true);
+        temporary = Directory.current.createTempSync('.project-center-test-');
+        workspace = (Directory(
+          '${temporary.path}/workspace',
+        )..createSync()).path;
+        if (stdin) {
+          profiles.single
+            ..['stdin'] = true
+            ..['plan_argv'] = ['/fixture/agent', 'read-only']
+            ..['run_argv'] = ['/fixture/agent', 'workspace-write'];
+        }
+        processes.clear();
+        commands.clear();
+        final inputs = <String?>[];
+        plugin = AiProjectCenterPlugin(
+          temporary.path,
+          agentProfiles: () => profiles,
+          filesystem: TestPosix(),
+          promptLimit: 4000,
+          runner: (argv, cwd, environment, input, _, _) async {
+            commands.add(argv);
+            inputs.add(input);
+            final process = FakeProjectProcess();
+            processes.add(process);
+            return process;
+          },
+        );
+        final item = await approve(
+          await save(
+            plan: 'p' * 2000,
+            team: [
+              {'agent': 'fixture', 'role': 'lead'},
+              {'agent': 'fixture', 'role': 'implementer'},
+            ],
+          ),
+        );
+        await plugin.call('run', {
+          'id': item['id'],
+          'revision': item['revision'],
+        });
+        await waitUntil(() => processes.length == 1);
+        await message(await project(plugin, item['id'] as String), 'm' * 2000);
+        await processes[0].finish('Lead done.');
+        if (stdin) {
+          await waitUntil(() => processes.length == 2);
+          await processes[1].finish('Done.');
+        }
+        await waitUntil(() => plugin.summary()['running'] == 0);
+        return (await project(plugin, item['id'] as String), inputs);
+      }
+
+      final (refused, _) = await attempt(false);
+      expect(refused['status'], 'failed');
+      expect(
+        (refused['events'] as List).last['text'],
+        'project_prompt_too_large',
+      );
+      expect(refused['messages_queued'], 1);
+      expect(commands, hasLength(1));
+      final (passed, inputs) = await attempt(true);
+      expect(passed['status'], 'completed');
+      expect(utf8.encode(inputs[1]!).length, greaterThan(4000));
+      expect(passed['messages_queued'], 0);
+    });
+
+    test('a store with malformed messages is refused as corrupt', () async {
+      final item = await save();
+      await plugin.shutdown();
+      final file = File('${plugin.directory}/projects.json');
+      final original = file.readAsStringSync();
+      Map<String, dynamic> queued(String id, [int bytes = 10]) => {
+        'id': id,
+        'at': '2026-11-22T00:00:00Z',
+        'mode': 'queue',
+        'text': 'x' * bytes,
+        'state': 'queued',
+        'run_id': 'r',
+      };
+      final delivered = {
+        ...queued('b' * 32),
+        'state': 'delivered',
+        'delivered_at': '2026-11-22T00:00:01Z',
+        'delivered_to': {
+          'phase': 'execution',
+          'position': 0,
+          'agent': 'fixture',
+          'role': 'lead',
+        },
+      };
+      void open(List<Map<String, dynamic>> messages) {
+        final data = jsonDecode(original) as Map;
+        ((data['projects'] as List).single as Map)['messages'] = messages;
+        file.writeAsStringSync(jsonEncode(data));
+        plugin = AiProjectCenterPlugin(
+          temporary.path,
+          agentProfiles: () => profiles,
+          filesystem: TestPosix(),
+        );
+      }
+
+      final malformed = <String, List<Map<String, dynamic>>>{
+        'duplicate ids': [queued('a' * 32), queued('a' * 32)],
+        'over 16 KiB waiting': [
+          for (var i = 0; i < 5; i++) queued('$i' * 32, 4096),
+        ],
+        'no run id': [
+          {...queued('a' * 32)}..remove('run_id'),
+        ],
+        'delivered without its target': [
+          {...delivered}..remove('delivered_to'),
+        ],
+        'a bad target phase': [
+          {
+            ...delivered,
+            'delivered_to': {
+              ...delivered['delivered_to'] as Map,
+              'phase': 'setup',
+            },
+          },
+        ],
+        'queued with a delivery time': [
+          {...queued('a' * 32), 'delivered_at': '2026-11-22T00:00:01Z'},
+        ],
+        'an unknown field': [
+          {...queued('a' * 32), 'extra': 1},
+        ],
+      };
+      for (final entry in malformed.entries) {
+        expect(
+          () => open(entry.value),
+          throwsA(errorCode('project_store_corrupt')),
+          reason: entry.key,
+        );
+      }
+      open([queued('a' * 32), delivered]);
+      final loaded = await project(plugin, item['id'] as String);
+      expect(loaded['messages_queued'], 1);
     });
   });
 }
