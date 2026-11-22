@@ -3862,5 +3862,9 @@
   "Used in {0} projects": "Usado en {0} proyectos",
   "Show {0} on map": "Mostrar {0} en el mapa",
   "This agent is not on the map.": "Este agente no está en el mapa.",
-  "Show all agents": "Mostrar todos los agentes"
+  "Show all agents": "Mostrar todos los agentes",
+  "Fix on map": "Corregir en el mapa",
+  "Go to Goal": "Ir a Objetivo",
+  "Go to Team": "Ir a Equipo",
+  "This is not on the map.": "Esto no está en el mapa."
 }

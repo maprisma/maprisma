@@ -520,3 +520,83 @@ class _MemberBox extends StatelessWidget {
     );
   }
 }
+
+/// The open project's issues (task 092): what stops it, each with its link
+/// (Fix on map for a box the map can act on, else the Goal or Team tab).
+class ProjectIssues extends StatelessWidget {
+  const ProjectIssues({
+    super.key,
+    required this.project,
+    required this.tr,
+    required this.onFix,
+    this.mapFix = false,
+  });
+
+  final Map<String, dynamic> project;
+  final String Function(String) tr;
+  final ValueChanged<Map> onFix;
+
+  /// Fix on map is possible (inside the shell).
+  final bool mapFix;
+
+  /// The project's issues and every assignment's, each code and box once.
+  static List<Map> collect(Map<String, dynamic> project) {
+    final seen = <String>{};
+    return [
+      for (final issue in [
+        ...?(project['issues'] as List?),
+        for (final phase in ['planning', 'execution'])
+          for (final member in project[phase] as List? ?? const [])
+            if (member is Map) ...?(member['issues'] as List?),
+      ])
+        if (issue is Map &&
+            seen.add('${issue['code']}\u0000${issue['node'] ?? ''}'))
+          issue,
+    ];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final issues = collect(project);
+    if (issues.isEmpty) return const SizedBox.shrink();
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    return Padding(
+      key: const ValueKey('page-issues'),
+      padding: const EdgeInsets.only(bottom: AppSpace.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final (i, issue) in issues.indexed)
+            MergeSemantics(
+              child: Row(
+                key: ValueKey('page-issue-$i'),
+                children: [
+                  Icon(Icons.error_outline, size: 16, color: colors.error),
+                  const SizedBox(width: AppSpace.xs),
+                  Expanded(
+                    child: Text(
+                      tr(boardIssue(issue['code'] as String?)),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colors.error,
+                      ),
+                    ),
+                  ),
+                  TextButton(
+                    key: ValueKey('page-fix-$i'),
+                    style: TextButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    onPressed: () => onFix(issue),
+                    child: Text(
+                      tr(issueFixLabel(issueFix(issue, map: mapFix))),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}

@@ -79,6 +79,24 @@ String boardIssue(String? code) => switch (code) {
   _ => 'Cannot start as it is',
 };
 
+/// Where an issue is fixed (task 092): `map` only with a box to go to and a
+/// shell that can go there ([map]); else the project's `goal` or `team` tab
+/// (an older backend without `fix`: team).
+String issueFix(Map issue, {bool map = true}) {
+  final fix = issue['fix'];
+  final node = issue['node'];
+  if (fix == 'map' && map && node is String && node.isNotEmpty) return 'map';
+  if (fix == 'goal') return 'goal';
+  return 'team';
+}
+
+/// The link's words for [issueFix]'s answer.
+String issueFixLabel(String fix) => switch (fix) {
+  'map' => 'Fix on map',
+  'goal' => 'Go to Goal',
+  _ => 'Go to Team',
+};
+
 /// The Projects board: the summary row with its filters and the project
 /// cards (docs/plan-main-layout.md, "Projects tab: the board").
 class ProjectBoard extends StatelessWidget {
@@ -105,7 +123,13 @@ class ProjectBoard extends StatelessWidget {
     this.onView,
     this.agentName,
     this.onClearAgent,
+    this.onFix,
+    this.mapFix = false,
   });
+
+  /// An issue's link on a card (task 092); [mapFix]: Fix on map is possible.
+  final void Function(Map<String, dynamic> project, Map issue)? onFix;
+  final bool mapFix;
 
   /// The agent chip (from the map's "Used in N projects", task 091): the
   /// projects are already narrowed to that agent; × or All clears it.
@@ -297,6 +321,10 @@ class ProjectBoard extends StatelessWidget {
                           onOpen: () => onOpen(project),
                           onReview: () => onReview(project),
                           onPause: () => onPause(project),
+                          onFix: onFix == null
+                              ? null
+                              : (issue) => onFix!(project, issue),
+                          mapFix: mapFix,
                         );
                         return Listener(
                           key: ValueKey('project-press-$id'),
@@ -521,7 +549,13 @@ class ProjectCard extends StatelessWidget {
     this.busy = false,
     this.focusNode,
     this.eventText,
+    this.onFix,
+    this.mapFix = false,
   });
+
+  /// The first issue's link (task 092): Fix on map, Go to Team or Goal.
+  final ValueChanged<Map>? onFix;
+  final bool mapFix;
 
   final Map<String, dynamic> project;
   final String Function(Map<String, dynamic> event)? eventText;
@@ -547,6 +581,10 @@ class ProjectCard extends StatelessWidget {
       for (final i in project['issues'] as List? ?? const [])
         if (i is Map) tr(boardIssue(i['code'] as String?)),
     ];
+    final firstIssue = [
+      for (final i in project['issues'] as List? ?? const [])
+        if (i is Map) i,
+    ].firstOrNull;
     final event = project['last_event'];
     final active = project['active'] as Map?;
     final status = project['status'];
@@ -618,13 +656,43 @@ class ProjectCard extends StatelessWidget {
               TeamNodes(project: project, tr: tr, max: narrow ? 3 : 4),
               const Spacer(),
               if (issues.isNotEmpty)
-                Text(
-                  issues.join(' · '),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: colors.error,
-                  ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        issues.join(' · '),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colors.error,
+                        ),
+                      ),
+                    ),
+                    if (onFix != null && firstIssue != null)
+                      Flexible(
+                        child: TextButton(
+                          key: const ValueKey('card-fix'),
+                          // As tall as the issue line: the card's height is
+                          // fixed.
+                          style: TextButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            minimumSize: const Size(0, 24),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpace.xs,
+                            ),
+                          ),
+                          onPressed: () => onFix!(firstIssue),
+                          child: Text(
+                            tr(
+                              issueFixLabel(issueFix(firstIssue, map: mapFix)),
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               if (event is Map)
                 Text(

@@ -676,10 +676,13 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   /// Show on map from a project's team member: through the guards to the AI
   /// Map, which pans the agent's box into view and marks it for a while.
   /// Temporary: nothing about the layout, pins or view is saved.
-  Future<void> _showOnMap(String command) async {
+  Future<void> _showOnMap(String command) => _revealOnMap('agent:$command');
+
+  /// Show on map or Fix on map (task 092) for any box id: an agent, a local
+  /// runtime or a model.
+  Future<void> _revealOnMap(String id) async {
     if (_keysBlocked || _snapshot == null) return;
     if (!await _toMapFirst() || !mounted) return;
-    final id = 'agent:$command';
     _guideReturn = false;
     _focusTimer?.cancel();
     setState(() {
@@ -747,7 +750,15 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       ScaffoldMessenger.of(context)
         ..clearSnackBars()
         ..showSnackBar(
-          SnackBar(content: Text(tr('This agent is not on the map.'))),
+          SnackBar(
+            content: Text(
+              tr(
+                (id ?? '').startsWith('agent:')
+                    ? 'This agent is not on the map.'
+                    : 'This is not on the map.',
+              ),
+            ),
+          ),
         );
       return;
     }
@@ -7021,6 +7032,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                                   onClearAgent: () =>
                                       setState(() => _projectAgent = null),
                                   onShowOnMap: _showOnMap,
+                                  onFixOnMap: _revealOnMap,
                                   active:
                                       _showProjectCenter &&
                                       _visibleTerminal == null &&

@@ -40,6 +40,9 @@ void main() {
       for (final f in BoardFilter.values) f.label,
       for (final (_, label) in boardStages) label,
       for (final v in BoardView.values) v.label,
+      for (final fix in ['map', 'goal', 'team']) issueFixLabel(fix),
+      // Fix on map's answer for a box that is not there (main.dart).
+      'This is not on the map.',
       for (final code in [
         'stopping',
         'setting_up_team',

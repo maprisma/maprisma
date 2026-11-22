@@ -28,7 +28,11 @@ class AiProjectCenterPage extends StatefulWidget {
     this.agent,
     this.onClearAgent,
     this.onShowOnMap,
+    this.onFixOnMap,
   });
+
+  /// Fix on map (task 092), by the AI Map box id an issue names.
+  final ValueChanged<String>? onFixOnMap;
 
   /// The agent chip from the map's "Used in N projects" (task 091): the
   /// board shows only projects whose planning or execution names it.
@@ -171,6 +175,22 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
     ];
     setState(() => _reveal = shown.contains(id) ? id : shown.firstOrNull ?? '');
     return true;
+  }
+
+  /// An issue's link (task 092): the map for a box it can act on, else the
+  /// project's Goal or Team tab (from the board: the project opens there).
+  Future<void> _fixIssue(Map<String, dynamic>? project, Map issue) async {
+    final fix = issueFix(issue, map: widget.onFixOnMap != null);
+    if (fix == 'map') {
+      widget.onFixOnMap!(issue['node'] as String);
+      return;
+    }
+    final tab = fix == 'goal' ? 0 : 2;
+    if (_projectOpen) {
+      setState(() => _tab = tab);
+    } else {
+      await _openFromBoard(project, tab: tab);
+    }
   }
 
   Future<void> _openFromBoard(
@@ -1706,6 +1726,15 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                // What stops the project (task 092): scrolls with the body,
+                // so every issue stays reachable in any window.
+                if (onBoard && _openCard != null)
+                  ProjectIssues(
+                    project: _openCard!,
+                    tr: tr,
+                    mapFix: widget.onFixOnMap != null,
+                    onFix: (issue) => _fixIssue(null, issue),
+                  ),
                 if (_project?['processes_stopping'] == true)
                   Padding(
                     padding: const EdgeInsets.only(bottom: AppSpace.md),
@@ -1915,6 +1944,8 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
                                 if (namesAgent(p, widget.agent?.command)) p,
                             ],
                             agentName: widget.agent?.name,
+                            onFix: (p, issue) => _fixIssue(p, issue),
+                            mapFix: widget.onFixOnMap != null,
                             onClearAgent: widget.onClearAgent,
                             tr: tr,
                             unavailable: _unavailable,

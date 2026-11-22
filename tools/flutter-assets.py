@@ -1001,6 +1001,10 @@ KEYS = (
     "Working",
     "has a problem",
     # The board (task 088).
+    "Fix on map",
+    "Go to Goal",
+    "Go to Team",
+    "This is not on the map.",
     "Used in 1 project",
     "Used in {0} projects",
     "Show {0} on map",

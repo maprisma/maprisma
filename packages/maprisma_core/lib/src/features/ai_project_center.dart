@@ -2042,9 +2042,24 @@ final class AiProjectCenterPlugin {
     final seen = <String>{};
     return [
       for (final issue in issues)
-        if (seen.add(issue['code']!)) issue,
+        if (seen.add('${issue['code']}\u0000${issue['node'] ?? ''}')) issue,
     ];
   }
+
+  /// One issue (task 092): its code, what it is about, the AI Map box when
+  /// it is one, and where it is fixed (`map` only with a box the map can
+  /// act on; else the project's `team` or `goal` tab).
+  static Map<String, String> _issue(
+    String code,
+    String target,
+    String fix, [
+    String? node,
+  ]) => {
+    'code': code,
+    'target': target,
+    'node': ?node,
+    'fix': node == null && fix == 'map' ? 'team' : fix,
+  };
 
   /// Project-level problems, for every status: the folder gone or no longer
   /// the saved one, no lead, no goal (task 087).
@@ -2053,18 +2068,18 @@ final class AiProjectCenterPlugin {
     final issues = <Map<String, String>>[];
     try {
       if (_folder(item['path']) != item['path']) {
-        issues.add({'code': 'folder_changed'});
+        issues.add(_issue('folder_changed', 'folder', 'goal'));
       }
     } on Object {
-      issues.add({'code': 'folder_missing'});
+      issues.add(_issue('folder_missing', 'folder', 'goal'));
     }
     final team = item['team'];
     if (team is! List ||
         team.whereType<Map>().where((m) => m['role'] == 'lead').length != 1) {
-      issues.add({'code': 'no_lead'});
+      issues.add(_issue('no_lead', 'team', 'team'));
     }
     if ('${item['brief'] ?? ''}'.trim().isEmpty) {
-      issues.add({'code': 'empty_goal'});
+      issues.add(_issue('empty_goal', 'goal', 'goal'));
     }
     return issues;
   }
@@ -2138,38 +2153,81 @@ final class AiProjectCenterPlugin {
             member['access'] == 'read-only'
         ? 'plan_argv'
         : 'run_argv';
+    String? text(Object? value) =>
+        value is String && value.isNotEmpty ? value : null;
+    final agent = text(member['agent']);
+    final runtime = text(member['runtime']);
+    final model = text(member['model']);
+    // Not installed, not for projects or no usable command: the map has
+    // nothing to act on; another agent is chosen in the Team tab.
     if (profile == null || !_validArgv(profile[key])) {
-      return [
-        {'code': 'agent_unavailable'},
-      ];
+      return [_issue('agent_unavailable', 'agent', 'team')];
     }
     if (!_validTemplate(profile, key)) {
-      return [
-        {'code': 'profile_invalid'},
-      ];
+      return [_issue('profile_invalid', 'profile', 'team')];
     }
     try {
       _memberOptions(Map<String, dynamic>.from(member), profile, runtimes);
       return const [];
     } on ServiceError catch (error) {
+      // Only a box the map shows and can act on gets Fix on map: an
+      // installed runtime (start it, its models, the agent's connection).
+      final known = runtime == null ? null : runtimes[runtime];
+      final box = known?['installed'] == true ? 'runtime:$runtime' : null;
+      final bindings = known?['bindings'];
+      final bound = bindings is Map && bindings[agent] is Map;
+      final option = profile['provider_option'];
+      final optionOk =
+          option is String &&
+          option.startsWith('--') &&
+          !option.contains('\x00');
       return [
-        {
-          'code': switch (error.code) {
-            'project_runtime_unavailable' => 'runtime_stopped',
-            'project_runtime_model_unavailable' => 'model_unavailable',
-            'project_provider_unsupported' => 'provider_unavailable',
-            'project_runtime_required' => 'runtime_required',
-            'project_access_unsupported' => 'access_unsupported',
-            'project_model_unsupported' => 'model_unsupported',
-            'project_subagents_unsupported' => 'subagents_unsupported',
-            _ => 'launch_unavailable',
-          },
+        switch (error.code) {
+          'project_runtime_unavailable' => _issue(
+            'runtime_stopped',
+            'runtime',
+            box == null ? 'team' : 'map',
+            box,
+          ),
+          // A chosen model the runtime does not serve: the runtime's box
+          // (its models; the model has no box of its own). No model chosen:
+          // only the Team tab chooses one.
+          'project_runtime_model_unavailable' =>
+            model == null
+                ? _issue('model_unavailable', 'model', 'team')
+                : _issue('model_unavailable', 'model', 'map', box),
+          // Not connected to this runtime: fixed on the map; a provider the
+          // connection does not name, or an agent without a provider option,
+          // is chosen in the Team tab.
+          'project_provider_unsupported' =>
+            box != null && optionOk && !bound
+                ? _issue('provider_unavailable', 'provider', 'map', box)
+                : _issue('provider_unavailable', 'provider', 'team'),
+          'project_runtime_required' => _issue(
+            'runtime_required',
+            'runtime',
+            'team',
+          ),
+          'project_access_unsupported' => _issue(
+            'access_unsupported',
+            'permission',
+            'team',
+          ),
+          'project_model_unsupported' => _issue(
+            'model_unsupported',
+            'model',
+            'team',
+          ),
+          'project_subagents_unsupported' => _issue(
+            'subagents_unsupported',
+            'agent',
+            'team',
+          ),
+          _ => _issue('launch_unavailable', 'agent', 'team'),
         },
       ];
     } on Object {
-      return [
-        {'code': 'launch_unavailable'},
-      ];
+      return [_issue('launch_unavailable', 'agent', 'team')];
     }
   }
 

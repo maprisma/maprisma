@@ -1248,4 +1248,104 @@ void main() {
     expect(editor.focused, isNull);
     await unmountApp(tester);
   });
+
+  testWidgets('Fix on map from a card: the runtime\'s box is revealed', (
+    tester,
+  ) async {
+    await mountApp(
+      tester,
+      beforeStart: (dir) {
+        projects(dir);
+        File('${dir.path}/board').writeAsStringSync('');
+        File('${dir.path}/projects.json').writeAsStringSync(
+          jsonEncode([
+            {
+              ...draft,
+              'stage': 'approval',
+              'activity': 'approved_blocked',
+              'bucket': 'needs_you',
+              'planning': [],
+              'execution': [],
+              'issues': [
+                {
+                  'code': 'runtime_stopped',
+                  'target': 'runtime',
+                  'node': 'runtime:fixture',
+                  'fix': 'map',
+                },
+              ],
+            },
+          ]),
+        );
+      },
+    );
+    await tester.tap(find.byKey(const ValueKey('card-fix')));
+    await settleService(tester);
+    await tester.pumpAndSettle();
+    expect(find.byType(AgentMap), findsOneWidget);
+    expect(
+      tester.widget<MapEditor>(find.byType(MapEditor)).focused,
+      'runtime:fixture',
+    );
+    expect(find.text('This is not on the map.'), findsNothing);
+    await unmountApp(tester);
+  });
+
+  testWidgets('Fix on map from the project page asks about unsaved changes; '
+      'a box not on the map says so', (tester) async {
+    await mountApp(
+      tester,
+      beforeStart: (dir) {
+        projects(dir);
+        File('${dir.path}/board').writeAsStringSync('');
+        File('${dir.path}/projects.json').writeAsStringSync(
+          jsonEncode([
+            {
+              ...draft,
+              'stage': 'approval',
+              'activity': 'approved_blocked',
+              'bucket': 'needs_you',
+              'planning': [],
+              'execution': [],
+              'issues': [
+                {
+                  'code': 'runtime_stopped',
+                  'target': 'runtime',
+                  'node': 'runtime:gone',
+                  'fix': 'map',
+                },
+              ],
+            },
+          ]),
+        );
+      },
+    );
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(const ValueKey('project-card-p1')),
+        matching: find.byKey(const ValueKey('card-open')),
+      ),
+    );
+    await settleService(tester);
+    await editTitle(tester);
+    final fix = find.byKey(const ValueKey('page-fix-0'));
+    await tester.ensureVisible(fix);
+    await tester.pumpAndSettle();
+    await tester.tap(fix);
+    await settleService(tester);
+    expect(find.text('Save project changes?'), findsOneWidget);
+    await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+    await settleService(tester);
+    expect(find.byKey(const ValueKey('breadcrumb-projects')), findsOneWidget);
+    expect(find.byType(AgentMap), findsNothing);
+    await tester.tap(fix);
+    await settleService(tester);
+    await tester.tap(find.widgetWithText(TextButton, 'Discard'));
+    await settleService(tester);
+    await tester.pumpAndSettle();
+    expect(find.byType(AgentMap), findsOneWidget);
+    expect(find.text('This is not on the map.'), findsOneWidget);
+    expect(tester.widget<MapEditor>(find.byType(MapEditor)).focused, isNull);
+    await unmountApp(tester);
+  });
 }

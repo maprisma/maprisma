@@ -2908,9 +2908,216 @@ void main() {
       plugin.discoveryGeneration++;
       final c = await card(item['id'] as String);
       expect(c['issues'], [
-        {'code': 'runtime_stopped'},
+        {
+          'code': 'runtime_stopped',
+          'target': 'runtime',
+          'node': 'runtime:runtime',
+          'fix': 'map',
+        },
       ]);
       expect(plugin.summary()['needs_you'], 1);
+    });
+
+    test('issue links (task 092): target, map box and fix per code', () async {
+      addRuntime();
+      var n = 0;
+      Future<Map> issueOf(Map<String, dynamic> member) async {
+        final item = await save(
+          title: 'T${n++}',
+          plan: 'A saved plan.',
+          team: [
+            {'role': 'lead', ...member},
+          ],
+        );
+        plugin.discoveryGeneration++;
+        final c = await card(item['id'] as String);
+        return ((c['execution'] as List).single['issues'] as List).single
+            as Map;
+      }
+
+      const bound = {
+        'agent': 'fixture',
+        'runtime': 'runtime',
+        'provider': 'local-provider',
+        'model': 'tiny-model',
+      };
+      // A stopped runtime that is installed: fixed on the map, at its box.
+      runtimes.single['running'] = false;
+      expect(await issueOf(bound), {
+        'code': 'runtime_stopped',
+        'target': 'runtime',
+        'node': 'runtime:runtime',
+        'fix': 'map',
+      });
+      // Not installed: no box on the map; another runtime in the Team tab.
+      runtimes.single['installed'] = false;
+      expect(await issueOf(bound), {
+        'code': 'runtime_stopped',
+        'target': 'runtime',
+        'fix': 'team',
+      });
+      runtimes.single
+        ..['installed'] = true
+        ..['running'] = true;
+      // A model the runtime does not serve: its runtime's box (its models).
+      expect(await issueOf({...bound, 'model': 'Other-Model'}), {
+        'code': 'model_unavailable',
+        'target': 'model',
+        'node': 'runtime:runtime',
+        'fix': 'map',
+      });
+      // No model chosen for the runtime: only the Team tab chooses one.
+      expect(await issueOf({...bound}..remove('model')), {
+        'code': 'model_unavailable',
+        'target': 'model',
+        'fix': 'team',
+      });
+      // A permission the agent does not offer.
+      profiles.first['access_modes'] = ['read-only'];
+      expect(await issueOf({'agent': 'fixture', 'access': 'project-edit'}), {
+        'code': 'access_unsupported',
+        'target': 'permission',
+        'fix': 'team',
+      });
+      profiles.first.remove('access_modes');
+      // A provider the agent's connection does not name: the Team tab.
+      expect(await issueOf({...bound, 'provider': 'another-provider'}), {
+        'code': 'provider_unavailable',
+        'target': 'provider',
+        'fix': 'team',
+      });
+      // Not connected to this runtime at all: connected on the map.
+      final bindings = runtimes.single['bindings'] as Map;
+      final binding = bindings.remove('fixture');
+      expect(await issueOf(bound), {
+        'code': 'provider_unavailable',
+        'target': 'provider',
+        'node': 'runtime:runtime',
+        'fix': 'map',
+      });
+      // ... unless the agent has no provider option: the Team tab.
+      final option = profiles.first.remove('provider_option');
+      expect(await issueOf(bound), {
+        'code': 'provider_unavailable',
+        'target': 'provider',
+        'fix': 'team',
+      });
+      profiles.first['provider_option'] = option;
+      bindings['fixture'] = binding;
+      // A provider without its runtime: chosen in the Team tab.
+      expect(
+        await issueOf({'agent': 'fixture', 'provider': 'local-provider'}),
+        {'code': 'runtime_required', 'target': 'runtime', 'fix': 'team'},
+      );
+      // A model while the agent has no model option.
+      final modelOption = profiles.first.remove('model_option');
+      expect(await issueOf({'agent': 'fixture', 'model': 'some-model'}), {
+        'code': 'model_unsupported',
+        'target': 'model',
+        'fix': 'team',
+      });
+      profiles.first['model_option'] = modelOption;
+      // Subagents the agent cannot run.
+      expect(
+        await issueOf({
+          'agent': 'fixture',
+          'subagents': ['helper'],
+        }),
+        {'code': 'subagents_unsupported', 'target': 'agent', 'fix': 'team'},
+      );
+      // An agent that is gone: another agent in the Team tab.
+      expect(await issueOf({'agent': 'gone-agent'}), {
+        'code': 'agent_unavailable',
+        'target': 'agent',
+        'fix': 'team',
+      });
+    });
+
+    test('project issues link to the Goal and Team tabs', () async {
+      final item = await save(plan: 'A saved plan.', team: []);
+      Directory(item['path'] as String).deleteSync(recursive: true);
+      plugin.discoveryGeneration++;
+      final c = await card(item['id'] as String);
+      expect(
+        c['issues'],
+        containsAll([
+          {'code': 'folder_missing', 'target': 'folder', 'fix': 'goal'},
+          {'code': 'no_lead', 'target': 'team', 'fix': 'team'},
+        ]),
+      );
+    });
+
+    test('a changed folder and an empty goal link to the Goal tab', () async {
+      final real = Directory('${Directory(workspace).parent.path}/real')
+        ..createSync();
+      final linked = Directory('${Directory(workspace).parent.path}/linked')
+        ..createSync();
+      final item = await save(path: linked.path, plan: 'A saved plan.');
+      // The saved folder now leads somewhere else.
+      linked.deleteSync();
+      Link(linked.path).createSync(real.path);
+      final empty =
+          (await plugin.call('save', {
+                'title': 'No goal',
+                'brief': '',
+                'path': workspace,
+                'team': [
+                  {'agent': 'fixture', 'role': 'lead'},
+                ],
+                'plan': '',
+              }))['project']
+              as Map<String, dynamic>;
+      plugin.discoveryGeneration++;
+      expect((await card(item['id'] as String))['issues'], [
+        {'code': 'folder_changed', 'target': 'folder', 'fix': 'goal'},
+      ]);
+      expect((await card(empty['id'] as String))['issues'], [
+        {'code': 'empty_goal', 'target': 'goal', 'fix': 'goal'},
+      ]);
+    });
+
+    test('two stopped runtimes are two issues on the card', () async {
+      addRuntime();
+      runtimes.add({
+        ...runtimes.single,
+        'key': 'second',
+        'bindings': {
+          'fixture': {
+            'provider': 'local-provider',
+            'models': ['tiny-model'],
+          },
+        },
+      });
+      final item = await approve(
+        await save(
+          plan: 'A saved plan.',
+          team: [
+            {
+              'agent': 'fixture',
+              'role': 'lead',
+              'runtime': 'runtime',
+              'provider': 'local-provider',
+              'model': 'tiny-model',
+            },
+            {
+              'agent': 'fixture',
+              'role': 'reviewer',
+              'runtime': 'second',
+              'provider': 'local-provider',
+              'model': 'tiny-model',
+            },
+          ],
+        ),
+      );
+      for (final r in runtimes) {
+        r['running'] = false;
+      }
+      plugin.discoveryGeneration++;
+      final c = await card(item['id'] as String);
+      expect(
+        [for (final i in c['issues'] as List) i['node']],
+        ['runtime:runtime', 'runtime:second'],
+      );
     });
 
     test(
@@ -3134,6 +3341,8 @@ void main() {
       expect(c['activity'], 'approve_again');
       expect(((c['execution'] as List).single['issues'] as List).single, {
         'code': 'profile_invalid',
+        'target': 'profile',
+        'fix': 'team',
       });
     });
 
