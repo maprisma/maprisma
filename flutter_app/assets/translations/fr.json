@@ -1187,5 +1187,6 @@
   "Your message was already given to an agent meanwhile. The project did not continue a second time.": "Votre message a déjà été remis à un agent entre-temps. Le projet n’a pas continué une seconde fois.",
   "Another action on this project came first.": "Une autre action sur ce projet est arrivée en premier.",
   "This message is already in the prompt of an agent that is starting. It will be delivered there.": "Ce message est déjà dans le prompt d’un agent qui démarre. Il lui sera remis.",
-  "The new session did not start: {0} The project is paused; check the changes, then continue.": "La nouvelle session n’a pas démarré : {0} Le projet est en pause ; vérifiez les changements, puis continuez."
+  "The new session did not start: {0} The project is paused; check the changes, then continue.": "La nouvelle session n’a pas démarré : {0} Le projet est en pause ; vérifiez les changements, puis continuez.",
+  "The new agent did not start.": "Le nouvel agent n’a pas démarré."
 }

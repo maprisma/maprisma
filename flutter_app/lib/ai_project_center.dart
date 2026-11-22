@@ -7,6 +7,7 @@ import 'package:maprisma_core/maprisma_core.dart' show ServiceError;
 
 import 'app_look.dart';
 import 'project_board.dart';
+import 'project_messages.dart';
 import 'project_page_parts.dart';
 import 'window_popup.dart';
 
@@ -89,52 +90,22 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
   /// task 088). Without it the tab keeps the page with its list.
   bool _board = false;
 
-  /// The backend keeps the user's board order and importance marks (its
-  /// `list` lists the capability `order`; task 095): cards can be moved and
-  /// marked, and a read shows the order as it comes.
-  bool _order = false;
+  /// The backend takes messages to a running project (capability
+  /// `messages`, task 096); without it no message box.
+  bool _messagesOn = false;
+  final _messageDrafts = <String, TextEditingController>{};
+  final _messageNotes = <String, MessageNote>{};
+
+  /// The project whose message action is on its way.
+  String? _messageSending;
+
+  /// Grows with every mutation's view taken over (messages): a read that
+  /// started before shows no older project.
+  int _viewGeneration = 0;
 
   /// A project (or a new one) is open over the board.
   bool _projectOpen = false;
   BoardFilter? _filter;
-  BoardImportance? _importance;
-
-  /// A card's move is on its way (one at a time); [_orderSeq] counts the
-  /// moves sent, so a read from before one does not undo it on the board.
-  bool _moving = false;
-  int _orderSeq = 0;
-
-  /// Importance marks on their way, by project: a read meanwhile keeps them.
-  final _marking = <String, String>{};
-
-  /// Marks sent and answered, by project (both count): a read begun before
-  /// either keeps the mark the page shows now.
-  final _markGen = <String, int>{};
-
-  /// The mark the page shows now for [id] (one on its way first).
-  String? _localMark(String id) =>
-      _marking[id] ??
-      _projects.where((p) => p['id'] == id).firstOrNull?['importance']
-          as String? ??
-      (_project?['id'] == id ? _project!['importance'] as String? : null);
-
-  /// A read's [project] keeps the shown mark when one was sent or answered
-  /// since the read began ([since]: the generations then).
-  void _keepMark(Map project, Map<String, int> since) {
-    final id = project['id'];
-    if (id is! String) return;
-    if (!_marking.containsKey(id) && (_markGen[id] ?? 0) == (since[id] ?? 0)) {
-      return;
-    }
-    if (_localMark(id) case final code?) project['importance'] = code;
-  }
-
-  /// Whether the board shows [p] (the filters and the agent [agent]).
-  bool _shows(Map<String, dynamic> p, String? agent) =>
-      (_filter == null || p['bucket'] == _filter!.code) &&
-      (_importance == null ||
-          BoardImportance.of(p['importance']) == _importance) &&
-      namesAgent(p, agent);
 
   /// Cards or Phases; kept while the app runs (task 090).
   BoardView _view = BoardView.cards;
@@ -149,27 +120,9 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
   final _boardScroll = ScrollController();
   final _newFocus = FocusNode(debugLabel: 'new project');
 
-  /// Counts the cards asked to be revealed: a board's callback from an
-  /// earlier ask (a move answered between the scroll and the focus) does
-  /// nothing.
-  int _revealSeq = 0;
-
-  /// Brings [id] into view and gives it the keyboard ('' : the first shown
-  /// card or New project).
-  void _revealCard(String id) {
-    _reveal = id;
-    _revealSeq++;
-  }
-
-  /// The board's callback for the reveal asked for now.
-  VoidCallback _revealedNow() {
-    final seq = _revealSeq;
-    return () => _revealed(seq);
-  }
-
-  void _revealed(int seq) {
+  void _revealed() {
     final id = _reveal;
-    if (!mounted || id == null || seq != _revealSeq) return;
+    if (!mounted || id == null) return;
     setState(() => _reveal = null);
     final node = _cardFocus[id];
     // A deleted card's node keeps its old context: it must still be there.
@@ -225,11 +178,6 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
       if (card != null && _filter != null && card['bucket'] != _filter!.code) {
         _filter = null;
       }
-      if (card != null &&
-          _importance != null &&
-          BoardImportance.of(card['importance']) != _importance) {
-        _importance = null;
-      }
       if (card != null && !namesAgent(card, widget.agent?.command)) {
         agentCleared = true;
       }
@@ -241,13 +189,11 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
     // and with none left, New project.
     final shown = [
       for (final p in _projects)
-        if (_shows(p, agent)) '${p['id']}',
+        if ((_filter == null || p['bucket'] == _filter!.code) &&
+            namesAgent(p, agent))
+          '${p['id']}',
     ];
-    setState(
-      () => _revealCard(
-        id != null && shown.contains(id) ? id : shown.firstOrNull ?? '',
-      ),
-    );
+    setState(() => _reveal = shown.contains(id) ? id : shown.firstOrNull ?? '');
     return true;
   }
 
@@ -304,190 +250,19 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
     return center ? Center(child: note) : note;
   }
 
-  /// The board's order after a read. With the user's order (task 095) the
-  /// read's order is shown, unless a move was sent after the read began or
-  /// is still on its way ([moved]): then the cards stay as moved (new ones on
-  /// top). An older backend sorts by urgency: while a card has the keyboard
-  /// or is pressed, and while a project is open, the cards stay where they
-  /// are (new ones at the end); the core's order returns with the next read
-  /// after.
-  List<Map<String, dynamic>> _holdOrder(
-    List<Map<String, dynamic>> fresh, {
-    bool moved = false,
-  }) {
-    if (!_board) return fresh;
+  /// While a card has the keyboard, a refresh keeps the cards where they are
+  /// (new ones at the end, gone ones removed); the core's order returns with
+  /// the next read after.
+  List<Map<String, dynamic>> _holdOrder(List<Map<String, dynamic>> fresh) {
     final focused = _cardFocus.values.any((node) => node.hasFocus);
-    final hold = _order
-        ? moved
-        : focused || _pressed.isNotEmpty || _projectOpen;
-    if (!hold) return fresh;
+    // Also while a card is pressed, and while a project is open (its card
+    // stays where the board was left, to give the keyboard back to).
+    if (!_board || !(focused || _pressed.isNotEmpty || _projectOpen)) {
+      return fresh;
+    }
     final byId = {for (final p in fresh) '${p['id']}': p};
     final kept = [for (final old in _projects) ?byId.remove('${old['id']}')];
-    return _order ? [...byId.values, ...kept] : [...kept, ...byId.values];
-  }
-
-  /// [projects] in the order of [ids] (others after them, as they were).
-  static List<Map<String, dynamic>> _ordered(
-    List<Map<String, dynamic>> projects,
-    List<String> ids,
-  ) {
-    final byId = {for (final p in projects) '${p['id']}': p};
-    return [for (final id in ids) ?byId.remove(id), ...byId.values];
-  }
-
-  /// A card moved on the board (drag, Move menu or keyboard): [target] null
-  /// is the top (or with [after] the end); after a card means before the
-  /// next card the board shows, else before the next one of the whole
-  /// order (a filter hides it), else the end.
-  void _moveFromBoard(String id, String? target, bool after) {
-    final ids = [for (final p in _projects) '${p['id']}'];
-    String? before;
-    if (target == null) {
-      before = after ? null : ids.where((i) => i != id).firstOrNull;
-      if (!after && before == null) return;
-    } else if (!after) {
-      before = target;
-    } else {
-      final agent = widget.agent?.command;
-      final shown = [
-        for (final p in _projects)
-          if (_shows(p, agent)) '${p['id']}',
-      ];
-      // A card gone meanwhile: no place to go after.
-      final whole = ids.indexOf(target);
-      if (whole < 0) return;
-      final there = shown.indexOf(target);
-      before =
-          (there < 0
-              ? null
-              : shown.skip(there + 1).where((i) => i != id).firstOrNull) ??
-          ids.skip(whole + 1).where((i) => i != id).firstOrNull;
-    }
-    unawaited(_move(id, before));
-  }
-
-  /// Sends `move`: the card moves at once, then takes the answer's order; a
-  /// refusal puts it back and keeps its reason on the board.
-  Future<void> _move(String id, String? before) async {
-    if (!_order || _moving || _quick.contains(id) || _unavailable) return;
-    final old = [for (final p in _projects) '${p['id']}'];
-    final rest = [...old]..remove(id);
-    final at = before == null ? rest.length : rest.indexOf(before);
-    if (at < 0 || !old.contains(id)) return;
-    final moved = [...rest]..insert(at, id);
-    if (moved.join('\n') == old.join('\n')) return;
-    setState(() {
-      _moving = true;
-      _orderSeq++;
-      _projects = _ordered(_projects, moved);
-      // The keyboard stays with the card, also when it left the view.
-      _revealCard(id);
-    });
-    var kept = false;
-    try {
-      final answer = await widget.onCall('move', {'id': id, 'before': before});
-      final order = answer['order'];
-      if (mounted && order is List) {
-        setState(() {
-          _projects = _ordered(_projects, [for (final i in order) '$i']);
-          // The answer may place it elsewhere: kept in view.
-          _revealCard(id);
-        });
-      }
-    } catch (error) {
-      if (mounted) {
-        setState(() {
-          _projects = _ordered(_projects, old);
-          // Back where it was, in view again.
-          _revealCard(id);
-          _error = _failure(error);
-          _keepError++;
-          _quickFailures++;
-          _quickReason = _error;
-          kept = true;
-        });
-      }
-    } finally {
-      // Counted again: a read begun while it was on its way is older too.
-      if (mounted) {
-        setState(() {
-          _moving = false;
-          _orderSeq++;
-        });
-      }
-    }
-    // A refused move (an unknown card): the board is read again; the reason
-    // stays through that read.
-    if (kept) {
-      if (mounted) await _refresh();
-      _keepError--;
-    }
-  }
-
-  /// Sends `set_importance` from a card's mark or the Goal tab: the mark
-  /// changes at once (the open project's draft stays as it is); a refusal
-  /// puts it back with its reason.
-  Future<void> _setImportance(String id, BoardImportance value) async {
-    if (!_order ||
-        _marking.containsKey(id) ||
-        _quick.contains(id) ||
-        _unavailable) {
-      return;
-    }
-    String? was;
-    void mark(String? code) {
-      for (final p in [..._projects.where((p) => p['id'] == id), ?_project]) {
-        if (p['id'] != id) continue;
-        if (code == null) {
-          p.remove('importance');
-        } else {
-          p['importance'] = code;
-        }
-      }
-    }
-
-    setState(() {
-      was =
-          _projects.where((p) => p['id'] == id).firstOrNull?['importance']
-              as String? ??
-          (_project?['id'] == id ? _project!['importance'] as String? : null);
-      _marking[id] = value.code;
-      _markGen[id] = (_markGen[id] ?? 0) + 1;
-      mark(value.code);
-    });
-    var kept = false;
-    try {
-      final answer = await widget.onCall('set_importance', {
-        'id': id,
-        'importance': value.code,
-      });
-      final project = answer['project'];
-      if (mounted && project is Map && project['importance'] is String) {
-        setState(() => mark(project['importance'] as String));
-      }
-    } catch (error) {
-      if (mounted) {
-        setState(() {
-          mark(was);
-          _error = _failure(error);
-          _keepError++;
-          _quickFailures++;
-          _quickReason = _error;
-          kept = true;
-        });
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _marking.remove(id);
-          _markGen[id] = (_markGen[id] ?? 0) + 1;
-        });
-      }
-    }
-    if (kept) {
-      if (mounted) await _refresh();
-      _keepError--;
-    }
+    return [...kept, ...byId.values];
   }
 
   /// Pause or Retry pause from a card, for the run the card shows.
@@ -548,6 +323,7 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
         'revision': project['revision'],
       });
       _setupDrafts.removeWhere((key, _) => key.startsWith('$id:'));
+      _forgetMessages(id);
     } catch (error) {
       if (mounted) {
         setState(() {
@@ -620,6 +396,9 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
     _readDone?.complete();
     _readDone = null;
     _setupRequest.dispose();
+    for (final draft in _messageDrafts.values) {
+      draft.dispose();
+    }
     for (final c in [_title, _brief, _path, _plan]) {
       c.dispose();
     }
@@ -755,6 +534,31 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
           'Some agent processes are still stopping. Try again shortly.',
         'project_setup_agent_failed' =>
           'Team setup ended without a proposal. The project is unchanged.',
+        'project_not_running' =>
+          'The project is not running now. Your message was not sent.',
+        'project_message_empty' => 'Write a message first.',
+        'project_message_too_long' =>
+          'The message is too long (at most 4096 bytes). Shorten it or send it in parts.',
+        'project_message_invalid' =>
+          'The message could not be sent: it contains characters that are not allowed.',
+        'project_messages_full' =>
+          'Too many messages are waiting. Remove one or wait until the next assignment takes them.',
+        'project_message_unknown' => 'This message is no longer there.',
+        'project_message_delivered' =>
+          'This message was already given to an agent.',
+        'project_launch_withdrawn' =>
+          'Another action on this project came first.',
+        'project_not_started' => 'The new agent did not start.',
+        'project_message_pending' =>
+          'This message is already in the prompt of an agent that is starting. It will be delivered there.',
+        'project_prompt_too_large' =>
+          'The prompt for the next agent would be too large. Shorten the goal, the plan or the waiting messages.',
+        'project_not_paused' => 'The agent at work could not be paused.',
+        'project_capacity' =>
+          'Too many projects are running now. Continue when one has finished.',
+        'project_center_closed' => 'The Project Center is closing.',
+        'project_message_not_continued' =>
+          'The project could not continue at once.',
         'project_store_unavailable' ||
         'project_store_full' ||
         'project_store_corrupt' =>
@@ -780,9 +584,7 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
     }
     _reading = true;
     final selection = _selection;
-    final moves = _orderSeq;
-    final marks = Map.of(_markGen);
-    final failures = _quickFailures;
+    final generation = _viewGeneration;
     // Full details only for the open project (the board needs none).
     final id = _board && !_projectOpen ? null : _project?['id'];
     try {
@@ -812,15 +614,10 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
       }
       if (!mounted) return;
       setState(() {
+        _projects = _holdOrder(_rows(results[0]['projects']));
         final caps = results[0]['capabilities'];
         _board = caps is List && caps.contains('board');
-        _order = _board && caps is List && caps.contains('order');
-        final fresh = _rows(results[0]['projects']);
-        // A mark on its way stays (the read may be older than it).
-        for (final p in fresh) {
-          _keepMark(p, marks);
-        }
-        _projects = _holdOrder(fresh, moved: _moving || moves != _orderSeq);
+        _messagesOn = caps is List && caps.contains('messages');
         _ticks = 0;
         _unavailable = false;
         final summary = results[0]['summary'];
@@ -836,8 +633,8 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
         if (selected is Map &&
             !_busy &&
             selection == _selection &&
+            generation == _viewGeneration &&
             id == _project?['id']) {
-          _keepMark(selected, marks);
           if (_dirty) {
             _project = Map<String, dynamic>.from(selected);
           } else {
@@ -849,11 +646,7 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
         if (detailError != null &&
             selection == _selection &&
             (!_board || _projectOpen)) {
-          // A card's action that failed since the read began keeps its
-          // reason.
-          _error = _quickFailures == failures
-              ? _failure(detailError)
-              : _quickReason;
+          _error = _failure(detailError);
         } else if (profileError != null && !_board) {
           _error = _failure(profileError);
         }
@@ -861,8 +654,7 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
     } catch (error) {
       if (mounted) {
         setState(() {
-          // A card's action that failed meanwhile keeps its reason.
-          _error = _quickFailures == failures ? _failure(error) : _quickReason;
+          _error = _failure(error);
           _unavailable = true;
           _ticks = 0;
         });
@@ -1014,8 +806,6 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
         _setupDrafts.removeWhere((key, _) => key.startsWith('new:'));
       }
     });
-    final marks = Map.of(_markGen);
-    final failures = _quickFailures;
     try {
       final result = project == null
           ? null
@@ -1025,20 +815,12 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
             );
       if (!mounted) return false;
       setState(() {
-        if (result != null) _keepMark(result, marks);
         _adopt(result);
         _tab = 0;
       });
       return true;
     } catch (error) {
-      // A card's action that failed meanwhile keeps its reason.
-      if (mounted) {
-        setState(
-          () => _error = _quickFailures == failures
-              ? _failure(error)
-              : _quickReason,
-        );
-      }
+      if (mounted) setState(() => _error = _failure(error));
       return false;
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -1140,6 +922,7 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
         if (operation == 'delete') {
           final gone = _project?['id'];
           _setupDrafts.removeWhere((key, _) => key.startsWith('$gone:'));
+          _forgetMessages(gone);
           // A read of the deleted project still on its way is outdated: its
           // failure must not show on the board.
           _selection++;
@@ -1182,12 +965,199 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
             }
             final shown = [
               for (final p in _projects)
-                if (_shows(p, widget.agent?.command)) '${p['id']}',
+                if ((_filter == null || p['bucket'] == _filter!.code) &&
+                    namesAgent(p, widget.agent?.command))
+                  '${p['id']}',
             ];
-            _revealCard(shown.firstOrNull ?? '');
+            _reveal = shown.firstOrNull ?? '';
           }
         });
       }
+    }
+  }
+
+  /// A refused message (task 096): what it means for the message, else as
+  /// every other refusal.
+  String _messageFailure(Object error) {
+    if (error is ServiceError) {
+      final text = switch (error.code) {
+        'project_changed' =>
+          'The project moved on to another run. Look at it again, then send your message.',
+        'project_store_full' =>
+          'The project store is full: your message was not saved. The running work goes on.',
+        _ => null,
+      };
+      if (text != null) return tr(text);
+    }
+    return _failure(error);
+  }
+
+  /// Send (queue) or Send now (task 096); Send now first asks as Continue.
+  /// The page clears the draft and keeps the note, whatever tab is shown
+  /// when the answer comes (Send now returns once the new agent started).
+  Future<void> _sendMessage(String text, {required bool now}) async {
+    final project = _project;
+    final id = project?['id'];
+    if (_busy || project == null || id is! String) return;
+    setState(() {
+      _busy = true;
+      _messageSending = id;
+    });
+    MessageNote? note;
+    try {
+      if (now &&
+          !await _confirm(
+            'Continue from saved handoff?',
+            'Review existing changes and output first. This starts a new agent session with the saved handoff; incomplete actions may already have changed files.',
+            'I reviewed the existing changes',
+          )) {
+        return;
+      }
+      _messageNotes.remove(id);
+      try {
+        final result = await widget.onCall('message', {
+          'id': id,
+          'run_id': project['run_id'],
+          'text': text,
+          'mode': now ? 'now' : 'queue',
+          if (now) 'acknowledge_interrupted': true,
+        });
+        // Stored: only this text leaves the box (one typed meanwhile stays).
+        final draft = _messageDrafts[id];
+        if (draft != null && draft.text == text) draft.clear();
+        if (now && result['continued'] != true) {
+          note = MessageNote(
+            _notContinued(result['reason'], result['message']),
+          );
+        }
+        if (mounted) _takeProject(result);
+      } catch (error) {
+        note = MessageNote(_messageFailure(error), error: true);
+      }
+      if (note case final shown?) _messageNotes[id] = shown;
+      // While still busy: a read on its way cannot bring the older view
+      // back, and the board's count is new when the page is free again.
+      if (mounted) await _refresh();
+    } finally {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _messageSending = null;
+        });
+      }
+    }
+  }
+
+  /// Why Send now did not continue at once, said for what became of the
+  /// message: removed or delivered meanwhile, else it waits.
+  String _notContinued(Object? reason, Object? message) {
+    if (reason == 'project_message_unknown' || message == null) {
+      return tr(
+        'Your message was removed meanwhile, so the project did not continue with it.',
+      );
+    }
+    if (reason == 'project_message_delivered' ||
+        (message is Map && message['state'] == 'delivered')) {
+      return tr(
+        'Your message was already given to an agent meanwhile. The project did not continue a second time.',
+      );
+    }
+    return _waits(reason);
+  }
+
+  /// "Could not continue at once: why. It waits." (the answer and the
+  /// `message_waiting` event say it alike).
+  String _waits(Object? reason) {
+    final why = switch (reason) {
+      'project_changed' || 'project_launch_withdrawn' => tr(
+        'Another action on this project came first.',
+      ),
+      String code => _failure(ServiceError(code)),
+      _ => tr('The project could not continue at once.'),
+    };
+    return tr(
+      'The agent could not continue at once: {0} Your message waits for the next assignment.',
+    ).replaceAll('{0}', why);
+  }
+
+  /// Removes a waiting message (task 096); its note is the page's.
+  Future<void> _dropMessage(String messageId) async {
+    final project = _project;
+    final id = project?['id'];
+    if (_busy || project == null || id is! String) return;
+    setState(() {
+      _busy = true;
+      _messageSending = id;
+      _messageNotes.remove(id);
+    });
+    try {
+      try {
+        final result = await widget.onCall('message_drop', {
+          'id': id,
+          'message_id': messageId,
+        });
+        if (mounted) _takeProject(result);
+      } catch (error) {
+        _messageNotes[id] = MessageNote(_messageFailure(error), error: true);
+      }
+      // The board's badge, and no older read over the new view.
+      if (mounted) await _refresh();
+    } finally {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _messageSending = null;
+        });
+      }
+    }
+  }
+
+  /// A mutation's project view; edits in the form stay. Reads that started
+  /// before it are older and are not shown.
+  void _takeProject(Map<String, dynamic> result) {
+    final view = result['project'];
+    if (view is! Map || view['id'] != _project?['id']) return;
+    setState(() {
+      _viewGeneration++;
+      final project = Map<String, dynamic>.from(view);
+      if (_dirty) {
+        _project = project;
+      } else {
+        _adopt(project);
+      }
+    });
+  }
+
+  /// The message box and the project's messages (task 096).
+  Widget _messagesPane() {
+    final project = _project;
+    final id = project?['id'];
+    if (!_messagesOn || project == null || id is! String) {
+      return const SizedBox.shrink();
+    }
+    return ProjectMessages(
+      project: project,
+      // Each project its own draft (kept while the page lives).
+      controller: _messageDrafts.putIfAbsent(id, TextEditingController.new),
+      tr: tr,
+      busy: _busy,
+      working: _busy && !_confirming,
+      sending: _messageSending == id,
+      note: _messageNotes[id],
+      onSend: (text, {required now}) => _sendMessage(text, now: now),
+      onDrop: _dropMessage,
+      agentName: (agent) =>
+          '${_profiles.where((p) => p['id'] == agent).firstOrNull?['name'] ?? agent}',
+    );
+  }
+
+  /// A deleted project's message draft and note go with it.
+  void _forgetMessages(Object? id) {
+    _messageNotes.remove(id);
+    final draft = _messageDrafts.remove(id);
+    // Its field may still be shown in this frame.
+    if (draft != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => draft.dispose());
     }
   }
 
@@ -1824,6 +1794,7 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
       'implementer' => 'Implementer',
       'reviewer' => 'Reviewer',
       'setup' => 'Setup helper',
+      'contributor' => 'Contributor',
       _ => value,
     });
     if (event['type'] == 'assignment') {
@@ -1843,6 +1814,41 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
       if (match != null) {
         return tr('{0} ended successfully.').replaceAll('{0}', role(match[1]!));
       }
+    }
+    // Messages to a running project (task 096).
+    if (event['type'] == 'message_delivered') {
+      final one = RegExp(
+        r'^Your message was given to (.*): (lead|implementer|reviewer|contributor)\.$',
+      ).firstMatch(text);
+      if (one != null) {
+        return tr(
+          'Your message was given to {0}: {1}.',
+        ).replaceAll('{0}', one[1]!).replaceAll('{1}', role(one[2]!));
+      }
+      final many = RegExp(
+        r'^(\d+) messages were given to (.*): (lead|implementer|reviewer|contributor)\.$',
+      ).firstMatch(text);
+      if (many != null) {
+        return tr('{0} messages were given to {1}: {2}.')
+            .replaceAll('{0}', many[1]!)
+            .replaceAll('{1}', many[2]!)
+            .replaceAll('{2}', role(many[3]!));
+      }
+    }
+    if (event['type'] == 'message_waiting') {
+      final match = RegExp(
+        r'^The agent could not continue at once \(([a-z_]+)\)\. Your message waits for the next assignment\.$',
+      ).firstMatch(text);
+      if (match != null) {
+        return _waits(match[1]);
+      }
+    }
+    // Send now's new session failed before its agent started (task 096).
+    if (event['type'] == 'continue_failed' &&
+        RegExp(r'^project_[a-z_]+$').hasMatch(text)) {
+      return tr(
+        'The new session did not start: {0} The project is paused; check the changes, then continue.',
+      ).replaceAll('{0}', _failure(ServiceError(text)));
     }
     if (event['type'] == 'setup_failed' &&
         RegExp(r'^project_[a-z_]+$').hasMatch(text)) {
@@ -1869,6 +1875,7 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
   Widget _activityPane() => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
+      _messagesPane(),
       Text(tr('Agent output'), style: Theme.of(context).textTheme.titleMedium),
       const SizedBox(height: AppSpace.sm),
       SelectableText('${_project?['output'] ?? ''}'),
@@ -1949,64 +1956,6 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
     );
   }
 
-  /// The Goal tab's importance (task 095): set at once, never part of the
-  /// draft; only for a saved project of a backend that keeps marks.
-  Widget? _importanceRow() {
-    final id = _project?['id'];
-    final value = BoardImportance.of(_project?['importance']);
-    if (!_order || id is! String || value == null) return null;
-    return Padding(
-      padding: const EdgeInsets.only(top: AppSpace.md),
-      child: LayoutBuilder(
-        builder: (context, box) {
-          // Without room (narrow, large text, long words): the label above,
-          // the choices across the width without symbols.
-          final scale = MediaQuery.textScalerOf(context).scale(16) / 16;
-          final compact = box.maxWidth < 520 * scale;
-          final selector = SegmentedButton<BoardImportance>(
-            key: const ValueKey('goal-importance'),
-            showSelectedIcon: false,
-            expandedInsets: compact ? EdgeInsets.zero : null,
-            segments: [
-              for (final i in BoardImportance.values)
-                ButtonSegment(
-                  value: i,
-                  icon: compact ? null : Icon(i.icon, size: 18),
-                  label: Text(tr(i.label)),
-                ),
-            ],
-            selected: {value},
-            // Not while the page saves, deletes or reads the project.
-            onSelectionChanged:
-                _busy ||
-                    _marking.containsKey(id) ||
-                    _quick.contains(id) ||
-                    _unavailable
-                ? null
-                : (chosen) => _setImportance(id, chosen.single),
-          );
-          if (compact) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(tr('Importance')),
-                const SizedBox(height: AppSpace.xs),
-                selector,
-              ],
-            );
-          }
-          return Row(
-            children: [
-              Expanded(child: Text(tr('Importance'))),
-              const SizedBox(width: AppSpace.md),
-              selector,
-            ],
-          );
-        },
-      ),
-    );
-  }
-
   /// The open tab's content (goal, plan, team, activity or setup).
   Widget _tabBody(bool approved) => switch (_tab) {
     0 => Column(
@@ -2031,7 +1980,6 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
             label: Text(tr('Choose folder')),
           ),
         ),
-        ?_importanceRow(),
       ],
     ),
     1 => Column(
@@ -2371,18 +2319,6 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
                             unavailable: _unavailable,
                             filter: _filter,
                             onFilter: (f) => setState(() => _filter = f),
-                            importance: _importance,
-                            onImportanceFilter: (i) =>
-                                setState(() => _importance = i),
-                            onMove: _order ? _moveFromBoard : null,
-                            // Move to top / to end judge the whole board,
-                            // also under the agent chip.
-                            firstId: _projects.firstOrNull?['id'] as String?,
-                            lastId: _projects.lastOrNull?['id'] as String?,
-                            onImportance: _order
-                                ? (p, value) =>
-                                      _setImportance('${p['id']}', value)
-                                : null,
                             view: _view,
                             onView: (v) => setState(() => _view = v),
                             onOpen: (p) => _openFromBoard(p),
@@ -2391,12 +2327,12 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
                                 : () => _openFromBoard(null),
                             onReview: (p) => _openFromBoard(p, tab: 1),
                             onPause: _pauseFromBoard,
-                            busyIds: {..._quick, ..._marking.keys},
+                            busyIds: _quick,
                             eventText: _eventText,
                             controller: _boardScroll,
                             newFocus: _newFocus,
                             reveal: _reveal,
-                            onRevealed: _revealedNow(),
+                            onRevealed: _revealed,
                             onPress: (id, down) =>
                                 down ? _pressed.add(id) : _pressed.remove(id),
                             cardFocus: (id) => _cardFocus[id] ??= FocusNode(

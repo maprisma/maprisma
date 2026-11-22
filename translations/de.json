@@ -3904,5 +3904,6 @@
   "Your message was already given to an agent meanwhile. The project did not continue a second time.": "Deine Nachricht wurde inzwischen schon an einen Agenten gegeben. Das Projekt hat kein zweites Mal fortgesetzt.",
   "Another action on this project came first.": "Eine andere Aktion für dieses Projekt kam zuerst.",
   "This message is already in the prompt of an agent that is starting. It will be delivered there.": "Diese Nachricht steht schon im Prompt eines Agenten, der gerade startet. Sie wird dort übergeben.",
-  "The new session did not start: {0} The project is paused; check the changes, then continue.": "Die neue Sitzung ist nicht gestartet: {0} Das Projekt ist pausiert; prüfe die Änderungen und setze dann fort."
+  "The new session did not start: {0} The project is paused; check the changes, then continue.": "Die neue Sitzung ist nicht gestartet: {0} Das Projekt ist pausiert; prüfe die Änderungen und setze dann fort.",
+  "The new agent did not start.": "Der neue Agent ist nicht gestartet."
 }

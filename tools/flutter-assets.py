@@ -1182,6 +1182,7 @@ KEYS = (
     "Another action on this project came first.",
     "This message is already in the prompt of an agent that is starting. It will be delivered there.",
     "The new session did not start: {0} The project is paused; check the changes, then continue.",
+    "The new agent did not start.",
 )
 
 

@@ -31,15 +31,37 @@ class Store {
 
   /// The next `message` waits for this.
   Completer<void>? hold;
+
+  /// The next `message_drop` waits for this.
+  Completer<void>? holdDrop;
+
+  /// The next `get` answers the project as it was when asked, after this.
+  Completer<void>? holdGet;
+
+  /// More projects on the board (not running into messages).
+  final others = <Map<String, dynamic>>[];
+  final calls = <String>[];
+
+  List<Map<String, dynamic>> get all => [project, ...others];
+
+  /// The card as the core counts it.
+  static Map<String, dynamic> listed(Map<String, dynamic> p) => {
+    ...p,
+    'messages_queued': [
+      for (final m in p['messages'] as List? ?? const [])
+        if ((m as Map)['state'] == 'queued') m,
+    ].length,
+  };
 }
 
 Map<String, dynamic> running({
+  String id = 'a',
   String status = 'running',
   List<Map<String, dynamic>> messages = const [],
   String? phase,
 }) => {
   ...card(
-    'a',
+    id,
     status: status,
     bucket: 'running',
     activity: 'running',
@@ -50,31 +72,44 @@ Map<String, dynamic> running({
   'messages_queued': messages.where((m) => m['state'] == 'queued').length,
 };
 
-Future<void> mount(WidgetTester tester, Store store) async {
+Future<GlobalKey<AiProjectCenterPageState>> mount(
+  WidgetTester tester,
+  Store store,
+) async {
+  final key = GlobalKey<AiProjectCenterPageState>();
   await tester.binding.setSurfaceSize(const Size(1400, 1000));
   addTearDown(() => tester.binding.setSurfaceSize(null));
   await tester.pumpWidget(
     MaterialApp(
       home: Scaffold(
         body: AiProjectCenterPage(
+          key: key,
           tr: (s) => s,
           onCall: (op, args) async {
+            store.calls.add(op);
             switch (op) {
               case 'list':
                 return {
-                  'projects': [store.project],
+                  'projects': [for (final p in store.all) Store.listed(p)],
                   'capabilities': store.capabilities,
                 };
               case 'get':
+                final asked = store.all.firstWhere(
+                  (p) => p['id'] == args['id'],
+                );
+                if (store.holdGet case final hold?) {
+                  store.holdGet = null;
+                  await hold.future;
+                }
                 return {
                   'project': {
-                    ...store.project,
+                    ...asked,
                     'brief': 'b',
                     'plan': 'p',
                     'team': [
                       {'agent': 'claude', 'role': 'lead'},
                     ],
-                    'events': [],
+                    'events': asked['events'] ?? [],
                     'plan_version': 1,
                     'approved_version': 1,
                   },
@@ -112,6 +147,10 @@ Future<void> mount(WidgetTester tester, Store store) async {
                   'reason': now && !store.continued ? store.reason : null,
                 };
               case 'message_drop':
+                if (store.holdDrop case final hold?) {
+                  store.holdDrop = null;
+                  await hold.future;
+                }
                 if (store.refuse case final code?) {
                   store.refuse = null;
                   throw ServiceError(code);
@@ -133,11 +172,17 @@ Future<void> mount(WidgetTester tester, Store store) async {
     ),
   );
   await tester.pumpAndSettle();
+  return key;
 }
 
 /// Opens the project from its card and shows its Activity tab.
-Future<void> openActivity(WidgetTester tester) async {
-  await tester.tap(find.byKey(const ValueKey('card-open')));
+Future<void> openActivity(WidgetTester tester, {String id = 'a'}) async {
+  await tester.tap(
+    find.descendant(
+      of: find.byKey(ValueKey('project-card-$id')),
+      matching: find.byKey(const ValueKey('card-open')),
+    ),
+  );
   await tester.pumpAndSettle();
   await tester.tap(find.widgetWithText(ChoiceChip, 'Activity'));
   await tester.pumpAndSettle();
@@ -639,5 +684,270 @@ void main() {
     );
     expect(store.dropped, isEmpty);
     expect(find.text('In flight'), findsOneWidget);
+  });
+
+  Future<void> chip(WidgetTester tester, String label) async {
+    await tester.tap(find.widgetWithText(ChoiceChip, label));
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('Send now ends well while another tab is shown', (tester) async {
+    final store = Store(running())
+      ..continued = false
+      ..reason = 'project_folder_busy'
+      ..hold = Completer<void>();
+    final hold = store.hold!;
+    await mount(tester, store);
+    await openActivity(tester);
+    await tester.enterText(box, 'Now please');
+    await tester.pump();
+    await tester.tap(sendNow);
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.widgetWithText(FilledButton, 'I reviewed the existing changes'),
+    );
+    await tester.pump();
+    // To the plan and back while the agent is still starting: still busy.
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Plan'));
+    await tester.pump();
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Activity'));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('message-progress')), findsOneWidget);
+    expect(enabled(tester, send), isFalse);
+    expect(enabled(tester, sendNow), isFalse);
+    // The answer arrives while the plan is shown.
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Plan'));
+    await tester.pump();
+    hold.complete();
+    await tester.pumpAndSettle();
+    await chip(tester, 'Activity');
+    expect(store.sent, hasLength(1));
+    expect(find.byKey(const ValueKey('message-progress')), findsNothing);
+    expect(
+      find.text(
+        'The agent could not continue at once: Another project is working in this folder. Your message waits for the next assignment.',
+      ),
+      findsOneWidget,
+    );
+    // The project is paused: the box is gone, the message waits.
+    expect(box, findsNothing);
+    expect(find.byKey(const ValueKey('project-message-m1')), findsOneWidget);
+  });
+
+  testWidgets('Send stored while another tab is shown clears its text', (
+    tester,
+  ) async {
+    final store = Store(running())..hold = Completer<void>();
+    final hold = store.hold!;
+    await mount(tester, store);
+    await openActivity(tester);
+    await tester.enterText(box, 'Queued');
+    await tester.pump();
+    await tester.tap(send);
+    await tester.pump();
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Goal'));
+    await tester.pump();
+    hold.complete();
+    await tester.pumpAndSettle();
+    await chip(tester, 'Activity');
+    expect(tester.widget<TextField>(box).controller!.text, isEmpty);
+    expect(store.sent.single['text'], 'Queued');
+  });
+
+  testWidgets('a refusal while another tab is shown is kept for the box', (
+    tester,
+  ) async {
+    final store = Store(running())
+      ..refuse = 'project_not_running'
+      ..hold = Completer<void>();
+    final hold = store.hold!;
+    await mount(tester, store);
+    await openActivity(tester);
+    await tester.enterText(box, 'Too late');
+    await tester.pump();
+    await tester.tap(send);
+    await tester.pump();
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Goal'));
+    await tester.pump();
+    hold.complete();
+    await tester.pumpAndSettle();
+    await chip(tester, 'Activity');
+    expect(
+      find.text('The project is not running now. Your message was not sent.'),
+      findsOneWidget,
+    );
+    expect(tester.widget<TextField>(box).controller!.text, 'Too late');
+  });
+
+  Map<String, dynamic> waiting(String id, String text) => {
+    'id': id,
+    'at': '2026-11-22T10:00:00.000Z',
+    'mode': 'queue',
+    'text': text,
+    'state': 'queued',
+    'run_id': 'r1',
+  };
+
+  testWidgets('a refused drop while another tab is shown keeps its reason', (
+    tester,
+  ) async {
+    final store = Store(running(messages: [waiting('m1', 'Starting')]))
+      ..refuse = 'project_message_pending'
+      ..holdDrop = Completer<void>();
+    final hold = store.holdDrop!;
+    await mount(tester, store);
+    await openActivity(tester);
+    await tester.tap(find.byTooltip('Remove message'));
+    await tester.pump();
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Goal'));
+    await tester.pump();
+    hold.complete();
+    await tester.pumpAndSettle();
+    await chip(tester, 'Activity');
+    expect(
+      find.text(
+        'This message is already in the prompt of an agent that is starting. It will be delivered there.',
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('a read older than a drop does not bring the message back', (
+    tester,
+  ) async {
+    final store = Store(
+      running(status: 'completed', messages: [waiting('m1', 'Left over')]),
+    );
+    final key = await mount(tester, store);
+    await openActivity(tester);
+    // A read that asks before the drop and answers after it.
+    final hold = store.holdGet = Completer<void>();
+    unawaited(key.currentState!.refresh());
+    await tester.pump();
+    await tester.tap(find.byTooltip('Remove message'));
+    await tester.pump();
+    expect(store.dropped, hasLength(1));
+    hold.complete();
+    await tester.pumpAndSettle();
+    expect(find.text('Left over'), findsNothing);
+    // The board was read after the drop: its card has no badge any more.
+    expect(
+      store.calls.lastIndexOf('list'),
+      greaterThan(store.calls.indexOf('message_drop')),
+    );
+    await key.currentState!.backToBoard();
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('card-messages')), findsNothing);
+  });
+
+  testWidgets('the board badge goes when the last waiting one is removed', (
+    tester,
+  ) async {
+    final store = Store(
+      running(status: 'completed', messages: [waiting('m1', 'Left over')]),
+    );
+    final key = await mount(tester, store);
+    expect(find.byKey(const ValueKey('card-messages')), findsOneWidget);
+    await openActivity(tester);
+    await tester.tap(find.byTooltip('Remove message'));
+    await tester.pumpAndSettle();
+    await key.currentState!.backToBoard();
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('card-messages')), findsNothing);
+  });
+
+  testWidgets('a read older than Send does not hide the new message', (
+    tester,
+  ) async {
+    final store = Store(running());
+    final key = await mount(tester, store);
+    await openActivity(tester);
+    await tester.enterText(box, 'Fresh');
+    await tester.pump();
+    final hold = store.holdGet = Completer<void>();
+    unawaited(key.currentState!.refresh());
+    await tester.pump();
+    await tester.tap(send);
+    await tester.pump();
+    // The read after it waits, so only the older answer has come.
+    final after = store.holdGet = Completer<void>();
+    hold.complete();
+    await tester.pump();
+    await tester.pump();
+    expect(find.byKey(const ValueKey('project-message-m1')), findsOneWidget);
+    after.complete();
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('project-message-m1')), findsOneWidget);
+  });
+
+  testWidgets('each project keeps its own draft', (tester) async {
+    final store = Store(running());
+    store.others.add({...running(id: 'b'), 'title': 'Project b'});
+    final key = await mount(tester, store);
+    await openActivity(tester);
+    await tester.enterText(box, 'For A');
+    await tester.pump();
+    await key.currentState!.backToBoard();
+    await tester.pumpAndSettle();
+    await openActivity(tester, id: 'b');
+    expect(tester.widget<TextField>(box).controller!.text, isEmpty);
+    await tester.enterText(box, 'For B');
+    await tester.pump();
+    await key.currentState!.backToBoard();
+    await tester.pumpAndSettle();
+    await openActivity(tester);
+    expect(tester.widget<TextField>(box).controller!.text, 'For A');
+    await key.currentState!.backToBoard();
+    await tester.pumpAndSettle();
+    await openActivity(tester, id: 'b');
+    expect(tester.widget<TextField>(box).controller!.text, 'For B');
+  });
+
+  testWidgets('message_waiting after another action and planning roles', (
+    tester,
+  ) async {
+    final store = Store(
+      running(
+        status: 'paused',
+        messages: [
+          {
+            'id': 'm1',
+            'at': '2026-11-20T10:00:00.000Z',
+            'mode': 'queue',
+            'text': 'Planned',
+            'state': 'delivered',
+            'run_id': 'r1',
+            'delivered_at': '2026-11-20T10:05:00.000Z',
+            'delivered_to': {
+              'phase': 'planning',
+              'position': 1,
+              'agent': 'codex',
+              'role': 'implementer',
+            },
+          },
+        ],
+      ),
+    );
+    store.project['events'] = [
+      {
+        'type': 'message_waiting',
+        'text':
+            'The agent could not continue at once (project_changed). Your message waits for the next assignment.',
+      },
+    ];
+    await mount(tester, store);
+    await tester.tap(find.byKey(const ValueKey('card-open')));
+    await tester.pumpAndSettle();
+    await chip(tester, 'Activity');
+    expect(
+      find.textContaining('Delivered to codex · Contributor (Planning)'),
+      findsOneWidget,
+    );
+    expect(
+      find.text(
+        'The agent could not continue at once: Another action on this project came first. Your message waits for the next assignment.',
+      ),
+      findsOneWidget,
+    );
   });
 }

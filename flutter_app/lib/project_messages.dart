@@ -4,15 +4,13 @@ import 'package:flutter/services.dart';
 import 'app_look.dart';
 import 'app_theme.dart';
 
-/// What sending a message ended with (task 096): [sent] clears the box;
-/// [note] is shown under it (an [error] in the error colour).
-class MessageOutcome {
-  const MessageOutcome({this.sent = false, this.note, this.error = false});
-
-  /// Nothing happened (busy, or the question was cancelled).
-  static const none = MessageOutcome();
-  final bool sent, error;
-  final String? note;
+/// What the last message action of a project ended with (task 096), shown
+/// under its box; an [error] in the error colour. The page keeps it per
+/// project, so it survives switching tabs.
+class MessageNote {
+  const MessageNote(this.text, {this.error = false});
+  final String text;
+  final bool error;
 }
 
 /// The project statuses in which a message is accepted; Send now not while
@@ -31,6 +29,8 @@ class ProjectMessages extends StatefulWidget {
     required this.tr,
     required this.busy,
     this.working = false,
+    this.sending = false,
+    this.note,
     required this.onSend,
     required this.onDrop,
     this.agentName,
@@ -45,11 +45,15 @@ class ProjectMessages extends StatefulWidget {
 
   /// The page waits for the backend (not for one of its questions).
   final bool working;
-  final Future<MessageOutcome> Function(String text, {required bool now})
-  onSend;
 
-  /// Null when it was removed, else the reason it was not.
-  final Future<String?> Function(String messageId) onDrop;
+  /// A message action of this project is on its way (the page's state).
+  final bool sending;
+  final MessageNote? note;
+
+  /// The page sends, clears the draft once it is stored and keeps the note:
+  /// all of it also when this widget is gone meanwhile (another tab).
+  final void Function(String text, {required bool now}) onSend;
+  final void Function(String messageId) onDrop;
 
   /// An agent's display name from its profile id.
   final String Function(String agent)? agentName;
@@ -67,10 +71,6 @@ class ProjectMessages extends StatefulWidget {
 }
 
 class _ProjectMessagesState extends State<ProjectMessages> {
-  String? _note;
-  bool _noteError = false;
-  bool _sending = false;
-
   String tr(String key) => widget.tr(key);
 
   @override
@@ -86,8 +86,6 @@ class _ProjectMessagesState extends State<ProjectMessages> {
       old.controller.removeListener(_changed);
       widget.controller.addListener(_changed);
     }
-    // Another project: its own notes.
-    if (old.project['id'] != widget.project['id']) _note = null;
   }
 
   @override
@@ -100,43 +98,13 @@ class _ProjectMessagesState extends State<ProjectMessages> {
 
   bool get _canSend => ProjectMessages.canSend(widget.project);
   bool get _hasText => widget.controller.text.trim().isNotEmpty;
-  bool get _enabled => _canSend && _hasText && !widget.busy && !_sending;
+  bool get _idle => !widget.busy && !widget.sending;
+  bool get _enabled => _canSend && _hasText && _idle;
   bool get _nowEnabled => _enabled && widget.project['status'] != 'pausing';
 
-  Future<void> _send({required bool now}) async {
+  void _send({required bool now}) {
     if (!(now ? _nowEnabled : _enabled)) return;
-    final text = widget.controller.text;
-    setState(() => _sending = true);
-    try {
-      final outcome = await widget.onSend(text, now: now);
-      if (!mounted) return;
-      setState(() {
-        // Only a stored message leaves the box; a refusal keeps the text.
-        if (outcome.sent && widget.controller.text == text) {
-          widget.controller.clear();
-        }
-        if (outcome.sent || outcome.note != null) {
-          _note = outcome.note;
-          _noteError = outcome.error;
-        }
-      });
-    } finally {
-      if (mounted) setState(() => _sending = false);
-    }
-  }
-
-  Future<void> _drop(String id) async {
-    setState(() => _sending = true);
-    try {
-      final reason = await widget.onDrop(id);
-      if (!mounted) return;
-      setState(() {
-        _note = reason;
-        _noteError = reason != null;
-      });
-    } finally {
-      if (mounted) setState(() => _sending = false);
-    }
+    widget.onSend(widget.controller.text, now: now);
   }
 
   List<Map<String, dynamic>> get _messages => [
@@ -144,8 +112,10 @@ class _ProjectMessagesState extends State<ProjectMessages> {
       if (m is Map) Map<String, dynamic>.from(m),
   ];
 
-  String _role(Object? role) => tr(switch (role) {
+  /// An implementer works as a contributor while planning.
+  String _role(Object? role, {bool planning = false}) => tr(switch (role) {
     'lead' => 'Lead agent',
+    'implementer' when planning => 'Contributor',
     'implementer' => 'Implementer',
     'reviewer' => 'Reviewer',
     'contributor' => 'Contributor',
@@ -175,7 +145,8 @@ class _ProjectMessagesState extends State<ProjectMessages> {
       final agent = '${to['agent'] ?? ''}';
       final who = [
         if (agent.isNotEmpty) widget.agentName?.call(agent) ?? agent,
-        if (to['role'] != null) _role(to['role']),
+        if (to['role'] != null)
+          _role(to['role'], planning: to['phase'] == 'planning'),
       ].join(' · ');
       final phase = tr(to['phase'] == 'planning' ? 'Planning' : 'Execution');
       final line = tr(
@@ -213,7 +184,6 @@ class _ProjectMessagesState extends State<ProjectMessages> {
               children: [
                 SelectableText(
                   '${message['text'] ?? ''}',
-                  maxLines: 4,
                   style: theme.textTheme.bodyMedium,
                 ),
                 Text(
@@ -231,7 +201,7 @@ class _ProjectMessagesState extends State<ProjectMessages> {
               tooltip: tr('Remove message'),
               visualDensity: VisualDensity.compact,
               icon: const Icon(Icons.close, size: 18),
-              onPressed: widget.busy || _sending ? null : () => _drop(id),
+              onPressed: _idle ? () => widget.onDrop(id) : null,
             ),
         ],
       ),
@@ -244,7 +214,8 @@ class _ProjectMessagesState extends State<ProjectMessages> {
     final colors = theme.colorScheme;
     final messages = _messages;
     final canSend = _canSend;
-    if (!canSend && messages.isEmpty && _note == null) {
+    final note = widget.note;
+    if (!canSend && messages.isEmpty && note == null) {
       return const SizedBox.shrink();
     }
     final pausing = widget.project['status'] == 'pausing';
@@ -321,26 +292,26 @@ class _ProjectMessagesState extends State<ProjectMessages> {
               ),
             ],
             // Send now returns once the new agent started: show it works.
-            if (_sending && widget.working)
+            if (widget.sending && widget.working)
               const Padding(
                 padding: EdgeInsets.only(top: AppSpace.sm),
                 child: LinearProgressIndicator(
                   key: ValueKey('message-progress'),
                 ),
               ),
-            if (_note != null)
+            if (note != null)
               Padding(
                 padding: const EdgeInsets.only(top: AppSpace.sm),
                 child: Text(
-                  _note!,
+                  note.text,
                   key: const ValueKey('message-note'),
                   style: TextStyle(
-                    color: _noteError ? colors.error : colors.onSurface,
+                    color: note.error ? colors.error : colors.onSurface,
                   ),
                 ),
               ),
             if (messages.isNotEmpty) ...[
-              if (canSend || _note != null)
+              if (canSend || note != null)
                 Divider(height: AppSpace.lg, color: colors.outlineVariant),
               for (final message in messages.reversed) _row(context, message),
             ],
