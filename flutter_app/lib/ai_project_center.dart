@@ -7,6 +7,7 @@ import 'package:maprisma_core/maprisma_core.dart' show ServiceError;
 
 import 'app_look.dart';
 import 'project_board.dart';
+import 'project_page_parts.dart';
 import 'window_popup.dart';
 
 typedef ProjectCenterCall =
@@ -1505,6 +1506,41 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
     );
   }
 
+  /// The open project as its board card describes it (stage, activity,
+  /// effective teams); null for a new project or without the board.
+  Map<String, dynamic>? get _openCard {
+    final id = _project?['id'];
+    if (!_board || id == null) return null;
+    return _projects.where((p) => p['id'] == id).firstOrNull;
+  }
+
+  /// The Team tab: the form, and on the board the team as a graph beside it
+  /// (below it when narrow), read only (task 089).
+  Widget _teamWithGraph() {
+    final card = _openCard;
+    if (card == null) return _teamPane();
+    final graph = TeamGraph(project: card, tr: tr);
+    return LayoutBuilder(
+      builder: (context, box) => box.maxWidth >= 900
+          ? Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(flex: 3, child: _teamPane()),
+                const SizedBox(width: AppSpace.lg),
+                Expanded(flex: 2, child: graph),
+              ],
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _teamPane(),
+                const SizedBox(height: AppSpace.lg),
+                graph,
+              ],
+            ),
+    );
+  }
+
   /// The open tab's content (goal, plan, team, activity or setup).
   Widget _tabBody(bool approved) => switch (_tab) {
     0 => Column(
@@ -1542,7 +1578,7 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
         ),
       ],
     ),
-    2 => _teamPane(),
+    2 => _teamWithGraph(),
     4 => _setupPane(),
     _ => _activityPane(),
   };
@@ -1559,6 +1595,9 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // The project's way (task 089), from its board card's facts.
+        if (onBoard && _openCard != null)
+          LargeStageRail(project: _openCard!, tr: tr, compact: narrow),
         // On the board's project page the breadcrumb row carries title,
         // status and "Unsaved changes".
         if (!onBoard)

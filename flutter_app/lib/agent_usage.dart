@@ -43,7 +43,8 @@ class AgentUsage extends StatelessWidget {
         ),
       if ((info['plan'] as String).isNotEmpty)
         ListTile(
-          title: Text(tr('Plan')),
+          // The subscription ("Plan" is the project plan's word).
+          title: Text(tr('Subscription plan')),
           subtitle: Text(info['plan'] as String),
         ),
       if ((info['plan'] as String).isNotEmpty) _extraUsage(),

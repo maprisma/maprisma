@@ -687,7 +687,7 @@
  "Optional: a local LLM (llama.cpp or Ollama) runs models on this PC, private and without costs. Right-click llama.cpp on the map → Install.": "Optional: Ein lokales LLM (llama.cpp oder Ollama) führt Modelle auf diesem PC aus, privat und ohne Kosten. Rechtsklick auf llama.cpp auf der Karte → Installieren.",
  "Overview": "Übersicht",
  "Pick a models folder of its own (not / or your home folder).": "Wähle einen eigenen Modellordner (nicht / oder deinen Home-Ordner).",
- "Plan": "Tarif",
+ "Plan": "Plan",
  "Plan: {0}": "Abo: {0}",
  "Port {0} is taken by another account: {1} cannot be reached there safely.": "Port {0} gehört einem anderen Konto: {1} ist dort nicht sicher erreichbar.",
  "Press Start to see how an agent is set up by drawing.": "Drücke Starten, um zu sehen, wie ein Agent per Zeichnen eingerichtet wird.",
@@ -3852,5 +3852,7 @@
   "has a problem": "hat ein Problem",
   "Check the changes first": "Prüfe zuerst die Änderungen",
   "Project status unavailable": "Projektstatus nicht verfügbar",
-  "Retry": "Erneut versuchen"
+  "Retry": "Erneut versuchen",
+  "No agents in this phase yet.": "Noch keine Agenten in dieser Phase.",
+  "Subscription plan": "Tarif"
 }

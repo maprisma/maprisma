@@ -1001,6 +1001,8 @@ KEYS = (
     "Working",
     "has a problem",
     # The board (task 088).
+    "Subscription plan",
+    "No agents in this phase yet.",
     "Project status unavailable",
     "Retry",
     "Check the changes first",

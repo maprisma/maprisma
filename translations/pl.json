@@ -3933,5 +3933,7 @@
   "has a problem": "ma problem",
   "Check the changes first": "Najpierw sprawdź zmiany",
   "Project status unavailable": "Stan projektów niedostępny",
-  "Retry": "Spróbuj ponownie"
+  "Retry": "Spróbuj ponownie",
+  "No agents in this phase yet.": "Brak jeszcze agentów w tej fazie.",
+  "Subscription plan": "Plan subskrypcji"
 }

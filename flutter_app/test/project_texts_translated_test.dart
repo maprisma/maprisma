@@ -16,6 +16,7 @@ void main() {
         'lib/ai_project_center.dart',
         'lib/main_tabs.dart',
         'lib/project_board.dart',
+        'lib/project_page_parts.dart',
       ])
         for (final match in used.allMatches(File(file).readAsStringSync()))
           match.group(1)!.replaceAll(r"\'", "'"),

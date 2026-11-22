@@ -687,7 +687,7 @@
  "Optional: a local LLM (llama.cpp or Ollama) runs models on this PC, private and without costs. Right-click llama.cpp on the map → Install.": "Optioneel: een lokale LLM (llama.cpp of Ollama) draait modellen op deze pc, privé en zonder kosten. Rechtsklik op llama.cpp op de kaart → Installeren.",
  "Overview": "Overzicht",
  "Pick a models folder of its own (not / or your home folder).": "Kies een eigen modellenmap (niet / of je thuismap).",
- "Plan": "Abonnement",
+ "Plan": "Plan",
  "Plan: {0}": "Abonnement: {0}",
  "Port {0} is taken by another account: {1} cannot be reached there safely.": "Poort {0} is van een ander account: {1} is daar niet veilig bereikbaar.",
  "Press Start to see how an agent is set up by drawing.": "Druk op Starten om te zien hoe je een agent instelt door te tekenen.",
@@ -3852,5 +3852,7 @@
   "has a problem": "heeft een probleem",
   "Check the changes first": "Controleer eerst de wijzigingen",
   "Project status unavailable": "Projectstatus niet beschikbaar",
-  "Retry": "Opnieuw proberen"
+  "Retry": "Opnieuw proberen",
+  "No agents in this phase yet.": "Nog geen agents in deze fase.",
+  "Subscription plan": "Abonnement"
 }
