@@ -36,6 +36,7 @@ abstract interface class ProjectProcess {
 }
 
 final class _ProjectAttempt {
+  _ProjectAttempt({this.sendNow = false});
   bool cancelled = false;
   bool finished = false;
   bool cleanupFailed = false;
@@ -51,7 +52,7 @@ final class _ProjectAttempt {
 
   /// Started by Send now: a failure before its first agent started returns
   /// to the paused checkpoint instead of failing the project.
-  bool sendNow = false;
+  final bool sendNow;
 }
 
 /// Durable project state belongs to this feature, not to the host's short-lived
@@ -99,10 +100,13 @@ final class AiProjectCenterPlugin {
   /// tests.
   final int promptLimit;
 
-  /// Grows with every lifecycle request per project (pause, plan, run,
+  /// Grows with every accepted lifecycle request per project (pause, plan, run,
   /// continue, save, review, setup, setup_apply, delete): Send now continues
   /// only if none came while it paused.
   final _lifecycle = <String, int>{};
+
+  void _advanceLifecycle(String id) =>
+      _lifecycle[id] = (_lifecycle[id] ?? 0) + 1;
   final ProjectRunner? _customRunner;
   final List<String>? _supervisorCommand;
   late final ProjectRunner _runner =
@@ -1031,6 +1035,7 @@ final class AiProjectCenterPlugin {
     }
     _event(item, 'saved', creating ? 'Project created.' : 'Project saved.');
     _put(item, increment: !creating);
+    _advanceLifecycle(item['id'] as String);
     return {'project': _view(item)};
   }
 
@@ -1059,6 +1064,7 @@ final class AiProjectCenterPlugin {
           : 'The plan needs changes.',
     );
     _put(item);
+    _advanceLifecycle(item['id'] as String);
     return {'project': _view(item)};
   }
 
@@ -1183,6 +1189,7 @@ final class AiProjectCenterPlugin {
     );
     final lock = _runLock(item['id'] as String);
     _put(item);
+    _advanceLifecycle(item['id'] as String);
     final active = _ProjectAttempt();
     _active[item['id'] as String] = active;
     unawaited(_execute(item['id'] as String, active, [helper], 'setup', lock));
@@ -1369,6 +1376,7 @@ final class AiProjectCenterPlugin {
       'The proposed team was applied. Review the plan before execution.',
     );
     _put(item);
+    _advanceLifecycle(item['id'] as String);
     return {'project': _view(item)};
   }
 
@@ -1435,7 +1443,11 @@ final class AiProjectCenterPlugin {
         'Setup request: ${item['setup_request']}\nCandidates: $catalog';
   }
 
-  Map<String, dynamic> _launch(Map<String, dynamic> params, String operation) {
+  Map<String, dynamic> _launch(
+    Map<String, dynamic> params,
+    String operation, {
+    _ProjectAttempt? attempt,
+  }) {
     final item = _project(params, revision: true);
     _idle(item);
     if (operation == 'continue' && item['phase'] == 'setup') {
@@ -1521,7 +1533,8 @@ final class AiProjectCenterPlugin {
     final lock = _runLock(item['id'] as String);
     // Intent reaches durable storage before any process is created.
     _put(item);
-    final active = _ProjectAttempt();
+    _advanceLifecycle(item['id'] as String);
+    final active = attempt ?? _ProjectAttempt();
     _active[item['id'] as String] = active;
     unawaited(_execute(item['id'] as String, active, members, phase, lock));
     return {'project': _view(item)};
@@ -1578,6 +1591,7 @@ final class AiProjectCenterPlugin {
     String phase,
     String lock,
   ) async {
+    String? startFailure;
     try {
       while ((_projects[id]!['next_member'] as int) < members.length) {
         if (active.cancelled) break;
@@ -1653,6 +1667,7 @@ final class AiProjectCenterPlugin {
         // a rule may have changed while the previous assignment was running.
         authorize?.call(member['agent'] as String);
         final ProjectProcess process;
+        final startup = Stopwatch()..start();
         try {
           process = await _runner(
             argv,
@@ -1677,7 +1692,14 @@ final class AiProjectCenterPlugin {
         active.process = process;
         // Delivered only once the agent's own process exists; a failed
         // spawn keeps the messages queued.
-        final launched = await process.started;
+        // Include the supervisor lock handshake in the ten-second startup
+        // budget. Together with bounded pause/cleanup this stays below the
+        // worker's shutdown and call deadlines.
+        final remaining = const Duration(seconds: 10) - startup.elapsed;
+        final launched = await process.started.timeout(
+          remaining.isNegative ? Duration.zero : remaining,
+          onTimeout: () => false,
+        );
         if (launched) {
           if (messages.isNotEmpty) {
             _deliver(id, messages, member, profile, phase);
@@ -1687,7 +1709,8 @@ final class AiProjectCenterPlugin {
         active.pending.clear();
         // Never started and not stopped by the user: the supervisor's own
         // stop is confirmed by the cleanup below.
-        if (!launched && !active.cancelled) {
+        if (!launched) {
+          if (active.cancelled) break;
           throw ServiceError('project_agent_unavailable');
         }
         if (active.cancelled) await process.stop();
@@ -1817,13 +1840,6 @@ final class AiProjectCenterPlugin {
           : 'completed';
       if (phase == 'running') item['needs_reconciliation'] = active.cancelled;
       item['checkpoint_kind'] = active.cancelled ? 'handoff' : 'assignment';
-      if (!active.cancelled && _queued(item).isNotEmpty) {
-        _event(
-          item,
-          'message_waiting',
-          'A message arrived after the last assignment had started. It waits for the next assignment.',
-        );
-      }
       _event(
         item,
         active.cancelled ? 'paused' : 'finished',
@@ -1834,7 +1850,22 @@ final class AiProjectCenterPlugin {
             : 'The configured agents have ended. Review the result and verification evidence.',
       );
       _record(item);
+      if (!active.cancelled && _queued(item).isNotEmpty) {
+        // The checkpoint is essential; this explanatory note is optional.
+        final note = _copy(_projects[id]!);
+        _event(
+          note,
+          'message_waiting',
+          'A message arrived after the last assignment had started. It waits for the next assignment.',
+        );
+        try {
+          _put(note, optional: true);
+        } on ServiceError {
+          // The saved messages and checkpoint remain available.
+        }
+      }
     } on Object catch (error) {
+      startFailure = error is ServiceError ? error.code : 'project_not_started';
       if (_projects.containsKey(id)) {
         final item = _copy(_projects[id]!);
         final code = error is ServiceError
@@ -1857,18 +1888,8 @@ final class AiProjectCenterPlugin {
         }
         _record(item);
       }
-      if (!active.firstStart.isCompleted) {
-        active.firstStart.complete(
-          error is ServiceError ? error.code : 'project_not_started',
-        );
-      }
     } finally {
       active.pending.clear();
-      if (!active.firstStart.isCompleted) {
-        active.firstStart.complete(
-          active.cancelled ? 'project_launch_withdrawn' : 'project_not_started',
-        );
-      }
       active.finished = true;
       // The last stop decides: an earlier failed attempt may since have
       // succeeded, and a confirmed tree needs no retained claim.
@@ -1876,7 +1897,7 @@ final class AiProjectCenterPlugin {
       final process = active.process;
       if (process != null) {
         try {
-          await process.stop();
+          await process.stop().timeout(const Duration(seconds: 6));
           active.process = null;
         } on Object {
           active.cleanupFailed = true;
@@ -1902,6 +1923,18 @@ final class AiProjectCenterPlugin {
         }
         _active.remove(id);
         if (!active.done.isCompleted) active.done.complete();
+      }
+      // A failed startup is observable only after cleanup established the
+      // final state and either released or retained this attempt's claim.
+      if (!active.firstStart.isCompleted) {
+        active.firstStart.complete(
+          active.cleanupFailed
+              ? 'project_still_pausing'
+              : startFailure ??
+                    (active.cancelled
+                        ? 'project_launch_withdrawn'
+                        : 'project_not_started'),
+        );
       }
     }
   }
@@ -2055,7 +2088,7 @@ final class AiProjectCenterPlugin {
     String? reason;
     var stillQueued = true;
     try {
-      await _pause({'id': id, 'run_id': message['run_id']});
+      await _pause({'id': id, 'run_id': message['run_id']}, lifecycle: false);
       final paused = _projects[id];
       if (paused == null) throw ServiceError('project_unknown');
       final stored = _storedMessage(paused, message['id'] as String);
@@ -2080,14 +2113,18 @@ final class AiProjectCenterPlugin {
       // A shutdown that waited for the same stop: no new session.
       if (_closed) throw ServiceError('project_center_closed');
       _dropDisplay();
-      _launch({
-        'id': id,
-        'revision': paused['revision'],
-        'acknowledge_interrupted': true,
-      }, 'continue');
-      final attempt = _active[id];
-      if (attempt == null) throw ServiceError('project_not_started');
-      attempt.sendNow = true;
+      // Keep the attempt independently of _active: a synchronous refusal in
+      // _execute can already have removed it when _launch returns.
+      final attempt = _ProjectAttempt(sendNow: true);
+      _launch(
+        {
+          'id': id,
+          'revision': paused['revision'],
+          'acknowledge_interrupted': true,
+        },
+        'continue',
+        attempt: attempt,
+      );
       // The new session counts once its first agent started.
       final outcome = await attempt.firstStart.future;
       if (outcome != null) throw ServiceError(outcome);
@@ -2206,7 +2243,10 @@ final class AiProjectCenterPlugin {
     }
   }
 
-  Future<Map<String, dynamic>> _pause(Map<String, dynamic> params) async {
+  Future<Map<String, dynamic>> _pause(
+    Map<String, dynamic> params, {
+    bool lifecycle = true,
+  }) async {
     final item = _project(params);
     final id = item['id'] as String;
     final active = _active[id];
@@ -2214,6 +2254,7 @@ final class AiProjectCenterPlugin {
     if (params.containsKey('run_id') && params['run_id'] != item['run_id']) {
       throw ServiceError('project_changed');
     }
+    if (lifecycle) _advanceLifecycle(id);
     // Stop first: a storage fault must not keep agents running.
     active.cancelled = true;
     if (item['status'] != 'pausing') {
@@ -2879,21 +2920,6 @@ final class AiProjectCenterPlugin {
     }.contains(operation)) {
       _dropDisplay();
     }
-    if (const {
-          'pause',
-          'plan',
-          'run',
-          'continue',
-          'save',
-          'review',
-          'setup',
-          'setup_apply',
-          'delete',
-        }.contains(operation) &&
-        params['id'] is String) {
-      final id = params['id'] as String;
-      _lifecycle[id] = (_lifecycle[id] ?? 0) + 1;
-    }
     switch (operation) {
       case 'profiles':
         return {
@@ -2914,6 +2940,7 @@ final class AiProjectCenterPlugin {
         final next = Map.of(_projects)..remove(item['id']);
         _persist(next, deleting: true);
         _projects.remove(item['id']);
+        _lifecycle.remove(item['id']);
         return {'deleted': true};
       case 'review':
         return _review(params);
@@ -2940,6 +2967,9 @@ final class AiProjectCenterPlugin {
   /// control pipe and stops its own tree while holding the project's run lock.
   void detach() {
     _closed = true;
+    for (final id in _active.keys) {
+      _advanceLifecycle(id);
+    }
     for (final active in _active.values) {
       active.cancelled = true;
       final process = active.process;
@@ -2962,6 +2992,9 @@ final class AiProjectCenterPlugin {
   Future<void> _shutdown() async {
     if (_closed) return;
     _closed = true;
+    for (final id in _active.keys) {
+      _advanceLifecycle(id);
+    }
     final results = await Future.wait([
       for (final entry in _active.entries.toList())
         _stopAttempt(

@@ -143,7 +143,7 @@ void main() {
       [
         '/bin/sh',
         '-c',
-        'read start; echo \'{"locked":true}\'; read launch; '
+        'read start; echo \'{"locked":true,"start_ack":true}\'; read launch; '
             'read first; read second; '
             'echo \'{"exit":0}\'; echo \'{"stopped":true}\'',
       ],
@@ -168,7 +168,7 @@ void main() {
         [
           '/bin/sh',
           '-c',
-          'read start; echo \'{"locked":true}\'; read launch; '
+          'read start; echo \'{"locked":true,"start_ack":true}\'; read launch; '
               'echo \'{"leader":0}\'; exit 0',
         ],
         ['/bin/true'],
@@ -379,6 +379,93 @@ void main() {
       expect(await lines, contains('"stopped":true'));
     },
     timeout: const Timeout(Duration(seconds: 60)),
+  );
+
+  test(
+    'an older supervisor is refused before launch without start-ack support',
+    () async {
+      final marker = File('${temporary.path}/launched');
+      await expectLater(
+        SupervisedProjectProcess.start(
+          [
+            '/bin/sh',
+            '-c',
+            'read start; echo \'{"locked":true}\'; '
+                'read launch || exit 0; touch "${marker.path}"; '
+                'echo \'{"stopped":true}\'',
+          ],
+          ['/bin/true'],
+          temporary.path,
+          const {},
+          null,
+          lock,
+        ),
+        throwsA(errorCode('project_agent_unavailable')),
+      );
+      expect(marker.existsSync(), isFalse);
+    },
+  );
+
+  for (final event in [
+    '{"out":"hello"}',
+    '{"leader":0}',
+    '{"stuck":1}',
+    '{"exit":0}',
+  ]) {
+    test('post-spawn $event is startup evidence even without started', () async {
+      final process = await SupervisedProjectProcess.start(
+        [
+          '/bin/sh',
+          '-c',
+          'read start; echo \'{"locked":true,"start_ack":true}\'; read launch; '
+              'echo \'$event\'; read stop; echo \'{"exit":0}\'; echo \'{"stopped":true}\'',
+        ],
+        ['/bin/true'],
+        temporary.path,
+        const {},
+        null,
+        lock,
+      );
+      final output = process.output.drain<void>();
+      try {
+        expect(
+          await process.started.timeout(const Duration(milliseconds: 500)),
+          isTrue,
+        );
+      } finally {
+        await process.stop();
+        await output;
+      }
+    });
+  }
+
+  test(
+    'a supervisor that stalls after launch has a bounded startup wait',
+    () async {
+      final process = await SupervisedProjectProcess.start(
+        [
+          '/bin/sh',
+          '-c',
+          'read start; echo \'{"locked":true,"start_ack":true}\'; read launch; '
+              'read stop; echo \'{"stopped":true}\'',
+        ],
+        ['/bin/true'],
+        temporary.path,
+        const {},
+        null,
+        lock,
+      );
+      final output = process.output.drain<void>();
+      try {
+        expect(
+          await process.started.timeout(const Duration(seconds: 12)),
+          isFalse,
+        );
+      } finally {
+        await process.stop();
+        await output;
+      }
+    },
   );
 
   test('started is reported only once the agent process exists', () async {

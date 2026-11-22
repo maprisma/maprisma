@@ -138,7 +138,7 @@ Future<int> runProjectSupervisor() async {
   // owns the project store. A controller retired in the same process (an
   // embedded core disposed, a worker between dispose and exit) never sends it;
   // EOF or a stop instead ends this supervisor without launching.
-  stdout.writeln(jsonEncode({'locked': true}));
+  stdout.writeln(jsonEncode({'locked': true, 'start_ack': true}));
   var authorized = false;
   try {
     if (await control.moveNext()) {
@@ -467,8 +467,10 @@ final class SupervisedProjectProcess implements ProjectProcess {
     final locked = await Future.any([
       managed._locked.future.then((_) => true),
       managed._confirmed.future.then((_) => false),
-    ]).timeout(const Duration(seconds: 30), onTimeout: () => false);
-    if (!locked) {
+    ]).timeout(const Duration(seconds: 5), onTimeout: () => false);
+    if (!locked || !managed._startAck) {
+      // Older supervisors cannot confirm prompt delivery. Withdraw before
+      // launch rather than guess that a quiet agent started successfully.
       await managed.detach();
       throw ServiceError('project_agent_unavailable');
     }
@@ -504,6 +506,7 @@ final class SupervisedProjectProcess implements ProjectProcess {
   final _confirmed = Completer<bool>();
   final _locked = Completer<void>();
   final _started = Completer<bool>();
+  bool _startAck = false;
   int stuck = 0;
   bool _inputOpen = true;
 
@@ -528,9 +531,18 @@ final class SupervisedProjectProcess implements ProjectProcess {
       return;
     }
     if (data is! Map) return;
+    // These frames are emitted only after the agent's spawn succeeded, even
+    // when a supervisor omits the dedicated acknowledgement.
+    if (data['out'] is String ||
+        data['leader'] is int ||
+        data['stuck'] is int ||
+        data['exit'] is int) {
+      if (!_started.isCompleted) _started.complete(true);
+    }
     if (data['out'] is String) {
       if (!_output.isClosed) _output.add(data['out'] as String);
     } else if (data['locked'] == true) {
+      _startAck = data['start_ack'] == true;
       if (!_locked.isCompleted) _locked.complete();
     } else if (data['started'] == true) {
       if (!_started.isCompleted) _started.complete(true);
@@ -571,7 +583,10 @@ final class SupervisedProjectProcess implements ProjectProcess {
   Stream<String> get output => _output.stream;
 
   @override
-  Future<bool> get started => _started.future;
+  Future<bool> get started => _started.future.timeout(
+    const Duration(seconds: 10),
+    onTimeout: () => false,
+  );
 
   /// The leader's exit code once the supervisor confirmed an empty tree. A
   /// result whose cleanup is unconfirmed fails instead of ending normally.

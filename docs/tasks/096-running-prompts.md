@@ -135,3 +135,70 @@ spawn. A deletion between the stop and Send now's resumption cannot be interleav
 `feature_plugins_test.dart`: `messages` capability, `message` and `message_drop` through the real
 worker.
 `tests/test_protocol.py`. Codex and agy CLEAN.
+
+## Core review round 2 corrections
+
+Both review files were read in full and every finding was reproduced in the core;
+none was skipped.
+
+- **Send now recovery before execution:** the continuation receives its immutable
+  `sendNow` flag at attempt creation, before `_execute` runs. Send now retains that
+  attempt and awaits its own startup future even if synchronous checks already
+  removed it from `_active`. Prompt-limit and dispatch-authorization refusals keep
+  their original codes, queued messages and the paused / `continue_failed` checkpoint.
+- **Failure completion after cleanup:** successful startup still answers immediately.
+  A failed or withdrawn startup answers only after the final stop (bounded to six
+  seconds) and removal or retention of the attempt. Unconfirmed cleanup returns
+  `project_still_pausing` with status `pausing`. Delayed and refused cleanup, including
+  concurrent shutdown, have regression coverage; immediate Continue works after a
+  confirmed failed startup.
+- **Optional end-of-run note:** save the essential checkpoint and finished event
+  first, then attempt `message_waiting` with `optional: true`. A boundary test leaves
+  space for the checkpoint but not the note, while another project keeps running;
+  the messages remain durable and no store fault is latched.
+- **Supervisor startup compatibility and deadline:** `locked` now advertises
+  `start_ack: true`. A supervisor without that capability is refused before `launch`
+  with the existing `project_agent_unavailable`; no delivery is guessed and a queued
+  message remains available. `out`, `leader`, `stuck` and `exit` also prove successful
+  spawn if the explicit `started` frame is omitted. The lock handshake is bounded
+  to five seconds. Waiting for agent startup has a ten-second budget including the
+  handshake; final cleanup is bounded to six seconds. With the existing pause path
+  (at most about twelve seconds), Send now stays within about twenty-eight seconds,
+  below the worker's 30-second shutdown and 45-second call deadlines.
+- **Cancelled launch:** an agent that never started exits the assignment loop on
+  cancellation. Its output and exit result are not consumed and no fictitious
+  assignment result enters the handoff.
+- **Lifecycle arbitration:** successful lifecycle mutations advance their counter
+  after their guards and durable write; Pause advances after its active/run guards.
+  Send now's own internal pause does not compete with itself. Rejected stale calls
+  leave a waiting Send now alone. Shutdown and detach invalidate every active
+  project's token before stopping work, including when shutdown later fails;
+  deletion removes its counter entry.
+
+GUI impact: no new public fields, codes or protocol version. Synchronous startup
+refusals now report their actual code with the promised paused checkpoint; cleanup
+failures report `project_still_pausing` / `pausing` before returning. Optional
+`message_waiting` may be absent at the store boundary and follows `finished` when
+present. Older supervisors fail cleanly before launch; stalled startup is bounded.
+
+Validation (2026-11-22, round 2 fixes):
+
+- All 26 added regression cases fail against the original `HEAD` core and pass
+  with these fixes (the cleanup/startup deadline cases included).
+- Requested `dart format lib test` and `dart analyze`: passed, no analyzer issues.
+- Requested three-file Dart run (`ai_project_center_test.dart`,
+  `feature_plugins_test.dart`, `project_supervisor_test.dart`): **211 passed,
+  5 failed**. Every failure is in the unchanged feature-plugin suite and was
+  reproduced with the original `HEAD` core: linked-data update size checking;
+  signed API-1 update; signed API-2 update; manifest/@hello API mismatch (these
+  four surface `feature_signature_invalid` in this sandbox); real-worker discovery
+  generation (`invalid_request`). No project-center or supervisor test failed.
+- `python3 -m unittest tests.test_protocol`: all 8 passed.
+- `git diff --check`: passed. `tools/test-changed --list` inspected; validation
+  narrowed to the user-requested core files and protocol test.
+- The supplied headless environment was used. The Flutter `dart` wrapper tried
+  writing its read-only SDK cache, so Dart commands used
+  `/mnt/Data/flutter/bin/cache/dart-sdk/bin/dart` directly.
+
+No routes.json or generated client changes were needed. Changes stay in the core
+package and this task record; nothing was committed or pushed.

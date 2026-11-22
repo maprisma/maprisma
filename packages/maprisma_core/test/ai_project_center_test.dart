@@ -32,6 +32,9 @@ final class FakeProjectProcess implements ProjectProcess {
   bool stopped = false;
   bool refuseStop = false;
   Future<void>? stopGate;
+  int stopCalls = 0;
+  int outputReads = 0;
+  int exitReads = 0;
   bool _finished = false;
 
   /// What [started] answers: the agent's process exists (task 096).
@@ -39,9 +42,17 @@ final class FakeProjectProcess implements ProjectProcess {
   @override
   Future<bool> get started => starts;
   @override
-  Stream<String> get output => lines.stream;
+  Stream<String> get output {
+    outputReads++;
+    return lines.stream;
+  }
+
   @override
-  Future<int> get exitCode => exit.future;
+  Future<int> get exitCode {
+    exitReads++;
+    return exit.future;
+  }
+
   Future<void> finish(String text, [int code = 0]) async {
     if (_finished) return;
     _finished = true;
@@ -52,6 +63,7 @@ final class FakeProjectProcess implements ProjectProcess {
 
   @override
   Future<void> stop() async {
+    stopCalls++;
     // A stop that takes a while (task 096: requests arriving meanwhile).
     await stopGate;
     if (refuseStop) throw ServiceError('project_processes_still_running');
@@ -4852,6 +4864,362 @@ void main() {
       expect(passed['status'], 'completed');
       expect(utf8.encode(inputs[1]!).length, greaterThan(4000));
       expect(passed['messages_queued'], 0);
+    });
+
+    for (final refusal in ['prompt', 'authorize']) {
+      test(
+        'Send now preserves synchronous $refusal refusal and checkpoint',
+        () async {
+          await plugin.shutdown();
+          var deny = false;
+          plugin = AiProjectCenterPlugin(
+            temporary.path,
+            agentProfiles: () => profiles,
+            filesystem: TestPosix(),
+            promptLimit: refusal == 'prompt'
+                ? 2000
+                : AiProjectCenterPlugin.maxPromptBytes,
+            authorize: (_) {
+              if (deny) throw ServiceError('project_policy_refused');
+            },
+            runner: (argv, cwd, environment, input, _, _) async {
+              final process = FakeProjectProcess();
+              processes.add(process);
+              return process;
+            },
+          );
+          final item = await started([
+            {'agent': 'fixture', 'role': 'lead'},
+          ]);
+          deny = refusal == 'authorize';
+          final sent = await message(item, 'm' * 2000, mode: 'now');
+          expect(
+            sent['reason'],
+            refusal == 'prompt'
+                ? 'project_prompt_too_large'
+                : 'project_policy_refused',
+          );
+          final current = sent['project'] as Map<String, dynamic>;
+          expect(current['status'], 'paused');
+          expect(current['needs_reconciliation'], isTrue);
+          expect(current['messages_queued'], 1);
+          expect(eventTypes(current), contains('continue_failed'));
+          expect(eventTypes(current), isNot(contains('failed')));
+          expect(processes, hasLength(1));
+        },
+      );
+    }
+
+    for (final shutdown in [false, true]) {
+      test(
+        'Send now waits for failed startup cleanup (shutdown=$shutdown)',
+        () async {
+          final item = await started([
+            {'agent': 'fixture', 'role': 'lead'},
+          ]);
+          final starts = Completer<bool>();
+          startGate = () => starts.future;
+          final now = message(item, 'Wait for cleanup.', mode: 'now');
+          var returned = false;
+          now.then((_) => returned = true);
+          await waitUntil(() => processes.length == 2);
+          final cleanup = Completer<void>();
+          processes.last.stopGate = cleanup.future;
+          starts.complete(false);
+          await waitUntil(() => processes.last.stopCalls > 0);
+          Future<void>? closing;
+          if (shutdown) closing = plugin.shutdown();
+          await Future<void>.delayed(const Duration(milliseconds: 30));
+          final returnedBeforeCleanup = returned;
+          cleanup.complete();
+          final sent = await now;
+          await closing;
+          expect(returnedBeforeCleanup, isFalse);
+          expect(sent['continued'], isFalse);
+          expect(sent['reason'], 'project_agent_unavailable');
+          final current = sent['project'] as Map<String, dynamic>;
+          expect(current['status'], 'paused');
+          expect(current['messages_queued'], 1);
+          if (!shutdown) {
+            startGate = null;
+            await plugin.call('continue', {
+              'id': item['id'],
+              'revision': current['revision'],
+              'acknowledge_interrupted': true,
+            });
+            await waitUntil(() => processes.length == 3);
+          }
+        },
+      );
+    }
+
+    test(
+      'Send now reports pausing when failed startup cleanup is refused',
+      () async {
+        final item = await started([
+          {'agent': 'fixture', 'role': 'lead'},
+        ]);
+        final starts = Completer<bool>();
+        startGate = () => starts.future;
+        final now = message(item, 'Keep it queued.', mode: 'now');
+        await waitUntil(() => processes.length == 2);
+        processes.last.refuseStop = true;
+        starts.complete(false);
+        final sent = await now;
+        processes.last.refuseStop = false;
+        expect(sent['reason'], 'project_still_pausing');
+        expect((sent['project'] as Map)['status'], 'pausing');
+        expect((sent['message'] as Map)['state'], 'queued');
+        final paused = await plugin.call('pause', {'id': item['id']});
+        expect((paused['project'] as Map)['status'], 'paused');
+      },
+    );
+
+    test(
+      'a cancelled agent that never launched adds no output or handoff',
+      () async {
+        final starts = Completer<bool>();
+        startGate = () => starts.future;
+        final item = await started([
+          {'agent': 'fixture', 'role': 'lead'},
+        ]);
+        final pause = plugin.call('pause', {'id': item['id']});
+        starts.complete(false);
+        final current = (await pause)['project'] as Map;
+        expect(current['status'], 'paused');
+        expect(current['handoff'], isEmpty);
+        expect(processes.single.outputReads, 0);
+        expect(processes.single.exitReads, 0);
+      },
+    );
+
+    for (final stale in [
+      'pause',
+      'save',
+      'continue',
+      'plan',
+      'run',
+      'review',
+      'setup',
+      'setup_apply',
+      'delete',
+    ]) {
+      test('a refused stale $stale does not cancel Send now', () async {
+        final item = await started([
+          {'agent': 'fixture', 'role': 'lead'},
+        ]);
+        final gate = Completer<void>();
+        processes.single.stopGate = gate.future;
+        final now = message(item, 'Continue despite stale calls.', mode: 'now');
+        await Future<void>.delayed(Duration.zero);
+        await expectLater(
+          plugin.call(stale, {
+            'id': item['id'],
+            'revision': -1,
+            if (stale == 'pause') 'run_id': 'stale',
+          }),
+          throwsA(errorCode('project_changed')),
+        );
+        gate.complete();
+        final sent = await now;
+        expect(sent['continued'], isTrue);
+        expect(sent['reason'], isNull);
+      });
+    }
+
+    test(
+      'detach invalidates a Send now waiting on its original pause',
+      () async {
+        final item = await started([
+          {'agent': 'fixture', 'role': 'lead'},
+        ]);
+        final gate = Completer<void>();
+        processes.single.stopGate = gate.future;
+        final now = message(
+          item,
+          'Do not restart a retired controller.',
+          mode: 'now',
+        );
+        await Future<void>.delayed(Duration.zero);
+        plugin.detach();
+        gate.complete();
+        final sent = await now;
+        expect(sent['continued'], isFalse);
+        expect(sent['reason'], 'project_changed');
+        expect(processes, hasLength(1));
+      },
+    );
+
+    test('failed startup cleanup has a deadline and can be retried', () async {
+      final item = await started([
+        {'agent': 'fixture', 'role': 'lead'},
+      ]);
+      final starts = Completer<bool>();
+      startGate = () => starts.future;
+      final now = message(
+        item,
+        'Do not return a false paused state.',
+        mode: 'now',
+      );
+      await waitUntil(() => processes.length == 2);
+      final cleanup = Completer<void>();
+      processes.last.stopGate = cleanup.future;
+      starts.complete(false);
+      final Map<String, dynamic> sent;
+      try {
+        sent = await now.timeout(const Duration(seconds: 8));
+      } finally {
+        cleanup.complete();
+      }
+      expect(sent['reason'], 'project_still_pausing');
+      expect((sent['project'] as Map)['status'], 'pausing');
+      final paused = await plugin.call('pause', {'id': item['id']});
+      expect((paused['project'] as Map)['status'], 'paused');
+    });
+
+    test(
+      'an aborted shutdown invalidates Send now for every active project',
+      () async {
+        final item = await started([
+          {'agent': 'fixture', 'role': 'lead'},
+        ]);
+        final otherPath = Directory('${temporary.path}/other')..createSync();
+        final other = await approve(
+          await save(path: otherPath.path, plan: 'Other plan.'),
+        );
+        final otherStart = Completer<bool>();
+        startGate = () => otherStart.future;
+        await plugin.call('run', {
+          'id': other['id'],
+          'revision': other['revision'],
+        });
+        await waitUntil(() => processes.length == 2);
+        processes[1].refuseStop = true;
+        final gate = Completer<void>();
+        processes[0].stopGate = gate.future;
+        final now = message(
+          item,
+          'Do not restart after shutdown.',
+          mode: 'now',
+        );
+        await Future<void>.delayed(Duration.zero);
+        // Only Send now's first stop remains held. Shutdown can stop A and
+        // fail on B before the waiting Send now resumes.
+        processes[0].stopGate = null;
+        await expectLater(
+          plugin.shutdown(),
+          throwsA(errorCode('project_still_pausing')),
+        );
+        startGate = null;
+        gate.complete();
+        final sent = await now;
+        processes[1].refuseStop = false;
+        otherStart.complete(false);
+        expect(sent['continued'], isFalse);
+        expect(sent['reason'], 'project_changed');
+        expect(processes, hasLength(2));
+      },
+    );
+
+    test(
+      'an end-of-run waiting note alone cannot latch a store fault',
+      () async {
+        Future<int> attempt(
+          String name,
+          int limit, {
+          required bool bounded,
+        }) async {
+          await plugin.shutdown();
+          processes.clear();
+          plugin = AiProjectCenterPlugin(
+            '${temporary.path}/$name',
+            agentProfiles: () => profiles,
+            filesystem: TestPosix(),
+            storeLimit: limit,
+            runner: (argv, cwd, environment, input, _, _) async {
+              final process = FakeProjectProcess();
+              processes.add(process);
+              return process;
+            },
+          );
+          final item = await started([
+            {'agent': 'fixture', 'role': 'lead'},
+          ]);
+          final folder = Directory('${temporary.path}/$name-other')
+            ..createSync();
+          final other = await approve(
+            await save(path: folder.path, plan: 'Other plan.'),
+          );
+          await plugin.call('run', {
+            'id': other['id'],
+            'revision': other['revision'],
+          });
+          await waitUntil(() => processes.length == 2);
+          await message(item, 'Carry over.');
+          await processes.first.finish('Done.');
+          Map<String, dynamic> current = {};
+          for (var i = 0; i < 100; i++) {
+            current = await project(plugin, item['id'] as String);
+            if (current['status'] == 'completed') break;
+            await Future<void>.delayed(const Duration(milliseconds: 10));
+          }
+          expect(current['status'], 'completed');
+          if (bounded) {
+            expect(plugin.summary()['error'], isNull);
+            expect(processes.last.stopped, isFalse);
+            expect(eventTypes(current), isNot(contains('message_waiting')));
+            final store =
+                jsonDecode(
+                      File(
+                        '${plugin.directory}/projects.json',
+                      ).readAsStringSync(),
+                    )
+                    as Map;
+            final saved =
+                (store['projects'] as List).singleWhere(
+                      (p) => p['id'] == item['id'],
+                    )
+                    as Map;
+            expect(saved['status'], 'completed');
+            expect((saved['messages'] as List).single['state'], 'queued');
+          } else {
+            expect(eventTypes(current), contains('message_waiting'));
+          }
+          return File('${plugin.directory}/projects.json').lengthSync();
+        }
+
+        // Same-length fixture paths and fixed-size ids. Leave room for the
+        // essential checkpoint, but less than one message_waiting event.
+        final fullSize = await attempt(
+          'measure',
+          AiProjectCenterPlugin.maxStore,
+          bounded: false,
+        );
+        await attempt('bounded', fullSize - 80, bounded: true);
+      },
+    );
+
+    test('Send now bounds an agent startup that never acknowledges', () async {
+      final item = await started([
+        {'agent': 'fixture', 'role': 'lead'},
+      ]);
+      final starts = Completer<bool>();
+      startGate = () => starts.future;
+      final clock = Stopwatch()..start();
+      final Map<String, dynamic> sent;
+      try {
+        sent = await message(
+          item,
+          'Bound the wait.',
+          mode: 'now',
+        ).timeout(const Duration(seconds: 15));
+      } finally {
+        starts.complete(false);
+      }
+      expect(sent['reason'], 'project_agent_unavailable');
+      expect((sent['project'] as Map)['status'], 'paused');
+      expect((sent['message'] as Map)['state'], 'queued');
+      expect(clock.elapsed, lessThan(const Duration(seconds: 15)));
     });
 
     test('a store with malformed messages is refused as corrupt', () async {
