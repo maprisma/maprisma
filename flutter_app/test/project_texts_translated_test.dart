@@ -16,6 +16,7 @@ void main() {
         'lib/ai_project_center.dart',
         'lib/main_tabs.dart',
         'lib/project_board.dart',
+        'lib/project_messages.dart',
         'lib/project_page_parts.dart',
         'lib/project_phases.dart',
       ])
@@ -94,13 +95,11 @@ void main() {
       'Agent default',
       'Check the changes first',
       'Approve again',
-      // Board order and importance (task 095).
-      for (final i in BoardImportance.values) i.label,
-      'Move',
-      'Move up',
-      'Move down',
-      'Move to top',
-      'Move to end',
+      // The core's message events (task 096), shown through tr(text).
+      'Message received. Pausing the agent to continue with it now.',
+      'Message queued for the next assignment.',
+      'A message arrived after the last assignment had started. It waits for the next assignment.',
+      'A waiting message was removed.',
     };
     for (final code in ['de', 'es', 'fr', 'it', 'nl', 'pl', 'pt']) {
       final table =
