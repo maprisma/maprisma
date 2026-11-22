@@ -717,9 +717,8 @@ void main() {
       await tester.pumpWidget(const SizedBox());
     });
 
-    testWidgets('a focused card stays in place when a refresh reorders', (
-      tester,
-    ) async {
+    testWidgets('an older backend (most urgent first): a focused card stays in '
+        'place when a refresh reorders', (tester) async {
       final key = GlobalKey<AiProjectCenterPageState>();
       var urgent = false;
       await mountWith(tester, key, (op, args) async {
@@ -867,9 +866,8 @@ void main() {
       await tester.pumpWidget(const SizedBox());
     });
 
-    testWidgets('a pressed card stays in place when a refresh reorders', (
-      tester,
-    ) async {
+    testWidgets('an older backend (most urgent first): a pressed card stays in '
+        'place when a refresh reorders', (tester) async {
       final key = GlobalKey<AiProjectCenterPageState>();
       var urgent = false;
       await mountWith(tester, key, (op, args) async {
@@ -895,8 +893,8 @@ void main() {
       await tester.pumpWidget(const SizedBox());
     });
 
-    testWidgets('a card that would move while its project is open gets the '
-        'keyboard back', (tester) async {
+    testWidgets('an older backend (most urgent first): a card that would move '
+        'while its project is open gets the keyboard back', (tester) async {
       final key = GlobalKey<AiProjectCenterPageState>();
       var moved = false;
       List<Map<String, dynamic>> many() {

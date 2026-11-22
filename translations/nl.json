@@ -3866,5 +3866,11 @@
   "Fix on map": "Op de kaart oplossen",
   "Go to Goal": "Naar Doel",
   "Go to Team": "Naar Team",
-  "This is not on the map.": "Dit staat niet op de kaart."
+  "This is not on the map.": "Dit staat niet op de kaart.",
+  "High": "Hoog",
+  "Medium": "Gemiddeld",
+  "Low": "Laag",
+  "Importance": "Belang",
+  "Move to top": "Bovenaan zetten",
+  "Move to end": "Achteraan zetten"
 }

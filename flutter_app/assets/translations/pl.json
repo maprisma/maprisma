@@ -1148,5 +1148,12 @@
   "Files saved, but service definitions could not be reloaded. Undo is available.": "Zapisano pliki, ale nie można ponownie wczytać definicji usług. Można cofnąć zmiany.",
   "More": "Więcej",
   "Update {0}": "Zaktualizuj {0}",
-  "Wait for the current step": "Poczekaj na zakończenie bieżącego kroku"
+  "Wait for the current step": "Poczekaj na zakończenie bieżącego kroku",
+  "High": "Wysoka",
+  "Medium": "Średnia",
+  "Low": "Niska",
+  "Importance": "Ważność",
+  "Move to top": "Przenieś na początek",
+  "Move to end": "Przenieś na koniec",
+  "Move": "Przenieś"
 }

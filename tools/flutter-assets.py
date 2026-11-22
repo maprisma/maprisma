@@ -1142,6 +1142,14 @@ KEYS = (
     "More",
     "Update {0}",
     "Wait for the current step",
+    # Board order and importance (task 095).
+    "High",
+    "Medium",
+    "Low",
+    "Importance",
+    "Move to top",
+    "Move to end",
+    "Move",
 )
 
 

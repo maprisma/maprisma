@@ -3866,5 +3866,11 @@
   "Fix on map": "Corrigir no mapa",
   "Go to Goal": "Ir para Objetivo",
   "Go to Team": "Ir para Equipa",
-  "This is not on the map.": "Isto não está no mapa."
+  "This is not on the map.": "Isto não está no mapa.",
+  "High": "Alta",
+  "Medium": "Média",
+  "Low": "Baixa",
+  "Importance": "Importância",
+  "Move to top": "Mover para o início",
+  "Move to end": "Mover para o fim"
 }

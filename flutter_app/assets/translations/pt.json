@@ -1148,5 +1148,12 @@
   "Files saved, but service definitions could not be reloaded. Undo is available.": "Ficheiros guardados, mas não foi possível recarregar as definições dos serviços. Pode anular as alterações.",
   "More": "Mais",
   "Update {0}": "Atualizar {0}",
-  "Wait for the current step": "Aguarde o passo atual terminar"
+  "Wait for the current step": "Aguarde o passo atual terminar",
+  "High": "Alta",
+  "Medium": "Média",
+  "Low": "Baixa",
+  "Importance": "Importância",
+  "Move to top": "Mover para o início",
+  "Move to end": "Mover para o fim",
+  "Move": "Mover"
 }

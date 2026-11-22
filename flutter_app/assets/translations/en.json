@@ -1148,5 +1148,12 @@
   "Files saved, but service definitions could not be reloaded. Undo is available.": "Files saved, but service definitions could not be reloaded. Undo is available.",
   "More": "More",
   "Update {0}": "Update {0}",
-  "Wait for the current step": "Wait for the current step"
+  "Wait for the current step": "Wait for the current step",
+  "High": "High",
+  "Medium": "Medium",
+  "Low": "Low",
+  "Importance": "Importance",
+  "Move to top": "Move to top",
+  "Move to end": "Move to end",
+  "Move": "Move"
 }

@@ -94,6 +94,13 @@ void main() {
       'Agent default',
       'Check the changes first',
       'Approve again',
+      // Board order and importance (task 095).
+      for (final i in BoardImportance.values) i.label,
+      'Move',
+      'Move up',
+      'Move down',
+      'Move to top',
+      'Move to end',
     };
     for (final code in ['de', 'es', 'fr', 'it', 'nl', 'pl', 'pt']) {
       final table =

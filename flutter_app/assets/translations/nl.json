@@ -1148,5 +1148,12 @@
   "Files saved, but service definitions could not be reloaded. Undo is available.": "Bestanden opgeslagen, maar de servicedefinities konden niet opnieuw worden geladen. Ongedaan maken is beschikbaar.",
   "More": "Meer",
   "Update {0}": "{0} bijwerken",
-  "Wait for the current step": "Wacht tot de huidige stap klaar is"
+  "Wait for the current step": "Wacht tot de huidige stap klaar is",
+  "High": "Hoog",
+  "Medium": "Gemiddeld",
+  "Low": "Laag",
+  "Importance": "Belang",
+  "Move to top": "Bovenaan zetten",
+  "Move to end": "Achteraan zetten",
+  "Move": "Verplaatsen"
 }
