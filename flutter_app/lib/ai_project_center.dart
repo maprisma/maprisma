@@ -536,6 +536,8 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
         'project_message_unknown' => 'This message is no longer there.',
         'project_message_delivered' =>
           'This message was already given to an agent.',
+        'project_message_pending' =>
+          'This message is already in the prompt of an agent that is starting. It will be delivered there.',
         'project_prompt_too_large' =>
           'The prompt for the next agent would be too large. Shorten the goal, the plan or the waiting messages.',
         'project_not_paused' => 'The agent at work could not be paused.',
@@ -997,16 +999,8 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
       });
       if (!mounted) return MessageOutcome.none;
       _takeProject(result);
-      final reason = result['reason'];
       final note = now && result['continued'] != true
-          ? tr(
-              'The agent could not continue at once: {0} Your message waits for the next assignment.',
-            ).replaceAll(
-              '{0}',
-              reason is String
-                  ? _failure(ServiceError(reason))
-                  : tr('The project could not continue at once.'),
-            )
+          ? _notContinued(result['reason'], result['message'])
           : null;
       unawaited(_refresh());
       return MessageOutcome(sent: true, note: note);
@@ -1015,6 +1009,30 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  /// Why Send now did not continue at once, said for what became of the
+  /// message: removed or delivered meanwhile, else it waits.
+  String _notContinued(Object? reason, Object? message) {
+    if (reason == 'project_message_unknown' || message == null) {
+      return tr(
+        'Your message was removed meanwhile, so the project did not continue with it.',
+      );
+    }
+    if (reason == 'project_message_delivered' ||
+        (message is Map && message['state'] == 'delivered')) {
+      return tr(
+        'Your message was already given to an agent meanwhile. The project did not continue a second time.',
+      );
+    }
+    final why = switch (reason) {
+      'project_changed' => tr('Another action on this project came first.'),
+      String code => _failure(ServiceError(code)),
+      _ => tr('The project could not continue at once.'),
+    };
+    return tr(
+      'The agent could not continue at once: {0} Your message waits for the next assignment.',
+    ).replaceAll('{0}', why);
   }
 
   /// Removes a waiting message (task 096); null when it is gone.
@@ -1064,6 +1082,7 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
       controller: _message,
       tr: tr,
       busy: _busy,
+      working: _busy && !_confirming,
       onSend: _sendMessage,
       onDrop: _dropMessage,
       agentName: (agent) =>
@@ -1754,6 +1773,13 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
           'The agent could not continue at once: {0} Your message waits for the next assignment.',
         ).replaceAll('{0}', _failure(ServiceError(match[1]!)));
       }
+    }
+    // Send now's new session failed before its agent started (task 096).
+    if (event['type'] == 'continue_failed' &&
+        RegExp(r'^project_[a-z_]+$').hasMatch(text)) {
+      return tr(
+        'The new session did not start: {0} The project is paused; check the changes, then continue.',
+      ).replaceAll('{0}', _failure(ServiceError(text)));
     }
     if (event['type'] == 'setup_failed' &&
         RegExp(r'^project_[a-z_]+$').hasMatch(text)) {

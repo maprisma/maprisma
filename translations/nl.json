@@ -3899,5 +3899,10 @@
   "Send now": "Nu versturen",
   "The next agent gets it; the one at work keeps working (Ctrl+Enter).": "De volgende agent krijgt het; die aan het werk gaat door (Ctrl+Enter).",
   "1 message waiting": "1 bericht wacht",
-  "{0} messages waiting": "{0} berichten wachten"
+  "{0} messages waiting": "{0} berichten wachten",
+  "Your message was removed meanwhile, so the project did not continue with it.": "Je bericht is intussen verwijderd, dus het project ging er niet mee verder.",
+  "Your message was already given to an agent meanwhile. The project did not continue a second time.": "Je bericht is intussen al aan een agent gegeven. Het project ging niet een tweede keer verder.",
+  "Another action on this project came first.": "Een andere actie op dit project was eerder.",
+  "This message is already in the prompt of an agent that is starting. It will be delivered there.": "Dit bericht staat al in de prompt van een agent die nu start. Het wordt daar afgeleverd.",
+  "The new session did not start: {0} The project is paused; check the changes, then continue.": "De nieuwe sessie is niet gestart: {0} Het project is gepauzeerd; controleer de wijzigingen en ga dan verder."
 }

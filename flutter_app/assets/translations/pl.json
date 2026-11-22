@@ -1182,5 +1182,10 @@
   "The next agent gets it; the one at work keeps working (Ctrl+Enter).": "Dostanie ją następny agent; pracujący działa dalej (Ctrl+Enter).",
   "Send": "Wyślij",
   "1 message waiting": "1 wiadomość czeka",
-  "{0} messages waiting": "Czekające wiadomości: {0}"
+  "{0} messages waiting": "Czekające wiadomości: {0}",
+  "Your message was removed meanwhile, so the project did not continue with it.": "Twoja wiadomość została w międzyczasie usunięta, więc projekt nie kontynuował z nią.",
+  "Your message was already given to an agent meanwhile. The project did not continue a second time.": "Twoja wiadomość została w międzyczasie przekazana agentowi. Projekt nie kontynuował drugi raz.",
+  "Another action on this project came first.": "Inna akcja dla tego projektu była pierwsza.",
+  "This message is already in the prompt of an agent that is starting. It will be delivered there.": "Ta wiadomość jest już w prompcie agenta, który właśnie startuje. Zostanie mu tam przekazana.",
+  "The new session did not start: {0} The project is paused; check the changes, then continue.": "Nowa sesja nie wystartowała: {0} Projekt jest wstrzymany; sprawdź zmiany, a potem kontynuuj."
 }

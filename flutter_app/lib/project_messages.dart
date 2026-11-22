@@ -30,6 +30,7 @@ class ProjectMessages extends StatefulWidget {
     required this.controller,
     required this.tr,
     required this.busy,
+    this.working = false,
     required this.onSend,
     required this.onDrop,
     this.agentName,
@@ -41,6 +42,9 @@ class ProjectMessages extends StatefulWidget {
   final TextEditingController controller;
   final String Function(String) tr;
   final bool busy;
+
+  /// The page waits for the backend (not for one of its questions).
+  final bool working;
   final Future<MessageOutcome> Function(String text, {required bool now})
   onSend;
 
@@ -316,6 +320,14 @@ class _ProjectMessagesState extends State<ProjectMessages> {
                 ],
               ),
             ],
+            // Send now returns once the new agent started: show it works.
+            if (_sending && widget.working)
+              const Padding(
+                padding: EdgeInsets.only(top: AppSpace.sm),
+                child: LinearProgressIndicator(
+                  key: ValueKey('message-progress'),
+                ),
+              ),
             if (_note != null)
               Padding(
                 padding: const EdgeInsets.only(top: AppSpace.sm),

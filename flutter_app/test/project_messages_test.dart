@@ -22,6 +22,11 @@ class Store {
 
   /// Send now's answer: continued, and the reason when not.
   bool continued = true;
+
+  /// Send now's answer names no message (it was dropped meanwhile), or the
+  /// message as delivered.
+  bool noMessage = false;
+  bool delivered = false;
   String? reason;
 
   /// The next `message` waits for this.
@@ -100,7 +105,9 @@ Future<void> mount(WidgetTester tester, Store store) async {
                 };
                 return {
                   'project': store.project,
-                  'message': message,
+                  'message': store.noMessage
+                      ? null
+                      : {...message, if (store.delivered) 'state': 'delivered'},
                   'continued': now && store.continued,
                   'reason': now && !store.continued ? store.reason : null,
                 };
@@ -498,5 +505,139 @@ void main() {
     expect(find.text('2 Nachrichten an Codex: Umsetzung.'), findsOneWidget);
     expect(find.text('Nicht sofort: Ordner belegt. Wartet.'), findsOneWidget);
     expect(find.text('Entfernt.'), findsOneWidget);
+  });
+
+  Future<void> sendNowWith(
+    WidgetTester tester,
+    Store store, {
+    required String? reason,
+  }) async {
+    store
+      ..continued = false
+      ..reason = reason;
+    await mount(tester, store);
+    await openActivity(tester);
+    await tester.enterText(box, 'Now please');
+    await tester.pump();
+    await tester.tap(sendNow);
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.widgetWithText(FilledButton, 'I reviewed the existing changes'),
+    );
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('Send now dropped meanwhile does not say it waits', (
+    tester,
+  ) async {
+    final store = Store(running())..noMessage = true;
+    await sendNowWith(tester, store, reason: 'project_message_unknown');
+    expect(
+      find.text(
+        'Your message was removed meanwhile, so the project did not continue with it.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.textContaining('waits for the next assignment'), findsNothing);
+  });
+
+  testWidgets('Send now delivered meanwhile says so', (tester) async {
+    final store = Store(running())..delivered = true;
+    await sendNowWith(tester, store, reason: 'project_message_delivered');
+    expect(
+      find.text(
+        'Your message was already given to an agent meanwhile. The project did not continue a second time.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.textContaining('waits for the next assignment'), findsNothing);
+  });
+
+  testWidgets('Send now overtaken by another action: the message waits', (
+    tester,
+  ) async {
+    final store = Store(running());
+    await sendNowWith(tester, store, reason: 'project_changed');
+    expect(
+      find.text(
+        'The agent could not continue at once: Another action on this project came first. Your message waits for the next assignment.',
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('Send now whose new agent did not start: the message waits', (
+    tester,
+  ) async {
+    final store = Store(running());
+    await sendNowWith(tester, store, reason: 'project_agent_unavailable');
+    expect(
+      find.text(
+        'The agent could not continue at once: A selected agent is unavailable. Your message waits for the next assignment.',
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('while Send now waits for the new agent the page stays busy', (
+    tester,
+  ) async {
+    final store = Store(running())..hold = Completer<void>();
+    final hold = store.hold!;
+    await mount(tester, store);
+    await openActivity(tester);
+    await tester.enterText(box, 'Now please');
+    await tester.pump();
+    await tester.tap(sendNow);
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.widgetWithText(FilledButton, 'I reviewed the existing changes'),
+    );
+    await tester.pump();
+    expect(find.byKey(const ValueKey('message-progress')), findsOneWidget);
+    expect(enabled(tester, send), isFalse);
+    expect(enabled(tester, sendNow), isFalse);
+    // No second send: Ctrl+Enter does nothing meanwhile.
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump();
+    hold.complete();
+    await tester.pumpAndSettle();
+    expect(store.sent, hasLength(1));
+    expect(store.sent.single['mode'], 'now');
+    expect(find.byKey(const ValueKey('message-progress')), findsNothing);
+    expect(tester.widget<TextField>(box).controller!.text, isEmpty);
+  });
+
+  testWidgets('a message whose agent is starting cannot be removed yet', (
+    tester,
+  ) async {
+    final store = Store(
+      running(
+        messages: [
+          {
+            'id': 'm1',
+            'at': '2026-11-22T10:00:00.000Z',
+            'mode': 'queue',
+            'text': 'In flight',
+            'state': 'queued',
+            'run_id': 'r1',
+          },
+        ],
+      ),
+    )..refuse = 'project_message_pending';
+    await mount(tester, store);
+    await openActivity(tester);
+    await tester.tap(find.byTooltip('Remove message'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text(
+        'This message is already in the prompt of an agent that is starting. It will be delivered there.',
+      ),
+      findsOneWidget,
+    );
+    expect(store.dropped, isEmpty);
+    expect(find.text('In flight'), findsOneWidget);
   });
 }

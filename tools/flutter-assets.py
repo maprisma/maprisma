@@ -1177,6 +1177,11 @@ KEYS = (
     "Send",
     "1 message waiting",
     "{0} messages waiting",
+    "Your message was removed meanwhile, so the project did not continue with it.",
+    "Your message was already given to an agent meanwhile. The project did not continue a second time.",
+    "Another action on this project came first.",
+    "This message is already in the prompt of an agent that is starting. It will be delivered there.",
+    "The new session did not start: {0} The project is paused; check the changes, then continue.",
 )
 
 
