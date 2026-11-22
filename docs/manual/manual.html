@@ -184,61 +184,91 @@
   </ol>
 
   <h2 id="my-setup">Setup</h2>
-  <p>The map shows what is set up — installed agents and local LLMs, the MCP servers and skill
-  folders agents use, and models — and, faded, the MCP servers and skill folders found on this
-  computer that no agent uses yet, ready to connect with a line (see <a href="#found-on-pc">Found on
-  this PC</a>). Everything else is done on <b>Setup</b> (the button in the header, beside <b>Map</b>),
-  one card per item, in sections that fold away with a click on their bar:</p>
+  <p>Maprisma has no separate Setup tab in the header: setup happens directly from the <b>AI Map</b>
+  and through the setup pages in <b>Help</b> (<b>?</b> or <kbd>F1</kbd>). The map shows what is set
+  up — installed agents and local LLMs, the MCP servers and skill folders agents use, and models —
+  together with faded boxes for MCP servers and skill folders found on this PC that no agent uses
+  yet (see <a href="#found-on-pc">Found on this PC</a>) and dashed cards for what can be installed
+  or added next.</p>
   <ul>
-    <li><b>How things get onto your map</b> — a folded card at the top; open it for five numbered steps:
-      switch on (or find) what you use, install what is missing, sign in to an online agent, connect by
-      drawing, and what shows up by itself.</li>
-    <li><b>What you can do with this</b> — what the setup is good for (everyday help, coding, images,
-      voice, research and writing), one tile each with what is there and the next step; folded, its line
-      says how many are ready.</li>
-    <li><b>AI agents, Local LLMs</b> — every one the app knows. A card with a blue frame is installed on
-      this PC; a grey one is not, and has <b>Install</b> where installed ones have <b>Uninstall</b>.
-      <span class="badge omarchy">Omarchy</span> A click on an installed card opens its details.
-      <span class="badge">Maprisma</span> A click ticks or unticks the card (✓), then <b>Apply</b>
-      switches its add-on on or off. Switching off takes it off the map; nothing is deleted. While an
-      agent runs in one of Maprisma's terminals (<b>Ask AI</b>'s included), its own add-on cannot be
-      switched off, updated or removed; all other add-ons can be changed. The page says which agent
-      holds it and has <b>Show terminal</b>.</li>
-    <li><b>Online providers</b> <span class="badge">Maprisma</span> — the online providers' add-on; its
-      menu has <b>Sign in to …</b> for each installed agent that uses them.</li>
-    <li><b>MCP servers, Skills, Models</b> — a card for each one that is installed. A click opens its
-      details (a model: its menu). The card with a <b>+</b> at the end of a section adds one:
-      <b>Add MCP server</b>, <b>Add skills</b>, <b>Add model</b>, <b>Get add-ons</b>.</li>
-    <li><b>⋯</b> or a right-click on a card opens the same menu as the box on the map: update, sign in,
-      start or stop, details, uninstall or remove, move a model.</li>
-    <li>A yellow <b>↑ version</b> on a card means an update is waiting; its menu has <b>Update</b>.</li>
-    <li>A red <b>!</b> on a card means an open problem there; hover it for what it is.</li>
-    <li>An agent's details show <b>Additional usage</b> under its plan: whether it can cost extra money beyond the plan's limits. Claude Code tells this on your PC (and the page to change it); for other agents the app says it does not know, so check with the provider.</li>
-    <li>A small battery on an online agent's card shows what is left of its limits (a session, a week):
-      the tightest one counts, yellow at a quarter or less, red under a tenth; hover it for each limit
-      and when it resets. On a running local LLM's card the battery is the GPU memory still free, with
-      the same colours; hover it for how much that local LLM uses.</li>
-    <li>The refresh symbol (<kbd>F5</kbd>) in the header row looks again at what is installed,
-      set up and signed in, and runs the checks of a start again (new apps, add-ons, updates, open problems).</li>
+    <li><b>First start (Welcome)</b> — when nothing is set up yet, Maprisma opens on the
+      <b>AI Map</b> with a welcome banner at the top and the <b>Agents</b> group expanded. The
+      banner offers <b>Look at this PC</b> (runs <b>Find existing AI</b> without sending anything or
+      running detected programs), <b>Skip</b>, and <b>Agents</b>, and shows <b>What you can do with
+      it</b> cards (<b>Ready</b>, <b>Almost</b>, <b>Not yet</b>) when available; in a short window
+      the full welcome text sits behind <b>Details…</b>. In the expanded <b>Agents</b> list, agents
+      detected on this PC are already ticked; the footer at the bottom offers <b>Switch on</b> (one
+      batch with <b>Undo</b>) and <b>Later</b>.</li>
+    <li><b>Column group cards and add-ons</b> — each column on the map (<b>MCP servers and
+      skills</b>, <b>Agents</b>, <b>Providers</b>, <b>Models</b>) starts with a group card showing
+      how many items are on and how many more are available, or a dashed card (<b>None yet · Expand
+      to add one</b>, or how many were found on this PC). Click the card or <b>⤢</b> (<b>Expand</b>)
+      to open that column's page (see <a href="#map-groups">Group cards and add-ons on the map</a>):
+      <b>Agents</b> and <b>Providers</b> list add-ons under <b>On</b>, <b>Off</b>, <b>Found on this
+      PC</b> and <b>Not installed</b>, with <b>Look for add-ons online</b>, <b>Install from
+      file…</b> and <b>Refresh</b>. An add-on's menu offers <b>Switch on</b> / <b>Switch off</b>,
+      <b>Update add-on to …</b> when an update is available, <b>Sign in to …</b> where applicable
+      and <b>Add-on…</b> (and <b>Setup</b> for a configurable local LLM). While an agent runs in one
+      of Maprisma's terminals, its own add-on cannot be switched off, updated or removed; a banner
+      names the running agent and offers <b>Show terminal</b>. Expanding <b>MCP servers and
+      skills</b> or <b>Models</b> shows their boxes, dashed <b>+</b> cards (<b>Add MCP server</b>,
+      <b>Add skills</b>, <b>Add model</b>) and links to <b>Connections</b>, <b>Providers and
+      models</b> and <b>Reuse model folder</b>.</li>
+    <li><b>Dashed cards on the map</b> — an agent or local LLM whose add-on is on but whose program
+      is not installed yet gets a dashed <b>Not installed</b> card at the end of its map card (click
+      or <b>⋮</b> › <b>Install …</b> to install it, or open <b>Add-on…</b> / <b>Switch off</b>).
+      MCP servers, skills and local model folders end with dashed <b>+</b> cards (<b>Add MCP
+      server</b>, <b>Add skills</b>, <b>Add model</b>).</li>
+    <li><b>Your first agent</b> (<b>Help</b> › <b>Your first agent</b>) — guided checklist to get one
+      agent working. Pick a route under <b>With an online account</b> or <b>On this PC</b> and work
+      through its steps (marked with <b>Next step: …</b> and action buttons such as <b>Install</b>,
+      <b>Install mise</b>, <b>Install Node.js</b>, <b>Download it</b>, <b>Sign in…</b>, <b>Providers
+      and models</b>, <b>Connections</b> and <b>Send the test question</b>). Buttons at the top open
+      <b>Find existing AI</b>, <b>Add-ons</b> and <b>Refresh</b>; if checking or saving fails,
+      <b>Try again</b> retries while keeping your confirmed choice. Once verified, <b>Open AI
+      map</b> returns to the map.</li>
+    <li><b>Agents</b> (<b>Help</b> › <b>Agents</b>) — a searchable list of all agents
+      (<b>Installed</b> / <b>Not installed</b>). Selecting an agent opens its details page with its
+      <b>Version</b>, health, usage, cost, projects, action buttons (<b>Install</b>, <b>Update</b>,
+      <b>Remove</b>, <b>Sign in…</b>, <b>API key…</b>, <b>Send the test question</b>, <b>What is it
+      doing?</b>, <b>Security settings</b>, <b>Connections</b>, <b>Subagents</b>), its <b>Default
+      folder</b> and <b>Recent projects</b>.</li>
+    <li><b>Providers and models</b> (<b>Help</b> › <b>Providers and models</b>) — lists model
+      folders, <b>Online</b> providers and a card for each local LLM (<b>Running</b>, <b>Stopped</b>
+      or <b>Not installed</b>) with <b>Install</b>, <b>Start</b> / <b>Stop</b>, <b>Configure for
+      this PC</b>, <b>Import model</b>, <b>Download model</b>, runtime details, health and an
+      expandable <b>Models</b> list (<b>Load</b>, <b>Unload</b>, <b>Remove model</b>), plus <b>Find
+      existing AI</b> at the top. On a local provider's map box and add-on sheet, its performance
+      settings are named <b>Setup</b> (see <a href="#provider-configuration">Configure a local
+      provider</a>).</li>
+    <li><b>Connections</b> (<b>Help</b> › <b>Connections</b>) — manage provider, <b>MCP servers</b>
+      and <b>Skills</b> connections per agent, with <b>Search</b>, <b>Undo</b>, <b>Find MCP
+      servers…</b>, <b>Find skills on the web…</b>, <b>Found on this PC</b> (including looking
+      inside AppImages, unpacking and updating), <b>Add MCP server</b> and <b>Add skills</b>. Every
+      change opens <b>Preview</b> before <b>Apply</b>.</li>
+    <li><b>Find existing AI</b> (<b>Help</b> › <b>Where to start</b>, also on <b>Your first agent</b>
+      and <b>Providers and models</b>) — scans this PC for existing local runtimes and model folders
+      and opens <b>What we found</b>, where you can <b>Reuse model folder</b> or <b>Reconnect</b> a
+      runtime to a <b>Models folder</b> after <b>Preview</b>. Existing files are preserved and
+      services stay stopped.</li>
+    <li><b>What you can do with it</b> and <b>Usage</b> (tabs in <b>Help</b>) — review what your
+      setup is ready for with direct next-step actions, or inspect AI runs of the last 30 days.</li>
+    <li><b>Refresh</b> (<b>⟳</b> or <kbd>F5</kbd> in the header) — looks again at what is installed,
+      set up and signed in on the <b>AI Map</b> (or refreshes the <b>Projects</b> tab when it is in
+      view).</li>
   </ul>
   <div class="figure">
-    <img src="images/my-setup.jpg" alt="Setup: the folded cards How things get onto your map and What you can do with this (4 of 5 ready), the bar AI agents 16, then the agents as cards with a blue frame and a check mark; Claude Code and DeepSeek Harness with a yellow update badge, Claude Code and Codex with a battery for their limits, Cursor CLI and Hermes with a red !; the menu of Claude Code is open with Update to 2.1.303, Uninstall, Update, Sign in, Start here, Start in terminal, Details and Add-on">
-    <p class="caption">Setup: installed agents have a blue frame, switched-on ones a ✓, updates a yellow and problems a red badge; the menu of Claude Code.</p>
+    <img src="images/my-setup.jpg" alt="Earlier card-based Setup view showing agent cards with update and limit badges and an open agent menu">
+    <p class="caption">Earlier card-based Setup view (agents with update and limit badges, and an agent's menu); in the current app these actions live on the AI Map's boxes, group cards and Help tabs.</p>
   </div>
   <div class="figure">
-    <img src="images/my-setup-tools.jpg" alt="Setup further down: MCP servers and skill folders as cards with the agents that use them, and the cards Add MCP server and Add skills">
-    <p class="caption">MCP servers and skills, each section with a card to add one.</p>
+    <img src="images/my-setup-tools.jpg" alt="Earlier Setup view of MCP servers and skill folders as cards with Add MCP server and Add skills cards">
+    <p class="caption">Earlier Setup view of MCP servers and skill folders; in the current app they are managed via the AI Map's dashed + cards and Help › Connections.</p>
   </div>
-  <p>There is nothing to hide: what you do not want on the map is switched off or removed here. When an
-  install or a sign-in runs in a terminal in the window, <b>Back</b> (or <b>×</b> on its tab) returns to
-  the page it was started from.</p>
-
-  <p><b>Local MCP servers</b> and <b>Online MCP servers</b> (those reached at a web address) are two
-  sections. <b>Add folder…</b> in <b>Local MCP servers</b> and in <b>Skills</b> adds a folder where the
-  app looks for them too — for example a shared disk with unpacked apps that offer an MCP server, or a
-  folder of your own skills. The folders added are listed beside the button; <b>✕</b> on one stops
-  looking there (nothing in it is deleted). What is found in them shows on the map, faded, until a line
-  connects it: Setup only has cards for what is set up.</p>
+  <p>To keep something off the map, switch its add-on off in its column's expanded group card or
+  disconnect it; nothing is deleted when you switch an add-on off. When an install or sign-in runs
+  in a terminal in the window, closing the terminal returns to the page it was started from, and
+  <b>Back</b> or <kbd>Esc</kbd> leaves any setup page.</p>
 
   <h2 id="views">Choosing what the map shows</h2>
   <p>The map shows everything that is set up. The <b>MCP servers</b>, <b>Agents</b>,
