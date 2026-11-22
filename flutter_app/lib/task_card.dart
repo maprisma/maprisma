@@ -130,7 +130,7 @@ class TaskReview extends StatelessWidget {
 }
 
 /// Preserve task-view state under a review without keeping a main map alive.
-class RetainedTaskView extends StatelessWidget {
+class RetainedTaskView extends StatefulWidget {
   const RetainedTaskView({
     super.key,
     required this.visible,
@@ -142,12 +142,55 @@ class RetainedTaskView extends StatelessWidget {
 
   /// False under an overlay card: seen, but the keyboard stays with the card.
   final bool focusable;
+
+  @override
+  State<RetainedTaskView> createState() => _RetainedTaskViewState();
+}
+
+class _RetainedTaskViewState extends State<RetainedTaskView>
+    with SingleTickerProviderStateMixin {
+  /// Just hidden: the view's animations run a moment longer, so the
+  /// tooltips closed now can fade out (with its tickers off a tooltip's fade
+  /// never ends, and it stays over the view in front). Timed by this view's
+  /// own ticker, never a pending timer.
+  late final AnimationController _settle =
+      AnimationController(
+        vsync: this,
+        duration: const Duration(milliseconds: 400),
+      )..addStatusListener((status) {
+        if (status == AnimationStatus.completed && mounted) setState(() {});
+      });
+
+  @override
+  void didUpdateWidget(RetainedTaskView old) {
+    super.didUpdateWidget(old);
+    if (old.visible && !widget.visible) {
+      _settle.forward(from: 0);
+      // Once the switch is drawn; the subtree itself stays as it is (its
+      // focus and state).
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && !widget.visible) Tooltip.dismissAllToolTips();
+      });
+    } else if (widget.visible) {
+      _settle.stop();
+    }
+  }
+
+  @override
+  void dispose() {
+    _settle.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) => Offstage(
-    offstage: !visible,
+    offstage: !widget.visible,
     child: ExcludeFocus(
-      excluding: !visible || !focusable,
-      child: TickerMode(enabled: visible, child: child),
+      excluding: !widget.visible || !widget.focusable,
+      child: TickerMode(
+        enabled: widget.visible || _settle.isAnimating,
+        child: widget.child,
+      ),
     ),
   );
 }

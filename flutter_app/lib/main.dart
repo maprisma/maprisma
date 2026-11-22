@@ -2107,7 +2107,8 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                       onPressed: blocked
                           ? null
                           : () => Navigator.pop(sheet, 'configuration'),
-                      label: Text(tr('Configure for this PC')),
+                      // The performance settings (Uwe: named Setup here).
+                      label: Text(tr('Setup')),
                     ),
                   if (activityCommand != null)
                     TextButton(
@@ -5225,7 +5226,8 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
               padding: EdgeInsets.zero,
               visualDensity: VisualDensity.compact,
               constraints: compact,
-              tooltip: tr('Configure for this PC'),
+              // The performance settings (Uwe: named Setup on the map).
+              tooltip: tr('Setup'),
               onPressed: () => _mapPerformance(node),
               icon: const Icon(Icons.speed, size: 16),
             ),

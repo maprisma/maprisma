@@ -75,8 +75,8 @@
   setup by drawing lines.</p>
 
   <div class="figure wide">
-    <img src="images/main-window.jpg" alt="The main window: in the header Setup, Map and a red ! for open problems; the GPU card, and the map across the whole width: MCP servers and skills, agents with a start button, LLM providers and models">
-    <p class="caption">The main window: the map across the whole width, the GPU card above it, the ! for open problems in the header.</p>
+    <img src="images/main-window.jpg" alt="The main window on the AI Map: the Projects and AI Map tabs, the header actions, the column filters and zoom, and agents with lines to their providers">
+    <p class="caption">The main window on the AI Map: agents with lines to the providers they use; the tabs and the header actions above.</p>
   </div>
 
   <h2 id="what-it-does">What it does</h2>
@@ -163,35 +163,24 @@
 
   <div class="figure wide annotated">
     <div class="shot">
-      <img src="images/main-window.jpg" alt="The main window with numbered areas">
-      <span class="pin" style="left:63.2%;top:2.6%">1</span>
-      <span class="pin" style="left:79.5%;top:2.6%">2</span>
-      <span class="pin" style="left:1.3%;top:12.9%">3</span>
-      <span class="pin" style="left:0.6%;top:27.9%">4</span>
-      <span class="pin" style="left:50.0%;top:34.9%">5</span>
-      <span class="pin" style="left:40.7%;top:43.6%">6</span>
+      <img src="images/main-window.jpg" alt="The main window on the AI Map with numbered areas">
+      <span class="pin" style="left:1.0%;top:9.8%">1</span>
+      <span class="pin" style="left:79.6%;top:6.0%">2</span>
+      <span class="pin" style="left:60.4%;top:10.0%">3</span>
+      <span class="pin" style="left:19.9%;top:15.4%">4</span>
+      <span class="pin" style="left:20.5%;top:29.0%">5</span>
+      <span class="pin" style="left:49.0%;top:34.4%">6</span>
     </div>
-    <p class="caption">The main window. The numbers match the list below.</p>
+    <p class="caption">The main window on the AI Map. The numbers match the list below.</p>
   </div>
 
   <ol class="legend-list">
-    <li><b>Setup</b> and <b>Map</b> — the two views, on every page; the one in view is highlighted.
-      Setup has every agent, local LLM, MCP server, skill folder and model as a card: install, update,
-      sign in, remove (see below).</li>
-    <li>The header's symbols: <b>⟳</b> refresh (<kbd>F5</kbd>: look again, as on start), <b>!</b> the overall state (green: all fine; yellow: tips or updates; red: something to fix; a click goes to the first column concerned), <b>ⓘ</b> the legend (what every dot, line and mark on the map
-      means), <b>⇅</b> the network traffic of the running agents (see <a href="#network">Network
-      traffic</a>), the add-ons <span class="badge">Maprisma</span>, the filled <b>i</b> for Information
-      (see <a href="#help">Help</a>), <b>?</b> Help (<kbd>F1</kbd>) and the gear for Settings
-      (<kbd>Ctrl</kbd>+<kbd>,</kbd>). Hold the left mouse button on a symbol and drag it sideways to put
-      it elsewhere: a bar shows where it lands, and the order is kept.</li>
-    <li><b>GPU</b> — GPU memory and GPU activity: how the graphics card is used right now, in a card that
-      folds (folded, its line keeps the numbers).</li>
-    <li><b>Column filters and zoom</b> — filter the map's columns (<b>MCP servers</b>, <b>Agents</b>,
-      <b>Providers</b>, <b>Models</b>) and zoom or fit to the window above the map.</li>
-    <li><b>The map</b> — MCP servers and skills ← agents → LLM providers → models, across the whole width,
-      under its heading <b>MAP</b>.</li>
-    <li><b>▶</b> on an agent's box starts it in a terminal in the window; while it runs there, the button
-      brings its terminal back.</li>
+    <li><b>Projects</b> and <b>AI Map</b> — the two tabs (<kbd>Ctrl</kbd>+<kbd>1</kbd>, <kbd>Ctrl</kbd>+<kbd>2</kbd>). Projects holds your AI projects (see <a href="#ai-project-center">AI Project Center</a>); its symbols count the projects that run, need you or need attention. The AI Map shows your AI setup.</li>
+    <li>The header's actions: the warning symbol for the overall state (a click goes to what needs fixing), <b>Ask AI</b>, <b>ⓘ</b> the legend (what every dot, line and mark on the map means), <b>Reports</b>, <b>?</b> Help (<kbd>F1</kbd>), the gear for Settings (<kbd>Ctrl</kbd>+<kbd>,</kbd>) and <b>⟳</b> refresh (<kbd>F5</kbd>). In a narrow window some of them move into <b>More</b>.</li>
+    <li><b>Column filters and zoom</b> — show or hide the map's columns (<b>MCP servers</b>, <b>Agents</b>, <b>Providers</b>, <b>Models</b>), zoom (− 100 % +) and fit the map to the window.</li>
+    <li><b>A group card per column</b> — how many are on and how many more are available; <b>⤢</b> expands it to manage its add-ons (see <a href="#map-groups">Group cards and add-ons on the map</a>).</li>
+    <li><b>An agent's box</b> — its name, version and state, the battery of its plan limits, a folder symbol with the number of projects that use it, and below its symbols: <b>ⓘ</b> details, usage, <b>▶</b> starts it in a terminal in the window. <b>⋮</b> opens its menu; drag its handle to reorder.</li>
+    <li><b>The lines</b> — which provider each agent uses, and which models a local LLM serves.</li>
   </ol>
 
   <h2 id="my-setup">Setup</h2>
@@ -1363,7 +1352,7 @@
 
 <section class="chapter" id="reports">
   <h1>Reports</h1>
-  <p>Open Reports beside Ask AI. Log shows the recorded activity and its settings, with a date filter, copy, and TXT or JSON export. Logging is off by default and retains one week including today when enabled.</p>
+  <p>Open Reports in the header (in a narrow window under <b>More</b>). Log shows the recorded activity and its settings, with a date filter, copy, and TXT or JSON export. Logging is off by default and retains one week including today when enabled.</p>
   <p>Topic reports sends sanitized activity summaries to the selected helper, using the chosen date range and optional project, agent or runtime, and focus. It sends counts and labels, without file contents or paths. Online helpers require explicit permission in Ask AI data rules. You can cancel generation, then copy, export or save a completed draft.</p>
   <p>The Library stores reports privately on this PC until you delete them. Search, edit a title or note, or export as TXT, Markdown or JSON. The command line provides <code>maprisma-core reports list</code>, <code>show ID</code> and <code>export ID --format text|markdown|json</code>. The history MCP server offers <code>reports_list</code> and <code>reports_get</code>.</p>
 
@@ -1424,7 +1413,7 @@
 <!-- ============================== Appendix ============================== -->
 <section class="chapter" id="provider-configuration">
 <h1>Configure a local provider</h1>
-<p>On a local provider’s map box, its menu or the Providers page, choose <b>Configure for this PC</b>. Ask AI proposals open the same Configuration page. Reading this page does not start or reconfigure a provider.</p>
+<p>On a local provider’s map box choose its speed symbol or <b>Setup</b> in its menu; on the Providers page choose <b>Configure for this PC</b>. Ask AI proposals open the same Configuration page. Reading this page does not start or reconfigure a provider.</p>
 <p>Choose <b>Balanced</b>, <b>Long context</b>, <b>Fast</b> or <b>Several agents</b>. Select a model where settings are per model; only llama.cpp has “All models (default)”. Ollama settings apply globally. The hardware strip and memory estimate show the basis for the recommendation, including model weights, KV cache and one reserve. Valid llama.cpp measurements take precedence; “Measure and tune” remains available.</p>
 <p>Compare Current, Recommended and Your value. Use recommended copies the recommendation; Reset returns to the current settings. Advanced contains threads and batches. Use the default removes a llama.cpp model override. Unverified keys are disabled. Errors block Apply; warnings must be acknowledged in the review.</p>
 <p>Unset values are shown as engine defaults. When changing context in llama.cpp or Jan with an automatic or unknown parallel count, choose a positive parallel count too; Use recommended supplies one.</p>
@@ -1440,26 +1429,28 @@
   <h1>AI Project Center</h1>
 
   <div class="figure wide">
-    <img src="images/project-center.jpg" alt="AI Project Center with a project waiting for review: its goal, its plan and its team of agents, each with a role and access">
-    <p class="caption">AI Project Center: a project's goal, its plan, and the team that carries it out (lead, implementers, a read-only reviewer).</p>
+    <img src="images/projects-tab.jpg" alt="The Projects board: the filters with their counts, Cards | Phases, and a card per project with its stage, team and next step">
+    <p class="caption">The Projects board: filters with counts, the Cards | Phases switch, and a card per project.</p>
   </div>
   <div class="figure wide">
-    <img src="images/projects-tab.jpg" alt="The Projects tab: the projects with their state, and in the tab how many need you or need attention">
-    <p class="caption">The Projects tab: each project with its state; the tab shows how many projects need you and how many need attention.</p>
+    <img src="images/project-center.jpg" alt="An open project: the stage rail under its name and, in the Team tab, the team as a graph beside the form">
+    <p class="caption">An open project: its stage rail, and in the Team tab the saved team as a graph beside the form.</p>
   </div>
   <h2 id="project-center-workflow">Planning and running a project</h2>
-  <p>The header has two tabs: <b>Projects</b> (the AI Project Center) and <b>AI Map</b> (<kbd>Ctrl</kbd>+<kbd>1</kbd> and <kbd>Ctrl</kbd>+<kbd>2</kbd>). Maprisma starts on the tab you used last; on a first start it opens Projects when a project exists, else the AI Map, and while setup is still needed always the AI Map. Settings, Reports and Help open over the Projects tab and return to the same project. Ask AI and the problems list work on the map: from Projects they switch to the AI Map. Leaving a project with unsaved changes (another tab, a header action, closing the window) asks first: Save, Discard or Cancel; while a project saves, starts or pauses, leaving waits for that step. Create a project with a title, a goal and an existing folder, then save it. Choose one lead agent and optional implementers and reviewers. Inspect each profile’s planning command, execution command and effective permissions before starting. If the profile supports it, choose a model or the declared read-only native subagent presets; unsupported options are shown as unavailable. Choose read-only access or permission to edit project files for execution; reviewers always remain read-only.</p>
-  <p>The Projects tab shows your projects as a <b>board</b> of cards, most urgent first. The row above it filters them: Running, Attention, Needs you, Ready, Drafts, Agents finished, or All (a filter chosen again shows all). Each card shows where the project is on its way (Goal, Plan, Approval, Ready, Run, Agents finished), what happens now, its team with the agent at work, problems such as a missing folder or a stopped local runtime, and its last event. <b>Open</b> shows the project; <b>Review plan</b> opens its plan; <b>Pause</b> stops the agent at work. <b>Approved · blocked</b> means the approval holds but something the run needs is missing; once it is fixed the project is ready again without a new approval. <b>Projects</b> above the project, <kbd>Esc</kbd> or the Projects tab lead back to the board.</p>
-  <p>The switch <b>Cards | Phases</b> beside the filters shows the same projects by stage: one column each for Goal, Plan, Approval, Ready, Run and Agents finished, with its count and a small card per project (in a narrow window a list per stage). The filters apply there too. The Phases view only shows the way: click a project (or press Enter) to open it; nothing there changes a project.</p>
-  <p>An open project shows its way as a <b>stage rail</b> under its name (Goal, Plan, Approval, Ready, Run, Agents finished) with what happens now. The <b>Team</b> tab draws the team next to the form (below it in a narrow window): a row for Planning and one for Execution, in the order the agents work, each agent with a line to the provider or local runtime you chose for it, or <b>Agent default</b> when you chose none. The agent at work is marked, and a problem shows under its name.</p>
-  <p>The tabs link to each other. In the Team graph, the map symbol beside an agent (<b>Show … on map</b>) opens the AI Map and moves that agent's box into view, marked for a few seconds; your layout and pins stay as they are. On the AI Map, an agent box shows in how many projects the agent works (<b>Used in N projects</b>, also in the box's menu); it opens the Projects tab with a chip for that agent, which works together with the filters. Its × removes the chip and keeps the filter; <b>All</b> shows every project again.</p>
-  <p>A project that cannot start lists what stops it at the top of its page, and its card shows the first problem. <b>Fix on map</b> takes you to the box on the AI Map that needs it (the local runtime's box: when it is stopped, does not serve the chosen model, or the agent is not connected to it) and marks it; <b>Go to Team</b> and <b>Go to Goal</b> open the project's tab where you fix the rest.</p>
+  <p>The header has two tabs: <b>Projects</b> (the AI Project Center) and <b>AI Map</b> (<kbd>Ctrl</kbd>+<kbd>1</kbd> and <kbd>Ctrl</kbd>+<kbd>2</kbd>, while no dialog, task card or terminal has the keys). Maprisma starts on the tab you used last; on a first start it opens Projects when a project exists, else the AI Map, and while setup is still needed always the AI Map. Settings, Reports and Help open over the Projects tab and return to the same project. Ask AI and the problems list work on the map: from Projects they switch to the AI Map.</p>
+  <p>Leaving a project with unsaved changes (back to the board, the other tab, a header action, a link to the map, closing the window) asks first: <b>Save</b>, <b>Discard</b> or <b>Cancel</b>. While a project is saving, starting or pausing, you cannot leave it: Maprisma says <b>Wait for the current step</b>; try again when the step has finished. In a text field <kbd>Esc</kbd> first leaves the field; the next <kbd>Esc</kbd>, <b>Projects</b> above the project or the Projects tab lead back to the board, with the keyboard on the project's card.</p>
+  <p>The Projects tab shows your projects as a <b>board</b> of cards, most urgent first. The row above it filters them: <b>Running</b>, <b>Attention</b>, <b>Needs you</b>, <b>Ready</b>, <b>Drafts</b>, <b>Agents finished</b> or <b>All</b>, each with its count; a filter chosen again is cleared. Each card shows where the project is on its way (Goal, Plan, Approval, Ready, Run, Agents finished), what happens now and, when it matters, a second line such as <b>Check the changes first</b> or <b>Approve again</b>; its team (up to four agents, three in a narrow window, the agent at work always among them, and the helper while a team is being set up); its problems; and its last event. <b>Open</b> shows the project, <b>Review plan</b> opens its plan, <b>Pause</b> stops the agent at work (<b>Retry pause</b> when stopping could not be confirmed). <b>Approved · blocked</b> means the approval holds but something the run needs is missing; once it is fixed the project is ready again without a new approval. <b>Agents finished</b> means the agents are done: look at their results before you go on. <b>New project</b> beside the filters (a + symbol in a narrow window, a card on an empty board) starts a new project.</p>
+  <p>The switch <b>Cards | Phases</b> beside the filters (symbols with tooltips when there is little room) shows the same projects by stage: one column each for Goal, Plan, Approval, Ready, Run and Agents finished, with its count and a small card per project (in a narrow window a list per stage). The filters apply there too. The Phases view only shows the way: click a project (or press <kbd>Enter</kbd>) to open it; nothing there changes a project. The filter, the agent chip and the Cards | Phases choice stay while you work in Projects (also under Settings, Reports and Help); they are reset when you switch to the AI Map and are not saved.</p>
+  <p>An open project shows its way as a <b>stage rail</b> under its name, with what happens now, and its tabs <b>Goal</b>, <b>Plan</b>, <b>Team</b>, <b>Activity</b> and <b>Setup</b>. In a small window the tabs become a list to choose from, and the footer keeps the main action for the project's state, with the others under <b>More</b>. The <b>Team</b> tab draws the team next to the form (below it in a narrow window): a row for Planning and one for Execution, in the order the agents work, each agent with a line to the provider or local runtime you chose for it, or <b>Agent default</b> when you chose none. The agent at work is marked, and a problem shows under its name. The graph shows the saved team: choose <b>Save project</b> to see your changes in it; a new project gets its graph once it is saved.</p>
+  <p>A project with problems lists all of them at the top of its page, each with a link; its card names the project's own problems on one line (for an approved project that cannot start, also what stops the run), with the link of the first one, and marks the agents that have one. <b>Fix on map</b> switches to the AI Map and marks the box that needs it (the local runtime's box: when it is stopped, does not serve the chosen model, or the agent is not connected to it), or says that it is not on the map. <b>Go to Team</b> and <b>Go to Goal</b> open that tab of the project (from a card, the project opens there).</p>
+  <p>The tabs link to each other. In the Team graph, the map symbol beside an agent (<b>Show … on map</b>) opens the AI Map and moves that agent's box into view, marked for a few seconds; your layout and pins stay as they are. On the AI Map, an agent box shows a folder symbol with the number of saved projects whose planning or execution team names the agent, drafts and finished projects included (<b>Used in N projects</b>, also in the box's menu). It opens the Projects tab with a chip for that agent, which narrows the board and its filter counts; the counts on the Projects tab itself stay for all projects. Its × removes the chip and keeps the filter; <b>All</b> clears both.</p>
+  <p>Create a project with a title, a goal and an existing folder, then save it. Choose one lead agent and optional implementers and reviewers. Inspect each profile’s planning command, execution command and effective permissions before starting. If the profile supports it, choose a model or the declared read-only native subagent presets; unsupported options are shown as unavailable. Choose read-only access or permission to edit project files for execution; reviewers always remain read-only. In <b>Team</b>, <b>Planning</b> and <b>Execution</b> switch between the two phases: planning uses the execution team until you choose <b>Customize planning team</b>; <b>Use execution team for planning</b> goes back to it.</p>
   <p>Generate a plan with the configured agent or enter your own. Review and approve the current plan before running it. Changing the goal, plan, folder, team or effective profile requires another review. Team assignments run sequentially and pass their results to the next assignment.</p>
-  <p>The <b>Projects</b> tab shows, from either tab, how many projects run (or are stopping), need you (a review, a paused project, an approval to renew) and need attention (interrupted or failed), each with its own symbol; a narrow window shows one dot instead. A warning mark means the saved project list has a problem; a crossed cloud means the status is unavailable. While the Projects tab is shown, the hidden map does not scan. Return to the center to inspect output and the saved handoff. Pause stops new assignments and waits for owned agents to stop. Continue starts a new agent session with the saved context; it does not promise to reopen the original agent conversation. After interrupted or partially completed work, inspect the actual files and acknowledge the unfinished changes before continuing.</p>
+  <p>The <b>Projects</b> tab shows, from either tab, how many projects run (or are stopping), need you (a review, a paused project, an approval to renew, a blocked launch, changes to check) and need attention (interrupted or failed), each with its own symbol; a narrow window shows one dot instead. A warning mark means the saved project list has a problem; a crossed cloud means the status is unavailable. While the Projects tab is shown, the hidden map does not scan. Open the project's <b>Activity</b> tab to look at the agents' output, the events and the saved handoff. Pause stops new assignments and waits for owned agents to stop. Continue starts a new agent session with the saved context; it does not promise to reopen the original agent conversation. After interrupted or partially completed work, inspect the actual files and acknowledge the unfinished changes before continuing.</p>
   <p>Projects are saved locally. Removing a saved project does not delete its working folder. Closing Maprisma stops its managed project agents; a later start shows unfinished work as interrupted instead of silently running it again.</p>
-  <p>If stopping cannot be confirmed, check the output and use <strong>Retry pause</strong>. The folder chooser keeps popup mode open while you select a directory.</p>
+  <p>If stopping cannot be confirmed, check the output and use <b>Retry pause</b>. The folder chooser keeps popup mode open while you select a directory.</p>
   <h2 id="project-center-setup">Configure a team in plain language</h2>
-  <p>Open Setup in AI Project Center and describe the team you want, for example: “Use Claude with agy and Pi using llama.cpp and choose a suitable model for this project.” Choose a helper to draft a proposal. It uses your project goal, installed agent profiles, existing connections on the map and available local models. Review the proposed roles, model bindings and effective permissions, together with the explanation of why the choices suit this project. This is a recommendation for the available setup, not a universal best-model ranking.</p>
+  <p>Open a project's <b>Setup</b> tab and describe the team you want, for example: “Use Claude with agy and Pi using llama.cpp and choose a suitable model for this project.” Choose a helper to draft a proposal. It uses your project goal, installed agent profiles, existing connections on the map and available local models. Review the proposed roles, model bindings and effective permissions, together with the explanation of why the choices suit this project. This is a recommendation for the available setup, not a universal best-model ranking.</p>
   <p>Choose <b>Use proposed team</b> to apply the reviewed proposal and configure the project team. Applying does not launch agents or runtimes, download a model or change global agent settings. A local runtime must already be running and its agent connected on the map; set that up first, then refresh the available choices. Project model and launch flags apply to this project only.</p>
   <p>Pi’s managed profile can read and search, but cannot run shell commands or edit files because it has no OS sandbox. After applying a team proposal, draft or revise the project plan, approve the current plan and team, then run the project separately.</p>
   <p>Use the Planning and Execution selectors in Setup and Team to configure each phase separately. Planning can use different agents, roles, models and local runtimes from execution. A helper proposal applies only to its selected phase. Existing projects use the execution team for planning until you choose a separate planning team. Plan approval covers both configurations; changing either requires a new review.</p>
@@ -1489,6 +1480,7 @@
 
   <h2 id="keyboard-flutter">Keyboard use in the Flutter preview</h2>
   <p>The shortcuts above work in the Flutter preview too: <kbd>F1</kbd>, <kbd>Ctrl</kbd>+<kbd>,</kbd>, <kbd>F5</kbd>, <kbd>Ctrl</kbd>+<kbd>+</kbd> / <kbd>Ctrl</kbd>+<kbd>−</kbd> / <kbd>Ctrl</kbd>+<kbd>0</kbd> for the map in view, and <kbd>Esc</kbd> or <kbd>Backspace</kbd> to go back from a page. In a text field <kbd>Backspace</kbd> deletes, a dialog closes with <kbd>Esc</kbd>, and a terminal keeps both keys for its agent.</p>
+  <p>Projects and AI Map: <kbd>Ctrl</kbd>+<kbd>1</kbd> and <kbd>Ctrl</kbd>+<kbd>2</kbd> switch between <b>Projects</b> and <b>AI Map</b> (not while a dialog, task card or terminal has the keys). In an open project <kbd>Esc</kbd> first leaves a text field, then goes back to the board; outside a text field <kbd>Backspace</kbd> goes back too. On the board or the AI Map <kbd>Esc</kbd> closes the window (as a popup: hides it); in the map editor it first cancels a connection you are drawing.</p>
   <p><kbd>Tab</kbd> moves through everything on the screen, <kbd>Enter</kbd> or <kbd>Space</kbd> uses it. On the map, <kbd>Enter</kbd> on a box opens it, and its <b>⋮</b> button opens its actions. In the map editor every drag has a way by keyboard: a box's <b>Actions</b> › <b>Connect</b>, then <kbd>Tab</kbd> to the target box and <kbd>Enter</kbd> (<kbd>Esc</kbd> cancels); <b>Move connection</b>, <b>Move up</b> and <b>Move down</b> are in the same menu. The app is checked for labelled controls, targets of at least 24 × 24 pixels and text contrast of at least 4.5:1, in light and dark.</p>
 
   <h2 id="files">Files and folders</h2>
