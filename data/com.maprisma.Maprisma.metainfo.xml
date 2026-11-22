@@ -25,6 +25,17 @@
   <url type="bugtracker">https://github.com/uBruckhaus/Asterism/issues</url>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="2.1.0" date="2026-11-22">
+      <description>
+        <p>Projects board: delete a project from its card, put the cards in your own order by
+          dragging, the Move menu or Ctrl+arrow keys, and mark each project High, Medium or Low
+          (also in the Goal tab and as a filter).</p>
+        <p>Messages to a running project: Send adds instructions for the next step, Send now pauses
+          the agent at work and continues at once with your message. Waiting messages can be
+          removed; cards show how many wait.</p>
+        <p>The manual is up to date in all 8 languages.</p>
+      </description>
+    </release>
     <release version="2.0.0" date="2026-11-21">
       <description>
         <p>Projects and AI Map tabs: the AI Project Center is the Projects tab next to the AI Map
