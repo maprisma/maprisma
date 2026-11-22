@@ -399,6 +399,7 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
     for (final draft in _messageDrafts.values) {
       draft.dispose();
     }
+    _messageDrafts.clear();
     for (final c in [_title, _brief, _path, _plan]) {
       c.dispose();
     }
@@ -571,15 +572,19 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
 
   /// A refresh asked for while one reads (F5, the focus back): one more
   /// afterwards, so it is never lost.
-  bool _readAgain = false, _readAgainProfiles = false;
+  bool _readAgain = false, _readAgainProfiles = false, _readAgainAdopt = false;
 
   /// Completes when the read running now, and the one queued after it, ended.
   Completer<void>? _readDone;
 
-  Future<void> _refresh({bool profiles = false}) async {
+  /// [adopt]: the read after a message action takes the open project even
+  /// while the page is still busy with it (reads that started before the
+  /// action are still refused by the generation).
+  Future<void> _refresh({bool profiles = false, bool adopt = false}) async {
     if (_reading) {
       _readAgain = true;
       _readAgainProfiles |= profiles;
+      _readAgainAdopt |= adopt;
       return (_readDone ??= Completer<void>()).future;
     }
     _reading = true;
@@ -631,7 +636,7 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
           _runtimes = _rows(results[1]['runtimes']);
         }
         if (selected is Map &&
-            !_busy &&
+            (!_busy || adopt) &&
             selection == _selection &&
             generation == _viewGeneration &&
             id == _project?['id']) {
@@ -664,10 +669,11 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
     }
     if (_readAgain && mounted) {
       final again = _readAgainProfiles;
-      _readAgain = _readAgainProfiles = false;
+      final adoptAgain = _readAgainAdopt;
+      _readAgain = _readAgainProfiles = _readAgainAdopt = false;
       final done = _readDone;
       _readDone = null;
-      await _refresh(profiles: again);
+      await _refresh(profiles: again, adopt: adoptAgain);
       done?.complete();
     } else {
       final done = _readDone;
@@ -1013,7 +1019,8 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
           )) {
         return;
       }
-      _messageNotes.remove(id);
+      if (!mounted) return;
+      setState(() => _messageNotes.remove(id));
       try {
         final result = await widget.onCall('message', {
           'id': id,
@@ -1022,6 +1029,7 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
           'mode': now ? 'now' : 'queue',
           if (now) 'acknowledge_interrupted': true,
         });
+        if (!mounted) return;
         // Stored: only this text leaves the box (one typed meanwhile stays).
         final draft = _messageDrafts[id];
         if (draft != null && draft.text == text) draft.clear();
@@ -1030,14 +1038,13 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
             _notContinued(result['reason'], result['message']),
           );
         }
-        if (mounted) _takeProject(result);
+        _takeProject(result);
       } catch (error) {
         note = MessageNote(_messageFailure(error), error: true);
       }
-      if (note case final shown?) _messageNotes[id] = shown;
-      // While still busy: a read on its way cannot bring the older view
-      // back, and the board's count is new when the page is free again.
-      if (mounted) await _refresh();
+      if (!mounted) return;
+      if (note case final shown?) setState(() => _messageNotes[id] = shown);
+      await _afterMessage();
     } finally {
       if (mounted) {
         setState(() {
@@ -1096,12 +1103,18 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
           'id': id,
           'message_id': messageId,
         });
-        if (mounted) _takeProject(result);
+        if (!mounted) return;
+        _takeProject(result);
       } catch (error) {
-        _messageNotes[id] = MessageNote(_messageFailure(error), error: true);
+        if (!mounted) return;
+        setState(
+          () => _messageNotes[id] = MessageNote(
+            _messageFailure(error),
+            error: true,
+          ),
+        );
       }
-      // The board's badge, and no older read over the new view.
-      if (mounted) await _refresh();
+      await _afterMessage();
     } finally {
       if (mounted) {
         setState(() {
@@ -1110,6 +1123,15 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
         });
       }
     }
+  }
+
+  /// The read after a message action, accepted or refused: the board's
+  /// count and the open project as they are now (a refusal often means the
+  /// view was old: another run, delivered meanwhile). Reads that started
+  /// before are older and are not shown.
+  Future<void> _afterMessage() {
+    setState(() => _viewGeneration++);
+    return _refresh(adopt: true);
   }
 
   /// A mutation's project view; edits in the form stay. Reads that started

@@ -20,6 +20,9 @@ class Store {
   /// The next `message` / `message_drop` is refused with this code.
   String? refuse;
 
+  /// What the project became meanwhile, applied with that refusal.
+  Map<String, dynamic> Function(Map<String, dynamic> project)? meanwhile;
+
   /// Send now's answer: continued, and the reason when not.
   bool continued = true;
 
@@ -121,6 +124,10 @@ Future<GlobalKey<AiProjectCenterPageState>> mount(
                 }
                 if (store.refuse case final code?) {
                   store.refuse = null;
+                  if (store.meanwhile case final change?) {
+                    store.project = change(store.project);
+                    store.meanwhile = null;
+                  }
                   throw ServiceError(code);
                 }
                 store.sent.add(args);
@@ -153,6 +160,10 @@ Future<GlobalKey<AiProjectCenterPageState>> mount(
                 }
                 if (store.refuse case final code?) {
                   store.refuse = null;
+                  if (store.meanwhile case final change?) {
+                    store.project = change(store.project);
+                    store.meanwhile = null;
+                  }
                   throw ServiceError(code);
                 }
                 store.dropped.add(args);
@@ -949,5 +960,114 @@ void main() {
       ),
       findsOneWidget,
     );
+  });
+
+  testWidgets('a refused drop shows the message as it is now', (tester) async {
+    final store =
+        Store(running(status: 'completed', messages: [waiting('m1', 'Given')]))
+          ..refuse = 'project_message_delivered'
+          ..meanwhile = (p) => {
+            ...p,
+            'messages': [
+              {
+                ...waiting('m1', 'Given'),
+                'state': 'delivered',
+                'delivered_at': '2026-11-22T10:01:00.000Z',
+                'delivered_to': {
+                  'phase': 'execution',
+                  'position': 0,
+                  'agent': 'claude',
+                  'role': 'lead',
+                },
+              },
+            ],
+          };
+    await mount(tester, store);
+    await openActivity(tester);
+    await tester.tap(find.byTooltip('Remove message'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('This message was already given to an agent.'),
+      findsOneWidget,
+    );
+    expect(find.byTooltip('Remove message'), findsNothing);
+    expect(find.textContaining('Delivered to claude'), findsOneWidget);
+  });
+
+  testWidgets('after project_changed the next Send goes to the new run', (
+    tester,
+  ) async {
+    final store = Store(running())
+      ..refuse = 'project_changed'
+      ..meanwhile = (p) => {...p, 'run_id': 'r2'};
+    await mount(tester, store);
+    await openActivity(tester);
+    await tester.enterText(box, 'Again');
+    await tester.pump();
+    await tester.tap(send);
+    // No later poll: only the read after the refusal.
+    for (var i = 0; i < 5; i++) {
+      await tester.pump();
+    }
+    expect(store.sent, isEmpty);
+    expect(tester.widget<TextField>(box).controller!.text, 'Again');
+    await tester.tap(send);
+    await tester.pumpAndSettle();
+    expect(store.sent.single['run_id'], 'r2');
+  });
+
+  testWidgets('after project_not_running the box goes', (tester) async {
+    final store = Store(running())
+      ..refuse = 'project_not_running'
+      ..meanwhile = (p) => {...p, 'status': 'completed'};
+    await mount(tester, store);
+    await openActivity(tester);
+    await tester.enterText(box, 'Too late');
+    await tester.pump();
+    await tester.tap(send);
+    for (var i = 0; i < 5; i++) {
+      await tester.pump();
+    }
+    expect(box, findsNothing);
+    expect(
+      find.text('The project is not running now. Your message was not sent.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('an old note goes when the next Send starts', (tester) async {
+    final store = Store(running())..refuse = 'project_messages_full';
+    await mount(tester, store);
+    await openActivity(tester);
+    await tester.enterText(box, 'One');
+    await tester.pump();
+    await tester.tap(send);
+    await tester.pumpAndSettle();
+    expect(note, findsOneWidget);
+    final hold = store.hold = Completer<void>();
+    await tester.tap(send);
+    await tester.pump();
+    expect(note, findsNothing);
+    hold.complete();
+    await tester.pumpAndSettle();
+    expect(store.sent, hasLength(1));
+    expect(note, findsNothing);
+  });
+
+  testWidgets('a page closed while Send is on its way stays quiet', (
+    tester,
+  ) async {
+    final store = Store(running());
+    await mount(tester, store);
+    await openActivity(tester);
+    await tester.enterText(box, 'Bye');
+    await tester.pump();
+    final hold = store.hold = Completer<void>();
+    await tester.tap(send);
+    await tester.pump();
+    await tester.pumpWidget(const SizedBox());
+    hold.complete();
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
   });
 }
