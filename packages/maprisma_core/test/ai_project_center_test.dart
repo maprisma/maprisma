@@ -3445,12 +3445,12 @@ void main() {
         await plugin.shutdown();
         final state = File('${plugin.directory}/projects.json');
         final body = jsonDecode(state.readAsStringSync()) as Map;
-        body.remove('board_order');
-        // Creation order, as the store kept it before.
+        // Creation order, as the store kept it before, without ranks.
         body['projects'] = (body['projects'] as List).reversed.toList();
         for (final item in (body['projects'] as List).cast<Map>()) {
           item['updated_at'] = '2026-01-01T00:00:00.000Z';
           item.remove('importance');
+          item.remove('board_rank');
         }
         state.writeAsStringSync(jsonEncode(body));
         plugin = AiProjectCenterPlugin(
@@ -3495,7 +3495,16 @@ void main() {
       test('new projects go on top; the order survives a reopen', () async {
         final ids = await three();
         expect(await titles(), ['C', 'B', 'A']);
-        expect(stored()['board_order'], isTrue);
+        expect(
+          [for (final p in stored()['projects'] as List) p['board_rank']],
+          [0, 1, 2],
+        );
+        // The rank is stored only.
+        expect(
+          (await project(plugin, ids['A']!)).containsKey('board_rank'),
+          isFalse,
+        );
+        expect((await board()).first.containsKey('board_rank'), isFalse);
         expect(
           [for (final p in stored()['projects'] as List) p['id']],
           [ids['C'], ids['B'], ids['A']],
@@ -3639,35 +3648,107 @@ void main() {
       });
 
       test(
-        'a stored importance that is not a mark is a corrupt store',
+        'a stored mark, rank or marker out of range is a corrupt store',
         () async {
           await three();
           await plugin.shutdown();
           final state = File('${plugin.directory}/projects.json');
-          final body = jsonDecode(state.readAsStringSync()) as Map;
-          (body['projects'] as List).first['importance'] = 'urgent';
+          final good = state.readAsStringSync();
+          for (final (key, value) in <(String, Object?)>[
+            ('importance', 'urgent'),
+            ('importance', null),
+            ('importance', 1),
+            ('board_rank', -1),
+            ('board_rank', 1.5),
+            ('board_rank', '1'),
+            ('board_order', false),
+            ('board_order', 'yes'),
+          ]) {
+            final body = jsonDecode(good) as Map;
+            if (key == 'board_order') {
+              body[key] = value;
+            } else {
+              (body['projects'] as List).first[key] = value;
+            }
+            state.writeAsStringSync(jsonEncode(body));
+            expect(
+              () => AiProjectCenterPlugin(
+                temporary.path,
+                agentProfiles: () => profiles,
+                filesystem: TestPosix(),
+              ),
+              throwsA(errorCode('project_store_corrupt')),
+              reason: '$key $value',
+            );
+          }
+          // Without the rank (an older core's project) it still opens.
+          final body = jsonDecode(good) as Map;
+          (body['projects'] as List).first.remove('board_rank');
           state.writeAsStringSync(jsonEncode(body));
-          expect(
-            () => AiProjectCenterPlugin(
-              temporary.path,
-              agentProfiles: () => profiles,
-              filesystem: TestPosix(),
-            ),
-            throwsA(errorCode('project_store_corrupt')),
-          );
-          (body['projects'] as List).first['importance'] = 'high';
-          body['board_order'] = 'yes';
-          state.writeAsStringSync(jsonEncode(body));
-          expect(
-            () => AiProjectCenterPlugin(
-              temporary.path,
-              agentProfiles: () => profiles,
-              filesystem: TestPosix(),
-            ),
-            throwsA(errorCode('project_store_corrupt')),
-          );
+          await reopen();
+          expect(await titles(), hasLength(3));
         },
       );
+
+      test('an older core\'s save keeps the arrangement; its new project '
+          'goes on top', () async {
+        final ids = await three();
+        await plugin.call('move', {'id': ids['A'], 'before': ids['C']});
+        await plugin.call('move', {'id': ids['B']});
+        expect(await titles(), ['A', 'C', 'B']);
+        await plugin.shutdown();
+        // What an older core writes: {version, projects}, every project's
+        // fields kept, its own new project appended without rank or mark.
+        final state = File('${plugin.directory}/projects.json');
+        final body = jsonDecode(state.readAsStringSync()) as Map;
+        final projects = (body['projects'] as List).cast<Map>();
+        final added = Map.of(projects.first)
+          ..['id'] = 'f' * 32
+          ..['title'] = 'D'
+          ..['updated_at'] = '2026-01-01T00:00:00.000Z'
+          ..remove('board_rank')
+          ..remove('importance');
+        state.writeAsStringSync(
+          jsonEncode({
+            'version': 1,
+            'projects': [...projects, added],
+          }),
+        );
+        await reopen();
+        expect(await titles(), ['D', 'A', 'C', 'B']);
+        expect((await board()).first['importance'], 'medium');
+        // The next write ranks them all again.
+        await plugin.call('move', {'id': 'f' * 32});
+        await reopen();
+        expect(await titles(), ['A', 'C', 'B', 'D']);
+      });
+
+      test('a store from before task 095: the latest change first', () async {
+        final ids = await three();
+        await plugin.shutdown();
+        final state = File('${plugin.directory}/projects.json');
+        final body = jsonDecode(state.readAsStringSync()) as Map;
+        // Creation order A, B, C; A changed last, B and C at the same time.
+        final byId = {
+          for (final p in (body['projects'] as List).cast<Map>()) p['id']: p,
+        };
+        final times = {
+          'A': '2026-03-01T00:00:00.000Z',
+          'B': '2026-02-01T00:00:00.000Z',
+          'C': '2026-02-01T00:00:00.000Z',
+        };
+        body['projects'] = [
+          for (final title in ['A', 'B', 'C'])
+            byId[ids[title]]!
+              ..remove('board_rank')
+              ..remove('importance')
+              ..['updated_at'] = times[title],
+        ];
+        state.writeAsStringSync(jsonEncode(body));
+        await reopen();
+        // A first (latest change), then C before B (newest on the tie).
+        expect(await titles(), ['A', 'C', 'B']);
+      });
 
       test('a failing store refuses moves and marks cleanly', () async {
         final ids = await three();
@@ -3684,6 +3765,89 @@ void main() {
         );
         expect((await project(plugin, ids['A']!))['importance'], 'medium');
         Directory(file.path).deleteSync();
+      });
+
+      test(
+        'a failing write of a mark leaves the mark (fresh instance)',
+        () async {
+          final ids = await three();
+          await reopen();
+          final file = File('${plugin.directory}/projects.json')..deleteSync();
+          Directory(file.path).createSync();
+          // The mark's own write fails (no earlier fault).
+          await expectLater(
+            plugin.call('set_importance', {
+              'id': ids['A'],
+              'importance': 'high',
+            }),
+            throwsA(errorCode('project_store_unavailable')),
+          );
+          expect((await project(plugin, ids['A']!))['importance'], 'medium');
+          expect((await board()).last['importance'], 'medium');
+          expect(plugin.summary()['error'], 'project_store_unavailable');
+          Directory(file.path).deleteSync();
+        },
+      );
+
+      test('a full store refuses moves and marks, nothing changes', () async {
+        final ids = await three();
+        final size = File('${plugin.directory}/projects.json').lengthSync();
+        await plugin.shutdown();
+        plugin = AiProjectCenterPlugin(
+          temporary.path,
+          agentProfiles: () => profiles,
+          filesystem: TestPosix(),
+          // 'high' is two bytes shorter than 'medium'.
+          storeLimit: size - 3,
+        );
+        await expectLater(
+          plugin.call('move', {'id': ids['A'], 'before': ids['C']}),
+          throwsA(errorCode('project_store_full')),
+        );
+        await expectLater(
+          plugin.call('set_importance', {'id': ids['A'], 'importance': 'high'}),
+          throwsA(errorCode('project_store_full')),
+        );
+        expect(await titles(), ['C', 'B', 'A']);
+        expect((await project(plugin, ids['A']!))['importance'], 'medium');
+        await reopen();
+        expect(await titles(), ['C', 'B', 'A']);
+        expect((await project(plugin, ids['A']!))['importance'], 'medium');
+      });
+
+      test('moved and marked while it runs: kept through the end and a '
+          'reopen', () async {
+        final ids = await three();
+        var item = await project(plugin, ids['A']!);
+        item = await approve(
+          (await plugin.call('save', {
+                'id': item['id'],
+                'revision': item['revision'],
+                'plan': 'A saved plan.',
+              }))['project']
+              as Map<String, dynamic>,
+        );
+        await plugin.call('run', {
+          'id': item['id'],
+          'revision': item['revision'],
+        });
+        await waitUntil(() => processes.length == 1);
+        expect((await project(plugin, ids['A']!))['status'], 'running');
+        await plugin.call('move', {'id': ids['A'], 'before': ids['C']});
+        await plugin.call('set_importance', {
+          'id': ids['A'],
+          'importance': 'high',
+        });
+        expect(await titles(), ['A', 'C', 'B']);
+        await processes.single.finish('Lead finished.');
+        await waitUntil(() => plugin.summary()['running'] == 0);
+        final done = await project(plugin, ids['A']!);
+        expect(done['status'], 'completed');
+        expect(done['importance'], 'high');
+        expect(await titles(), ['A', 'C', 'B']);
+        await reopen();
+        expect(await titles(), ['A', 'C', 'B']);
+        expect((await project(plugin, ids['A']!))['importance'], 'high');
       });
     });
 

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:collection/collection.dart' show ListEquality;
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 
@@ -96,22 +97,10 @@ final class AiProjectCenterPlugin {
   static const maxOutput = 64 * 1024;
   static const maxPlan = 48 * 1024;
   static const maxStore = 16 * 1024 * 1024;
-
-  /// User messages to a running project (task 096): the bytes of one, how
-  /// many may wait at once and how many (waiting and delivered) are kept.
-  static const maxMessageBytes = 4096;
-  static const maxQueuedMessages = 8;
-  static const maxMessages = 20;
-
-  /// The waiting text of one project together (UTF-8 bytes): with the plan,
-  /// the bounded handoff, the goal and a member's instructions a prompt stays
-  /// below [maxPromptBytes].
-  static const maxQueuedBytes = 16 * 1024;
-
-  /// A prompt passed as one argv word must stay below Linux's MAX_ARG_STRLEN
-  /// (32 pages, 128 KiB); the bounds above keep it near 102 KiB at most.
-  static const maxPromptBytes = 120 * 1024;
   static const _activeStates = {'planning', 'running', 'reviewing', 'pausing'};
+
+  /// A mark per project (task 095); it never moves a card.
+  static const importances = {'high', 'medium', 'low'};
   static const _states = {
     'draft',
     'planning',
@@ -322,12 +311,18 @@ final class AiProjectCenterPlugin {
       } finally {
         _io.close(fd);
       }
-      if (data is! Map || data['version'] != 1 || data['projects'] is! List) {
+      if (data is! Map ||
+          data['version'] != 1 ||
+          data['projects'] is! List ||
+          (data.containsKey('board_order') && data['board_order'] != true)) {
         throw const FormatException();
       }
       final projects = data['projects'] as List;
       if (projects.length > maxProjects) throw const FormatException();
       var recovered = false;
+      // Each project's place on the board (task 095); null: written by a
+      // core from before, which keeps the field of the others.
+      final ranks = <String, int?>{};
       for (final raw in projects) {
         if (raw is! Map) throw const FormatException();
         final item = Map<String, dynamic>.from(raw);
@@ -364,7 +359,17 @@ final class AiProjectCenterPlugin {
           _text(event['type'], 80, required: true);
           _text(event['text'], 4000);
         }
-        if (item.containsKey('messages')) _checkMessages(item['messages']);
+        // A store from before task 095 has no importance: Medium.
+        if (!item.containsKey('importance')) item['importance'] = 'medium';
+        if (!importances.contains(item['importance'])) {
+          throw const FormatException();
+        }
+        // Stored only; the order is the list's.
+        final rank = item.remove('board_rank');
+        if (rank != null && (rank is! int || rank < 0)) {
+          throw const FormatException();
+        }
+        ranks[id] = rank as int?;
         item['team'] = _team(item['team']);
         if (item.containsKey('plan_team')) {
           item['plan_team'] = _team(item['plan_team']);
@@ -408,6 +413,7 @@ final class AiProjectCenterPlugin {
         }
         _projects[id] = item;
       }
+      _boardOrder(ranks);
       if (recovered) _persist(_projects);
     } on ServiceError {
       rethrow;
@@ -416,41 +422,44 @@ final class AiProjectCenterPlugin {
     }
   }
 
-  /// A stored message list (task 096) as [_message] writes it.
-  static void _checkMessages(Object? value) {
-    if (value is! List || value.length > maxMessages) {
-      throw const FormatException();
-    }
-    var queued = 0;
-    for (final message in value) {
-      if (message is! Map ||
-          message['id'] is! String ||
-          !RegExp(r'^[0-9a-f]{32}$').hasMatch(message['id'] as String) ||
-          !{'queue', 'now'}.contains(message['mode']) ||
-          !{'queued', 'delivered'}.contains(message['state']) ||
-          (message['delivered_to'] != null &&
-              message['delivered_to'] is! Map)) {
-        throw const FormatException();
+  /// The board order of a loaded store (task 095): the ranked projects by
+  /// rank (the stored list order on a tie). Projects without a rank (all of
+  /// a store from before task 095, or those an older core added after a
+  /// downgrade; such a core rewrites the store without new top-level keys
+  /// but keeps every project's fields) go on top: the latest change first,
+  /// the newest project first on a tie. That was the order within a bucket
+  /// on the old board; the urgency itself needs the display snapshot, which
+  /// a load does not read, and would freeze a passing state such as running
+  /// at the top.
+  void _boardOrder(Map<String, int?> ranks) {
+    final stored = _projects.values.toList();
+    final position = {
+      for (final (index, item) in stored.indexed) item['id']: index,
+    };
+    int compare(Map<String, dynamic> a, Map<String, dynamic> b) {
+      final ra = ranks[a['id']], rb = ranks[b['id']];
+      if (ra == null && rb == null) {
+        final time = (b['updated_at'] as String).compareTo(
+          a['updated_at'] as String,
+        );
+        if (time != 0) return time;
+        return position[b['id']]!.compareTo(position[a['id']]!);
       }
-      _text(message['at'], 50, required: true);
-      _text(message['text'], maxMessageBytes, required: true);
-      if (message['run_id'] != null) _text(message['run_id'], 64);
-      if (message['state'] == 'queued') {
-        queued++;
-      } else {
-        _text(message['delivered_at'], 50, required: true);
-      }
+      if (ra == null) return -1;
+      if (rb == null) return 1;
+      if (ra != rb) return ra.compareTo(rb);
+      return position[a['id']]!.compareTo(position[b['id']]!);
     }
-    if (queued > maxQueuedMessages) throw const FormatException();
+
+    stored.sort(compare);
+    _projects
+      ..clear()
+      ..addAll({for (final item in stored) item['id'] as String: item});
   }
 
-  /// [optional]: a write the user asked for that is not needed to keep
-  /// running work saved (a message): a store that would grow too large
-  /// refuses only this request, without stopping work or a lasting fault.
   void _persist(
     Map<String, Map<String, dynamic>> projects, {
     bool deleting = false,
-    bool optional = false,
   }) {
     // A retired controller (detached, store descriptor released) must never
     // write its stale snapshot over a replacement's store.
@@ -464,14 +473,22 @@ final class AiProjectCenterPlugin {
       throw ServiceError('project_store_full');
     }
     final body = utf8.encode(
-      jsonEncode({'version': 1, 'projects': projects.values.toList()}),
+      // The list is the board order; each project also carries its rank,
+      // which an older core keeps (task 095).
+      jsonEncode({
+        'version': 1,
+        'projects': [
+          for (final (rank, item) in projects.values.indexed)
+            {...item, 'board_rank': rank},
+        ],
+      }),
     );
     if (body.length > storeLimit) {
       // Running work cannot be saved any more: stop it, as for any failed
       // write, and keep the fault visible until a smaller store (e.g. after a
       // deletion) has been written. Without running work only this request
       // is refused; the durable store is unchanged.
-      if (!optional && (_active.isNotEmpty || _storageFault != null)) {
+      if (_active.isNotEmpty || _storageFault != null) {
         _storageFault = 'project_store_full';
         _haltAll();
       }
@@ -551,29 +568,75 @@ final class AiProjectCenterPlugin {
     view['approval_valid'] = _displayApprovalValid(item);
     view['processes_stopping'] =
         !_active.containsKey(item['id']) && _runHeld(item['id'] as String);
-    view['messages'] ??= const <Map<String, dynamic>>[];
-    view['messages_queued'] = _queued(item).length;
     return view;
   }
 
-  /// The messages still waiting for an assignment, oldest first.
-  static List<Map<String, dynamic>> _queued(Map<String, dynamic> item) => [
-    for (final message in item['messages'] as List? ?? const [])
-      if (message is Map && message['state'] == 'queued')
-        Map<String, dynamic>.from(message),
-  ];
-
-  void _put(
-    Map<String, dynamic> item, {
-    bool increment = true,
-    bool optional = false,
-  }) {
+  void _put(Map<String, dynamic> item, {bool increment = true}) {
     final id = item['id'] as String;
     if (increment) item['revision'] = (item['revision'] as int) + 1;
     item['updated_at'] = _now();
-    final next = {..._projects, id: item};
-    _persist(next, optional: optional);
-    _projects[id] = item;
+    if (_projects.containsKey(id)) {
+      final next = {..._projects, id: item};
+      _persist(next);
+      _projects[id] = item;
+    } else {
+      // A new project goes on top of the board (task 095).
+      final next = {id: item, ..._projects};
+      _persist(next);
+      _projects
+        ..clear()
+        ..addAll(next);
+    }
+  }
+
+  /// Moves a project on the board (task 095): before the project `before`,
+  /// or to the end when it is null or absent. Neither its revision nor its
+  /// last change move: the order is not project content.
+  Map<String, dynamic> _move(Map<String, dynamic> params) {
+    if (params.keys.any((key) => !{'id', 'before'}.contains(key))) {
+      throw const FormatException('Invalid move fields');
+    }
+    final id = params['id'];
+    final before = params['before'];
+    if (!_projects.containsKey(id) ||
+        (before != null && !_projects.containsKey(before))) {
+      throw ServiceError('project_unknown');
+    }
+    final order = _projects.keys.toList();
+    if (before != id) {
+      final moved = [...order]..remove(id);
+      moved.insert(
+        before == null ? moved.length : moved.indexOf(before as String),
+        id as String,
+      );
+      if (!const ListEquality<String>().equals(moved, order)) {
+        final next = {for (final key in moved) key: _projects[key]!};
+        _persist(next);
+        _projects
+          ..clear()
+          ..addAll(next);
+        return {'order': moved};
+      }
+    }
+    return {'order': order};
+  }
+
+  /// Marks a project High, Medium or Low (task 095). A mark, not project
+  /// content: no revision check, the revision, the approval and the last
+  /// change stay, and it is allowed while the project works.
+  Map<String, dynamic> _setImportance(Map<String, dynamic> params) {
+    if (params.keys.any((key) => !{'id', 'importance'}.contains(key)) ||
+        !importances.contains(params['importance'])) {
+      throw const FormatException('Invalid importance');
+    }
+    final item = _project(params);
+    if (item['importance'] != params['importance']) {
+      item['importance'] = params['importance'];
+      final next = {..._projects, item['id'] as String: item};
+      _persist(next);
+      _projects[item['id'] as String] = item;
+    }
+    return {'project': _view(item)};
   }
 
   void _event(Map<String, dynamic> item, String type, String text) {
@@ -901,6 +964,7 @@ final class AiProjectCenterPlugin {
             'run_id': null,
             'events': <Map<String, dynamic>>[],
             'created_at': _now(),
+            'importance': 'medium',
           }
         : _project(params, revision: true);
     _idle(item);
@@ -1484,9 +1548,8 @@ final class AiProjectCenterPlugin {
   String _prompt(
     Map<String, dynamic> item,
     Map<String, dynamic> member,
-    String phase, [
-    List<Map<String, dynamic>> messages = const [],
-  ]) {
+    String phase,
+  ) {
     final reviewing = member['role'] == 'reviewer';
     return [
       'Project: ${item['title']}',
@@ -1506,11 +1569,6 @@ final class AiProjectCenterPlugin {
       if ((item['handoff'] as String).isNotEmpty)
         'Saved handoff (may describe partial work; inspect actual files before continuing, '
             'and never repeat an uncertain side effect without checking):\n${_bounded(item['handoff'] as String, 16 * 1024)}',
-      if (messages.isNotEmpty)
-        'Messages from the user, sent while this project was running (oldest first). '
-            'Follow them where they refine or correct earlier instructions, within the approved '
-            'plan\'s scope and the configured permissions; say in your result how you handled each:\n'
-            '${[for (final message in messages) '- (${message['at']}) ${message['text']}'].join('\n')}',
       'Return a clear result with any unfinished work. Do not claim a verification you did not perform.',
     ].join('\n\n');
   }
@@ -1552,20 +1610,10 @@ final class AiProjectCenterPlugin {
         if (!_validArgv(profile[key])) {
           throw ServiceError('project_agent_unavailable');
         }
-        // Waiting user messages go to this assignment (task 096); they count
-        // as delivered only once its process was started.
-        final messages = phase == 'setup'
-            ? const <Map<String, dynamic>>[]
-            : _queued(item);
         final prompt = phase == 'setup'
             ? _setupPrompt(item)
-            : _prompt(item, member, phase, messages);
+            : _prompt(item, member, phase);
         final stdin = profile['stdin'] == true;
-        // One argv word may not exceed MAX_ARG_STRLEN; refused before any
-        // launch (waiting messages stay queued).
-        if (!stdin && utf8.encode(prompt).length > maxPromptBytes) {
-          throw ServiceError('project_prompt_too_large');
-        }
         final template = (profile[key] as List).cast<String>();
         // Model, provider and subagent options follow the template; a "--"
         // would turn them into prompt words.
@@ -1616,9 +1664,6 @@ final class AiProjectCenterPlugin {
           rethrow;
         }
         active.process = process;
-        if (messages.isNotEmpty) {
-          _deliver(id, messages, member, profile, phase);
-        }
         if (active.cancelled) await process.stop();
         var output = '';
         var truncated = false;
@@ -1746,13 +1791,6 @@ final class AiProjectCenterPlugin {
           : 'completed';
       if (phase == 'running') item['needs_reconciliation'] = active.cancelled;
       item['checkpoint_kind'] = active.cancelled ? 'handoff' : 'assignment';
-      if (!active.cancelled && _queued(item).isNotEmpty) {
-        _event(
-          item,
-          'message_waiting',
-          'A message arrived after the last assignment had started. It waits for the next assignment.',
-        );
-      }
       _event(
         item,
         active.cancelled ? 'paused' : 'finished',
@@ -1815,215 +1853,6 @@ final class AiProjectCenterPlugin {
         if (!active.done.isCompleted) active.done.complete();
       }
     }
-  }
-
-  /// The started assignment received [messages]: each is marked delivered
-  /// once and recorded in the handoff, so later assignments and a
-  /// continuation know what the user asked. Kept in memory if the write fails
-  /// (the failed write already stops the work).
-  void _deliver(
-    String id,
-    List<Map<String, dynamic>> messages,
-    Map<String, dynamic> member,
-    Map<String, dynamic> profile,
-    String phase,
-  ) {
-    final item = _copy(_projects[id]!);
-    final ids = {for (final message in messages) message['id']};
-    final at = _now();
-    final to = {
-      'phase': phase == 'planning' ? 'planning' : 'execution',
-      'position': item['next_member'],
-      'agent': member['agent'],
-      'role': member['role'],
-    };
-    item['messages'] = [
-      for (final message in item['messages'] as List? ?? const [])
-        if (message is Map && ids.contains(message['id']))
-          {
-            ...Map<String, dynamic>.from(message),
-            'state': 'delivered',
-            'delivered_at': at,
-            'delivered_to': to,
-          }
-        else
-          message,
-    ];
-    item['handoff'] = _bounded(
-      '${item['handoff']}\n\n'
-      '${[for (final message in messages) 'User message (${message['at']}), given to ${member['role']} (${member['agent']}):\n${message['text']}'].join('\n\n')}',
-      maxOutput,
-    );
-    _event(
-      item,
-      'message_delivered',
-      messages.length == 1
-          ? 'Your message was given to ${profile['name'] ?? member['agent']}: ${member['role']}.'
-          : '${messages.length} messages were given to ${profile['name'] ?? member['agent']}: ${member['role']}.',
-    );
-    _record(item);
-  }
-
-  /// A message from the user to a running project (task 096). `queue` waits
-  /// for the next assignment while the current one keeps working; `now`
-  /// pauses the run and continues at once in a new session with the saved
-  /// handoff and the message. A message that cannot be delivered yet stays
-  /// queued, never lost.
-  Future<Map<String, dynamic>> _message(Map<String, dynamic> params) async {
-    final mode = params['mode'] ?? 'queue';
-    final text = params['text'];
-    if (!{'queue', 'now'}.contains(mode) ||
-        text is! String ||
-        params.keys.any(
-          (key) => !{
-            'id',
-            'run_id',
-            'text',
-            'mode',
-            // Send now only: the same confirmation as Continue.
-            if (mode == 'now') 'acknowledge_interrupted',
-          }.contains(key),
-        )) {
-      throw ServiceError('project_message_invalid');
-    }
-    if (text.contains('\x00')) throw ServiceError('project_message_invalid');
-    if (text.trim().isEmpty) throw ServiceError('project_message_empty');
-    if (utf8.encode(text).length > maxMessageBytes) {
-      throw ServiceError('project_message_too_long');
-    }
-    final item = _project(params);
-    final id = item['id'] as String;
-    final active = _active[id];
-    if (active == null || item['phase'] == 'setup') {
-      throw ServiceError('project_not_running');
-    }
-    // Only the run the user saw: a message never reaches a later run.
-    if (params['run_id'] is! String || params['run_id'] != item['run_id']) {
-      throw ServiceError('project_changed');
-    }
-    // Pausing (also a stop still being confirmed): a queued message waits
-    // for the continuation; Send now has nothing left to interrupt.
-    if (item['status'] == 'pausing' || active.cancelled) {
-      if (mode == 'now') throw ServiceError('project_still_pausing');
-    } else if (!const {
-      'planning',
-      'running',
-      'reviewing',
-    }.contains(item['status'])) {
-      throw ServiceError('project_not_running');
-    }
-    // Send now continues uncertain partial work: the user confirms it as
-    // for Continue ("Continue from saved handoff?").
-    if (mode == 'now' && params['acknowledge_interrupted'] != true) {
-      throw ServiceError('project_review_changes_first');
-    }
-    final messages = (item['messages'] as List? ?? const []).toList();
-    final waiting = _queued(item);
-    if (waiting.length >= maxQueuedMessages ||
-        waiting.fold<int>(
-              utf8.encode(text).length,
-              (sum, message) =>
-                  sum + utf8.encode(message['text'] as String).length,
-            ) >
-            maxQueuedBytes) {
-      throw ServiceError('project_messages_full');
-    }
-    final message = <String, dynamic>{
-      'id': _id(),
-      'at': _now(),
-      'mode': mode,
-      'text': text,
-      'state': 'queued',
-      'run_id': item['run_id'],
-    };
-    messages.add(message);
-    // The oldest delivered ones make room; waiting ones are never dropped.
-    while (messages.length > maxMessages) {
-      messages.removeAt(
-        messages.indexWhere((entry) => (entry as Map)['state'] != 'queued'),
-      );
-    }
-    item['messages'] = messages;
-    _event(
-      item,
-      'message',
-      mode == 'now'
-          ? 'Message received. Pausing the agent to continue with it now.'
-          : 'Message queued for the next assignment.',
-    );
-    // Stored before anything else happens; a store that would be too large
-    // refuses only this message.
-    _put(item, optional: true);
-    if (mode == 'queue') {
-      return {
-        'project': _view(_projects[id]!),
-        'message': message,
-        'continued': false,
-        'reason': null,
-      };
-    }
-    String? reason;
-    try {
-      await _pause({'id': id, 'run_id': message['run_id']});
-      final paused = _projects[id];
-      if (paused == null) throw ServiceError('project_unknown');
-      if (paused['status'] != 'paused') {
-        throw ServiceError('project_not_paused');
-      }
-      // A shutdown that waited for the same stop: no new session.
-      if (_closed) throw ServiceError('project_center_closed');
-      _dropDisplay();
-      // The user chose to interrupt this assignment: its partial work is
-      // what the continuation is told to inspect (the reconciliation the
-      // Continue button asks for is this decision).
-      _launch({
-        'id': id,
-        'revision': paused['revision'],
-        'acknowledge_interrupted': true,
-      }, 'continue');
-    } on ServiceError catch (error) {
-      reason = error.code;
-    } on FormatException {
-      reason = 'project_message_not_continued';
-    }
-    if (reason != null && _projects.containsKey(id)) {
-      final left = _copy(_projects[id]!);
-      _event(
-        left,
-        'message_waiting',
-        'The agent could not continue at once ($reason). Your message waits for the next assignment.',
-      );
-      _record(left);
-    }
-    return {
-      'project': _view(_projects[id]!),
-      'message': message,
-      'continued': reason == null,
-      'reason': reason,
-    };
-  }
-
-  /// Remove a message that still waits (task 096), in any status: also one
-  /// left over after its run ended.
-  Map<String, dynamic> _dropMessage(Map<String, dynamic> params) {
-    if (params.keys.any((key) => !{'id', 'message_id'}.contains(key)) ||
-        params['message_id'] is! String) {
-      throw ServiceError('project_message_invalid');
-    }
-    final item = _project(params);
-    final messages = (item['messages'] as List? ?? const []).toList();
-    final index = messages.indexWhere(
-      (message) => message is Map && message['id'] == params['message_id'],
-    );
-    if (index < 0) throw ServiceError('project_message_unknown');
-    if ((messages[index] as Map)['state'] != 'queued') {
-      throw ServiceError('project_message_delivered');
-    }
-    messages.removeAt(index);
-    item['messages'] = messages;
-    _event(item, 'message_dropped', 'A waiting message was removed.');
-    _put(item, optional: true);
-    return {'project': _view(_projects[item['id']]!)};
   }
 
   /// Stop one attempt and wait for its confirmed end. Every call asks again;
@@ -2216,10 +2045,6 @@ final class AiProjectCenterPlugin {
     }
     return true;
   }
-
-  static final _bucketOrder = [
-    for (final bucket in ProjectBucket.values) bucket.code,
-  ];
 
   /// Statuses whose stage or bucket depends on the approval.
   static const _approvalMatters = {'ready', 'paused', 'interrupted', 'failed'};
@@ -2604,6 +2429,7 @@ final class AiProjectCenterPlugin {
       for (final key in ['id', 'title', 'path', 'status', 'revision'])
         key: item[key],
       'updated_at': item['updated_at'],
+      'importance': item['importance'],
       'phase': item['phase'],
       'run_id': item['run_id'],
       ...state.toJson(),
@@ -2611,7 +2437,6 @@ final class AiProjectCenterPlugin {
       'approval_valid': _displayApprovalValid(item),
       'needs_reconciliation': item['needs_reconciliation'] == true,
       'processes_stopping': derived.stopping,
-      'messages_queued': _queued(item).length,
       'issues': state.activity == 'approved_blocked'
           ? derived.launchIssues
           : _readiness(item).project,
@@ -2639,30 +2464,17 @@ final class AiProjectCenterPlugin {
     };
   }
 
-  /// The board (task 087): most urgent first, then the latest change;
-  /// every card and the summary from the same derived facts.
+  /// The board (task 087) in the user's order (task 095: urgency is shown
+  /// and counted, it does not sort); every card and the summary from the
+  /// same derived facts.
   Map<String, dynamic> _list() {
-    // Most urgent first, then the latest change (task 087); every card
-    // and the summary from the same derived facts.
     final derived = {
       for (final item in _projects.values) item['id'] as String: _derive(item),
     };
-    final board =
-        [
-          for (final item in _projects.values)
-            _boardItem(item, derived[item['id']]!),
-        ]..sort((a, b) {
-          final order = _bucketOrder
-              .indexOf(a['bucket'] as String)
-              .compareTo(_bucketOrder.indexOf(b['bucket'] as String));
-          if (order != 0) return order;
-          final time = (b['updated_at'] as String).compareTo(
-            a['updated_at'] as String,
-          );
-          return time != 0
-              ? time
-              : (a['id'] as String).compareTo(b['id'] as String);
-        });
+    final board = [
+      for (final item in _projects.values)
+        _boardItem(item, derived[item['id']]!),
+    ];
     return {
       'projects': board,
       'summary': summary({
@@ -2755,6 +2567,10 @@ final class AiProjectCenterPlugin {
         return {'project': _view(_project(params))};
       case 'save':
         return _save(params);
+      case 'move':
+        return _move(params);
+      case 'set_importance':
+        return _setImportance(params);
       case 'delete':
         final item = _project(params, revision: true);
         _idle(item);
@@ -2774,10 +2590,6 @@ final class AiProjectCenterPlugin {
         return _launch(params, operation);
       case 'pause':
         return _pause(params);
-      case 'message':
-        return _message(params);
-      case 'message_drop':
-        return _dropMessage(params);
       default:
         throw ServiceError('project_operation_unknown');
     }

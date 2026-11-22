@@ -37,14 +37,18 @@ the importance mark only when it is there.
   `project_store_full`); a failed write leaves the order and the mark as they were.
 
 ## Store
-`projects.json` keeps `version: 1`; its `projects` list is the board order and the file carries
-`board_order: true`. A store from before this task (no `board_order`) kept creation order while
-the board sorted by urgency: its first order is the latest change first, the newest project first
-on a tie (the old order within a bucket; the urgency itself needs the display snapshot, which a
-load does not read, and would freeze a passing state such as Running at the top). Missing
-`importance` reads `medium`; any other stored value, or a `board_order` other than `true`, is
-`project_store_corrupt`. An older core reading the new store keeps both (it rewrites unknown
-fields unchanged) but adds its new projects at the end.
+`projects.json` keeps `version: 1`; its `projects` list is the board order and every project
+carries its place as `board_rank` (0 = top; stored only, not in views). The rank lives in the
+projects because an older core rewrites the store as `{version, projects}` (a top-level marker
+would be lost after a downgrade and a save) but keeps every project's fields and the list order.
+On load the ranked projects come by rank (stored position on a tie). Projects without a rank (a
+whole store from before this task, or those an older core added after a downgrade) go on top: the
+latest change first, the newest project first on a tie (the old order within a bucket; the
+urgency itself needs the display snapshot, which a load does not read, and would freeze a passing
+state such as Running at the top). The next write ranks all again. An absent `importance` reads
+`medium`; null or any other value, a `board_rank` that is not a non-negative integer, or a
+top-level `board_order` other than `true` (written by an early build of this task) is
+`project_store_corrupt`.
 
 ## UI (next step, GUI task)
 - Board cards can be dragged; a drop calls `move` with the card after the drop place as `before`
@@ -59,8 +63,11 @@ Core tests (`ai_project_center_test.dart`, group "board order and importance (ta
 on top and order across a reopen, move up / down / to the top / to the end with revision and last
 change unchanged, unknown ids and fields refused with nothing moved, a deleted project leaves the
 order, importance Medium when new, set, validated (invalid value, missing value, extra field,
-unknown id), kept across a reopen and not moving the card or the approval, a corrupt stored mark,
-a failing store refusing both, a legacy store ordered latest change first (newest first on a tie)
-with Medium, urgency not sorting (every bucket in the user's order, counts unchanged). Through
+unknown id), kept across a reopen and not moving the card or the approval; corrupt stored marks,
+ranks and markers; an older core's save keeping the arrangement with its new project on top; a
+legacy store ordered latest change first (newest first on a tie) with Medium; a failing store
+refusing both (also a mark's own failed write on a fresh instance), a full store refusing both
+with nothing changed; moved and marked while running, kept through the end and a reopen; urgency
+not sorting (every bucket in the user's order, counts unchanged). Through
 the real worker (`feature_plugins_test.dart`): capability `order`, `move` and `set_importance`
 pass the host. Codex and agy CLEAN.
