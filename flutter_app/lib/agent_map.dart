@@ -34,6 +34,10 @@ class AgentMap extends StatelessWidget {
     this.controller,
     this.onViewChanged,
     this.focusedNode,
+    this.reveal,
+    this.onRevealed,
+    this.usedIn = const {},
+    this.onUsedIn,
     this.groups,
     this.onExpandGroup,
     this.onAdd,
@@ -84,6 +88,14 @@ class AgentMap extends StatelessWidget {
   final TransformationController? controller;
   final VoidCallback? onViewChanged;
   final String? focusedNode;
+
+  /// Show on map (task 091): a box panned into view once; see MapEditor.
+  final String? reveal;
+  final ValueChanged<bool>? onRevealed;
+
+  /// Projects naming each agent (`by_agent`) and the way to them.
+  final Map<String, int> usedIn;
+  final ValueChanged<String>? onUsedIn;
   final List<MapGroup>? groups;
   final ValueChanged<int>? onExpandGroup;
   final void Function(String kind, String target)? onAdd;
@@ -170,6 +182,11 @@ class AgentMap extends StatelessWidget {
       return MapEditor(
         layers: layers,
         onLayers: onLayers,
+        focused: focusedNode,
+        reveal: reveal,
+        onRevealed: onRevealed,
+        usedIn: usedIn,
+        onUsedIn: onUsedIn,
         graph: graph,
         saved: savedLayout,
         onLayout: onLayout,

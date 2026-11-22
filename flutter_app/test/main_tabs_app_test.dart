@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:maprisma/agent_map.dart';
 import 'package:maprisma/ai_project_center.dart';
 import 'package:maprisma/main.dart';
+import 'package:maprisma/map_editor.dart' show MapEditor;
 import 'package:maprisma/settings_view.dart';
 
 import 'package:maprisma/agent_list_view.dart';
@@ -875,6 +876,376 @@ void main() {
     expect(find.byKey(const ValueKey('breadcrumb-projects')), findsOneWidget);
     File('${dir.path}/release_features.summary').writeAsStringSync('');
     await settleService(tester);
+    await unmountApp(tester);
+  });
+
+  testWidgets('Show on map from a team member, through the save question; '
+      'Used in N projects back to the board with the agent chip', (
+    tester,
+  ) async {
+    late Directory home;
+    await mountApp(
+      tester,
+      beforeStart: (dir) {
+        home = dir;
+        projects(dir);
+        File('${dir.path}/board').writeAsStringSync('');
+        final summary =
+            jsonDecode(File('${dir.path}/summary.json').readAsStringSync())
+                as Map;
+        summary['by_agent'] = {'test': 1};
+        File('${dir.path}/summary.json').writeAsStringSync(jsonEncode(summary));
+        File('${dir.path}/projects.json').writeAsStringSync(
+          jsonEncode([
+            {
+              ...draft,
+              'stage': 'goal',
+              'activity': 'draft',
+              'bucket': 'drafts',
+              'planning': [],
+              'execution': [
+                {
+                  'phase': 'execution',
+                  'position': 0,
+                  'agent': 'test',
+                  'name': 'Test agent',
+                  'role': 'lead',
+                  'issues': [],
+                },
+              ],
+            },
+          ]),
+        );
+      },
+    );
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(const ValueKey('project-card-p1')),
+        matching: find.byKey(const ValueKey('card-open')),
+      ),
+    );
+    await settleService(tester);
+    await editTitle(tester);
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Team'));
+    await settleService(tester);
+    final show = find.byKey(const ValueKey('graph-show-execution-0'));
+    await tester.ensureVisible(show);
+    await tester.pumpAndSettle();
+    await tester.tap(show);
+    await settleService(tester);
+    expect(find.text('Save project changes?'), findsOneWidget);
+    await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+    await settleService(tester);
+    expect(find.byKey(const ValueKey('breadcrumb-projects')), findsOneWidget);
+    expect(find.byType(AgentMap), findsNothing);
+    await tester.tap(show);
+    await settleService(tester);
+    await tester.tap(find.widgetWithText(TextButton, 'Discard'));
+    await settleService(tester);
+    expect(find.byType(AgentMap), findsOneWidget);
+    expect(
+      tester.widget<MapEditor>(find.byType(MapEditor)).focused,
+      'agent:test',
+    );
+    // Temporary: nothing about the layout was saved.
+    expect(
+      calls(home, 'settings.update').where(
+        (q) =>
+            (q['params'] as Map)['values'] is Map &&
+            ((q['params'] as Map)['values'] as Map).containsKey(
+              'flutter_map_layout',
+            ),
+      ),
+      isEmpty,
+    );
+    // The mark goes after a while.
+    await tester.pump(const Duration(seconds: 7));
+    await settleService(tester);
+    expect(tester.widget<MapEditor>(find.byType(MapEditor)).focused, isNull);
+    // Used in 1 project: Projects with the agent chip.
+    await tester.tap(find.byKey(const ValueKey('used-in-badge')));
+    await settleService(tester);
+    expect(projectsPage(), findsOneWidget);
+    final chip = find.byKey(const ValueKey('board-agent'));
+    expect(chip, findsOneWidget);
+    expect(
+      find.descendant(of: chip, matching: find.text('Test agent')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('project-card-p1')), findsOneWidget);
+    // Back to the map: the chip goes with the Projects page.
+    await tester.tap(find.byKey(const ValueKey('ai-map-open')));
+    await settleService(tester);
+    await tester.tap(find.byKey(const ValueKey('tab-projects')));
+    await settleService(tester);
+    expect(find.byKey(const ValueKey('board-agent')), findsNothing);
+    await unmountApp(tester);
+  });
+
+  testWidgets('Show on map for an agent that is not on the map says so', (
+    tester,
+  ) async {
+    await mountApp(
+      tester,
+      beforeStart: (dir) {
+        projects(dir);
+        File('${dir.path}/board').writeAsStringSync('');
+        File('${dir.path}/projects.json').writeAsStringSync(
+          jsonEncode([
+            {
+              ...draft,
+              'stage': 'goal',
+              'activity': 'draft',
+              'bucket': 'drafts',
+              'planning': [],
+              'execution': [
+                {
+                  'phase': 'execution',
+                  'position': 0,
+                  'agent': 'gone',
+                  'name': 'gone',
+                  'role': 'lead',
+                  'issues': [],
+                },
+              ],
+            },
+          ]),
+        );
+      },
+    );
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(const ValueKey('project-card-p1')),
+        matching: find.byKey(const ValueKey('card-open')),
+      ),
+    );
+    await settleService(tester);
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Team'));
+    await settleService(tester);
+    final show = find.byKey(const ValueKey('graph-show-execution-0'));
+    await tester.ensureVisible(show);
+    await tester.pumpAndSettle();
+    await tester.tap(show);
+    await settleService(tester);
+    expect(find.byType(AgentMap), findsOneWidget);
+    expect(find.text('This agent is not on the map.'), findsOneWidget);
+    expect(tester.widget<MapEditor>(find.byType(MapEditor)).focused, isNull);
+    await unmountApp(tester);
+  });
+
+  testWidgets('Show on map waits for the map refresh: an agent added '
+      'meanwhile is revealed, not reported missing', (tester) async {
+    late Directory home;
+    await mountApp(
+      tester,
+      beforeStart: (dir) {
+        home = dir;
+        projects(dir, settings: {'main_tab': 'map'});
+        File('${dir.path}/board').writeAsStringSync('');
+        File('${dir.path}/projects.json').writeAsStringSync(
+          jsonEncode([
+            {
+              ...draft,
+              'stage': 'goal',
+              'activity': 'draft',
+              'bucket': 'drafts',
+              'planning': [],
+              'execution': [
+                {
+                  'phase': 'execution',
+                  'position': 0,
+                  'agent': 'later',
+                  'name': 'Later agent',
+                  'role': 'lead',
+                  'issues': [],
+                },
+              ],
+            },
+          ]),
+        );
+      },
+    );
+    // The map was read without the agent.
+    expect(find.byType(AgentMap), findsOneWidget);
+    expect(find.text('Later agent'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('tab-projects')));
+    await settleService(tester);
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(const ValueKey('project-card-p1')),
+        matching: find.byKey(const ValueKey('card-open')),
+      ),
+    );
+    await settleService(tester);
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Team'));
+    await settleService(tester);
+    // Installed meanwhile; the next map read is held back.
+    File('${home.path}/agent_later').writeAsStringSync('');
+    File('${home.path}/slow_map.snapshot').writeAsStringSync('');
+    final show = find.byKey(const ValueKey('graph-show-execution-0'));
+    await tester.ensureVisible(show);
+    await tester.pumpAndSettle();
+    await tester.tap(show);
+    await settleService(tester);
+    expect(find.byType(AgentMap), findsOneWidget);
+    expect(find.text('This agent is not on the map.'), findsNothing);
+    expect(tester.widget<MapEditor>(find.byType(MapEditor)).reveal, isNull);
+    File('${home.path}/release_map.snapshot').writeAsStringSync('');
+    await settleService(tester);
+    await tester.pumpAndSettle();
+    expect(find.text('This agent is not on the map.'), findsNothing);
+    expect(find.text('Later agent'), findsOneWidget);
+    expect(
+      tester.widget<MapEditor>(find.byType(MapEditor)).focused,
+      'agent:later',
+    );
+    // The reveal ran after the refresh: its timer takes the mark away.
+    await tester.pump(const Duration(seconds: 7));
+    await settleService(tester);
+    expect(tester.widget<MapEditor>(find.byType(MapEditor)).focused, isNull);
+    await unmountApp(tester);
+  });
+
+  testWidgets('Show on map, then the map left before its refresh: no late '
+      'reveal, no lasting mark', (tester) async {
+    late Directory home;
+    await mountApp(
+      tester,
+      beforeStart: (dir) {
+        home = dir;
+        projects(dir, settings: {'main_tab': 'map'});
+        File('${dir.path}/board').writeAsStringSync('');
+        File('${dir.path}/projects.json').writeAsStringSync(
+          jsonEncode([
+            {
+              ...draft,
+              'stage': 'goal',
+              'activity': 'draft',
+              'bucket': 'drafts',
+              'planning': [],
+              'execution': [
+                {
+                  'phase': 'execution',
+                  'position': 0,
+                  'agent': 'test',
+                  'name': 'Test agent',
+                  'role': 'lead',
+                  'issues': [],
+                },
+              ],
+            },
+          ]),
+        );
+      },
+    );
+    await tester.tap(find.byKey(const ValueKey('tab-projects')));
+    await settleService(tester);
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(const ValueKey('project-card-p1')),
+        matching: find.byKey(const ValueKey('card-open')),
+      ),
+    );
+    await settleService(tester);
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Team'));
+    await settleService(tester);
+    File('${home.path}/slow_map.snapshot').writeAsStringSync('');
+    final show = find.byKey(const ValueKey('graph-show-execution-0'));
+    await tester.ensureVisible(show);
+    await tester.pumpAndSettle();
+    await tester.tap(show);
+    await settleService(tester);
+    // The agent's details opened while the read is on its way: the map is
+    // left (the AI Map tab stays).
+    await tester.tap(
+      find
+          .descendant(
+            of: find
+                .ancestor(
+                  of: find.text('Test agent'),
+                  matching: find.byType(Card),
+                )
+                .first,
+            matching: find.byTooltip('Actions'),
+          )
+          .first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Details').last);
+    await settleService(tester);
+    expect(find.byType(AgentMap), findsNothing);
+    File('${home.path}/release_map.snapshot').writeAsStringSync('');
+    await settleService(tester);
+    // Back on the map: nothing was waiting.
+    await tester.tap(find.byKey(const ValueKey('ai-map-open')));
+    await settleService(tester);
+    final editor = tester.widget<MapEditor>(find.byType(MapEditor));
+    expect(editor.reveal, isNull);
+    expect(editor.focused, isNull);
+    await unmountApp(tester);
+  });
+
+  testWidgets('Show on map whose first map read fails: no mark, and the read '
+      'that works later neither pans nor marks', (tester) async {
+    late Directory home;
+    await mountApp(
+      tester,
+      beforeStart: (dir) {
+        home = dir;
+        projects(dir);
+        File('${dir.path}/board').writeAsStringSync('');
+        File('${dir.path}/projects.json').writeAsStringSync(
+          jsonEncode([
+            {
+              ...draft,
+              'stage': 'goal',
+              'activity': 'draft',
+              'bucket': 'drafts',
+              'planning': [],
+              'execution': [
+                {
+                  'phase': 'execution',
+                  'position': 0,
+                  'agent': 'test',
+                  'name': 'Test agent',
+                  'role': 'lead',
+                  'issues': [],
+                },
+              ],
+            },
+          ]),
+        );
+      },
+    );
+    // Started on Projects: the map was not read yet.
+    expect(calls(home, 'map.snapshot'), isEmpty);
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(const ValueKey('project-card-p1')),
+        matching: find.byKey(const ValueKey('card-open')),
+      ),
+    );
+    await settleService(tester);
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Team'));
+    await settleService(tester);
+    File('${home.path}/slow_map.snapshot').writeAsStringSync('');
+    File('${home.path}/error_map.snapshot').writeAsStringSync('');
+    final show = find.byKey(const ValueKey('graph-show-execution-0'));
+    await tester.ensureVisible(show);
+    await tester.pumpAndSettle();
+    await tester.tap(show);
+    await settleService(tester);
+    File('${home.path}/release_map.snapshot').writeAsStringSync('');
+    await settleService(tester);
+    // The read failed; it works again and the map is read on F5.
+    File('${home.path}/error_map.snapshot').deleteSync();
+    await tester.sendKeyEvent(LogicalKeyboardKey.f5);
+    await settleService(tester);
+    await tester.pumpAndSettle();
+    expect(find.byType(AgentMap), findsOneWidget);
+    final editor = tester.widget<MapEditor>(find.byType(MapEditor));
+    expect(editor.reveal, isNull);
+    expect(editor.focused, isNull);
     await unmountApp(tester);
   });
 }

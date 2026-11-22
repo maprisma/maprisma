@@ -3857,5 +3857,10 @@
   "Subscription plan": "Plano de subscrição",
   "Phases": "Fases",
   "No projects here.": "Não há projetos aqui.",
-  "{0} projects": "{0} projetos"
+  "{0} projects": "{0} projetos",
+  "Used in 1 project": "Usado em 1 projeto",
+  "Used in {0} projects": "Usado em {0} projetos",
+  "Show {0} on map": "Mostrar {0} no mapa",
+  "This agent is not on the map.": "Este agente não está no mapa.",
+  "Show all agents": "Mostrar todos os agentes"
 }

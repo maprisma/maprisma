@@ -1001,6 +1001,11 @@ KEYS = (
     "Working",
     "has a problem",
     # The board (task 088).
+    "Used in 1 project",
+    "Used in {0} projects",
+    "Show {0} on map",
+    "This agent is not on the map.",
+    "Show all agents",
     "Cards",
     "Phases",
     "No projects here.",

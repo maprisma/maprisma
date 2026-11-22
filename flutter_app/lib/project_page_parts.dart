@@ -219,10 +219,18 @@ class _StopPainter extends CustomPainter {
 /// runtime, else an "Agent default" box; the marked member as on the card;
 /// read only. One text line per member for screen readers.
 class TeamGraph extends StatelessWidget {
-  const TeamGraph({super.key, required this.project, required this.tr});
+  const TeamGraph({
+    super.key,
+    required this.project,
+    required this.tr,
+    this.onShowOnMap,
+  });
 
   final Map<String, dynamic> project;
   final String Function(String) tr;
+
+  /// Show on map (task 091), by agent command; no button without it.
+  final ValueChanged<String>? onShowOnMap;
 
   @override
   Widget build(BuildContext context) {
@@ -239,7 +247,12 @@ class TeamGraph extends StatelessWidget {
               style: Theme.of(context).textTheme.titleSmall,
             ),
           ),
-          _PhaseRow(project: project, phase: phase, tr: tr),
+          _PhaseRow(
+            project: project,
+            phase: phase,
+            tr: tr,
+            onShowOnMap: onShowOnMap,
+          ),
           const SizedBox(height: AppSpace.md),
         ],
       ],
@@ -252,11 +265,13 @@ class _PhaseRow extends StatelessWidget {
     required this.project,
     required this.phase,
     required this.tr,
+    this.onShowOnMap,
   });
 
   final Map<String, dynamic> project;
   final String phase;
   final String Function(String) tr;
+  final ValueChanged<String>? onShowOnMap;
 
   @override
   Widget build(BuildContext context) {
@@ -283,6 +298,7 @@ class _PhaseRow extends StatelessWidget {
                 ? active!['state'] as String?
                 : null,
             tr: tr,
+            onShowOnMap: onShowOnMap,
           ),
       ],
     );
@@ -294,11 +310,13 @@ class _MemberBox extends StatelessWidget {
     required this.member,
     required this.state,
     required this.tr,
+    this.onShowOnMap,
   });
 
   final Map member;
   final String? state;
   final String Function(String) tr;
+  final ValueChanged<String>? onShowOnMap;
 
   @override
   Widget build(BuildContext context) {
@@ -358,7 +376,9 @@ class _MemberBox extends StatelessWidget {
     ];
     final problem = problems.isEmpty ? null : problems.join(' · ');
     final phase = tr(member['phase'] == 'planning' ? 'Planning' : 'Execution');
-    return Semantics(
+    final agent = member['agent'];
+    final showOnMap = onShowOnMap;
+    final graph = Semantics(
       label: [phase, role, name, config, ?stateText, ?problem].join(', '),
       excludeSemantics: true,
       child: Row(
@@ -473,6 +493,30 @@ class _MemberBox extends StatelessWidget {
           ),
         ],
       ),
+    );
+    if (showOnMap == null || agent is! String || agent.isEmpty) return graph;
+    final label = tr('Show {0} on map').replaceAll('{0}', name);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Flexible(child: graph),
+        // One node: the agent's name with the button's own tap, focus and
+        // enabled state.
+        MergeSemantics(
+          child: Semantics(
+            label: label,
+            child: IconButton(
+              key: ValueKey(
+                'graph-show-${member['phase']}-${member['position']}',
+              ),
+              tooltip: label,
+              visualDensity: VisualDensity.compact,
+              icon: const Icon(Icons.travel_explore, size: 18),
+              onPressed: () => showOnMap(agent),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

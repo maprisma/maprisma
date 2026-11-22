@@ -103,7 +103,14 @@ class ProjectBoard extends StatelessWidget {
     this.onRevealed,
     this.view = BoardView.cards,
     this.onView,
+    this.agentName,
+    this.onClearAgent,
   });
+
+  /// The agent chip (from the map's "Used in N projects", task 091): the
+  /// projects are already narrowed to that agent; × or All clears it.
+  final String? agentName;
+  final VoidCallback? onClearAgent;
 
   /// Cards or Phases (navigation only).
   final BoardView view;
@@ -230,12 +237,26 @@ class ProjectBoard extends StatelessWidget {
               newFocus: newFocus,
               view: view,
               onView: onView,
+              agentName: agentName,
+              onClearAgent: onClearAgent,
               tr: tr,
             ),
             const Divider(height: 1),
             Expanded(
-              child: projects.isEmpty
+              child: projects.isEmpty && agentName == null
                   ? _EmptyBoard(onNew: onNew, tr: tr)
+                  // A filter or the agent chip that leaves nothing.
+                  : shown.isEmpty
+                  ? Center(
+                      key: const ValueKey('board-none'),
+                      child: Padding(
+                        padding: const EdgeInsets.all(AppSpace.md),
+                        child: Text(
+                          tr('No projects here.'),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    )
                   : view == BoardView.phases
                   ? PhasesBoard(
                       projects: shown,
@@ -305,9 +326,13 @@ class _SummaryRow extends StatelessWidget {
     this.newFocus,
     this.view = BoardView.cards,
     this.onView,
+    this.agentName,
+    this.onClearAgent,
   });
 
   final FocusNode? newFocus;
+  final String? agentName;
+  final VoidCallback? onClearAgent;
   final BoardView view;
   final ValueChanged<BoardView>? onView;
 
@@ -335,8 +360,11 @@ class _SummaryRow extends StatelessWidget {
           showCheckmark: false,
           onSelected: onFilter == null
               ? null
-              // Chosen again clears; All resets.
-              : (_) => onFilter!(filter == f ? null : f),
+              // Chosen again clears; All resets both filter and agent.
+              : (_) {
+                  onFilter!(filter == f ? null : f);
+                  if (f == null) onClearAgent?.call();
+                },
         ),
       );
     }
@@ -374,6 +402,19 @@ class _SummaryRow extends StatelessWidget {
               scrollDirection: Axis.horizontal,
               child: Row(
                 children: [
+                  if (agentName case final name?)
+                    Padding(
+                      padding: const EdgeInsets.only(right: AppSpace.xs),
+                      child: InputChip(
+                        key: const ValueKey('board-agent'),
+                        avatar: const Icon(Icons.smart_toy_outlined, size: 16),
+                        label: Text(name),
+                        selected: true,
+                        showCheckmark: false,
+                        onDeleted: onClearAgent,
+                        deleteButtonTooltipMessage: tr('Show all agents'),
+                      ),
+                    ),
                   chip(null),
                   for (final f in BoardFilter.values) chip(f),
                 ],

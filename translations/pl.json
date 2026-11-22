@@ -3938,5 +3938,10 @@
   "Subscription plan": "Plan subskrypcji",
   "Phases": "Etapy",
   "No projects here.": "Brak tu projektów.",
-  "{0} projects": "Projekty: {0}"
+  "{0} projects": "Projekty: {0}",
+  "Used in 1 project": "Używany w 1 projekcie",
+  "Used in {0} projects": "Używany w projektach: {0}",
+  "Show {0} on map": "Pokaż {0} na mapie",
+  "This agent is not on the map.": "Tego agenta nie ma na mapie.",
+  "Show all agents": "Pokaż wszystkich agentów"
 }

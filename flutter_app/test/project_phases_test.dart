@@ -129,7 +129,7 @@ void main() {
 
   testWidgets('a filter that leaves nothing says so', (tester) async {
     await showPhases(tester, projects, filter: BoardFilter.ready);
-    expect(find.byKey(const ValueKey('phases-empty')), findsOneWidget);
+    expect(find.byKey(const ValueKey('board-none')), findsOneWidget);
     expect(find.text('No projects here.'), findsOneWidget);
   });
 

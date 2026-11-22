@@ -368,6 +368,15 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   String? _connectionUndo;
   String? _moveUndo;
   String? _aiFocus;
+
+  /// Show on map (task 091): the box to pan to once, and the timer that
+  /// takes its mark away again.
+  String? _mapReveal;
+  Timer? _focusTimer;
+
+  /// The Projects board's agent chip (from "Used in N projects"); it lives
+  /// with the Projects page and goes with it.
+  ({String command, String name})? _projectAgent;
   final _mapSelection = <String>{};
   Timer? _liveTimer;
   Map<String, dynamic>? _mapLayoutOverride;
@@ -525,6 +534,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     if (_mainTab != MainTab.projects || !_tabDecided) return;
     if (_showMap && _focusCategory == null) return;
     _mainTab = MainTab.map;
+    _projectAgent = null;
     // The map's first scan, deferred by a start on Projects, runs as soon as
     // the map is on screen (also with scans set to manual).
     if (_graph == null) _mapStale = true;
@@ -590,6 +600,8 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
       _visibleTerminal = null;
       _askOpen = false;
       _mainTab = tab;
+      if (tab == MainTab.map) _projectAgent = null;
+      if (tab == MainTab.projects) _forgetMapMark();
     });
     // Every explicit choice counts, also of the tab already shown.
     _saveTab(tab);
@@ -653,9 +665,125 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
   Future<bool> _toMapFirst() async {
     if (!await _leavePages() || !mounted) return false;
     if (_mainTab == MainTab.map) return true;
-    setState(() => _mainTab = MainTab.map);
+    setState(() {
+      _mainTab = MainTab.map;
+      _projectAgent = null;
+    });
     _saveTab(MainTab.map);
     return true;
+  }
+
+  /// Show on map from a project's team member: through the guards to the AI
+  /// Map, which pans the agent's box into view and marks it for a while.
+  /// Temporary: nothing about the layout, pins or view is saved.
+  Future<void> _showOnMap(String command) async {
+    if (_keysBlocked || _snapshot == null) return;
+    if (!await _toMapFirst() || !mounted) return;
+    final id = 'agent:$command';
+    _guideReturn = false;
+    _focusTimer?.cancel();
+    setState(() {
+      _card = null;
+      _browser = null;
+      _showSettings = false;
+      _showMap = true;
+      _showGuide = false;
+      _showProviders = false;
+      _showConnections = false;
+      _focusCategory = null;
+      _visibleTerminal = null;
+      _askOpen = false;
+      _aiFocus = id;
+      // The box is revealed once the map was read (an agent added meanwhile
+      // is then on it; a map not read yet gets its first scan here).
+      _mapReveal = null;
+    });
+    _revealWanted = id;
+    try {
+      await _refresh(refreshMap: true);
+    } finally {
+      if (mounted && _revealWanted == id) {
+        // Only onto the map still shown and freshly read; otherwise
+        // nothing waits for later (no stray pan, no lasting mark).
+        setState(
+          () =>
+              _mapOnScreen &&
+                  _focusCategory == null &&
+                  _browser == null &&
+                  !_showProviders &&
+                  !_showConnections &&
+                  !_failed
+              ? _mapReveal = id
+              : _forgetMapMark(),
+        );
+      }
+    }
+  }
+
+  /// The agent box a Show on map is still on its way to (null: none).
+  String? _revealWanted;
+
+  /// Leaving the AI Map: a reveal not done yet and the mark go with it.
+  void _forgetMapMark() {
+    _focusTimer?.cancel();
+    _revealWanted = null;
+    _mapReveal = null;
+    _aiFocus = null;
+  }
+
+  /// The map's answer to [_mapReveal]: the mark stays a few seconds; an agent
+  /// that is not on the map (removed, or its layer hidden) says so.
+  void _mapRevealed(bool found) {
+    if (!mounted) return;
+    final id = _mapReveal;
+    _revealWanted = null;
+    setState(() {
+      _mapReveal = null;
+      if (!found) _aiFocus = null;
+    });
+    if (!found) {
+      final context = _navigator.currentContext;
+      if (context == null) return;
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(
+          SnackBar(content: Text(tr('This agent is not on the map.'))),
+        );
+      return;
+    }
+    _focusTimer?.cancel();
+    _focusTimer = Timer(const Duration(seconds: 6), () {
+      if (mounted && _aiFocus == id) setState(() => _aiFocus = null);
+    });
+  }
+
+  /// "Used in N projects" on an agent box: the Projects tab with that
+  /// agent's chip on the board.
+  Future<void> _projectsForAgent(String command) async {
+    if (_keysBlocked || _snapshot == null || _departing || _closing) return;
+    if (!await _leaveReports() || !mounted) return;
+    final node = [
+      for (final n in _graph?['nodes'] as List? ?? const [])
+        if (n is Map && n['id'] == 'agent:$command') n,
+    ].firstOrNull;
+    final name = node == null ? command : tr('${node['label']}');
+    _guideReturn = false;
+    setState(() {
+      _card = null;
+      _browser = null;
+      _showSettings = false;
+      _showMap = true;
+      _showGuide = false;
+      _showProviders = false;
+      _showConnections = false;
+      _focusCategory = null;
+      _visibleTerminal = null;
+      _askOpen = false;
+      _mainTab = MainTab.projects;
+      _projectAgent = (command: command, name: name);
+      _forgetMapMark();
+    });
+    _saveTab(MainTab.projects);
   }
 
   /// After a switch to the map: its first scan if the start deferred it.
@@ -6478,6 +6606,7 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
     _mapLayoutTimer?.cancel();
     _startMenu.dispose();
     _aiTransform.dispose();
+    _focusTimer?.cancel();
     HardwareKeyboard.instance.removeHandler(_shotKey);
     smartWindowsShown.removeListener(_smartWindowsChanged);
     smartHelperChosen.removeListener(_smartHelperChanged);
@@ -6888,6 +7017,10 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                                   },
                                   tr: tr,
                                   onBoard: _backToBoard,
+                                  agent: _projectAgent,
+                                  onClearAgent: () =>
+                                      setState(() => _projectAgent = null),
+                                  onShowOnMap: _showOnMap,
                                   active:
                                       _showProjectCenter &&
                                       _visibleTerminal == null &&
@@ -7165,6 +7298,21 @@ class _MaprismaAppState extends State<MaprismaApp> with WindowListener {
                                                     'map_layers': layers,
                                                   }),
                                               focusedNode: _aiFocus,
+                                              // Only on the AI Map shown.
+                                              reveal: _mainTab == MainTab.map
+                                                  ? _mapReveal
+                                                  : null,
+                                              onRevealed: _mapRevealed,
+                                              usedIn: {
+                                                for (final e
+                                                    in ((_projectSummary['by_agent']
+                                                                as Map?) ??
+                                                            const {})
+                                                        .entries)
+                                                  if (e.value is int)
+                                                    '${e.key}': e.value as int,
+                                              },
+                                              onUsedIn: _projectsForAgent,
                                               onNode: _aiNode,
                                               tr: tr,
                                               onAgent: _selectAgent,

@@ -3857,5 +3857,10 @@
   "Subscription plan": "Tarif",
   "Phases": "Phasen",
   "No projects here.": "Hier sind keine Projekte.",
-  "{0} projects": "{0} Projekte"
+  "{0} projects": "{0} Projekte",
+  "Used in 1 project": "In 1 Projekt verwendet",
+  "Used in {0} projects": "In {0} Projekten verwendet",
+  "Show {0} on map": "{0} auf der Karte zeigen",
+  "This agent is not on the map.": "Dieser Agent ist nicht auf der Karte.",
+  "Show all agents": "Alle Agenten zeigen"
 }

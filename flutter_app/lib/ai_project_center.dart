@@ -25,7 +25,18 @@ class AiProjectCenterPage extends StatefulWidget {
     this.onBoard,
     this.active = true,
     this.chooseFolder,
+    this.agent,
+    this.onClearAgent,
+    this.onShowOnMap,
   });
+
+  /// The agent chip from the map's "Used in N projects" (task 091): the
+  /// board shows only projects whose planning or execution names it.
+  final ({String command, String name})? agent;
+  final VoidCallback? onClearAgent;
+
+  /// Show on map from a Team graph member (by agent command).
+  final ValueChanged<String>? onShowOnMap;
 
   final ProjectCenterCall onCall;
   final String Function(String) tr;
@@ -130,23 +141,33 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
   Future<bool> backToBoard() async {
     if (!projectOpen) return true;
     if (!await beforeLeave() || !mounted) return false;
-    final id = _openedId;
+    // A new project saved meanwhile is the card to come back to.
+    final id = _openedId ?? _project?['id'] as String?;
+    var agentCleared = false;
     setState(() {
       _projectOpen = false;
       // The project page's message stays with the page.
       if (!_keepError) _error = null;
-      // The opened card is shown again even when it left the filter.
+      // The opened card is shown again even when it left the filter (or
+      // the agent chip).
       final card = _projects.where((p) => p['id'] == id).firstOrNull;
       if (card != null && _filter != null && card['bucket'] != _filter!.code) {
         _filter = null;
       }
+      if (card != null && !namesAgent(card, widget.agent?.command)) {
+        agentCleared = true;
+      }
     });
+    if (agentCleared) widget.onClearAgent?.call();
+    final agent = agentCleared ? null : widget.agent?.command;
     // The board scrolls the card into view, then it gets the keyboard; for a
     // card deleted meanwhile the first one the filter shows takes its place,
     // and with none left, New project.
     final shown = [
       for (final p in _projects)
-        if (_filter == null || p['bucket'] == _filter!.code) '${p['id']}',
+        if ((_filter == null || p['bucket'] == _filter!.code) &&
+            namesAgent(p, agent))
+          '${p['id']}',
     ];
     setState(() => _reveal = shown.contains(id) ? id : shown.firstOrNull ?? '');
     return true;
@@ -1522,7 +1543,11 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
   Widget _teamWithGraph() {
     final card = _openCard;
     if (card == null) return _teamPane();
-    final graph = TeamGraph(project: card, tr: tr);
+    final graph = TeamGraph(
+      project: card,
+      tr: tr,
+      onShowOnMap: widget.onShowOnMap,
+    );
     return LayoutBuilder(
       builder: (context, box) => box.maxWidth >= 900
           ? Row(
@@ -1885,7 +1910,12 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
                           ),
                         Expanded(
                           child: ProjectBoard(
-                            projects: _projects,
+                            projects: [
+                              for (final p in _projects)
+                                if (namesAgent(p, widget.agent?.command)) p,
+                            ],
+                            agentName: widget.agent?.name,
+                            onClearAgent: widget.onClearAgent,
                             tr: tr,
                             unavailable: _unavailable,
                             filter: _filter,
@@ -2017,3 +2047,12 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
     ],
   );
 }
+
+/// Whether a board card's planning or execution names the agent [command]
+/// (null: every card).
+bool namesAgent(Map<String, dynamic> project, String? command) =>
+    command == null ||
+    [
+      for (final phase in ['planning', 'execution'])
+        ...?(project[phase] as List?),
+    ].any((m) => m is Map && m['agent'] == command);

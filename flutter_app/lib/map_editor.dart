@@ -1,6 +1,6 @@
 import 'dart:async' show FutureOr, unawaited;
 
-import 'package:flutter/foundation.dart' show listEquals;
+import 'package:flutter/foundation.dart' show listEquals, mapEquals;
 import 'package:flutter/gestures.dart' show GestureBinding, PointerScrollEvent;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -30,6 +30,11 @@ class MapEditor extends StatefulWidget {
   const MapEditor({
     this.layers,
     this.onLayers,
+    this.focused,
+    this.reveal,
+    this.onRevealed,
+    this.usedIn = const {},
+    this.onUsedIn,
     super.key,
     required this.graph,
     required this.saved,
@@ -110,6 +115,18 @@ class MapEditor extends StatefulWidget {
   /// the three map views. Null: no filter.
   final List<String>? layers;
   final FutureOr<void> Function(List<String>)? onLayers;
+
+  /// A box marked for a while (Show on map, task 091).
+  final String? focused;
+
+  /// A box to pan into view once; [onRevealed] says whether it is on the
+  /// map. Temporary: no layout, pin or saved view is written.
+  final String? reveal;
+  final ValueChanged<bool>? onRevealed;
+
+  /// Projects naming an agent (`by_agent`, by command) and the way to them.
+  final Map<String, int> usedIn;
+  final ValueChanged<String>? onUsedIn;
   @override
   State<MapEditor> createState() => _MapEditorState();
 }
@@ -271,6 +288,10 @@ class _MapEditorState extends State<MapEditor>
       _pendingSmartPan = null;
       if (_openSmartColumn == col) _panSmartCardIntoView(col);
     }
+    if (_pendingReveal case final id?) {
+      _pendingReveal = null;
+      if (widget.reveal == id) widget.onRevealed?.call(_panIntoView(id));
+    }
   }
 
   void _fitAgain() {
@@ -372,11 +393,70 @@ class _MapEditorState extends State<MapEditor>
       ..clampedTo = null;
     _transform.addListener(_zoomChanged);
     mapFit[_transform] = _fitAgain;
+    _askReveal();
+  }
+
+  /// The box [MapEditor.reveal] names, once: panned into view after the
+  /// frame that lays it out.
+  String? _revealing;
+  String? _pendingReveal;
+  void _askReveal() {
+    final id = widget.reveal;
+    if (id == null || id == _revealing) return;
+    _revealing = id;
+    // Taken by the next settled fit (scale, viewport and clamping done),
+    // so the fit cannot move the box away again.
+    _pendingReveal = id;
+  }
+
+  /// Pans the box into view (centred when it was outside); false when the
+  /// box is not on the map (removed, or its layer hidden).
+  bool _panIntoView(String id) {
+    final layout = _layout ??= MapLayout(
+      _shownGraph,
+      _saved,
+      smartCards: widget.smartCards,
+      columns: _shownColumns,
+      viewportWidth: _viewportWidth,
+      centerWidth: _centerIn,
+    );
+    final rect = layout.boxes[id];
+    if (rect == null) return false;
+    final box = _viewport.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return true;
+    final visible = Rect.fromPoints(
+      _transform.toScene(Offset.zero),
+      _transform.toScene(Offset(box.size.width, box.size.height)),
+    );
+    if (visible.contains(rect.topLeft) && visible.contains(rect.bottomRight)) {
+      return true;
+    }
+    final d = visible.center - rect.center;
+    _fitting = true;
+    _transform.value = _transform.value.clone()
+      ..translateByDouble(d.dx, d.dy, 0, 1);
+    scrollMap(
+      _transform,
+      Offset.zero,
+      viewport: box.size,
+      content: layout.size,
+    );
+    _fitting = false;
+    return true;
   }
 
   @override
   void didUpdateWidget(covariant MapEditor old) {
     super.didUpdateWidget(old);
+    if (widget.reveal != old.reveal) {
+      if (widget.reveal == null) _revealing = null;
+      _askReveal();
+    }
+    if (widget.focused != old.focused ||
+        !mapEquals(widget.usedIn, old.usedIn) ||
+        (widget.onUsedIn == null) != (old.onUsedIn == null)) {
+      _staticRevision++;
+    }
     if (old.controller != widget.controller) {
       final prev = old.controller ?? _ownTransform;
       prev.removeListener(_zoomChanged);
@@ -796,13 +876,17 @@ class _MapEditorState extends State<MapEditor>
             inset: 4.0,
             faceColor: face,
             depth: map3dColumnDepth(node['column'] as int? ?? 1),
-            accent: valid || lit.contains(id)
+            accent: valid || lit.contains(id) || widget.focused == id
                 ? colors.primary
                 : running
                 ? colors.secondary
                 : null,
             elevated:
-                _hover == id || _selected.contains(id) || valid || running,
+                _hover == id ||
+                _selected.contains(id) ||
+                valid ||
+                running ||
+                widget.focused == id,
             dimmed: dimmed,
             child: Stack(
               fit: StackFit.expand,
@@ -823,10 +907,15 @@ class _MapEditorState extends State<MapEditor>
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(radius),
                       side: BorderSide(
-                        color: valid || lit.contains(id)
+                        color: valid || lit.contains(id) || widget.focused == id
                             ? colors.primary
                             : colors.outlineVariant,
-                        width: valid || _selected.contains(id) ? 3 : 1,
+                        width:
+                            valid ||
+                                _selected.contains(id) ||
+                                widget.focused == id
+                            ? 3
+                            : 1,
                       ),
                     ),
                     child: Stack(
@@ -898,6 +987,16 @@ class _MapEditorState extends State<MapEditor>
                                           },
                                         ),
                                       ),
+                                      if (command.isNotEmpty &&
+                                          widget.usedIn[command] != null &&
+                                          widget.usedIn[command]! > 0)
+                                        _UsedIn(
+                                          count: widget.usedIn[command]!,
+                                          tr: widget.tr,
+                                          onTap: widget.onUsedIn == null
+                                              ? null
+                                              : () => widget.onUsedIn!(command),
+                                        ),
                                       if ((widget.graph['update_badges']
                                               as Map?)?[id]
                                           case final List updates
@@ -959,6 +1058,8 @@ class _MapEditorState extends State<MapEditor>
                                               );
                                             case 'ask':
                                               widget.onAsk?.call(node);
+                                            case 'projects':
+                                              widget.onUsedIn?.call(command);
                                             case 'open':
                                               widget.onOpen?.call(node);
                                             case 'actions':
@@ -1005,6 +1106,19 @@ class _MapEditorState extends State<MapEditor>
                                                 value: action,
                                                 child: Text(label),
                                               ),
+                                          if (widget.onUsedIn != null &&
+                                              command.isNotEmpty &&
+                                              (widget.usedIn[command] ?? 0) > 0)
+                                            PopupMenuItem(
+                                              key: ValueKey('used-in-$id'),
+                                              value: 'projects',
+                                              child: Text(
+                                                usedInText(
+                                                  widget.tr,
+                                                  widget.usedIn[command]!,
+                                                ),
+                                              ),
+                                            ),
                                           PopupMenuItem(
                                             value: 'connect',
                                             child: Text(widget.tr('Connect')),
@@ -2307,4 +2421,51 @@ class _ColumnEdge extends StatelessWidget {
       ),
     ),
   );
+}
+
+/// "Used in 1 project" / "Used in N projects".
+String usedInText(String Function(String) tr, int count) => count == 1
+    ? tr('Used in 1 project')
+    : tr('Used in {0} projects').replaceAll('{0}', '$count');
+
+/// The agent box's "Used in N projects" badge (task 091): opens Projects
+/// with the agent chip.
+class _UsedIn extends StatelessWidget {
+  const _UsedIn({required this.count, required this.tr, this.onTap});
+  final int count;
+  final String Function(String) tr;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = usedInText(tr, count);
+    // The InkWell keeps its tap, focus and enabled state for screen
+    // readers; they read the sentence, not the bare number.
+    return Tooltip(
+      message: text,
+      excludeFromSemantics: true,
+      child: InkWell(
+        key: const ValueKey('used-in-badge'),
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(6),
+        child: Semantics(
+          button: true,
+          label: text,
+          child: ExcludeSemantics(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.folder_copy_outlined, size: 14),
+                  const SizedBox(width: 2),
+                  Text('$count', style: const TextStyle(fontSize: 11)),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

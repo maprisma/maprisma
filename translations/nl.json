@@ -3857,5 +3857,10 @@
   "Subscription plan": "Abonnement",
   "Phases": "Fasen",
   "No projects here.": "Hier zijn geen projecten.",
-  "{0} projects": "{0} projecten"
+  "{0} projects": "{0} projecten",
+  "Used in 1 project": "Gebruikt in 1 project",
+  "Used in {0} projects": "Gebruikt in {0} projecten",
+  "Show {0} on map": "{0} op de kaart tonen",
+  "This agent is not on the map.": "Deze agent staat niet op de kaart.",
+  "Show all agents": "Alle agents tonen"
 }
