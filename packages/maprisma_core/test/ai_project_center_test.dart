@@ -3733,4 +3733,606 @@ void main() {
       expect(stored()['assignment_started'], isTrue);
     });
   });
+
+  group('messages to a running project (task 096)', () {
+    Future<Map<String, dynamic>> message(
+      Map<String, dynamic> item,
+      String text, {
+      String mode = 'queue',
+      Object? runId,
+      bool? acknowledge,
+    }) => plugin.call('message', {
+      'id': item['id'],
+      'run_id': runId ?? item['run_id'],
+      'text': text,
+      'mode': mode,
+      if (acknowledge != null || mode == 'now')
+        'acknowledge_interrupted': acknowledge ?? true,
+    });
+
+    int occurrences(String haystack, String needle) =>
+        needle.allMatches(haystack).length;
+
+    List<String> eventTypes(Map<String, dynamic> item) => [
+      for (final event in item['events'] as List)
+        (event as Map)['type'] as String,
+    ];
+
+    Future<Map<String, dynamic>> started(
+      List<Map<String, dynamic>> team,
+    ) async {
+      final item = await approve(await save(plan: 'The plan.', team: team));
+      await plugin.call('run', {
+        'id': item['id'],
+        'revision': item['revision'],
+      });
+      await waitUntil(() => processes.length == 1);
+      return project(plugin, item['id'] as String);
+    }
+
+    test('Send queues for the next assignment, which gets it exactly once; '
+        'the handoff keeps it for later ones', () async {
+      final item = await started([
+        {'agent': 'fixture', 'role': 'lead'},
+        {'agent': 'fixture', 'role': 'implementer'},
+        {'agent': 'fixture', 'role': 'reviewer'},
+      ]);
+      const text = 'Please also update the changelog.';
+      final sent = await message(item, text);
+      expect(sent['continued'], isFalse);
+      expect(sent['reason'], isNull);
+      expect((sent['message'] as Map)['state'], 'queued');
+      var current = sent['project'] as Map<String, dynamic>;
+      expect(current['status'], 'running');
+      expect(current['messages_queued'], 1);
+      expect(eventTypes(current).last, 'message');
+      // The current agent keeps working; the card shows the count.
+      expect(processes.single.stopped, isFalse);
+      final card = ((await plugin.call('list', {}))['projects'] as List).single;
+      expect((card as Map)['messages_queued'], 1);
+      expect(occurrences(commands[0].last, text), 0);
+      await processes[0].finish('Lead done.');
+      await waitUntil(() => processes.length == 2);
+      expect(occurrences(commands[1].last, text), 1);
+      expect(commands[1].last, contains('Messages from the user'));
+      current = await project(plugin, item['id'] as String);
+      expect(current['messages_queued'], 0);
+      final stored = (current['messages'] as List).single as Map;
+      expect(stored['state'], 'delivered');
+      expect(stored['delivered_to'], {
+        'phase': 'execution',
+        'position': 1,
+        'agent': 'fixture',
+        'role': 'implementer',
+      });
+      expect(occurrences(current['handoff'] as String, text), 1);
+      expect(eventTypes(current), contains('message_delivered'));
+      await processes[1].finish('Implemented.');
+      await waitUntil(() => processes.length == 3);
+      // Later assignments see it once, in the handoff, not as a new message.
+      expect(occurrences(commands[2].last, text), 1);
+      expect(commands[2].last, isNot(contains('Messages from the user')));
+      await processes[2].finish('No findings.');
+      await waitUntil(() => plugin.summary()['running'] == 0);
+      expect(
+        (await project(plugin, item['id'] as String))['status'],
+        'completed',
+      );
+    });
+
+    test('refused when not running, for another run, empty, too long, '
+        'invalid or too many', () async {
+      final ready = await approve(await save(plan: 'The plan.'));
+      await expectLater(
+        message(ready, 'Hello', runId: 'none'),
+        throwsA(errorCode('project_not_running')),
+      );
+      final item = await started([
+        {'agent': 'fixture', 'role': 'lead'},
+      ]);
+      await expectLater(
+        message(item, 'Hello', runId: 'another-run'),
+        throwsA(errorCode('project_changed')),
+      );
+      await expectLater(
+        plugin.call('message', {'id': item['id'], 'text': 'Hello'}),
+        throwsA(errorCode('project_changed')),
+      );
+      await expectLater(
+        message(item, '  \n '),
+        throwsA(errorCode('project_message_empty')),
+      );
+      await expectLater(
+        message(item, 'ä' * 2049),
+        throwsA(errorCode('project_message_too_long')),
+      );
+      await expectLater(
+        message(item, 'Hello', mode: 'later'),
+        throwsA(errorCode('project_message_invalid')),
+      );
+      await expectLater(
+        plugin.call('message', {
+          'id': item['id'],
+          'run_id': item['run_id'],
+          'text': 'Hello',
+          'extra': true,
+        }),
+        throwsA(errorCode('project_message_invalid')),
+      );
+      await expectLater(
+        plugin.call('message', {'id': 'unknown', 'run_id': 'x', 'text': 'Hi'}),
+        throwsA(errorCode('project_unknown')),
+      );
+      // The longest allowed message is accepted; the queue is bounded.
+      await message(item, 'ä' * 2048);
+      for (var i = 1; i < AiProjectCenterPlugin.maxQueuedMessages; i++) {
+        await message(item, 'Message $i');
+      }
+      await expectLater(
+        message(item, 'One too many'),
+        throwsA(errorCode('project_messages_full')),
+      );
+      // Ended runs refuse: the run id is still the last one.
+      await processes.single.finish('Done.');
+      await waitUntil(() => plugin.summary()['running'] == 0);
+      final done = await project(plugin, item['id'] as String);
+      expect(done['status'], 'completed');
+      await expectLater(
+        message(done, 'Too late'),
+        throwsA(errorCode('project_not_running')),
+      );
+      // Nothing was delivered: the run had no further assignment.
+      expect(done['messages_queued'], AiProjectCenterPlugin.maxQueuedMessages);
+      expect(eventTypes(done), contains('message_waiting'));
+      expect(commands, hasLength(1));
+    });
+
+    test('team setup refuses messages', () async {
+      final item = await save();
+      await plugin.call('setup', {
+        'id': item['id'],
+        'revision': item['revision'],
+        'request': 'Use fixture.',
+        'agent': 'fixture',
+      });
+      await waitUntil(() => processes.length == 1);
+      final current = await project(plugin, item['id'] as String);
+      await expectLater(
+        message(current, 'Hello'),
+        throwsA(errorCode('project_not_running')),
+      );
+      await processes.single.finish('{}');
+      await waitUntil(() => plugin.summary()['running'] == 0);
+    });
+
+    test('while pausing, Send queues and Send now is refused', () async {
+      final item = await started([
+        {'agent': 'fixture', 'role': 'lead'},
+      ]);
+      processes.single.refuseStop = true;
+      await expectLater(
+        plugin.call('pause', {'id': item['id']}),
+        throwsA(errorCode('project_still_pausing')),
+      );
+      await expectLater(
+        message(item, 'Now, please', mode: 'now'),
+        throwsA(errorCode('project_still_pausing')),
+      );
+      final sent = await message(item, 'When you continue, check the tests.');
+      expect((sent['project'] as Map)['messages_queued'], 1);
+      processes.single.refuseStop = false;
+      var current =
+          (await plugin.call('pause', {'id': item['id']}))['project']
+              as Map<String, dynamic>;
+      expect(current['status'], 'paused');
+      await plugin.call('continue', {
+        'id': item['id'],
+        'revision': current['revision'],
+        'acknowledge_interrupted': true,
+      });
+      await waitUntil(() => processes.length == 2);
+      expect(
+        occurrences(commands[1].last, 'When you continue, check the tests.'),
+        1,
+      );
+      current = await project(plugin, item['id'] as String);
+      expect(current['messages_queued'], 0);
+    });
+
+    test('Send now pauses the agent and continues at once with the handoff '
+        'and the message', () async {
+      final item = await started([
+        {'agent': 'fixture', 'role': 'lead'},
+        {'agent': 'fixture', 'role': 'implementer'},
+      ]);
+      processes[0].lines.add('Partial progress.');
+      await Future<void>.delayed(Duration.zero);
+      const text = 'Stop using the old API, switch to the new one.';
+      final sent = await message(item, text, mode: 'now');
+      expect(sent['continued'], isTrue, reason: '${sent['reason']}');
+      expect(processes[0].stopped, isTrue);
+      await waitUntil(() => processes.length == 2);
+      // The interrupted lead runs again in a new session.
+      expect(commands[1][1], 'workspace-write');
+      expect(occurrences(commands[1].last, text), 1);
+      expect(commands[1].last, contains('Partial progress.'));
+      expect(
+        commands[1].last,
+        contains('never repeat an uncertain side effect'),
+      );
+      final current = await project(plugin, item['id'] as String);
+      expect(current['status'], 'running');
+      expect(current['run_id'], isNot(item['run_id']));
+      expect(current['messages_queued'], 0);
+      final stored = (current['messages'] as List).single as Map;
+      expect(stored['mode'], 'now');
+      expect(stored['state'], 'delivered');
+      expect((stored['delivered_to'] as Map)['position'], 0);
+      final types = eventTypes(current);
+      final at = types.lastIndexOf('message');
+      expect(types.sublist(at), [
+        'message',
+        'pausing',
+        'paused',
+        'continued',
+        'assignment',
+        'message_delivered',
+      ]);
+      await processes[1].finish('Lead switched the API.');
+      await waitUntil(() => processes.length == 3);
+      // The next assignment finds it in the handoff only.
+      expect(occurrences(commands[2].last, text), 1);
+      await processes[2].finish('Implemented.');
+      await waitUntil(() => plugin.summary()['running'] == 0);
+    });
+
+    test('Send now that cannot continue keeps the message queued and the '
+        'project paused', () async {
+      final item = await started([
+        {'agent': 'fixture', 'role': 'lead'},
+      ]);
+      // The adapter changes meanwhile: the continuation needs a new approval.
+      final original = profiles.single['run_argv'];
+      profiles.single['run_argv'] = ['/fixture/agent', 'changed', '{prompt}'];
+      const text = 'Use the staging database.';
+      final sent = await message(item, text, mode: 'now');
+      expect(sent['continued'], isFalse);
+      expect(sent['reason'], 'project_plan_not_approved');
+      var current = sent['project'] as Map<String, dynamic>;
+      expect(current['status'], 'paused');
+      expect(current['messages_queued'], 1);
+      expect(eventTypes(current).last, 'message_waiting');
+      expect(processes, hasLength(1));
+      // Once fixed, the next continuation gets it.
+      profiles.single['run_argv'] = original;
+      await plugin.call('continue', {
+        'id': item['id'],
+        'revision': current['revision'],
+        'acknowledge_interrupted': true,
+      });
+      await waitUntil(() => processes.length == 2);
+      expect(occurrences(commands[1].last, text), 1);
+      current = await project(plugin, item['id'] as String);
+      expect(current['messages_queued'], 0);
+    });
+
+    test('a launch that never started keeps the message queued', () async {
+      final item = await approve(
+        await save(
+          plan: 'The plan.',
+          team: [
+            {'agent': 'fixture', 'role': 'lead'},
+            {'agent': 'fixture', 'role': 'implementer'},
+          ],
+        ),
+      );
+      await plugin.shutdown();
+      var launches = 0;
+      plugin = AiProjectCenterPlugin(
+        temporary.path,
+        agentProfiles: () => profiles,
+        filesystem: TestPosix(),
+        runner: (argv, cwd, environment, input, _, _) async {
+          commands.add(argv);
+          if (++launches == 2) {
+            throw ServiceError('project_agent_unavailable');
+          }
+          final process = FakeProjectProcess();
+          processes.add(process);
+          return process;
+        },
+      );
+      var current = await project(plugin, item['id'] as String);
+      await plugin.call('run', {
+        'id': current['id'],
+        'revision': current['revision'],
+      });
+      await waitUntil(() => processes.length == 1);
+      current = await project(plugin, item['id'] as String);
+      await message(current, 'Mind the tests.');
+      await processes.single.finish('Lead done.');
+      await waitUntil(() => plugin.summary()['running'] == 0);
+      current = await project(plugin, item['id'] as String);
+      expect(current['status'], 'failed');
+      expect(current['messages_queued'], 1);
+      expect(eventTypes(current), isNot(contains('message_delivered')));
+      expect(current['handoff'], isNot(contains('Mind the tests.')));
+    });
+
+    test(
+      'queued messages survive a restart and reach the continuation',
+      () async {
+        final item = await started([
+          {'agent': 'fixture', 'role': 'lead'},
+        ]);
+        await message(item, 'Remember the docs.');
+        await plugin.shutdown();
+        plugin = AiProjectCenterPlugin(
+          temporary.path,
+          agentProfiles: () => profiles,
+          filesystem: TestPosix(),
+          runner: (argv, cwd, environment, input, _, _) async {
+            commands.add(argv);
+            final process = FakeProjectProcess();
+            processes.add(process);
+            return process;
+          },
+        );
+        var current = await project(plugin, item['id'] as String);
+        expect(current['messages_queued'], 1);
+        expect(
+          ((current['messages'] as List).single as Map)['text'],
+          'Remember the docs.',
+        );
+        await plugin.call('continue', {
+          'id': current['id'],
+          'revision': current['revision'],
+          'acknowledge_interrupted': true,
+        });
+        await waitUntil(() => processes.length == 2);
+        expect(occurrences(commands[1].last, 'Remember the docs.'), 1);
+        await processes[1].finish('Done.');
+        await waitUntil(() => plugin.summary()['running'] == 0);
+        await plugin.shutdown();
+        plugin = AiProjectCenterPlugin(
+          temporary.path,
+          agentProfiles: () => profiles,
+          filesystem: TestPosix(),
+        );
+        current = await project(plugin, item['id'] as String);
+        expect(current['messages_queued'], 0);
+        expect(
+          ((current['messages'] as List).single as Map)['state'],
+          'delivered',
+        );
+      },
+    );
+
+    test(
+      'a message during planning reaches the next planning assignment',
+      () async {
+        final item = await save(
+          team: [
+            {'agent': 'fixture', 'role': 'lead'},
+            {'agent': 'fixture', 'role': 'reviewer'},
+          ],
+        );
+        await plugin.call('plan', {
+          'id': item['id'],
+          'revision': item['revision'],
+        });
+        await waitUntil(() => processes.length == 1);
+        final current = await project(plugin, item['id'] as String);
+        await message(current, 'Check the migration risk.');
+        await processes[0].finish('1. Do it.');
+        await waitUntil(() => processes.length == 2);
+        expect(commands[1][1], 'read-only');
+        expect(occurrences(commands[1].last, 'Check the migration risk.'), 1);
+        final delivered = await project(plugin, item['id'] as String);
+        expect(
+          ((delivered['messages'] as List).single as Map)['delivered_to'],
+          containsPair('phase', 'planning'),
+        );
+        await processes[1].finish('No findings.');
+        await waitUntil(() => plugin.summary()['running'] == 0);
+      },
+    );
+
+    test('a store that would be too large refuses only the message', () async {
+      final item = await approve(await save(plan: 'The plan.'));
+      final size = File('${plugin.directory}/projects.json').lengthSync();
+      await plugin.shutdown();
+      plugin = AiProjectCenterPlugin(
+        temporary.path,
+        agentProfiles: () => profiles,
+        filesystem: TestPosix(),
+        storeLimit: size + 3000,
+        runner: (argv, cwd, environment, input, _, _) async {
+          commands.add(argv);
+          final process = FakeProjectProcess();
+          processes.add(process);
+          return process;
+        },
+      );
+      var current = await project(plugin, item['id'] as String);
+      await plugin.call('run', {
+        'id': current['id'],
+        'revision': current['revision'],
+      });
+      await waitUntil(() => processes.length == 1);
+      current = await project(plugin, item['id'] as String);
+      await expectLater(
+        message(current, 'x' * 4000),
+        throwsA(errorCode('project_store_full')),
+      );
+      expect(plugin.summary()['error'], isNull);
+      expect(processes.single.stopped, isFalse);
+      current = await project(plugin, item['id'] as String);
+      expect(current['status'], 'running');
+      expect(current['messages_queued'], 0);
+      await processes.single.finish('Done.');
+      await waitUntil(() => plugin.summary()['running'] == 0);
+      expect(
+        (await project(plugin, item['id'] as String))['status'],
+        'completed',
+      );
+    });
+
+    test('Send now needs the Continue confirmation; Send takes none', () async {
+      final item = await started([
+        {'agent': 'fixture', 'role': 'lead'},
+      ]);
+      await expectLater(
+        message(item, 'Now.', mode: 'now', acknowledge: false),
+        throwsA(errorCode('project_review_changes_first')),
+      );
+      await expectLater(
+        plugin.call('message', {
+          'id': item['id'],
+          'run_id': item['run_id'],
+          'text': 'Now.',
+          'mode': 'now',
+        }),
+        throwsA(errorCode('project_review_changes_first')),
+      );
+      await expectLater(
+        message(item, 'Later.', acknowledge: true),
+        throwsA(errorCode('project_message_invalid')),
+      );
+      // Nothing was stored or stopped.
+      final current = await project(plugin, item['id'] as String);
+      expect(current['messages'], isEmpty);
+      expect(processes.single.stopped, isFalse);
+    });
+
+    test('a waiting message can be dropped, a delivered one cannot', () async {
+      final item = await started([
+        {'agent': 'fixture', 'role': 'lead'},
+        {'agent': 'fixture', 'role': 'implementer'},
+      ]);
+      final first = (await message(item, 'Deliver me.'))['message'] as Map;
+      final second = (await message(item, 'Drop me.'))['message'] as Map;
+      final dropped =
+          (await plugin.call('message_drop', {
+                'id': item['id'],
+                'message_id': second['id'],
+              }))['project']
+              as Map<String, dynamic>;
+      expect(dropped['messages_queued'], 1);
+      expect(eventTypes(dropped).last, 'message_dropped');
+      await expectLater(
+        plugin.call('message_drop', {
+          'id': item['id'],
+          'message_id': second['id'],
+        }),
+        throwsA(errorCode('project_message_unknown')),
+      );
+      await expectLater(
+        plugin.call('message_drop', {'id': item['id']}),
+        throwsA(errorCode('project_message_invalid')),
+      );
+      await processes[0].finish('Lead done.');
+      await waitUntil(() => processes.length == 2);
+      expect(commands[1].last, contains('Deliver me.'));
+      expect(commands[1].last, isNot(contains('Drop me.')));
+      await expectLater(
+        plugin.call('message_drop', {
+          'id': item['id'],
+          'message_id': first['id'],
+        }),
+        throwsA(errorCode('project_message_delivered')),
+      );
+      await processes[1].finish('Done.');
+      await waitUntil(() => plugin.summary()['running'] == 0);
+    });
+
+    test('a message left after the run ended can be dropped', () async {
+      final item = await started([
+        {'agent': 'fixture', 'role': 'lead'},
+      ]);
+      final sent = (await message(item, 'Too late.'))['message'] as Map;
+      await processes.single.finish('Done.');
+      await waitUntil(() => plugin.summary()['running'] == 0);
+      var current = await project(plugin, item['id'] as String);
+      expect(current['status'], 'completed');
+      expect(current['messages_queued'], 1);
+      current =
+          (await plugin.call('message_drop', {
+                'id': item['id'],
+                'message_id': sent['id'],
+              }))['project']
+              as Map<String, dynamic>;
+      expect(current['messages_queued'], 0);
+      expect(current['messages'], isEmpty);
+    });
+
+    test('the waiting text of a project is at most 16 KiB', () async {
+      final item = await started([
+        {'agent': 'fixture', 'role': 'lead'},
+      ]);
+      for (var i = 0; i < 3; i++) {
+        await message(item, '$i' * 4096);
+      }
+      // 12 KiB wait; 4 KiB more fit exactly, one byte more does not.
+      await expectLater(
+        message(item, 'x' * 4097),
+        throwsA(errorCode('project_message_too_long')),
+      );
+      final last = (await message(item, 'y' * 4096))['message'] as Map;
+      await expectLater(
+        message(item, 'z'),
+        throwsA(errorCode('project_messages_full')),
+      );
+      // Dropping one makes room again.
+      await plugin.call('message_drop', {
+        'id': item['id'],
+        'message_id': last['id'],
+      });
+      await message(item, 'z');
+      expect(
+        (await project(plugin, item['id'] as String))['messages_queued'],
+        4,
+      );
+    });
+
+    test('the largest prompt with waiting messages stays below one argv '
+        'word\'s limit', () async {
+      final item = await approve(
+        await save(
+          plan: 'p' * AiProjectCenterPlugin.maxPlan,
+          team: [
+            {'agent': 'fixture', 'role': 'lead', 'instructions': 'i' * 4000},
+            {'agent': 'fixture', 'role': 'implementer'},
+          ],
+        ),
+      );
+      var current =
+          (await plugin.call('save', {
+                'id': item['id'],
+                'revision': item['revision'],
+                'title': 't' * 200,
+                'brief': 'b' * (16 * 1024),
+              }))['project']
+              as Map<String, dynamic>;
+      current = await approve(current);
+      await plugin.call('run', {
+        'id': current['id'],
+        'revision': current['revision'],
+      });
+      await waitUntil(() => processes.length == 1);
+      current = await project(plugin, item['id'] as String);
+      for (var i = 0; i < 4; i++) {
+        await message(current, '$i' * 4096);
+      }
+      // The lead's output fills the handoff (64 KiB, 16 KiB in the prompt).
+      await processes[0].finish('o' * (80 * 1024));
+      await waitUntil(() => processes.length == 2);
+      final bytes = utf8.encode(commands[1].last).length;
+      expect(bytes, lessThan(AiProjectCenterPlugin.maxPromptBytes));
+      expect(bytes, lessThan(128 * 1024));
+      printOnFailure('largest prompt: $bytes bytes');
+      await processes[1].finish('Done.');
+      await waitUntil(() => plugin.summary()['running'] == 0);
+    });
+  });
 }

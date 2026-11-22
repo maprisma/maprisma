@@ -977,7 +977,7 @@ void main() {
         expect(host.capabilities('ai-project-center'), [
           'summary2',
           'board',
-          'order',
+          'messages',
         ]);
         await host.shutdown();
       },
@@ -1290,21 +1290,30 @@ void main() {
         final listed = await call('list', {}, refresh: true);
         // The backend offers the board (task 087), with its projection.
         expect(listed['capabilities'], contains('board'));
-        expect(listed['capabilities'], contains('order'));
+        // and messages to a running project (task 096): the route reaches it.
+        expect(listed['capabilities'], contains('messages'));
+        await expectLater(
+          call('message', {
+            'id': item['id'],
+            'run_id': item['run_id'],
+            'text': 'Hello',
+          }),
+          throwsA(
+            isA<ServiceError>().having(
+              (e) => e.code,
+              'code',
+              'project_not_running',
+            ),
+          ),
+        );
         final card = (listed['projects'] as List).single as Map;
         expect(card['bucket'], 'needs_you');
+        expect(card['messages_queued'], 0);
         expect((card['execution'] as List).single['name'], isA<String>());
         expect((listed['summary'] as Map)['ready'], 0);
         expect((listed['summary'] as Map)['needs_you'], 1);
         final viewed = await call('get', {'id': item['id']});
         expect((viewed['project'] as Map)['approval_valid'], isFalse);
-        // Order and importance (task 095) pass the host to the worker.
-        expect((await call('move', {'id': item['id']}))['order'], [item['id']]);
-        final marked = await call('set_importance', {
-          'id': item['id'],
-          'importance': 'high',
-        });
-        expect((marked['project'] as Map)['importance'], 'high');
         await service.shutdownFeatures();
       },
       timeout: const Timeout(Duration(minutes: 2)),

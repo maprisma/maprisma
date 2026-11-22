@@ -140,6 +140,8 @@ extension FeatureRoutes on CoreService {
             'run',
             'pause',
             'continue',
+            'message',
+            'message_drop',
           }.contains(operation) =>
         operation,
       _ => throw ServiceError('feature_operation_unknown'),
