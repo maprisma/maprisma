@@ -1693,8 +1693,8 @@ final class AiProjectCenterPlugin {
         // Delivered only once the agent's own process exists; a failed
         // spawn keeps the messages queued.
         // Include the supervisor lock handshake in the ten-second startup
-        // budget. Together with bounded pause/cleanup this stays below the
-        // worker's shutdown and call deadlines.
+        // budget. With bounded pause/cleanup the call fits the worker's
+        // 45-second deadline; @shutdown queues behind it in the worker.
         final remaining = const Duration(seconds: 10) - startup.elapsed;
         final launched = await process.started.timeout(
           remaining.isNegative ? Duration.zero : remaining,
@@ -2101,6 +2101,8 @@ final class AiProjectCenterPlugin {
               : 'project_message_delivered',
         );
       }
+      // A shutdown that waited for the same stop: no new session.
+      if (_closed) throw ServiceError('project_center_closed');
       // Another lifecycle request (Pause, Continue, a run, a change) came
       // meanwhile, or this is no longer the message's run: it decides.
       if ((_lifecycle[id] ?? 0) != token ||
@@ -2110,8 +2112,6 @@ final class AiProjectCenterPlugin {
       if (paused['status'] != 'paused') {
         throw ServiceError('project_not_paused');
       }
-      // A shutdown that waited for the same stop: no new session.
-      if (_closed) throw ServiceError('project_center_closed');
       _dropDisplay();
       // Keep the attempt independently of _active: a synchronous refusal in
       // _execute can already have removed it when _launch returns.
@@ -2967,7 +2967,7 @@ final class AiProjectCenterPlugin {
   /// control pipe and stops its own tree while holding the project's run lock.
   void detach() {
     _closed = true;
-    for (final id in _active.keys) {
+    for (final id in {..._projects.keys, ..._lifecycle.keys}) {
       _advanceLifecycle(id);
     }
     for (final active in _active.values) {
@@ -2992,7 +2992,9 @@ final class AiProjectCenterPlugin {
   Future<void> _shutdown() async {
     if (_closed) return;
     _closed = true;
-    for (final id in _active.keys) {
+    // A Send now may still await its stop after _execute removed the attempt
+    // from _active. Invalidate it even when another stop aborts shutdown.
+    for (final id in {..._projects.keys, ..._lifecycle.keys}) {
       _advanceLifecycle(id);
     }
     final results = await Future.wait([

@@ -406,6 +406,73 @@ void main() {
     },
   );
 
+  for (final handshake in [true, false]) {
+    test(
+      'a refused supervisor releases its lock before returning (handshake=$handshake)',
+      () async {
+        final marker = File('${temporary.path}/launched');
+        final owner = File('${temporary.path}/owner');
+        await expectLater(
+          SupervisedProjectProcess.start(
+            [
+              '/bin/sh',
+              '-c',
+              'exec 9<"$lock"; /usr/bin/flock -s 9; '
+                  'echo \$\$ > "${owner.path}"; read start; '
+                  '${handshake ? 'echo \'{"locked":true}\'; ' : ''}'
+                  'if read launch; then touch "${marker.path}"; fi; '
+                  // EOF cleanup is deliberately slower than detach().
+                  'sleep 0.3; exec 9<&-; echo \'{"stopped":true}\'; '
+                  'sleep 0.2',
+            ],
+            ['/bin/true'],
+            temporary.path,
+            {'PATH': Platform.environment['PATH'] ?? '/usr/bin:/bin'},
+            null,
+            lock,
+          ),
+          throwsA(errorCode('project_agent_unavailable')),
+        );
+        final io = Posix();
+        final fd = io.openAt(-100, lock, Posix.noFollow);
+        try {
+          expect(io.tryFlock(fd, shared: false), isTrue);
+          expect(alive(int.parse(owner.readAsStringSync().trim())), isFalse);
+          expect(marker.existsSync(), isFalse);
+        } finally {
+          io.close(fd);
+          // Also let the fixture exit when checking the unfixed core.
+          await Future<void>.delayed(const Duration(milliseconds: 700));
+        }
+      },
+    );
+  }
+
+  test('a Dart VM supervisor gets longer than five seconds to lock', () async {
+    // Model a loaded development VM without compiling another Dart program.
+    final executable = File('${temporary.path}/dart')
+      ..writeAsStringSync(
+        '#!/bin/sh\n'
+        'read start; sleep 5.5; echo \'{"locked":true,"start_ack":true}\'; '
+        'if read launch; then echo \'{"started":true}\'; read stop; fi; '
+        'echo \'{"stopped":true}\'\n',
+      );
+    Process.runSync('chmod', ['755', executable.path]);
+    final process = await SupervisedProjectProcess.start(
+      [executable.path],
+      ['/bin/true'],
+      temporary.path,
+      {'PATH': Platform.environment['PATH'] ?? '/usr/bin:/bin'},
+      null,
+      lock,
+    );
+    try {
+      expect(await process.started, isTrue);
+    } finally {
+      await process.stop();
+    }
+  });
+
   for (final event in [
     '{"out":"hello"}',
     '{"leader":0}',

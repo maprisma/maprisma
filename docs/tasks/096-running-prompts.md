@@ -161,19 +161,31 @@ none was skipped.
   with the existing `project_agent_unavailable`; no delivery is guessed and a queued
   message remains available. `out`, `leader`, `stuck` and `exit` also prove successful
   spawn if the explicit `started` frame is omitted. The lock handshake is bounded
-  to five seconds. Waiting for agent startup has a ten-second budget including the
-  handshake; final cleanup is bounded to six seconds. With the existing pause path
-  (at most about twelve seconds), Send now stays within about twenty-eight seconds,
-  below the worker's 30-second shutdown and 45-second call deadlines.
+  to five seconds for a release executable, seven seconds when the supervisor
+  command runs under `dart` (development JIT startup). Refusing an incompatible
+  supervisor, a timed-out handshake or withdrawn authorization closes control
+  and waits for confirmation (up to two seconds) and exit (up to one second),
+  within three seconds total and the remaining startup budget. Waiting for agent
+  startup has a ten-second budget including the handshake and withdrawal; final
+  cleanup is bounded to six seconds. With the existing pause path (at most about
+  twelve seconds), Send now takes up to about twenty-eight seconds, within the
+  worker's 45-second call deadline. The worker answers one request at a time:
+  `@shutdown` queued during a worst-case Send now first waits for that request,
+  then performs its own cleanup. The host's 30-second shutdown deadline can
+  therefore report `project_still_pausing`; the host keeps waiting for the late
+  shutdown reply and retains the worker until cleanup is confirmed.
 - **Cancelled launch:** an agent that never started exits the assignment loop on
   cancellation. Its output and exit result are not consumed and no fictitious
   assignment result enters the handoff.
 - **Lifecycle arbitration:** successful lifecycle mutations advance their counter
   after their guards and durable write; Pause advances after its active/run guards.
   Send now's own internal pause does not compete with itself. Rejected stale calls
-  leave a waiting Send now alone. Shutdown and detach invalidate every active
-  project's token before stopping work, including when shutdown later fails;
-  deletion removes its counter entry.
+  leave a waiting Send now alone. Shutdown and detach invalidate every known
+  project's token (`_projects` keys union `_lifecycle` keys) before stopping work,
+  including attempts already removed from `_active` and when shutdown later
+  fails; deletion removes its counter entry. A clean shutdown or detach reports
+  `project_center_closed` before checking that token; an aborted shutdown reports
+  `project_changed` and does not restart the waiting Send now.
 
 GUI impact: no new public fields, codes or protocol version. Synchronous startup
 refusals now report their actual code with the promised paused checkpoint; cleanup
@@ -202,3 +214,44 @@ Validation (2026-11-22, round 2 fixes):
 
 No routes.json or generated client changes were needed. Changes stay in the core
 package and this task record; nothing was committed or pushed.
+
+## Core review round 3 corrections
+
+Read the full agy round-3 review and verified all three findings in the core.
+Six regression cases fail against `8b78e091` before the corresponding fixes:
+
+- **agy 1 / Claude c:** both an older supervisor without `start_ack` and a
+  supervisor whose handshake times out hold a real shared run lock through
+  delayed EOF cleanup. Startup refusal now uses the same bounded withdrawal
+  helper as withdrawn authorization; both tests verify immediate exclusive lock
+  acquisition, supervisor exit and no agent launch when refusal returns. This
+  prevents transient stopping/busy refusals after confirmed cleanup.
+- **agy 2:** a gated Send now stop remains pending after its execution loop has
+  finished and removed the attempt from `_active`; another project's refused
+  stop aborts shutdown. Invalidating all known projects now keeps the message
+  queued with `project_changed` and the project paused, without another session.
+- **agy 3:** clean shutdown and detach during the original pause now return
+  `project_center_closed`, replacing `project_changed`. Both retain the queued
+  message and launch no new session; the detach regression expectation was
+  updated.
+- **Claude a:** a fixture named `dart` delays its lock handshake beyond five
+  seconds and now starts successfully under the seven-second development bound.
+  Release commands keep five seconds; withdrawal shares the ten-second startup
+  budget. **Claude b:** the timing paragraph above now accounts for serialized
+  worker requests and a late shutdown reply.
+
+Validation (2026-11-22, round 3 fixes):
+
+- All six regression cases failed before the fixes, then passed with them.
+- Requested `dart format lib test`: passed (208 files); `dart analyze`: no issues.
+- Requested `dart test test/ai_project_center_test.dart test/project_supervisor_test.dart`:
+  **170 passed**, no failures. `feature_plugins_test.dart` was not rerun in this
+  sandbox; Uwe supplied its outside verification.
+- Used the requested headless environment and `FLUTTER_ROOT`/`PATH`. The Flutter
+  wrapper cannot write its SDK cache here; commands used the cached SDK's
+  `/mnt/Data/flutter/bin/cache/dart-sdk/bin/dart` directly.
+- Inspected `tools/test-changed --list` and narrowed checks to the requested core
+  files; `git diff --check` passed.
+
+Only the core package and this task record were edited for these fixes. Concurrent
+`flutter_app/` edits were left untouched. No route changes, commit or push.

@@ -445,6 +445,7 @@ final class SupervisedProjectProcess implements ProjectProcess {
     String lock, {
     bool Function()? authorize,
   }) async {
+    final startup = Stopwatch()..start();
     final process = await Process.start(
       supervisor.first,
       supervisor.skip(1).toList(),
@@ -464,34 +465,30 @@ final class SupervisedProjectProcess implements ProjectProcess {
     // The supervisor holds the run lock before the controller authorizes the
     // launch, and the controller authorizes it only while it still owns the
     // store: there is no moment without an owner.
-    final locked = await Future.any([
-      managed._locked.future.then((_) => true),
-      managed._confirmed.future.then((_) => false),
-    ]).timeout(const Duration(seconds: 5), onTimeout: () => false);
+    // A development VM has to JIT the supervisor before it can take the
+    // lock. Leave it more room while keeping withdrawal inside startup's
+    // ten-second budget; compiled release supervisors keep the short bound.
+    final lockWait =
+        Duration(seconds: p.basename(supervisor.first) == 'dart' ? 7 : 5) -
+        startup.elapsed;
+    final locked =
+        await Future.any([
+          managed._locked.future.then((_) => true),
+          managed._confirmed.future.then((_) => false),
+        ]).timeout(
+          lockWait.isNegative ? Duration.zero : lockWait,
+          onTimeout: () => false,
+        );
     if (!locked || !managed._startAck) {
       // Older supervisors cannot confirm prompt delivery. Withdraw before
-      // launch rather than guess that a quiet agent started successfully.
-      await managed.detach();
+      // launch, also waiting for a timed-out handshake's lock to be released.
+      await managed._withdraw(const Duration(seconds: 10) - startup.elapsed);
       throw ServiceError('project_agent_unavailable');
     }
     if (authorize != null && !authorize()) {
       // Withdraw: EOF makes the supervisor end without launching; wait
       // (bounded) for its confirmation so its run lock is released.
-      managed._inputOpen = false;
-      try {
-        await process.stdin.close();
-      } on Object {
-        // Already closed.
-      }
-      await managed._confirmed.future.timeout(
-        const Duration(seconds: 5),
-        onTimeout: () => false,
-      );
-      await process.exitCode.timeout(
-        const Duration(seconds: 2),
-        onTimeout: () => 0,
-      );
-      await managed._events.cancel();
+      await managed._withdraw(const Duration(seconds: 10) - startup.elapsed);
       throw ServiceError('project_launch_withdrawn');
     }
     managed._send({'launch': true});
@@ -509,6 +506,38 @@ final class SupervisedProjectProcess implements ProjectProcess {
   bool _startAck = false;
   int stuck = 0;
   bool _inputOpen = true;
+
+  /// Close control before launch and retain events until the supervisor has
+  /// confirmed cleanup and exited. Reserve at most three seconds in total,
+  /// capped by the startup budget left after the lock handshake.
+  Future<void> _withdraw(Duration budget) async {
+    final waiting = Stopwatch()..start();
+    if (budget > const Duration(seconds: 3)) {
+      budget = const Duration(seconds: 3);
+    }
+    Duration bound(Duration limit) {
+      final remaining = budget - waiting.elapsed;
+      if (remaining <= Duration.zero) return Duration.zero;
+      return remaining < limit ? remaining : limit;
+    }
+
+    _inputOpen = false;
+    if (!_started.isCompleted) _started.complete(false);
+    try {
+      await _process.stdin.close().timeout(bound(const Duration(seconds: 1)));
+    } on Object {
+      // Already closed or unresponsive. Keep waiting for cleanup/exit.
+    }
+    await _confirmed.future.timeout(
+      bound(const Duration(seconds: 2)),
+      onTimeout: () => false,
+    );
+    await _process.exitCode.timeout(
+      bound(const Duration(seconds: 1)),
+      onTimeout: () => 0,
+    );
+    await _events.cancel();
+  }
 
   void _send(Map<String, dynamic> message) {
     if (!_inputOpen) return;

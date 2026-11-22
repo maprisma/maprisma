@@ -5027,28 +5027,37 @@ void main() {
       });
     }
 
-    test(
-      'detach invalidates a Send now waiting on its original pause',
-      () async {
-        final item = await started([
-          {'agent': 'fixture', 'role': 'lead'},
-        ]);
-        final gate = Completer<void>();
-        processes.single.stopGate = gate.future;
-        final now = message(
-          item,
-          'Do not restart a retired controller.',
-          mode: 'now',
-        );
-        await Future<void>.delayed(Duration.zero);
-        plugin.detach();
-        gate.complete();
-        final sent = await now;
-        expect(sent['continued'], isFalse);
-        expect(sent['reason'], 'project_changed');
-        expect(processes, hasLength(1));
-      },
-    );
+    for (final detach in [false, true]) {
+      test(
+        'closing invalidates a Send now waiting on its original pause (detach=$detach)',
+        () async {
+          final item = await started([
+            {'agent': 'fixture', 'role': 'lead'},
+          ]);
+          final gate = Completer<void>();
+          processes.single.stopGate = gate.future;
+          final now = message(
+            item,
+            'Do not restart a retired controller.',
+            mode: 'now',
+          );
+          await Future<void>.delayed(Duration.zero);
+          Future<void>? closing;
+          if (detach) {
+            plugin.detach();
+          } else {
+            closing = plugin.shutdown();
+          }
+          gate.complete();
+          final sent = await now;
+          await closing;
+          expect(sent['continued'], isFalse);
+          expect(sent['reason'], 'project_center_closed');
+          expect((sent['message'] as Map)['state'], 'queued');
+          expect(processes, hasLength(1));
+        },
+      );
+    }
 
     test('failed startup cleanup has a deadline and can be retried', () async {
       final item = await started([
@@ -5118,6 +5127,66 @@ void main() {
         expect(sent['continued'], isFalse);
         expect(sent['reason'], 'project_changed');
         expect(processes, hasLength(2));
+      },
+    );
+
+    test(
+      'an aborted shutdown invalidates Send now after its attempt left active',
+      () async {
+        final item = await started([
+          {'agent': 'fixture', 'role': 'lead'},
+        ]);
+        final otherPath = Directory('${temporary.path}/other')..createSync();
+        final other = await approve(
+          await save(path: otherPath.path, plan: 'Other plan.'),
+        );
+        final otherStart = Completer<bool>();
+        startGate = () => otherStart.future;
+        await plugin.call('run', {
+          'id': other['id'],
+          'revision': other['revision'],
+        });
+        await waitUntil(() => processes.length == 2);
+        final gate = Completer<void>();
+        processes[0].stopGate = gate.future;
+        processes[1].refuseStop = true;
+        final now = message(
+          item,
+          'Do not restart after shutdown.',
+          mode: 'now',
+        );
+        try {
+          await waitUntil(() => processes[0].stopCalls == 1);
+          // Send now's stop is still waiting. The execution loop's own stop
+          // can finish independently and remove A from _active first.
+          processes[0].stopGate = null;
+          await processes[0].finish('Partial work.', -15);
+          await waitUntil(() => processes[0].stopCalls >= 2);
+          await Future<void>.delayed(Duration.zero);
+          // A rejected Pause proves A is no longer active without changing
+          // its lifecycle token (unlike a successful mutation).
+          await expectLater(
+            plugin.call('pause', {'id': item['id']}),
+            throwsA(errorCode('project_not_running')),
+          );
+          await expectLater(
+            plugin.shutdown(),
+            throwsA(errorCode('project_still_pausing')),
+          );
+          startGate = null;
+          gate.complete();
+          final sent = await now;
+          expect(sent['continued'], isFalse);
+          expect(sent['reason'], 'project_changed');
+          expect((sent['project'] as Map)['status'], 'paused');
+          expect((sent['message'] as Map)['state'], 'queued');
+          expect(processes, hasLength(2));
+        } finally {
+          processes[1].refuseStop = false;
+          if (!gate.isCompleted) gate.complete();
+          otherStart.complete(false);
+          await now;
+        }
       },
     );
 
