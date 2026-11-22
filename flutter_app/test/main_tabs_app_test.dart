@@ -1348,4 +1348,35 @@ void main() {
     expect(tester.widget<MapEditor>(find.byType(MapEditor)).focused, isNull);
     await unmountApp(tester);
   });
+
+  testWidgets('under the card\'s delete question, F1, Ctrl+2 and Ctrl+, '
+      'do nothing', (tester) async {
+    final dir = await mountApp(
+      tester,
+      beforeStart: (dir) {
+        projects(dir);
+        File('${dir.path}/board').writeAsStringSync('');
+      },
+    );
+    await tester.tap(find.byKey(const ValueKey('card-delete')));
+    await settleService(tester);
+    expect(find.text('Delete saved project?'), findsOneWidget);
+    File('${dir.path}/slow_help.snapshot').writeAsStringSync('');
+    await tester.sendKeyEvent(LogicalKeyboardKey.f1);
+    await settleService(tester);
+    await ctrl(tester, LogicalKeyboardKey.digit2);
+    await ctrl(tester, LogicalKeyboardKey.comma);
+    // The question stays, nothing else happened.
+    expect(find.text('Delete saved project?'), findsOneWidget);
+    expect(find.text('Wait for the current step'), findsNothing);
+    await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+    await settleService(tester);
+    File('${dir.path}/release_help.snapshot').writeAsStringSync('');
+    await settleService(tester);
+    expect(find.byKey(const ValueKey('help-tab-Agents')), findsNothing);
+    expect(find.byType(SettingsView), findsNothing);
+    expect(projectsPage(), findsOneWidget);
+    expect(find.byKey(const ValueKey('project-card-p1')), findsOneWidget);
+    await unmountApp(tester);
+  });
 }

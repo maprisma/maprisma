@@ -123,7 +123,13 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
   final _pressed = <String>{};
 
   /// A board message that the next read keeps (a failed quick action).
-  bool _keepError = false;
+  int _keepError = 0;
+
+  /// Failed quick actions so far, and the latest one's reason: a card's
+  /// reason newer than a step's start is shown again after that step, over a
+  /// stale read's message.
+  int _quickFailures = 0;
+  String? _quickReason;
 
   /// Two-second ticks since the last read (the board's quiet rhythm).
   int _ticks = 0;
@@ -151,7 +157,7 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
     setState(() {
       _projectOpen = false;
       // The project page's message stays with the page.
-      if (!_keepError) _error = null;
+      if (_keepError == 0) _error = null;
       // The opened card is shown again even when it left the filter (or
       // the agent chip).
       final card = _projects.where((p) => p['id'] == id).firstOrNull;
@@ -250,6 +256,7 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
     final id = '${project['id']}';
     if (_quick.contains(id)) return;
     setState(() => _quick.add(id));
+    var kept = false;
     try {
       await widget.onCall('pause', {
         'id': id,
@@ -261,15 +268,66 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
       if (mounted) {
         setState(() {
           _error = _failure(error);
-          _keepError = true;
+          _keepError++;
+          _quickFailures++;
+          _quickReason = _error;
+          kept = true;
         });
       }
     } finally {
       // The card's Pause stays off until the board shows the new state; the
       // reason stays through that read (also when a poll was on its way).
       if (mounted) await _refresh();
-      _keepError = false;
+      if (kept) _keepError--;
       if (mounted) setState(() => _quick.remove(id));
+    }
+  }
+
+  /// The card's trash symbol (task 094): the footer's question, then the
+  /// saved project is removed (its folder is kept); a refusal keeps its
+  /// reason on the board. The page is busy meanwhile, so the shell's keys and
+  /// the window's close wait for the question.
+  Future<void> _deleteFromBoard(Map<String, dynamic> project) async {
+    final id = '${project['id']}';
+    if (_quick.contains(id) || _busy || _confirming) return;
+    setState(() => _busy = true);
+    var kept = false;
+    var asked = false;
+    try {
+      if (!await _confirm(
+            'Delete saved project?',
+            'The saved project will be removed. Its working folder is kept.',
+            'Delete',
+          ) ||
+          !mounted) {
+        return;
+      }
+      asked = true;
+      setState(() => _quick.add(id));
+      await widget.onCall('delete', {
+        'id': id,
+        'revision': project['revision'],
+      });
+      _setupDrafts.removeWhere((key, _) => key.startsWith('$id:'));
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _error = _failure(error);
+          _keepError++;
+          _quickFailures++;
+          _quickReason = _error;
+          kept = true;
+        });
+      }
+    } finally {
+      if (mounted && asked) await _refresh();
+      if (kept) _keepError--;
+      if (mounted) {
+        setState(() {
+          _quick.remove(id);
+          _busy = false;
+        });
+      }
     }
   }
 
@@ -522,7 +580,7 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
         _storeError = fault is String && fault.isNotEmpty ? fault : null;
         // An earlier board message ends with a read (a failed quick action's
         // survives the read it asked for).
-        if (_board && !_projectOpen && !_keepError) _error = null;
+        if (_board && !_projectOpen && _keepError == 0) _error = null;
         if (results.length > 1) {
           _profiles = _rows(results[1]['profiles']);
           _runtimes = _rows(results[1]['runtimes']);
@@ -751,6 +809,8 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
 
   Future<void> _perform(String operation) async {
     if (_busy) return;
+    var backAfterDelete = false;
+    final failures = _quickFailures;
     final setupText = _setupRequest.text;
     final setupTarget = _phase;
     final setupAgent = _setupHelper;
@@ -763,7 +823,12 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
         await _save();
         return;
       }
-      if ((_dirty || _project == null) && !await _save()) return;
+      // Deleting asks first and never saves the draft it removes.
+      if (operation == 'delete') {
+        if (_project == null) return;
+      } else if ((_dirty || _project == null) && !await _save()) {
+        return;
+      }
       if (!mounted) return;
       if (operation == 'delete' &&
           !await _confirm(
@@ -809,7 +874,16 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
       if (!mounted) return;
       setState(() {
         if (operation == 'delete') {
+          final gone = _project?['id'];
+          _setupDrafts.removeWhere((key, _) => key.startsWith('$gone:'));
+          // A read of the deleted project still on its way is outdated: its
+          // failure must not show on the board.
+          _selection++;
+          // So is a message about it from an earlier read.
+          _error = _quickFailures == failures ? null : _quickReason;
           _adopt(null);
+          _projects.removeWhere((p) => p['id'] == gone);
+          backAfterDelete = _board && _projectOpen;
         } else if (result['project'] is Map) {
           if (operation == 'setup_apply') {
             _phase = (_project?['setup_proposal'] as Map?)?['target'] == 'plan'
@@ -827,7 +901,31 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
     } catch (error) {
       if (mounted) setState(() => _error = _failure(error));
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          // Deleted from its own page: back to the board, the keyboard on
+          // the first card the board shows (or New project), once it is
+          // read again and New project can take the focus.
+          if (backAfterDelete && _projectOpen) {
+            _projectOpen = false;
+            _openedId = null;
+            // An older read's failure ends with the board read after the
+            // delete (unless that read failed too).
+            // A card's failed quick action keeps its reason.
+            if (!_unavailable) {
+              _error = _quickFailures == failures ? null : _quickReason;
+            }
+            final shown = [
+              for (final p in _projects)
+                if ((_filter == null || p['bucket'] == _filter!.code) &&
+                    namesAgent(p, widget.agent?.command))
+                  '${p['id']}',
+            ];
+            _reveal = shown.firstOrNull ?? '';
+          }
+        });
+      }
     }
   }
 
@@ -1945,6 +2043,7 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
                             ],
                             agentName: widget.agent?.name,
                             onFix: (p, issue) => _fixIssue(p, issue),
+                            onDelete: _deleteFromBoard,
                             mapFix: widget.onFixOnMap != null,
                             onClearAgent: widget.onClearAgent,
                             tr: tr,

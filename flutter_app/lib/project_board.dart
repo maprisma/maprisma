@@ -125,7 +125,12 @@ class ProjectBoard extends StatelessWidget {
     this.onClearAgent,
     this.onFix,
     this.mapFix = false,
+    this.onDelete,
   });
+
+  /// The card's trash symbol (task 094): deletes the saved project after a
+  /// question; none without it.
+  final void Function(Map<String, dynamic> project)? onDelete;
 
   /// An issue's link on a card (task 092); [mapFix]: Fix on map is possible.
   final void Function(Map<String, dynamic> project, Map issue)? onFix;
@@ -325,6 +330,10 @@ class ProjectBoard extends StatelessWidget {
                               ? null
                               : (issue) => onFix!(project, issue),
                           mapFix: mapFix,
+                          onDelete: onDelete == null
+                              ? null
+                              : () => onDelete!(project),
+                          unavailable: unavailable,
                         );
                         return Listener(
                           key: ValueKey('project-press-$id'),
@@ -551,7 +560,14 @@ class ProjectCard extends StatelessWidget {
     this.eventText,
     this.onFix,
     this.mapFix = false,
+    this.onDelete,
+    this.unavailable = false,
   });
+
+  /// The trash symbol (task 094); off while the project works or stops,
+  /// and while the board cannot be read.
+  final VoidCallback? onDelete;
+  final bool unavailable;
 
   /// The first issue's link (task 092): Fix on map, Go to Team or Goal.
   final ValueChanged<Map>? onFix;
@@ -590,6 +606,15 @@ class ProjectCard extends StatelessWidget {
     final status = project['status'];
     // Pause while an assignment or the team setup runs; not while old
     // processes are still stopping.
+    final deletable =
+        !const {
+          'planning',
+          'running',
+          'reviewing',
+          'pausing',
+        }.contains(status) &&
+        project['activity'] != 'setting_up_team' &&
+        project['processes_stopping'] != true;
     final canPause =
         (active?['state'] == 'active' ||
             project['activity'] == 'setting_up_team') &&
@@ -707,15 +732,35 @@ class ProjectCard extends StatelessWidget {
               const SizedBox(height: AppSpace.xs),
               Row(
                 children: [
-                  _action('card-open', 'Open', onOpen),
-                  if (project['activity'] == 'needs_review')
-                    _action('card-review', 'Review plan', onReview),
-                  if (canPause || status == 'pausing')
-                    _action(
-                      'card-pause',
-                      status == 'pausing' ? 'Retry pause' : 'Pause',
-                      busy ? null : onPause,
+                  // The actions take the room; the trash symbol stays at the
+                  // end.
+                  Expanded(
+                    child: Row(
+                      children: [
+                        _action('card-open', 'Open', onOpen),
+                        if (project['activity'] == 'needs_review')
+                          _action('card-review', 'Review plan', onReview),
+                        if (canPause || status == 'pausing')
+                          _action(
+                            'card-pause',
+                            status == 'pausing' ? 'Retry pause' : 'Pause',
+                            busy ? null : onPause,
+                          ),
+                      ],
                     ),
+                  ),
+                  if (onDelete != null) ...[
+                    IconButton(
+                      key: const ValueKey('card-delete'),
+                      tooltip: tr('Delete project'),
+                      visualDensity: VisualDensity.compact,
+                      icon: const Icon(Icons.delete_outline, size: 20),
+                      // Not while agents work, set up its team or stop.
+                      onPressed: busy || unavailable || !deletable
+                          ? null
+                          : onDelete,
+                    ),
+                  ],
                 ],
               ),
             ],
