@@ -3661,7 +3661,9 @@ void main() {
             ('board_rank', -1),
             ('board_rank', 1.5),
             ('board_rank', '1'),
+            ('board_rank', null),
             ('board_order', false),
+            ('board_order', null),
             ('board_order', 'yes'),
           ]) {
             final body = jsonDecode(good) as Map;
@@ -3689,6 +3691,33 @@ void main() {
           expect(await titles(), hasLength(3));
         },
       );
+
+      test('ranks out of order and tied: by rank, then stored position; '
+          'unranked on top', () async {
+        await three();
+        await plugin.shutdown();
+        final state = File('${plugin.directory}/projects.json');
+        final body = jsonDecode(state.readAsStringSync()) as Map;
+        final stored = body['projects'] as List;
+        final ranks = {'A': 2, 'B': 0, 'C': 2};
+        for (final p in stored) {
+          p['board_rank'] = ranks[p['title']];
+        }
+        // Stored as C, A, B: C and A tie at rank 2, C stored first.
+        stored.sort(
+          (a, b) => ['C', 'A', 'B']
+              .indexOf(a['title'] as String)
+              .compareTo(['C', 'A', 'B'].indexOf(b['title'] as String)),
+        );
+        final d = Map<String, dynamic>.from(stored.first as Map)
+          ..['id'] = 'd' * 32
+          ..['title'] = 'D'
+          ..remove('board_rank');
+        stored.add(d);
+        state.writeAsStringSync(jsonEncode(body));
+        await reopen();
+        expect(await titles(), ['D', 'B', 'C', 'A']);
+      });
 
       test('an older core\'s save keeps the arrangement; its new project '
           'goes on top', () async {

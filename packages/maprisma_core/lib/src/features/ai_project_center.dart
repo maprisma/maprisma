@@ -365,8 +365,10 @@ final class AiProjectCenterPlugin {
           throw const FormatException();
         }
         // Stored only; the order is the list's.
+        // A present rank (also null) must be a non-negative integer.
+        final ranked = item.containsKey('board_rank');
         final rank = item.remove('board_rank');
-        if (rank != null && (rank is! int || rank < 0)) {
+        if (ranked && (rank is! int || rank < 0)) {
           throw const FormatException();
         }
         ranks[id] = rank as int?;
