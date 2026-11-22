@@ -34,6 +34,17 @@ class Backend {
   /// this completes.
   Completer<void>? holdList;
 
+  /// The next held `list` fails once released.
+  bool failHeldList = false;
+
+  /// The next `get` answers what the project was when it was asked, after
+  /// this completes.
+  Completer<void>? holdGet;
+
+  /// `delete` waits for this.
+  Completer<void>? holdDelete;
+  final deleted = <String>[];
+
   List<String> get ids => [for (final p in projects) '${p['id']}'];
 }
 
@@ -41,6 +52,8 @@ Future<GlobalKey<AiProjectCenterPageState>> mount(
   WidgetTester tester,
   Backend backend, {
   Size size = const Size(1400, 900),
+  String Function(String)? tr,
+  ({String command, String name})? agent,
 }) async {
   final key = GlobalKey<AiProjectCenterPageState>();
   await tester.binding.setSurfaceSize(size);
@@ -50,9 +63,16 @@ Future<GlobalKey<AiProjectCenterPageState>> mount(
       home: Scaffold(
         body: AiProjectCenterPage(
           key: key,
-          tr: (s) => s,
+          tr: tr ?? (s) => s,
+          agent: agent,
           onCall: (op, args) async {
             backend.calls.add(op);
+            if (op == 'delete') {
+              await backend.holdDelete?.future;
+              backend.deleted.add('${args['id']}');
+              backend.projects.removeWhere((p) => p['id'] == args['id']);
+              return {'deleted': true};
+            }
             if (op == 'list') {
               if (backend.failList) throw ServiceError('feature_unavailable');
               final answer = {
@@ -68,6 +88,10 @@ Future<GlobalKey<AiProjectCenterPageState>> mount(
               if (backend.holdList case final hold?) {
                 backend.holdList = null;
                 await hold.future;
+                if (backend.failHeldList) {
+                  backend.failHeldList = false;
+                  throw ServiceError('feature_unavailable');
+                }
               }
               return answer;
             }
@@ -117,9 +141,13 @@ Future<GlobalKey<AiProjectCenterPageState>> mount(
               };
             }
             if (op == 'get') {
-              final p = backend.projects.firstWhere(
-                (p) => p['id'] == args['id'],
-              );
+              final p = {
+                ...backend.projects.firstWhere((p) => p['id'] == args['id']),
+              };
+              if (backend.holdGet case final hold?) {
+                backend.holdGet = null;
+                await hold.future;
+              }
               return {
                 'project': {
                   ...p,
@@ -647,5 +675,267 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('card-open')).first);
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('goal-importance')), findsNothing);
+  });
+
+  group('review round 1', () {
+    testWidgets('a read begun before a mark does not put the old one back', (
+      tester,
+    ) async {
+      final backend = Backend([marked('a'), marked('b')]);
+      final key = await mount(tester, backend);
+      final list = backend.holdList = Completer();
+      unawaited(key.currentState!.refresh());
+      await tester.pump();
+      await tester.tap(inCard('a', const ValueKey('card-importance-menu')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('importance-high')));
+      await tester.pumpAndSettle();
+      expect(backend.marks.single['importance'], 'high');
+      list.complete();
+      await tester.pumpAndSettle();
+      expect(inCard('a', const ValueKey('card-importance-high')), findsOne);
+    });
+
+    testWidgets('a read of the open project begun before a mark keeps the '
+        'Goal tab\'s choice', (tester) async {
+      final backend = Backend([marked('a')]);
+      final key = await mount(tester, backend);
+      await tester.tap(inCard('a', const ValueKey('card-open')));
+      await tester.pumpAndSettle();
+      final get = backend.holdGet = Completer();
+      unawaited(key.currentState!.refresh());
+      await tester.pump();
+      final selector = find.byKey(const ValueKey('goal-importance'));
+      await tester.tap(
+        find.descendant(of: selector, matching: find.text('High')),
+      );
+      await tester.pumpAndSettle();
+      expect(backend.marks.single['importance'], 'high');
+      get.complete();
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<SegmentedButton<BoardImportance>>(selector).selected,
+        {BoardImportance.high},
+      );
+    });
+
+    testWidgets('opening a project marked meanwhile shows the new mark', (
+      tester,
+    ) async {
+      final backend = Backend([marked('a')]);
+      await mount(tester, backend);
+      final get = backend.holdGet = Completer();
+      await tester.tap(inCard('a', const ValueKey('card-open')));
+      await tester.pump();
+      // The page reads the project (a progress bar runs meanwhile).
+      Future<void> wait() async {
+        for (var i = 0; i < 10; i++) {
+          await tester.pump(const Duration(milliseconds: 100));
+        }
+      }
+
+      await tester.tap(inCard('a', const ValueKey('card-importance-menu')));
+      await wait();
+      await tester.tap(find.byKey(const ValueKey('importance-low')));
+      await wait();
+      expect(backend.marks.single['importance'], 'low');
+      get.complete();
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<SegmentedButton<BoardImportance>>(
+              find.byKey(const ValueKey('goal-importance')),
+            )
+            .selected,
+        {BoardImportance.low},
+      );
+    });
+
+    testWidgets('a read begun while a move was on its way does not undo it', (
+      tester,
+    ) async {
+      final backend = Backend([marked('a'), marked('b'), marked('c')]);
+      final key = await mount(tester, backend);
+      final answer = backend.holdMove = Completer();
+      await drag(tester, 'c', 'a', settle: false);
+      final list = backend.holdList = Completer();
+      unawaited(key.currentState!.refresh());
+      await tester.pump();
+      answer.complete();
+      await tester.pumpAndSettle();
+      expect(shown(tester, ['a', 'b', 'c']), ['c', 'a', 'b']);
+      list.complete();
+      await tester.pumpAndSettle();
+      expect(shown(tester, ['a', 'b', 'c']), ['c', 'a', 'b']);
+    });
+
+    testWidgets('an older read\'s failure keeps a refused move\'s reason', (
+      tester,
+    ) async {
+      final backend = Backend([for (final id in all) marked(id)])
+        ..refuseMove = 'project_unknown';
+      final key = await mount(tester, backend);
+      final list = backend.holdList = Completer();
+      backend.failHeldList = true;
+      unawaited(key.currentState!.refresh());
+      await tester.pump();
+      await drag(tester, 'a', 'c');
+      expect(find.text('The project could not be found.'), findsOneWidget);
+      // The older read fails, then the move's own read succeeds.
+      list.complete();
+      await tester.pumpAndSettle();
+      expect(find.text('The project could not be found.'), findsOneWidget);
+      expect(find.text('The project operation failed.'), findsNothing);
+      expect(shown(tester, all), all);
+    });
+
+    testWidgets('a refused move to the end brings the card back into view', (
+      tester,
+    ) async {
+      final ids = [for (var i = 0; i < 30; i++) 'c$i'];
+      final backend = Backend([for (final id in ids) marked(id)])
+        ..refuseMove = 'project_store_unavailable';
+      await mount(tester, backend);
+      final answer = backend.holdMove = Completer();
+      focusOf(tester, 'c0').requestFocus();
+      await tester.pump();
+      await ctrl(tester, LogicalKeyboardKey.end);
+      // At the end, in view.
+      expect(cardOf('c0').hitTestable(), findsOneWidget);
+      answer.complete();
+      await tester.pumpAndSettle();
+      expect(cardOf('c0').hitTestable(), findsOneWidget);
+      expect(tester.getTopLeft(cardOf('c0')).dy, lessThan(300));
+    });
+
+    testWidgets('the Goal tab\'s importance fits 480 × 360 with large text '
+        'and long words', (tester) async {
+      tester.platformDispatcher.textScaleFactorTestValue = 1.5;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      final backend = Backend([marked('a')]);
+      await mount(
+        tester,
+        backend,
+        size: const Size(480, 360),
+        tr: (s) => '$s $s',
+      );
+      final open = find.byKey(const ValueKey('card-open'));
+      await tester.ensureVisible(open);
+      await tester.pumpAndSettle();
+      await tester.tap(open);
+      await tester.pumpAndSettle();
+      final selector = find.byKey(const ValueKey('goal-importance'));
+      await tester.ensureVisible(selector);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(selector, findsOneWidget);
+    });
+
+    testWidgets('under the agent chip, Move to top and to end judge the whole '
+        'board', (tester) async {
+      Map<String, dynamic> other(String id) => {
+        ...card(
+          id,
+          execution: [
+            {
+              'phase': 'execution',
+              'position': 0,
+              'agent': 'codex',
+              'name': 'Codex',
+              'role': 'lead',
+              'issues': <Map>[],
+            },
+          ],
+        ),
+        'importance': 'medium',
+      };
+      final backend = Backend([
+        other('h'),
+        marked('a'),
+        marked('b'),
+        other('z'),
+      ]);
+      await mount(
+        tester,
+        backend,
+        agent: (command: 'claude', name: 'Claude Code'),
+      );
+      expect(cardOf('h'), findsNothing);
+      focusOf(tester, 'a').requestFocus();
+      await tester.pump();
+      await ctrl(tester, LogicalKeyboardKey.home);
+      expect(backend.moves.last, {'id': 'a', 'before': 'h'});
+      focusOf(tester, 'b').requestFocus();
+      await tester.pump();
+      await ctrl(tester, LogicalKeyboardKey.end);
+      expect(backend.moves.last, {'id': 'b', 'before': null});
+      expect(backend.ids, ['a', 'h', 'z', 'b']);
+    });
+
+    testWidgets('the Goal tab\'s importance is off while the project is being '
+        'deleted', (tester) async {
+      final backend = Backend([marked('a'), marked('b')]);
+      await mount(tester, backend);
+      await tester.tap(inCard('a', const ValueKey('card-open')));
+      await tester.pumpAndSettle();
+      final held = backend.holdDelete = Completer();
+      await tester.tap(find.widgetWithText(FilledButton, 'Delete project'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
+      await tester.pump();
+      final selector = find.byKey(const ValueKey('goal-importance'));
+      expect(
+        tester
+            .widget<SegmentedButton<BoardImportance>>(selector)
+            .onSelectionChanged,
+        isNull,
+      );
+      held.complete();
+      await tester.pumpAndSettle();
+      expect(backend.deleted, ['a']);
+      expect(backend.marks, isEmpty);
+    });
+
+    testWidgets(
+      'a dragged card that a read takes off the board moves nowhere',
+      (tester) async {
+        final backend = Backend([marked('a'), marked('b'), marked('c')]);
+        final key = await mount(tester, backend);
+        await tapChip(tester, 'filter-drafts');
+        await tester.pumpAndSettle();
+        final gesture = await tester.startGesture(
+          tester.getCenter(inCard('c', const ValueKey('card-move'))),
+          kind: PointerDeviceKind.mouse,
+        );
+        await gesture.moveBy(const Offset(20, 20));
+        await tester.pump();
+        await gesture.moveTo(tester.getCenter(cardOf('a')));
+        await tester.pump();
+        expect(find.byKey(const ValueKey('card-drop')), findsOneWidget);
+        // c leaves the filter while it hovers over a.
+        backend.projects[2] = marked('c', bucket: 'ready');
+        await key.currentState!.refresh();
+        await tester.pump();
+        expect(find.byKey(const ValueKey('card-drop')), findsNothing);
+        await gesture.up();
+        await tester.pumpAndSettle();
+        expect(backend.moves, isEmpty);
+      },
+    );
+
+    testWidgets('the importance filter sits right after All', (tester) async {
+      final backend = Backend([marked('a')]);
+      await mount(tester, backend, size: const Size(1200, 800));
+      final chip = find.byKey(const ValueKey('board-importance'));
+      expect(
+        tester.getTopLeft(chip).dx,
+        lessThan(
+          tester
+              .getTopLeft(find.byKey(const ValueKey('board-filter-running')))
+              .dx,
+        ),
+      );
+      expect(chip.hitTestable(), findsOneWidget);
+    });
   });
 }
