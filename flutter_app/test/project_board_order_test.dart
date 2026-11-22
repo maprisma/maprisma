@@ -41,6 +41,12 @@ class Backend {
   /// this completes.
   Completer<void>? holdGet;
 
+  /// A card's Pause answers with this.
+  Completer<Map<String, dynamic>>? pause;
+
+  /// The next held `get` fails once released.
+  bool failHeldGet = false;
+
   /// `delete` waits for this.
   Completer<void>? holdDelete;
   final deleted = <String>[];
@@ -95,6 +101,9 @@ Future<GlobalKey<AiProjectCenterPageState>> mount(
               }
               return answer;
             }
+            if (op == 'pause' && backend.pause != null) {
+              return backend.pause!.future;
+            }
             if (op == 'move') {
               backend.moves.add(args);
               if (backend.holdMove case final hold?) {
@@ -147,6 +156,10 @@ Future<GlobalKey<AiProjectCenterPageState>> mount(
               if (backend.holdGet case final hold?) {
                 backend.holdGet = null;
                 await hold.future;
+                if (backend.failHeldGet) {
+                  backend.failHeldGet = false;
+                  throw ServiceError('feature_unavailable');
+                }
               }
               return {
                 'project': {
@@ -936,6 +949,123 @@ void main() {
         ),
       );
       expect(chip.hitTestable(), findsOneWidget);
+    });
+  });
+
+  group('review round 2', () {
+    Future<void> frames(WidgetTester tester) async {
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+    }
+
+    const store =
+        'The saved project store is unavailable. Check the saved state before continuing.';
+
+    testWidgets('a held read of the open project that fails keeps a refused '
+        'mark\'s reason', (tester) async {
+      final backend = Backend([marked('a')])..refuseMark = 'project_store_full';
+      final key = await mount(tester, backend);
+      await tester.tap(inCard('a', const ValueKey('card-open')));
+      await tester.pumpAndSettle();
+      final get = backend.holdGet = Completer();
+      backend.failHeldGet = true;
+      unawaited(key.currentState!.refresh());
+      await tester.pump();
+      await tester.tap(
+        find.descendant(
+          of: find.byKey(const ValueKey('goal-importance')),
+          matching: find.text('High'),
+        ),
+      );
+      await tester.pump();
+      expect(find.text(store), findsOneWidget);
+      get.complete();
+      await tester.pumpAndSettle();
+      expect(find.text(store), findsOneWidget);
+      expect(find.text('The project operation failed.'), findsNothing);
+    });
+
+    testWidgets('an opening read that fails keeps a refused move\'s reason', (
+      tester,
+    ) async {
+      final backend = Backend([marked('a'), marked('b')])
+        ..refuseMove = 'project_unknown';
+      await mount(tester, backend);
+      final get = backend.holdGet = Completer();
+      backend.failHeldGet = true;
+      await tester.tap(inCard('a', const ValueKey('card-open')));
+      await tester.pump();
+      // While a is being read, b's move is refused.
+      await tester.tap(inCard('b', const ValueKey('card-move')));
+      await frames(tester);
+      await tester.tap(find.text('Move up'));
+      await frames(tester);
+      expect(backend.moves.single, {'id': 'b', 'before': 'a'});
+      expect(find.text('The project could not be found.'), findsOneWidget);
+      get.complete();
+      await tester.pumpAndSettle();
+      expect(find.text('The project could not be found.'), findsOneWidget);
+      expect(find.text('The project operation failed.'), findsNothing);
+    });
+
+    testWidgets('a refusal between the scroll and the focus: the card keeps '
+        'the keyboard', (tester) async {
+      final ids = [for (var i = 0; i < 30; i++) 'c$i'];
+      final backend = Backend([for (final id in ids) marked(id)])
+        ..refuseMove = 'project_store_unavailable';
+      await mount(tester, backend);
+      // From the end of the board to the top (the Move menu), refused.
+      await tester.scrollUntilVisible(
+        cardOf('c29'),
+        400,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.pumpAndSettle();
+      final answer = backend.holdMove = Completer();
+      await tester.tap(inCard('c29', const ValueKey('card-move')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Move to top'));
+      // The board scrolls to the top; the focus would follow a frame later.
+      await tester.pump();
+      answer.complete();
+      await tester.pumpAndSettle();
+      expect(backend.moves.single, {'id': 'c29', 'before': 'c0'});
+      expect(cardOf('c29').hitTestable(), findsOneWidget);
+      expect(focusOf(tester, 'c29').hasFocus, isTrue);
+    });
+
+    testWidgets('the Goal tab\'s importance is off while a card action on the '
+        'project runs', (tester) async {
+      final pause = Completer<Map<String, dynamic>>();
+      final backend = Backend([
+        {
+          ...card(
+            'r',
+            bucket: 'running',
+            activity: 'running',
+            status: 'running',
+            runId: 'run-1',
+            active: {'phase': 'execution', 'position': 0, 'state': 'active'},
+          ),
+          'importance': 'medium',
+        },
+      ])..pause = pause;
+      await mount(tester, backend);
+      await tester.tap(find.byKey(const ValueKey('card-pause')));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('card-open')));
+      await frames(tester);
+      expect(
+        tester
+            .widget<SegmentedButton<BoardImportance>>(
+              find.byKey(const ValueKey('goal-importance')),
+            )
+            .onSelectionChanged,
+        isNull,
+      );
+      pause.complete({});
+      await frames(tester);
     });
   });
 }

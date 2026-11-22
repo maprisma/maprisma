@@ -149,9 +149,27 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
   final _boardScroll = ScrollController();
   final _newFocus = FocusNode(debugLabel: 'new project');
 
-  void _revealed() {
+  /// Counts the cards asked to be revealed: a board's callback from an
+  /// earlier ask (a move answered between the scroll and the focus) does
+  /// nothing.
+  int _revealSeq = 0;
+
+  /// Brings [id] into view and gives it the keyboard ('' : the first shown
+  /// card or New project).
+  void _revealCard(String id) {
+    _reveal = id;
+    _revealSeq++;
+  }
+
+  /// The board's callback for the reveal asked for now.
+  VoidCallback _revealedNow() {
+    final seq = _revealSeq;
+    return () => _revealed(seq);
+  }
+
+  void _revealed(int seq) {
     final id = _reveal;
-    if (!mounted || id == null) return;
+    if (!mounted || id == null || seq != _revealSeq) return;
     setState(() => _reveal = null);
     final node = _cardFocus[id];
     // A deleted card's node keeps its old context: it must still be there.
@@ -225,7 +243,11 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
       for (final p in _projects)
         if (_shows(p, agent)) '${p['id']}',
     ];
-    setState(() => _reveal = shown.contains(id) ? id : shown.firstOrNull ?? '');
+    setState(
+      () => _revealCard(
+        id != null && shown.contains(id) ? id : shown.firstOrNull ?? '',
+      ),
+    );
     return true;
   }
 
@@ -359,7 +381,7 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
       _orderSeq++;
       _projects = _ordered(_projects, moved);
       // The keyboard stays with the card, also when it left the view.
-      _reveal = id;
+      _revealCard(id);
     });
     var kept = false;
     try {
@@ -369,7 +391,7 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
         setState(() {
           _projects = _ordered(_projects, [for (final i in order) '$i']);
           // The answer may place it elsewhere: kept in view.
-          _reveal = id;
+          _revealCard(id);
         });
       }
     } catch (error) {
@@ -377,7 +399,7 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
         setState(() {
           _projects = _ordered(_projects, old);
           // Back where it was, in view again.
-          _reveal = id;
+          _revealCard(id);
           _error = _failure(error);
           _keepError++;
           _quickFailures++;
@@ -827,7 +849,11 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
         if (detailError != null &&
             selection == _selection &&
             (!_board || _projectOpen)) {
-          _error = _failure(detailError);
+          // A card's action that failed since the read began keeps its
+          // reason.
+          _error = _quickFailures == failures
+              ? _failure(detailError)
+              : _quickReason;
         } else if (profileError != null && !_board) {
           _error = _failure(profileError);
         }
@@ -989,6 +1015,7 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
       }
     });
     final marks = Map.of(_markGen);
+    final failures = _quickFailures;
     try {
       final result = project == null
           ? null
@@ -1004,7 +1031,14 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
       });
       return true;
     } catch (error) {
-      if (mounted) setState(() => _error = _failure(error));
+      // A card's action that failed meanwhile keeps its reason.
+      if (mounted) {
+        setState(
+          () => _error = _quickFailures == failures
+              ? _failure(error)
+              : _quickReason,
+        );
+      }
       return false;
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -1150,7 +1184,7 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
               for (final p in _projects)
                 if (_shows(p, widget.agent?.command)) '${p['id']}',
             ];
-            _reveal = shown.firstOrNull ?? '';
+            _revealCard(shown.firstOrNull ?? '');
           }
         });
       }
@@ -1944,7 +1978,10 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
             selected: {value},
             // Not while the page saves, deletes or reads the project.
             onSelectionChanged:
-                _busy || _marking.containsKey(id) || _unavailable
+                _busy ||
+                    _marking.containsKey(id) ||
+                    _quick.contains(id) ||
+                    _unavailable
                 ? null
                 : (chosen) => _setImportance(id, chosen.single),
           );
@@ -2359,7 +2396,7 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
                             controller: _boardScroll,
                             newFocus: _newFocus,
                             reveal: _reveal,
-                            onRevealed: _revealed,
+                            onRevealed: _revealedNow(),
                             onPress: (id, down) =>
                                 down ? _pressed.add(id) : _pressed.remove(id),
                             cardFocus: (id) => _cardFocus[id] ??= FocusNode(
