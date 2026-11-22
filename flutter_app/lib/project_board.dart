@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_look.dart';
+import 'project_phases.dart';
 
 /// The filters of the Projects board, in the core's bucket order (task 088).
 enum BoardFilter {
@@ -18,6 +19,21 @@ enum BoardFilter {
   final String label;
   final IconData icon;
 }
+
+/// The board's two views (task 090): cards, or stage columns.
+enum BoardView {
+  cards('Cards', Icons.grid_view),
+  phases('Phases', Icons.view_column_outlined);
+
+  const BoardView(this.label, this.icon);
+  final String label;
+  final IconData icon;
+}
+
+/// A bucket's symbol (the filter's).
+IconData boardBucketIcon(Object? bucket) => BoardFilter.values
+    .firstWhere((f) => f.code == bucket, orElse: () => BoardFilter.drafts)
+    .icon;
 
 /// The stage rail's stops, as the core names them.
 const boardStages = [
@@ -85,7 +101,13 @@ class ProjectBoard extends StatelessWidget {
     this.newFocus,
     this.reveal,
     this.onRevealed,
+    this.view = BoardView.cards,
+    this.onView,
   });
+
+  /// Cards or Phases (navigation only).
+  final BoardView view;
+  final ValueChanged<BoardView>? onView;
 
   /// The board projection, most urgent first.
   final List<Map<String, dynamic>> projects;
@@ -150,7 +172,24 @@ class ProjectBoard extends StatelessWidget {
             MediaQuery.textScalerOf(context).scale(16) /
             16;
         final target = reveal;
-        if (target != null) {
+        if (target != null && view == BoardView.phases) {
+          // Every compact card is built: scroll its column or list to it.
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            // Only a shown card (never a focus node for a gone one).
+            final card = shown.any((p) => '${p['id']}' == target)
+                ? cardFocus?.call(target).context
+                : null;
+            if (card != null && card.mounted) {
+              Scrollable.ensureVisible(card, alignment: 0.5);
+              WidgetsBinding.instance.addPostFrameCallback(
+                (_) => onRevealed?.call(),
+              );
+              WidgetsBinding.instance.scheduleFrame();
+            } else {
+              onRevealed?.call();
+            }
+          });
+        } else if (target != null) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             final index = shown.indexWhere((p) => '${p['id']}' == target);
             final scroll = controller;
@@ -189,12 +228,22 @@ class ProjectBoard extends StatelessWidget {
               onFilter: onFilter,
               onNew: onNew,
               newFocus: newFocus,
+              view: view,
+              onView: onView,
               tr: tr,
             ),
             const Divider(height: 1),
             Expanded(
               child: projects.isEmpty
                   ? _EmptyBoard(onNew: onNew, tr: tr)
+                  : view == BoardView.phases
+                  ? PhasesBoard(
+                      projects: shown,
+                      tr: tr,
+                      onOpen: onOpen,
+                      cardFocus: cardFocus,
+                      onPress: onPress,
+                    )
                   : GridView.builder(
                       controller: controller,
                       // A refresh keeps each card's element by its id.
@@ -254,9 +303,13 @@ class _SummaryRow extends StatelessWidget {
     required this.onNew,
     required this.tr,
     this.newFocus,
+    this.view = BoardView.cards,
+    this.onView,
   });
 
   final FocusNode? newFocus;
+  final BoardView view;
+  final ValueChanged<BoardView>? onView;
 
   /// Null while the list cannot be read (status unavailable, never zero).
   final Map<BoardFilter, int>? counts;
@@ -289,15 +342,25 @@ class _SummaryRow extends StatelessWidget {
     }
 
     return LayoutBuilder(
-      builder: (context, box) => _row(context, box.maxWidth < 600, chip),
+      builder: (context, box) {
+        // Names only with room for them (larger text needs more).
+        final scale = MediaQuery.textScalerOf(context).scale(16) / 16;
+        return _row(
+          context,
+          box.maxWidth < 600 * scale,
+          chip,
+          named: box.maxWidth >= 1000 * scale,
+        );
+      },
     );
   }
 
   Widget _row(
     BuildContext context,
     bool narrow,
-    Widget Function(BoardFilter?) chip,
-  ) {
+    Widget Function(BoardFilter?) chip, {
+    required bool named,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpace.md,
@@ -316,6 +379,30 @@ class _SummaryRow extends StatelessWidget {
                 ],
               ),
             ),
+          ),
+          const SizedBox(width: AppSpace.sm),
+          // Cards | Phases; without room: symbols only (names as tooltips).
+          SegmentedButton<BoardView>(
+            key: const ValueKey('board-view'),
+            showSelectedIcon: false,
+            segments: [
+              for (final v in BoardView.values)
+                ButtonSegment(
+                  value: v,
+                  icon: Icon(v.icon, size: 18),
+                  tooltip: named ? null : tr(v.label),
+                  label: !named
+                      ? null
+                      : Text(
+                          tr(v.label),
+                          key: ValueKey('board-view-${v.name}'),
+                        ),
+                ),
+            ],
+            selected: {view},
+            onSelectionChanged: onView == null
+                ? null
+                : (chosen) => onView!(chosen.first),
           ),
           const SizedBox(width: AppSpace.sm),
           // Narrow: the symbol only (its name as tooltip and label).
@@ -457,7 +544,7 @@ class ProjectCard extends StatelessWidget {
               const SizedBox(height: AppSpace.xs),
               Row(
                 children: [
-                  Icon(_bucketIcon(project['bucket']), size: 16),
+                  Icon(boardBucketIcon(project['bucket']), size: 16),
                   const SizedBox(width: AppSpace.xs),
                   Expanded(
                     child: Text(
@@ -553,10 +640,6 @@ class ProjectCard extends StatelessWidget {
         : local.formatShortMonthDay(at);
     return '$when · $text';
   }
-
-  static IconData _bucketIcon(Object? bucket) => BoardFilter.values
-      .firstWhere((f) => f.code == bucket, orElse: () => BoardFilter.drafts)
-      .icon;
 }
 
 /// The stage rail: six stops, the current one lit, Approval drawn as a gate;

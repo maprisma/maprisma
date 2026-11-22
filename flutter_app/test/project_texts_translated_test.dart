@@ -17,6 +17,7 @@ void main() {
         'lib/main_tabs.dart',
         'lib/project_board.dart',
         'lib/project_page_parts.dart',
+        'lib/project_phases.dart',
       ])
         for (final match in used.allMatches(File(file).readAsStringSync()))
           match.group(1)!.replaceAll(r"\'", "'"),
@@ -38,6 +39,7 @@ void main() {
     final keys = {
       for (final f in BoardFilter.values) f.label,
       for (final (_, label) in boardStages) label,
+      for (final v in BoardView.values) v.label,
       for (final code in [
         'stopping',
         'setting_up_team',

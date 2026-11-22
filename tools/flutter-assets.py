@@ -1001,6 +1001,10 @@ KEYS = (
     "Working",
     "has a problem",
     # The board (task 088).
+    "Cards",
+    "Phases",
+    "No projects here.",
+    "{0} projects",
     "Subscription plan",
     "No agents in this phase yet.",
     "Project status unavailable",

@@ -77,6 +77,9 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
   /// A project (or a new one) is open over the board.
   bool _projectOpen = false;
   BoardFilter? _filter;
+
+  /// Cards or Phases; kept while the app runs (task 090).
+  BoardView _view = BoardView.cards;
   final _cardFocus = <String, FocusNode>{};
   String? _openedId;
 
@@ -1887,6 +1890,8 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
                             unavailable: _unavailable,
                             filter: _filter,
                             onFilter: (f) => setState(() => _filter = f),
+                            view: _view,
+                            onView: (v) => setState(() => _view = v),
                             onOpen: (p) => _openFromBoard(p),
                             onNew: _busy || _unavailable
                                 ? null

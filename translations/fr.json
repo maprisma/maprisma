@@ -3854,5 +3854,8 @@
   "Project status unavailable": "État des projets indisponible",
   "Retry": "Réessayer",
   "No agents in this phase yet.": "Pas encore d’agents dans cette phase.",
-  "Subscription plan": "Forfait"
+  "Subscription plan": "Forfait",
+  "Phases": "Phases",
+  "No projects here.": "Aucun projet ici.",
+  "{0} projects": "{0} projets"
 }

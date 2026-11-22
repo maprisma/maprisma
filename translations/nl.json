@@ -3854,5 +3854,8 @@
   "Project status unavailable": "Projectstatus niet beschikbaar",
   "Retry": "Opnieuw proberen",
   "No agents in this phase yet.": "Nog geen agents in deze fase.",
-  "Subscription plan": "Abonnement"
+  "Subscription plan": "Abonnement",
+  "Phases": "Fasen",
+  "No projects here.": "Hier zijn geen projecten.",
+  "{0} projects": "{0} projecten"
 }
