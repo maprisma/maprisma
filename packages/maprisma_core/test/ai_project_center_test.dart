@@ -2802,19 +2802,25 @@ void main() {
       expect((await card(item['id'] as String))['activity'], 'ready_to_run');
     });
 
-    test('most urgent first, then the latest change', () async {
-      final draft = await save(title: 'Draft');
-      final review = await save(title: 'Review', plan: 'A saved plan.');
+    test('urgency shows and counts but does not sort (task 095)', () async {
       final broken = await save(title: 'Broken', plan: 'A saved plan.');
+      await save(title: 'Review', plan: 'A saved plan.');
+      await save(title: 'Draft');
       await edit(broken['id'] as String, (p) {
         p['status'] = 'failed';
         p['phase'] = 'running';
       });
+      final cards = await board();
       expect(
-        [for (final p in await board()) p['title']],
-        ['Broken', 'Review', 'Draft'],
+        [for (final p in cards) p['title']],
+        ['Draft', 'Review', 'Broken'],
       );
-      expect(draft['id'], isNot(review['id']));
+      expect(cards.last['bucket'], 'attention');
+      expect(
+        ((await plugin.call('list', {}))['summary']
+            as Map)['attention_projects'],
+        1,
+      );
     });
 
     test('one profile read for the whole board', () async {
@@ -3368,7 +3374,7 @@ void main() {
     );
 
     test(
-      'all buckets in order; same bucket by the latest change, then id',
+      'every bucket in the user\'s order, not by urgency or change (task 095)',
       () async {
         final ids = <String, String>{};
         for (final title in [
@@ -3413,41 +3419,272 @@ void main() {
         );
         addTearDown(() => io.close(fd));
         expect(io.tryFlock(fd, shared: true), isTrue);
+        // Newest on top; the buckets are on the cards, not in the order.
+        final cards = await board();
         expect(
-          [for (final p in await board()) p['title']],
+          [for (final p in cards) (p['title'], p['bucket'])],
           [
-            'Running',
-            'Broken',
-            'Review new',
-            'Review old',
-            'Ready',
-            'Draft',
-            'Done',
+            ('Running', 'running'),
+            ('Ready', 'ready'),
+            ('Done', 'finished'),
+            ('Broken', 'attention'),
+            ('Review new', 'needs_you'),
+            ('Review old', 'needs_you'),
+            ('Draft', 'drafts'),
           ],
         );
       },
     );
 
-    test('more than 32 equal cards keep their order (by id)', () async {
-      for (var n = 0; n < 40; n++) {
-        await save(title: 'P$n');
+    test(
+      'a store from before task 095: newest first on equal changes',
+      () async {
+        for (var n = 0; n < 40; n++) {
+          await save(title: 'P$n');
+        }
+        await plugin.shutdown();
+        final state = File('${plugin.directory}/projects.json');
+        final body = jsonDecode(state.readAsStringSync()) as Map;
+        body.remove('board_order');
+        // Creation order, as the store kept it before.
+        body['projects'] = (body['projects'] as List).reversed.toList();
+        for (final item in (body['projects'] as List).cast<Map>()) {
+          item['updated_at'] = '2026-01-01T00:00:00.000Z';
+          item.remove('importance');
+        }
+        state.writeAsStringSync(jsonEncode(body));
+        plugin = AiProjectCenterPlugin(
+          temporary.path,
+          agentProfiles: () => profiles,
+          filesystem: TestPosix(),
+        );
+        final cards = await board();
+        expect(
+          [for (final p in cards) p['title']],
+          [for (var n = 39; n >= 0; n--) 'P$n'],
+        );
+        expect(cards.every((p) => p['importance'] == 'medium'), isTrue);
+      },
+    );
+
+    group('board order and importance (task 095)', () {
+      Future<List<String>> titles() async => [
+        for (final p in await board()) p['title'] as String,
+      ];
+
+      Future<void> reopen() async {
+        await plugin.shutdown();
+        plugin = AiProjectCenterPlugin(
+          temporary.path,
+          agentProfiles: () => profiles,
+          filesystem: TestPosix(),
+        );
       }
-      final all = await board();
-      await plugin.shutdown();
-      final state = File('${plugin.directory}/projects.json');
-      final body = jsonDecode(state.readAsStringSync()) as Map;
-      for (final item in (body['projects'] as List).cast<Map>()) {
-        item['updated_at'] = '2026-01-01T00:00:00.000Z';
-      }
-      state.writeAsStringSync(jsonEncode(body));
-      plugin = AiProjectCenterPlugin(
-        temporary.path,
-        agentProfiles: () => profiles,
-        filesystem: TestPosix(),
+
+      Map<String, dynamic> stored() =>
+          jsonDecode(
+                File('${plugin.directory}/projects.json').readAsStringSync(),
+              )
+              as Map<String, dynamic>;
+
+      Future<Map<String, String>> three() async => {
+        for (final title in ['A', 'B', 'C'])
+          title: (await save(title: title))['id'] as String,
+      };
+
+      test('new projects go on top; the order survives a reopen', () async {
+        final ids = await three();
+        expect(await titles(), ['C', 'B', 'A']);
+        expect(stored()['board_order'], isTrue);
+        expect(
+          [for (final p in stored()['projects'] as List) p['id']],
+          [ids['C'], ids['B'], ids['A']],
+        );
+        await plugin.call('move', {'id': ids['C'], 'before': null});
+        await reopen();
+        expect(await titles(), ['B', 'A', 'C']);
+        await save(title: 'D');
+        expect(await titles(), ['D', 'B', 'A', 'C']);
+      });
+
+      test('move up, down, to the top and to the end', () async {
+        final ids = await three();
+        final before = await project(plugin, ids['A']!);
+        // A one up (before B).
+        var moved = await plugin.call('move', {
+          'id': ids['A'],
+          'before': ids['B'],
+        });
+        expect(moved['order'], [ids['C'], ids['A'], ids['B']]);
+        expect(await titles(), ['C', 'A', 'B']);
+        // C one down (before B, the card after its lower neighbour).
+        await plugin.call('move', {'id': ids['C'], 'before': ids['B']});
+        expect(await titles(), ['A', 'C', 'B']);
+        // B to the top, then A to the end (before absent).
+        await plugin.call('move', {'id': ids['B'], 'before': ids['A']});
+        expect(await titles(), ['B', 'A', 'C']);
+        moved = await plugin.call('move', {'id': ids['A']});
+        expect(moved['order'], [ids['B'], ids['C'], ids['A']]);
+        // Before itself or where it is already: nothing changes.
+        await plugin.call('move', {'id': ids['C'], 'before': ids['C']});
+        await plugin.call('move', {'id': ids['C'], 'before': ids['A']});
+        expect(await titles(), ['B', 'C', 'A']);
+        // Not project content: revision and last change stay.
+        final after = await project(plugin, ids['A']!);
+        expect(after['revision'], before['revision']);
+        expect(after['updated_at'], before['updated_at']);
+        expect(after['events'], before['events']);
+        await reopen();
+        expect(await titles(), ['B', 'C', 'A']);
+      });
+
+      test('unknown ids and fields are refused, nothing moves', () async {
+        final ids = await three();
+        final unknown = '0' * 32;
+        for (final params in [
+          {'id': unknown},
+          {'id': ids['A'], 'before': unknown},
+          {'id': 7, 'before': ids['A']},
+          {'id': ids['A'], 'before': 7},
+        ]) {
+          await expectLater(
+            plugin.call('move', params),
+            throwsA(errorCode('project_unknown')),
+            reason: '$params',
+          );
+        }
+        await expectLater(
+          plugin.call('move', {'id': ids['A'], 'index': 0}),
+          throwsA(isA<FormatException>()),
+        );
+        expect(await titles(), ['C', 'B', 'A']);
+      });
+
+      test('a deleted project leaves the order', () async {
+        final ids = await three();
+        final b = await project(plugin, ids['B']!);
+        await plugin.call('delete', {'id': b['id'], 'revision': b['revision']});
+        expect(await titles(), ['C', 'A']);
+        expect(
+          [for (final p in stored()['projects'] as List) p['id']],
+          [ids['C'], ids['A']],
+        );
+        await expectLater(
+          plugin.call('move', {'id': ids['A'], 'before': ids['B']}),
+          throwsA(errorCode('project_unknown')),
+        );
+        await expectLater(
+          plugin.call('move', {'id': ids['B']}),
+          throwsA(errorCode('project_unknown')),
+        );
+        expect(await titles(), ['C', 'A']);
+      });
+
+      test('importance: Medium when new, set, validated, kept', () async {
+        final ids = await three();
+        expect((await project(plugin, ids['A']!))['importance'], 'medium');
+        expect(
+          (await board()).every((p) => p['importance'] == 'medium'),
+          isTrue,
+        );
+        final item = await approve(
+          (await plugin.call('save', {
+                'id': ids['A'],
+                'revision': (await project(plugin, ids['A']!))['revision'],
+                'plan': 'A saved plan.',
+              }))['project']
+              as Map<String, dynamic>,
+        );
+        expect(item['status'], 'ready');
+        final marked =
+            (await plugin.call('set_importance', {
+                  'id': ids['A'],
+                  'importance': 'high',
+                }))['project']
+                as Map<String, dynamic>;
+        expect(marked['importance'], 'high');
+        // A mark, not content: revision, approval and last change stay.
+        expect(marked['revision'], item['revision']);
+        expect(marked['updated_at'], item['updated_at']);
+        expect(marked['status'], 'ready');
+        expect(marked['approval_valid'], isTrue);
+        // It does not move the card.
+        expect(await titles(), ['C', 'B', 'A']);
+        expect((await board()).last['importance'], 'high');
+        await plugin.call('set_importance', {
+          'id': ids['B'],
+          'importance': 'low',
+        });
+        for (final params in [
+          {'id': ids['C'], 'importance': 'urgent'},
+          {'id': ids['C'], 'importance': null},
+          {'id': ids['C']},
+          {'id': ids['C'], 'importance': 'high', 'revision': 1},
+        ]) {
+          await expectLater(
+            plugin.call('set_importance', params),
+            throwsA(isA<FormatException>()),
+            reason: '$params',
+          );
+        }
+        await expectLater(
+          plugin.call('set_importance', {'id': '0' * 32, 'importance': 'low'}),
+          throwsA(errorCode('project_unknown')),
+        );
+        await reopen();
+        expect(
+          [for (final p in await board()) p['importance']],
+          ['medium', 'low', 'high'],
+        );
+      });
+
+      test(
+        'a stored importance that is not a mark is a corrupt store',
+        () async {
+          await three();
+          await plugin.shutdown();
+          final state = File('${plugin.directory}/projects.json');
+          final body = jsonDecode(state.readAsStringSync()) as Map;
+          (body['projects'] as List).first['importance'] = 'urgent';
+          state.writeAsStringSync(jsonEncode(body));
+          expect(
+            () => AiProjectCenterPlugin(
+              temporary.path,
+              agentProfiles: () => profiles,
+              filesystem: TestPosix(),
+            ),
+            throwsA(errorCode('project_store_corrupt')),
+          );
+          (body['projects'] as List).first['importance'] = 'high';
+          body['board_order'] = 'yes';
+          state.writeAsStringSync(jsonEncode(body));
+          expect(
+            () => AiProjectCenterPlugin(
+              temporary.path,
+              agentProfiles: () => profiles,
+              filesystem: TestPosix(),
+            ),
+            throwsA(errorCode('project_store_corrupt')),
+          );
+        },
       );
-      final ordered = [for (final p in await board()) p['id'] as String];
-      expect(ordered, [...ordered]..sort());
-      expect(ordered.length, all.length);
+
+      test('a failing store refuses moves and marks cleanly', () async {
+        final ids = await three();
+        final file = File('${plugin.directory}/projects.json')..deleteSync();
+        Directory(file.path).createSync();
+        await expectLater(
+          plugin.call('move', {'id': ids['A']!, 'before': ids['C']}),
+          throwsA(errorCode('project_store_unavailable')),
+        );
+        expect(await titles(), ['C', 'B', 'A']);
+        await expectLater(
+          plugin.call('set_importance', {'id': ids['A'], 'importance': 'high'}),
+          throwsA(errorCode('project_store_unavailable')),
+        );
+        expect((await project(plugin, ids['A']!))['importance'], 'medium');
+        Directory(file.path).deleteSync();
+      });
     });
 
     test('a fresh attempt starts with no member started', () async {

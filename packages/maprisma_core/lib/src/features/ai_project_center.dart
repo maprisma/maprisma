@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:collection/collection.dart' show ListEquality;
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 
@@ -97,6 +98,9 @@ final class AiProjectCenterPlugin {
   static const maxPlan = 48 * 1024;
   static const maxStore = 16 * 1024 * 1024;
   static const _activeStates = {'planning', 'running', 'reviewing', 'pausing'};
+
+  /// A mark per project (task 095); it never moves a card.
+  static const importances = {'high', 'medium', 'low'};
   static const _states = {
     'draft',
     'planning',
@@ -307,7 +311,10 @@ final class AiProjectCenterPlugin {
       } finally {
         _io.close(fd);
       }
-      if (data is! Map || data['version'] != 1 || data['projects'] is! List) {
+      if (data is! Map ||
+          data['version'] != 1 ||
+          data['projects'] is! List ||
+          (data.containsKey('board_order') && data['board_order'] != true)) {
         throw const FormatException();
       }
       final projects = data['projects'] as List;
@@ -348,6 +355,11 @@ final class AiProjectCenterPlugin {
           _text(event['at'], 50, required: true);
           _text(event['type'], 80, required: true);
           _text(event['text'], 4000);
+        }
+        // A store from before task 095 has no importance: Medium.
+        item['importance'] ??= 'medium';
+        if (!importances.contains(item['importance'])) {
+          throw const FormatException();
         }
         item['team'] = _team(item['team']);
         if (item.containsKey('plan_team')) {
@@ -392,12 +404,36 @@ final class AiProjectCenterPlugin {
         }
         _projects[id] = item;
       }
+      if (data['board_order'] != true) _legacyOrder();
       if (recovered) _persist(_projects);
     } on ServiceError {
       rethrow;
     } on Object {
       throw ServiceError('project_store_corrupt');
     }
+  }
+
+  /// A store from before task 095 kept projects in creation order and the
+  /// board sorted them by urgency. Its first board order is the latest change
+  /// first (the old order within a bucket; the urgency itself needs the
+  /// display snapshot, which a load does not read, and would freeze a passing
+  /// state such as running at the top), the newest project first on a tie.
+  void _legacyOrder() {
+    final stored = _projects.values.toList();
+    final position = {
+      for (final (index, item) in stored.indexed) item['id']: index,
+    };
+    stored.sort((a, b) {
+      final time = (b['updated_at'] as String).compareTo(
+        a['updated_at'] as String,
+      );
+      return time != 0
+          ? time
+          : position[b['id']]!.compareTo(position[a['id']]!);
+    });
+    _projects
+      ..clear()
+      ..addAll({for (final item in stored) item['id'] as String: item});
   }
 
   void _persist(
@@ -416,7 +452,12 @@ final class AiProjectCenterPlugin {
       throw ServiceError('project_store_full');
     }
     final body = utf8.encode(
-      jsonEncode({'version': 1, 'projects': projects.values.toList()}),
+      // The list is the board order (task 095).
+      jsonEncode({
+        'version': 1,
+        'board_order': true,
+        'projects': projects.values.toList(),
+      }),
     );
     if (body.length > storeLimit) {
       // Running work cannot be saved any more: stop it, as for any failed
@@ -510,9 +551,68 @@ final class AiProjectCenterPlugin {
     final id = item['id'] as String;
     if (increment) item['revision'] = (item['revision'] as int) + 1;
     item['updated_at'] = _now();
-    final next = {..._projects, id: item};
-    _persist(next);
-    _projects[id] = item;
+    if (_projects.containsKey(id)) {
+      final next = {..._projects, id: item};
+      _persist(next);
+      _projects[id] = item;
+    } else {
+      // A new project goes on top of the board (task 095).
+      final next = {id: item, ..._projects};
+      _persist(next);
+      _projects
+        ..clear()
+        ..addAll(next);
+    }
+  }
+
+  /// Moves a project on the board (task 095): before the project `before`,
+  /// or to the end when it is null or absent. Neither its revision nor its
+  /// last change move: the order is not project content.
+  Map<String, dynamic> _move(Map<String, dynamic> params) {
+    if (params.keys.any((key) => !{'id', 'before'}.contains(key))) {
+      throw const FormatException('Invalid move fields');
+    }
+    final id = params['id'];
+    final before = params['before'];
+    if (!_projects.containsKey(id) ||
+        (before != null && !_projects.containsKey(before))) {
+      throw ServiceError('project_unknown');
+    }
+    final order = _projects.keys.toList();
+    if (before != id) {
+      final moved = [...order]..remove(id);
+      moved.insert(
+        before == null ? moved.length : moved.indexOf(before as String),
+        id as String,
+      );
+      if (!const ListEquality<String>().equals(moved, order)) {
+        final next = {for (final key in moved) key: _projects[key]!};
+        _persist(next);
+        _projects
+          ..clear()
+          ..addAll(next);
+        return {'order': moved};
+      }
+    }
+    return {'order': order};
+  }
+
+  /// Marks a project High, Medium or Low (task 095). A mark, not project
+  /// content: no revision check, the revision, the approval and the last
+  /// change stay, and it is allowed while the project works.
+  Map<String, dynamic> _setImportance(Map<String, dynamic> params) {
+    if (params.keys.any((key) => !{'id', 'importance'}.contains(key)) ||
+        !importances.contains(params['importance'])) {
+      throw const FormatException('Invalid importance');
+    }
+    final item = _project(params);
+    if (item['importance'] != params['importance']) {
+      item['importance'] = params['importance'];
+      final next = {..._projects, item['id'] as String: item};
+      _persist(next);
+      _projects[item['id'] as String] = item;
+    }
+    return {'project': _view(item)};
   }
 
   void _event(Map<String, dynamic> item, String type, String text) {
@@ -840,6 +940,7 @@ final class AiProjectCenterPlugin {
             'run_id': null,
             'events': <Map<String, dynamic>>[],
             'created_at': _now(),
+            'importance': 'medium',
           }
         : _project(params, revision: true);
     _idle(item);
@@ -1921,10 +2022,6 @@ final class AiProjectCenterPlugin {
     return true;
   }
 
-  static final _bucketOrder = [
-    for (final bucket in ProjectBucket.values) bucket.code,
-  ];
-
   /// Statuses whose stage or bucket depends on the approval.
   static const _approvalMatters = {'ready', 'paused', 'interrupted', 'failed'};
 
@@ -2308,6 +2405,7 @@ final class AiProjectCenterPlugin {
       for (final key in ['id', 'title', 'path', 'status', 'revision'])
         key: item[key],
       'updated_at': item['updated_at'],
+      'importance': item['importance'],
       'phase': item['phase'],
       'run_id': item['run_id'],
       ...state.toJson(),
@@ -2342,30 +2440,17 @@ final class AiProjectCenterPlugin {
     };
   }
 
-  /// The board (task 087): most urgent first, then the latest change;
-  /// every card and the summary from the same derived facts.
+  /// The board (task 087) in the user's order (task 095: urgency is shown
+  /// and counted, it does not sort); every card and the summary from the
+  /// same derived facts.
   Map<String, dynamic> _list() {
-    // Most urgent first, then the latest change (task 087); every card
-    // and the summary from the same derived facts.
     final derived = {
       for (final item in _projects.values) item['id'] as String: _derive(item),
     };
-    final board =
-        [
-          for (final item in _projects.values)
-            _boardItem(item, derived[item['id']]!),
-        ]..sort((a, b) {
-          final order = _bucketOrder
-              .indexOf(a['bucket'] as String)
-              .compareTo(_bucketOrder.indexOf(b['bucket'] as String));
-          if (order != 0) return order;
-          final time = (b['updated_at'] as String).compareTo(
-            a['updated_at'] as String,
-          );
-          return time != 0
-              ? time
-              : (a['id'] as String).compareTo(b['id'] as String);
-        });
+    final board = [
+      for (final item in _projects.values)
+        _boardItem(item, derived[item['id']]!),
+    ];
     return {
       'projects': board,
       'summary': summary({
@@ -2458,6 +2543,10 @@ final class AiProjectCenterPlugin {
         return {'project': _view(_project(params))};
       case 'save':
         return _save(params);
+      case 'move':
+        return _move(params);
+      case 'set_importance':
+        return _setImportance(params);
       case 'delete':
         final item = _project(params, revision: true);
         _idle(item);

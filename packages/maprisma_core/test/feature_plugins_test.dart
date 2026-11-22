@@ -1,4 +1,5 @@
 import 'package:crypto/crypto.dart';
+
 import 'dart:convert';
 import 'dart:io';
 
@@ -973,7 +974,11 @@ void main() {
         final host = FeaturePluginHost(identity);
         await host.call('ai-project-center', 'list', {}, () => {'local': 1});
         expect(host.negotiatedApi('ai-project-center'), 2);
-        expect(host.capabilities('ai-project-center'), ['summary2', 'board']);
+        expect(host.capabilities('ai-project-center'), [
+          'summary2',
+          'board',
+          'order',
+        ]);
         await host.shutdown();
       },
     );
@@ -1285,6 +1290,7 @@ void main() {
         final listed = await call('list', {}, refresh: true);
         // The backend offers the board (task 087), with its projection.
         expect(listed['capabilities'], contains('board'));
+        expect(listed['capabilities'], contains('order'));
         final card = (listed['projects'] as List).single as Map;
         expect(card['bucket'], 'needs_you');
         expect((card['execution'] as List).single['name'], isA<String>());
@@ -1292,6 +1298,13 @@ void main() {
         expect((listed['summary'] as Map)['needs_you'], 1);
         final viewed = await call('get', {'id': item['id']});
         expect((viewed['project'] as Map)['approval_valid'], isFalse);
+        // Order and importance (task 095) pass the host to the worker.
+        expect((await call('move', {'id': item['id']}))['order'], [item['id']]);
+        final marked = await call('set_importance', {
+          'id': item['id'],
+          'importance': 'high',
+        });
+        expect((marked['project'] as Map)['importance'], 'high');
         await service.shutdownFeatures();
       },
       timeout: const Timeout(Duration(minutes: 2)),
