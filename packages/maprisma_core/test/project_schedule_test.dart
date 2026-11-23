@@ -835,6 +835,19 @@ void main() {
       },
     );
 
+    test('an agent that is gone skips the run with a reason', () async {
+      final item = await scheduled(await approved());
+      profiles.clear();
+      now = utc(2026, 11, 24, 4);
+      final code = await plugin.scheduledRun(item['id'] as String, now);
+      expect(code, isNot('started'));
+      expect(commands, isEmpty);
+      final after = await get(item['id'] as String);
+      expect(after['status'], 'ready');
+      expect(events(after).last, 'schedule_skipped');
+      expect(scheduler.notes, hasLength(1));
+    });
+
     test('a refused rule skips the run without failing the project', () async {
       final item = await scheduled(await approved());
       refuseAgent = 'fixture';

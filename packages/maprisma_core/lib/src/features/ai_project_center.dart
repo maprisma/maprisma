@@ -3370,13 +3370,9 @@ final class AiProjectCenterPlugin {
         'run',
         scheduled: described,
       );
-    } on ServiceError catch (error) {
-      return _skip(
-        _copy(_projects[id]!),
-        error.code,
-        _refusalText(error.code),
-        described,
-      );
+    } on Object catch (error) {
+      final code = error is ServiceError ? error.code : 'project_not_started';
+      return _skip(_copy(_projects[id]!), code, _refusalText(code), described);
     }
     return 'started';
   }
@@ -3411,10 +3407,19 @@ final class AiProjectCenterPlugin {
         'The approval no longer fits: the plan, the team, the folder or an agent changed. Approve again.',
       );
     }
+    final List<Map<String, dynamic>> members;
+    try {
+      members = _members(item, 'running');
+    } on Object catch (error) {
+      final code = error is ServiceError
+          ? error.code
+          : 'project_agent_unavailable';
+      return (code, _refusalText(code));
+    }
     // The rules are checked again at each assignment; checked here first,
     // a refusal skips this run instead of failing the project.
     try {
-      for (final member in _members(item, 'running')) {
+      for (final member in members) {
         authorize?.call(member['agent'] as String);
       }
     } on ServiceError catch (error) {
