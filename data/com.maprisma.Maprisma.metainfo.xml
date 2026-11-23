@@ -25,6 +25,13 @@
   <url type="bugtracker">https://github.com/uBruckhaus/Asterism/issues</url>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="2.1.6" date="2026-11-23">
+      <description>
+        <p>GitHub Copilot and Goose can join project teams with reviewed profiles; a shield beside a team
+          member's agent shows what it can and cannot do in the project. Agents whose permissions cannot be
+          fenced in from the command line have no project profile. OpenClaw's Ask AI command was fixed.</p>
+      </description>
+    </release>
     <release version="2.1.5" date="2026-11-23">
       <description>
         <p>Maintenance release: the test suite no longer wakes local LLM services of another provider
