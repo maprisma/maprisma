@@ -47,7 +47,10 @@ class DartAgentHaltParityTest(unittest.TestCase):
                 env = {'HOME': str(home), 'PATH': f'{home}/.local/bin:/usr/bin:/bin', 'LANG': 'C.UTF-8',
                        'XDG_CONFIG_HOME': str(home / '.config'), 'XDG_CACHE_HOME': str(home / '.cache'),
                        'XDG_DATA_HOME': str(home / '.local/share'), 'MAPRISMA_DESKTOP': 'generic',
-                       'MAPRISMA_FLUTTER_DEVEL': '1'}
+                       'MAPRISMA_FLUTTER_DEVEL': '1',
+                       # Fake agents hide from AI Agents Map's provider watcher on this desktop, so the test
+                       # never starts or stops the real local LLM services.
+                       'AI_AGENTS_MAP_NO_PROVIDERS': '1'}
                 runner = (Side([sys.executable, '-c', PYTHON_SERVICE, str(ROOT)], ROOT, env) if side == 'python' else
                           Side([DART, '--disable-dart-dev', '--packages=.dart_tool/package_config.json',
                                 'bin/maprisma-core.dart'], ROOT / 'packages/maprisma_core', env))

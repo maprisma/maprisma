@@ -150,6 +150,10 @@ class DartProviderWatchParityTest(unittest.TestCase):
                 config.write_text(json.dumps({"agents": {"opencode": ["llamacpp"]},
                                               "runtimes": {"llamacpp": {"service": "llama-server", "port": 8080}}}))
                 env = {'HOME': str(home), 'PATH': f'{bin_dir}:/usr/bin:/bin', 'LANG': 'C.UTF-8'}
+                # The fake agent hides from a provider watcher running on this desktop (AI Agents Map's
+                # checks this variable; the watcher under test reads only MAPRISMA_NO_PROVIDERS), so the
+                # test never starts or stops the real local LLM services.
+                agent_env = {**env, 'AI_AGENTS_MAP_NO_PROVIDERS': '1'}
                 command = ([sys.executable, '-I', str(ROOT / 'provider_watch.py'), '--config', str(config)]
                            if side == 'python' else
                            [DART, '--disable-dart-dev', '--packages=.dart_tool/package_config.json',
@@ -165,12 +169,12 @@ class DartProviderWatchParityTest(unittest.TestCase):
                         time.sleep(0.2)
                 try:
                     time.sleep(3)
-                    agent = subprocess.Popen([str(bin_dir / 'opencode')], env=env)
+                    agent = subprocess.Popen([str(bin_dir / 'opencode')], env=agent_env)
                     wait_for(1)
                     agent.kill()
                     agent.wait()
                     wait_for(2)
-                    agent = subprocess.Popen([str(bin_dir / 'opencode')], env=env)
+                    agent = subprocess.Popen([str(bin_dir / 'opencode')], env=agent_env)
                     wait_for(3)
                 finally:
                     watcher.terminate()
