@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:maprisma_core/maprisma_core.dart' show ServiceError;
 
 import 'app_look.dart';
+import 'project_agent_hint.dart';
 import 'project_board.dart';
 import 'project_messages.dart';
 import 'project_page_parts.dart';
@@ -1994,36 +1995,45 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            DropdownButtonFormField<String>(
-              key: ValueKey('agent-$_selection-$index'),
-              initialValue: profile?['id'] as String?,
-              decoration: InputDecoration(labelText: tr('Agent profile')),
-              items: [
-                for (final p in _profiles)
-                  DropdownMenuItem(
-                    value: '${p['id']}',
-                    child: Text('${p['name']}'),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    key: ValueKey('agent-$_selection-$index'),
+                    initialValue: profile?['id'] as String?,
+                    decoration: InputDecoration(labelText: tr('Agent profile')),
+                    items: [
+                      for (final p in _profiles)
+                        DropdownMenuItem(
+                          value: '${p['id']}',
+                          child: Text('${p['name']}'),
+                        ),
+                    ],
+                    onChanged: _teamLocked
+                        ? null
+                        : (value) => setState(() {
+                            member['agent'] = value;
+                            member.remove('model');
+                            member.remove('subagents');
+                            member.remove('runtime');
+                            member.remove('provider');
+                            final next = _profiles
+                                .where((p) => p['id'] == value)
+                                .first;
+                            member['access'] =
+                                _phase == 'plan' || member['role'] == 'reviewer'
+                                ? 'read-only'
+                                : (next['access_modes'] as List? ??
+                                          ['read-only', 'project-edit'])
+                                      .last;
+                            _dirty = true;
+                          }),
                   ),
+                ),
+                // What the chosen agent can and cannot do here.
+                AgentAbilityHint(profile: profile, access: access, tr: tr),
               ],
-              onChanged: _teamLocked
-                  ? null
-                  : (value) => setState(() {
-                      member['agent'] = value;
-                      member.remove('model');
-                      member.remove('subagents');
-                      member.remove('runtime');
-                      member.remove('provider');
-                      final next = _profiles
-                          .where((p) => p['id'] == value)
-                          .first;
-                      member['access'] =
-                          _phase == 'plan' || member['role'] == 'reviewer'
-                          ? 'read-only'
-                          : (next['access_modes'] as List? ??
-                                    ['read-only', 'project-edit'])
-                                .last;
-                      _dirty = true;
-                    }),
             ),
             DropdownButtonFormField<String>(
               key: ValueKey('role-$_selection-$index'),

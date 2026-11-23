@@ -4023,5 +4023,16 @@
   "Maprisma cannot read the folder of its timers (~/.config/systemd/user). Timers it no longer needs stay until it can.": "Maprisma no puede leer la carpeta de sus temporizadores (~/.config/systemd/user). Los temporizadores que ya no necesita se quedan hasta que pueda.",
   "Maprisma could not record the scheduled run. Open its Projects page to check the project.": "Maprisma no pudo registrar la ejecución programada. Abre su página Proyectos para revisar el proyecto.",
   "The scheduled run could not be handed over to Maprisma. Its timer starts it again at the next planned time.": "No se pudo entregar la ejecución programada a Maprisma. Su temporizador la iniciará de nuevo a la próxima hora prevista.",
-  "Maprisma cannot use the folder of its scheduled runs, so it starts none until it is opened again.": "Maprisma no puede usar la carpeta de sus ejecuciones programadas, así que no inicia ninguna hasta que se vuelva a abrir."
+  "Maprisma cannot use the folder of its scheduled runs, so it starts none until it is opened again.": "Maprisma no puede usar la carpeta de sus ejecuciones programadas, así que no inicia ninguna hasta que se vuelva a abrir.",
+  "What this agent can and cannot do": "Qué puede y qué no puede hacer este agente",
+  "Choose an agent to see what it can do.": "Elige un agente para ver qué puede hacer.",
+  "Edit project files (read-only in this team)": "Editar los archivos del proyecto (solo lectura en este equipo)",
+  "Choose a model": "Elegir un modelo",
+  "Use a local LLM from the map": "Usar un LLM local del mapa",
+  "Use native subagents": "Usar subagentes nativos",
+  "Propose a team": "Proponer un equipo",
+  "In this team: read-only": "En este equipo: solo lectura",
+  "In this team: edits project files": "En este equipo: edita los archivos del proyecto",
+  "Planning and review only read and search project files. Execution may also create and edit files inside the project folder; shell commands, web access, memory and the built-in MCP servers are disabled. Only these file tools reach the model, but your own hooks, plugins and MCP servers still start (and repository hooks in a folder you already trusted in Copilot).": "La planificación y la revisión solo leen y buscan en los archivos del proyecto. La ejecución también puede crear y editar archivos dentro de la carpeta del proyecto; los comandos de shell, el acceso web, la memoria y los servidores MCP integrados están desactivados. Solo estas herramientas de archivos llegan al modelo, pero tus propios hooks, plugins y servidores MCP siguen iniciándose (y los hooks del repositorio en una carpeta en la que ya confías en Copilot).",
+  "Planning, review and execution only see code structure (files, signatures, call graphs) through goose's built-in analyze tool; it cannot read whole files, edit or run commands, but it is not fenced to the project folder. Goose has no filesystem sandbox; its other extensions and MCP servers are not loaded in this managed profile.": "La planificación, la revisión y la ejecución solo ven la estructura del código (archivos, firmas, grafos de llamadas) mediante la herramienta integrada analyze de goose; no puede leer archivos completos, editar ni ejecutar comandos, pero no está limitada a la carpeta del proyecto. Goose no tiene sandbox del sistema de archivos; sus otras extensiones y servidores MCP no se cargan en este perfil gestionado."
 }
