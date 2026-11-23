@@ -25,6 +25,12 @@
   <url type="bugtracker">https://github.com/uBruckhaus/Asterism/issues</url>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="2.1.5" date="2026-11-23">
+      <description>
+        <p>Maintenance release: the test suite no longer wakes local LLM services of another provider
+          watcher running on the same desktop. The app itself is unchanged from 2.1.4.</p>
+      </description>
+    </release>
     <release version="2.1.4" date="2026-11-23">
       <description>
         <p>Scheduled runs keep their timers honest: a timer that cannot be removed or set up is
