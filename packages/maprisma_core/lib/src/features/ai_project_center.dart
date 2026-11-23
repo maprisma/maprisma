@@ -3599,6 +3599,13 @@ final class AiProjectCenterPlugin {
   static const _spoolUnusable =
       'Maprisma cannot use the folder of its scheduled runs, so it starts none until it is opened again.';
 
+  /// The system's reason for a failed file operation (Posix fills OSError
+  /// with an empty message, agy 103 r4).
+  static String _why(FileSystemException error) {
+    final said = error.osError?.message ?? '';
+    return said.isNotEmpty ? said : '$error';
+  }
+
   void _stopServing(Object reason) {
     if (_spoolBroken != null) return;
     _spoolBroken = '$reason';
@@ -3625,43 +3632,44 @@ final class AiProjectCenterPlugin {
   Future<int> takeScheduleRequests() async {
     if (_taking || !_ownsStore() || _spoolBroken != null) return 0;
     final spool = p.join(directory, 'schedule');
-    if (FileSystemEntity.typeSync(spool, followLinks: false) !=
-        FileSystemEntityType.directory) {
-      return 0;
-    }
+    // No spool yet: no timer has fired. Anything else at that name goes
+    // through the gate (agy 103 r4).
+    if (_io.absent(spool)) return 0;
     _taking = true;
     var handled = 0;
     try {
-      _io.close(_io.privateDirectory(spool));
-      // The gate: the folder takes and gives back a file, or nothing is
-      // served (a read-only or closed spool would leave entries behind).
-      final probe = p.join(spool, '.probe-$pid');
-      try {
-        File(probe).writeAsStringSync('');
-        File(probe).deleteSync();
-      } on FileSystemException catch (error) {
-        _stopServing(error.osError?.message ?? error.message);
-        return 0;
-      }
       final names = <String>[];
       final now = DateTime.now();
-      await for (final entry in Directory(spool).list(followLinks: false)) {
-        final name = p.basename(entry.path);
-        if (entry is Directory) continue; // never a request; never removed
-        if (_requestName.hasMatch(name)) {
-          names.add(name);
-          if (names.length >= _requestsPerLook) break;
-        } else if (_requestDraft.hasMatch(name)) {
-          // A draft older than ten minutes belongs to no living trigger.
-          try {
-            if (entry is Link ||
-                now.difference(entry.statSync().modified).inMinutes >= 10) {
-              entry.deleteSync();
+      // The gate: the folder opens as this account's private folder, takes
+      // and gives back a file, and can be listed, or nothing is served (a
+      // read-only, closed or foreign spool would leave entries behind).
+      try {
+        _io.close(_io.existingDirectory(spool));
+        final probe = p.join(spool, '.probe-$pid');
+        File(probe).writeAsStringSync('');
+        File(probe).deleteSync();
+        await for (final entry in Directory(spool).list(followLinks: false)) {
+          final name = p.basename(entry.path);
+          if (entry is Directory) continue; // never a request; never removed
+          if (_requestName.hasMatch(name)) {
+            names.add(name);
+            if (names.length >= _requestsPerLook) break;
+          } else if (_requestDraft.hasMatch(name)) {
+            // A draft older than ten minutes belongs to no living trigger.
+            try {
+              if (entry is Link ||
+                  now.difference(entry.statSync().modified).inMinutes >= 10) {
+                entry.deleteSync();
+              }
+            } on FileSystemException {
+              // Gone meanwhile.
             }
-          } on FileSystemException {
-            // Gone meanwhile.
           }
         }
+      } on FileSystemException catch (error) {
+        if (_io.absent(spool)) return 0; // removed meanwhile
+        _stopServing(_why(error));
+        return 0;
       }
       names.sort();
       for (final name in names) {
@@ -3675,7 +3683,7 @@ final class AiProjectCenterPlugin {
             File(path).renameSync(taken);
           } on FileSystemException catch (error) {
             if (_io.absent(path)) continue; // withdrawn meanwhile
-            _stopServing(error.osError?.message ?? error.message);
+            _stopServing(_why(error));
             break;
           }
           path = taken;
@@ -3703,7 +3711,7 @@ final class AiProjectCenterPlugin {
             return true;
           } on FileSystemException catch (error) {
             if (_io.absent(path)) return true;
-            _stopServing(error.osError?.message ?? error.message);
+            _stopServing(_why(error));
             return false;
           }
         }

@@ -1637,6 +1637,38 @@ void main() {
     );
 
     test(
+      'agy 103 r4 #1: a spool that cannot be opened stops serving, told once; the headless owner shuts down',
+      () async {
+        final item = await scheduled(await approved());
+        final id = item['id'] as String;
+        now = utc(2026, 11, 24, 4).add(const Duration(seconds: 1));
+        writeScheduleRequest(temporary.path, id, now, posix: TestPosix());
+        final spool = p.join(plugin.directory, 'schedule');
+        Process.runSync('chmod', ['000', spool]);
+        addTearDown(() => Process.runSync('chmod', ['700', spool]));
+        scheduler.notes.clear();
+        for (var look = 0; look < 3; look++) {
+          expect(await plugin.takeScheduleRequests(), 0);
+        }
+        expect(scheduler.notes.map((n) => n.$2), [
+          'Maprisma cannot use the folder of its scheduled runs, so it starts none until it is opened again.',
+        ]);
+        // The headless owner: no throw, a clean shutdown.
+        await plugin.shutdown();
+        plugin = open();
+        await serveScheduledRuns(
+          plugin,
+          poll: const Duration(milliseconds: 1),
+          stop: Future<void>.delayed(const Duration(seconds: 10)),
+        ).timeout(const Duration(seconds: 5));
+        expect(commands, isEmpty);
+        Process.runSync('chmod', ['700', spool]);
+        plugin = open(); // the store was let go: it opens again
+      },
+      skip: Platform.environment['USER'] == 'root' ? 'root reads it' : false,
+    );
+
+    test(
       'agy 103 r1 #6: a timer report never stops running work when the store is full',
       () async {
         final runner = await approved();
