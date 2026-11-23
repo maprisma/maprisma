@@ -1,13 +1,11 @@
 # 103 Schedule hardening: what AI Agents Map 2.1.0–2.1.4 fixed
 
-> **Status 2026-11-23: ready for review (Antigravity round 1).** The WIP was reviewed against `main`
-> (0297b5f2, Maprisma 2.1.3); every finding below was confirmed as written. Split into protocol / core / gui /
-> docs commits. Every new `project_schedule_test.dart` case fails on 2.1.3's code (8 of 8) and passes here;
-> the `[project]` test passes on both (it guards behaviour Maprisma already has). Tests: `tools/test-changed
-> --base main` + the rest of `tools/flutter-dev check` (diff-core 69 cases, AOT release check, format, analyze,
-> 781 widget tests, Python i18n/manual/protocol) pass; the core suite's 15 failures are machine-dependent
-> (usage_refresh ×10, map_chain R3 #10, dictation readiness, agent_detect OpenClaw/Hermes, smart_card local
-> group, activity_stdio history CLI) and all fail on main too (main had 18). Not merged, no release.
+> **Status 2026-11-23: ready for review (Antigravity round 2).** Round 1 (ea9807e0) found 8 points (2 High,
+> 4 Medium, 2 Low), all confirmed and fixed in fb524392 (core) and 2e4415dd (gui), each with a test that fails
+> on ea9807e0; record in `docs/reviews/103-schedule-hardening.md`. Earlier: the WIP was reviewed against
+> `main` (0297b5f2, Maprisma 2.1.3), every finding below confirmed; the core suite's machine-dependent
+> failures (usage_refresh ×10, map_chain R3 #10, dictation readiness, agent_detect OpenClaw/Hermes,
+> smart_card local group, activity_stdio history CLI) also fail on main. Not merged, no release.
 
 Author: Claude · Reviewer: Antigravity · Branch: task/103-schedule-hardening
 
@@ -43,6 +41,14 @@ memory, and nothing fails silently; the user is told and Maprisma tries again.
   lost the occurrence. It is now removed only once handled; one the closing owner could not handle stays
   claimed (`.taken`) for the next owner (the slot check keeps it from running twice). A run that throws
   is told.
+
+- **After review round 1:** removals run inside the schedule chain (awaited), so a following
+  set_schedule waits and the headless owner stays until they end; an ended schedule is recorded once; an
+  unreadable unit folder is an error in `remove()`/`install()` too (Dart's `typeSync` said "not found");
+  a timer started next to a left-over service is stopped before its files go; every timer reason is one
+  line of at most 200 characters without control characters; broken spool entries count as work; a timer
+  report is an optional store write (a full store never stops running work); a look stops claiming once
+  the store is released; a run dropped for a storage fault is told.
 
 ## Routes
 `ai_project_center` `set_schedule` note (routes.json): event `schedule_timer_failed`, no silent timer
