@@ -37,6 +37,13 @@ void main() {
           'text':
               'The timer of its schedule could not be removed (systemctl disable --now failed: Access denied). Maprisma tries again at its next start.',
         },
+        // Stored by 2.1.3's core: systemd's reason over two lines, with
+        // parentheses and periods (agy 103 r1 #4).
+        {
+          'type': 'schedule_timer_failed',
+          'text':
+              'The timer of its schedule could not be set up (Job for x.timer failed.\nSee "systemctl --user status x.timer" (details).). Maprisma tries again at its next start.',
+        },
       ],
     };
     const translations = {
@@ -54,6 +61,8 @@ void main() {
           'Prompt zu groß.',
       'The timer of its schedule could not be removed. Maprisma tries again at its next start.':
           'Timer nicht entfernt.',
+      'The timer of its schedule could not be set up, so it does not run on time. Maprisma tries again at its next start.':
+          'Timer nicht eingerichtet.',
       'Original agent output': 'Must not replace output',
       'Original saved handoff': 'Must not replace handoff',
     };
@@ -88,6 +97,12 @@ void main() {
     expect(
       find.text(
         'Timer nicht entfernt. (systemctl disable --now failed: Access denied)',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.text(
+        'Timer nicht eingerichtet. (Job for x.timer failed.\nSee "systemctl --user status x.timer" (details).)',
       ),
       findsOneWidget,
     );

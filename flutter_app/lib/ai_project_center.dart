@@ -2278,6 +2278,8 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
     if (event['type'] == 'schedule_timer_failed') {
       final match = RegExp(
         r'^The timer of its schedule could not be (removed|set up) \((.*)\)\. Maprisma tries again at its next start\.$',
+        // A reason over several lines (stored by 2.1.3) still matches.
+        dotAll: true,
       ).firstMatch(text);
       if (match != null) {
         final sentence = match[1] == 'removed'
