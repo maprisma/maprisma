@@ -7,6 +7,7 @@ import 'package:maprisma_core/src/desktop_schedules.dart';
 import 'package:maprisma_core/src/features/ai_project_center.dart';
 import 'package:maprisma_core/src/features/project_schedule.dart';
 import 'package:maprisma_core/src/features/project_schedule_run.dart';
+import 'package:maprisma_core/src/posix_ffi.dart';
 import 'package:maprisma_core/src/protocol.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
@@ -66,6 +67,7 @@ final class FakeScheduler implements ProjectScheduler {
   ServiceError? failRemove;
   ServiceError? failInstalled;
   Duration installDelay = Duration.zero;
+  Duration removeDelay = Duration.zero;
   @override
   Future<void> install(String id, List<String> calendar) async {
     await Future<void>.delayed(installDelay);
@@ -76,6 +78,7 @@ final class FakeScheduler implements ProjectScheduler {
   @override
   Future<void> remove(String id) async {
     removed.add(id);
+    await Future<void>.delayed(removeDelay);
     if (failRemove != null) throw failRemove!;
     installs.remove(id);
   }
@@ -88,6 +91,20 @@ final class FakeScheduler implements ProjectScheduler {
 
   @override
   void notify(String title, String body) => notes.add((title, body));
+}
+
+/// Store writes fail while [fail] is set (a full or broken disk); stat as
+/// [TestPosix] answers it.
+final class FailingPosix extends Posix {
+  bool fail = false;
+  final _test = TestPosix();
+  @override
+  ({int mode, int uid, int size}) stat(int fd) => _test.stat(fd);
+  @override
+  void atomicWrite(String path, List<int> bytes) {
+    if (fail) throw const FileSystemException('disk full');
+    super.atomicWrite(path, bytes);
+  }
 }
 
 void main() {
@@ -635,6 +652,61 @@ void main() {
         expect(await scheduler.installed(), isEmpty);
       },
     );
+
+    test(
+      'agy 103 r1 #2: an unreadable unit folder is no "nothing to remove"',
+      () async {
+        await scheduler.install(id, ['*-*-* 05:00:00']);
+        calls.clear();
+        Process.runSync('chmod', ['000', units]);
+        addTearDown(() => Process.runSync('chmod', ['700', units]));
+        // Dart's typeSync says "not found" here; the timer still runs.
+        await expectLater(
+          scheduler.remove(id),
+          throwsA(errorCode('project_schedule_unavailable')),
+        );
+        await expectLater(
+          scheduler.install(id, ['*-*-* 06:00:00']),
+          throwsA(errorCode('project_schedule_unavailable')),
+        );
+        expect(calls, isEmpty);
+        Process.runSync('chmod', ['700', units]);
+        await scheduler.remove(id);
+        expect(await scheduler.installed(), isEmpty);
+        // A folder that is not there: nothing to remove.
+        Directory(units).deleteSync(recursive: true);
+        await scheduler.remove(id);
+      },
+      skip: Platform.environment['USER'] == 'root' ? 'root reads it' : false,
+    );
+
+    test(
+      'agy 103 r1 #3: a timer started next to a left-over service is stopped before its file goes',
+      () async {
+        await scheduler.install(id, ['*-*-* 05:00:00']);
+        // A removal that went half way: the service stays, the timer is gone.
+        File(p.join(units, 'maprisma-project-$id.timer')).deleteSync();
+        calls.clear();
+        failing = {'restart'};
+        await expectLater(
+          scheduler.install(id, ['*-*-* 06:00:00']),
+          throwsA(errorCode('project_schedule_unavailable')),
+        );
+        final timerName = 'maprisma-project-$id.timer';
+        // enable went through, so it may run: disable --now comes first,
+        // and no file of a timer systemd may run is deleted before it.
+        final disable = calls.indexWhere(
+          (c) => c.first == 'disable' && c.contains(timerName),
+        );
+        expect(disable, isNonNegative, reason: '$calls');
+        expect(calls.indexWhere((c) => c.first == 'enable'), lessThan(disable));
+        expect(
+          calls.skip(disable + 1).where((c) => c.first == 'restart'),
+          isEmpty,
+        );
+        expect(await scheduler.installed(), isEmpty);
+      },
+    );
   });
 
   group('scheduled runs of a project (task 101)', () {
@@ -1030,7 +1102,8 @@ void main() {
           '{"id":"$id","at":"${now.toIso8601String()}","x":"${'y' * 2000}"}',
         );
         File(p.join(spool, 'other')).writeAsStringSync('ignored');
-        expect(await plugin.takeScheduleRequests(), 1);
+        // The request and the four dropped ones: all work done (task 103).
+        expect(await plugin.takeScheduleRequests(), 5);
         expect(commands, hasLength(1));
         expect(target.existsSync(), isTrue);
         expect(Directory(spool).listSync().map((e) => p.basename(e.path)), [
@@ -1300,6 +1373,248 @@ void main() {
         expect(fresh.existsSync(), isTrue);
         await processes.single.finish('done');
         await waitUntil(() => plugin.idle);
+      },
+    );
+
+    test(
+      'agy 103 r1 #1: a removal is awaited in the chain; set_schedule after it keeps its timer',
+      () async {
+        final item = await scheduled(await approved());
+        final id = item['id'] as String;
+        // Off, but the timer stays (systemd refused).
+        scheduler.failRemove = ServiceError(
+          'project_schedule_unavailable',
+          'x',
+        );
+        await plugin.call('set_schedule', {'id': id, 'schedule': null});
+        expect(scheduler.installs.containsKey(id), isTrue);
+        scheduler
+          ..failRemove = null
+          ..removeDelay = const Duration(milliseconds: 150);
+        // The timer fires (no schedule: it goes) and the user sets one again.
+        final trigger = plugin.scheduledRun(id, now);
+        final set = plugin.call('set_schedule', {'id': id, 'schedule': daily});
+        expect(await trigger, 'no_schedule');
+        await set;
+        // Long enough for a removal that ran outside the chain to land.
+        await Future<void>.delayed(const Duration(milliseconds: 300));
+        expect(scheduler.removed, [id, id]);
+        expect(scheduler.installs.containsKey(id), isTrue);
+        expect((await get(id))['schedule'], isNotNull);
+      },
+    );
+
+    test(
+      'agy 103 r1 #1: the headless owner is not idle while a timer is removed',
+      () async {
+        scheduler.removeDelay = const Duration(milliseconds: 200);
+        const gone = 'ffffffffffffffffffffffffffffffff';
+        final trigger = plugin.scheduledRun(gone, now);
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        expect(plugin.idle, isFalse);
+        expect(await trigger, 'no_schedule');
+        expect(plugin.idle, isTrue);
+      },
+    );
+
+    test(
+      'agy 103 r1 #1: an ended schedule is recorded once while its timer cannot go',
+      () async {
+        final item = await scheduled(await approved(), {
+          ...daily,
+          'until': '2026-11-24',
+        });
+        final id = item['id'] as String;
+        scheduler.failRemove = ServiceError(
+          'project_schedule_unavailable',
+          'x',
+        );
+        for (final day in [26, 27, 28]) {
+          now = utc(2026, 11, day, 4).add(const Duration(seconds: 1));
+          expect(await plugin.scheduledRun(id, now), 'ended');
+        }
+        final kinds = events(await get(id));
+        expect(kinds.where((e) => e == 'schedule_ended'), hasLength(1));
+        expect(kinds.where((e) => e == 'schedule_timer_failed'), hasLength(1));
+        expect(scheduler.removed, hasLength(3));
+      },
+    );
+
+    test(
+      'agy 103 r1 #4: systemd\'s reason is one bounded line in the event',
+      () async {
+        final item = await scheduled(await approved());
+        final id = item['id'] as String;
+        scheduler.failRemove = ServiceError(
+          'project_schedule_unavailable',
+          'Job for maprisma-project-$id.timer failed.\n'
+              'See "systemctl --user status" (x).\t\x00\x1b[31m${'y' * 2000}',
+        );
+        await plugin.call('set_schedule', {'id': id, 'schedule': null});
+        final text = ((await get(id))['events'] as List).last['text'] as String;
+        expect(text, isNot(matches(RegExp(r'[\x00-\x1f\x7f]'))));
+        expect(text.length, lessThan(400));
+        expect(
+          text,
+          startsWith(
+            'The timer of its schedule could not be removed (Job for maprisma-project-$id.timer failed. See "systemctl --user status" (x).',
+          ),
+        );
+        expect(text, endsWith('…). Maprisma tries again at its next start.'));
+        // The store still opens.
+        await plugin.shutdown();
+        plugin = open();
+        expect(events(await get(id)).last, 'schedule_timer_failed');
+      },
+    );
+
+    test(
+      'agy 103 r1 #5: broken requests count as work; none hides a good one',
+      () async {
+        final item = await scheduled(await approved());
+        final id = item['id'] as String;
+        final spool = p.join(plugin.directory, 'schedule');
+        Directory(spool).createSync(recursive: true);
+        for (var i = 0; i < 70; i++) {
+          File(
+            p.join(
+              spool,
+              '$id.${i.toRadixString(16).padLeft(16, '0')}.request',
+            ),
+          ).writeAsStringSync('not json');
+        }
+        // A look that only removed broken entries is no quiet one.
+        expect(await plugin.takeScheduleRequests(), greaterThan(0));
+        for (var i = 0; i < 1000; i++) {
+          File(
+            p.join(
+              spool,
+              '$id.${(i + 100).toRadixString(16).padLeft(16, '0')}.request',
+            ),
+          ).writeAsStringSync('not json');
+        }
+        now = utc(2026, 11, 24, 4).add(const Duration(seconds: 1));
+        writeScheduleRequest(temporary.path, id, now, posix: TestPosix());
+        await serveScheduledRuns(
+          plugin,
+          poll: const Duration(milliseconds: 1),
+          stop: Future<void>.delayed(const Duration(seconds: 20)),
+        );
+        expect(commands, hasLength(1));
+        plugin = open();
+      },
+    );
+
+    test(
+      'agy 103 r1 #6: a timer report never stops running work when the store is full',
+      () async {
+        final runner = await approved();
+        final item = await scheduled(await saved(title: 'Other'));
+        final id = item['id'] as String;
+        // Off while its timer stays: the timer is still there.
+        scheduler.failRemove = ServiceError(
+          'project_schedule_unavailable',
+          'x',
+        );
+        await plugin.call('set_schedule', {'id': id, 'schedule': null});
+        await plugin.shutdown();
+        final path = p.join(plugin.directory, 'projects.json');
+        final size = File(path).lengthSync();
+        plugin = AiProjectCenterPlugin(
+          temporary.path,
+          agentProfiles: () => profiles,
+          filesystem: TestPosix(),
+          scheduler: scheduler,
+          zone: zone,
+          clock: () => now,
+          storeLimit: size + 1200,
+          runner: (argv, cwd, environment, input, _, _) async {
+            commands.add(argv);
+            final process = FakeProjectProcess();
+            processes.add(process);
+            return process;
+          },
+        );
+        await waitUntil(() => plugin.idle);
+        final current = await get(runner['id'] as String);
+        await plugin.call('run', {
+          'id': runner['id'],
+          'revision': current['revision'],
+        });
+        await waitUntil(() => processes.isNotEmpty);
+        // Room for a report or two, not for six (about 300 bytes each, each
+        // with another reason, so none is the same as the last).
+        expect(size + 1200 - File(path).lengthSync(), greaterThan(150));
+        final tries = scheduler.removed.length;
+        for (var i = 0; i < 6; i++) {
+          scheduler.failRemove = ServiceError(
+            'project_schedule_unavailable',
+            '$i${'z' * 189}',
+          );
+          await plugin.scheduledRun(id, now);
+          await waitUntil(() => scheduler.removed.length == tries + i + 1);
+          await Future<void>.delayed(const Duration(milliseconds: 20));
+        }
+        expect(processes.single.stopped, isFalse);
+        expect((await get(runner['id'] as String))['status'], 'running');
+        await processes.single.finish('done');
+        await waitUntil(() => plugin.idle);
+      },
+    );
+
+    test(
+      'agy 103 r1 #7: closed while the spool is read, nothing is claimed',
+      () async {
+        final item = await scheduled(await approved());
+        final id = item['id'] as String;
+        now = utc(2026, 11, 24, 4).add(const Duration(seconds: 1));
+        final request = writeScheduleRequest(
+          temporary.path,
+          id,
+          now,
+          posix: TestPosix(),
+        );
+        final taking = plugin.takeScheduleRequests();
+        plugin.detach();
+        expect(await taking, 0);
+        expect(File(request).existsSync(), isTrue);
+        expect(commands, isEmpty);
+        plugin = open();
+      },
+    );
+
+    test(
+      'agy 103 r1 #8: a scheduled run dropped for a storage fault is told',
+      () async {
+        final failing = FailingPosix();
+        final item = await scheduled(await approved());
+        final id = item['id'] as String;
+        await plugin.shutdown();
+        plugin = AiProjectCenterPlugin(
+          temporary.path,
+          agentProfiles: () => profiles,
+          filesystem: failing,
+          scheduler: scheduler,
+          zone: zone,
+          clock: () => now,
+        );
+        await waitUntil(() => plugin.idle);
+        failing.fail = true;
+        await expectLater(
+          plugin.call('set_importance', {'id': id, 'importance': 'high'}),
+          throwsA(errorCode('project_store_unavailable')),
+        );
+        now = utc(2026, 11, 24, 4).add(const Duration(seconds: 1));
+        writeScheduleRequest(temporary.path, id, now, posix: TestPosix());
+        scheduler.notes.clear();
+        expect(await plugin.takeScheduleRequests(), 1);
+        expect(scheduler.notes, [
+          (
+            'Maprisma: a scheduled project did not run',
+            'Check my e-mails: Maprisma could not record the scheduled run. Open its Projects page to check the project.',
+          ),
+        ]);
+        failing.fail = false;
       },
     );
 

@@ -3195,10 +3195,12 @@ final class AiProjectCenterPlugin {
 
   /// Stores [item] without a new revision (a setting or a schedule note,
   /// task 101): an open editor does not turn stale.
-  void _note(Map<String, dynamic> item) {
+  /// [optional]: a note that may be refused when the store is full without
+  /// stopping running work (a timer report, task 103).
+  void _note(Map<String, dynamic> item, {bool optional = false}) {
     final id = item['id'] as String;
     final next = {..._projects, id: item};
-    _persist(next);
+    _persist(next, optional: optional);
     _projects[id] = item;
   }
 
@@ -3276,11 +3278,26 @@ final class AiProjectCenterPlugin {
     }
   }
 
-  static String _reason(Object error) => switch (error) {
-    ServiceError(:final reason?) when reason.isNotEmpty => reason,
-    ServiceError(:final code) => code,
-    _ => 'systemctl failed',
-  };
+  /// Why a timer failed, as it goes into an event and a notification: one
+  /// line, no control characters, at most [_reasonLimit] characters
+  /// (systemd's messages span lines and may carry anything; task 103).
+  static String _reason(Object error) {
+    final raw = switch (error) {
+      ServiceError(:final reason?) when reason.isNotEmpty => reason,
+      ServiceError(:final code) => code,
+      _ => 'systemctl failed',
+    };
+    final line = raw
+        .replaceAll(RegExp(r'[\x00-\x1f\x7f-\x9f\u2028\u2029]'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    if (line.isEmpty) return 'systemctl failed';
+    return line.length > _reasonLimit
+        ? '${line.substring(0, _reasonLimit)}…'
+        : line;
+  }
+
+  static const _reasonLimit = 200;
 
   /// What this process has told the user about, so a timer that keeps
   /// failing notifies once per process, not at every look.
@@ -3315,7 +3332,7 @@ final class AiProjectCenterPlugin {
         final item = _copy(stored);
         _event(item, 'schedule_timer_failed', text);
         try {
-          _note(item);
+          _note(item, optional: true);
         } on Object {
           // The notification still tells the user.
         }
@@ -3390,18 +3407,22 @@ final class AiProjectCenterPlugin {
   /// trigger belongs to is recorded first, so overlapping triggers never
   /// run it twice. The result is a short code for the caller's journal.
   Future<String> scheduledRun(String id, DateTime at) =>
-      _serial(() async => _scheduledRun(id, at.toUtc()));
+      _serial(() => _scheduledRun(id, at.toUtc()));
 
-  String _scheduledRun(String id, DateTime at) {
+  /// Removals are awaited inside the schedule chain (task 103): a
+  /// set_schedule that follows never runs while the timer is still being
+  /// removed, and the headless owner is not idle until it is done.
+  Future<String> _scheduledRun(String id, DateTime at) async {
     if (_closed || !_ownsStore()) return 'closed';
     final stored = _projects[id];
     final schedule = stored?['schedule'];
     if (stored == null || schedule is! Map<String, dynamic>) {
       // A timer without a schedule (cleared or deleted meanwhile) goes.
-      unawaited(_removeTimer(id));
+      await _removeTimer(id);
       return 'no_schedule';
     }
-    if (_storageFault != null) return _storageFault!;
+    // Not dropped silently: the owner tells the user (task 103).
+    if (_storageFault != null) throw ServiceError(_storageFault!);
     final slot = latestScheduledRun(schedule, at, zone: _zone);
     if (slot == null) return 'no_slot';
     final setAt = DateTime.tryParse(stored['schedule_set_at'] as String? ?? '');
@@ -3416,13 +3437,19 @@ final class AiProjectCenterPlugin {
     item['schedule_last_slot'] = slot.toUtc().toIso8601String();
     final described = describeSchedule(schedule);
     if (scheduleEndedAt(schedule, slot, zone: _zone)) {
-      _event(
-        item,
-        'schedule_ended',
-        'The schedule ($described) has ended; its timer was removed.',
-      );
+      // Recorded once: a timer that cannot be removed fires again, and
+      // each later trigger only tries the removal again (task 103).
+      final ended =
+          last != null && scheduleEndedAt(schedule, last, zone: _zone);
+      if (!ended) {
+        _event(
+          item,
+          'schedule_ended',
+          'The schedule ($described) has ended; its timer was removed.',
+        );
+      }
       _note(item);
-      unawaited(_removeTimer(id));
+      await _removeTimer(id);
       return 'ended';
     }
     if (_active.containsKey(id) ||
@@ -3572,7 +3599,9 @@ final class AiProjectCenterPlugin {
   /// files count; anything else is removed unread. The spool is read one
   /// entry at a time (task 103), and a request is removed only once it was
   /// handled: one that this owner, closing, could not handle stays claimed
-  /// for the next owner.
+  /// for the next owner. The result counts every request handled or
+  /// removed as broken, so a look that only cleared broken ones is no quiet
+  /// one for the headless owner (task 103).
   Future<int> takeScheduleRequests() async {
     if (_taking || !_ownsStore()) return 0;
     final spool = p.join(directory, 'schedule');
@@ -3606,6 +3635,8 @@ final class AiProjectCenterPlugin {
       }
       names.sort();
       for (final name in names) {
+        // Closed while the spool was read: the next owner takes them.
+        if (!_ownsStore()) break;
         final match = _requestName.firstMatch(name)!;
         var path = p.join(spool, name);
         if (match[2] == 'request') {
@@ -3648,7 +3679,10 @@ final class AiProjectCenterPlugin {
             at.isAfter(
               _scheduleClock().toUtc().add(const Duration(minutes: 5)),
             )) {
+          // Work done, too: a look that only removed broken entries is no
+          // quiet one, so the headless owner looks again (task 103).
           drop();
+          handled++;
           continue;
         }
         String result;

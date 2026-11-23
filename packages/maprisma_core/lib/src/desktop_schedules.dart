@@ -229,13 +229,21 @@ final class SystemdUserScheduler implements ProjectScheduler {
   }
 
   /// The file's text when it is a regular file Maprisma wrote, '' when
-  /// there is none, null when something else is in the way.
+  /// there is none, null when something else is in the way. A path that
+  /// cannot be examined (an unreadable unit folder) is neither: it throws,
+  /// so no caller takes it for "no timer" (task 103).
   String? _managed(String path) {
-    final type = FileSystemEntity.typeSync(path, followLinks: false);
-    if (type == FileSystemEntityType.notFound) return '';
-    if (type != FileSystemEntityType.file) return null;
     final stat = _io.lstatOwn(path);
-    if (stat == null || stat.uid != _io.uid || stat.size > 64 * 1024) {
+    if (stat == null) {
+      if (_io.absent(path)) return '';
+      throw ServiceError(
+        'project_schedule_unavailable',
+        'the unit folder cannot be read',
+      );
+    }
+    if (stat.mode & 0xf000 != 0x8000 ||
+        stat.uid != _io.uid ||
+        stat.size > 64 * 1024) {
       return null;
     }
     try {
@@ -267,7 +275,11 @@ final class SystemdUserScheduler implements ProjectScheduler {
     if (before.values.any((text) => text == null)) {
       throw ServiceError('project_schedule_unavailable');
     }
-    final fresh = before.values.every((text) => text!.isEmpty);
+    // Fresh: no timer of it was there, so none ran before (a service left
+    // alone by a removal that went half way does not run by itself). On a
+    // failure everything it brought is taken back, a started timer through
+    // remove(), never by deleting the files of a timer systemd may run.
+    final fresh = before[timer]!.isEmpty;
     final wants = p.join(unitDir, 'timers.target.wants', scheduleTimerName(id));
     final changed = texts.entries.where((e) => before[e.key] != e.value);
     if (changed.isEmpty &&

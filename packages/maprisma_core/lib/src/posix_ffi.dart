@@ -303,6 +303,23 @@ class Posix {
 
   List<int>? signature(String path) => lstatFull(path)?.signature;
 
+  /// Nothing is at [path] (lstat says ENOENT or ENOTDIR). False when it
+  /// exists or cannot be examined (EACCES and the like): unlike
+  /// `FileSystemEntity.typeSync`, an unreadable folder is never "not found"
+  /// (task 103).
+  bool absent(String path) {
+    final buffer = calloc<Uint8>(256);
+    try {
+      return _path(path, (name) {
+        if (_statx(-100, name, 0x100, 0x7ff, buffer) == 0) return false;
+        final error = _errno().value;
+        return error == 2 || error == 20;
+      });
+    } finally {
+      calloc.free(buffer);
+    }
+  }
+
   /// os.stat / os.lstat as Python's DirEntry.stat gives them: st_dev (made
   /// the glibc way), st_ino, st_mode, st_uid, st_size, st_blocks; null when
   /// the path cannot be looked at.
