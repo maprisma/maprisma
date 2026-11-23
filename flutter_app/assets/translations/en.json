@@ -1265,5 +1265,6 @@
   "The timer of its schedule could not be set up, so it does not run on time. Maprisma tries again at its next start.": "The timer of its schedule could not be set up, so it does not run on time. Maprisma tries again at its next start.",
   "Maprisma cannot read the folder of its timers (~/.config/systemd/user). Timers it no longer needs stay until it can.": "Maprisma cannot read the folder of its timers (~/.config/systemd/user). Timers it no longer needs stay until it can.",
   "Maprisma could not record the scheduled run. Open its Projects page to check the project.": "Maprisma could not record the scheduled run. Open its Projects page to check the project.",
-  "The scheduled run could not be handed over to Maprisma. Its timer starts it again at the next planned time.": "The scheduled run could not be handed over to Maprisma. Its timer starts it again at the next planned time."
+  "The scheduled run could not be handed over to Maprisma. Its timer starts it again at the next planned time.": "The scheduled run could not be handed over to Maprisma. Its timer starts it again at the next planned time.",
+  "Maprisma cannot use the folder of its scheduled runs, so it starts none until it is opened again.": "Maprisma cannot use the folder of its scheduled runs, so it starts none until it is opened again."
 }

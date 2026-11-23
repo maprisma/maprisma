@@ -132,6 +132,7 @@ void main() {
       'Maprisma cannot read the folder of its timers (~/.config/systemd/user). Timers it no longer needs stay until it can.',
       'Maprisma could not record the scheduled run. Open its Projects page to check the project.',
       'The scheduled run could not be handed over to Maprisma. Its timer starts it again at the next planned time.',
+      'Maprisma cannot use the folder of its scheduled runs, so it starts none until it is opened again.',
     };
     for (final code in ['de', 'es', 'fr', 'it', 'nl', 'pl', 'pt']) {
       final table =
