@@ -1391,6 +1391,44 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+  testWidgets('a box dragged by its body moves inside its card, and '
+      'connects when dragged out of it', (tester) async {
+    final edits = <Map<String, dynamic>>[], saved = <Map<String, dynamic>>[];
+    await mount(tester, edits: edits, onLayout: saved.add);
+    // With the mouse on the box itself (not the grip), down inside its card.
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.text('agent:a')),
+      kind: PointerDeviceKind.mouse,
+    );
+    for (var i = 0; i < 20; i++) {
+      await gesture.moveBy(const Offset(0, 10));
+      await tester.pump();
+    }
+    expect(find.byKey(const ValueKey('box-gap-0')), findsOneWidget);
+    expect(find.byKey(const ValueKey('box-drop-line')), findsOneWidget);
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect((saved.last['order'] as Map)['1:agent:'], ['agent:b', 'agent:a']);
+    expect(edits, isEmpty);
+    expect(find.byKey(const ValueKey('box-drop-line')), findsNothing);
+    // Out of its card onto a local LLM: the connection as before.
+    final from = tester.getCenter(find.text('agent:b'));
+    final to = tester.getCenter(find.text('runtime:s'));
+    final drawing = await tester.startGesture(
+      from,
+      kind: PointerDeviceKind.mouse,
+    );
+    for (var i = 1; i <= 20; i++) {
+      await drawing.moveTo(Offset.lerp(from, to, i / 20)!);
+      await tester.pump();
+    }
+    expect(find.byKey(const ValueKey('box-drop-line')), findsNothing);
+    await drawing.up();
+    await tester.pumpAndSettle();
+    expect(edits.single, {'source': 'agent:b', 'target': 'runtime:s'});
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('a box dragged by its grip stays in its own card', (
     tester,
   ) async {

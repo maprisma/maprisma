@@ -596,6 +596,19 @@ class _MapEditorState extends State<MapEditor>
     _save(reorderMapCard(_saved, layout, card.id, to));
   }
 
+  /// Whether a box dragged to [cursor] is being moved inside its own card:
+  /// the pointer is in that card (below its header) and the card has other
+  /// boxes to place it among. Outside it the drag draws a connection.
+  static bool _reorderingInCard(MapLayout layout, String id, Offset cursor) {
+    final card = layout.cards[layout.cardOf[id]];
+    if (card == null || card.nodes.length < 2) return false;
+    final r = card.rect;
+    return cursor.dx >= r.left &&
+        cursor.dx <= r.right &&
+        cursor.dy >= r.top + 36 &&
+        cursor.dy <= r.bottom;
+  }
+
   Offset _local(Offset global) =>
       (_board.currentContext!.findRenderObject() as RenderBox).globalToLocal(
         global,
@@ -894,13 +907,39 @@ class _MapEditorState extends State<MapEditor>
         onEnter: (_) => _renderChange(() => _hover = id),
         onExit: (_) => _renderChange(() => _hover = null),
         child: GestureDetector(
+          // Dragged inside its own card the box changes its place there
+          // (separators show every place); dragged out of its card it draws a
+          // connection as before (Uwe: as the plugin's map).
           onPanStart: (d) =>
               _begin(id, global: d.globalPosition, pointer: true),
-          onPanUpdate: (d) =>
-              _renderChange(() => _cursor = _local(d.globalPosition)),
-          onPanEnd: (_) =>
-              _drop(_cursor == null ? null : layout.nodeAt(_cursor!)),
+          onPanUpdate: (d) => _renderChange(() {
+            _cursor = _local(d.globalPosition);
+            final reorder = _reorderingInCard(layout, id, _cursor!);
+            _draggingBox = reorder ? id : null;
+            _draggingBoxY = reorder ? _cursor!.dy : null;
+          }),
+          onPanEnd: (_) {
+            final y = _draggingBox == id ? _draggingBoxY : null;
+            if (y != null) {
+              _renderChange(() {
+                _draggingBox = null;
+                _draggingBoxY = null;
+              });
+              _cancel();
+              if (layout.boxDrop(id, y) case final drop?) {
+                _save(reorderMapBox(_saved, layout, id, drop.$1));
+              }
+              return;
+            }
+            _drop(_cursor == null ? null : layout.nodeAt(_cursor!));
+          },
           onPanCancel: () {
+            if (_draggingBox == id) {
+              _renderChange(() {
+                _draggingBox = null;
+                _draggingBoxY = null;
+              });
+            }
             if (_pointerDrawing) _cancel();
           },
           // No tooltip on the card itself, only on its symbols (Uwe).
@@ -1676,8 +1715,12 @@ class _MapEditorState extends State<MapEditor>
                                                 layout,
                                                 colors,
                                                 lit,
-                                                _source,
-                                                _cursor,
+                                                _draggingBox == null
+                                                    ? _source
+                                                    : null,
+                                                _draggingBox == null
+                                                    ? _cursor
+                                                    : null,
                                                 _saved['card_border'] as Map?,
                                                 dimming,
                                                 pinned,
