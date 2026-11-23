@@ -1140,6 +1140,10 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
         await _save();
         return;
       }
+      if (operation == 'skip_plan') {
+        await _skipPlanning();
+        return;
+      }
       // Deleting asks first and never saves the draft it removes.
       if (operation == 'delete') {
         if (_project == null) return;
@@ -1243,6 +1247,54 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
         });
       }
     }
+  }
+
+  /// The plan a project gets when planning is skipped (task 099); the
+  /// agents read it in the user's language like the goal.
+  static const skippedPlan =
+      'No separate plan: work directly from the goal. Inspect the project first, '
+      'keep the changes to what the goal asks, and report what you did and checked.';
+
+  /// Skip planning (task 099): after one question, the plan becomes
+  /// [skippedPlan], it is approved with the team and its permissions, and
+  /// the project runs. A step that fails leaves the project where it got
+  /// (saved, or approved), with the reason; the user goes on from there.
+  Future<void> _skipPlanning() async {
+    if (!await _confirm(
+      'Skip planning?',
+      'The agents work directly from the goal, without a plan. This approves the team, working folder and permissions and starts the run.',
+      'Skip planning and run',
+    )) {
+      return;
+    }
+    if (!mounted) return;
+    final before = _plan.text;
+    _plan.text = tr(skippedPlan);
+    if (!await _save()) {
+      // Not saved: the box keeps what the user had.
+      if (mounted && _plan.text == tr(skippedPlan)) _plan.text = before;
+      return;
+    }
+    if (!mounted) return;
+    final reviewed = await widget.onCall('review', {
+      'id': _project!['id'],
+      'revision': _project!['revision'],
+      'approved': true,
+    });
+    if (!mounted) return;
+    setState(
+      () => _adopt(Map<String, dynamic>.from(reviewed['project'] as Map)),
+    );
+    final started = await widget.onCall('run', {
+      'id': _project!['id'],
+      'revision': _project!['revision'],
+    });
+    if (!mounted) return;
+    setState(() {
+      _adopt(Map<String, dynamic>.from(started['project'] as Map));
+      _tab = 3;
+    });
+    await _refresh();
   }
 
   /// A refused message (task 096): what it means for the message, else as
@@ -2509,6 +2561,15 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
                   'Draft plan with AI',
                   'plan',
                   !_running && (_planTeam ?? _runTeam).isNotEmpty,
+                ),
+                // Run straight from the goal (task 099).
+                (
+                  'Skip planning',
+                  'skip_plan',
+                  !_running &&
+                      _runTeam.isNotEmpty &&
+                      _plan.text.trim().isEmpty &&
+                      !{'paused', 'interrupted', 'failed'}.contains(status),
                 ),
                 (
                   'Approve plan',

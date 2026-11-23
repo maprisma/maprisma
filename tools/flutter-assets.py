@@ -1203,6 +1203,12 @@ KEYS = (
     "for {0} min",
     "for {0} h {1} min",
     "The AI is drafting the plan. It appears here when the agent is done.",
+    # Skip planning (task 099).
+    "Skip planning",
+    "Skip planning?",
+    "The agents work directly from the goal, without a plan. This approves the team, working folder and permissions and starts the run.",
+    "Skip planning and run",
+    "No separate plan: work directly from the goal. Inspect the project first, keep the changes to what the goal asks, and report what you did and checked.",
 )
 
 

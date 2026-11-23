@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:maprisma/ai_project_center.dart';
 import 'package:maprisma/project_working.dart';
 
 import 'ai_project_center_test.dart' as page show project, mount;
@@ -192,7 +193,88 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
+  skipPlanningTests();
+
   test('the bar is still under flutter test', () {
     expect(WorkingBar.animate, isFalse);
+  });
+}
+
+/// Skip planning (task 099).
+void skipPlanningTests() {
+  testWidgets('Skip planning asks, then saves the fixed plan, approves and '
+      'runs', (tester) async {
+    var saved = {...page.project(), 'plan': '', 'plan_version': 0};
+    final calls = <String>[];
+    Map<String, dynamic>? savedParams;
+    await page.mount(tester, (operation, params) async {
+      if (operation == 'list') {
+        return {
+          'projects': [saved],
+        };
+      }
+      if (operation == 'profiles') return {'profiles': []};
+      if (const {'save', 'review', 'run'}.contains(operation)) {
+        calls.add(operation);
+        expect(params['revision'], saved['revision']);
+        if (operation == 'save') {
+          savedParams = {...params};
+          saved = {
+            ...saved,
+            'plan': params['plan'],
+            'plan_version': 1,
+            'status': 'awaiting_review',
+          };
+        }
+        if (operation == 'review') {
+          expect(params['approved'], isTrue);
+          saved = {...saved, 'approved_version': 1, 'status': 'ready'};
+        }
+        if (operation == 'run') saved = {...saved, 'status': 'running'};
+        saved = {...saved, 'revision': (saved['revision'] as int) + 1};
+      }
+      return {'project': saved};
+    });
+    await tester.tap(find.text('Saved project'));
+    await tester.pumpAndSettle();
+    // Cancel changes nothing.
+    await tester.tap(find.widgetWithText(FilledButton, 'Skip planning'));
+    await tester.pumpAndSettle();
+    expect(find.text('Skip planning?'), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(calls, isEmpty);
+    await tester.tap(find.widgetWithText(FilledButton, 'Skip planning'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Skip planning and run'));
+    await tester.pumpAndSettle();
+    expect(calls, ['save', 'review', 'run']);
+    expect(savedParams!['plan'], AiProjectCenterPageState.skippedPlan);
+    expect(saved['status'], 'running');
+    // Running: no second skip.
+    final skip = tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, 'Skip planning'),
+    );
+    expect(skip.onPressed, isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('Skip planning is offered only without a plan', (tester) async {
+    await page.mount(tester, (operation, params) async {
+      if (operation == 'list') {
+        return {
+          'projects': [page.project()],
+        };
+      }
+      if (operation == 'profiles') return {'profiles': []};
+      return {'project': page.project()};
+    });
+    await tester.tap(find.text('Saved project'));
+    await tester.pumpAndSettle();
+    final skip = tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, 'Skip planning'),
+    );
+    expect(skip.onPressed, isNull);
+    await tester.pumpWidget(const SizedBox());
   });
 }

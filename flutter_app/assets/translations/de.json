@@ -1206,5 +1206,10 @@
   "just started": "gerade gestartet",
   "for {0} min": "seit {0} Min.",
   "for {0} h {1} min": "seit {0} Std. {1} Min.",
-  "The AI is drafting the plan. It appears here when the agent is done.": "Die KI entwirft den Plan. Er erscheint hier, sobald der Agent fertig ist."
+  "The AI is drafting the plan. It appears here when the agent is done.": "Die KI entwirft den Plan. Er erscheint hier, sobald der Agent fertig ist.",
+  "Skip planning": "Planung überspringen",
+  "Skip planning?": "Planung überspringen?",
+  "The agents work directly from the goal, without a plan. This approves the team, working folder and permissions and starts the run.": "Die Agenten arbeiten direkt nach dem Ziel, ohne Plan. Damit werden Team, Arbeitsordner und Berechtigungen freigegeben und die Ausführung startet.",
+  "Skip planning and run": "Planung überspringen und ausführen",
+  "No separate plan: work directly from the goal. Inspect the project first, keep the changes to what the goal asks, and report what you did and checked.": "Kein eigener Plan: Arbeite direkt nach dem Ziel. Sieh dir zuerst das Projekt an, beschränke die Änderungen auf das, was das Ziel verlangt, und berichte, was du getan und geprüft hast."
 }

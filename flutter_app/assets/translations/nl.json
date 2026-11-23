@@ -1206,5 +1206,10 @@
   "just started": "net gestart",
   "for {0} min": "sinds {0} min",
   "for {0} h {1} min": "sinds {0} u {1} min",
-  "The AI is drafting the plan. It appears here when the agent is done.": "AI stelt het plan op. Het verschijnt hier zodra de agent klaar is."
+  "The AI is drafting the plan. It appears here when the agent is done.": "AI stelt het plan op. Het verschijnt hier zodra de agent klaar is.",
+  "Skip planning": "Planning overslaan",
+  "Skip planning?": "Planning overslaan?",
+  "The agents work directly from the goal, without a plan. This approves the team, working folder and permissions and starts the run.": "De agents werken direct vanuit het doel, zonder plan. Hiermee keur je het team, de werkmap en de rechten goed en start de uitvoering.",
+  "Skip planning and run": "Planning overslaan en uitvoeren",
+  "No separate plan: work directly from the goal. Inspect the project first, keep the changes to what the goal asks, and report what you did and checked.": "Geen apart plan: werk direct vanuit het doel. Bekijk eerst het project, beperk de wijzigingen tot wat het doel vraagt en meld wat je hebt gedaan en gecontroleerd."
 }

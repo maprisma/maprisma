@@ -91,7 +91,9 @@ projectWork(
     if (member != null) ...[
       '${member['name'] ?? member['agent'] ?? ''}',
       tr(_roleLabel(role)),
-    ] else if (!setup && started?['text'] is String)
+    ] else if (setup && card?['setup_agent'] is Map)
+      '${(card!['setup_agent'] as Map)['name'] ?? ''}'
+    else if (!setup && started?['text'] is String)
       started!['text'] as String,
     if (member != null && count > 1)
       tr('step {0} of {1}')

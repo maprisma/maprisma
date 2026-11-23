@@ -3922,5 +3922,10 @@
   "just started": "recién iniciado",
   "for {0} min": "desde hace {0} min",
   "for {0} h {1} min": "desde hace {0} h {1} min",
-  "The AI is drafting the plan. It appears here when the agent is done.": "La IA está elaborando el plan. Aparecerá aquí cuando el agente termine."
+  "The AI is drafting the plan. It appears here when the agent is done.": "La IA está elaborando el plan. Aparecerá aquí cuando el agente termine.",
+  "Skip planning": "Omitir la planificación",
+  "Skip planning?": "¿Omitir la planificación?",
+  "The agents work directly from the goal, without a plan. This approves the team, working folder and permissions and starts the run.": "Los agentes trabajan directamente a partir del objetivo, sin plan. Esto aprueba el equipo, la carpeta de trabajo y los permisos e inicia la ejecución.",
+  "Skip planning and run": "Omitir la planificación y ejecutar",
+  "No separate plan: work directly from the goal. Inspect the project first, keep the changes to what the goal asks, and report what you did and checked.": "Sin plan aparte: trabaja directamente a partir del objetivo. Revisa primero el proyecto, limita los cambios a lo que pide el objetivo e informa de lo que hiciste y comprobaste."
 }
