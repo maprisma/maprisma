@@ -3258,16 +3258,87 @@ final class AiProjectCenterPlugin {
         rethrow;
       }
       if (schedule == null) await _removeTimer(id);
-      return {'project': _view(item)};
+      // With the event of a timer that could not be removed.
+      return {'project': _view(_projects[id] ?? item)};
     });
   }
 
   Future<void> _removeTimer(String id) async {
+    final scheduler = _scheduler;
+    if (scheduler == null) return;
     try {
-      await _scheduler?.remove(id);
-    } on Object {
-      // The next owner's reconciliation removes it.
+      await scheduler.remove(id);
+      _timerTroubles.remove('$id/remove');
+    } on Object catch (error) {
+      // Kept: the next owner's reconciliation (or the timer's next
+      // trigger, which finds no schedule) tries again.
+      _timerTrouble(id, removing: true, reason: _reason(error));
     }
+  }
+
+  static String _reason(Object error) => switch (error) {
+    ServiceError(:final reason?) when reason.isNotEmpty => reason,
+    ServiceError(:final code) => code,
+    _ => 'systemctl failed',
+  };
+
+  /// What this process has told the user about, so a timer that keeps
+  /// failing notifies once per process, not at every look.
+  final _timerTroubles = <String>{};
+
+  static const _timerTitle = 'Maprisma: a project schedule needs attention';
+  static const _timerNotRemoved =
+      'The timer of its schedule could not be removed. Maprisma tries again at its next start.';
+  static const _timerNotSetUp =
+      'The timer of its schedule could not be set up, so it does not run on time. Maprisma tries again at its next start.';
+  static const _timersUnreadable =
+      'Maprisma cannot read the folder of its timers (~/.config/systemd/user). Timers it no longer needs stay until it can.';
+
+  /// A timer that could not be removed or set up (task 103): never silent.
+  /// Its project (when it still exists) records `schedule_timer_failed`
+  /// with the reason (once while the reason stays the same) and the user
+  /// gets a desktop notification (once per process).
+  void _timerTrouble(
+    String? id, {
+    required bool removing,
+    required String reason,
+  }) {
+    final stored = id == null ? null : _projects[id];
+    if (stored != null && !_closed && _storageFault == null) {
+      final text =
+          'The timer of its schedule could not be ${removing ? 'removed' : 'set up'} ($reason). Maprisma tries again at its next start.';
+      final events = stored['events'];
+      final last = events is List && events.isNotEmpty ? events.last : null;
+      if (!(last is Map &&
+          last['type'] == 'schedule_timer_failed' &&
+          last['text'] == text)) {
+        final item = _copy(stored);
+        _event(item, 'schedule_timer_failed', text);
+        try {
+          _note(item);
+        } on Object {
+          // The notification still tells the user.
+        }
+      }
+    }
+    final key = id == null
+        ? 'folder'
+        : '$id/${removing ? 'remove' : 'install'}';
+    if (!_timerTroubles.add(key)) return;
+    final body = _translate(
+      id == null
+          ? _timersUnreadable
+          : removing
+          ? _timerNotRemoved
+          : _timerNotSetUp,
+    );
+    final title = stored?['title'];
+    _scheduler?.notify(
+      _translate(_timerTitle),
+      title is String
+          ? '${title.length > 120 ? '${title.substring(0, 120)}…' : title}: $body'
+          : body,
+    );
   }
 
   /// The timers as the store wants them: scheduled projects with a next run
@@ -3282,20 +3353,28 @@ final class AiProjectCenterPlugin {
             when nextScheduledRun(schedule, now, zone: _zone) != null)
           item['id'] as String: scheduleCalendar(schedule),
     };
-    final Set<String> present;
+    Set<String> present;
     try {
-      present = scheduler.installed();
-    } on Object {
-      return;
+      present = await scheduler.installed();
+      _timerTroubles.remove('folder');
+    } on Object catch (error) {
+      // Not "no timers": which ones to remove is unknown, so none is; the
+      // wanted ones are still written.
+      _timerTrouble(null, removing: true, reason: _reason(error));
+      present = const {};
     }
     for (final id in present.difference(wanted.keys.toSet())) {
+      if (_closed) return;
       await _removeTimer(id);
     }
     for (final entry in wanted.entries) {
+      if (_closed) return;
       try {
         await scheduler.install(entry.key, entry.value);
-      } on Object {
-        // Shown nowhere yet; the next owner tries again.
+        _timerTroubles.remove('${entry.key}/install');
+      } on Object catch (error) {
+        // Recorded and told; the next owner tries again.
+        _timerTrouble(entry.key, removing: false, reason: _reason(error));
       }
     }
   }
@@ -3471,13 +3550,29 @@ final class AiProjectCenterPlugin {
   static final _requestName = RegExp(
     r'^([0-9a-f]{32})\.[0-9a-f]{16}\.(request|taken)$',
   );
+
+  /// A trigger's request still being written (writeScheduleRequest), or
+  /// left by a trigger that died while writing it.
+  static final _requestDraft = RegExp(
+    r'^\.[0-9a-f]{32}\.[0-9a-f]{16}\.request\.tmp$',
+  );
+
+  /// Requests handled per look; the rest at the next one (those handled
+  /// are gone by then, so nothing is hidden behind them).
+  static const _requestsPerLook = 64;
   bool _taking = false;
+
+  static const _requestFailed =
+      'Maprisma could not record the scheduled run. Open its Projects page to check the project.';
 
   /// Handles the requests timers left in the spool (task 101): each is
   /// claimed by renaming it before it is read, so one request runs once; a
   /// claimed one left by an owner that died is handled again (its planned
   /// run is recorded, so it never runs twice). Only own, small, regular
-  /// files count; anything else is removed unread.
+  /// files count; anything else is removed unread. The spool is read one
+  /// entry at a time (task 103), and a request is removed only once it was
+  /// handled: one that this owner, closing, could not handle stays claimed
+  /// for the next owner.
   Future<int> takeScheduleRequests() async {
     if (_taking || !_ownsStore()) return 0;
     final spool = p.join(directory, 'schedule');
@@ -3489,13 +3584,29 @@ final class AiProjectCenterPlugin {
     var handled = 0;
     try {
       _io.close(_io.privateDirectory(spool));
-      final names = [
-        for (final entry in Directory(spool).listSync(followLinks: false))
-          p.basename(entry.path),
-      ]..sort();
+      final names = <String>[];
+      final now = DateTime.now();
+      await for (final entry in Directory(spool).list(followLinks: false)) {
+        final name = p.basename(entry.path);
+        if (entry is Directory) continue; // never a request; never removed
+        if (_requestName.hasMatch(name)) {
+          names.add(name);
+          if (names.length >= _requestsPerLook) break;
+        } else if (_requestDraft.hasMatch(name)) {
+          // A draft older than ten minutes belongs to no living trigger.
+          try {
+            if (entry is Link ||
+                now.difference(entry.statSync().modified).inMinutes >= 10) {
+              entry.deleteSync();
+            }
+          } on FileSystemException {
+            // Gone meanwhile.
+          }
+        }
+      }
+      names.sort();
       for (final name in names) {
-        final match = _requestName.firstMatch(name);
-        if (match == null) continue;
+        final match = _requestName.firstMatch(name)!;
         var path = p.join(spool, name);
         if (match[2] == 'request') {
           final taken = path.replaceFirst(RegExp(r'\.request$'), '.taken');
@@ -3519,25 +3630,45 @@ final class AiProjectCenterPlugin {
         } on Object {
           request = null;
         }
-        try {
-          File(path).deleteSync();
-        } on FileSystemException {
-          // Gone already.
+        void drop() {
+          try {
+            File(path).deleteSync();
+          } on FileSystemException {
+            // Gone already.
+          }
         }
+
+        final at = request is Map && request['at'] is String
+            ? DateTime.tryParse(request['at'] as String)
+            : null;
+        // A time from the future is no trigger.
         if (request is! Map ||
             request['id'] != match[1] ||
-            request['at'] is! String) {
-          continue;
-        }
-        final at = DateTime.tryParse(request['at'] as String);
-        // A time from the future is no trigger.
-        if (at == null ||
+            at == null ||
             at.isAfter(
               _scheduleClock().toUtc().add(const Duration(minutes: 5)),
             )) {
+          drop();
           continue;
         }
-        await scheduledRun(match[1]!, at);
+        String result;
+        try {
+          result = await scheduledRun(match[1]!, at);
+        } on Object {
+          // Not silent: its planned run may not be recorded.
+          drop();
+          final title = _projects[match[1]]?['title'];
+          _scheduler?.notify(
+            _translate(_scheduleTitle),
+            title is String
+                ? '${title.length > 120 ? '${title.substring(0, 120)}…' : title}: ${_translate(_requestFailed)}'
+                : _translate(_requestFailed),
+          );
+          handled++;
+          continue;
+        }
+        if (result == 'closed') break; // claimed, kept for the next owner
+        drop();
         handled++;
       }
     } finally {

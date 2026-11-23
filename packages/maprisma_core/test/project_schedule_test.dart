@@ -63,6 +63,8 @@ final class FakeScheduler implements ProjectScheduler {
   final removed = <String>[];
   final notes = <(String, String)>[];
   ServiceError? failInstall;
+  ServiceError? failRemove;
+  ServiceError? failInstalled;
   Duration installDelay = Duration.zero;
   @override
   Future<void> install(String id, List<String> calendar) async {
@@ -74,11 +76,15 @@ final class FakeScheduler implements ProjectScheduler {
   @override
   Future<void> remove(String id) async {
     removed.add(id);
+    if (failRemove != null) throw failRemove!;
     installs.remove(id);
   }
 
   @override
-  Set<String> installed() => installs.keys.toSet();
+  Future<Set<String>> installed() async {
+    if (failInstalled != null) throw failInstalled!;
+    return installs.keys.toSet();
+  }
 
   @override
   void notify(String title, String body) => notes.add((title, body));
@@ -319,6 +325,7 @@ void main() {
     late String units;
     late List<List<String>> calls;
     late bool systemctlFails;
+    late Set<String> failing; // verbs whose systemctl call fails
     late List<String> command;
     late SystemdUserScheduler scheduler;
     const id = '0123456789abcdef0123456789abcdef';
@@ -329,6 +336,7 @@ void main() {
       units = p.join(temporary.path, 'systemd', 'user');
       calls = [];
       systemctlFails = false;
+      failing = {};
       command = ['/opt/maprisma/features/ai-project-center/plugin'];
       scheduler = SystemdUserScheduler(
         unitDir: units,
@@ -342,6 +350,9 @@ void main() {
         systemctl: (args) async {
           calls.add(args);
           if (systemctlFails) return (false, 'failed');
+          if (failing.contains(args.first)) {
+            return (false, 'Failed to ${args.first} unit: Access denied');
+          }
           // systemd's enable: the wants link.
           if (args.first == 'enable') {
             final wants = Directory(p.join(units, 'timers.target.wants'))
@@ -460,7 +471,7 @@ void main() {
           ['enable', 'maprisma-project-$id.timer'],
           ['restart', 'maprisma-project-$id.timer'],
         ]);
-        expect(scheduler.installed(), {id});
+        expect(await scheduler.installed(), {id});
         calls.clear();
         await scheduler.install(id, ['*-*-* 05:00:00']);
         expect(calls, isEmpty);
@@ -474,7 +485,7 @@ void main() {
           ['daemon-reload'],
         ]);
         expect(timer.existsSync() || service.existsSync(), isFalse);
-        expect(scheduler.installed(), isEmpty);
+        expect(await scheduler.installed(), isEmpty);
       },
     );
 
@@ -499,7 +510,7 @@ void main() {
         expect(calls, isEmpty);
         await scheduler.remove(id);
         expect(foreign.existsSync(), isTrue);
-        expect(scheduler.installed(), isEmpty);
+        expect(await scheduler.installed(), isEmpty);
         // A link (even to a managed text) is not followed.
         foreign.deleteSync();
         final target = File(p.join(temporary.path, 'elsewhere'))
@@ -523,7 +534,7 @@ void main() {
           ..writeAsStringSync(
             '$scheduleMarker\n${scheduleStoreLine}ffffffffffffffff\n',
           );
-        expect(scheduler.installed(), isEmpty);
+        expect(await scheduler.installed(), isEmpty);
         await scheduler.remove(other);
         expect(theirs.existsSync(), isTrue);
         await expectLater(
@@ -556,6 +567,72 @@ void main() {
           none.install(id, ['*-*-* 05:00:00']),
           throwsA(errorCode('project_schedule_unavailable')),
         );
+      },
+    );
+    // Task 103: what AI Agents Map 2.1.1-2.1.4 fixed in its systemd timers.
+    test(
+      'a timer whose disable --now fails keeps its files and is reported',
+      () async {
+        await scheduler.install(id, ['*-*-* 05:00:00']);
+        final timer = File(p.join(units, 'maprisma-project-$id.timer'));
+        final service = File(p.join(units, 'maprisma-project-$id.service'));
+        calls.clear();
+        failing = {'disable'};
+        await expectLater(
+          scheduler.remove(id),
+          throwsA(
+            isA<ServiceError>()
+                .having((e) => e.code, 'code', 'project_schedule_unavailable')
+                .having((e) => e.reason, 'reason', contains('Access denied')),
+          ),
+        );
+        // Still running for systemd, so still Maprisma's: the next removal
+        // tries again.
+        expect(timer.existsSync() && service.existsSync(), isTrue);
+        expect(await scheduler.installed(), {id});
+        expect(calls, [
+          ['disable', '--now', 'maprisma-project-$id.timer'],
+        ]);
+        failing = {'daemon-reload'};
+        await expectLater(
+          scheduler.remove(id),
+          throwsA(errorCode('project_schedule_unavailable')),
+        );
+        failing = {};
+        expect(await scheduler.installed(), isEmpty);
+      },
+    );
+
+    test('a rewrite systemd refuses puts the previous timer back', () async {
+      await scheduler.install(id, ['*-*-* 05:00:00']);
+      final timer = File(p.join(units, 'maprisma-project-$id.timer'));
+      failing = {'restart'};
+      await expectLater(
+        scheduler.install(id, ['*-*-* 06:00:00']),
+        throwsA(errorCode('project_schedule_unavailable')),
+      );
+      // The store keeps the old schedule; so do the files systemd reads.
+      expect(timer.readAsStringSync(), contains('OnCalendar=*-*-* 05:00:00'));
+      expect(timer.readAsStringSync(), isNot(contains('06:00:00')));
+    });
+
+    test(
+      'an unreadable unit folder is an error, not "no timers"; a large one is read whole',
+      () async {
+        await scheduler.install(id, ['*-*-* 05:00:00']);
+        for (var i = 0; i < 2000; i++) {
+          File(p.join(units, 'other-$i.service')).writeAsStringSync('');
+        }
+        expect(await scheduler.installed(), {id});
+        Process.runSync('chmod', ['000', units]);
+        addTearDown(() => Process.runSync('chmod', ['700', units]));
+        await expectLater(
+          scheduler.installed(),
+          throwsA(errorCode('project_schedule_unavailable')),
+        );
+        Process.runSync('chmod', ['700', units]);
+        Directory(units).deleteSync(recursive: true);
+        expect(await scheduler.installed(), isEmpty);
       },
     );
   });
@@ -1057,6 +1134,197 @@ void main() {
         Directory(p.join(plugin.directory, 'schedule')).listSync(),
         isEmpty,
       );
+    });
+
+    // Task 103: the bookkeeping AI Agents Map 2.1.1-2.1.4 fixed.
+    test('a timer that cannot be removed is recorded and told, not hidden', () async {
+      final item = await scheduled(await approved());
+      final id = item['id'] as String;
+      scheduler.failRemove = ServiceError(
+        'project_schedule_unavailable',
+        'systemctl disable --now failed: Access denied',
+      );
+      final off =
+          (await plugin.call('set_schedule', {
+                'id': id,
+                'schedule': null,
+              }))['project']
+              as Map<String, dynamic>;
+      expect(off['schedule'], isNull);
+      expect(events(off).last, 'schedule_timer_failed');
+      expect(
+        (off['events'] as List).last['text'],
+        'The timer of its schedule could not be removed (systemctl disable --now failed: Access denied). Maprisma tries again at its next start.',
+      );
+      expect(off['revision'], item['revision']);
+      expect(scheduler.notes, [
+        (
+          'Maprisma: a project schedule needs attention',
+          'Check my e-mails: The timer of its schedule could not be removed. Maprisma tries again at its next start.',
+        ),
+      ]);
+      // The timer is still there: its next trigger tries again; the same
+      // reason is neither recorded nor told twice.
+      expect(scheduler.installs.containsKey(id), isTrue);
+      expect(await plugin.scheduledRun(id, now), 'no_schedule');
+      await waitUntil(() => scheduler.removed.length == 2);
+      expect(
+        events(await get(id)).where((e) => e == 'schedule_timer_failed'),
+        hasLength(1),
+      );
+      expect(scheduler.notes, hasLength(1));
+      // Deleted while its timer cannot go: told, too.
+      final other = await saved(title: 'Other');
+      await scheduled(other);
+      await plugin.call('delete', {
+        'id': other['id'],
+        'revision': other['revision'],
+      });
+      await waitUntil(() => scheduler.notes.length == 2);
+      expect(
+        scheduler.notes.last.$2,
+        'The timer of its schedule could not be removed. Maprisma tries again at its next start.',
+      );
+      // Once it can, it goes.
+      scheduler.failRemove = null;
+      expect(await plugin.scheduledRun(id, now), 'no_schedule');
+      await waitUntil(() => !scheduler.installs.containsKey(id));
+    });
+
+    test('reconciliation tells what it could not do', () async {
+      final item = await scheduled(await approved());
+      final id = item['id'] as String;
+      await plugin.shutdown();
+      scheduler.installs.clear();
+      scheduler.failInstall = ServiceError(
+        'project_schedule_unavailable',
+        'systemctl enable failed',
+      );
+      plugin = open();
+      await waitUntil(() => scheduler.notes.isNotEmpty);
+      expect(
+        scheduler.notes.single.$1,
+        'Maprisma: a project schedule needs attention',
+      );
+      expect(
+        scheduler.notes.single.$2,
+        'Check my e-mails: The timer of its schedule could not be set up, so it does not run on time. Maprisma tries again at its next start.',
+      );
+      await waitUntil(() => plugin.idle);
+      final after = await get(id);
+      expect(events(after).last, 'schedule_timer_failed');
+      expect(
+        (after['events'] as List).last['text'],
+        contains('could not be set up (systemctl enable failed)'),
+      );
+      // A unit folder that cannot be read is no "nothing to remove".
+      await plugin.shutdown();
+      scheduler
+        ..failInstall = null
+        ..notes.clear()
+        ..failInstalled = ServiceError(
+          'project_schedule_unavailable',
+          'the unit folder cannot be read: Permission denied',
+        );
+      plugin = open();
+      await waitUntil(() => scheduler.notes.isNotEmpty);
+      expect(
+        scheduler.notes.single.$2,
+        'Maprisma cannot read the folder of its timers (~/.config/systemd/user). Timers it no longer needs stay until it can.',
+      );
+      // The wanted timer is still written.
+      await waitUntil(() => scheduler.installs.containsKey(id));
+    });
+
+    test(
+      'a claimed request an owner could not handle stays for the next one',
+      () async {
+        final item = await scheduled(await approved());
+        final id = item['id'] as String;
+        await plugin.shutdown();
+        now = utc(2026, 11, 24, 4).add(const Duration(seconds: 1));
+        writeScheduleRequest(temporary.path, id, now, posix: TestPosix());
+        // The owner's start keeps the schedule chain busy; it closes before
+        // the request's turn comes.
+        scheduler.installDelay = const Duration(milliseconds: 200);
+        plugin = open();
+        final taking = plugin.takeScheduleRequests();
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        await plugin.shutdown();
+        expect(await taking, 0);
+        final spool = p.join(plugin.directory, 'schedule');
+        expect(Directory(spool).listSync().map((e) => p.basename(e.path)), [
+          matches(RegExp('^$id\\.[0-9a-f]{16}\\.taken\$')),
+        ]);
+        expect(commands, isEmpty);
+        // The next owner runs it, once.
+        scheduler.installDelay = Duration.zero;
+        plugin = open();
+        expect(await plugin.takeScheduleRequests(), 1);
+        expect(commands, hasLength(1));
+        expect(Directory(spool).listSync(), isEmpty);
+        expect(events(await get(id)), contains('schedule_started'));
+        await processes.single.finish('done');
+        await waitUntil(() => plugin.idle);
+      },
+    );
+
+    test(
+      'the spool is read whole: other entries hide no request; drafts go',
+      () async {
+        final item = await scheduled(await approved());
+        final id = item['id'] as String;
+        final spool = p.join(plugin.directory, 'schedule');
+        now = utc(2026, 11, 24, 4).add(const Duration(seconds: 1));
+        writeScheduleRequest(temporary.path, id, now, posix: TestPosix());
+        for (var i = 0; i < 1500; i++) {
+          File(p.join(spool, 'junk-$i')).writeAsStringSync('');
+        }
+        // Directories named like requests never fill a look.
+        for (var i = 0; i < 70; i++) {
+          Directory(
+            p.join(spool, '$id.${i.toRadixString(16).padLeft(16, '0')}.taken'),
+          ).createSync();
+        }
+        // A draft a dead trigger left an hour ago, and one being written.
+        final old = File(p.join(spool, '.$id.00000000000000aa.request.tmp'))
+          ..writeAsStringSync('{"id"');
+        old.setLastModifiedSync(
+          DateTime.now().subtract(const Duration(hours: 1)),
+        );
+        final fresh = File(p.join(spool, '.$id.00000000000000bb.request.tmp'))
+          ..writeAsStringSync('{"id"');
+        expect(await plugin.takeScheduleRequests(), 1);
+        expect(commands, hasLength(1));
+        expect(old.existsSync(), isFalse);
+        expect(fresh.existsSync(), isTrue);
+        await processes.single.finish('done');
+        await waitUntil(() => plugin.idle);
+      },
+    );
+
+    test('a request that cannot be written is told, not lost silently', () async {
+      final item = await scheduled(await approved());
+      final notes = <(String, String)>[];
+      // The store folder is a file: no spool can be made.
+      final broken = p.join(temporary.path, 'broken');
+      Directory(broken).createSync();
+      File(p.join(broken, 'ai-project-center')).writeAsStringSync('');
+      final result = await scheduleTrigger(
+        id: item['id'] as String,
+        dataDirectory: broken,
+        open: () => fail('no owner without a request'),
+        serve: (_) async => fail('not the owner'),
+        notify: (title, body) => notes.add((title, body)),
+        posix: TestPosix(),
+      );
+      expect(result, 'unwritten');
+      expect(notes, [
+        (
+          'Maprisma: a scheduled project did not run',
+          'The scheduled run could not be handed over to Maprisma. Its timer starts it again at the next planned time.',
+        ),
+      ]);
     });
   });
 }

@@ -31,7 +31,8 @@ String _random() => List.generate(
 
 /// Writes the request of a trigger of [id] at [at] into the spool of the
 /// store in [dataDirectory]: written under a temporary name and renamed, so
-/// the owner never reads half a request. Returns its path.
+/// the owner never reads half a request (a draft that failed is removed).
+/// Returns its path.
 String writeScheduleRequest(
   String dataDirectory,
   String id,
@@ -44,27 +45,42 @@ String writeScheduleRequest(
   final dir = io.privateDirectory(spool);
   final name = '$id.${_random()}.request';
   final temporary = '.$name.tmp';
+  var created = false;
   try {
-    const create = 0x40, exclusive = 0x80, writeOnly = 0x1;
-    final fd = io.openAt(
-      dir,
-      temporary,
-      writeOnly | create | exclusive | Posix.noFollow,
-      0x180,
-    );
     try {
-      io.write(
-        fd,
-        utf8.encode(jsonEncode({'id': id, 'at': at.toUtc().toIso8601String()})),
+      const create = 0x40, exclusive = 0x80, writeOnly = 0x1;
+      final fd = io.openAt(
+        dir,
+        temporary,
+        writeOnly | create | exclusive | Posix.noFollow,
+        0x180,
       );
-      io.sync(fd);
+      created = true;
+      try {
+        io.write(
+          fd,
+          utf8.encode(
+            jsonEncode({'id': id, 'at': at.toUtc().toIso8601String()}),
+          ),
+        );
+        io.sync(fd);
+      } finally {
+        io.close(fd);
+      }
     } finally {
-      io.close(fd);
+      io.close(dir);
     }
-  } finally {
-    io.close(dir);
+    File(p.join(spool, temporary)).renameSync(p.join(spool, name));
+  } on Object {
+    if (created) {
+      try {
+        File(p.join(spool, temporary)).deleteSync();
+      } on FileSystemException {
+        // Gone already.
+      }
+    }
+    rethrow;
   }
-  File(p.join(spool, temporary)).renameSync(p.join(spool, name));
   return p.join(spool, name);
 }
 
@@ -102,7 +118,8 @@ Future<void> serveScheduledRuns(
 /// throws `ServiceError('project_center_busy')` while another process owns
 /// it. Results: `owner` (it was the owner and has served the spool),
 /// `handed_over` (the running owner claimed the request) or `timeout` (no
-/// owner took it in [wait]; the request was withdrawn, the user notified).
+/// owner took it in [wait]; the request was withdrawn, the user notified)
+/// or `unwritten` (its request could not be written; the user notified).
 Future<String> scheduleTrigger({
   required String id,
   required String dataDirectory,
@@ -115,12 +132,25 @@ Future<String> scheduleTrigger({
   String Function(String text) translate = _same,
   Posix? posix,
 }) async {
-  final request = writeScheduleRequest(
-    dataDirectory,
-    id,
-    (clock ?? DateTime.now)(),
-    posix: posix,
-  );
+  final String request;
+  try {
+    request = writeScheduleRequest(
+      dataDirectory,
+      id,
+      (clock ?? DateTime.now)(),
+      posix: posix,
+    );
+  } on Object catch (error) {
+    // Without its request no owner can run it: not silent.
+    stderr.writeln('Maprisma schedule-run $id: the request: $error');
+    notify?.call(
+      translate('Maprisma: a scheduled project did not run'),
+      translate(
+        'The scheduled run could not be handed over to Maprisma. Its timer starts it again at the next planned time.',
+      ),
+    );
+    return 'unwritten';
+  }
   final deadline = DateTime.now().add(wait);
   while (true) {
     AiProjectCenterPlugin? owner;
@@ -186,7 +216,7 @@ Future<int> runScheduledProject(List<String> args) async {
       translate: service.i18n.text,
     );
     stdout.writeln('Maprisma schedule-run $id: $result');
-    return result == 'timeout' ? 1 : 0;
+    return result == 'timeout' || result == 'unwritten' ? 1 : 0;
   } on Object catch (error) {
     stderr.writeln('Maprisma schedule-run $id: $error');
     return 1;

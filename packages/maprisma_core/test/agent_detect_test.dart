@@ -149,6 +149,43 @@ void main() {
     expect(of('hermes'), (true, '', 'own'));
   });
 
+  test(
+    'an agent add-on signed before [project] keeps the app\'s project profile',
+    () {
+      // AddonRegistry.reload loads an agent add-on as
+      // Adapter(withNewerFacts(its facts, the built-in adapter's facts)): one
+      // signed before the AI Project Center's [project] table must not leave
+      // its agent "not available" on the Projects board (AI Agents Map 2.1.0
+      // had this bug).
+      final own = builtinAdapters().firstWhere((a) => a.command == 'claude');
+      final source = File(
+        p.join('..', '..', 'adapters', 'claude.toml'),
+      ).readAsStringSync();
+      final before = source.substring(0, source.indexOf('\n[project]\n') + 1);
+      final old = Adapter.parse(before);
+      expect(old.table('project'), isEmpty);
+      final project = Adapter(
+        withNewerFacts(old.facts, own.facts),
+      ).table('project');
+      expect(project, isNotEmpty);
+      for (final key in ['plan', 'run', 'setup', 'permissions']) {
+        expect(project[key], own.table('project')[key], reason: key);
+      }
+      // An add-on's own [project] table stays its own.
+      final theirs = Adapter.parse(
+        '$before\n[project]\nplan = ["claude", "-p", "theirs", "{prompt}"]\n'
+        'run = ["claude", "-p", "theirs", "{prompt}"]\n'
+        'permissions = "Theirs."\n',
+      );
+      final kept = Adapter(
+        withNewerFacts(theirs.facts, own.facts),
+      ).table('project');
+      expect(kept['plan'], ['claude', '-p', 'theirs', '{prompt}']);
+      expect(kept['permissions'], 'Theirs.');
+      expect(kept['setup'], isNull);
+    },
+  );
+
   test('an add-on signed before install_marks gets the app\'s', () {
     final own = builtinAdapters().firstWhere((a) => a.command == 'openclaw');
     final merged = withNewerFacts({

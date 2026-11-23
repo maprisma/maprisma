@@ -22,15 +22,22 @@ import 'protocol.dart';
 abstract interface class ProjectScheduler {
   /// Writes (or rewrites) the timer of project [id] for the `OnCalendar`
   /// values [calendar] and enables it. Throws
-  /// `ServiceError('project_schedule_unavailable')`; a first install that
-  /// failed leaves nothing behind.
+  /// `ServiceError('project_schedule_unavailable', reason)`; a first install
+  /// that failed leaves nothing behind, a failed rewrite puts the previous
+  /// files back.
   Future<void> install(String id, List<String> calendar);
 
-  /// Disables and removes the timer of [id], if Maprisma wrote it.
+  /// Disables and removes the timer of [id], if Maprisma wrote it. Throws
+  /// `ServiceError('project_schedule_unavailable', reason)` when the timer
+  /// could not be stopped (its files then stay, so a later removal tries
+  /// again) or its files or systemd's reload failed.
   Future<void> remove(String id);
 
-  /// The project ids whose managed timer files exist.
-  Set<String> installed();
+  /// The project ids whose managed timer files exist. The unit folder is
+  /// read one entry at a time (only names of ours are kept); a folder that
+  /// cannot be read throws `ServiceError('project_schedule_unavailable')`
+  /// instead of counting as "no timers".
+  Future<Set<String>> installed();
 
   /// A desktop notification (best effort).
   void notify(String title, String body);
@@ -268,24 +275,85 @@ final class SystemdUserScheduler implements ProjectScheduler {
             FileSystemEntityType.link) {
       return;
     }
+    final written = <String>[];
+    var started = false;
     try {
       Directory(unitDir).createSync(recursive: true);
       for (final entry in changed) {
         _io.replaceFile(entry.key, utf8.encode(entry.value), 0x1a4);
+        written.add(entry.key);
       }
       for (final args in [
         ['daemon-reload'],
         ['enable', scheduleTimerName(id)],
         ['restart', scheduleTimerName(id)],
       ]) {
-        final (ok, _) = await _run(args);
-        if (!ok) throw ServiceError('project_schedule_unavailable');
+        started = args.first == 'restart';
+        final (ok, said) = await _run(args);
+        if (!ok) {
+          throw ServiceError(
+            'project_schedule_unavailable',
+            _said('systemctl ${args.first}', said),
+          );
+        }
       }
-    } on Object {
-      if (fresh) await remove(id);
-      throw ServiceError('project_schedule_unavailable');
+    } on Object catch (error) {
+      final reason = error is ServiceError && error.reason != null
+          ? error.reason
+          : '$error';
+      if (fresh && started) {
+        // It may run: stopped first, or its files stay for the next
+        // reconciliation, which removes it.
+        try {
+          await remove(id);
+        } on Object {
+          // Kept (see above).
+        }
+      } else if (fresh) {
+        // Never started: nothing of it may stay (an enable that went half
+        // way leaves its link; disable takes it back).
+        try {
+          await _run(['disable', scheduleTimerName(id)]);
+        } on Object {
+          // Its files go all the same.
+        }
+        for (final path in written) {
+          try {
+            File(path).deleteSync();
+          } on FileSystemException {
+            // Gone already.
+          }
+        }
+        try {
+          await _run(['daemon-reload']);
+        } on Object {
+          // Nothing of it is left to load.
+        }
+      } else if (written.isNotEmpty) {
+        // A rewrite that failed: the previous timer as it was, so systemd
+        // and the store's schedule do not drift apart (best effort; the
+        // next reconciliation writes it again).
+        try {
+          for (final path in written) {
+            final text = before[path]!;
+            if (text.isEmpty) {
+              File(path).deleteSync();
+            } else {
+              _io.replaceFile(path, utf8.encode(text), 0x1a4);
+            }
+          }
+          await _run(['daemon-reload']);
+          await _run(['restart', scheduleTimerName(id)]);
+        } on Object {
+          // See above.
+        }
+      }
+      throw ServiceError('project_schedule_unavailable', reason);
     }
   }
+
+  static String _said(String what, String said) =>
+      said.isEmpty ? '$what failed' : '$what failed: $said';
 
   @override
   Future<void> remove(String id) async {
@@ -301,31 +369,66 @@ final class SystemdUserScheduler implements ProjectScheduler {
     if (managed.isEmpty) return;
     if (managed.contains(paths.first)) {
       // The timer only: a scheduled run that works now goes on (its
-      // service stays loaded until it ends).
-      await _run(['disable', '--now', scheduleTimerName(id)]);
+      // service stays loaded until it ends). A timer not known to be
+      // stopped keeps its files: removed, systemd would keep running it
+      // with nothing left that says it is Maprisma's.
+      final (ok, said) = await _run([
+        'disable',
+        '--now',
+        scheduleTimerName(id),
+      ]);
+      if (!ok) {
+        throw ServiceError(
+          'project_schedule_unavailable',
+          _said('systemctl disable --now', said),
+        );
+      }
     }
+    final left = <String>[];
     for (final path in managed) {
       try {
         File(path).deleteSync();
       } on FileSystemException {
-        // Gone meanwhile.
+        if (FileSystemEntity.typeSync(path, followLinks: false) !=
+            FileSystemEntityType.notFound) {
+          left.add(p.basename(path));
+        }
       }
     }
-    await _run(['daemon-reload']);
+    final (ok, said) = await _run(['daemon-reload']);
+    if (left.isNotEmpty) {
+      throw ServiceError(
+        'project_schedule_unavailable',
+        '${left.join(', ')} could not be removed',
+      );
+    }
+    if (!ok) {
+      throw ServiceError(
+        'project_schedule_unavailable',
+        _said('systemctl daemon-reload', said),
+      );
+    }
   }
 
   @override
-  Set<String> installed() {
+  Future<Set<String>> installed() async {
     final ids = <String>{};
     try {
-      for (final entry in Directory(unitDir).listSync(followLinks: false)) {
+      // One entry at a time: a large systemd/user folder costs time, never
+      // memory, and no unit of ours is left out.
+      await for (final entry in Directory(unitDir).list(followLinks: false)) {
         final match = _unitName.firstMatch(p.basename(entry.path));
         if (match == null) continue;
         final text = _managed(entry.path);
         if (text != null && text.isNotEmpty) ids.add(match[1]!);
       }
-    } on FileSystemException {
-      // No unit folder yet.
+    } on PathNotFoundException {
+      // No unit folder yet: no timers.
+    } on FileSystemException catch (error) {
+      throw ServiceError(
+        'project_schedule_unavailable',
+        'the unit folder cannot be read: ${error.osError?.message ?? error.message}',
+      );
     }
     return ids;
   }
