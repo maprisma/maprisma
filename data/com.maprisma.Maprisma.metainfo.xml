@@ -25,6 +25,18 @@
   <url type="bugtracker">https://github.com/uBruckhaus/Asterism/issues</url>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="2.1.3" date="2026-11-23">
+      <description>
+        <p>Projects can run on a schedule: every day, on chosen weekdays, weekly, every few hours or
+          monthly at a set time, also while Maprisma is closed (a systemd user timer per project; a
+          run missed while the PC was off runs once after the next login). A scheduled run starts the
+          approved plan with its team; when the plan or team changed since approval it does not run
+          and you get a notification. Board cards show a clock with the next run.</p>
+        <p>Map boxes are moved by dragging the box itself inside its card; dragged out of it they
+          connect as before. While a box is moved only the separators light up, and afterwards the
+          moved box alone is selected.</p>
+      </description>
+    </release>
     <release version="2.1.2" date="2026-11-23">
       <description>
         <p>Drag and drop instead of move menus: a project card is dragged as a whole (by touch after a
