@@ -604,6 +604,7 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
     for (final c in [_title, _brief, _path, _plan]) {
       c.addListener(_edited);
     }
+    _plan.addListener(_planEdited);
     unawaited(_refresh());
     _timer = Timer.periodic(const Duration(seconds: 2), (_) {
       if (!widget.active || _busy) return;
@@ -654,6 +655,14 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
   /// An edit outside the four fields (a member's instructions): always a change.
   void _changed() {
     if (!_dirty && mounted) setState(() => _dirty = true);
+  }
+
+  /// Whether the plan box is empty decides Skip planning and Approve plan,
+  /// also while the page already has unsaved changes.
+  bool _planEmpty = true;
+  void _planEdited() {
+    final empty = _plan.text.trim().isEmpty;
+    if (empty != _planEmpty && mounted) setState(() => _planEmpty = empty);
   }
 
   /// The four fields' controllers: only a text that differs counts.
@@ -1269,32 +1278,41 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
     }
     if (!mounted) return;
     final before = _plan.text;
+    final wasDirty = _dirty;
     _plan.text = tr(skippedPlan);
     if (!await _save()) {
-      // Not saved: the box keeps what the user had.
-      if (mounted && _plan.text == tr(skippedPlan)) _plan.text = before;
+      // Not saved: the box keeps what the user had, and the page is as
+      // changed as it was.
+      if (mounted && _plan.text == tr(skippedPlan)) {
+        _plan.text = before;
+        setState(() => _dirty = wasDirty);
+      }
       return;
     }
     if (!mounted) return;
-    final reviewed = await widget.onCall('review', {
-      'id': _project!['id'],
-      'revision': _project!['revision'],
-      'approved': true,
-    });
-    if (!mounted) return;
-    setState(
-      () => _adopt(Map<String, dynamic>.from(reviewed['project'] as Map)),
-    );
-    final started = await widget.onCall('run', {
-      'id': _project!['id'],
-      'revision': _project!['revision'],
-    });
-    if (!mounted) return;
-    setState(() {
-      _adopt(Map<String, dynamic>.from(started['project'] as Map));
-      _tab = 3;
-    });
-    await _refresh();
+    try {
+      final reviewed = await widget.onCall('review', {
+        'id': _project!['id'],
+        'revision': _project!['revision'],
+        'approved': true,
+      });
+      if (!mounted) return;
+      setState(
+        () => _adopt(Map<String, dynamic>.from(reviewed['project'] as Map)),
+      );
+      final started = await widget.onCall('run', {
+        'id': _project!['id'],
+        'revision': _project!['revision'],
+      });
+      if (!mounted) return;
+      setState(() {
+        _adopt(Map<String, dynamic>.from(started['project'] as Map));
+        _tab = 3;
+      });
+    } finally {
+      // The board and the stage rail show where it got, also after a refusal.
+      if (mounted) await _refresh();
+    }
   }
 
   /// A refused message (task 096): what it means for the message, else as
@@ -2370,7 +2388,8 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
                 ? null
                 : () async {
                     final folder = await PopupGuard.around(
-                      widget.chooseFolder ?? chooseFolder,
+                      widget.chooseFolder ??
+                          () => chooseFolder(title: tr('Choose folder')),
                     );
                     if (folder != null && mounted) {
                       _path.text = folder;
@@ -2569,9 +2588,13 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
                 (
                   'Skip planning',
                   'skip_plan',
+                  // Not while an agent still stops, nor where existing
+                  // changes need a review first (Run asks for that).
                   !_running &&
                       _runTeam.isNotEmpty &&
                       _plan.text.trim().isEmpty &&
+                      _project?['processes_stopping'] != true &&
+                      _project?['needs_reconciliation'] != true &&
                       !{'paused', 'interrupted', 'failed'}.contains(status),
                 ),
                 (

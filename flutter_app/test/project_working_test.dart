@@ -76,7 +76,8 @@ void main() {
     );
     expect(
       headline({
-        ...working(status: 'draft', state: 'stopped'),
+        ...working(status: 'planning', state: 'stopped'),
+        'phase': 'setup',
         'active': null,
         'activity': 'setting_up_team',
       }),
@@ -143,6 +144,97 @@ void main() {
       }),
       'Stopping the agent',
     );
+  });
+
+  test('the project view decides, the card only says who', () {
+    // The card (list) is older than the project (get, a change's answer).
+    final staleActive = working(status: 'running', phase: 'execution');
+    expect(
+      projectWork(staleActive, {...staleActive, 'status': 'paused'}, tr),
+      isNull,
+    );
+    final justStarted = {
+      ...working(status: 'ready', state: 'next'),
+      'active': null,
+    };
+    expect(
+      projectWork(justStarted, {
+        ...justStarted,
+        'status': 'planning',
+        'phase': 'planning',
+      }, tr)?.headline,
+      'AI is drafting the plan',
+    );
+  });
+
+  test('stopping a team setup still names the setup and its helper', () {
+    final project = {
+      ...page.project(status: 'pausing'),
+      'phase': 'setup',
+      'setup_agent': {'agent': 'claude', 'name': 'Claude Code'},
+      'output': 'old run',
+      'setup_output': 'Choosing models',
+      'events': [
+        {'at': '2026-11-23T10:09:00.000Z', 'type': 'setup_started', 'text': ''},
+        {
+          'at': '2026-11-23T10:09:01.000Z',
+          'type': 'assignment',
+          'text': 'Claude Code: setup',
+        },
+      ],
+    };
+    final work = projectWork(null, project, tr)!;
+    expect(work.headline, 'Stopping the agent');
+    expect(work.detail, 'Claude Code');
+    expect(work.output, 'Choosing models');
+    expect(work.since, DateTime.utc(2026, 11, 23, 10, 9));
+    // A failed setup ends its attempt: its assignment is not the stopping one.
+    final failed = projectWork(null, {
+      ...page.project(status: 'draft'),
+      'processes_stopping': true,
+      'events': [
+        {
+          'at': '2026-11-23T10:09:01.000Z',
+          'type': 'assignment',
+          'text': 'Claude Code: setup',
+        },
+        {'at': '2026-11-23T10:10:00.000Z', 'type': 'setup_failed', 'text': ''},
+      ],
+    }, tr)!;
+    expect(failed.detail, isNull);
+  });
+
+  testWidgets('output of the previous attempt or agent is not shown', (
+    tester,
+  ) async {
+    Future<void> poll(Map<String, dynamic> card) => show(
+      tester,
+      ProjectWorking(card: card, project: card, tr: tr, now: now),
+    );
+    // Continued: no dispatch yet, the stored output is the last attempt's.
+    final continued = {
+      ...working(status: 'running', phase: 'execution', state: 'next'),
+      'events': [
+        {'at': '2026-11-23T10:11:00.000Z', 'type': 'continued', 'text': ''},
+      ],
+      'output': 'Old interrupted line',
+    };
+    await poll(continued);
+    expect(find.byKey(const ValueKey('working-output')), findsNothing);
+    // The first poll after the dispatch already has the new agent's lines.
+    await poll({
+      ...continued,
+      'events': [
+        ...continued['events'] as List,
+        {
+          'at': '2026-11-23T10:11:05.000Z',
+          'type': 'assignment',
+          'text': 'Claude Code: lead',
+        },
+      ],
+      'output': 'Inspecting the repo',
+    });
+    expect(find.text('Inspecting the repo'), findsOneWidget);
   });
 
   test('the time counts from this attempt, not an older assignment', () {
@@ -441,6 +533,80 @@ void skipPlanningTests() {
       find.widgetWithText(FilledButton, 'Skip planning'),
     );
     expect(skip.onPressed, isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('Skip planning waits for stopping agents and reviewed changes, '
+      'and a failed save leaves the page unchanged', (tester) async {
+    var shown = {...page.project(), 'plan': '', 'processes_stopping': true};
+    await page.mount(tester, (operation, params) async {
+      if (operation == 'list') {
+        return {
+          'projects': [shown],
+        };
+      }
+      if (operation == 'profiles') return {'profiles': []};
+      if (operation == 'save') throw StateError('folder gone');
+      return {'project': shown};
+    });
+    await tester.tap(find.text('Saved project'));
+    await tester.pumpAndSettle();
+    FilledButton skip() => tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, 'Skip planning'),
+    );
+    expect(skip().onPressed, isNull);
+    shown = {
+      ...shown,
+      'processes_stopping': false,
+      'needs_reconciliation': true,
+    };
+    await tester.tap(find.text('Goal').last);
+    await tester.pumpAndSettle();
+    final state = tester.state<AiProjectCenterPageState>(
+      find.byType(AiProjectCenterPage),
+    );
+    await state.refresh();
+    await tester.pumpAndSettle();
+    expect(skip().onPressed, isNull);
+    shown = {...shown, 'needs_reconciliation': false};
+    await state.refresh();
+    await tester.pumpAndSettle();
+    expect(skip().onPressed, isNotNull);
+    // The save fails: no "Unsaved changes" from the restored plan box.
+    await tester.tap(find.widgetWithText(FilledButton, 'Skip planning'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Skip planning and run'));
+    await tester.pumpAndSettle();
+    expect(find.text('Unsaved changes'), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('typing a plan after other edits turns Skip planning off', (
+    tester,
+  ) async {
+    final shown = {...page.project(), 'plan': ''};
+    await page.mount(tester, (operation, params) async {
+      if (operation == 'list') {
+        return {
+          'projects': [shown],
+        };
+      }
+      if (operation == 'profiles') return {'profiles': []};
+      return {'project': shown};
+    });
+    await tester.tap(find.text('Saved project'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).first, 'Another title');
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Plan').last);
+    await tester.pumpAndSettle();
+    FilledButton skip() => tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, 'Skip planning'),
+    );
+    expect(skip().onPressed, isNotNull);
+    await tester.enterText(find.byType(TextField).last, 'My own plan');
+    await tester.pump();
+    expect(skip().onPressed, isNull);
     await tester.pumpWidget(const SizedBox());
   });
 

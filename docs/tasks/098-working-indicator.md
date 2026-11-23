@@ -66,3 +66,19 @@ dialog (`maprisma/window` method `chooseFolder`) with sidebar shortcuts for ever
 (`/mnt`, `/media`, `/run/media`, `/srv`; not another system's root such as an opened Omarchy disk)
 and the folders pinned in COSMIC Files (favorites) and KDE Places; GTK bookmarks GTK shows itself.
 file_selector's dialog remains the fallback.
+
+## Review round 2 (Codex + agy) — fixed
+- The project view (`get`, a change's answer) decides whether an agent works (status planning,
+  running, reviewing, pausing, or `processes_stopping`), as the core derives it; the board card,
+  which can be older, only says who and which step.
+- Output: no line while no dispatch is known (an attempt just started or continued keeps the
+  last attempt's output). At a new dispatch the output seen before it is the baseline, so the new
+  agent's first lines show at the first poll; opened mid-run, the output found then.
+- Stopping a team setup stays "setup": its output, helper name (also from the project's
+  `setup_agent`), no role "Agent"; `setup_failed` and `continue_failed` end an attempt.
+- Folder dialog: GTK's own folder dialog instead of GtkFileChooserNative (with a portal that
+  dropped the shortcuts); it no longer blocks in a nested main loop: the call is answered when the
+  dialog closes, a second call brings it to the front, closing the window closes it. Title from
+  the app's translation, buttons in GTK's own. Mounts: network shares and ZFS count, mounts inside
+  another system's root do not; empty XDG variables, `HOME` with a slash, hidden KDE places and
+  XML entities are handled.

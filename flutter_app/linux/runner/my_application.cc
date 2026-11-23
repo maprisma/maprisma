@@ -20,6 +20,11 @@ struct _MyApplication {
   gint64 hidden_at;
   // The toggle is hiding the window (that hide is not "by itself").
   gboolean toggling;
+  // The app's window, the folder dialog's parent.
+  GtkWindow* main_window;
+  // The open folder dialog and the "chooseFolder" call it answers.
+  GtkWidget* folder_dialog;
+  FlMethodCall* folder_call;
 };
 
 G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
@@ -71,10 +76,52 @@ static void set_header_colors(const gchar* bg, const gchar* fg,
 
 // "chooseFolder" {title, accept, initial, shortcuts}: GTK's folder dialog with
 // the mounted disks and pinned folders the Dart side found in its sidebar
-// (file_selector has no shortcut folders). Answers the chosen path or null.
-static FlValue* choose_folder(GtkWindow* parent, FlValue* args) {
-  const gchar* title = "Choose folder";
-  const gchar* accept = "Open";
+// (file_selector has no shortcut folders). It is GTK's own dialog, not
+// GtkFileChooserNative, which hands the request to the desktop portal when
+// one is used (GTK_USE_PORTAL=1) and drops the shortcuts. It does not block:
+// the call is answered (the chosen path or null) when the dialog closes; a
+// second call while it is open brings it to the front and answers null.
+static void folder_dialog_finish(MyApplication* self, FlValue* chosen) {
+  FlMethodCall* call = self->folder_call;
+  GtkWidget* dialog = self->folder_dialog;
+  self->folder_call = nullptr;
+  self->folder_dialog = nullptr;
+  if (call != nullptr) {
+    g_autoptr(FlMethodResponse) response =
+        FL_METHOD_RESPONSE(fl_method_success_response_new(chosen));
+    fl_method_call_respond(call, response, nullptr);
+    g_object_unref(call);
+  }
+  if (dialog != nullptr) gtk_widget_destroy(dialog);
+}
+
+static void folder_dialog_response_cb(GtkDialog* dialog, gint response_id,
+                                      gpointer user_data) {
+  MyApplication* self = MY_APPLICATION(user_data);
+  g_autoptr(FlValue) chosen = fl_value_new_null();
+  if (response_id == GTK_RESPONSE_ACCEPT) {
+    g_autofree gchar* path =
+        gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialog));
+    if (path != nullptr) {
+      fl_value_unref(chosen);
+      chosen = fl_value_new_string(path);
+    }
+  }
+  folder_dialog_finish(self, chosen);
+}
+
+static void choose_folder(MyApplication* self, FlMethodCall* call) {
+  if (self->folder_dialog != nullptr) {
+    gtk_window_present(GTK_WINDOW(self->folder_dialog));
+    g_autoptr(FlMethodResponse) response =
+        FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr));
+    fl_method_call_respond(call, response, nullptr);
+    return;
+  }
+  FlValue* args = fl_method_call_get_args(call);
+  // GTK's own translations for the defaults, in the desktop's language.
+  const gchar* title = g_dgettext("gtk30", "Select a folder");
+  const gchar* accept = g_dgettext("gtk30", "_Select");
   const gchar* initial = nullptr;
   FlValue* shortcuts = nullptr;
   if (args != nullptr && fl_value_get_type(args) == FL_VALUE_TYPE_MAP) {
@@ -92,8 +139,12 @@ static FlValue* choose_folder(GtkWindow* parent, FlValue* args) {
     }
     shortcuts = fl_value_lookup_string(args, "shortcuts");
   }
-  g_autoptr(GtkFileChooserNative) dialog = gtk_file_chooser_native_new(
-      title, parent, GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER, accept, nullptr);
+  GtkWidget* dialog = gtk_file_chooser_dialog_new(
+      title, self->main_window, GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER,
+      g_dgettext("gtk30", "_Cancel"), GTK_RESPONSE_CANCEL, accept,
+      GTK_RESPONSE_ACCEPT, nullptr);
+  gtk_dialog_set_default_response(GTK_DIALOG(dialog), GTK_RESPONSE_ACCEPT);
+  gtk_window_set_modal(GTK_WINDOW(dialog), TRUE);
   GtkFileChooser* chooser = GTK_FILE_CHOOSER(dialog);
   if (shortcuts != nullptr && fl_value_get_type(shortcuts) == FL_VALUE_TYPE_LIST) {
     for (size_t i = 0; i < fl_value_get_length(shortcuts); i++) {
@@ -107,15 +158,11 @@ static FlValue* choose_folder(GtkWindow* parent, FlValue* args) {
   if (initial != nullptr && g_file_test(initial, G_FILE_TEST_IS_DIR)) {
     gtk_file_chooser_set_current_folder(chooser, initial);
   }
-  FlValue* result = fl_value_new_null();
-  if (gtk_native_dialog_run(GTK_NATIVE_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT) {
-    g_autofree gchar* path = gtk_file_chooser_get_filename(chooser);
-    if (path != nullptr) {
-      fl_value_unref(result);
-      result = fl_value_new_string(path);
-    }
-  }
-  return result;
+  self->folder_dialog = dialog;
+  self->folder_call = FL_METHOD_CALL(g_object_ref(call));
+  g_signal_connect(dialog, "response", G_CALLBACK(folder_dialog_response_cb),
+                   self);
+  gtk_widget_show(dialog);
 }
 
 // "titlebar": GTK draws the title bar, so it takes the app's light or dark
@@ -145,11 +192,9 @@ static void window_call_cb(FlMethodChannel* channel, FlMethodCall* call,
     }
     response = FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr));
   } else if (g_strcmp0(fl_method_call_get_name(call), "chooseFolder") == 0) {
-    GtkWindow* window =
-        gtk_application_get_active_window(GTK_APPLICATION(user_data));
-    g_autoptr(FlValue) chosen =
-        choose_folder(window, fl_method_call_get_args(call));
-    response = FL_METHOD_RESPONSE(fl_method_success_response_new(chosen));
+    // Answered when the dialog closes.
+    choose_folder(MY_APPLICATION(user_data), call);
+    return;
   } else if (g_strcmp0(fl_method_call_get_name(call), "tiled") == 0) {
     // Whether the compositor tiles the window (COSMIC's auto-tiling, KWin's quick tiles):
     // its size then isn't the user's, so it isn't remembered. window_manager only knows
@@ -173,6 +218,15 @@ static void window_call_cb(FlMethodChannel* channel, FlMethodCall* call,
 static void first_frame_cb(MyApplication* self, FlView* view) {
   gtk_widget_show(gtk_widget_get_toplevel(GTK_WIDGET(view)));
   notify_shown(self);
+}
+
+// The window closes: an open folder dialog answers null and closes with it.
+static void main_window_destroyed_cb(GtkWidget* widget, gpointer user_data) {
+  MyApplication* self = MY_APPLICATION(user_data);
+  self->main_window = nullptr;
+  if (self->folder_dialog != nullptr || self->folder_call != nullptr) {
+    folder_dialog_finish(self, nullptr);
+  }
 }
 
 static void window_hidden_cb(GtkWidget* widget, gpointer user_data) {
@@ -276,6 +330,9 @@ static void my_application_activate(GApplication* application) {
   }
   gtk_window_set_default_size(window, width, height);
   g_signal_connect(window, "hide", G_CALLBACK(window_hidden_cb), self);
+  self->main_window = window;
+  g_signal_connect(window, "destroy", G_CALLBACK(main_window_destroyed_cb),
+                   self);
 
   g_autoptr(FlDartProject) project = fl_dart_project_new();
   fl_dart_project_set_dart_entrypoint_arguments(
@@ -375,6 +432,10 @@ static void my_application_shutdown(GApplication* application) {
 static void my_application_dispose(GObject* object) {
   MyApplication* self = MY_APPLICATION(object);
   g_clear_pointer(&self->dart_entrypoint_arguments, g_strfreev);
+  // An open folder dialog answers null and closes before the channel goes.
+  if (self->folder_dialog != nullptr || self->folder_call != nullptr) {
+    folder_dialog_finish(self, nullptr);
+  }
   g_clear_object(&self->window_channel);
   G_OBJECT_CLASS(my_application_parent_class)->dispose(object);
 }

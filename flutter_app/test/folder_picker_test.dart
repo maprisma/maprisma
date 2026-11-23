@@ -10,6 +10,8 @@ void main() {
 /dev/nvme0n1p3 /mnt/Data ext4 rw 0 0
 /dev/nvme1n1p3 /mnt/Games ext4 rw 0 0
 /dev/mapper/omarchy /mnt/omarchy-root btrfs rw 0 0
+/dev/nvme1n1p1 /mnt/omarchy-root/boot vfat rw 0 0
+nas:/export /mnt/Nas nfs4 rw 0 0
 /dev/sda1 /run/media/uwe/My\\040Stick vfat rw 0 0
 tmpfs /mnt/ram tmpfs rw 0 0
 proc /proc proc rw 0 0
@@ -26,12 +28,16 @@ proc /proc proc rw 0 0
 <bookmark href="file:///mnt/Data/Projects"><title>Projects</title></bookmark>
 <bookmark href="file:///home/uwe/My%20Work/"><title>Work</title></bookmark>
 <bookmark href="trash:/"><title>Trash</title></bookmark>
+<bookmark href="file:///mnt/Data/Old">
+  <title>Old</title><info><metadata><isHidden>true</isHidden></metadata></info>
+</bookmark>
+<bookmark href="file:///mnt/Data/Uwe&apos;s"><title>Mine</title></bookmark>
 ''';
 
   test('mounted data disks first, then pinned folders, once each', () {
     final shortcuts = folderShortcuts(
       mounts: mounts,
-      home: '/home/uwe',
+      home: '/home/uwe/',
       cosmicFavorites: cosmic,
       kdePlaces: kde,
       isDir: (path) => path != '/gone',
@@ -40,10 +46,12 @@ proc /proc proc rw 0 0
     expect(shortcuts, [
       '/mnt/Data',
       '/mnt/Games',
+      '/mnt/Nas',
       '/run/media/uwe/My Stick',
       '/mnt/Data/Ai',
       '/mnt/Data/Projects',
       '/home/uwe/My Work',
+      "/mnt/Data/Uwe's",
     ]);
   });
 

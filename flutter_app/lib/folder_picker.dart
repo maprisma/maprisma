@@ -28,25 +28,40 @@ List<String> folderShortcuts({
   final exists = isDir ?? (path) => Directory(path).existsSync();
   final system = isSystemRoot ?? (_) => false;
   final found = <String>[];
-  void add(String path) {
+  String trim(String path) {
     var clean = path;
     while (clean.length > 1 && clean.endsWith('/')) {
       clean = clean.substring(0, clean.length - 1);
     }
-    if (!clean.startsWith('/') || clean == home || clean == '/') return;
+    return clean;
+  }
+
+  final homeDir = trim(home);
+  void add(String path) {
+    final clean = trim(path);
+    if (!clean.startsWith('/') || clean == homeDir || clean == '/') return;
     if (found.contains(clean) || !exists(clean)) return;
     found.add(clean);
   }
 
+  // Another system's root and every mount inside it (its /boot, /home).
+  final systemRoots = <String>[];
   for (final line in mounts.split('\n')) {
     final fields = line.split(' ');
-    if (fields.length < 3 || !fields[0].startsWith('/dev/')) continue;
+    if (fields.length < 3 || !_dataFilesystem(fields[0], fields[2])) continue;
     // /proc/self/mounts writes a space as \040 (and tab, newline, \ alike).
-    final target = fields[1].replaceAllMapped(
-      RegExp(r'\\([0-7]{3})'),
-      (m) => String.fromCharCode(int.parse(m[1]!, radix: 8)),
+    final target = trim(
+      fields[1].replaceAllMapped(
+        RegExp(r'\\([0-7]{3})'),
+        (m) => String.fromCharCode(int.parse(m[1]!, radix: 8)),
+      ),
     );
-    if (!_mountRoots.any(target.startsWith) || system(target)) continue;
+    if (!_mountRoots.any(target.startsWith)) continue;
+    if (systemRoots.any((root) => target.startsWith('$root/'))) continue;
+    if (system(target)) {
+      systemRoots.add(target);
+      continue;
+    }
     add(target);
   }
   if (cosmicFavorites != null) {
@@ -57,9 +72,16 @@ List<String> folderShortcuts({
     }
   }
   if (kdePlaces != null) {
-    for (final m in RegExp(r'href="(file://[^"]+)"').allMatches(kdePlaces)) {
+    // Each <bookmark>; one the user hid in KDE stays hidden.
+    for (final b in RegExp(
+      r'<bookmark\b([^>]*)>(.*?)</bookmark>',
+      dotAll: true,
+    ).allMatches(kdePlaces)) {
+      if (RegExp(r'<isHidden>\s*true\s*</isHidden>').hasMatch(b[2]!)) continue;
+      final href = RegExp(r'href="(file://[^"]+)"').firstMatch(b[1]!);
+      if (href == null) continue;
       try {
-        add(Uri.parse(m[1]!.replaceAll('&amp;', '&')).toFilePath());
+        add(Uri.parse(_xmlText(href[1]!)).toFilePath());
       } on FormatException {
         // Not a local path.
       } on UnsupportedError {
@@ -69,6 +91,35 @@ List<String> folderShortcuts({
   }
   return found;
 }
+
+/// A mount that holds data: a disk (/dev/...), a network share (NFS, SMB,
+/// SSHFS) or a ZFS/btrfs pool; not tmpfs, proc, overlay and the like.
+bool _dataFilesystem(String source, String type) {
+  if (source.startsWith('/dev/')) return true;
+  const network = {'nfs', 'nfs4', 'cifs', 'smb3', 'fuse.sshfs', 'zfs', '9p'};
+  return network.contains(type);
+}
+
+/// An XML attribute's text (&amp;, &apos;, &#39;, ...).
+String _xmlText(String text) => text.replaceAllMapped(
+  RegExp(r'&(#x[0-9a-fA-F]+|#[0-9]+|amp|lt|gt|quot|apos);'),
+  (m) {
+    final name = m[1]!;
+    if (name.startsWith('#x')) {
+      return String.fromCharCode(int.parse(name.substring(2), radix: 16));
+    }
+    if (name.startsWith('#')) {
+      return String.fromCharCode(int.parse(name.substring(1)));
+    }
+    return const {
+      'amp': '&',
+      'lt': '<',
+      'gt': '>',
+      'quot': '"',
+      'apos': "'",
+    }[name]!;
+  },
+);
 
 String? _read(String path) {
   try {
@@ -80,9 +131,16 @@ String? _read(String path) {
 
 /// [folderShortcuts] of this PC.
 List<String> currentFolderShortcuts() {
-  final home = Platform.environment['HOME'] ?? '';
-  final config = Platform.environment['XDG_CONFIG_HOME'] ?? '$home/.config';
-  final data = Platform.environment['XDG_DATA_HOME'] ?? '$home/.local/share';
+  final env = Platform.environment;
+  final home = env['HOME'] ?? '';
+  // An empty XDG variable counts as unset (XDG Base Directory spec).
+  String xdg(String name, String fallback) {
+    final value = env[name] ?? '';
+    return value.startsWith('/') ? value : fallback;
+  }
+
+  final config = xdg('XDG_CONFIG_HOME', '$home/.config');
+  final data = xdg('XDG_DATA_HOME', '$home/.local/share');
   return folderShortcuts(
     mounts: _read('/proc/self/mounts') ?? '',
     home: home,
@@ -99,14 +157,17 @@ List<String> currentFolderShortcuts() {
 /// Choose a folder: GTK's dialog with the mounted disks and pinned folders
 /// in its sidebar (Uwe 2026-11-23); file_selector's where the runner has no
 /// such method (an older runner, other platforms). A drop-in for
-/// file_selector's getDirectoryPath.
+/// file_selector's getDirectoryPath; [title] is the dialog's (translated)
+/// title, GTK's own "Select a folder" without it.
 Future<String?> chooseFolder({
+  String? title,
   String? initialDirectory,
   String? confirmButtonText,
 }) async {
   if (Platform.isLinux) {
     try {
       return await windowChannel.invokeMethod<String>('chooseFolder', {
+        'title': ?title,
         'shortcuts': currentFolderShortcuts(),
         'initial': ?initialDirectory,
         'accept': ?confirmButtonText,

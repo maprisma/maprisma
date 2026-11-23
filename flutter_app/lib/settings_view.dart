@@ -815,7 +815,9 @@ class SettingsView extends StatelessWidget {
                 onPressed: busy
                     ? null
                     : () async {
-                        final chosen = await PopupGuard.around(chooseFolder);
+                        final chosen = await PopupGuard.around(
+                          () => chooseFolder(title: _t('Choose folder')),
+                        );
                         if (chosen != null) {
                           await onUpdate({'agent_folder': chosen});
                         }
@@ -974,7 +976,9 @@ class SettingsView extends StatelessWidget {
                 onPressed: busy
                     ? null
                     : () async {
-                        final chosen = await PopupGuard.around(chooseFolder);
+                        final chosen = await PopupGuard.around(
+                          () => chooseFolder(title: _t('Choose folder')),
+                        );
                         if (chosen != null) {
                           await onUpdate({'screenshot_folder': chosen});
                         }

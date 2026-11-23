@@ -305,7 +305,9 @@ class _ConnectionAuthoringState extends State<ConnectionAuthoring> {
                       ? null
                       : () async {
                           final selected = await PopupGuard.around(
-                            () => widget.chooseFolder?.call() ?? chooseFolder(),
+                            () =>
+                                widget.chooseFolder?.call() ??
+                                chooseFolder(title: tr('Choose folder')),
                           );
                           if (mounted && selected != null) {
                             setState(() => _folder.text = selected);

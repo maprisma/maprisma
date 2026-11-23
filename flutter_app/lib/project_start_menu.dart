@@ -119,7 +119,9 @@ class _ProjectStartMenuState extends State<ProjectStartMenu> {
           closeOnActivate: false,
           onPressed: widget.enabled
               ? () async {
-                  final chosen = await PopupGuard.around(chooseFolder);
+                  final chosen = await PopupGuard.around(
+                    () => chooseFolder(title: widget.tr('Choose folder')),
+                  );
                   if (chosen != null && mounted) {
                     setState(() {
                       _path = chosen;

@@ -54,19 +54,13 @@ projectWork(
   final status = project['status'];
   final phase = project['phase'] as String?;
   final active = card?['active'] as Map?;
-  final stopping =
-      status == 'pausing' ||
-      project['processes_stopping'] == true ||
-      card?['processes_stopping'] == true ||
-      card?['activity'] == 'stopping' ||
-      active?['state'] == 'stopping';
+  // The project view (`get`, or a change's answer) is at least as fresh as
+  // the board card (`list` runs before it), so it decides whether an agent
+  // works; the card only says who. The core derives the same facts.
+  final stopping = status == 'pausing' || project['processes_stopping'] == true;
   final running = const {'planning', 'running', 'reviewing'}.contains(status);
-  final setup =
-      card?['activity'] == 'setting_up_team' || (phase == 'setup' && running);
-  final working = card == null
-      ? running || stopping
-      : stopping || setup || active?['state'] == 'active';
-  if (!working) return null;
+  if (!running && !stopping) return null;
+  final setup = phase == 'setup';
   // The current attempt's latest dispatch.
   Map? started;
   DateTime? boundary;
@@ -104,8 +98,13 @@ projectWork(
     }
   }
   if (setup) {
-    final agent = card?['setup_agent'];
-    if (agent is Map) name = '${agent['name'] ?? agent['agent'] ?? ''}';
+    final agent = card?['setup_agent'] ?? project['setup_agent'];
+    if (agent is Map) {
+      name = '${agent['name'] ?? agent['agent'] ?? ''}';
+    } else if (agent is String) {
+      name = agent;
+    }
+    role = null;
   } else if (name == null && started?['text'] is String) {
     final text = started!['text'] as String;
     final colon = text.lastIndexOf(': ');
@@ -154,7 +153,9 @@ const _boundaries = {
   'paused',
   'failed',
   'interrupted',
+  'continue_failed',
   'setup_started',
+  'setup_failed',
   'setup_paused',
   'setup_interrupted',
   'setup_applied',
@@ -201,8 +202,8 @@ String workingFor(DateTime? since, DateTime now, String Function(String) tr) {
 ///
 /// The stored output is the previous agent's until the current one writes
 /// (it is kept on purpose, e.g. as evidence of interrupted work), so the
-/// strip shows an output line only once the output changed after the
-/// current dispatch was first seen.
+/// strip shows an output line only once it differs from the output before
+/// the current dispatch (or, opened mid-run, from the output found then).
 class ProjectWorking extends StatefulWidget {
   const ProjectWorking({
     super.key,
@@ -226,9 +227,15 @@ class ProjectWorking extends StatefulWidget {
 }
 
 class _ProjectWorkingState extends State<ProjectWorking> {
-  // The dispatch seen, and the output it found then.
+  // The dispatch seen and the output that is not its own: the output before
+  // it was dispatched (each agent's live output starts empty and replaces
+  // the stored one), or, when the page opened while it already ran, the
+  // output found then. [_last] is the output of the previous build.
+  bool _seen = false;
   String? _key;
   String? _baseline;
+  String? _last;
+  bool _lastSetup = false;
   Object? _projectId;
 
   @override
@@ -237,16 +244,25 @@ class _ProjectWorkingState extends State<ProjectWorking> {
     final id = widget.project?['id'];
     if (work == null || id != _projectId) {
       _projectId = id;
-      _key = null;
-      _baseline = null;
+      _seen = false;
+      _last = null;
     }
     if (work == null) return const SizedBox.shrink();
-    if (work.key != _key) {
-      // A new dispatch (or none yet): what is stored now is not its output.
+    // Team setup writes setup_output, the agents output.
+    final setup = work.key?.startsWith('setup_started@') ?? false;
+    if (!_seen || (work.key != _key && setup != _lastSetup)) {
+      _seen = true;
       _key = work.key;
       _baseline = work.output;
+    } else if (work.key != _key) {
+      _key = work.key;
+      _baseline = _last;
     }
-    final output = work.output == _baseline
+    _last = work.output;
+    _lastSetup = setup;
+    // No dispatch yet (the attempt just started or continued): the stored
+    // output is the last attempt's.
+    final output = work.key == null || work.output == _baseline
         ? null
         : lastOutputLine(work.output);
     final theme = Theme.of(context);

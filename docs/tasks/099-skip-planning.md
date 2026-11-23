@@ -28,3 +28,10 @@ existing `save` (plan = a fixed note), `review {approved: true}` and `run`.
 ## Acceptance
 - Widget tests: Cancel calls nothing; confirm calls save (with the note), review (approved), run
   in this order with each new revision; the action is disabled with a plan and while running.
+
+## Review round 2 (Codex + agy) — fixed
+- Skip planning is off while old agents still stop (`processes_stopping`) and while existing
+  changes need a review first (`needs_reconciliation`, which Run asks about).
+- Typing a plan turns it off also when the page already had unsaved changes.
+- A failed save restores the plan box and the page's unsaved state; a refused review or run still
+  refreshes the board and the stage rail.
