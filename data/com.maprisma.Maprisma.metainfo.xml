@@ -25,6 +25,15 @@
   <url type="bugtracker">https://github.com/uBruckhaus/Asterism/issues</url>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="2.1.1" date="2026-11-23">
+      <description>
+        <p>See that the AI is working: while an agent plans, works, reviews, sets up the team or
+          stops, the project page shows a moving bar with what happens, who does it, for how long
+          and the agent's latest output line; board cards show a thin bar.</p>
+        <p>Skip planning: the agents work directly from the goal after one question.</p>
+        <p>The folder dialog lists the mounted disks and the folders pinned in the file manager.</p>
+      </description>
+    </release>
     <release version="2.1.0" date="2026-11-22">
       <description>
         <p>Projects board: delete a project from its card, put the cards in your own order by
