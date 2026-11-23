@@ -750,6 +750,57 @@ class MapLayout {
       Rect.fromLTWH(card.rect.left, lineY - 1, card.rect.width, 2),
     );
   }
+
+  /// While a card is dragged: a line in every gap of its column it can go
+  /// to (above each other card and below the last), top to bottom.
+  List<Rect> cardGaps(String id) {
+    final card = cards[id]!;
+    final others = [
+      for (final c in cards.values)
+        if (c.column == card.column && c.id != id) c.rect,
+    ];
+    return _gaps(others, card.rect.left, card.rect.width, 9);
+  }
+
+  /// A box dragged inside its card to [y] (board coordinates): its new place
+  /// among the card's other shown boxes (0 = first) and the line there; null
+  /// for a box alone in its card.
+  (int, Rect)? boxDrop(String id, double y) {
+    final others = _siblings(id);
+    if (others.isEmpty) return null;
+    final index = others.where((r) => r.center.dy < y).length;
+    return (index, boxGaps(id)[index]);
+  }
+
+  /// While a box is dragged: a line at every place in its card it can go to
+  /// (above each other box and below the last), top to bottom.
+  List<Rect> boxGaps(String id) {
+    final rect = boxes[id]!;
+    return _gaps(
+      _siblings(id),
+      rect.left,
+      rect.width,
+      (mapRowStep - mapBoxHeight) / 2,
+    );
+  }
+
+  List<Rect> _siblings(String id) => [
+    for (final other in cards[cardOf[id]]!.nodes)
+      if (other != id && boxes[other] != null) boxes[other]!,
+  ];
+
+  static List<Rect> _gaps(
+    List<Rect> others,
+    double left,
+    double width,
+    double half,
+  ) {
+    if (others.isEmpty) return const [];
+    return [
+      for (final r in others) Rect.fromLTWH(left, r.top - half - 1, width, 2),
+      Rect.fromLTWH(left, others.last.bottom + half - 1, width, 2),
+    ];
+  }
 }
 
 Map<String, dynamic> reorderMapBox(

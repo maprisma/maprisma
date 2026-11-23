@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import 'package:flutter/semantics.dart';
@@ -1148,14 +1149,37 @@ class _ReorderCell extends StatefulWidget {
   State<_ReorderCell> createState() => _ReorderCellState();
 }
 
+/// The card being dragged on the board (its id), or null: while a card is
+/// dragged every other cell shows the places it can go (one board at a time).
+final ValueNotifier<String?> boardDrag = ValueNotifier<String?>(null);
+
 class _ReorderCellState extends State<_ReorderCell> {
   bool _dragging = false;
 
   void _drag(bool on) {
     if (mounted && _dragging != on) setState(() => _dragging = on);
+    if (on) {
+      boardDrag.value = widget.id;
+    } else if (boardDrag.value == widget.id) {
+      boardDrag.value = null;
+    }
   }
 
-  /// The Move menu: label, key and action (null: not possible here).
+  @override
+  void dispose() {
+    // A card that goes while it is dragged (a read meanwhile): the board
+    // stops showing the places, after this frame (not while it is torn down).
+    final id = widget.id;
+    if (boardDrag.value == id) {
+      scheduleMicrotask(() {
+        if (boardDrag.value == id) boardDrag.value = null;
+      });
+    }
+    super.dispose();
+  }
+
+  /// The keyboard and screen reader moves: label, key and action (null: not
+  /// possible here). The mouse drags the whole card.
   List<(String, String, VoidCallback?)> get _moves {
     final shown = widget.shown;
     final at = shown.indexOf(widget.id);
@@ -1182,66 +1206,56 @@ class _ReorderCellState extends State<_ReorderCell> {
     ];
   }
 
+  /// A bar in the gap before or after this card: [strong] where the dragged
+  /// card goes, faint at every other place it can go.
+  Widget _bar(ThemeData theme, {required bool after, required bool strong}) {
+    const gap = -(AppSpace.md + 3) / 2;
+    final bar = DecoratedBox(
+      key: ValueKey(strong ? 'card-drop' : 'card-gap'),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primary.withValues(alpha: strong ? 1 : 0.35),
+        borderRadius: BorderRadius.circular(2),
+      ),
+    );
+    final thickness = strong ? 3.0 : 2.0;
+    return widget.vertical
+        ? Positioned(
+            left: 0,
+            right: 0,
+            top: after ? null : gap,
+            bottom: after ? gap : null,
+            height: thickness,
+            child: bar,
+          )
+        : Positioned(
+            top: 0,
+            bottom: 0,
+            left: after ? null : gap,
+            right: after ? gap : null,
+            width: thickness,
+            child: bar,
+          );
+  }
+
   @override
   Widget build(BuildContext context) {
     final tr = widget.tr;
     final moves = _moves;
     VoidCallback? action(String key) => moves.firstWhere((m) => m.$2 == key).$3;
     final theme = Theme.of(context);
-    final handle = Draggable<String>(
-      data: widget.id,
-      maxSimultaneousDrags: widget.enabled ? null : 0,
-      onDragStarted: () => _drag(true),
-      onDragEnd: (_) => _drag(false),
-      feedback: Material(
-        elevation: 6,
-        color: theme.colorScheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(corners(context)),
-        child: SizedBox(
-          width: widget.width,
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpace.md),
-            child: Row(
-              children: [
-                const Icon(Icons.drag_indicator, size: 20),
-                const SizedBox(width: AppSpace.sm),
-                Expanded(
-                  child: Text(
-                    widget.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.titleMedium,
-                  ),
-                ),
-              ],
-            ),
+    // The grip only shows that the card can be dragged; it has no menu.
+    final grip = MouseRegion(
+      key: const ValueKey('card-move'),
+      cursor: widget.enabled ? SystemMouseCursors.grab : MouseCursor.defer,
+      child: Tooltip(
+        message: tr('Move'),
+        child: Padding(
+          padding: const EdgeInsets.all(4),
+          child: Icon(
+            Icons.drag_indicator,
+            size: 20,
+            color: widget.enabled ? null : theme.disabledColor,
           ),
-        ),
-      ),
-      child: MouseRegion(
-        cursor: widget.enabled ? SystemMouseCursors.grab : MouseCursor.defer,
-        child: PopupMenuButton<String>(
-          key: const ValueKey('card-move'),
-          tooltip: tr('Move'),
-          enabled: widget.enabled,
-          padding: EdgeInsets.zero,
-          iconSize: 20,
-          icon: const Icon(Icons.drag_indicator),
-          style: IconButton.styleFrom(
-            visualDensity: VisualDensity.compact,
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            minimumSize: const Size(28, 28),
-          ),
-          onSelected: (key) => action(key)?.call(),
-          itemBuilder: (context) => [
-            for (final (label, key, run) in moves)
-              PopupMenuItem(
-                key: ValueKey('move-$key'),
-                value: key,
-                enabled: run != null,
-                child: Text(tr(label)),
-              ),
-          ],
         ),
       ),
     );
@@ -1257,7 +1271,36 @@ class _ReorderCellState extends State<_ReorderCell> {
       },
       builder: (context, candidates, _) {
         final source = candidates.whereType<String>().firstOrNull;
-        Widget cell = Opacity(
+        // The whole card is dragged. With a mouse, pen or trackpad at once (a
+        // click on one of its buttons stays a click: a drag starts only after
+        // the pointer moved past the slop); by touch after a long press, so a
+        // swipe still scrolls the board.
+        final feedback = Material(
+          elevation: 6,
+          color: theme.colorScheme.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(corners(context)),
+          child: SizedBox(
+            width: widget.width,
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpace.md),
+              child: Row(
+                children: [
+                  const Icon(Icons.drag_indicator, size: 20),
+                  const SizedBox(width: AppSpace.sm),
+                  Expanded(
+                    child: Text(
+                      widget.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleMedium,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+        final content = Opacity(
           opacity: _dragging ? 0.4 : 1,
           child: CallbackShortcuts(
             bindings: {
@@ -1275,48 +1318,98 @@ class _ReorderCellState extends State<_ReorderCell> {
                 for (final (label, _, run) in moves)
                   CustomSemanticsAction(label: tr(label)): ?run,
               },
-              child: widget.card(handle),
+              child: widget.card(grip),
             ),
           ),
         );
-        if (source == null || at(source) < 0) return cell;
-        // The drop place: a bar in the gap before or after this card.
-        final after = at(source) < at(widget.id);
-        const gap = -(AppSpace.md + 3) / 2;
-        final bar = DecoratedBox(
-          key: const ValueKey('card-drop'),
-          decoration: BoxDecoration(
-            color: theme.colorScheme.primary,
-            borderRadius: BorderRadius.circular(2),
+        final cell = _TouchDraggable<String>(
+          data: widget.id,
+          maxSimultaneousDrags: widget.enabled ? null : 0,
+          onDragStarted: () => _drag(true),
+          onDragEnd: (_) => _drag(false),
+          feedback: feedback,
+          child: _PointerDraggable<String>(
+            data: widget.id,
+            maxSimultaneousDrags: widget.enabled ? null : 0,
+            onDragStarted: () => _drag(true),
+            onDragEnd: (_) => _drag(false),
+            feedback: feedback,
+            child: content,
           ),
         );
-        return Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Positioned.fill(child: cell),
-            if (widget.vertical)
-              Positioned(
-                left: 0,
-                right: 0,
-                top: after ? null : gap,
-                bottom: after ? gap : null,
-                height: 3,
-                child: bar,
-              )
-            else
-              Positioned(
-                top: 0,
-                bottom: 0,
-                left: after ? null : gap,
-                right: after ? gap : null,
-                width: 3,
-                child: bar,
-              ),
-          ],
+        return ValueListenableBuilder<String?>(
+          valueListenable: boardDrag,
+          builder: (context, dragged, _) {
+            final over = source != null && at(source) >= 0;
+            final moving = dragged != null && dragged != widget.id;
+            if (!over && !moving) return cell;
+            // While a card is dragged: a faint separator in the gaps beside
+            // every other card, the strong one where it would go now.
+            final after = over && at(source) < at(widget.id);
+            return Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Positioned.fill(child: cell),
+                if (moving && !(over && !after))
+                  _bar(theme, after: false, strong: false),
+                if (moving && !(over && after))
+                  _bar(theme, after: true, strong: false),
+                if (over) _bar(theme, after: after, strong: true),
+              ],
+            );
+          },
         );
       },
     );
   }
+}
+
+/// A card dragged with a mouse, pen or trackpad: at once (a click stays a
+/// click until the pointer moved past the slop). Touch is left to
+/// [_TouchDraggable], so a swipe scrolls the board.
+class _PointerDraggable<T extends Object> extends Draggable<T> {
+  const _PointerDraggable({
+    required super.child,
+    required super.feedback,
+    super.data,
+    super.maxSimultaneousDrags,
+    super.onDragStarted,
+    super.onDragEnd,
+  });
+
+  static const kinds = {
+    PointerDeviceKind.mouse,
+    PointerDeviceKind.stylus,
+    PointerDeviceKind.invertedStylus,
+    PointerDeviceKind.trackpad,
+  };
+
+  @override
+  MultiDragGestureRecognizer createRecognizer(
+    GestureMultiDragStartCallback onStart,
+  ) =>
+      ImmediateMultiDragGestureRecognizer(supportedDevices: kinds)
+        ..onStart = onStart;
+}
+
+/// A card dragged by touch: after a long press, so a swipe scrolls the board.
+class _TouchDraggable<T extends Object> extends LongPressDraggable<T> {
+  const _TouchDraggable({
+    required super.child,
+    required super.feedback,
+    super.data,
+    super.maxSimultaneousDrags,
+    super.onDragStarted,
+    super.onDragEnd,
+  });
+
+  @override
+  DelayedMultiDragGestureRecognizer createRecognizer(
+    GestureMultiDragStartCallback onStart,
+  ) => DelayedMultiDragGestureRecognizer(
+    delay: delay,
+    supportedDevices: const {PointerDeviceKind.touch},
+  )..onStart = onStart;
 }
 
 /// The stage rail: six stops, the current one lit, Approval drawn as a gate;

@@ -204,7 +204,7 @@ List<String> shown(WidgetTester tester, List<String> ids) {
   return there;
 }
 
-/// Drags [from]'s handle onto the card [onto] with the mouse.
+/// Drags [from] by its grip onto the card [onto] with the mouse.
 Future<void> drag(
   WidgetTester tester,
   String from,
@@ -219,8 +219,9 @@ Future<void> drag(
   await tester.pump();
   await gesture.moveTo(tester.getCenter(cardOf(onto)));
   await tester.pump();
-  // The drop place is shown while it hovers.
+  // The drop place is shown while it hovers, and the other places faintly.
   expect(find.byKey(const ValueKey('card-drop')), findsOneWidget);
+  expect(find.byKey(const ValueKey('card-gap')), findsWidgets);
   await gesture.up();
   if (settle) {
     await tester.pumpAndSettle();
@@ -398,36 +399,50 @@ void main() {
     expect(backend.moves, hasLength(sent));
   });
 
-  testWidgets('the handle\'s Move menu', (tester) async {
+  testWidgets('the whole card is dragged; separators show the places', (
+    tester,
+  ) async {
     final backend = Backend([for (final id in all) marked(id)]);
     await mount(tester, backend);
+    // The grip only shows that a card can be dragged: no Move menu.
     expect(find.byTooltip('Move'), findsNWidgets(4));
-    await tester.tap(inCard('c', const ValueKey('card-move')));
-    await tester.pumpAndSettle();
-    expect(find.text('Move up'), findsOneWidget);
-    expect(find.text('Move down'), findsOneWidget);
-    await tester.tap(find.text('Move to top'));
-    await tester.pumpAndSettle();
-    expect(backend.moves.last, {'id': 'c', 'before': 'a'});
-    expect(shown(tester, all), ['c', 'a', 'b', 'd']);
-    // The first card cannot go up or to the top.
-    await tester.tap(inCard('c', const ValueKey('card-move')));
-    await tester.pumpAndSettle();
-    expect(
-      tester
-          .widget<PopupMenuItem<String>>(find.byKey(const ValueKey('move-up')))
-          .enabled,
-      isFalse,
+    expect(find.byType(PopupMenuButton<String>), findsNothing);
+    expect(find.text('Move to top'), findsNothing);
+    // Grabbed anywhere on the card (here near its top left corner, away from
+    // its buttons), not only by the grip.
+    final gesture = await tester.startGesture(
+      tester.getTopLeft(cardOf('d')) + const Offset(40, 16),
+      kind: PointerDeviceKind.mouse,
     );
-    expect(
-      tester
-          .widget<PopupMenuItem<String>>(find.byKey(const ValueKey('move-top')))
-          .enabled,
-      isFalse,
-    );
-    await tester.tap(find.text('Move to end'));
+    await gesture.moveBy(const Offset(20, 20));
+    await tester.pump();
+    // While it is dragged, every other card shows the gaps it can go to.
+    expect(find.byKey(const ValueKey('card-gap')), findsNWidgets(6));
+    expect(find.byKey(const ValueKey('card-drop')), findsNothing);
+    await gesture.moveTo(tester.getCenter(cardOf('a')));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('card-drop')), findsOneWidget);
+    await gesture.up();
     await tester.pumpAndSettle();
-    expect(backend.moves.last, {'id': 'c', 'before': null});
+    expect(backend.moves.last, {'id': 'd', 'before': 'a'});
+    expect(shown(tester, all), ['d', 'a', 'b', 'c']);
+    expect(find.byKey(const ValueKey('card-gap')), findsNothing);
+    // By touch, a long press picks the card up (a swipe scrolls the board).
+    final touch = await tester.startGesture(
+      tester.getTopLeft(cardOf('c')) + const Offset(40, 16),
+    );
+    await tester.pump(kLongPressTimeout + const Duration(milliseconds: 100));
+    await touch.moveTo(tester.getCenter(cardOf('d')));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('card-drop')), findsOneWidget);
+    await touch.up();
+    await tester.pumpAndSettle();
+    expect(backend.moves.last, {'id': 'c', 'before': 'd'});
+    expect(shown(tester, all), ['c', 'd', 'a', 'b']);
+    // A click on a card's button stays a click.
+    await tester.tap(inCard('b', const ValueKey('card-open')));
+    await tester.pumpAndSettle();
+    expect(backend.moves, hasLength(2));
   });
 
   testWidgets('the mark sets the importance and the card shows it', (
@@ -648,10 +663,15 @@ void main() {
     backend.failList = true;
     await key.currentState!.refresh();
     await tester.pumpAndSettle();
-    final move = tester.widget<PopupMenuButton<String>>(
-      inCard('a', const ValueKey('card-move')),
+    final move = tester.widget<Draggable<String>>(
+      find
+          .ancestor(
+            of: cardOf('a'),
+            matching: find.byWidgetPredicate((w) => w is Draggable<String>),
+          )
+          .first,
     );
-    expect(move.enabled, isFalse);
+    expect(move.maxSimultaneousDrags, 0);
     expect(find.byKey(const ValueKey('card-importance-menu')), findsNothing);
     expect(
       find.byKey(const ValueKey('card-importance-medium')),
@@ -669,7 +689,7 @@ void main() {
     final backend = Backend([marked('a'), marked('b')])..order = false;
     await mount(tester, backend);
     expect(find.byKey(const ValueKey('card-move')), findsNothing);
-    expect(find.byType(Draggable<String>), findsNothing);
+    expect(find.byWidgetPredicate((w) => w is Draggable<String>), findsNothing);
     expect(find.byKey(const ValueKey('card-importance-menu')), findsNothing);
     focusOf(tester, 'b').requestFocus();
     await tester.pump();
@@ -997,9 +1017,7 @@ void main() {
       await tester.tap(inCard('a', const ValueKey('card-open')));
       await tester.pump();
       // While a is being read, b's move is refused.
-      await tester.tap(inCard('b', const ValueKey('card-move')));
-      await frames(tester);
-      await tester.tap(find.text('Move up'));
+      await drag(tester, 'b', 'a', settle: false);
       await frames(tester);
       expect(backend.moves.single, {'id': 'b', 'before': 'a'});
       expect(find.text('The project could not be found.'), findsOneWidget);
@@ -1015,7 +1033,7 @@ void main() {
       final backend = Backend([for (final id in ids) marked(id)])
         ..refuseMove = 'project_store_unavailable';
       await mount(tester, backend);
-      // From the end of the board to the top (the Move menu), refused.
+      // From the end of the board to the top (Ctrl+Home), refused.
       await tester.scrollUntilVisible(
         cardOf('c29'),
         400,
@@ -1023,9 +1041,11 @@ void main() {
       );
       await tester.pumpAndSettle();
       final answer = backend.holdMove = Completer();
-      await tester.tap(inCard('c29', const ValueKey('card-move')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Move to top'));
+      focusOf(tester, 'c29').requestFocus();
+      await tester.pump();
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.home);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
       // The board scrolls to the top; the focus would follow a frame later.
       await tester.pump();
       answer.complete();

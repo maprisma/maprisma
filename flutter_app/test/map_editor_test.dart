@@ -1262,7 +1262,8 @@ void main() {
     },
   );
   testWidgets(
-    'group cards stay in their column with 2 px drop line and Earlier/Later menu only',
+    'group cards are dragged inside their column, with the places shown; '
+    'no Move card menu; Ctrl+Up / Down by keyboard',
     (tester) async {
       final edits = <Map<String, dynamic>>[], saved = <Map<String, dynamic>>[];
       final base = fixtureGraph();
@@ -1306,28 +1307,21 @@ void main() {
         lessThan(tester.getTopLeft(skillsHeader).dy),
       );
 
-      // Header menu only has Earlier card and Later card (the four Move items are gone).
-      await tester.tap(
+      // No Move card menu any more: the header is dragged; its grip only
+      // shows that.
+      expect(
         find.descendant(
           of: mcpHeader,
           matching: find.byType(PopupMenuButton<String>),
         ),
+        findsNothing,
       );
-      await tester.pumpAndSettle();
-      expect(find.text('Earlier card'), findsOneWidget);
-      expect(find.text('Later card'), findsOneWidget);
-      expect(find.text('Move left'), findsNothing);
-      expect(find.text('Move right'), findsNothing);
-      expect(find.text('Move up'), findsNothing);
-      expect(find.text('Move down'), findsNothing);
-      // Trying Earlier card on the top card in column 0 keeps it in column 0 at index 0.
-      await tester.tap(find.text('Earlier card'));
-      await tester.pumpAndSettle();
-      expect(tester.getTopLeft(mcpHeader).dx, 17);
       expect(
-        tester.getTopLeft(mcpHeader).dy,
-        lessThan(tester.getTopLeft(skillsHeader).dy),
+        find.descendant(of: mcpHeader, matching: find.byTooltip('Move card')),
+        findsOneWidget,
       );
+      expect(find.text('Earlier card'), findsNothing);
+      expect(find.text('Later card'), findsNothing);
 
       // Vertical drag shows the 2 px drop line inside the column and reorders on release,
       // while horizontal offset cannot move the card out of its column.
@@ -1338,6 +1332,24 @@ void main() {
       await tester.pump();
       final dropLine = find.byKey(const ValueKey('card-drop-line'));
       expect(dropLine, findsOneWidget);
+      // A faint line in every gap of the column it can go to: above Skills
+      // and below it.
+      final gaps = [
+        find.byKey(const ValueKey('card-gap-0')),
+        find.byKey(const ValueKey('card-gap-1')),
+      ];
+      for (final gap in gaps) {
+        expect(gap, findsOneWidget);
+        expect(tester.getRect(gap).left, 17);
+      }
+      expect(
+        tester.getRect(gaps[0]).top,
+        lessThan(tester.getTopLeft(skillsHeader).dy),
+      );
+      expect(
+        tester.getRect(gaps[1]).top,
+        greaterThan(tester.getTopLeft(skillsHeader).dy),
+      );
       final lineRect = tester.getRect(dropLine);
       expect(lineRect.left, 17);
       expect(lineRect.width, 266);
@@ -1345,26 +1357,99 @@ void main() {
       await gesture.up();
       await tester.pumpAndSettle();
       expect(dropLine, findsNothing);
+      expect(find.byKey(const ValueKey('card-gap-0')), findsNothing);
       expect(tester.getTopLeft(mcpHeader).dx, 17);
       expect(tester.getTopLeft(skillsHeader).dx, 17);
       expect(
         tester.getTopLeft(skillsHeader).dy,
         lessThan(tester.getTopLeft(mcpHeader).dy),
       );
+      // By keyboard: the focus on the MCP card's header, Ctrl+Up puts it back
+      // on top of its column.
+      final element = mcpHeader.evaluate().single;
+      for (var k = 0; k < 120; k++) {
+        await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+        await tester.pump();
+        final focused = FocusManager.instance.primaryFocus?.context;
+        var inside = focused == element;
+        focused?.visitAncestorElements((e) {
+          if (e == element) inside = true;
+          return !inside;
+        });
+        if (inside) break;
+      }
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pumpAndSettle();
+      expect(
+        tester.getTopLeft(mcpHeader).dy,
+        lessThan(tester.getTopLeft(skillsHeader).dy),
+      );
+      expect(tester.getTopLeft(mcpHeader).dx, 17);
       expect(edits, isEmpty);
       expect(tester.takeException(), isNull);
     },
   );
+  testWidgets('a box dragged by its grip stays in its own card', (
+    tester,
+  ) async {
+    // The rule of the map: an agent never goes into the providers' card (or
+    // any other); its grip only finds places among the boxes of its card.
+    final edits = <Map<String, dynamic>>[], saved = <Map<String, dynamic>>[];
+    await mount(tester, edits: edits, onLayout: saved.add);
+    final grip = find.byKey(const ValueKey('reorder-agent:a'));
+    final runtime = tester.getCenter(find.text('runtime:s'));
+    final gesture = await tester.startGesture(tester.getCenter(grip));
+    await gesture.moveBy(const Offset(0, 20));
+    await tester.pump();
+    // Far to the side and below everything: over the providers' column.
+    await gesture.moveTo(Offset(runtime.dx, runtime.dy + 600));
+    await tester.pump();
+    final strong = find.byKey(const ValueKey('box-drop-line'));
+    expect(strong, findsOneWidget);
+    // The line stays in the agents' card: where its own gaps are, left of
+    // the providers' column.
+    expect(
+      tester.getRect(strong).left,
+      tester.getRect(find.byKey(const ValueKey('box-gap-0'))).left,
+    );
+    expect(tester.getRect(strong).right, lessThan(runtime.dx));
+    await gesture.up();
+    await tester.pumpAndSettle();
+    final order = saved.last['order'] as Map;
+    expect(order['1:agent:'], ['agent:b', 'agent:a']);
+    // Nothing else changed its card, and no connection was made.
+    expect(order.keys.where((k) => k != '1:agent:'), isEmpty);
+    expect(edits, isEmpty);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('reorder grip and provider hook preserve scene coordinates', (
     tester,
   ) async {
     final edits = <Map<String, dynamic>>[], saved = <Map<String, dynamic>>[];
     await mount(tester, edits: edits, onLayout: saved.add);
-    await tester.drag(
-      find.byKey(const ValueKey('reorder-agent:a')),
-      const Offset(0, 160),
+    // Dragged by its grip below the next box's middle: every place in its
+    // card is shown, the one it goes to strongest; let go, it goes there.
+    final grip = find.byKey(const ValueKey('reorder-agent:a'));
+    final gesture = await tester.startGesture(tester.getCenter(grip));
+    await gesture.moveBy(const Offset(0, 20));
+    await tester.pump();
+    await gesture.moveBy(const Offset(0, 180));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('box-gap-0')), findsOneWidget);
+    expect(find.byKey(const ValueKey('box-gap-1')), findsOneWidget);
+    final strong = find.byKey(const ValueKey('box-drop-line'));
+    expect(strong, findsOneWidget);
+    expect(
+      tester.getRect(strong).top,
+      closeTo(tester.getRect(find.byKey(const ValueKey('box-gap-1'))).top, 1),
     );
+    await gesture.up();
     await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('box-drop-line')), findsNothing);
+    expect(find.byKey(const ValueKey('box-gap-0')), findsNothing);
     expect((saved.last['order'] as Map)['1:agent:'], ['agent:b', 'agent:a']);
     await tester.tap(find.text('agent:a'));
     await tester.pumpAndSettle();
@@ -1379,6 +1464,46 @@ void main() {
     await tester.pumpAndSettle();
     expect(edits.single['target'], 'runtime:s');
     expect(edits.single['edge']['kind'], 'uses');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Ctrl+Up / Ctrl+Down reorder a box inside its own card', (
+    tester,
+  ) async {
+    // The keyboard's way now that the menu has no Move up / Move down.
+    final edits = <Map<String, dynamic>>[], saved = <Map<String, dynamic>>[];
+    await mount(tester, edits: edits, onLayout: saved.add);
+    final box = find
+        .ancestor(of: find.text('agent:a'), matching: find.byType(Card))
+        .first;
+    final element = box.evaluate().single;
+    for (var i = 0; i < 80; i++) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+      final focused = FocusManager.instance.primaryFocus?.context;
+      var inside = focused == element;
+      focused?.visitAncestorElements((e) {
+        if (e == element) inside = true;
+        return !inside;
+      });
+      if (inside) break;
+    }
+    Future<void> ctrl(LogicalKeyboardKey key) async {
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(key);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pumpAndSettle();
+    }
+
+    expect(find.text('Move up'), findsNothing);
+    await ctrl(LogicalKeyboardKey.arrowDown);
+    expect((saved.last['order'] as Map)['1:agent:'], ['agent:b', 'agent:a']);
+    final count = saved.length;
+    await ctrl(LogicalKeyboardKey.arrowDown); // already last: nothing
+    expect(saved, hasLength(count));
+    await ctrl(LogicalKeyboardKey.arrowUp);
+    expect((saved.last['order'] as Map)['1:agent:'], ['agent:a', 'agent:b']);
+    expect(edits, isEmpty);
     expect(tester.takeException(), isNull);
   });
 
