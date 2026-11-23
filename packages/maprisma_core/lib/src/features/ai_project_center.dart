@@ -1691,6 +1691,11 @@ final class AiProjectCenterPlugin {
       if (phase == 'planning')
         'Create a concrete implementation plan with steps, dependencies and acceptance checks. '
             'Inspect the project read-only. Do not implement, edit, commit, publish or change permissions.',
+      // Only the lead's answer becomes the plan (task 098: no notes about
+      // plan files or tools the read-only session does not have).
+      if (phase == 'planning' && member['role'] == 'lead')
+        'Your answer is saved as the plan the user reviews: answer with the plan itself as plain text '
+            'or Markdown. Do not write files, and do not mention your tools, plan mode or files you could not write.',
       if (phase != 'planning')
         reviewing
             ? 'Review the existing changes against the approved plan, read-only. '

@@ -345,12 +345,16 @@ void main() {
       );
       await waitUntil(() => processes.length == 1);
       expect(commands.single[1], 'read-only');
+      // Task 098: the answer is the plan, not a note about missing tools.
+      expect(commands.single.last, contains('answer with the plan itself'));
+      expect(commands.single.last, contains('Do not write files'));
       await processes[0].finish(
         '1. Make the requested change.\n2. Run the acceptance check.',
       );
       await waitUntil(() => processes.length == 2);
       expect(commands[1][1], 'read-only');
       expect(commands[1].last, contains('Check feasibility.'));
+      expect(commands[1].last, isNot(contains('answer with the plan itself')));
       await processes[1].finish('No feasibility findings.');
       await waitUntil(() => plugin.summary()['running'] == 0);
       final finished = await project(plugin, item['id'] as String);
@@ -4016,6 +4020,8 @@ void main() {
       final card = ((await plugin.call('list', {}))['projects'] as List).single;
       expect((card as Map)['messages_queued'], 1);
       expect(occurrences(commands[0].last, text), 0);
+      // Task 098: only planning prompts ask for the plan as the answer.
+      expect(commands[0].last, isNot(contains('answer with the plan itself')));
       await processes[0].finish('Lead done.');
       await waitUntil(() => processes.length == 2);
       expect(occurrences(commands[1].last, text), 1);
