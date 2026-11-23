@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:maprisma/project_board.dart';
+import 'package:maprisma/project_schedule.dart';
 
 /// The app reads its texts only from assets/translations (built by
 /// tools/flutter-assets.py from its KEYS): every text the Projects tab and
@@ -18,6 +19,7 @@ void main() {
         'lib/project_board.dart',
         'lib/project_messages.dart',
         'lib/project_page_parts.dart',
+        'lib/project_schedule.dart',
         'lib/project_phases.dart',
       ])
         for (final match in used.allMatches(File(file).readAsStringSync()))
@@ -107,6 +109,22 @@ void main() {
       'Move down',
       'Move to top',
       'Move to end',
+      // Schedules (task 101): choices, weekdays and the core's reasons.
+      for (final r in ScheduleRepeat.values) r.label,
+      ...scheduleWeekdays,
+      'The project is still running.',
+      'The last run stopped before it ended. Review its changes and continue or approve again.',
+      'The plan is not approved. Review and approve it first.',
+      'The approval no longer fits: the plan, the team, the folder or an agent changed. Approve again.',
+      'A rule refuses starting one of its agents.',
+      'Another project works in the same folder now.',
+      'Too many projects are running now.',
+      'The working folder changed or is missing.',
+      'An agent of its team is not available.',
+      'The approval no longer fits. Approve again.',
+      'Some of its processes are still stopping.',
+      'Maprisma: a scheduled project did not run',
+      'Maprisma is open but did not take the scheduled run. Open its Projects page and try again.',
     };
     for (final code in ['de', 'es', 'fr', 'it', 'nl', 'pl', 'pt']) {
       final table =

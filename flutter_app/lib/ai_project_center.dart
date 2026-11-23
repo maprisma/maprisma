@@ -9,6 +9,7 @@ import 'app_look.dart';
 import 'project_board.dart';
 import 'project_messages.dart';
 import 'project_page_parts.dart';
+import 'project_schedule.dart';
 import 'project_working.dart';
 import 'window_popup.dart';
 
@@ -27,6 +28,8 @@ class AiProjectCenterPage extends StatefulWidget {
     this.onBoard,
     this.active = true,
     this.chooseFolder,
+    this.pickTime,
+    this.pickDate,
     this.agent,
     this.onClearAgent,
     this.onShowOnMap,
@@ -57,6 +60,12 @@ class AiProjectCenterPage extends StatefulWidget {
 
   /// The native picker by default; tests can supply a controlled dialog.
   final Future<String?> Function()? chooseFolder;
+
+  /// The schedule's time and date pickers (task 101); tests replace them.
+  final Future<TimeOfDay?> Function(BuildContext context, TimeOfDay initial)?
+  pickTime;
+  final Future<DateTime?> Function(BuildContext context, DateTime initial)?
+  pickDate;
 
   @override
   State<AiProjectCenterPage> createState() => AiProjectCenterPageState();
@@ -108,6 +117,12 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
   /// `list` lists the capability `order`; task 095): cards can be moved and
   /// marked, and a read shows the order as it comes.
   bool _order = false;
+
+  /// The backend keeps schedules (capability `schedule`, task 101).
+  bool _scheduleOn = false;
+
+  /// Projects whose schedule change is on its way.
+  final _scheduling = <String>{};
 
   /// A project (or a new one) is open over the board.
   bool _projectOpen = false;
@@ -505,6 +520,38 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
     }
   }
 
+  /// Sends `set_schedule` from the Goal tab (task 101): a setting, never
+  /// part of the draft; the answer's schedule and next run are shown on the
+  /// page and its card.
+  Future<void> _setSchedule(String id, Map<String, dynamic>? schedule) async {
+    if (!_scheduleOn || _scheduling.contains(id) || _unavailable) return;
+    setState(() => _scheduling.add(id));
+    try {
+      final answer = await widget.onCall('set_schedule', {
+        'id': id,
+        'schedule': schedule,
+      });
+      final project = answer['project'];
+      if (mounted && project is Map) {
+        setState(() {
+          for (final p in [
+            ..._projects.where((p) => p['id'] == id),
+            ?_project,
+          ]) {
+            if (p['id'] != id) continue;
+            p['schedule'] = project['schedule'];
+            p['next_run'] = project['next_run'];
+          }
+          _error = null;
+        });
+      }
+    } catch (error) {
+      if (mounted) setState(() => _error = _failure(error));
+    } finally {
+      if (mounted) setState(() => _scheduling.remove(id));
+    }
+  }
+
   /// Pause or Retry pause from a card, for the run the card shows.
   Future<void> _pauseFromBoard(Map<String, dynamic> project) async {
     final id = '${project['id']}';
@@ -807,6 +854,12 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
         'project_capacity' =>
           'Too many projects are running now. Continue when one has finished.',
         'project_center_closed' => 'The Project Center is closing.',
+        // Schedules (task 101).
+        'project_schedule_invalid' => 'This schedule is not valid.',
+        'project_schedule_unavailable' =>
+          'Schedules need systemd user timers, which this system does not offer.',
+        'project_center_busy' =>
+          'A scheduled project is running in the background. The Project Center opens when it has ended.',
         'project_message_not_continued' =>
           'The project could not continue at once.',
         'project_store_unavailable' ||
@@ -875,6 +928,7 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
         _board = caps is List && caps.contains('board');
         _messagesOn = caps is List && caps.contains('messages');
         _order = _board && caps is List && caps.contains('order');
+        _scheduleOn = _board && caps is List && caps.contains('schedule');
         final fresh = _rows(results[0]['projects']);
         // A mark on its way stays (the read may be older than it).
         for (final p in fresh) {
@@ -2203,6 +2257,23 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
         return _waits(match[1]);
       }
     }
+    // Scheduled runs (task 101): the reason is a sentence of its own.
+    if (event['type'] == 'schedule_started') {
+      return tr('Started by its schedule: executing the approved plan.');
+    }
+    if (event['type'] == 'schedule_skipped') {
+      final match = RegExp(
+        r'^Not started by its schedule \([^)]*\): (.*)$',
+      ).firstMatch(text);
+      if (match != null) {
+        return tr(
+          'Not started by its schedule: {0}',
+        ).replaceAll('{0}', tr(match[1]!));
+      }
+    }
+    if (event['type'] == 'schedule_ended') {
+      return tr('The schedule has ended; its timer was removed.');
+    }
     // Send now's new session failed before its agent started (task 096).
     if (event['type'] == 'continue_failed' &&
         RegExp(r'^project_[a-z_]+$').hasMatch(text)) {
@@ -2374,6 +2445,35 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
     );
   }
 
+  /// The Goal tab's schedule (task 101), for a saved project of a backend
+  /// that keeps schedules.
+  Widget? _scheduleRow() {
+    final id = _project?['id'];
+    if (!_scheduleOn || id is! String) return null;
+    final schedule = _project?['schedule'];
+    final next = _project?['next_run'];
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpace.md),
+      child: ProjectScheduleControl(
+        key: const ValueKey('goal-schedule'),
+        schedule: schedule is Map ? Map<String, dynamic>.from(schedule) : null,
+        nextRun: next is String ? next : null,
+        tr: tr,
+        approved: _project?['approval_valid'] == true,
+        pickTime: widget.pickTime,
+        pickDate: widget.pickDate,
+        // Not while the page saves, deletes or reads the project.
+        onChanged:
+            _busy ||
+                _scheduling.contains(id) ||
+                _quick.contains(id) ||
+                _unavailable
+            ? null
+            : (value) => _setSchedule(id, value),
+      ),
+    );
+  }
+
   /// The open tab's content (goal, plan, team, activity or setup).
   Widget _tabBody(bool approved) => switch (_tab) {
     0 => Column(
@@ -2400,6 +2500,7 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
           ),
         ),
         ?_importanceRow(),
+        ?_scheduleRow(),
       ],
     ),
     1 => Column(

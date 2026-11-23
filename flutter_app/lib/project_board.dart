@@ -10,6 +10,7 @@ import 'app_look.dart';
 import 'project_messages.dart';
 import 'app_theme.dart';
 import 'project_phases.dart';
+import 'project_schedule.dart';
 import 'project_working.dart';
 
 /// The filters of the Projects board, in the core's bucket order (task 088).
@@ -875,6 +876,17 @@ class ProjectCard extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
+                      // The next scheduled run (task 101).
+                      if (project['next_run'] case final String next
+                          when project['schedule'] is Map)
+                        Padding(
+                          padding: const EdgeInsets.only(left: AppSpace.xs),
+                          child: ScheduleBadge(
+                            schedule: project['schedule'] as Map,
+                            nextRun: next,
+                            tr: tr,
+                          ),
+                        ),
                       // Messages waiting for the next assignment (task 096).
                       if (project['messages_queued'] case final int queued
                           when queued > 0)
