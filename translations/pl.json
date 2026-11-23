@@ -3992,5 +3992,16 @@
   "Low": "Niska",
   "Importance": "Ważność",
   "Move to top": "Przenieś na początek",
-  "Move to end": "Przenieś na koniec"
+  "Move to end": "Przenieś na koniec",
+  "AI is drafting the plan": "AI przygotowuje plan",
+  "AI is checking the plan": "AI sprawdza plan",
+  "AI is working on the project": "AI pracuje nad projektem",
+  "AI is reviewing the changes": "AI przegląda zmiany",
+  "AI is setting up the team": "AI konfiguruje zespół",
+  "Stopping the agent": "Zatrzymywanie agenta",
+  "step {0} of {1}": "krok {0} z {1}",
+  "just started": "właśnie rozpoczęto",
+  "for {0} min": "od {0} min",
+  "for {0} h {1} min": "od {0} godz. {1} min",
+  "The AI is drafting the plan. It appears here when the agent is done.": "AI przygotowuje plan. Pojawi się tutaj, gdy agent skończy."
 }

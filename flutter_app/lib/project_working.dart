@@ -1,0 +1,246 @@
+import 'dart:io' show Platform;
+
+import 'package:flutter/material.dart';
+
+import 'app_look.dart';
+import 'app_theme.dart' show monoFont;
+
+/// A thin bar that moves while an agent works (task 098).
+///
+/// Still when the platform asks for no animations, and under `flutter test`
+/// (a repeating animation never lets `pumpAndSettle` finish).
+class WorkingBar extends StatelessWidget {
+  const WorkingBar({super.key, this.height = 3});
+
+  final double height;
+
+  /// Whether the bar moves; tests may set it.
+  static bool animate = !Platform.environment.containsKey('FLUTTER_TEST');
+
+  @override
+  Widget build(BuildContext context) {
+    final still =
+        !animate || (MediaQuery.maybeDisableAnimationsOf(context) ?? false);
+    return LinearProgressIndicator(
+      key: const ValueKey('working-bar'),
+      minHeight: height,
+      // A still bar is full: it still reads as "busy", not as progress.
+      value: still ? 1 : null,
+    );
+  }
+}
+
+/// What an agent of the project is doing right now, or null when none works.
+///
+/// From the board card (`active`, `activity`, the assignments) when there is
+/// one, else from the project's status; the latest `assignment` or
+/// `setup_started` event gives the start time.
+({String headline, String? detail, String? output, DateTime? since})?
+projectWork(
+  Map<String, dynamic>? card,
+  Map<String, dynamic>? project,
+  String Function(String) tr,
+) {
+  if (project == null) return null;
+  final status = project['status'];
+  final active = card?['active'] as Map?;
+  final state = active?['state'];
+  final setup = card?['activity'] == 'setting_up_team';
+  final working = card == null
+      ? const {'planning', 'running', 'reviewing', 'pausing'}.contains(status)
+      : setup || state == 'active' || state == 'stopping';
+  if (!working) return null;
+  final phase = active?['phase'] as String? ?? project['phase'] as String?;
+  Map? member;
+  int count = 0;
+  final position = active?['position'];
+  if (card != null && phase != null && position is int) {
+    final list = card[phase] as List? ?? const [];
+    count = list.length;
+    member = list
+        .whereType<Map>()
+        .where((m) => m['position'] == position)
+        .firstOrNull;
+  }
+  final role = member?['role'] as String?;
+  final String headline;
+  if (setup) {
+    headline = 'AI is setting up the team';
+  } else if (state == 'stopping' || status == 'pausing') {
+    headline = 'Stopping the agent';
+  } else if (phase == 'planning' || status == 'planning') {
+    headline = role == 'reviewer'
+        ? 'AI is checking the plan'
+        : 'AI is drafting the plan';
+  } else if (role == 'reviewer' || status == 'reviewing') {
+    headline = 'AI is reviewing the changes';
+  } else {
+    headline = 'AI is working on the project';
+  }
+  // The latest start of an assignment (or of the team setup).
+  Map? started;
+  for (final event in (project['events'] as List? ?? const []).reversed) {
+    if (event is Map &&
+        (event['type'] == (setup ? 'setup_started' : 'assignment'))) {
+      started = event;
+      break;
+    }
+  }
+  final since = DateTime.tryParse('${started?['at'] ?? ''}');
+  final parts = <String>[
+    if (member != null) ...[
+      '${member['name'] ?? member['agent'] ?? ''}',
+      tr(_roleLabel(role)),
+    ] else if (!setup && started?['text'] is String)
+      started!['text'] as String,
+    if (member != null && count > 1)
+      tr('step {0} of {1}')
+          .replaceAll('{0}', '${(position as int) + 1}')
+          .replaceAll('{1}', '$count'),
+  ];
+  return (
+    headline: tr(headline),
+    detail: parts.where((p) => p.trim().isNotEmpty).join(' · ').nullIfEmpty,
+    output: lastOutputLine(
+      '${project[setup ? 'setup_output' : 'output'] ?? ''}',
+    ),
+    since: since,
+  );
+}
+
+// The labels the team graph and the board use.
+String _roleLabel(String? role) => switch (role) {
+  'lead' => 'Lead agent',
+  'implementer' => 'Implementer',
+  'contributor' => 'Contributor',
+  'reviewer' => 'Reviewer',
+  _ => 'Agent',
+};
+
+extension on String {
+  String? get nullIfEmpty => isEmpty ? null : this;
+}
+
+final _ansi = RegExp(r'\x1B(?:\[[0-9;?]*[ -/]*[@-~]|\][^\x07]*\x07|[@-Z\\-_])');
+
+/// The agent's latest non-empty output line, without terminal codes.
+String? lastOutputLine(String output) {
+  final lines = output.replaceAll(_ansi, '').split(RegExp(r'[\r\n]+'));
+  for (final line in lines.reversed) {
+    final text = line.trim();
+    if (text.isNotEmpty) {
+      return text.length > 300 ? '${text.substring(0, 300)}…' : text;
+    }
+  }
+  return null;
+}
+
+/// "for 3 min" from [since] to [now]; "just started" in the first minute.
+String workingFor(DateTime? since, DateTime now, String Function(String) tr) {
+  if (since == null) return '';
+  final minutes = now.toUtc().difference(since.toUtc()).inMinutes;
+  if (minutes < 1) return tr('just started');
+  if (minutes < 60) return tr('for {0} min').replaceAll('{0}', '$minutes');
+  return tr(
+    'for {0} h {1} min',
+  ).replaceAll('{0}', '${minutes ~/ 60}').replaceAll('{1}', '${minutes % 60}');
+}
+
+/// The project page's strip under the tabs while an agent works (task 098):
+/// moving bar, headline, who and how long, the latest output line.
+class ProjectWorking extends StatelessWidget {
+  const ProjectWorking({
+    super.key,
+    required this.card,
+    required this.project,
+    required this.tr,
+    this.now,
+    this.compact = false,
+  });
+
+  final Map<String, dynamic>? card;
+  final Map<String, dynamic>? project;
+  final String Function(String) tr;
+
+  /// The clock (tests); the page rebuilds every 2 s while agents run.
+  final DateTime? now;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final work = projectWork(card, project, tr);
+    if (work == null) return const SizedBox.shrink();
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final elapsed = workingFor(work.since, now ?? DateTime.now(), tr);
+    final detail = [?work.detail, if (elapsed.isNotEmpty) elapsed].join(' · ');
+    return Semantics(
+      key: const ValueKey('project-working'),
+      liveRegion: true,
+      label: work.headline,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const WorkingBar(),
+          Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: AppSpace.md,
+              vertical: compact ? AppSpace.xs : AppSpace.sm,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.auto_awesome, size: 18, color: colors.primary),
+                    const SizedBox(width: AppSpace.sm),
+                    Flexible(
+                      child: Text(
+                        '${work.headline}…',
+                        key: const ValueKey('working-headline'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          color: colors.primary,
+                        ),
+                      ),
+                    ),
+                    if (detail.isNotEmpty)
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.only(left: AppSpace.md),
+                          child: Text(
+                            detail,
+                            key: const ValueKey('working-detail'),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: colors.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                if (work.output != null && !compact)
+                  Padding(
+                    padding: const EdgeInsets.only(top: AppSpace.xs),
+                    child: Text(
+                      work.output!,
+                      key: const ValueKey('working-output'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        fontFamily: monoFont(context),
+                        color: colors.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

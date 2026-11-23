@@ -9,6 +9,7 @@ import 'app_look.dart';
 import 'project_messages.dart';
 import 'app_theme.dart';
 import 'project_phases.dart';
+import 'project_working.dart';
 
 /// The filters of the Projects board, in the core's bucket order (task 088).
 enum BoardFilter {
@@ -814,178 +815,190 @@ class ProjectCard extends StatelessWidget {
     return Card(
       margin: EdgeInsets.zero,
       clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        focusNode: focusNode,
-        onTap: onOpen,
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpace.md),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+      child: Stack(
+        children: [
+          InkWell(
+            focusNode: focusNode,
+            onTap: onOpen,
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpace.md),
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '${project['title'] ?? ''}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.titleMedium,
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${project['title'] ?? ''}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.titleMedium,
+                            ),
+                            Text(
+                              shortPath('${project['path'] ?? ''}'),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: colors.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
                         ),
-                        Text(
-                          shortPath('${project['path'] ?? ''}'),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: colors.onSurfaceVariant,
+                      ),
+                      if (importance case final mark?)
+                        Padding(
+                          padding: const EdgeInsets.only(left: AppSpace.xs),
+                          child: ImportanceMark(
+                            importance: mark,
+                            tr: tr,
+                            onChanged: onImportance,
                           ),
                         ),
-                      ],
-                    ),
+                      ?handle,
+                    ],
                   ),
-                  if (importance case final mark?)
-                    Padding(
-                      padding: const EdgeInsets.only(left: AppSpace.xs),
-                      child: ImportanceMark(
-                        importance: mark,
-                        tr: tr,
-                        onChanged: onImportance,
+                  const SizedBox(height: AppSpace.xs),
+                  Row(
+                    children: [
+                      Icon(boardBucketIcon(project['bucket']), size: 16),
+                      const SizedBox(width: AppSpace.xs),
+                      Expanded(
+                        child: Text(
+                          activity,
+                          key: const ValueKey('card-activity'),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                    ),
-                  ?handle,
-                ],
-              ),
-              const SizedBox(height: AppSpace.xs),
-              Row(
-                children: [
-                  Icon(boardBucketIcon(project['bucket']), size: 16),
-                  const SizedBox(width: AppSpace.xs),
-                  Expanded(
-                    child: Text(
-                      activity,
-                      key: const ValueKey('card-activity'),
+                      // Messages waiting for the next assignment (task 096).
+                      if (project['messages_queued'] case final int queued
+                          when queued > 0)
+                        Padding(
+                          padding: const EdgeInsets.only(left: AppSpace.xs),
+                          child: MessagesBadge(count: queued, tr: tr),
+                        ),
+                    ],
+                  ),
+                  if (second is String)
+                    Text(
+                      tr(
+                        second == 'check_changes_first'
+                            ? 'Check the changes first'
+                            : 'Approve again',
+                      ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall,
                     ),
+                  const SizedBox(height: AppSpace.sm),
+                  StageRail(
+                    stage: project['stage'] as String?,
+                    tr: tr,
+                    compact: narrow,
                   ),
-                  // Messages waiting for the next assignment (task 096).
-                  if (project['messages_queued'] case final int queued
-                      when queued > 0)
-                    Padding(
-                      padding: const EdgeInsets.only(left: AppSpace.xs),
-                      child: MessagesBadge(count: queued, tr: tr),
-                    ),
-                ],
-              ),
-              if (second is String)
-                Text(
-                  tr(
-                    second == 'check_changes_first'
-                        ? 'Check the changes first'
-                        : 'Approve again',
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall,
-                ),
-              const SizedBox(height: AppSpace.sm),
-              StageRail(
-                stage: project['stage'] as String?,
-                tr: tr,
-                compact: narrow,
-              ),
-              const SizedBox(height: AppSpace.sm),
-              TeamNodes(project: project, tr: tr, max: narrow ? 3 : 4),
-              const Spacer(),
-              if (issues.isNotEmpty)
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        issues.join(' · '),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: colors.error,
-                        ),
-                      ),
-                    ),
-                    if (onFix != null && firstIssue != null)
-                      Flexible(
-                        child: TextButton(
-                          key: const ValueKey('card-fix'),
-                          // As tall as the issue line: the card's height is
-                          // fixed.
-                          style: TextButton.styleFrom(
-                            visualDensity: VisualDensity.compact,
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            minimumSize: const Size(0, 24),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: AppSpace.xs,
-                            ),
-                          ),
-                          onPressed: () => onFix!(firstIssue),
+                  const SizedBox(height: AppSpace.sm),
+                  TeamNodes(project: project, tr: tr, max: narrow ? 3 : 4),
+                  const Spacer(),
+                  if (issues.isNotEmpty)
+                    Row(
+                      children: [
+                        Expanded(
                           child: Text(
-                            tr(
-                              issueFixLabel(issueFix(firstIssue, map: mapFix)),
-                            ),
+                            issues.join(' · '),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: colors.error,
+                            ),
                           ),
                         ),
-                      ),
-                  ],
-                ),
-              if (event is Map)
-                Text(
-                  _eventLine(context, Map<String, dynamic>.from(event)),
-                  key: const ValueKey('card-event'),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: colors.onSurfaceVariant,
-                  ),
-                ),
-              const SizedBox(height: AppSpace.xs),
-              Row(
-                children: [
-                  // The actions take the room; the trash symbol stays at the
-                  // end.
-                  Expanded(
-                    child: Row(
-                      children: [
-                        _action('card-open', 'Open', onOpen),
-                        if (project['activity'] == 'needs_review')
-                          _action('card-review', 'Review plan', onReview),
-                        if (canPause || status == 'pausing')
-                          _action(
-                            'card-pause',
-                            status == 'pausing' ? 'Retry pause' : 'Pause',
-                            busy ? null : onPause,
+                        if (onFix != null && firstIssue != null)
+                          Flexible(
+                            child: TextButton(
+                              key: const ValueKey('card-fix'),
+                              // As tall as the issue line: the card's height is
+                              // fixed.
+                              style: TextButton.styleFrom(
+                                visualDensity: VisualDensity.compact,
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                minimumSize: const Size(0, 24),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: AppSpace.xs,
+                                ),
+                              ),
+                              onPressed: () => onFix!(firstIssue),
+                              child: Text(
+                                tr(
+                                  issueFixLabel(
+                                    issueFix(firstIssue, map: mapFix),
+                                  ),
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
                           ),
                       ],
                     ),
-                  ),
-                  if (onDelete != null) ...[
-                    IconButton(
-                      key: const ValueKey('card-delete'),
-                      tooltip: tr('Delete project'),
-                      visualDensity: VisualDensity.compact,
-                      icon: const Icon(Icons.delete_outline, size: 20),
-                      // Not while agents work, set up its team or stop.
-                      onPressed: busy || unavailable || !deletable
-                          ? null
-                          : onDelete,
+                  if (event is Map)
+                    Text(
+                      _eventLine(context, Map<String, dynamic>.from(event)),
+                      key: const ValueKey('card-event'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colors.onSurfaceVariant,
+                      ),
                     ),
-                  ],
+                  const SizedBox(height: AppSpace.xs),
+                  Row(
+                    children: [
+                      // The actions take the room; the trash symbol stays at the
+                      // end.
+                      Expanded(
+                        child: Row(
+                          children: [
+                            _action('card-open', 'Open', onOpen),
+                            if (project['activity'] == 'needs_review')
+                              _action('card-review', 'Review plan', onReview),
+                            if (canPause || status == 'pausing')
+                              _action(
+                                'card-pause',
+                                status == 'pausing' ? 'Retry pause' : 'Pause',
+                                busy ? null : onPause,
+                              ),
+                          ],
+                        ),
+                      ),
+                      if (onDelete != null) ...[
+                        IconButton(
+                          key: const ValueKey('card-delete'),
+                          tooltip: tr('Delete project'),
+                          visualDensity: VisualDensity.compact,
+                          icon: const Icon(Icons.delete_outline, size: 20),
+                          // Not while agents work, set up its team or stop.
+                          onPressed: busy || unavailable || !deletable
+                              ? null
+                              : onDelete,
+                        ),
+                      ],
+                    ],
+                  ),
                 ],
               ),
-            ],
+            ),
           ),
-        ),
+          // An agent works here (task 098): over the card's lower edge, so
+          // the card keeps its fixed layout.
+          if (active?['state'] == 'active' ||
+              active?['state'] == 'stopping' ||
+              project['activity'] == 'setting_up_team')
+            const Positioned(left: 0, right: 0, bottom: 0, child: WorkingBar()),
+        ],
       ),
     );
   }

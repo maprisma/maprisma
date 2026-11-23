@@ -1195,5 +1195,16 @@
   "Importance": "Importance",
   "Move to top": "Move to top",
   "Move to end": "Move to end",
-  "Move": "Move"
+  "Move": "Move",
+  "AI is drafting the plan": "AI is drafting the plan",
+  "AI is checking the plan": "AI is checking the plan",
+  "AI is working on the project": "AI is working on the project",
+  "AI is reviewing the changes": "AI is reviewing the changes",
+  "AI is setting up the team": "AI is setting up the team",
+  "Stopping the agent": "Stopping the agent",
+  "step {0} of {1}": "step {0} of {1}",
+  "just started": "just started",
+  "for {0} min": "for {0} min",
+  "for {0} h {1} min": "for {0} h {1} min",
+  "The AI is drafting the plan. It appears here when the agent is done.": "The AI is drafting the plan. It appears here when the agent is done."
 }

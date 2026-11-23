@@ -1195,5 +1195,16 @@
   "Importance": "Importanza",
   "Move to top": "Sposta all'inizio",
   "Move to end": "Sposta alla fine",
-  "Move": "Sposta"
+  "Move": "Sposta",
+  "AI is drafting the plan": "L’IA sta preparando il piano",
+  "AI is checking the plan": "L’IA sta controllando il piano",
+  "AI is working on the project": "L’IA sta lavorando al progetto",
+  "AI is reviewing the changes": "L’IA sta esaminando le modifiche",
+  "AI is setting up the team": "L’IA sta configurando il team",
+  "Stopping the agent": "Arresto dell’agente",
+  "step {0} of {1}": "passo {0} di {1}",
+  "just started": "appena avviato",
+  "for {0} min": "da {0} min",
+  "for {0} h {1} min": "da {0} h {1} min",
+  "The AI is drafting the plan. It appears here when the agent is done.": "L’IA sta preparando il piano. Apparirà qui quando l’agente avrà finito."
 }

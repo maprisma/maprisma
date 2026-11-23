@@ -9,6 +9,7 @@ import 'app_look.dart';
 import 'project_board.dart';
 import 'project_messages.dart';
 import 'project_page_parts.dart';
+import 'project_working.dart';
 import 'window_popup.dart';
 
 typedef ProjectCenterCall =
@@ -1497,6 +1498,7 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
     TextEditingController controller,
     String label, {
     int lines = 1,
+    String? hint,
   }) => Padding(
     padding: const EdgeInsets.only(bottom: AppSpace.lg),
     child: TextField(
@@ -1506,6 +1508,10 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
       maxLines: lines == 1 ? 1 : null,
       decoration: InputDecoration(
         labelText: tr(label),
+        hintText: hint,
+        floatingLabelBehavior: hint == null
+            ? null
+            : FloatingLabelBehavior.always,
         border: const OutlineInputBorder(),
       ),
     ),
@@ -2328,7 +2334,17 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
     1 => Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _field(_plan, 'Project plan', lines: 10),
+        _field(
+          _plan,
+          'Project plan',
+          lines: 10,
+          // While the lead drafts it (task 098).
+          hint: _plan.text.trim().isEmpty && _project?['status'] == 'planning'
+              ? tr(
+                  'The AI is drafting the plan. It appears here when the agent is done.',
+                )
+              : null,
+        ),
         Text(
           approved
               ? tr('This plan version is approved.')
@@ -2429,6 +2445,14 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
                 ),
         ),
         Divider(height: narrow ? 1 : 16),
+        // What the agent is doing (task 098), on every tab.
+        if (_project != null)
+          ProjectWorking(
+            card: onBoard ? _openCard : null,
+            project: _project,
+            tr: tr,
+            compact: narrow,
+          ),
         Expanded(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(AppSpace.lg),

@@ -1191,6 +1191,18 @@ KEYS = (
     "Move to top",
     "Move to end",
     "Move",
+    # What the agent is doing (task 098).
+    "AI is drafting the plan",
+    "AI is checking the plan",
+    "AI is working on the project",
+    "AI is reviewing the changes",
+    "AI is setting up the team",
+    "Stopping the agent",
+    "step {0} of {1}",
+    "just started",
+    "for {0} min",
+    "for {0} h {1} min",
+    "The AI is drafting the plan. It appears here when the agent is done.",
 )
 
 

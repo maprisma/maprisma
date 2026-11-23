@@ -3911,5 +3911,16 @@
   "Low": "Laag",
   "Importance": "Belang",
   "Move to top": "Bovenaan zetten",
-  "Move to end": "Achteraan zetten"
+  "Move to end": "Achteraan zetten",
+  "AI is drafting the plan": "AI stelt het plan op",
+  "AI is checking the plan": "AI controleert het plan",
+  "AI is working on the project": "AI werkt aan het project",
+  "AI is reviewing the changes": "AI beoordeelt de wijzigingen",
+  "AI is setting up the team": "AI stelt het team samen",
+  "Stopping the agent": "Agent wordt gestopt",
+  "step {0} of {1}": "stap {0} van {1}",
+  "just started": "net gestart",
+  "for {0} min": "sinds {0} min",
+  "for {0} h {1} min": "sinds {0} u {1} min",
+  "The AI is drafting the plan. It appears here when the agent is done.": "AI stelt het plan op. Het verschijnt hier zodra de agent klaar is."
 }
