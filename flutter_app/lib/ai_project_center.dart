@@ -1,8 +1,8 @@
 import 'dart:async';
+import 'folder_picker.dart';
 import 'dart:math' show min;
 
 import 'package:flutter/material.dart';
-import 'package:file_selector/file_selector.dart' show getDirectoryPath;
 import 'package:maprisma_core/maprisma_core.dart' show ServiceError;
 
 import 'app_look.dart';
@@ -2370,7 +2370,7 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
                 ? null
                 : () async {
                     final folder = await PopupGuard.around(
-                      widget.chooseFolder ?? getDirectoryPath,
+                      widget.chooseFolder ?? chooseFolder,
                     );
                     if (folder != null && mounted) {
                       _path.text = folder;
@@ -2391,7 +2391,10 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
           'Project plan',
           lines: 10,
           // While the lead drafts it (task 098).
-          hint: _plan.text.trim().isEmpty && _project?['status'] == 'planning'
+          hint:
+              _plan.text.trim().isEmpty &&
+                  _project?['status'] == 'planning' &&
+                  _project?['phase'] == 'planning'
               ? tr(
                   'The AI is drafting the plan. It appears here when the agent is done.',
                 )

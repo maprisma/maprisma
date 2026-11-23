@@ -996,7 +996,11 @@ class ProjectCard extends StatelessWidget {
           // the card keeps its fixed layout.
           if (active?['state'] == 'active' ||
               active?['state'] == 'stopping' ||
-              project['activity'] == 'setting_up_team')
+              const {
+                'setting_up_team',
+                'stopping',
+              }.contains(project['activity']) ||
+              project['processes_stopping'] == true)
             const Positioned(left: 0, right: 0, bottom: 0, child: WorkingBar()),
         ],
       ),

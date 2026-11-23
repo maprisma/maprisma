@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'package:file_selector/file_selector.dart';
+import 'folder_picker.dart';
 import 'package:flutter/material.dart';
 import 'app_look.dart';
 import 'core_client.g.dart';
@@ -815,9 +815,7 @@ class SettingsView extends StatelessWidget {
                 onPressed: busy
                     ? null
                     : () async {
-                        final chosen = await PopupGuard.around(
-                          getDirectoryPath,
-                        );
+                        final chosen = await PopupGuard.around(chooseFolder);
                         if (chosen != null) {
                           await onUpdate({'agent_folder': chosen});
                         }
@@ -976,9 +974,7 @@ class SettingsView extends StatelessWidget {
                 onPressed: busy
                     ? null
                     : () async {
-                        final chosen = await PopupGuard.around(
-                          getDirectoryPath,
-                        );
+                        final chosen = await PopupGuard.around(chooseFolder);
                         if (chosen != null) {
                           await onUpdate({'screenshot_folder': chosen});
                         }

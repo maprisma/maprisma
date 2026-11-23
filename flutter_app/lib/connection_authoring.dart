@@ -1,5 +1,5 @@
-import 'package:file_selector/file_selector.dart';
 import 'backend.dart' show failureText;
+import 'folder_picker.dart';
 import 'window_popup.dart';
 import 'package:flutter/material.dart';
 
@@ -305,9 +305,7 @@ class _ConnectionAuthoringState extends State<ConnectionAuthoring> {
                       ? null
                       : () async {
                           final selected = await PopupGuard.around(
-                            () =>
-                                widget.chooseFolder?.call() ??
-                                getDirectoryPath(),
+                            () => widget.chooseFolder?.call() ?? chooseFolder(),
                           );
                           if (mounted && selected != null) {
                             setState(() => _folder.text = selected);

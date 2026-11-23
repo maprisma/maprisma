@@ -15,7 +15,7 @@ class WorkingBar extends StatelessWidget {
   final double height;
 
   /// Whether the bar moves; tests may set it.
-  static bool animate = !Platform.environment.containsKey('FLUTTER_TEST');
+  static bool animate = Platform.environment['FLUTTER_TEST'] != 'true';
 
   @override
   Widget build(BuildContext context) {
@@ -32,10 +32,19 @@ class WorkingBar extends StatelessWidget {
 
 /// What an agent of the project is doing right now, or null when none works.
 ///
-/// From the board card (`active`, `activity`, the assignments) when there is
-/// one, else from the project's status; the latest `assignment` or
-/// `setup_started` event gives the start time.
-({String headline, String? detail, String? output, DateTime? since})?
+/// From the board card (`active`, `activity`) when there is one, else from
+/// the project view (`phase`, `status`, `processes_stopping`). The latest
+/// `assignment` (or `setup_started`) event of the current attempt gives the
+/// start, the agent and its role; a boundary event before it (`started`,
+/// `continued`, `assignment_done`, ...) means the next agent is not yet
+/// dispatched, and then the boundary's time counts.
+({
+  String headline,
+  String? detail,
+  String output,
+  String? key,
+  DateTime? since,
+})?
 projectWork(
   Map<String, dynamic>? card,
   Map<String, dynamic>? project,
@@ -43,72 +52,113 @@ projectWork(
 ) {
   if (project == null) return null;
   final status = project['status'];
+  final phase = project['phase'] as String?;
   final active = card?['active'] as Map?;
-  final state = active?['state'];
-  final setup = card?['activity'] == 'setting_up_team';
+  final stopping =
+      status == 'pausing' ||
+      project['processes_stopping'] == true ||
+      card?['processes_stopping'] == true ||
+      card?['activity'] == 'stopping' ||
+      active?['state'] == 'stopping';
+  final running = const {'planning', 'running', 'reviewing'}.contains(status);
+  final setup =
+      card?['activity'] == 'setting_up_team' || (phase == 'setup' && running);
   final working = card == null
-      ? const {'planning', 'running', 'reviewing', 'pausing'}.contains(status)
-      : setup || state == 'active' || state == 'stopping';
+      ? running || stopping
+      : stopping || setup || active?['state'] == 'active';
   if (!working) return null;
-  final phase = active?['phase'] as String? ?? project['phase'] as String?;
-  Map? member;
-  int count = 0;
-  final position = active?['position'];
-  if (card != null && phase != null && position is int) {
-    final list = card[phase] as List? ?? const [];
-    count = list.length;
-    member = list
-        .whereType<Map>()
-        .where((m) => m['position'] == position)
-        .firstOrNull;
-  }
-  final role = member?['role'] as String?;
-  final String headline;
-  if (setup) {
-    headline = 'AI is setting up the team';
-  } else if (state == 'stopping' || status == 'pausing') {
-    headline = 'Stopping the agent';
-  } else if (phase == 'planning' || status == 'planning') {
-    headline = role == 'reviewer'
-        ? 'AI is checking the plan'
-        : 'AI is drafting the plan';
-  } else if (role == 'reviewer' || status == 'reviewing') {
-    headline = 'AI is reviewing the changes';
-  } else {
-    headline = 'AI is working on the project';
-  }
-  // The latest start of an assignment (or of the team setup).
+  // The current attempt's latest dispatch.
   Map? started;
+  DateTime? boundary;
   for (final event in (project['events'] as List? ?? const []).reversed) {
-    if (event is Map &&
-        (event['type'] == (setup ? 'setup_started' : 'assignment'))) {
+    if (event is! Map) continue;
+    final type = event['type'];
+    if (type == (setup ? 'setup_started' : 'assignment')) {
       started = event;
       break;
     }
+    if (_boundaries.contains(type)) {
+      if (type == 'started' || type == 'continued') {
+        boundary = DateTime.tryParse('${event['at'] ?? ''}');
+      }
+      break;
+    }
   }
-  final since = DateTime.tryParse('${started?['at'] ?? ''}');
+  // Who: the card's member at the active position, else the event's
+  // "Agent: role".
+  String? name;
+  String? role;
+  var position = -1, count = 0;
+  final where = active?['phase'] as String?;
+  if (card != null && where != null && active?['position'] is int) {
+    position = active!['position'] as int;
+    final list = card[where] as List? ?? const [];
+    count = list.length;
+    final member = list
+        .whereType<Map>()
+        .where((m) => m['position'] == position)
+        .firstOrNull;
+    if (member != null) {
+      name = '${member['name'] ?? member['agent'] ?? ''}';
+      role = member['role'] as String?;
+    }
+  }
+  if (setup) {
+    final agent = card?['setup_agent'];
+    if (agent is Map) name = '${agent['name'] ?? agent['agent'] ?? ''}';
+  } else if (name == null && started?['text'] is String) {
+    final text = started!['text'] as String;
+    final colon = text.lastIndexOf(': ');
+    if (colon > 0) {
+      name = text.substring(0, colon);
+      role = text.substring(colon + 2);
+    }
+  }
+  final reviewer = role == 'reviewer' || status == 'reviewing';
+  final String headline;
+  if (stopping) {
+    headline = 'Stopping the agent';
+  } else if (setup) {
+    headline = 'AI is setting up the team';
+  } else if ((where ?? phase) == 'planning') {
+    headline = reviewer ? 'AI is checking the plan' : 'AI is drafting the plan';
+  } else {
+    headline = reviewer
+        ? 'AI is reviewing the changes'
+        : 'AI is working on the project';
+  }
   final parts = <String>[
-    if (member != null) ...[
-      '${member['name'] ?? member['agent'] ?? ''}',
-      tr(_roleLabel(role)),
-    ] else if (setup && card?['setup_agent'] is Map)
-      '${(card!['setup_agent'] as Map)['name'] ?? ''}'
-    else if (!setup && started?['text'] is String)
-      started!['text'] as String,
-    if (member != null && count > 1)
-      tr('step {0} of {1}')
-          .replaceAll('{0}', '${(position as int) + 1}')
-          .replaceAll('{1}', '$count'),
+    if (name != null && name.trim().isNotEmpty) name,
+    if (role != null && !setup) tr(_roleLabel(role)),
+    if (position >= 0 && count > 1)
+      tr(
+        'step {0} of {1}',
+      ).replaceAll('{0}', '${position + 1}').replaceAll('{1}', '$count'),
   ];
   return (
     headline: tr(headline),
-    detail: parts.where((p) => p.trim().isNotEmpty).join(' · ').nullIfEmpty,
-    output: lastOutputLine(
-      '${project[setup ? 'setup_output' : 'output'] ?? ''}',
-    ),
-    since: since,
+    detail: parts.isEmpty ? null : parts.join(' · '),
+    output: '${project[setup ? 'setup_output' : 'output'] ?? ''}',
+    // Which dispatch the output belongs to (see [ProjectWorking]).
+    key: started == null ? null : '${started['type']}@${started['at']}',
+    since: DateTime.tryParse('${started?['at'] ?? ''}') ?? boundary,
   );
 }
+
+/// Events that end or start an attempt or an assignment.
+const _boundaries = {
+  'started',
+  'continued',
+  'assignment_done',
+  'finished',
+  'paused',
+  'failed',
+  'interrupted',
+  'setup_started',
+  'setup_paused',
+  'setup_interrupted',
+  'setup_applied',
+};
 
 // The labels the team graph and the board use.
 String _roleLabel(String? role) => switch (role) {
@@ -119,11 +169,9 @@ String _roleLabel(String? role) => switch (role) {
   _ => 'Agent',
 };
 
-extension on String {
-  String? get nullIfEmpty => isEmpty ? null : this;
-}
-
-final _ansi = RegExp(r'\x1B(?:\[[0-9;?]*[ -/]*[@-~]|\][^\x07]*\x07|[@-Z\\-_])');
+final _ansi = RegExp(
+  r'\x1B(?:\[[0-9;?]*[ -/]*[@-~]|\][^\x07\x1B]*(?:\x07|\x1B\\)|[@-Z\\-_])',
+);
 
 /// The agent's latest non-empty output line, without terminal codes.
 String? lastOutputLine(String output) {
@@ -150,7 +198,12 @@ String workingFor(DateTime? since, DateTime now, String Function(String) tr) {
 
 /// The project page's strip under the tabs while an agent works (task 098):
 /// moving bar, headline, who and how long, the latest output line.
-class ProjectWorking extends StatelessWidget {
+///
+/// The stored output is the previous agent's until the current one writes
+/// (it is kept on purpose, e.g. as evidence of interrupted work), so the
+/// strip shows an output line only once the output changed after the
+/// current dispatch was first seen.
+class ProjectWorking extends StatefulWidget {
   const ProjectWorking({
     super.key,
     required this.card,
@@ -169,13 +222,44 @@ class ProjectWorking extends StatelessWidget {
   final bool compact;
 
   @override
+  State<ProjectWorking> createState() => _ProjectWorkingState();
+}
+
+class _ProjectWorkingState extends State<ProjectWorking> {
+  // The dispatch seen, and the output it found then.
+  String? _key;
+  String? _baseline;
+  Object? _projectId;
+
+  @override
   Widget build(BuildContext context) {
-    final work = projectWork(card, project, tr);
+    final work = projectWork(widget.card, widget.project, widget.tr);
+    final id = widget.project?['id'];
+    if (work == null || id != _projectId) {
+      _projectId = id;
+      _key = null;
+      _baseline = null;
+    }
     if (work == null) return const SizedBox.shrink();
+    if (work.key != _key) {
+      // A new dispatch (or none yet): what is stored now is not its output.
+      _key = work.key;
+      _baseline = work.output;
+    }
+    final output = work.output == _baseline
+        ? null
+        : lastOutputLine(work.output);
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
-    final elapsed = workingFor(work.since, now ?? DateTime.now(), tr);
+    final elapsed = workingFor(
+      work.since,
+      widget.now ?? DateTime.now(),
+      widget.tr,
+    );
     final detail = [?work.detail, if (elapsed.isNotEmpty) elapsed].join(' · ');
+    final small = theme.textTheme.bodySmall?.copyWith(
+      color: colors.onSurfaceVariant,
+    );
     return Semantics(
       key: const ValueKey('project-working'),
       liveRegion: true,
@@ -187,8 +271,9 @@ class ProjectWorking extends StatelessWidget {
           Padding(
             padding: EdgeInsets.symmetric(
               horizontal: AppSpace.md,
-              vertical: compact ? AppSpace.xs : AppSpace.sm,
+              vertical: widget.compact ? AppSpace.xs : AppSpace.sm,
             ),
+            // One line each, the full width (long translations, large text).
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -196,7 +281,7 @@ class ProjectWorking extends StatelessWidget {
                   children: [
                     Icon(Icons.auto_awesome, size: 18, color: colors.primary),
                     const SizedBox(width: AppSpace.sm),
-                    Flexible(
+                    Expanded(
                       child: Text(
                         '${work.headline}…',
                         key: const ValueKey('working-headline'),
@@ -207,36 +292,23 @@ class ProjectWorking extends StatelessWidget {
                         ),
                       ),
                     ),
-                    if (detail.isNotEmpty)
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.only(left: AppSpace.md),
-                          child: Text(
-                            detail,
-                            key: const ValueKey('working-detail'),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: colors.onSurfaceVariant,
-                            ),
-                          ),
-                        ),
-                      ),
                   ],
                 ),
-                if (work.output != null && !compact)
-                  Padding(
-                    padding: const EdgeInsets.only(top: AppSpace.xs),
-                    child: Text(
-                      work.output!,
-                      key: const ValueKey('working-output'),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        fontFamily: monoFont(context),
-                        color: colors.onSurfaceVariant,
-                      ),
-                    ),
+                if (detail.isNotEmpty)
+                  Text(
+                    detail,
+                    key: const ValueKey('working-detail'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: small,
+                  ),
+                if (output != null && !widget.compact)
+                  Text(
+                    output,
+                    key: const ValueKey('working-output'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: small?.copyWith(fontFamily: monoFont(context)),
                   ),
               ],
             ),

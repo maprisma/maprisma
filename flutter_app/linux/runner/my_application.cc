@@ -69,6 +69,55 @@ static void set_header_colors(const gchar* bg, const gchar* fg,
   gtk_css_provider_load_from_data(provider, css, -1, nullptr);
 }
 
+// "chooseFolder" {title, accept, initial, shortcuts}: GTK's folder dialog with
+// the mounted disks and pinned folders the Dart side found in its sidebar
+// (file_selector has no shortcut folders). Answers the chosen path or null.
+static FlValue* choose_folder(GtkWindow* parent, FlValue* args) {
+  const gchar* title = "Choose folder";
+  const gchar* accept = "Open";
+  const gchar* initial = nullptr;
+  FlValue* shortcuts = nullptr;
+  if (args != nullptr && fl_value_get_type(args) == FL_VALUE_TYPE_MAP) {
+    FlValue* value = fl_value_lookup_string(args, "title");
+    if (value != nullptr && fl_value_get_type(value) == FL_VALUE_TYPE_STRING) {
+      title = fl_value_get_string(value);
+    }
+    value = fl_value_lookup_string(args, "accept");
+    if (value != nullptr && fl_value_get_type(value) == FL_VALUE_TYPE_STRING) {
+      accept = fl_value_get_string(value);
+    }
+    value = fl_value_lookup_string(args, "initial");
+    if (value != nullptr && fl_value_get_type(value) == FL_VALUE_TYPE_STRING) {
+      initial = fl_value_get_string(value);
+    }
+    shortcuts = fl_value_lookup_string(args, "shortcuts");
+  }
+  g_autoptr(GtkFileChooserNative) dialog = gtk_file_chooser_native_new(
+      title, parent, GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER, accept, nullptr);
+  GtkFileChooser* chooser = GTK_FILE_CHOOSER(dialog);
+  if (shortcuts != nullptr && fl_value_get_type(shortcuts) == FL_VALUE_TYPE_LIST) {
+    for (size_t i = 0; i < fl_value_get_length(shortcuts); i++) {
+      FlValue* item = fl_value_get_list_value(shortcuts, i);
+      if (fl_value_get_type(item) != FL_VALUE_TYPE_STRING) continue;
+      // A folder GTK already lists (or that is gone) is refused; that is fine.
+      gtk_file_chooser_add_shortcut_folder(chooser, fl_value_get_string(item),
+                                           nullptr);
+    }
+  }
+  if (initial != nullptr && g_file_test(initial, G_FILE_TEST_IS_DIR)) {
+    gtk_file_chooser_set_current_folder(chooser, initial);
+  }
+  FlValue* result = fl_value_new_null();
+  if (gtk_native_dialog_run(GTK_NATIVE_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT) {
+    g_autofree gchar* path = gtk_file_chooser_get_filename(chooser);
+    if (path != nullptr) {
+      fl_value_unref(result);
+      result = fl_value_new_string(path);
+    }
+  }
+  return result;
+}
+
 // "titlebar": GTK draws the title bar, so it takes the app's light or dark
 // (a bool) or {dark, background, foreground, border} with its colours.
 static void window_call_cb(FlMethodChannel* channel, FlMethodCall* call,
@@ -95,6 +144,12 @@ static void window_call_cb(FlMethodChannel* channel, FlMethodCall* call,
       }
     }
     response = FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr));
+  } else if (g_strcmp0(fl_method_call_get_name(call), "chooseFolder") == 0) {
+    GtkWindow* window =
+        gtk_application_get_active_window(GTK_APPLICATION(user_data));
+    g_autoptr(FlValue) chosen =
+        choose_folder(window, fl_method_call_get_args(call));
+    response = FL_METHOD_RESPONSE(fl_method_success_response_new(chosen));
   } else if (g_strcmp0(fl_method_call_get_name(call), "tiled") == 0) {
     // Whether the compositor tiles the window (COSMIC's auto-tiling, KWin's quick tiles):
     // its size then isn't the user's, so it isn't remembered. window_manager only knows

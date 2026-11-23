@@ -90,10 +90,93 @@ void main() {
     // Without the board: from the status alone.
     final draft = page.project();
     expect(projectWork(null, draft, tr), isNull);
+    String? alone(Map<String, dynamic> fields) =>
+        projectWork(null, {...draft, ...fields}, tr)?.headline;
     expect(
-      projectWork(null, {...draft, 'status': 'planning'}, tr)?.headline,
+      alone({'status': 'planning', 'phase': 'planning'}),
       'AI is drafting the plan',
     );
+    expect(
+      alone({'status': 'reviewing', 'phase': 'planning'}),
+      'AI is checking the plan',
+    );
+    expect(
+      alone({'status': 'reviewing', 'phase': 'running'}),
+      'AI is reviewing the changes',
+    );
+    // A team setup runs as status planning, phase setup.
+    expect(
+      alone({'status': 'planning', 'phase': 'setup'}),
+      'AI is setting up the team',
+    );
+    expect(
+      projectWork(null, {
+        ...draft,
+        'status': 'planning',
+        'phase': 'setup',
+        'output': 'old run',
+        'setup_output': 'Choosing models',
+      }, tr)?.output,
+      'Choosing models',
+    );
+    // Old processes still stopping: also without an active assignment.
+    expect(
+      alone({'status': 'paused', 'processes_stopping': true}),
+      'Stopping the agent',
+    );
+    expect(
+      headline({
+        ...working(status: 'ready', state: 'stopped'),
+        'active': null,
+        'activity': 'stopping',
+        'processes_stopping': true,
+      }),
+      'Stopping the agent',
+    );
+    // A paused team setup: stopping, no active assignment.
+    expect(
+      headline({
+        ...working(status: 'pausing'),
+        'active': null,
+        'phase': 'setup',
+        'activity': 'stopping',
+      }),
+      'Stopping the agent',
+    );
+  });
+
+  test('the time counts from this attempt, not an older assignment', () {
+    final card = {
+      ...working(status: 'running', phase: 'execution', state: 'next'),
+      'active': {'phase': 'execution', 'position': 0, 'state': 'active'},
+      'events': [
+        {
+          'at': '2026-11-23T08:00:00.000Z',
+          'type': 'assignment',
+          'text': 'A: lead',
+        },
+        {'at': '2026-11-23T08:30:00.000Z', 'type': 'finished', 'text': 'Done.'},
+        {'at': '2026-11-23T10:11:30.000Z', 'type': 'started', 'text': 'Go.'},
+      ],
+    };
+    final work = projectWork(card, card, tr)!;
+    expect(work.since, DateTime.utc(2026, 11, 23, 10, 11, 30));
+    expect(work.key, isNull);
+    expect(workingFor(work.since, now, tr), 'just started');
+    // Without the board the event names agent and role, translated.
+    final alone = projectWork(null, {
+      ...page.project(status: 'running'),
+      'phase': 'running',
+      'events': [
+        {
+          'at': '2026-11-23T10:00:00.000Z',
+          'type': 'assignment',
+          'text': 'Codex: reviewer',
+        },
+      ],
+    }, tr)!;
+    expect(alone.detail, 'Codex · Reviewer');
+    expect(alone.headline, 'AI is reviewing the changes');
   });
 
   test('time and the latest output line', () {
@@ -117,12 +200,20 @@ void main() {
     );
     expect(lastOutputLine(' \n '), isNull);
     expect(lastOutputLine('x' * 400)!.length, 301);
+    // OSC with BEL or ST (title, hyperlink) leaves no payload behind.
+    expect(
+      lastOutputLine(
+        '\x1B]0;Working\x1B\\See \x1B]8;;https://x\x07here\x1B]8;;\x07',
+      ),
+      'See here',
+    );
   });
 
   testWidgets('the strip shows headline, who, step, time and output', (
     tester,
   ) async {
-    final card = working(output: 'Inspecting lib/\nComparing the routes');
+    // The stored output is still the previous agent's: not shown.
+    var card = working(output: 'The previous agent said this');
     await show(
       tester,
       ProjectWorking(card: card, project: card, tr: tr, now: now),
@@ -132,6 +223,13 @@ void main() {
     expect(
       find.text('Claude Code · Lead agent · step 1 of 2 · for 3 min'),
       findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('working-output')), findsNothing);
+    // This agent writes: its latest line.
+    card = working(output: 'Inspecting lib/\nComparing the routes');
+    await show(
+      tester,
+      ProjectWorking(card: card, project: card, tr: tr, now: now),
     );
     expect(find.text('Comparing the routes'), findsOneWidget);
     // Compact: no output line.
@@ -165,11 +263,98 @@ void main() {
       board.card('c'),
     ]);
     expect(find.byKey(const ValueKey('working-bar')), findsOneWidget);
+    // Old processes still stopping, no active assignment: the bar stays.
+    await board.showBoard(tester, [
+      {
+        ...board.card('d', status: 'ready', activity: 'stopping'),
+        'processes_stopping': true,
+      },
+    ]);
+    expect(find.byKey(const ValueKey('working-bar')), findsOneWidget);
+  });
+
+  testWidgets('the strip fits a narrow window with large text', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(320, 400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final card = working(status: 'running', phase: 'execution');
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MediaQuery(
+          data: const MediaQueryData(
+            size: Size(320, 400),
+            textScaler: TextScaler.linear(2),
+          ),
+          child: Scaffold(
+            body: ProjectWorking(
+              card: card,
+              project: card,
+              tr: tr,
+              now: now,
+              compact: true,
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(tester.takeException(), isNull);
+    expect(find.text('AI is working on the project…'), findsOneWidget);
+  });
+
+  testWidgets('the bar moves unless animations are off', (tester) async {
+    WorkingBar.animate = true;
+    addTearDown(() => WorkingBar.animate = false);
+    LinearProgressIndicator bar() =>
+        tester.widget(find.byKey(const ValueKey('working-bar')));
+    await show(tester, const WorkingBar());
+    expect(bar().value, isNull);
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: MediaQuery(
+          data: MediaQueryData(disableAnimations: true),
+          child: Scaffold(body: WorkingBar()),
+        ),
+      ),
+    );
+    expect(bar().value, 1);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('a team setup does not promise a plan', (tester) async {
+    final setup = {
+      ...page.project(status: 'planning'),
+      'phase': 'setup',
+      'plan': '',
+    };
+    await page.mount(tester, (operation, params) async {
+      if (operation == 'list') {
+        return {
+          'projects': [setup],
+        };
+      }
+      if (operation == 'profiles') return {'profiles': []};
+      return {'project': setup};
+    });
+    await tester.tap(find.text('Saved project'));
+    await tester.pumpAndSettle();
+    expect(find.text('AI is setting up the team…'), findsOneWidget);
+    await tester.tap(find.text('Plan').last);
+    await tester.pumpAndSettle();
+    expect(
+      find.text(
+        'The AI is drafting the plan. It appears here when the agent is done.',
+      ),
+      findsNothing,
+    );
+    await tester.pumpWidget(const SizedBox());
   });
 
   testWidgets('while the lead drafts, the page says so and the plan box '
       'explains why it is empty', (tester) async {
-    final planning = {...page.project(status: 'planning'), 'plan': ''};
+    final planning = {
+      ...page.project(status: 'planning'),
+      'phase': 'planning',
+      'plan': '',
+    };
     await page.mount(tester, (operation, params) async {
       if (operation == 'list') {
         return {

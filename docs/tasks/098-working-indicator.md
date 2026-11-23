@@ -42,3 +42,27 @@ saved as the plan.
 - Core test: the planning prompt carries the "answer with the plan" instruction; execution
   prompts do not.
 - Screenshot of the planning state (F12 style) checked by eye.
+
+## Review round 1 (Codex + agy) — fixed
+- Stopping without an active assignment (`activity: stopping`, `processes_stopping`, a paused
+  team setup) now shows "Stopping the agent" on the page and the card bar.
+- Without the board card: team setup (`phase: setup`) and planning review (`status: reviewing`)
+  are named right; setup reads `setup_output`; the event's role is translated.
+- The start time comes from the current attempt: the backward scan stops at `started`,
+  `continued`, `assignment_done`, `finished`, ... (before the next dispatch the attempt's start
+  counts).
+- Output carried over from the previous agent (kept by the core on purpose, e.g. as evidence of
+  interrupted work) is not shown as the current agent's: the strip shows an output line only once
+  the output changed after it first saw the current dispatch.
+- The plan hint only while the lead drafts (`phase: planning`), not during team setup.
+- Layout: headline, detail and output each on their own full-width line.
+- `FLUTTER_TEST == 'true'`; OSC sequences ended by ST are stripped; tests for all of these,
+  the moving/still bar, and a 320 px window at text scale 2.
+
+## Folder dialog (Uwe 2026-11-23, before the push)
+"the folder dialog must have mounted folder like Data and Ai in the sidebar". All four
+"Choose folder" places use `chooseFolder` (lib/folder_picker.dart): the runner's GTK folder
+dialog (`maprisma/window` method `chooseFolder`) with sidebar shortcuts for every mounted data disk
+(`/mnt`, `/media`, `/run/media`, `/srv`; not another system's root such as an opened Omarchy disk)
+and the folders pinned in COSMIC Files (favorites) and KDE Places; GTK bookmarks GTK shows itself.
+file_selector's dialog remains the fallback.
