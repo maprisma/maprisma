@@ -25,6 +25,16 @@
   <url type="bugtracker">https://github.com/uBruckhaus/Asterism/issues</url>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="2.1.2" date="2026-11-23">
+      <description>
+        <p>Drag and drop instead of move menus: a project card is dragged as a whole (by touch after a
+          long press), map boxes by their grip inside their card and map cards by their header inside
+          their column; while dragging, a line marks every place it can go and the strongest where it
+          goes. Ctrl+Up and Ctrl+Down move the card or box that has the keyboard.</p>
+        <p>Settings › Keyboard shortcuts lists every key that works inside the app, each with what it
+          does.</p>
+      </description>
+    </release>
     <release version="2.1.1" date="2026-11-23">
       <description>
         <p>See that the AI is working: while an agent plans, works, reviews, sets up the team or
