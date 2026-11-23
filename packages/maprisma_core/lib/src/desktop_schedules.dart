@@ -401,10 +401,9 @@ final class SystemdUserScheduler implements ProjectScheduler {
       try {
         File(path).deleteSync();
       } on FileSystemException {
-        if (FileSystemEntity.typeSync(path, followLinks: false) !=
-            FileSystemEntityType.notFound) {
-          left.add(p.basename(path));
-        }
+        // Not "gone" unless the file system says so: typeSync calls a file
+        // in a folder it cannot search "not found" (agy 103 r2 #2).
+        if (!_io.absent(path)) left.add(p.basename(path));
       }
     }
     final (ok, said) = await _run(['daemon-reload']);

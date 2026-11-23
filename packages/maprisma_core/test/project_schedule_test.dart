@@ -681,6 +681,33 @@ void main() {
     );
 
     test(
+      'agy 103 r2 #2: a unit file not removed because its folder closed meanwhile is said',
+      () async {
+        await scheduler.install(id, ['*-*-* 05:00:00']);
+        final closing = SystemdUserScheduler(
+          unitDir: units,
+          store: store,
+          environment: const {},
+          command: () => command,
+          systemctl: (args) async {
+            // The folder loses its search right while systemd stops the timer.
+            if (args.first == 'disable') Process.runSync('chmod', ['000', units]);
+            return (true, '');
+          },
+          posix: TestPosix(),
+        );
+        addTearDown(() => Process.runSync('chmod', ['700', units]));
+        await expectLater(
+          closing.remove(id),
+          throwsA(errorCode('project_schedule_unavailable')),
+        );
+        Process.runSync('chmod', ['700', units]);
+        expect(await scheduler.installed(), {id});
+      },
+      skip: Platform.environment['USER'] == 'root' ? 'root reads it' : false,
+    );
+
+    test(
       'agy 103 r1 #3: a timer started next to a left-over service is stopped before its file goes',
       () async {
         await scheduler.install(id, ['*-*-* 05:00:00']);
@@ -1503,6 +1530,30 @@ void main() {
         expect(commands, hasLength(1));
         plugin = open();
       },
+    );
+
+    test(
+      'agy 103 r2 #1: an entry that cannot be removed is no work; the headless owner ends',
+      () async {
+        final item = await scheduled(await approved());
+        final id = item['id'] as String;
+        final spool = p.join(plugin.directory, 'schedule');
+        Directory(spool).createSync(recursive: true);
+        final stuck = File(p.join(spool, '$id.${'0' * 16}.taken'))
+          ..writeAsStringSync('not json');
+        Process.runSync('chmod', ['500', spool]);
+        addTearDown(() => Process.runSync('chmod', ['700', spool]));
+        expect(await plugin.takeScheduleRequests(), 0);
+        expect(stuck.existsSync(), isTrue);
+        await serveScheduledRuns(
+          plugin,
+          poll: const Duration(milliseconds: 1),
+          stop: Future<void>.delayed(const Duration(seconds: 10)),
+        ).timeout(const Duration(seconds: 5));
+        Process.runSync('chmod', ['700', spool]);
+        plugin = open();
+      },
+      skip: Platform.environment['USER'] == 'root' ? 'root writes it' : false,
     );
 
     test(

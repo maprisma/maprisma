@@ -3661,11 +3661,16 @@ final class AiProjectCenterPlugin {
         } on Object {
           request = null;
         }
-        void drop() {
+        // True when the entry is gone. One that cannot be removed (a spool
+        // that turned read-only, EPERM) is no work done: counting it would
+        // keep the headless owner looking forever while it holds the store
+        // (agy 103 r2 #1).
+        bool drop() {
           try {
             File(path).deleteSync();
+            return true;
           } on FileSystemException {
-            // Gone already.
+            return _io.absent(path);
           }
         }
 
@@ -3681,8 +3686,7 @@ final class AiProjectCenterPlugin {
             )) {
           // Work done, too: a look that only removed broken entries is no
           // quiet one, so the headless owner looks again (task 103).
-          drop();
-          handled++;
+          if (drop()) handled++;
           continue;
         }
         String result;
@@ -3690,7 +3694,7 @@ final class AiProjectCenterPlugin {
           result = await scheduledRun(match[1]!, at);
         } on Object {
           // Not silent: its planned run may not be recorded.
-          drop();
+          final gone = drop();
           final title = _projects[match[1]]?['title'];
           _scheduler?.notify(
             _translate(_scheduleTitle),
@@ -3698,12 +3702,11 @@ final class AiProjectCenterPlugin {
                 ? '${title.length > 120 ? '${title.substring(0, 120)}…' : title}: ${_translate(_requestFailed)}'
                 : _translate(_requestFailed),
           );
-          handled++;
+          if (gone) handled++;
           continue;
         }
         if (result == 'closed') break; // claimed, kept for the next owner
-        drop();
-        handled++;
+        if (drop()) handled++;
       }
     } finally {
       _taking = false;
