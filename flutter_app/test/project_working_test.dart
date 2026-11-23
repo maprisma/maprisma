@@ -173,7 +173,7 @@ void main() {
     final project = {
       ...page.project(status: 'pausing'),
       'phase': 'setup',
-      'setup_agent': {'agent': 'claude', 'name': 'Claude Code'},
+      'setup_agent': 'claude',
       'output': 'old run',
       'setup_output': 'Choosing models',
       'events': [
@@ -187,7 +187,7 @@ void main() {
     };
     final work = projectWork(null, project, tr)!;
     expect(work.headline, 'Stopping the agent');
-    expect(work.detail, 'Claude Code');
+    expect(work.detail, 'claude');
     expect(work.output, 'Choosing models');
     expect(work.since, DateTime.utc(2026, 11, 23, 10, 9));
     // A failed setup ends its attempt: its assignment is not the stopping one.
@@ -270,11 +270,40 @@ void main() {
       {
         ...working(status: 'planning'),
         'phase': 'setup',
-        'setup_agent': {'name': 'Helper B'},
+        'setup_agent': 'helper-b',
       },
       tr,
     )!;
-    expect(setup.detail, 'Helper B');
+    expect(setup.detail, 'helper-b');
+    // The card's name for the same helper.
+    final named = projectWork(
+      {
+        ...working(status: 'planning'),
+        'setup_agent': {'agent': 'claude', 'name': 'Claude Code'},
+      },
+      {
+        ...working(status: 'planning'),
+        'phase': 'setup',
+        'setup_agent': 'claude',
+      },
+      tr,
+    )!;
+    expect(named.detail, 'Claude Code');
+    // The reviewer started after the card was read: not the lead's name.
+    final card = working();
+    final reviewer = projectWork(card, {
+      ...card,
+      'next_member': 1,
+      'events': [
+        {
+          'at': '2026-11-23T10:11:00.000Z',
+          'type': 'assignment',
+          'text': 'Codex: reviewer',
+        },
+      ],
+    }, tr)!;
+    expect(reviewer.detail, 'Codex · Reviewer');
+    expect(reviewer.headline, 'AI is checking the plan');
   });
 
   test('the time counts from this attempt, not an older assignment', () {

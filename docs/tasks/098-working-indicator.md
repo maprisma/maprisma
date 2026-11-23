@@ -92,3 +92,9 @@ file_selector's dialog remains the fallback.
   project first.
 - The folder dialog has no made-up default title (GTK has no translation for one); the app passes
   its translated title.
+
+## Review round 4 (Codex + agy) — fixed
+- The card's assignment names the agent only when its position is the project's `next_member`
+  (the reviewer may have started after the board was read).
+- Team setup: the project has the helper's id, the card its name; the card's name is used when
+  it is the same helper, else the id.

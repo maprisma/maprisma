@@ -90,7 +90,10 @@ projectWork(
       !setup &&
       const {'active', 'stopping'}.contains(active?['state']) &&
       (phase == null ||
-          cardPhase == (phase == 'running' ? 'execution' : phase));
+          cardPhase == (phase == 'running' ? 'execution' : phase)) &&
+      // The project's member at work (next_member) is the card's.
+      (project['next_member'] is! int ||
+          project['next_member'] == active?['position']);
   final where = current ? cardPhase : null;
   if (card != null && where != null && active?['position'] is int) {
     position = active!['position'] as int;
@@ -106,11 +109,14 @@ projectWork(
     }
   }
   if (setup) {
-    final agent = project['setup_agent'] ?? card?['setup_agent'];
-    if (agent is Map) {
-      name = '${agent['name'] ?? agent['agent'] ?? ''}';
-    } else if (agent is String) {
-      name = agent;
+    // The project has the helper's id, the card also its name; a card from
+    // before the change may name another helper.
+    final id = project['setup_agent'];
+    final shown = card?['setup_agent'];
+    if (shown is Map && (id == null || shown['agent'] == id)) {
+      name = '${shown['name'] ?? shown['agent'] ?? ''}';
+    } else if (id is String) {
+      name = id;
     }
     role = null;
   } else if (name == null && started?['text'] is String) {
