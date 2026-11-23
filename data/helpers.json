@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "helpers": [
     {
       "id": "claude",
@@ -249,10 +249,11 @@
       "ask": {
         "argv": [
           "openclaw",
-          "agent",
-          "exec",
-          "--config-override",
-          "{\"tools\":{\"deny\":[\"*\"]}}",
+          "infer",
+          "model",
+          "run",
+          "--local",
+          "--prompt",
           "{prompt}"
         ],
         "stdin": false

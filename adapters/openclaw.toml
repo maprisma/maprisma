@@ -60,11 +60,10 @@ reader = "openclaw"
 
 # The AI helper of the other Maprisma apps (tools/export-helpers.py -> data/helpers.json, docs/adapter-format.md).
 
-[ask]                                  # one embedded turn, only the answer on stdout; every tool denied
-                                       # ("deny wins", "*" wildcards, applied without the Docker sandbox too)
-# Source: https://docs.openclaw.ai/cli/agent (agent exec, --config-override),
-# https://docs.openclaw.ai/gateway/config-tools/tool-policy
-argv = ["openclaw", "agent", "exec", "--config-override", "{\"tools\":{\"deny\":[\"*\"]}}", "{prompt}"]
+[ask]                                  # one model turn without tools, run locally (no gateway)
+# Source: `openclaw infer model run --help` of OpenClaw 2026.10.4 ("Run a one-shot model turn");
+# agent exec has no --config-override (its tool policy is only a config file).
+argv = ["openclaw", "infer", "model", "run", "--local", "--prompt", "{prompt}"]
 verified = false                       # documentation only, not yet tried with it
 
 [task]                                 # its terminal chat (local), the first message sent (--message)

@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:test/test.dart';
+import 'package:maprisma_core/src/agent_start.dart' show isAgentSessionVar;
 import 'package:maprisma_core/src/adapters.dart';
 import 'package:maprisma_core/src/adapter_assets.g.dart';
 import 'package:maprisma_core/src/identity.dart';
@@ -76,6 +77,73 @@ void main() {
       () => Adapter({...base, 'unknown': 1}),
       throwsA(isA<AdapterError>()),
     );
+  });
+  test('[project.env] takes plan/run/setup tables of safe variables', () {
+    Map<String, dynamic> withEnv(Object env) => {
+      'command': 'x',
+      'name': 'X',
+      'project': {
+        'plan': ['x', '{prompt}'],
+        'run': ['x', '{prompt}'],
+        'permissions': 'p',
+        'env': env,
+      },
+    };
+    final ok = Adapter(
+      withEnv({
+        'plan': {'GOOSE_MODE': 'auto'},
+        'run': {'GOOSE_MODE': 'auto'},
+      }),
+    );
+    expect(ok.table('project')['env'], isA<Map>());
+    // Copilot's switches: only "false" (an exported "true" is turned off).
+    expect(
+      Adapter(
+        withEnv({
+          'plan': {
+            for (final name in [
+              'COPILOT_ALLOW_ALL',
+              'COPILOT_ASSISTED_APPROVAL',
+              'COPILOT_AUTO_UPDATE',
+              'GITHUB_COPILOT_PROMPT_MODE_EXTENSIONS',
+              'GITHUB_COPILOT_PROMPT_MODE_REPO_HOOKS',
+              'GITHUB_COPILOT_PROMPT_MODE_WORKSPACE_MCP',
+            ])
+              name: 'false',
+          },
+        }),
+      ).table('project')['env'],
+      isA<Map>(),
+    );
+    expect(isAgentSessionVar('CLAUDE_RELAUNCH_SESSION_ADD_DIRS'), isTrue);
+    expect(isAgentSessionVar('CLAUDE_BG_SESSION_PERMISSION_RULES'), isTrue);
+    for (final bad in [
+      {
+        'review': {'A': 'b'},
+      },
+      {'plan': 'A=b'},
+      {
+        'plan': {'LD_PRELOAD': '/x.so'},
+      },
+      {
+        'plan': {'XDG_CONFIG_HOME': '/x'},
+      },
+      {
+        'plan': {'HOME': '/x'},
+      },
+      {
+        'plan': {'lower': 'x'},
+      },
+      {
+        'plan': {'A': 1},
+      },
+    ]) {
+      expect(
+        () => Adapter(withEnv(bad)),
+        throwsA(isA<AdapterError>()),
+        reason: '$bad',
+      );
+    }
   });
   test('an [ask] or [task] marked verified = false is not used by the app', () {
     const base = {'command': 'x', 'name': 'X'};

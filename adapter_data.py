@@ -74,7 +74,7 @@ TOOLS = {"file": STR, "key": STR}                       # the tools it is given 
 RESEARCH, REWRITE, TASK = {"argv": STRS, "output": STR}, {"argv": STRS}, {"argv": STRS, "verified": BOOL}
 # What closes it in when the map starts it (agent_guard): options right after the program for its
 # look-ups and rewrites, for its task tabs, and per MCP server in its [mcp] file ("{name}").
-PROJECT = {"plan": STRS, "run": STRS, "setup": STRS, "permissions": STR, "access_modes": STRS, "model_option": STR, "provider_option": STR, "native_subagents": BOOL, "subagent_option": STR, "subagent_definitions": TABLE}
+PROJECT = {"plan": STRS, "run": STRS, "setup": STRS, "permissions": STR, "access_modes": STRS, "model_option": STR, "provider_option": STR, "native_subagents": BOOL, "subagent_option": STR, "subagent_definitions": TABLE, "env": TABLE}
 CLOSED = {"background": STRS, "task": STRS, "mcp_off": STRS, "home_env": STR}
 # One question answered by a model it is given (a local LLM's), offline and without tools: the prompt
 # on stdin; "model": the options that pick it ("{model}" once, "{provider}" at most once).
@@ -176,6 +176,33 @@ def _check(table: dict, allowed: dict, where: str, required: tuple = ()) -> None
             raise AdapterError(f"{where}: “{key}” is missing")
 
 
+# [project.env.<plan|run|setup>]: fixed variables for that phase's process only. Only audited names
+# (adapters.dart: projectEnvNames is the same list, with the values each may take): a variable such as NODE_OPTIONS or PYTHONPATH would
+# load code into the agent. GOOSE_MODE: goose's approval mode, which has no flag (goose.toml); the
+# COPILOT_* switches only as "false", so an exported "true" cannot trust the folder (copilot.toml).
+PROJECT_ENV_NAMES = {
+    "GOOSE_MODE": ("auto", "approve", "smart_approve", "chat"),
+    # Copilot: turn off what the user's own environment could switch on (only "false" is accepted).
+    "COPILOT_ALLOW_ALL": ("false",),
+    "COPILOT_ASSISTED_APPROVAL": ("false",),
+    "GITHUB_COPILOT_PROMPT_MODE_EXTENSIONS": ("false",),
+    "GITHUB_COPILOT_PROMPT_MODE_REPO_HOOKS": ("false",),
+    "GITHUB_COPILOT_PROMPT_MODE_WORKSPACE_MCP": ("false",),
+    "COPILOT_AUTO_UPDATE": ("false",),
+}
+
+
+def check_project_env(env, name: str) -> None:
+    if not isinstance(env, dict):
+        raise AdapterError(f"{name}: project.env must be a table")
+    for phase, values in env.items():
+        if phase not in ("plan", "run", "setup") or not isinstance(values, dict):
+            raise AdapterError(f"{name}: project.env.{phase} must be a table (plan, run or setup)")
+        for key, value in values.items():
+            if value not in PROJECT_ENV_NAMES.get(key, ()):
+                raise AdapterError(f"{name}: invalid project.env.{phase} variable “{key}”")
+
+
 def check(data: dict, name: str) -> None:
     """Refuse a file with an unknown key, a value of the wrong type or a missing one."""
     _check(data, TOP, name, REQUIRED["top"])
@@ -188,6 +215,7 @@ def check(data: dict, name: str) -> None:
             argv = data["project"][operation]
             if not argv or argv[0] != data["command"] or argv.count("{prompt}") != 1 or any("{prompt}" in a and a != "{prompt}" for a in argv):
                 raise AdapterError(f"{name}: invalid project argv")
+        check_project_env(data["project"].get("env", {}), name)
     if "ask" in data:
         _check(data["ask"], ASK, f"{name}: ask", REQUIRED["ask"])
         argv = data["ask"]["argv"]

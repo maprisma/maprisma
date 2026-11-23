@@ -49,3 +49,6 @@ argv = ["crush"]
 # No [ask]: crush run approves every tool of its non-interactive session itself; only a crushrc
 # (permissions deny …) limits it, no option does.
 # Source: https://github.com/charmbracelet/crush (README), internal/cmd/root.go, internal/cmd/run.go
+# No [project]: crush run (v0.102.0, internal/cmd/run.go) auto-approves every permission request of
+# its session, and no flag limits its tools (bash, edit, fetch, MCP), so it cannot be fenced to
+# read-only or to project edits.

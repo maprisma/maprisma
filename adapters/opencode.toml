@@ -71,3 +71,9 @@ helper = false                         # not for the other apps: run allows its 
 # Source: https://opencode.ai/v1/docs/cli/, https://opencode.ai/docs/cli/commands.md
 argv = ["opencode", "--prompt", "{prompt}"]
 verified = false
+
+# No [project] (AI Project Center): no argv-only way to fence it. Every built-in agent, plan and explore
+# included, allows shell commands (base policy allows "*"; plan only denies edits), permissions come only
+# from config files or OPENCODE_CONFIG_CONTENT, and the project's own opencode.json, plugins and MCP
+# servers load. Source: opencode v2.4.1 run --help and its built-in agent definitions,
+# https://opencode.ai/docs/permissions.md, https://opencode.ai/docs/agents.md

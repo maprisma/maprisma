@@ -33,8 +33,14 @@ const agentSessionExact = {
   'COPILOT_CLI',
   'CURSOR_AGENT',
 };
+
+/// CLAUDE_RELAUNCH_* / CLAUDE_BG_*: what Claude Code hands a relaunched or
+/// background session (CLAUDE_RELAUNCH_SESSION_ADD_DIRS adds folders even
+/// under --restricted); ai_core.AGENT_SESSION_PREFIXES is the same list.
+const agentSessionPrefixes = ['CLAUDE_CODE_', 'CLAUDE_RELAUNCH_', 'CLAUDE_BG_'];
 bool isAgentSessionVar(String name) =>
-    agentSessionExact.contains(name) || name.startsWith('CLAUDE_CODE_');
+    agentSessionExact.contains(name) ||
+    agentSessionPrefixes.any(name.startsWith);
 
 /// flutter_backend's agent start, terminal sessions and project folders.
 final class AgentStart {

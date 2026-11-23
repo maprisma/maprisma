@@ -137,6 +137,38 @@ final class Adapter {
     }
   }
 
+  /// `[project.env.<plan|run|setup>]`: fixed variables for that phase's
+  /// process only. Only audited names (adapter_data.PROJECT_ENV_NAMES is the
+  /// same list, with the values each may take): a variable such as NODE_OPTIONS or PYTHONPATH would load code
+  /// into the agent. GOOSE_MODE: goose's approval mode, which has no flag.
+  static const projectEnvNames = {
+    'GOOSE_MODE': {'auto', 'approve', 'smart_approve', 'chat'},
+    // Copilot: only turned off, so a "true" the user exported cannot trust
+    // the folder or load its hooks, MCP servers and extensions.
+    'COPILOT_ALLOW_ALL': {'false'},
+    'COPILOT_ASSISTED_APPROVAL': {'false'},
+    'GITHUB_COPILOT_PROMPT_MODE_EXTENSIONS': {'false'},
+    'GITHUB_COPILOT_PROMPT_MODE_REPO_HOOKS': {'false'},
+    'GITHUB_COPILOT_PROMPT_MODE_WORKSPACE_MCP': {'false'},
+    'COPILOT_AUTO_UPDATE': {'false'},
+  };
+
+  static bool validProjectEnv(Object? env) =>
+      env is Map &&
+      env.entries.every(
+        (phase) =>
+            const {'plan', 'run', 'setup'}.contains(phase.key) &&
+            phase.value is Map &&
+            (phase.value as Map).entries.every(
+              (e) =>
+                  e.key is String &&
+                  validProjectEnvVar(e.key as String, e.value),
+            ),
+      );
+
+  static bool validProjectEnvVar(String name, Object? value) =>
+      projectEnvNames[name]?.contains(value) == true;
+
   static void validate(Map<String, dynamic> data) {
     _check(data, 'TOP', _required('top'));
     final command = data['command'] as String;
@@ -163,6 +195,9 @@ final class Adapter {
             )) {
           throw const AdapterError('Invalid project argv');
         }
+      }
+      if (!validProjectEnv(t('project')['env'] ?? const {})) {
+        throw const AdapterError('Invalid project env');
       }
     }
     if (data.containsKey('ask')) {

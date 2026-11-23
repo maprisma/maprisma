@@ -256,6 +256,21 @@ The optional `[project]` table declares `plan`, `run` and optional `setup` argv,
 optional `native_subagents`, `subagent_option`, `subagent_definitions`. Every argv
 starts with this adapter's own command and contains exactly one `{prompt}`
 argument. These are reviewed session profiles, never arbitrary user shell text.
+Optional `[project.env.plan]`, `[project.env.run]` and `[project.env.setup]`
+tables set fixed variables for that phase's process only, for an agent whose
+approval mode has no flag. Only audited names are accepted (see below;
+`PROJECT_ENV_NAMES` in adapter_data.py and `projectEnvNames` in adapters.dart),
+because a variable such as `NODE_OPTIONS` or `PYTHONPATH` would load code into
+the agent; each name has a fixed set of values (`GOOSE_MODE`: auto, approve,
+smart_approve, chat; Copilot's `COPILOT_ALLOW_ALL`, `COPILOT_ASSISTED_APPROVAL` and
+`GITHUB_COPILOT_PROMPT_MODE_EXTENSIONS`/`_REPO_HOOKS`/`_WORKSPACE_MCP`: only `false`, so a value the user exported cannot
+weaken the profile; `COPILOT_AUTO_UPDATE`: only `false`). The profile fences
+what the project and the model can make the agent do; the user's own deliberate
+environment (sign-in commands such as `COPILOT_PROVIDER_API_KEY_COMMAND`,
+telemetry such as `OTEL_*`, proxies) is passed through as the user set it. A
+variable is turned off only when its user value would let the project itself
+run code or load extensions (as `COPILOT_ALLOW_ALL=true` trusts the folder). An empty table counts as none. They override the user's own value and
+are part of the plan approval.
 `setup` must disable tools and project customization: it receives only the brief,
 request and sanitized inventory in a private neutral working directory.
 

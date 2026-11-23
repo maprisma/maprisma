@@ -107,6 +107,7 @@ void main() {
   late List<FakeProjectProcess> processes;
   late List<List<String>> commands;
   late List<String> directories;
+  late List<Map<String, String>> environments;
 
   Future<Map<String, dynamic>> save({
     String title = 'A project',
@@ -208,6 +209,7 @@ void main() {
     processes = [];
     commands = [];
     directories = [];
+    environments = [];
     startGate = null;
     launchFail = null;
     plugin = AiProjectCenterPlugin(
@@ -222,6 +224,7 @@ void main() {
       runner: (argv, cwd, environment, input, _, _) async {
         commands.add(argv);
         directories.add(cwd);
+        environments.add(environment);
         final failure = launchFail?.call();
         if (failure != null) throw failure;
         final process = FakeProjectProcess();
@@ -2095,6 +2098,138 @@ void main() {
       );
     },
   );
+
+  test('a phase env reaches only that phase and overrides the user', () async {
+    profiles.single['plan_env'] = {'GOOSE_MODE': 'chat'};
+    profiles.single['run_env'] = {'GOOSE_MODE': 'auto'};
+    var item = await save(plan: 'The plan.');
+    item = await approve(item);
+    await plugin.call('run', {'id': item['id'], 'revision': item['revision']});
+    await waitUntil(() => processes.length == 1);
+    expect(environments.single['GOOSE_MODE'], 'auto');
+    await processes.single.finish('Done.');
+    await waitUntil(() => plugin.summary()['running'] == 0);
+  });
+
+  test('a planning assignment gets the plan env', () async {
+    profiles.single['plan_env'] = {'GOOSE_MODE': 'chat'};
+    final item = await save();
+    await plugin.call('plan', {'id': item['id'], 'revision': item['revision']});
+    await waitUntil(() => processes.length == 1);
+    expect(environments.single['GOOSE_MODE'], 'chat');
+    await processes.single.finish('The plan.');
+    await waitUntil(() => plugin.summary()['running'] == 0);
+  });
+
+  for (final env in [
+    {'LD_PRELOAD': '/tmp/x.so'},
+    {'NODE_OPTIONS': '--require=/tmp/x.js'},
+    {'PYTHONPATH': '/tmp'},
+    {'PATH': '/tmp'},
+    {'MAPRISMA_PAGE': 'x'},
+    {'CLAUDECODE': '1'},
+    {'lower': 'x'},
+    {'GOOSE_MODE': 'yolo'},
+  ]) {
+    test('a profile env ${env.keys.single} is refused', () async {
+      profiles.single['plan_env'] = env;
+      final item = await save();
+      await expectLater(
+        plugin.call('plan', {'id': item['id'], 'revision': item['revision']}),
+        throwsA(errorCode('project_profile_invalid')),
+      );
+      expect(commands, isEmpty);
+    });
+  }
+
+  test('the phase env overrides the user\'s own value', () async {
+    await plugin.shutdown();
+    plugin = AiProjectCenterPlugin(
+      temporary.path,
+      agentProfiles: () => profiles,
+      filesystem: TestPosix(),
+      environment: {'GOOSE_MODE': 'approve', 'KEEP': 'me'},
+      runner: (argv, cwd, environment, input, _, _) async {
+        commands.add(argv);
+        environments.add(environment);
+        final process = FakeProjectProcess();
+        processes.add(process);
+        return process;
+      },
+    );
+    profiles.single['plan_env'] = {'GOOSE_MODE': 'auto'};
+    final item = await save();
+    await plugin.call('plan', {'id': item['id'], 'revision': item['revision']});
+    await waitUntil(() => processes.length == 1);
+    expect(environments.single['GOOSE_MODE'], 'auto');
+    expect(environments.single['KEEP'], 'me');
+    await processes.single.finish('The plan.');
+    await waitUntil(() => plugin.summary()['running'] == 0);
+  });
+
+  test('a reviewer in execution gets the plan env', () async {
+    profiles.single['plan_env'] = {'GOOSE_MODE': 'chat'};
+    profiles.single['run_env'] = {'GOOSE_MODE': 'auto'};
+    var item = await save(
+      plan: 'Implement then review.',
+      team: [
+        {'agent': 'fixture', 'role': 'lead'},
+        {'agent': 'fixture', 'role': 'reviewer'},
+      ],
+    );
+    item = await approve(item);
+    await plugin.call('run', {'id': item['id'], 'revision': item['revision']});
+    await waitUntil(() => processes.length == 1);
+    expect(environments[0]['GOOSE_MODE'], 'auto');
+    await processes[0].finish('Lead finished.');
+    await waitUntil(() => processes.length == 2);
+    expect(environments[1]['GOOSE_MODE'], 'chat');
+    await processes[1].finish('CLEAN');
+    await waitUntil(() => plugin.summary()['running'] == 0);
+  });
+
+  test('an invalid setup env is refused before the project changes', () async {
+    profiles.single['setup_env'] = {'NODE_OPTIONS': '--require=/x.js'};
+    final item = await save();
+    await expectLater(
+      plugin.call('setup', {
+        'id': item['id'],
+        'revision': item['revision'],
+        'request': 'A team please.',
+        'agent': 'fixture',
+      }),
+      throwsA(errorCode('project_profile_invalid')),
+    );
+    expect(commands, isEmpty);
+    final after = await project(plugin, item['id'] as String);
+    expect(after['revision'], item['revision']);
+  });
+
+  test(
+    'an old approval stays valid and an empty env table is no change',
+    () async {
+      final item = await approve(await save(plan: 'The checked plan.'));
+      profiles.single['run_env'] = <String, String>{};
+      await plugin.call('run', {
+        'id': item['id'],
+        'revision': item['revision'],
+      });
+      await waitUntil(() => processes.length == 1);
+      await processes.single.finish('Done.');
+      await waitUntil(() => plugin.summary()['running'] == 0);
+    },
+  );
+
+  test('an env change invalidates an already approved plan', () async {
+    profiles.single['run_env'] = {'GOOSE_MODE': 'chat'};
+    final item = await approve(await save(plan: 'The checked plan.'));
+    profiles.single['run_env'] = {'GOOSE_MODE': 'auto'};
+    await expectLater(
+      plugin.call('run', {'id': item['id'], 'revision': item['revision']}),
+      throwsA(errorCode('project_plan_not_approved')),
+    );
+    expect(commands, isEmpty);
+  });
 
   test('a template that ends option parsing is refused', () async {
     profiles.single['model_option'] = '--model';

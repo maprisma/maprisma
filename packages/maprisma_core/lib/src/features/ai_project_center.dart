@@ -8,6 +8,7 @@ import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 
 import '../action_rules.dart' show RuleRefused;
+import '../adapters.dart' show Adapter;
 import '../agent_start.dart' show isAgentSessionVar;
 import '../desktop_schedules.dart' show ProjectScheduler;
 import '../posix_ffi.dart';
@@ -957,6 +958,7 @@ final class AiProjectCenterPlugin {
   static bool _validTemplate(Map<String, dynamic> profile, String key) {
     final value = profile[key];
     if (!_validArgv(value)) return false;
+    if (!_validEnv(profile[_envKey(key)])) return false;
     final template = (value as List).cast<String>();
     if (profile['stdin'] != true && !template.contains('{prompt}')) {
       return false;
@@ -968,6 +970,21 @@ final class AiProjectCenterPlugin {
           arg == '--',
     );
   }
+
+  /// The phase's fixed variables (`plan_env` beside `plan_argv`, ...).
+  static String _envKey(String argvKey) =>
+      argvKey.replaceFirst(RegExp(r'_argv$'), '_env');
+
+  static bool _validEnv(Object? value) =>
+      value == null ||
+      value is Map &&
+          value.length <= 16 &&
+          value.entries.every(
+            (e) =>
+                e.key is String &&
+                !isAgentSessionVar(e.key as String) &&
+                Adapter.validProjectEnvVar(e.key as String, e.value),
+          );
 
   static bool _validArgv(Object? value) =>
       value is List &&
@@ -1093,6 +1110,12 @@ final class AiProjectCenterPlugin {
       final binding = bindings is Map ? bindings[member['agent']] : null;
       return {
         'argv': profile[key],
+        // Only when declared (sorted): approvals saved before env existed
+        // stay valid, and an empty table is no change.
+        if (profile[_envKey(key)] case final Map env when env.isNotEmpty)
+          'env': {
+            for (final name in env.keys.toList()..sort()) name: env[name],
+          },
         for (final fact in _launchFacts) fact: profile[fact],
         'subagents': {
           for (final id in member['subagents'] as List? ?? const [])
@@ -1356,6 +1379,10 @@ final class AiProjectCenterPlugin {
         profile == null ||
         !_validArgv(profile['setup_argv'])) {
       throw ServiceError('project_setup_helper_unavailable');
+    }
+    // Refused before anything changes (the dispatch checks the same).
+    if (!_validTemplate(profile, 'setup_argv')) {
+      throw ServiceError('project_profile_invalid');
     }
     final previous = currentTeam
         .where((member) => member['agent'] == chosen)
@@ -1904,7 +1931,10 @@ final class AiProjectCenterPlugin {
             phase == 'setup'
                 ? p.join(directory, 'setup-workspace')
                 : item['path'] as String,
-            Map.of(_environment),
+            {
+              ..._environment,
+              ...?(profile[_envKey(key)] as Map?)?.cast<String, String>(),
+            },
             stdin ? prompt : null,
             lock,
             // Per attempt: the store is still owned and the work not paused,

@@ -82,3 +82,37 @@ verified = false                       # documentation only, not yet tried with 
 # Source: https://docs.github.com/en/copilot/reference/cli-command-reference
 argv = ["copilot", "-i", "{prompt}"]
 verified = false
+
+# AI Project Center: session-only permission scope; never changes global settings.
+# Checked against `copilot --help`, `copilot help permissions` and `copilot help sandbox` of
+# GitHub Copilot CLI 1.0.114 and https://docs.github.com/en/copilot/reference/cli-command-reference
+# (tool names for --available-tools). -p denies every tool request no rule approves; shell, URL and
+# memory are denied, file paths stay inside the working directory (--disallow-temp-dir). A -p run in
+# an untrusted folder skips its workspace MCP servers and repository hooks; user-level hooks and
+# plugins cannot be switched off by a flag. No --sandbox: the shell is not available at all.
+[project]
+plan = ["copilot", "-p", "{prompt}", "-s", "--no-ask-user", "--no-auto-update", "--disable-builtin-mcps", "--disallow-temp-dir", "--available-tools=view,glob,grep,rg", "--deny-tool=shell", "--deny-tool=write", "--deny-tool=url", "--deny-tool=memory"]
+run = ["copilot", "-p", "{prompt}", "-s", "--no-ask-user", "--no-auto-update", "--disable-builtin-mcps", "--disallow-temp-dir", "--available-tools=view,glob,grep,rg,edit,create,apply_patch", "--allow-tool=write", "--deny-tool=shell", "--deny-tool=url", "--deny-tool=memory"]
+permissions = "Planning and review only read and search project files. Execution may also create and edit files inside the project folder; shell commands, web access, memory and the built-in MCP servers are disabled. Only these file tools reach the model, but your own hooks, plugins and MCP servers still start (and repository hooks in a folder you already trusted in Copilot)."
+model_option = "--model"
+
+# The user's own environment could switch these on: COPILOT_ALLOW_ALL=true trusts the folder (its
+# hooks, MCP servers, skills, plugins), the PROMPT_MODE_* opt-ins load the folder's extensions, repo
+# hooks or workspace MCP in -p (cli-main.js 1.0.114, changelog), ASSISTED_APPROVAL lets a judge approve, and
+# COPILOT_AUTO_UPDATE=false also stops the plugin updates --no-auto-update leaves on.
+# Source: `copilot help environment`, `copilot help extensions` (1.0.114).
+[project.env.plan]
+COPILOT_ALLOW_ALL = "false"
+COPILOT_ASSISTED_APPROVAL = "false"
+GITHUB_COPILOT_PROMPT_MODE_EXTENSIONS = "false"
+GITHUB_COPILOT_PROMPT_MODE_REPO_HOOKS = "false"
+GITHUB_COPILOT_PROMPT_MODE_WORKSPACE_MCP = "false"
+COPILOT_AUTO_UPDATE = "false"
+
+[project.env.run]
+COPILOT_ALLOW_ALL = "false"
+COPILOT_ASSISTED_APPROVAL = "false"
+GITHUB_COPILOT_PROMPT_MODE_EXTENSIONS = "false"
+GITHUB_COPILOT_PROMPT_MODE_REPO_HOOKS = "false"
+GITHUB_COPILOT_PROMPT_MODE_WORKSPACE_MCP = "false"
+COPILOT_AUTO_UPDATE = "false"

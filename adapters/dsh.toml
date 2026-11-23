@@ -57,3 +57,9 @@ hook = true
 # let it write; there is no read-only or no-tools option.
 # Source: https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/cli-help.md,
 # docs/subsystems/permission-presets.md
+
+
+# No [project] (dsh 0.2.1-rc.2, reviewed 2026-11-23): no permission flags; DSH_PERMISSION_MODE only sets
+# the inferred default preset, and a defaultPreset the user saved wins over it for every fresh session
+# (dsh-permission-presets/lib/index.js: pinInitialPermission, defaultSettings). Its sandbox covers file
+# effects only (dsh-bash-sandbox README, "Known Limitations"): commands keep network access.

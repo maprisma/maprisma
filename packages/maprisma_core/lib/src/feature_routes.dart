@@ -34,6 +34,17 @@ extension FeatureRoutes on CoreService {
               'plan_argv': agent.adapter.table('project')['plan'],
               'run_argv': agent.adapter.table('project')['run'],
               'setup_argv': agent.adapter.table('project')['setup'],
+              // Fixed variables per phase (goose's GOOSE_MODE): validated
+              // with the adapter, checked again at every dispatch.
+              for (final phase in const ['plan', 'run', 'setup'])
+                if (((agent.adapter.table('project')['env'] as Map?)?[phase]
+                            as Map?)
+                        ?.isNotEmpty ==
+                    true)
+                  '${phase}_env': Map<String, dynamic>.from(
+                    (agent.adapter.table('project')['env'] as Map)[phase]
+                        as Map,
+                  ),
               'access_modes':
                   agent.adapter.table('project')['access_modes'] ??
                   ['read-only', 'project-edit'],
