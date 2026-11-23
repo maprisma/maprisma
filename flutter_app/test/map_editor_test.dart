@@ -1391,6 +1391,50 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+  testWidgets('while a box is moved, the box under it is neither selected nor '
+      'highlighted; after the drop only the moved box is selected', (
+    tester,
+  ) async {
+    final edits = <Map<String, dynamic>>[], saved = <Map<String, dynamic>>[];
+    await mount(tester, edits: edits, onLayout: saved.add);
+    // The frame of a box: 3 px while it is selected or a target, else 1 px.
+    double frame(String id) {
+      final face = tester
+          .widgetList<Card>(
+            find.descendant(
+              of: find.byKey(ValueKey('map-node-$id')),
+              matching: find.byType(Card),
+            ),
+          )
+          .firstWhere((c) => c.key == null);
+      return ((face.shape as RoundedRectangleBorder).side).width;
+    }
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.text('agent:a')),
+      kind: PointerDeviceKind.mouse,
+    );
+    final over = tester.getCenter(find.text('agent:b'));
+    final start = tester.getCenter(find.text('agent:a'));
+    for (var i = 1; i <= 20; i++) {
+      await gesture.moveTo(Offset.lerp(start, over, i / 20)!);
+      await tester.pump();
+    }
+    // Over agent:b: only the separators show; agent:b is no target, not lit.
+    expect(find.byKey(const ValueKey('box-drop-line')), findsOneWidget);
+    expect(frame('agent:b'), 1);
+    await gesture.moveBy(const Offset(0, 60));
+    await tester.pump();
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect((saved.last['order'] as Map)['1:agent:'], ['agent:b', 'agent:a']);
+    // The dropped box alone is selected.
+    expect(frame('agent:a'), 3);
+    expect(frame('agent:b'), 1);
+    expect(edits, isEmpty);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('a box dragged by its body moves inside its card, and '
       'connects when dragged out of it', (tester) async {
     final edits = <Map<String, dynamic>>[], saved = <Map<String, dynamic>>[];
@@ -1489,8 +1533,7 @@ void main() {
     expect(find.byKey(const ValueKey('box-drop-line')), findsNothing);
     expect(find.byKey(const ValueKey('box-gap-0')), findsNothing);
     expect((saved.last['order'] as Map)['1:agent:'], ['agent:b', 'agent:a']);
-    await tester.tap(find.text('agent:a'));
-    await tester.pumpAndSettle();
+    // The moved box is selected already (no click needed): its hooks show.
     final hook = find
         .byTooltip(
           'Move this connection to another compatible box, or to empty space to disconnect.',

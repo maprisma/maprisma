@@ -583,6 +583,19 @@ class _MapEditorState extends State<MapEditor>
     final to = nodes.indexOf(id) + step;
     if (to < 0 || to >= nodes.length) return;
     _save(reorderMapBox(_saved, layout, id, to));
+    _selectOnly(id);
+  }
+
+  /// After a box was moved: it alone is selected (what it was dropped over is
+  /// not).
+  void _selectOnly(String id) {
+    _renderChange(() {
+      _clickedLine = null;
+      _hover = null;
+      _selected
+        ..clear()
+        ..add(id);
+    });
   }
 
   /// A card one place earlier or later in its own column.
@@ -876,8 +889,12 @@ class _MapEditorState extends State<MapEditor>
     bool dimmed = false,
   }) {
     final node = layout.nodes[id]!, rect = layout.boxes[id]!;
+    // While a box is moved inside its card no other box is a target (only
+    // the separators show where it goes).
     final valid =
-        _source != null && layout.targetOk(_source!, id, moving: _moving);
+        _draggingBox == null &&
+        _source != null &&
+        layout.targetOk(_source!, id, moving: _moving);
     final colors = Theme.of(context).colorScheme;
     final radius = corners(context);
     final running = node['status'] == 'running';
@@ -904,8 +921,12 @@ class _MapEditorState extends State<MapEditor>
       key: ValueKey('map-node-$id'),
       rect: rect,
       child: MouseRegion(
-        onEnter: (_) => _renderChange(() => _hover = id),
-        onExit: (_) => _renderChange(() => _hover = null),
+        onEnter: (_) {
+          if (_draggingBox == null) _renderChange(() => _hover = id);
+        },
+        onExit: (_) {
+          if (_draggingBox == null) _renderChange(() => _hover = null);
+        },
         child: GestureDetector(
           // Dragged inside its own card the box changes its place there
           // (separators show every place); dragged out of its card it draws a
@@ -915,6 +936,7 @@ class _MapEditorState extends State<MapEditor>
           onPanUpdate: (d) => _renderChange(() {
             _cursor = _local(d.globalPosition);
             final reorder = _reorderingInCard(layout, id, _cursor!);
+            if (reorder) _hover = null;
             _draggingBox = reorder ? id : null;
             _draggingBoxY = reorder ? _cursor!.dy : null;
           }),
@@ -929,6 +951,7 @@ class _MapEditorState extends State<MapEditor>
               if (layout.boxDrop(id, y) case final drop?) {
                 _save(reorderMapBox(_saved, layout, id, drop.$1));
               }
+              _selectOnly(id);
               return;
             }
             _drop(_cursor == null ? null : layout.nodeAt(_cursor!));
@@ -955,7 +978,7 @@ class _MapEditorState extends State<MapEditor>
                 ? colors.secondary
                 : null,
             elevated:
-                _hover == id ||
+                (_hover == id && _draggingBox == null) ||
                 _selected.contains(id) ||
                 valid ||
                 running ||
@@ -1018,6 +1041,7 @@ class _MapEditorState extends State<MapEditor>
                                           // to strongest.
                                           onVerticalDragStart: (d) =>
                                               _renderChange(() {
+                                                _hover = null;
                                                 _draggingBox = id;
                                                 _draggingBoxY = _local(
                                                   d.globalPosition,
@@ -1049,6 +1073,7 @@ class _MapEditorState extends State<MapEditor>
                                                 drop.$1,
                                               ),
                                             );
+                                            _selectOnly(id);
                                           },
                                           onVerticalDragCancel: () =>
                                               _renderChange(() {
@@ -1553,7 +1578,7 @@ class _MapEditorState extends State<MapEditor>
     _phase.framesPerSecond = widget.lightFps;
     _phase.refreshRate = View.of(context).display.refreshRate;
     _phase.enabled = flowing;
-    final seed = {..._selected, ?_hover};
+    final seed = {..._selected, if (_draggingBox == null) ?_hover};
     final pinned = {...(_saved['pins'] as List? ?? []).cast<String>()};
     // A hidden column or a box a card leaves out has no lines to light.
     seed.retainWhere(layout.boxes.containsKey);
