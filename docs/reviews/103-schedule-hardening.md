@@ -174,3 +174,25 @@ Verified by the reviewer without findings: the add-on `[project]` table, the `in
 - `packages/maprisma_core`: `dart analyze` clean; `dart test test/project_schedule_test.dart test/agent_detect_test.dart test/ai_project_center_test.dart` — 220 passed, 1 known machine-dependent failure (`test/agent_detect_test.dart: OpenClaw and Hermes outside their packages count when proven`).
 - `flutter_app`: `flutter analyze --no-pub` clean; `flutter test --no-pub test/project_event_translation_test.dart test/project_texts_translated_test.dart test/project_schedule_test.dart` — 12/12 passed.
 - Python: `python3 -m unittest tests.test_i18n tests.test_manual tests.test_manual_translations tests.test_protocol` — 14/14 passed.
+
+
+## Round 5 (Antigravity, 2026-11-23, commit f79b1ed8)
+
+No findings.
+
+### Verified without findings
+- **Spool gate (`takeScheduleRequests`)** ([ai_project_center.dart:3632-3673](packages/maprisma_core/lib/src/features/ai_project_center.dart#L3632-L3673)):
+  - `_io.absent(spool)` ([L3637](packages/maprisma_core/lib/src/features/ai_project_center.dart#L3637), [posix_ffi.dart:310-321](packages/maprisma_core/lib/src/posix_ffi.dart#L310-L321)) returns `0` cleanly when `schedule` does not exist yet (`ENOENT`/`ENOTDIR`) and lets every other state (`chmod 000`–`600`, `770`/`777`, foreign owner, regular file, dangling/looping symlink, unreadable parent `ai-project-center/`) enter the gate.
+  - `_io.close(_io.existingDirectory(spool))` ([L3647](packages/maprisma_core/lib/src/features/ai_project_center.dart#L3647), [posix_ffi.dart:726-742](packages/maprisma_core/lib/src/posix_ffi.dart#L726-L742)), the `.probe-$pid` write/delete ([L3648-L3650](packages/maprisma_core/lib/src/features/ai_project_center.dart#L3648-L3650)), and `Directory(spool).list(followLinks: false)` ([L3651-L3668](packages/maprisma_core/lib/src/features/ai_project_center.dart#L3651-L3668)) are guarded in one `try / on FileSystemException` block. Using `existingDirectory` ensures a dangling symlink fails closed (`ENOENT`) without creating a directory, and `absent(spool)` (`AT_SYMLINK_NOFOLLOW`) remains `false` on a dangling symlink so `_stopServing` still fires.
+  - Concurrent removal of `spool` between the check and the gate/listing hits `if (_io.absent(spool)) return 0;` ([L3670](packages/maprisma_core/lib/src/features/ai_project_center.dart#L3670)) and does not falsely end serving; a usable spool (including a trusted symlink to a `0700` directory) passes the gate normally.
+  - `_why(error)` ([L3604-L3607](packages/maprisma_core/lib/src/features/ai_project_center.dart#L3604-L3607), used at [L3671](packages/maprisma_core/lib/src/features/ai_project_center.dart#L3671), [L3686](packages/maprisma_core/lib/src/features/ai_project_center.dart#L3686), [L3714](packages/maprisma_core/lib/src/features/ai_project_center.dart#L3714)) falls back to `'$error'` when `Posix._fail()` leaves `OSError.message` empty (confirmed in test output: `Maprisma: schedule spool: FileSystemException: POSIX operation failed, path = '' (OS Error: errno = 13)`).
+  - Nothing in `takeScheduleRequests` throws uncaught on operational spool failures; `serveScheduledRuns` ([project_schedule_run.dart:90-115](packages/maprisma_core/lib/src/features/project_schedule_run.dart#L90-L115)) finishes cleanly via `plugin.shutdown()`.
+- **Earlier rounds & `scheduleTrigger`:** Only [ai_project_center.dart](packages/maprisma_core/lib/src/features/ai_project_center.dart), [project_schedule_test.dart](packages/maprisma_core/test/project_schedule_test.dart), and the task/review docs changed since `9f53b6a7`. Rounds 1–3 fixes and `scheduleTrigger` ([project_schedule_run.dart:123-194](packages/maprisma_core/lib/src/features/project_schedule_run.dart#L123-L194)) remain intact and truthful.
+- **New test:** `agy 103 r4 #1` ([project_schedule_test.dart:1639-1669](packages/maprisma_core/test/project_schedule_test.dart#L1639-L1669)) accurately tests a `chmod 000` spool across 3 looks (returns `0`, single `_spoolUnusable` notification) and in `serveScheduledRuns` (no throw, no commands launched, store lock released by `shutdown()` so `open()` succeeds again).
+
+### Checks run (temp `HOME`/`XDG_*`, real `PUB_CACHE`)
+- `packages/maprisma_core`: `dart analyze` — no issues; `dart test test/project_schedule_test.dart test/agent_detect_test.dart test/ai_project_center_test.dart` — 221 passed, 1 known machine-dependent failure (`test/agent_detect_test.dart: OpenClaw and Hermes outside their packages count when proven`).
+- `flutter_app`: `flutter analyze --no-pub` — no issues; `flutter test --no-pub test/project_event_translation_test.dart test/project_texts_translated_test.dart test/project_schedule_test.dart` — 12/12 passed.
+- Python: `python3 -m unittest tests.test_i18n tests.test_manual tests.test_manual_translations tests.test_protocol` — 14/14 passed.
+
+CLEAN

@@ -1,6 +1,6 @@
 # 103 Schedule hardening: what AI Agents Map 2.1.0–2.1.4 fixed
 
-> **Status 2026-11-23: ready for review (Antigravity round 5).** Round 4 (9f53b6a7) found 1 Medium (the gate did not cover opening and listing the spool), fixed in 8dba19ee with a failing-first test (docs/reviews/103-schedule-hardening.md).
+> **Status 2026-11-23: reviewed, CLEAN (Antigravity round 5 at f79b1ed8).** Rounds: 8 → 2 → 3 → 1 → 0 findings (docs/reviews/103-schedule-hardening.md). Next: merge into main, complete suites, release 2.1.4 (add-on signing needs Uwe's passphrase).
 > 4 Medium, 2 Low), all confirmed and fixed in fb524392 (core) and 2e4415dd (gui), each with a test that fails
 > on ea9807e0; record in `docs/reviews/103-schedule-hardening.md`. Earlier: the WIP was reviewed against
 > `main` (0297b5f2, Maprisma 2.1.3), every finding below confirmed; the core suite's machine-dependent
