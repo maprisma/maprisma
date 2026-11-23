@@ -691,7 +691,8 @@ void main() {
           command: () => command,
           systemctl: (args) async {
             // The folder loses its search right while systemd stops the timer.
-            if (args.first == 'disable') Process.runSync('chmod', ['000', units]);
+            if (args.first == 'disable')
+              Process.runSync('chmod', ['000', units]);
             return (true, '');
           },
           posix: TestPosix(),
