@@ -2274,6 +2274,22 @@ class AiProjectCenterPageState extends State<AiProjectCenterPage> {
     if (event['type'] == 'schedule_ended') {
       return tr('The schedule has ended; its timer was removed.');
     }
+    // A timer that could not be kept (task 103), with systemd's reason.
+    if (event['type'] == 'schedule_timer_failed') {
+      final match = RegExp(
+        r'^The timer of its schedule could not be (removed|set up) \((.*)\)\. Maprisma tries again at its next start\.$',
+      ).firstMatch(text);
+      if (match != null) {
+        final sentence = match[1] == 'removed'
+            ? tr(
+                'The timer of its schedule could not be removed. Maprisma tries again at its next start.',
+              )
+            : tr(
+                'The timer of its schedule could not be set up, so it does not run on time. Maprisma tries again at its next start.',
+              );
+        return '$sentence (${match[2]})';
+      }
+    }
     // Send now's new session failed before its agent started (task 096).
     if (event['type'] == 'continue_failed' &&
         RegExp(r'^project_[a-z_]+$').hasMatch(text)) {

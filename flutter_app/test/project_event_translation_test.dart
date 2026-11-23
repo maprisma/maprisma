@@ -31,6 +31,12 @@ void main() {
         {'type': 'failed', 'text': 'project_agent_unavailable'},
         // Send now's new session failed before its agent started (096).
         {'type': 'continue_failed', 'text': 'project_prompt_too_large'},
+        // A timer that could not be kept (103): systemd's reason stays.
+        {
+          'type': 'schedule_timer_failed',
+          'text':
+              'The timer of its schedule could not be removed (systemctl disable --now failed: Access denied). Maprisma tries again at its next start.',
+        },
       ],
     };
     const translations = {
@@ -46,6 +52,8 @@ void main() {
           'Nicht gestartet: {0}',
       'The prompt for the next agent would be too large. Shorten the goal, the plan or the waiting messages.':
           'Prompt zu groß.',
+      'The timer of its schedule could not be removed. Maprisma tries again at its next start.':
+          'Timer nicht entfernt.',
       'Original agent output': 'Must not replace output',
       'Original saved handoff': 'Must not replace handoff',
     };
@@ -77,6 +85,12 @@ void main() {
     expect(find.text('Agent mit Code -15 beendet.'), findsOneWidget);
     expect(find.text('Agent nicht verfügbar.'), findsOneWidget);
     expect(find.text('Nicht gestartet: Prompt zu groß.'), findsOneWidget);
+    expect(
+      find.text(
+        'Timer nicht entfernt. (systemctl disable --now failed: Access denied)',
+      ),
+      findsOneWidget,
+    );
     expect(find.text('Original agent output'), findsOneWidget);
     expect(find.text('Original saved handoff'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());

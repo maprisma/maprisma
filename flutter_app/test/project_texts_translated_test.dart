@@ -125,6 +125,13 @@ void main() {
       'Some of its processes are still stopping.',
       'Maprisma: a scheduled project did not run',
       'Maprisma is open but did not take the scheduled run. Open its Projects page and try again.',
+      // Timers that cannot be kept (task 103).
+      'Maprisma: a project schedule needs attention',
+      'The timer of its schedule could not be removed. Maprisma tries again at its next start.',
+      'The timer of its schedule could not be set up, so it does not run on time. Maprisma tries again at its next start.',
+      'Maprisma cannot read the folder of its timers (~/.config/systemd/user). Timers it no longer needs stay until it can.',
+      'Maprisma could not record the scheduled run. Open its Projects page to check the project.',
+      'The scheduled run could not be handed over to Maprisma. Its timer starts it again at the next planned time.',
     };
     for (final code in ['de', 'es', 'fr', 'it', 'nl', 'pl', 'pt']) {
       final table =

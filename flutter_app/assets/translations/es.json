@@ -1259,5 +1259,11 @@
   "The approval no longer fits. Approve again.": "La aprobación ya no corresponde. Vuelve a aprobar.",
   "Some of its processes are still stopping.": "Algunos de sus procesos aún se están deteniendo.",
   "Maprisma: a scheduled project did not run": "Maprisma: un proyecto programado no se ejecutó",
-  "Maprisma is open but did not take the scheduled run. Open its Projects page and try again.": "Maprisma está abierto pero no aceptó la ejecución programada. Abre su página Proyectos e inténtalo de nuevo."
+  "Maprisma is open but did not take the scheduled run. Open its Projects page and try again.": "Maprisma está abierto pero no aceptó la ejecución programada. Abre su página Proyectos e inténtalo de nuevo.",
+  "Maprisma: a project schedule needs attention": "Maprisma: una programación de proyecto necesita atención",
+  "The timer of its schedule could not be removed. Maprisma tries again at its next start.": "No se pudo eliminar el temporizador de su programación. Maprisma lo intentará de nuevo en su próximo inicio.",
+  "The timer of its schedule could not be set up, so it does not run on time. Maprisma tries again at its next start.": "No se pudo configurar el temporizador de su programación, así que no se ejecuta a tiempo. Maprisma lo intentará de nuevo en su próximo inicio.",
+  "Maprisma cannot read the folder of its timers (~/.config/systemd/user). Timers it no longer needs stay until it can.": "Maprisma no puede leer la carpeta de sus temporizadores (~/.config/systemd/user). Los temporizadores que ya no necesita se quedan hasta que pueda.",
+  "Maprisma could not record the scheduled run. Open its Projects page to check the project.": "Maprisma no pudo registrar la ejecución programada. Abre su página Proyectos para revisar el proyecto.",
+  "The scheduled run could not be handed over to Maprisma. Its timer starts it again at the next planned time.": "No se pudo entregar la ejecución programada a Maprisma. Su temporizador la iniciará de nuevo a la próxima hora prevista."
 }
