@@ -1556,6 +1556,86 @@ void main() {
       skip: Platform.environment['USER'] == 'root' ? 'root writes it' : false,
     );
 
+    for (final mode in ['000', '500']) {
+      test(
+        'agy 103 r3 #1: a request left in a $mode spool is not "handed over"',
+        () async {
+          final item = await scheduled(await approved());
+          final spool = p.join(plugin.directory, 'schedule');
+          addTearDown(() => Process.runSync('chmod', ['700', spool]));
+          final notes = <String>[];
+          final result = await scheduleTrigger(
+            id: item['id'] as String,
+            dataDirectory: temporary.path,
+            open: () {
+              // The request is written; now the folder closes.
+              Process.runSync('chmod', [mode, spool]);
+              return open(); // busy: the plugin above owns the store
+            },
+            serve: (_) async => fail('not the owner'),
+            wait: const Duration(milliseconds: 100),
+            step: const Duration(milliseconds: 10),
+            notify: (title, body) => notes.add(body),
+            posix: TestPosix(),
+          );
+          expect(result, 'timeout');
+          expect(notes, [
+            'The scheduled run could not be handed over to Maprisma. Its timer starts it again at the next planned time.',
+          ]);
+        },
+        skip: Platform.environment['USER'] == 'root' ? 'root writes it' : false,
+      );
+    }
+
+    test(
+      'agy 103 r3 #2: a spool that cannot be changed stops serving, told once',
+      () async {
+        final item = await scheduled(await approved());
+        final id = item['id'] as String;
+        now = utc(2026, 11, 24, 4).add(const Duration(seconds: 1));
+        writeScheduleRequest(temporary.path, id, now, posix: TestPosix());
+        final spool = p.join(plugin.directory, 'schedule');
+        Process.runSync('chmod', ['500', spool]);
+        addTearDown(() => Process.runSync('chmod', ['700', spool]));
+        scheduler.notes.clear();
+        for (var look = 0; look < 3; look++) {
+          expect(await plugin.takeScheduleRequests(), 0);
+        }
+        expect(scheduler.notes.map((n) => n.$2), [
+          'Maprisma cannot use the folder of its scheduled runs, so it starts none until it is opened again.',
+        ]);
+        expect(commands, isEmpty);
+        // The next start (permissions back) serves it.
+        Process.runSync('chmod', ['700', spool]);
+        await plugin.shutdown();
+        plugin = open();
+        expect(await plugin.takeScheduleRequests(), 1);
+        await waitUntil(() => commands.length == 1);
+        await processes.single.finish('done');
+        await waitUntil(() => plugin.idle);
+      },
+      skip: Platform.environment['USER'] == 'root' ? 'root writes it' : false,
+    );
+
+    test(
+      'agy 103 r3 #3: an entry that cannot be claimed stops serving instead of taking places',
+      () async {
+        final item = await scheduled(await approved());
+        final id = item['id'] as String;
+        final spool = p.join(plugin.directory, 'schedule');
+        Directory(spool).createSync(recursive: true);
+        now = utc(2026, 11, 24, 4).add(const Duration(seconds: 1));
+        final stuck = '$id.${'0' * 16}';
+        File(p.join(spool, '$stuck.request')).writeAsStringSync('{}');
+        Directory(p.join(spool, '$stuck.taken')).createSync();
+        scheduler.notes.clear();
+        expect(await plugin.takeScheduleRequests(), 0);
+        expect(await plugin.takeScheduleRequests(), 0);
+        expect(scheduler.notes, hasLength(1));
+        expect(File(p.join(spool, '$stuck.request')).existsSync(), isTrue);
+      },
+    );
+
     test(
       'agy 103 r1 #6: a timer report never stops running work when the store is full',
       () async {

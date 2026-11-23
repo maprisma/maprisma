@@ -132,13 +132,16 @@ Future<String> scheduleTrigger({
   String Function(String text) translate = _same,
   Posix? posix,
 }) async {
+  // "Gone" only when the file system says so: typeSync calls a file in a
+  // folder it cannot search "not found" (agy 103 r3 #1).
+  final io = posix ?? Posix();
   final String request;
   try {
     request = writeScheduleRequest(
       dataDirectory,
       id,
       (clock ?? DateTime.now)(),
-      posix: posix,
+      posix: io,
     );
   } on Object catch (error) {
     // Without its request no owner can run it: not silent.
@@ -165,20 +168,23 @@ Future<String> scheduleTrigger({
       return 'owner';
     }
     // Claimed (renamed) by the running owner.
-    if (FileSystemEntity.typeSync(request, followLinks: false) ==
-        FileSystemEntityType.notFound) {
-      return 'handed_over';
-    }
+    if (io.absent(request)) return 'handed_over';
     if (DateTime.now().isAfter(deadline)) {
+      var withdrawn = true;
       try {
         File(request).deleteSync();
       } on FileSystemException {
-        return 'handed_over'; // claimed at the last moment
+        // Claimed at the last moment, or a folder that cannot be changed:
+        // the request stays and was not handed over (agy 103 r3 #1).
+        if (io.absent(request)) return 'handed_over';
+        withdrawn = false;
       }
       notify?.call(
         translate('Maprisma: a scheduled project did not run'),
         translate(
-          'Maprisma is open but did not take the scheduled run. Open its Projects page and try again.',
+          withdrawn
+              ? 'Maprisma is open but did not take the scheduled run. Open its Projects page and try again.'
+              : 'The scheduled run could not be handed over to Maprisma. Its timer starts it again at the next planned time.',
         ),
       );
       return 'timeout';

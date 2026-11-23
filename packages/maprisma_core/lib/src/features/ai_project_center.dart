@@ -3589,6 +3589,26 @@ final class AiProjectCenterPlugin {
   static const _requestsPerLook = 64;
   bool _taking = false;
 
+  /// Why this process stopped serving the spool (agy 103 r3): the spool is
+  /// used as a whole or not at all. A folder that cannot be listed or
+  /// written, or an entry that cannot be renamed or removed, ends serving
+  /// until the next start, and the user is told once. So no entry is run,
+  /// counted or reported again and again, and none takes places forever.
+  String? _spoolBroken;
+
+  static const _spoolUnusable =
+      'Maprisma cannot use the folder of its scheduled runs, so it starts none until it is opened again.';
+
+  void _stopServing(Object reason) {
+    if (_spoolBroken != null) return;
+    _spoolBroken = '$reason';
+    stderr.writeln('Maprisma: schedule spool: $reason');
+    _scheduler?.notify(
+      _translate('Maprisma: a project schedule needs attention'),
+      _translate(_spoolUnusable),
+    );
+  }
+
   static const _requestFailed =
       'Maprisma could not record the scheduled run. Open its Projects page to check the project.';
 
@@ -3603,7 +3623,7 @@ final class AiProjectCenterPlugin {
   /// removed as broken, so a look that only cleared broken ones is no quiet
   /// one for the headless owner (task 103).
   Future<int> takeScheduleRequests() async {
-    if (_taking || !_ownsStore()) return 0;
+    if (_taking || !_ownsStore() || _spoolBroken != null) return 0;
     final spool = p.join(directory, 'schedule');
     if (FileSystemEntity.typeSync(spool, followLinks: false) !=
         FileSystemEntityType.directory) {
@@ -3613,6 +3633,16 @@ final class AiProjectCenterPlugin {
     var handled = 0;
     try {
       _io.close(_io.privateDirectory(spool));
+      // The gate: the folder takes and gives back a file, or nothing is
+      // served (a read-only or closed spool would leave entries behind).
+      final probe = p.join(spool, '.probe-$pid');
+      try {
+        File(probe).writeAsStringSync('');
+        File(probe).deleteSync();
+      } on FileSystemException catch (error) {
+        _stopServing(error.osError?.message ?? error.message);
+        return 0;
+      }
       final names = <String>[];
       final now = DateTime.now();
       await for (final entry in Directory(spool).list(followLinks: false)) {
@@ -3636,15 +3666,17 @@ final class AiProjectCenterPlugin {
       names.sort();
       for (final name in names) {
         // Closed while the spool was read: the next owner takes them.
-        if (!_ownsStore()) break;
+        if (!_ownsStore() || _spoolBroken != null) break;
         final match = _requestName.firstMatch(name)!;
         var path = p.join(spool, name);
         if (match[2] == 'request') {
           final taken = path.replaceFirst(RegExp(r'\.request$'), '.taken');
           try {
             File(path).renameSync(taken);
-          } on FileSystemException {
-            continue; // withdrawn meanwhile
+          } on FileSystemException catch (error) {
+            if (_io.absent(path)) continue; // withdrawn meanwhile
+            _stopServing(error.osError?.message ?? error.message);
+            break;
           }
           path = taken;
         }
@@ -3669,8 +3701,10 @@ final class AiProjectCenterPlugin {
           try {
             File(path).deleteSync();
             return true;
-          } on FileSystemException {
-            return _io.absent(path);
+          } on FileSystemException catch (error) {
+            if (_io.absent(path)) return true;
+            _stopServing(error.osError?.message ?? error.message);
+            return false;
           }
         }
 

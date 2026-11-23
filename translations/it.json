@@ -4022,5 +4022,6 @@
   "The timer of its schedule could not be set up, so it does not run on time. Maprisma tries again at its next start.": "Non è stato possibile impostare il timer della sua pianificazione, quindi non viene eseguito in orario. Maprisma riproverà al prossimo avvio.",
   "Maprisma cannot read the folder of its timers (~/.config/systemd/user). Timers it no longer needs stay until it can.": "Maprisma non riesce a leggere la cartella dei suoi timer (~/.config/systemd/user). I timer che non servono più restano finché non ci riesce.",
   "Maprisma could not record the scheduled run. Open its Projects page to check the project.": "Maprisma non è riuscito a registrare l’esecuzione pianificata. Apri la sua pagina Progetti per controllare il progetto.",
-  "The scheduled run could not be handed over to Maprisma. Its timer starts it again at the next planned time.": "Non è stato possibile passare l’esecuzione pianificata a Maprisma. Il suo timer la riavvierà al prossimo orario previsto."
+  "The scheduled run could not be handed over to Maprisma. Its timer starts it again at the next planned time.": "Non è stato possibile passare l’esecuzione pianificata a Maprisma. Il suo timer la riavvierà al prossimo orario previsto.",
+  "Maprisma cannot use the folder of its scheduled runs, so it starts none until it is opened again.": "Maprisma non può usare la cartella delle sue esecuzioni pianificate, quindi non ne avvia nessuna finché non viene riaperto."
 }
