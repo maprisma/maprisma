@@ -545,4 +545,45 @@ void main() {
     await tester.pumpAndSettle();
     expect(decorator().decoration.enabled, isFalse);
   });
+
+  testWidgets('Keyboard shortcuts: a section of its own, each key with what '
+      'it does, translated and found by Find in Settings', (tester) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(view(section: 'shortcuts'));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('settings-section-shortcuts')),
+      findsOneWidget,
+    );
+    for (final (key, what) in [
+      ('Ctrl+1', 'Projects tab'),
+      ('Ctrl+,', 'Open Settings'),
+      ('Ctrl+0', 'Fit the map to the window'),
+      ('Ctrl+Home / Ctrl+End', 'Move it to the top or the end of the board'),
+      ('Ctrl+Shift+C', 'Copy the selection'),
+    ]) {
+      expect(find.text(key), findsWidgets, reason: key);
+      expect(find.text(what), findsOneWidget, reason: what);
+    }
+    // Only this section's groups: not General's language.
+    expect(find.text('Language'), findsNothing);
+
+    await tester.enterText(find.byKey(const ValueKey('settings-find')), 'zoom');
+    await tester.pumpAndSettle();
+    expect(find.text('Zoom in'), findsOneWidget);
+    await tester.tap(find.byTooltip('Clear'));
+    await tester.pumpAndSettle();
+
+    final german =
+        jsonDecode(File('../translations/de.json').readAsStringSync())
+            as Map<String, dynamic>;
+    await tester.pumpWidget(view(section: 'shortcuts', translations: german));
+    await tester.pumpAndSettle();
+    expect(find.text('Tastenkürzel'), findsWidgets);
+    expect(find.text('Strg+Pos1 / Strg+Ende'), findsOneWidget);
+    expect(find.text('Die Karte ins Fenster einpassen'), findsOneWidget);
+  });
 }

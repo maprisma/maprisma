@@ -431,6 +431,103 @@ class SettingsView extends StatelessWidget {
         '${words.formatTimeOfDay(TimeOfDay.fromDateTime(t))}';
   }
 
+  /// The app's keyboard shortcuts, grouped, each with what it does
+  /// (Settings › Shortcuts; Find in Settings finds them).
+  static const _shortcuts = [
+    (
+      'Window',
+      [
+        ('Ctrl+1', 'Projects tab'),
+        ('Ctrl+2', 'AI Map tab'),
+        ('Ctrl+,', 'Open Settings'),
+        ('F1', 'Open Help'),
+        ('F5', 'Read the setup again (Refresh)'),
+        (
+          'F12',
+          'Save a picture of this window (it can be turned off under General)',
+        ),
+        ('Esc', 'Leave a page or close a dialog'),
+        ('Backspace', 'Back a page, when no text field has the keyboard'),
+      ],
+    ),
+    (
+      'AI Map',
+      [
+        ('Ctrl++', 'Zoom in'),
+        ('Ctrl+−', 'Zoom out'),
+        ('Ctrl+0', 'Fit the map to the window'),
+        ('Tab', 'The next box or button'),
+        ('Enter', 'Open the box that has the keyboard'),
+        (
+          'Ctrl+↑ / Ctrl+↓',
+          'Move the box or card that has the keyboard one place up or down; it stays in its card or column',
+        ),
+      ],
+    ),
+    (
+      'Projects',
+      [
+        ('Ctrl+↑ / Ctrl+↓', 'Move the card that has the keyboard one place'),
+        ('Ctrl+Home / Ctrl+End', 'Move it to the top or the end of the board'),
+      ],
+    ),
+    (
+      'Ask AI',
+      [
+        ('Enter', 'Send the question'),
+        ('Ctrl+Enter', 'A new line in the question'),
+      ],
+    ),
+    (
+      'Terminal',
+      [
+        ('Ctrl+Shift+C', 'Copy the selection'),
+        ('Ctrl+A', 'Select all'),
+        ('Ctrl+V / Ctrl+Shift+V', 'Paste'),
+      ],
+    ),
+  ];
+
+  List<Widget> _shortcutRows(BuildContext context) {
+    final theme = Theme.of(context);
+    return [
+      _Heading('shortcuts', _t('Keyboard shortcuts')),
+      const SizedBox(height: 8),
+      Text(
+        _t(
+          'The keys that work inside the app. Shortcuts that start the app or open it from the desktop are set in your desktop.',
+        ),
+      ),
+      for (final (group, keys) in _shortcuts) ...[
+        const SizedBox(height: AppSpace.md),
+        Text(_t(group), style: theme.textTheme.titleSmall),
+        const SizedBox(height: 4),
+        for (final (combo, what) in keys)
+          Padding(
+            key: ValueKey('shortcut-$group-$combo'),
+            padding: const EdgeInsets.symmetric(vertical: 3),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: 180,
+                  child: Text(
+                    _t(combo),
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontFamily: 'monospace',
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                Expanded(child: Text(_t(what))),
+              ],
+            ),
+          ),
+      ],
+      const SizedBox(height: AppSpace.md),
+    ];
+  }
+
   List<Widget> _changeRows(BuildContext context) {
     final changes = this.changes;
     if (changes == null) return const [];
@@ -1273,6 +1370,7 @@ class SettingsView extends StatelessWidget {
           onChanged: busy ? null : (mode) => onUpdate({'map_animations': mode}),
         ),
         const SizedBox(height: AppSpace.md),
+        ..._shortcutRows(context),
         ..._changeRows(context),
       ];
       log = _log!;
@@ -1390,6 +1488,7 @@ const _settingsSections = [
   ('agents', 'Agents', Icons.smart_toy_outlined),
   ('llms', 'Local LLMs', Icons.memory),
   ('dictation', 'Dictation', Icons.mic_none),
+  ('shortcuts', 'Keyboard shortcuts', Icons.keyboard_outlined),
   ('changes', 'Recent changes', Icons.history),
 ];
 
