@@ -40,6 +40,8 @@ Map<String, dynamic> working({
       execution: phase == 'execution' ? members : const [],
     ),
     if (phase == 'planning') 'planning': members,
+    // The project's phase: planning, or running for the execution team.
+    'phase': phase == 'execution' ? 'running' : phase,
     'events': [
       {'at': '2026-11-23T10:00:00.000Z', 'type': 'started', 'text': 'Go.'},
       {
@@ -235,6 +237,44 @@ void main() {
       'output': 'Inspecting the repo',
     });
     expect(find.text('Inspecting the repo'), findsOneWidget);
+    // The lead finishes between polls, the reviewer starts: the lead's final
+    // output stays stored until the reviewer writes.
+    Map<String, dynamic> step(String at, String output) => {
+      ...continued,
+      'active': {'phase': 'execution', 'position': 1, 'state': 'active'},
+      'events': [
+        ...continued['events'] as List,
+        {'at': at, 'type': 'assignment', 'text': 'Codex: reviewer'},
+      ],
+      'output': output,
+    };
+    await poll(step('2026-11-23T10:11:30.000Z', 'Inspecting the repo\nDone.'));
+    expect(find.byKey(const ValueKey('working-output')), findsNothing);
+    await poll(step('2026-11-23T10:11:30.000Z', 'Reading the diff'));
+    expect(find.text('Reading the diff'), findsOneWidget);
+  });
+
+  test('a card from before a change does not name the agent at work', () {
+    final ready = {
+      ...working(status: 'ready', phase: 'execution', state: 'next'),
+    };
+    final work = projectWork(ready, {
+      ...ready,
+      'status': 'planning',
+      'phase': 'planning',
+    }, tr)!;
+    expect(work.headline, 'AI is drafting the plan');
+    expect(work.detail, isNot(contains('step')));
+    final setup = projectWork(
+      {...working(status: 'running', phase: 'execution')},
+      {
+        ...working(status: 'planning'),
+        'phase': 'setup',
+        'setup_agent': {'name': 'Helper B'},
+      },
+      tr,
+    )!;
+    expect(setup.detail, 'Helper B');
   });
 
   test('the time counts from this attempt, not an older assignment', () {

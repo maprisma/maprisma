@@ -119,8 +119,9 @@ static void choose_folder(MyApplication* self, FlMethodCall* call) {
     return;
   }
   FlValue* args = fl_method_call_get_args(call);
-  // GTK's own translations for the defaults, in the desktop's language.
-  const gchar* title = g_dgettext("gtk30", "Select a folder");
+  // No title unless the app gives one (translated); the buttons in GTK's own
+  // translations, in the desktop's language.
+  const gchar* title = nullptr;
   const gchar* accept = g_dgettext("gtk30", "_Select");
   const gchar* initial = nullptr;
   FlValue* shortcuts = nullptr;

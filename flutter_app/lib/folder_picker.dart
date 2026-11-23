@@ -158,7 +158,7 @@ List<String> currentFolderShortcuts() {
 /// in its sidebar (Uwe 2026-11-23); file_selector's where the runner has no
 /// such method (an older runner, other platforms). A drop-in for
 /// file_selector's getDirectoryPath; [title] is the dialog's (translated)
-/// title, GTK's own "Select a folder" without it.
+/// title (none without it).
 Future<String?> chooseFolder({
   String? title,
   String? initialDirectory,

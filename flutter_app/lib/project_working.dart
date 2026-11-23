@@ -83,7 +83,15 @@ projectWork(
   String? name;
   String? role;
   var position = -1, count = 0;
-  final where = active?['phase'] as String?;
+  // The card's assignment, unless it is not the one at work (the card is
+  // from before a change: an assignment "next" or "stopped", another phase).
+  final cardPhase = active?['phase'] as String?;
+  final current =
+      !setup &&
+      const {'active', 'stopping'}.contains(active?['state']) &&
+      (phase == null ||
+          cardPhase == (phase == 'running' ? 'execution' : phase));
+  final where = current ? cardPhase : null;
   if (card != null && where != null && active?['position'] is int) {
     position = active!['position'] as int;
     final list = card[where] as List? ?? const [];
@@ -98,7 +106,7 @@ projectWork(
     }
   }
   if (setup) {
-    final agent = card?['setup_agent'] ?? project['setup_agent'];
+    final agent = project['setup_agent'] ?? card?['setup_agent'];
     if (agent is Map) {
       name = '${agent['name'] ?? agent['agent'] ?? ''}';
     } else if (agent is String) {
@@ -202,8 +210,9 @@ String workingFor(DateTime? since, DateTime now, String Function(String) tr) {
 ///
 /// The stored output is the previous agent's until the current one writes
 /// (it is kept on purpose, e.g. as evidence of interrupted work), so the
-/// strip shows an output line only once it differs from the output before
-/// the current dispatch (or, opened mid-run, from the output found then).
+/// strip shows an output line only once it differs from what was stored
+/// when the current dispatch was first seen (after an attempt's start with
+/// no dispatch: from the output seen then).
 class ProjectWorking extends StatefulWidget {
   const ProjectWorking({
     super.key,
@@ -227,10 +236,9 @@ class ProjectWorking extends StatefulWidget {
 }
 
 class _ProjectWorkingState extends State<ProjectWorking> {
-  // The dispatch seen and the output that is not its own: the output before
-  // it was dispatched (each agent's live output starts empty and replaces
-  // the stored one), or, when the page opened while it already ran, the
-  // output found then. [_last] is the output of the previous build.
+  // The dispatch seen and the output that is not its own (each agent's live
+  // output starts empty and replaces the stored one). [_last] is the output
+  // of the previous build.
   bool _seen = false;
   String? _key;
   String? _baseline;
@@ -255,8 +263,11 @@ class _ProjectWorkingState extends State<ProjectWorking> {
       _key = work.key;
       _baseline = work.output;
     } else if (work.key != _key) {
+      // After no dispatch (an attempt's start) the output seen then is not
+      // the new agent's; after another agent, its final output stays stored
+      // until the new one writes, so what is stored now is not.
+      _baseline = _key == null ? _last : work.output;
       _key = work.key;
-      _baseline = _last;
     }
     _last = work.output;
     _lastSetup = setup;

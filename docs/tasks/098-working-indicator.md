@@ -82,3 +82,13 @@ file_selector's dialog remains the fallback.
   the app's translation, buttons in GTK's own. Mounts: network shares and ZFS count, mounts inside
   another system's root do not; empty XDG variables, `HOME` with a slash, hidden KDE places and
   XML entities are handled.
+
+## Review round 3 (Codex + agy) — fixed
+- From one agent to the next the finished agent's final output stays stored until the next one
+  writes: at such a dispatch the stored output is the baseline (only after an attempt's start with
+  no dispatch the output seen then).
+- The card names the agent only while its assignment is the one at work (state active or
+  stopping, same phase as the project, not during team setup); the setup helper comes from the
+  project first.
+- The folder dialog has no made-up default title (GTK has no translation for one); the app passes
+  its translated title.
