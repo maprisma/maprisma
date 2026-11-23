@@ -134,6 +134,7 @@ extension FeatureRoutes on CoreService {
             'save',
             'move',
             'set_importance',
+            'set_schedule',
             'delete',
             'plan',
             'review',

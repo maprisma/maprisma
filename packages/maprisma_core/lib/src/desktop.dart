@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:toml/toml.dart';
 import 'desktop_palette.dart';
+import 'desktop_schedules.dart';
 import 'identity.dart';
 import 'posix_ffi.dart';
 
@@ -22,6 +23,10 @@ abstract interface class Desktop {
   /// Fixed commands one after the other while each succeeds, in one terminal
   /// window that waits at the end (run_steps_in_terminal).
   bool runStepsInTerminal(List<List<String>> steps, String prompt);
+
+  /// The timers of scheduled AI projects (task 101): systemd user timers
+  /// on Linux; macOS later gets launchd here.
+  ProjectScheduler get projectScheduler;
 }
 
 /// shlex.quote / shlex.join.
@@ -268,6 +273,9 @@ final class GenericDesktop implements Desktop {
   late final _gtkFonts = GtkFonts(environment);
   @override
   Map<String, String> fonts() => desktopFonts(environment, gtk: _gtkFonts.read);
+  @override
+  late final ProjectScheduler projectScheduler =
+      SystemdUserScheduler.forEnvironment(environment);
 }
 
 final class OmarchyDesktop implements Desktop {
@@ -306,6 +314,9 @@ final class OmarchyDesktop implements Desktop {
   @override
   Map<String, String> fonts() =>
       desktopFonts(identity.environment, gtk: _gtkFonts.read);
+  @override
+  late final ProjectScheduler projectScheduler =
+      SystemdUserScheduler.forEnvironment(identity.environment);
 
   @override
   String get themeDir =>

@@ -320,6 +320,11 @@ final class CoreService {
         runtimeProfiles: projectRuntimeProfiles,
         authorize: (agent) => _enforce([ActionCheck('start', 'agents', agent)]),
         environment: identity.environment,
+        // Task 101: the timers of scheduled projects, and the requests of
+        // timers that fired while this process owns the store.
+        scheduler: desktop.projectScheduler,
+        requestPoll: const Duration(seconds: 2),
+        translate: i18n.text,
       );
 
   late final reads = ReadService(identity, settings, desktop, i18n)

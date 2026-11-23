@@ -421,6 +421,26 @@ List<String>? projectSupervisorCommand() {
   return File(bundled).existsSync() ? [bundled, 'supervise'] : null;
 }
 
+/// The program a project's timer starts (task 101; `schedule-run <id>` is
+/// added): a stable path, never the private launch cache a feature process
+/// runs from. The bundle's own AI Project Center program (part of the
+/// installed package), or the Dart entry point in a source checkout; null
+/// when neither exists.
+List<String>? projectScheduleCommand() {
+  final executable = Platform.resolvedExecutable;
+  if (p.basename(executable) == 'dart') {
+    final command = projectSupervisorCommand();
+    return command?.sublist(0, command.length - 1);
+  }
+  final bundled = p.join(
+    appFolder(),
+    'features',
+    'ai-project-center',
+    'plugin',
+  );
+  return File(bundled).existsSync() ? [bundled] : null;
+}
+
 /// The controller's view of one supervised assignment. A stop that cannot be
 /// confirmed fails, and a later stop asks and waits again; nothing is cached
 /// except a confirmed empty tree.

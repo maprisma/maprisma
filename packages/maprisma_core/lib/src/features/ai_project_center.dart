@@ -7,9 +7,12 @@ import 'package:collection/collection.dart' show ListEquality;
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 
+import '../action_rules.dart' show RuleRefused;
 import '../agent_start.dart' show isAgentSessionVar;
+import '../desktop_schedules.dart' show ProjectScheduler;
 import '../posix_ffi.dart';
 import '../protocol.dart';
+import 'project_schedule.dart';
 import 'project_stage.dart';
 import 'project_supervisor.dart';
 
@@ -70,7 +73,17 @@ final class AiProjectCenterPlugin {
     List<String>? supervisor,
     this.storeLimit = maxStore,
     this.promptLimit = maxPromptBytes,
-  }) : directory = p.join(dataDirectory, 'ai-project-center'),
+    ProjectScheduler? scheduler,
+    ScheduleZone zone = const LocalScheduleZone(),
+    DateTime Function()? clock,
+    Duration? requestPoll,
+    String Function(String text)? translate,
+  }) : _translate = translate ?? _same,
+       directory = p.join(dataDirectory, 'ai-project-center'),
+       _scheduler = scheduler,
+       _requestPoll = requestPoll,
+       _zone = zone,
+       _scheduleClock = clock ?? DateTime.now,
        _customRunner = runner,
        _supervisorCommand = supervisor,
        _io = filesystem ?? Posix(),
@@ -87,7 +100,49 @@ final class AiProjectCenterPlugin {
       _directoryFd = null;
       rethrow;
     }
+    // The timers follow the store (task 101): written when missing or
+    // different, removed for projects without a schedule; requests from
+    // timers that fired while another process owned the store, too.
+    if (_scheduler != null) {
+      unawaited(_serial(_syncSchedules).catchError((Object _) {}));
+      _startRequests();
+    }
   }
+
+  void _startRequests() {
+    final poll = _requestPoll;
+    if (poll == null || _requestTimer?.isActive == true) return;
+    _requestTimer = Timer.periodic(poll, (_) {
+      unawaited(takeScheduleRequests().catchError((Object _) => 0));
+    });
+    unawaited(takeScheduleRequests().catchError((Object _) => 0));
+  }
+
+  final Duration? _requestPoll;
+
+  /// Keeps the systemd timers of scheduled projects (task 101); null: this
+  /// system keeps none and set_schedule is refused.
+  final ProjectScheduler? _scheduler;
+  final ScheduleZone _zone;
+  final DateTime Function() _scheduleClock;
+
+  /// The user's language for notifications (events stay English).
+  final String Function(String text) _translate;
+  static String _same(String text) => text;
+  Timer? _requestTimer;
+
+  /// Schedule changes (timers, requests) one after the other.
+  Future<void> _scheduleChain = Future.value();
+  Future<T> _serial<T>(Future<T> Function() action) {
+    _scheduleBusy++;
+    final result = _scheduleChain
+        .then((_) => action())
+        .whenComplete(() => _scheduleBusy--);
+    _scheduleChain = result.then<void>((_) {}, onError: (Object _) {});
+    return result;
+  }
+
+  int _scheduleBusy = 0;
 
   final String directory;
   final List<Map<String, dynamic>> Function() agentProfiles;
@@ -405,6 +460,24 @@ final class AiProjectCenterPlugin {
           _text(event['text'], 4000);
         }
         if (item.containsKey('messages')) _checkMessages(item['messages']);
+        // A schedule (task 101) as set_schedule stores it.
+        if (item['schedule'] != null) {
+          try {
+            item['schedule'] = checkSchedule(
+              item['schedule'],
+              checkUntil: false,
+            );
+          } on ServiceError {
+            throw const FormatException();
+          }
+        }
+        for (final key in ['schedule_set_at', 'schedule_last_slot']) {
+          if (item[key] != null &&
+              (item[key] is! String ||
+                  DateTime.tryParse(item[key] as String) == null)) {
+            throw const FormatException();
+          }
+        }
         // A store from before task 095 has no importance: Medium.
         if (!item.containsKey('importance')) item['importance'] = 'medium';
         if (!importances.contains(item['importance'])) {
@@ -680,7 +753,20 @@ final class AiProjectCenterPlugin {
         !_active.containsKey(item['id']) && _runHeld(item['id'] as String);
     view['messages'] ??= const <Map<String, dynamic>>[];
     view['messages_queued'] = _queued(item).length;
+    view['schedule'] = item['schedule'];
+    view['next_run'] = _nextRun(item);
     return view;
+  }
+
+  /// The next planned run of [item] (ISO 8601 UTC), null without one.
+  String? _nextRun(Map<String, dynamic> item) {
+    final schedule = item['schedule'];
+    if (schedule is! Map<String, dynamic>) return null;
+    return nextScheduledRun(
+      schedule,
+      _scheduleClock().toUtc(),
+      zone: _zone,
+    )?.toUtc().toIso8601String();
   }
 
   /// The messages still waiting for an assignment, oldest first.
@@ -1574,6 +1660,7 @@ final class AiProjectCenterPlugin {
     Map<String, dynamic> params,
     String operation, {
     _ProjectAttempt? attempt,
+    String? scheduled,
   }) {
     final item = _project(params, revision: true);
     _idle(item);
@@ -1601,7 +1688,12 @@ final class AiProjectCenterPlugin {
         !{'paused', 'interrupted', 'failed'}.contains(item['status'])) {
       throw ServiceError('project_not_paused');
     }
-    if (!continuing && operation == 'run' && item['status'] != 'ready') {
+    // A scheduled run (task 101) repeats a completed one while its approval
+    // is still valid (checked below).
+    if (!continuing &&
+        operation == 'run' &&
+        item['status'] != 'ready' &&
+        !(scheduled != null && item['status'] == 'completed')) {
       throw ServiceError('project_plan_not_approved');
     }
     if (phase == 'running' &&
@@ -1650,8 +1742,14 @@ final class AiProjectCenterPlugin {
     item['run_id'] = _id();
     _event(
       item,
-      continuing ? 'continued' : 'started',
-      continuing
+      scheduled != null
+          ? 'schedule_started'
+          : continuing
+          ? 'continued'
+          : 'started',
+      scheduled != null
+          ? 'Executing the approved plan, started by its schedule ($scheduled).'
+          : continuing
           ? 'Continuing from the saved handoff in a new agent session.'
           : phase == 'planning'
           ? 'Generating a plan.'
@@ -2912,6 +3010,8 @@ final class AiProjectCenterPlugin {
         key: item[key],
       'updated_at': item['updated_at'],
       'importance': item['importance'],
+      'schedule': item['schedule'],
+      'next_run': _nextRun(item),
       'phase': item['phase'],
       'run_id': item['run_id'],
       ...state.toJson(),
@@ -3054,6 +3154,8 @@ final class AiProjectCenterPlugin {
         return _move(params);
       case 'set_importance':
         return _setImportance(params);
+      case 'set_schedule':
+        return _setSchedule(params);
       case 'delete':
         final item = _project(params, revision: true);
         _idle(item);
@@ -3061,6 +3163,14 @@ final class AiProjectCenterPlugin {
         _persist(next, deleting: true);
         _projects.remove(item['id']);
         _lifecycle.remove(item['id']);
+        // Its timer goes with it (task 101).
+        if (item['schedule'] != null) {
+          unawaited(
+            _serial(
+              () => _removeTimer(item['id'] as String),
+            ).catchError((Object _) {}),
+          );
+        }
         return {'deleted': true};
       case 'review':
         return _review(params);
@@ -3083,10 +3193,359 @@ final class AiProjectCenterPlugin {
     }
   }
 
+  /// Stores [item] without a new revision (a setting or a schedule note,
+  /// task 101): an open editor does not turn stale.
+  void _note(Map<String, dynamic> item) {
+    final id = item['id'] as String;
+    final next = {..._projects, id: item};
+    _persist(next);
+    _projects[id] = item;
+  }
+
+  /// set_schedule (task 101): a setting like the importance mark. The timer
+  /// is written first; a schedule is stored only with its timer in place.
+  Future<Map<String, dynamic>> _setSchedule(Map<String, dynamic> params) {
+    if (params.keys.any((key) => !{'id', 'schedule'}.contains(key)) ||
+        !params.containsKey('schedule')) {
+      throw ServiceError('project_schedule_invalid');
+    }
+    final now = _scheduleClock().toUtc();
+    final schedule = checkSchedule(params['schedule'], today: _zone.wall(now));
+    final id = _project(params)['id'] as String;
+    if (schedule != null &&
+        nextScheduledRun(schedule, now, zone: _zone) == null) {
+      throw ServiceError('project_schedule_invalid');
+    }
+    return _serial(() async {
+      final scheduler = _scheduler;
+      final before = _projects[id]?['schedule'];
+      if (schedule != null) {
+        if (scheduler == null) {
+          throw ServiceError('project_schedule_unavailable');
+        }
+        await scheduler.install(id, scheduleCalendar(schedule));
+      }
+      final stored = _projects[id];
+      if (stored == null || _closed) {
+        // Deleted (or closed) while the timer was written.
+        if (schedule != null) await _removeTimer(id);
+        throw ServiceError(
+          stored == null ? 'project_unknown' : 'project_center_closed',
+        );
+      }
+      final item = _copy(stored);
+      if (schedule == null) {
+        item
+          ..remove('schedule')
+          ..remove('schedule_set_at');
+      } else {
+        item['schedule'] = schedule;
+        item['schedule_set_at'] = now.toIso8601String();
+      }
+      try {
+        _note(item);
+      } on Object {
+        // The store keeps the old schedule: so does the timer.
+        if (schedule != null) {
+          if (before is Map<String, dynamic>) {
+            await scheduler!
+                .install(id, scheduleCalendar(before))
+                .catchError((Object _) {});
+          } else {
+            await _removeTimer(id);
+          }
+        }
+        rethrow;
+      }
+      if (schedule == null) await _removeTimer(id);
+      return {'project': _view(item)};
+    });
+  }
+
+  Future<void> _removeTimer(String id) async {
+    try {
+      await _scheduler?.remove(id);
+    } on Object {
+      // The next owner's reconciliation removes it.
+    }
+  }
+
+  /// The timers as the store wants them: scheduled projects with a next run
+  /// have theirs, managed timers of other projects go.
+  Future<void> _syncSchedules() async {
+    final scheduler = _scheduler;
+    if (scheduler == null || _closed) return;
+    final now = _scheduleClock().toUtc();
+    final wanted = <String, List<String>>{
+      for (final item in _projects.values)
+        if (item['schedule'] case final Map<String, dynamic> schedule
+            when nextScheduledRun(schedule, now, zone: _zone) != null)
+          item['id'] as String: scheduleCalendar(schedule),
+    };
+    final Set<String> present;
+    try {
+      present = scheduler.installed();
+    } on Object {
+      return;
+    }
+    for (final id in present.difference(wanted.keys.toSet())) {
+      await _removeTimer(id);
+    }
+    for (final entry in wanted.entries) {
+      try {
+        await scheduler.install(entry.key, entry.value);
+      } on Object {
+        // Shown nowhere yet; the next owner tries again.
+      }
+    }
+  }
+
+  /// No attempt of this controller is active and no schedule work (timers,
+  /// requests) waits: the headless owner (task 101) ends then.
+  bool get idle => _active.isEmpty && !_taking && _scheduleBusy == 0;
+
+  static const _scheduleTitle = 'Maprisma: a scheduled project did not run';
+
+  /// A trigger of [id]'s timer at [at] (task 101). It runs the approved plan
+  /// through the run operation, or says why not. The planned run the
+  /// trigger belongs to is recorded first, so overlapping triggers never
+  /// run it twice. The result is a short code for the caller's journal.
+  Future<String> scheduledRun(String id, DateTime at) =>
+      _serial(() async => _scheduledRun(id, at.toUtc()));
+
+  String _scheduledRun(String id, DateTime at) {
+    if (_closed || !_ownsStore()) return 'closed';
+    final stored = _projects[id];
+    final schedule = stored?['schedule'];
+    if (stored == null || schedule is! Map<String, dynamic>) {
+      // A timer without a schedule (cleared or deleted meanwhile) goes.
+      unawaited(_removeTimer(id));
+      return 'no_schedule';
+    }
+    if (_storageFault != null) return _storageFault!;
+    final slot = latestScheduledRun(schedule, at, zone: _zone);
+    if (slot == null) return 'no_slot';
+    final setAt = DateTime.tryParse(stored['schedule_set_at'] as String? ?? '');
+    final last = DateTime.tryParse(
+      stored['schedule_last_slot'] as String? ?? '',
+    );
+    if ((setAt != null && !slot.isAfter(setAt)) ||
+        (last != null && !slot.isAfter(last))) {
+      return 'duplicate';
+    }
+    final item = _copy(stored);
+    item['schedule_last_slot'] = slot.toUtc().toIso8601String();
+    final described = describeSchedule(schedule);
+    if (scheduleEndedAt(schedule, slot, zone: _zone)) {
+      _event(
+        item,
+        'schedule_ended',
+        'The schedule ($described) has ended; its timer was removed.',
+      );
+      _note(item);
+      unawaited(_removeTimer(id));
+      return 'ended';
+    }
+    if (_active.containsKey(id) ||
+        _activeStates.contains(item['status']) ||
+        _runHeld(id)) {
+      _event(
+        item,
+        'schedule_skipped',
+        'Not started by its schedule ($described): The project is still running.',
+      );
+      _note(item);
+      return 'running';
+    }
+    // Fresh profiles, as for every launch.
+    _dropDisplay();
+    final reason = _scheduleRefusal(item);
+    if (reason != null) return _skip(item, reason.$1, reason.$2, described);
+    // The planned run is recorded before the launch (a crash in between
+    // does not run it again).
+    _note(item);
+    try {
+      _launch(
+        {'id': id, 'revision': item['revision']},
+        'run',
+        scheduled: described,
+      );
+    } on ServiceError catch (error) {
+      return _skip(
+        _copy(_projects[id]!),
+        error.code,
+        _refusalText(error.code),
+        described,
+      );
+    }
+    return 'started';
+  }
+
+  /// Why a scheduled run of [item] must not start now (code, text), or null.
+  (String, String)? _scheduleRefusal(Map<String, dynamic> item) {
+    final status = item['status'];
+    if (const {'paused', 'interrupted', 'failed'}.contains(status) ||
+        item['needs_reconciliation'] == true) {
+      return (
+        'project_review_changes_first',
+        'The last run stopped before it ended. Review its changes and continue or approve again.',
+      );
+    }
+    if (!const {'ready', 'completed'}.contains(status)) {
+      return (
+        'project_plan_not_approved',
+        'The plan is not approved. Review and approve it first.',
+      );
+    }
+    bool valid;
+    try {
+      valid =
+          item['approved_version'] == item['plan_version'] &&
+          item['approved_digest'] == _approval(item);
+    } on Object {
+      valid = false;
+    }
+    if (!valid) {
+      return (
+        'project_plan_not_approved',
+        'The approval no longer fits: the plan, the team, the folder or an agent changed. Approve again.',
+      );
+    }
+    // The rules are checked again at each assignment; checked here first,
+    // a refusal skips this run instead of failing the project.
+    try {
+      for (final member in _members(item, 'running')) {
+        authorize?.call(member['agent'] as String);
+      }
+    } on ServiceError catch (error) {
+      return (error.code, _refusalText(error.code));
+    } on RuleRefused catch (error) {
+      return ('action_refused', 'A rule refuses it: ${error.message}');
+    } on Object {
+      return ('action_refused', 'A rule refuses starting one of its agents.');
+    }
+    return null;
+  }
+
+  static String _refusalText(String code) => switch (code) {
+    'project_folder_busy' => 'Another project works in the same folder now.',
+    'project_capacity' => 'Too many projects are running now.',
+    'project_folder_changed' ||
+    'project_folder_missing' => 'The working folder changed or is missing.',
+    'project_agent_unavailable' => 'An agent of its team is not available.',
+    'project_plan_not_approved' =>
+      'The approval no longer fits. Approve again.',
+    'project_still_pausing' => 'Some of its processes are still stopping.',
+    _ => 'The run was refused ($code).',
+  };
+
+  String _skip(
+    Map<String, dynamic> item,
+    String code,
+    String text,
+    String described,
+  ) {
+    _event(
+      item,
+      'schedule_skipped',
+      'Not started by its schedule ($described): $text',
+    );
+    try {
+      _note(item);
+    } on Object {
+      // The notification still tells the user.
+    }
+    final title = item['title'] as String;
+    _scheduler?.notify(
+      _translate(_scheduleTitle),
+      '${title.length > 120 ? '${title.substring(0, 120)}…' : title}: ${_translate(text)}',
+    );
+    return code;
+  }
+
+  static final _requestName = RegExp(
+    r'^([0-9a-f]{32})\.[0-9a-f]{16}\.(request|taken)$',
+  );
+  bool _taking = false;
+
+  /// Handles the requests timers left in the spool (task 101): each is
+  /// claimed by renaming it before it is read, so one request runs once; a
+  /// claimed one left by an owner that died is handled again (its planned
+  /// run is recorded, so it never runs twice). Only own, small, regular
+  /// files count; anything else is removed unread.
+  Future<int> takeScheduleRequests() async {
+    if (_taking || !_ownsStore()) return 0;
+    final spool = p.join(directory, 'schedule');
+    if (FileSystemEntity.typeSync(spool, followLinks: false) !=
+        FileSystemEntityType.directory) {
+      return 0;
+    }
+    _taking = true;
+    var handled = 0;
+    try {
+      _io.close(_io.privateDirectory(spool));
+      final names = [
+        for (final entry in Directory(spool).listSync(followLinks: false))
+          p.basename(entry.path),
+      ]..sort();
+      for (final name in names) {
+        final match = _requestName.firstMatch(name);
+        if (match == null) continue;
+        var path = p.join(spool, name);
+        if (match[2] == 'request') {
+          final taken = path.replaceFirst(RegExp(r'\.request$'), '.taken');
+          try {
+            File(path).renameSync(taken);
+          } on FileSystemException {
+            continue; // withdrawn meanwhile
+          }
+          path = taken;
+        }
+        Object? request;
+        try {
+          final stat = _io.lstatOwn(path);
+          if (stat != null &&
+              stat.mode & 0xf000 == 0x8000 &&
+              stat.uid == _io.uid &&
+              stat.nlink == 1 &&
+              stat.size <= 1024) {
+            request = jsonDecode(utf8.decode(_io.readRegular(path, 1024)));
+          }
+        } on Object {
+          request = null;
+        }
+        try {
+          File(path).deleteSync();
+        } on FileSystemException {
+          // Gone already.
+        }
+        if (request is! Map ||
+            request['id'] != match[1] ||
+            request['at'] is! String) {
+          continue;
+        }
+        final at = DateTime.tryParse(request['at'] as String);
+        // A time from the future is no trigger.
+        if (at == null ||
+            at.isAfter(
+              _scheduleClock().toUtc().add(const Duration(minutes: 5)),
+            )) {
+          continue;
+        }
+        await scheduledRun(match[1]!, at);
+        handled++;
+      }
+    } finally {
+      _taking = false;
+    }
+    return handled;
+  }
+
   /// Release this controller without waiting: each supervisor sees EOF on its
   /// control pipe and stops its own tree while holding the project's run lock.
   void detach() {
     _closed = true;
+    _requestTimer?.cancel();
     for (final id in {..._projects.keys, ..._lifecycle.keys}) {
       _advanceLifecycle(id);
     }
@@ -3112,6 +3571,7 @@ final class AiProjectCenterPlugin {
   Future<void> _shutdown() async {
     if (_closed) return;
     _closed = true;
+    _requestTimer?.cancel();
     // A Send now may still await its stop after _execute removed the attempt
     // from _active. Invalidate it even when another stop aborts shutdown.
     for (final id in {..._projects.keys, ..._lifecycle.keys}) {
@@ -3128,6 +3588,7 @@ final class AiProjectCenterPlugin {
       // The caller must keep the controller alive or explicitly force-close;
       // retaining the store lock prevents a second controller from dispatching.
       _closed = false;
+      if (_scheduler != null) _startRequests();
       throw ServiceError('project_still_pausing');
     }
     if (_directoryFd != null) {

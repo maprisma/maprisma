@@ -35,7 +35,7 @@ const featureApiOwn = {'reports': 1, 'ask-ai': 1, 'ai-project-center': 2};
 const featureCapabilitiesOwn = {
   'reports': <String>[],
   'ask-ai': <String>[],
-  'ai-project-center': ['summary2', 'board', 'order', 'messages'],
+  'ai-project-center': ['summary2', 'board', 'order', 'messages', 'schedule'],
 };
 
 /// Whether [api] is accepted for [id].

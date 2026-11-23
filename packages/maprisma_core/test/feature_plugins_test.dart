@@ -979,6 +979,7 @@ void main() {
           'board',
           'order',
           'messages',
+          'schedule',
         ]);
         await host.shutdown();
       },
@@ -1226,11 +1227,19 @@ void main() {
         final claude = File('${bin.path}/claude')
           ..writeAsStringSync('#!/bin/sh\necho "2.1.0 (Claude Code)"\n');
         Process.runSync('chmod', ['755', claude.path]);
+        // A stand-in for systemctl (task 101): the user's real systemd is
+        // never asked.
+        final systemctl = File('${bin.path}/systemctl')
+          ..writeAsStringSync('#!/bin/sh\necho "\$@" >> "\$0.log"\n');
+        Process.runSync('chmod', ['755', systemctl.path]);
+        Link('${bin.path}/setsid').createSync('/usr/bin/setsid');
         final folder = Directory('${temporary.path}/work')..createSync();
         final environment = {
           ...identity.environment,
           // Only the stand-in: a real agent on this machine must not count.
           'PATH': bin.path,
+          // Timers (task 101) only in this test's home.
+          'XDG_CONFIG_HOME': '${temporary.path}/.config',
         };
         final host = FeaturePluginHost(
           AppIdentity(environment: environment),
@@ -1333,6 +1342,24 @@ void main() {
           'importance': 'high',
         });
         expect((marked['project'] as Map)['importance'], 'high');
+        // A schedule (task 101) passes the host; its timer is written.
+        expect(listed['capabilities'], contains('schedule'));
+        final timed = await call('set_schedule', {
+          'id': item['id'],
+          'schedule': {'repeat': 'daily', 'time': '05:00'},
+        });
+        expect((timed['project'] as Map)['next_run'], isA<String>());
+        final unit = File(
+          '${temporary.path}/.config/systemd/user/'
+          'maprisma-project-${item['id']}.timer',
+        );
+        expect(unit.readAsStringSync(), contains('OnCalendar=*-*-* 05:00:00'));
+        expect(
+          File('${systemctl.path}.log').readAsStringSync(),
+          contains('--user enable maprisma-project-${item['id']}.timer'),
+        );
+        await call('set_schedule', {'id': item['id'], 'schedule': null});
+        expect(unit.existsSync(), isFalse);
         await service.shutdownFeatures();
       },
       timeout: const Timeout(Duration(minutes: 2)),
